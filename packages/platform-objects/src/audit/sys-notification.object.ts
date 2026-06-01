@@ -3,113 +3,60 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_notification — Per-User Inbox Notification
+ * sys_notification — Notification Event (ADR-0030 Layer 2)
  *
- * Personal, unread-trackable notifications. Distinct from
- * `sys_activity` (per-record, append-only narrative) and
- * `sys_audit_log` (compliance-grade structured diff). Each row
- * targets exactly one user (`recipient_id`) and is the source of
- * truth for the header bell badge.
+ * **Re-modeled (ADR-0030)**: this object was previously a per-user inbox. It is
+ * now the platform's notification **event** — one row per `emit()`, the single
+ * ingress through which every producer (the flow `notify` node, collaboration
+ * `@mention`, record assignment, system alerts) publishes. It carries no
+ * recipient and no read-state: those live downstream in the delivery
+ * materialization (`sys_inbox_message`) and the receipt
+ * (`sys_notification_receipt`).
  *
- * Typical writers: comment mention, record assignment, lead-convert
- * completion, flow notifications. Typical readers: header bell,
- * notification center.
+ * Layering (ADR-0012 / ADR-0030):
+ *   L2 event       → this object (`topic` / `payload` / `dedup_key` / `severity`)
+ *   L4 delivery    → `sys_notification_delivery` (outbox; P1)
+ *   L5 materialize → `sys_inbox_message` (in-app), email/push/… per channel
+ *   L5 receipt     → `sys_notification_receipt` (read/clicked/dismissed)
+ *
+ * Writers: `NotificationService.emit()` only — **no producer writes this row
+ * directly** (single-ingress rule). Readers: the delivery pipeline; the admin
+ * notification-event log. The Console bell reads `sys_inbox_message`, not this.
  *
  * @namespace sys
  */
 export const SysNotification = ObjectSchema.create({
   name: 'sys_notification',
-  label: 'Notification',
-  pluralLabel: 'Notifications',
+  label: 'Notification Event',
+  pluralLabel: 'Notification Events',
   icon: 'bell',
   isSystem: true,
   managedBy: 'system',
-  description: 'Per-user notification inbox entries',
-  displayNameField: 'title',
-  titleFormat: '{title}',
-  compactLayout: ['title', 'type', 'is_read', 'created_at'],
-
-  /**
-   * Row-level inbox actions. Use `visible` CEL expressions to ensure
-   * `mark_read` only shows on unread rows and vice-versa, mirroring the
-   * mark-as-read affordances in GitHub / Linear inboxes. The toolbar-level
-   * `mark_all_read` is intentionally omitted server-side: it requires a
-   * bulk update primitive that doesn't yet exist on the REST surface, and
-   * the popover already handles the multi-row case client-side via N
-   * single-row PATCHes (see `InboxPopover.tsx` -> AppHeader `markAllRead`).
-   */
-  actions: [
-    {
-      name: 'mark_read',
-      label: 'Mark as Read',
-      icon: 'check',
-      variant: 'secondary',
-      mode: 'custom',
-      locations: ['list_item'],
-      type: 'api',
-      method: 'PATCH',
-      target: '/api/v1/data/sys_notification/{id}',
-      bodyExtra: { is_read: true },
-      visible: '!record.is_read',
-      successMessage: 'Notification marked as read',
-      refreshAfter: true,
-    },
-    {
-      name: 'mark_unread',
-      label: 'Mark as Unread',
-      icon: 'bell-dot',
-      variant: 'secondary',
-      mode: 'custom',
-      locations: ['list_item'],
-      type: 'api',
-      method: 'PATCH',
-      target: '/api/v1/data/sys_notification/{id}',
-      bodyExtra: { is_read: false, read_at: null },
-      visible: 'record.is_read',
-      successMessage: 'Notification marked as unread',
-      refreshAfter: true,
-    },
-  ],
+  description: 'Notification events — one row per emit() (ADR-0030 Layer 2 ingress)',
+  displayNameField: 'topic',
+  titleFormat: '{topic}',
+  compactLayout: ['topic', 'severity', 'source_object', 'created_at'],
 
   listViews: {
-    unread: {
+    recent: {
       type: 'grid',
-      name: 'unread',
-      label: 'Unread',
+      name: 'recent',
+      label: 'Recent',
       data: { provider: 'object', object: 'sys_notification' },
-      // Title + actor first (the "who/what" the user actually scans);
-      // type stays as a categorising chip; created_at right-aligned.
-      columns: ['title', 'actor_name', 'type', 'created_at'],
-      filter: [
-        { field: 'recipient_id', operator: 'equals', value: '{current_user_id}' },
-        { field: 'is_read', operator: 'equals', value: false },
-      ],
+      columns: ['topic', 'severity', 'actor_id', 'source_object', 'created_at'],
       sort: [{ field: 'created_at', order: 'desc' }],
       pagination: { pageSize: 50 },
-      emptyState: { title: 'Inbox zero', message: 'No unread notifications.' },
+      emptyState: { title: 'No events', message: 'No notification events have been emitted.' },
     },
-    mine: {
+    by_topic: {
       type: 'grid',
-      name: 'mine',
-      label: 'Mine',
+      name: 'by_topic',
+      label: 'By Topic',
       data: { provider: 'object', object: 'sys_notification' },
-      columns: ['title', 'actor_name', 'type', 'is_read', 'created_at'],
-      filter: [{ field: 'recipient_id', operator: 'equals', value: '{current_user_id}' }],
-      sort: [{ field: 'created_at', order: 'desc' }],
-      pagination: { pageSize: 50 },
-      // Group by notification category so mention/assignment storms don't
-      // hide system or task_due rows. Users still toggle to flat via the
-      // toolbar Group control if they prefer chronology only.
-      grouping: { fields: [{ field: 'type', order: 'asc', collapsed: false }] },
-    },
-    all_notifications: {
-      type: 'grid',
-      name: 'all_notifications',
-      label: 'All',
-      data: { provider: 'object', object: 'sys_notification' },
-      columns: ['title', 'recipient_id', 'actor_name', 'type', 'is_read', 'created_at'],
+      columns: ['topic', 'severity', 'source_object', 'source_id', 'created_at'],
       sort: [{ field: 'created_at', order: 'desc' }],
       pagination: { pageSize: 100 },
+      grouping: { fields: [{ field: 'topic', order: 'asc', collapsed: false }] },
     },
   },
 
@@ -121,40 +68,37 @@ export const SysNotification = ObjectSchema.create({
       group: 'System',
     }),
 
-    // ── Routing ──────────────────────────────────────────────────
-    recipient_id: Field.lookup('sys_user', {
-      label: 'Recipient',
+    // ── Event identity ───────────────────────────────────────────
+    topic: Field.text({
+      label: 'Topic',
       required: true,
+      maxLength: 200,
       searchable: true,
-      description: 'User the notification is delivered to',
-      group: 'Routing',
+      description: 'Notification topic, e.g. task.assigned, collab.mention',
+      group: 'Event',
     }),
 
-    // ── Content ──────────────────────────────────────────────────
-    type: Field.select(
-      ['mention', 'assignment', 'comment_reply', 'lead_converted', 'task_due', 'system'],
-      {
-        label: 'Type',
-        required: true,
-        defaultValue: 'system',
-        description: 'Notification category — drives icon + sort priority',
-        group: 'Content',
-      },
-    ),
-
-    title: Field.text({
-      label: 'Title',
-      required: true,
-      maxLength: 255,
-      searchable: true,
-      group: 'Content',
-    }),
-
-    body: Field.textarea({
-      label: 'Body',
+    payload: Field.json({
+      label: 'Payload',
       required: false,
-      description: 'Optional secondary text (one-line summary)',
-      group: 'Content',
+      description: 'Template inputs carried to channels (title/body/url/actor/source/…)',
+      group: 'Event',
+    }),
+
+    severity: Field.select(['info', 'warning', 'critical'], {
+      label: 'Severity',
+      required: false,
+      defaultValue: 'info',
+      description: 'Severity hint for rendering / filtering',
+      group: 'Event',
+    }),
+
+    dedup_key: Field.text({
+      label: 'Dedup Key',
+      required: false,
+      maxLength: 255,
+      description: 'Idempotency key within a topic window; a repeat emit is a no-op',
+      group: 'Event',
     }),
 
     // ── Source linkage ───────────────────────────────────────────
@@ -174,38 +118,11 @@ export const SysNotification = ObjectSchema.create({
       group: 'Source',
     }),
 
-    url: Field.url({
-      label: 'Deep Link',
-      required: false,
-      description: 'Optional URL to navigate to when clicked',
-      group: 'Source',
-    }),
-
     actor_id: Field.lookup('sys_user', {
       label: 'Actor',
       required: false,
-      description: 'User who caused the notification (mentioner, assigner)',
+      description: 'User who caused the event (mentioner, assigner)',
       group: 'Source',
-    }),
-
-    actor_name: Field.text({
-      label: 'Actor Name',
-      required: false,
-      group: 'Source',
-    }),
-
-    // ── Read state ───────────────────────────────────────────────
-    is_read: Field.boolean({
-      label: 'Read',
-      defaultValue: false,
-      description: 'True once recipient acknowledges',
-      group: 'State',
-    }),
-
-    read_at: Field.datetime({
-      label: 'Read At',
-      required: false,
-      group: 'State',
     }),
 
     // ── Lifecycle ────────────────────────────────────────────────
@@ -216,17 +133,11 @@ export const SysNotification = ObjectSchema.create({
       readonly: true,
       group: 'System',
     }),
-
-    updated_at: Field.datetime({
-      label: 'Updated At',
-      required: false,
-      group: 'System',
-    }),
   },
 
   indexes: [
-    { fields: ['recipient_id', 'is_read', 'created_at'] },
-    { fields: ['recipient_id', 'created_at'] },
+    { fields: ['topic', 'created_at'] },
+    { fields: ['dedup_key'] },
     { fields: ['source_object', 'source_id'] },
   ],
 });

@@ -1,10 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import {
-  SysApprovalRequest,
-  SysApprovalAction,
-} from '@objectstack/platform-objects/audit';
+import { SysApprovalRequest } from './sys-approval-request.object.js';
+import { SysApprovalAction } from './sys-approval-action.object.js';
 import { ApprovalService, type ApprovalEngine } from './approval-service.js';
 import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
 import { registerApprovalNode, type ApprovalAutomationSurface } from './approval-node.js';
@@ -53,7 +51,36 @@ export class ApprovalsServicePlugin implements Plugin {
       defaultDatasource: 'cloud',
       namespace: 'sys',
       objects: [SysApprovalRequest, SysApprovalAction],
+      // ADR-0029 D7 — contribute the Approvals entries into the Setup app's
+      // `group_approvals` slot. This plugin owns these objects (K2.b), so it
+      // ships their menu too; when the plugin isn't installed the slot is empty.
+      navigationContributions: [
+        {
+          app: 'setup',
+          group: 'group_approvals',
+          priority: 100,
+          items: [
+            { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
+            { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
+          ],
+        },
+      ],
     });
+    // ADR-0029 D8 — contribute this plugin's object translations to the i18n
+    // service on kernel:ready (the i18n plugin may register after this one).
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', async () => {
+        try {
+          const i18n = ctx.getService<any>('i18n');
+          if (i18n && typeof i18n.loadTranslations === 'function') {
+            const { ApprovalsTranslations } = await import('./translations/index.js');
+            for (const [locale, data] of Object.entries(ApprovalsTranslations)) {
+              i18n.loadTranslations(locale, data as Record<string, unknown>);
+            }
+          }
+        } catch { /* i18n optional */ }
+      });
+    }
     ctx.logger.info('ApprovalsServicePlugin: schemas registered');
   }
 

@@ -40,6 +40,32 @@ export interface AutomationContext {
     params?: Record<string, unknown>;
 }
 
+/** One input field rendered by a paused `screen` node (ADR-0019 / screen-flow runtime). */
+export interface ScreenFieldSpec {
+    name: string;
+    label?: string;
+    /** Widget hint (text/select/boolean/number/date/…); the client maps it to a field widget. */
+    type?: string;
+    required?: boolean;
+    /** Closed-enum options for select-style fields. */
+    options?: Array<{ value: unknown; label: string }>;
+    defaultValue?: unknown;
+    placeholder?: string;
+}
+
+/**
+ * The screen a paused `screen` node wants the client to render. Surfaced on a
+ * paused {@link AutomationResult} so a UI flow-runner can collect input and
+ * `resume()` the run with the values.
+ */
+export interface ScreenSpec {
+    /** The screen node's id (correlates the resume back to this pause point). */
+    nodeId: string;
+    title?: string;
+    description?: string;
+    fields: ScreenFieldSpec[];
+}
+
 /**
  * Result of an automation execution
  */
@@ -61,6 +87,13 @@ export interface AutomationResult {
     status?: 'completed' | 'paused' | 'failed';
     /** Run id — set when `status` is `'paused'`, so callers can resume it. */
     runId?: string;
+    /**
+     * The screen to render — set when the run paused at a `screen` node awaiting
+     * user input (screen-flow runtime). The client collects values for
+     * `screen.fields` and calls {@link IAutomationService.resume} with them as
+     * `signal.variables`.
+     */
+    screen?: ScreenSpec;
 }
 
 /** Signal payload used to resume a paused run (ADR-0019). */
@@ -77,6 +110,13 @@ export interface ResumeSignal {
      * back to the node's conditional/unconditional edges.
      */
     branchLabel?: string;
+    /**
+     * Bare flow variables to set on resume (e.g. a `screen` node's collected
+     * inputs: `{ new_assignee: 'ada@x' }` → variable `new_assignee`). Unlike
+     * {@link output} these are set under their plain names, so downstream
+     * `{var}` interpolation and conditions read them directly.
+     */
+    variables?: Record<string, unknown>;
 }
 
 export interface IAutomationService {
@@ -163,4 +203,11 @@ export interface IAutomationService {
      * attached. Backs operability (e.g. a "pending approvals" view).
      */
     listSuspendedRuns?(): Array<{ runId: string; flowName: string; nodeId: string; correlation?: string }>;
+
+    /**
+     * The screen a paused run is currently awaiting (screen-flow runtime), or
+     * `null` if the run isn't suspended at a `screen` node. Lets a UI flow-runner
+     * re-fetch the form (e.g. after a page refresh).
+     */
+    getSuspendedScreen?(runId: string): ScreenSpec | null;
 }

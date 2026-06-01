@@ -54,30 +54,36 @@ describe('MessagingServicePlugin', () => {
         expect(messaging.getRegisteredChannels()).toEqual(['inbox']);
     });
 
-    it('registers the sys_inbox_message object via the manifest service', async () => {
+    it('registers the sys_inbox_message + sys_notification_receipt objects via the manifest service', async () => {
         const { ctx, registeredObjects } = fakeCtx();
         await new MessagingServicePlugin().init(ctx);
 
         const names = registeredObjects.map((o: any) => o?.name);
         expect(names).toContain('sys_inbox_message');
+        expect(names).toContain('sys_notification_receipt');
     });
 
-    it('end-to-end: emit() through the registered service writes an inbox row', async () => {
+    it('end-to-end: emit() writes the L2 event, the inbox row, and the receipt', async () => {
         const { ctx, services, inserts } = fakeCtx();
         await new MessagingServicePlugin().init(ctx);
 
         const messaging = services.get('messaging') as MessagingService;
         const result = await messaging.emit({
             topic: 'deal.won',
-            title: 'Deal closed',
-            body: 'Acme signed 🎉',
-            recipients: ['user_1'],
+            audience: ['user_1'],
+            payload: { title: 'Deal closed', body: 'Acme signed 🎉' },
         });
 
         expect(result.delivered).toBe(1);
-        expect(inserts).toHaveLength(1);
-        expect(inserts[0].object).toBe('sys_inbox_message');
-        expect(inserts[0].row).toMatchObject({ user_id: 'user_1', title: 'Deal closed', read: false });
+        const objs = inserts.map((i) => i.object);
+        expect(objs).toEqual(['sys_notification', 'sys_inbox_message', 'sys_notification_receipt']);
+
+        // The event row id threads through to the materialization + receipt.
+        expect(result.notificationId).toBe('row_1');
+        const inbox = inserts.find((i) => i.object === 'sys_inbox_message')!;
+        expect(inbox.row).toMatchObject({ user_id: 'user_1', title: 'Deal closed', notification_id: 'row_1' });
+        const receipt = inserts.find((i) => i.object === 'sys_notification_receipt')!;
+        expect(receipt.row).toMatchObject({ notification_id: 'row_1', user_id: 'user_1', channel: 'inbox', state: 'delivered' });
     });
 
     it('can be constructed without the inbox channel for an empty registry', async () => {

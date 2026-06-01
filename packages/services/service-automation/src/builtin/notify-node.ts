@@ -14,16 +14,16 @@ import { interpolate } from './template.js';
  * degrades to a no-op success.
  */
 export interface MessagingServiceSurface {
-    emit(notification: {
-        topic?: string;
-        title: string;
-        body: string;
-        severity?: string;
-        recipients: string[];
-        channels?: string[];
-        actionUrl?: string;
+    emit(input: {
+        topic: string;
+        audience: string[];
         payload?: Record<string, unknown>;
-    }): Promise<{ delivered: number; failed: number }>;
+        severity?: string;
+        dedupKey?: string;
+        source?: { object: string; id: string };
+        actorId?: string;
+        channels?: string[];
+    }): Promise<{ notificationId: string; delivered: number; failed: number }>;
 }
 
 /** Coerce a config value (string | string[]) into a clean string[]. */
@@ -99,19 +99,24 @@ export function registerNotifyNode(engine: AutomationEngine, ctx: PluginContext)
             }
 
             try {
+                // ADR-0030 single ingress: hand the messaging service a topic +
+                // audience + payload; it writes the L2 event and materializes
+                // per channel. title/body/url ride in the payload (templates in
+                // a later phase fall back to these).
                 const result = await messaging.emit({
-                    topic,
-                    title,
-                    body,
+                    topic: topic ?? 'notify',
+                    audience: recipients,
+                    payload: { ...(payload ?? {}), title, body, url: actionUrl },
                     severity,
-                    recipients,
                     channels: channels.length ? channels : undefined,
-                    actionUrl,
-                    payload,
                 });
                 return {
                     success: true,
-                    output: { delivered: result.delivered, failed: result.failed },
+                    output: {
+                        notificationId: result.notificationId,
+                        delivered: result.delivered,
+                        failed: result.failed,
+                    },
                 };
             } catch (err) {
                 return { success: false, error: `notify failed: ${(err as Error).message}` };

@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { defineStack } from '@objectstack/spec';
+import { ConnectorRestPlugin } from '@objectstack/connector-rest';
+import { ConnectorSlackPlugin } from '@objectstack/connector-slack';
 
 import * as objects from './src/objects/index.js';
 import { TaskViews, ProjectViews } from './src/views/index.js';
@@ -26,6 +28,11 @@ import { allDatasources } from './src/datasources/index.js';
 import { allPortals } from './src/portals/index.js';
 import { ShowcaseSeedData } from './src/data/index.js';
 
+// Ambient `process` for the env-var overrides below — the showcase tsconfig
+// doesn't pull in `@types/node`, but the CLI provides the real `process` at
+// runtime. Keeps `pnpm typecheck` green without widening the type surface.
+declare const process: { env: Record<string, string | undefined> };
+
 /**
  * Showcase — a kitchen-sink workspace that exercises every metadata type,
  * every view type, every chart type, and the major end-to-end capability
@@ -49,9 +56,35 @@ export default defineStack({
     description: 'Kitchen-sink workspace covering all metadata types, all view types, and the major capability chains.',
   },
 
-  // `approvals` loads ApprovalsServicePlugin so the `approval` flow node
-  // (ADR-0019) is contributed to the engine — the showcase flows use it.
-  requires: ['ui', 'automation', 'approvals'],
+  // Capability tokens the CLI resolves to platform plugins:
+  //   • automation  — AutomationServicePlugin (flow engine + node executors).
+  //   • approvals   — ApprovalsServicePlugin, so the `approval` flow node
+  //                   (ADR-0019) is contributed to the engine.
+  //   • messaging   — MessagingServicePlugin, so the `notify` node delivers to
+  //                   the inbox channel (`sys_inbox_message` rows) instead of
+  //                   degrading to a logged no-op.
+  //   • triggers    — record-change + schedule FlowTrigger plugins, so the
+  //                   autolaunched / schedule flows below actually auto-fire.
+  //   • job         — JobServicePlugin, the timing backend the schedule trigger
+  //                   delegates to (interval / cron jobs).
+  requires: ['ui', 'automation', 'approvals', 'messaging', 'triggers', 'job'],
+
+  // Concrete connectors for the `connector_action` node. The baseline engine
+  // ships the dispatch node + an empty registry; these plugins populate it.
+  //   • rest  → points at the running server itself, so the REST connector
+  //             flow's call + response are observable on the flow run with no
+  //             external dependency. Override the target with SHOWCASE_SELF_URL.
+  //   • slack → registered so TaskCompletedSlackFlow resolves its connector;
+  //             live posting needs a real bot token (set SLACK_BOT_TOKEN).
+  plugins: [
+    new ConnectorRestPlugin({
+      name: 'rest',
+      baseUrl: process.env.SHOWCASE_SELF_URL ?? 'http://127.0.0.1:3000',
+    }),
+    new ConnectorSlackPlugin({
+      token: process.env.SLACK_BOT_TOKEN ?? 'xoxb-showcase-demo-token',
+    }),
+  ],
 
   // Infrastructure
   datasources: allDatasources,

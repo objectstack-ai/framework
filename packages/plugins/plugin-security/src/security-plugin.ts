@@ -132,7 +132,37 @@ export class SecurityPlugin implements Plugin {
       // can resolve them by name when SecurityPlugin middleware queries
       // `metadata.list('permissions')`.
       permissions: this.bootstrapPermissionSets,
+      // ADR-0029 D7 — contribute the RBAC entries into the Setup app's
+      // `group_access_control` slot. This plugin owns these objects (K2), so it
+      // ships their menu too; when the plugin is absent the entries don't appear.
+      navigationContributions: [
+        {
+          app: 'setup',
+          group: 'group_access_control',
+          priority: 100,
+          items: [
+            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
+            { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
+          ],
+        },
+      ],
     });
+
+    // ADR-0029 D8 — contribute this plugin's object translations to the i18n
+    // service on kernel:ready (the i18n plugin may register after this one).
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', async () => {
+        try {
+          const i18n = ctx.getService<any>('i18n');
+          if (i18n && typeof i18n.loadTranslations === 'function') {
+            const { SecurityTranslations } = await import('./translations/index.js');
+            for (const [locale, data] of Object.entries(SecurityTranslations)) {
+              i18n.loadTranslations(locale, data as Record<string, unknown>);
+            }
+          }
+        } catch { /* i18n optional */ }
+      });
+    }
 
     ctx.logger.info('Security Plugin initialized', {
       defaultPermissionSets: this.bootstrapPermissionSets.map((p) => p.name),

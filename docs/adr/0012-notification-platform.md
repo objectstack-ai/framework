@@ -1,6 +1,6 @@
 # ADR-0012: Messaging Platform — Outbound Notifications on a Generalized Outbox
 
-**Status**: Draft (2026-05-25 · scope-revised 2026-05-26)
+**Status**: Draft (2026-05-25 · scope-revised 2026-05-26) · **Superseded by [ADR-0030](./0030-notification-platform-convergence.md)** (2026-06-01) — the M1 implementation drifted (two conflated inbox objects); ADR-0030 records the correction and realizes this layered model.
 **Authors**: Platform team — surfaced from GitHub Issue #1292 ("[P0] notification: no outbound notification channel")
 **Consumers**: `@objectstack/spec` (new `messaging/` domain), `@objectstack/service-messaging` (new), `@objectstack/plugin-notification-inbox` (new), `@objectstack/plugin-notification-email` (replaces `plugin-email`), `@objectstack/plugin-notification-webhook` (extracted from `plugin-webhooks`), `@objectstack/plugin-notification-push` (new), every flow that has a `notify` node, every template that ships notification rules
 **Sibling**: [ADR-0013 — Bidirectional Messaging & Conversational Channels](./0013-bidirectional-messaging.md)

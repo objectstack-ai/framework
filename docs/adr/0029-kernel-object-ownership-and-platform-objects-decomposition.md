@@ -184,6 +184,39 @@ for this ADR is the `setup` app and first-party capability contributions;
 generalizing app-extension to arbitrary apps is a follow-up. References inside
 contributions follow ADR-0028's naming model (`sys.audit_log`, etc.).
 
+### D8 — An object's i18n resources migrate with its ownership
+
+A kernel object is more than its schema: it has **localized labels, field help,
+and list-view names**. Today these live in `platform-objects` as generated
+bundles (`src/apps/translations/*.objects.generated.ts`, produced by
+`os i18n extract` against `scripts/i18n-extract.config.ts`, loaded at runtime by
+the `platform-objects` plugin). The generated entries are keyed by **object
+name** (`sys_webhook: {...}`) and loaded globally, so they keep working at
+runtime regardless of which package owns the object — but their **source of
+truth** stays wrongly attached to the monolith.
+
+Therefore object migration must carry the i18n resources, not just the schema:
+
+- The owning plugin becomes the **source of truth** for its objects'
+  translations — it owns the extract config entry and ships the generated
+  bundle(s), and contributes them at runtime (e.g. via `i18n.loadTranslations`
+  or `manifest.translations`), exactly as `platform-objects` does today.
+- When an object leaves `platform-objects`, it is removed from
+  `scripts/i18n-extract.config.ts`; **regenerating before the plugin owns its
+  extraction would silently drop locales** — so the plugin-side i18n extraction
+  must land in the same step (or the object stays in the extract set
+  transitionally, explicitly tracked).
+- A plugin that currently has **no i18n infrastructure** (e.g. `plugin-webhooks`,
+  whose `sys_webhook_delivery` ships inline labels only) must gain one as part of
+  taking ownership of a localized object — this is real, recurring work in every
+  K2 domain move and must be budgeted, not assumed free.
+
+Pilot note: the first pilot (webhooks) moves the schema and removes the object
+from the monolith extract config, but **defers building plugin-side i18n
+extraction** — the existing generated entries remain valid at runtime
+(object-name-keyed), and the plugin-owned i18n bundle is the explicit next sub-task
+before any regeneration.
+
 ---
 
 ## Migration plan (template-transparent, independently shippable)
@@ -211,10 +244,14 @@ the ADR-0028 naming flip.
   webhooks), relocate the `*.object.ts` definitions into the owning plugin and
   switch its manifest from "declare `namespace:'sys'`" to actual `own`, and move
   that domain's `setup` nav entries out of the base shell into the plugin as
-  navigation contributions (D7). Keep a `platform-objects` re-export facade so
-  importers don't break mid-migration.
+  navigation contributions (D7). **Migrate the object's i18n resources with it**
+  (see D8). Keep a `platform-objects` re-export facade so importers don't break
+  mid-migration (where the dependency direction forbids a facade — e.g. a leaf
+  plugin `platform-objects` already depends on — do a clean move instead and
+  update the importers).
   *Exit per domain:* that domain's objects resolve to the new owner; its setup
-  menu entries render via its own contribution; its tests green; cross-domain
+  menu entries render via its own contribution; its translations load from the
+  owning plugin (no localization regression); its tests green; cross-domain
   lookups to the hub still resolve.
 - **K3 — Boundary enforcement.** Flip the app-cannot-define-kernel check
   warn→error. Classify the scattered `ai`/`mail`/`branding`/`prefs`/`feat`/… —

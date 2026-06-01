@@ -1,0 +1,214 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * Migration: sys_notification (per-user inbox) → notification event (ADR-0030)
+ *
+ * ADR-0030 re-models `sys_notification` from a per-user *inbox* into the L2
+ * *event* (one row per `emit`). This migration preserves users' existing bell
+ * notifications across the cut-over by splitting each legacy row into the new
+ * layered model:
+ *
+ *   legacy sys_notification row (recipient_id, type, title, body, url,
+ *       actor_name, is_read, read_at, …)
+ *     │
+ *     ├─► sys_inbox_message      (L5 in-app materialization, keyed by user)
+ *     ├─► sys_notification_receipt (L5 read-state: 'read' if is_read else 'delivered')
+ *     └─► the sys_notification row itself is rewritten to the event shape
+ *         (topic ← type, payload ← {title,body,url,actor_name}) and its legacy
+ *         inbox columns are cleared.
+ *
+ * Idempotent: it acts only on rows that still carry the legacy shape
+ * (`recipient_id IS NOT NULL`); a second run is a no-op. Safe when the legacy
+ * columns were never present (a fresh install created directly in the new
+ * shape) — it reports `not_applicable`.
+ *
+ * Usage:
+ *   import { migrateSysNotificationToEvent } from '@objectstack/metadata/migrations';
+ *   await migrateSysNotificationToEvent({ driver, data });
+ *
+ * `driver` provides raw access to read legacy columns the re-modeled schema no
+ * longer projects and to clear them; `data` (IDataEngine) performs the
+ * structured inbox/receipt writes and the event rewrite so ids, JSON fields and
+ * tenant stamping are handled uniformly across drivers.
+ */
+
+import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
+
+const EVENT_OBJECT = 'sys_notification';
+const INBOX_OBJECT = 'sys_inbox_message';
+const RECEIPT_OBJECT = 'sys_notification_receipt';
+
+/** Legacy inbox columns cleared once a row is rewritten to the event shape. */
+const LEGACY_COLUMNS = [
+    'recipient_id',
+    'type',
+    'title',
+    'body',
+    'url',
+    'actor_name',
+    'is_read',
+    'read_at',
+] as const;
+
+export interface SysNotificationMigrationResult {
+    status: 'migrated' | 'already_done' | 'not_applicable' | 'error';
+    /** Number of legacy rows split into inbox + receipt + event. */
+    migrated: number;
+    error?: string;
+}
+
+export interface SysNotificationMigrationOptions {
+    driver: IDataDriver;
+    data: IDataEngine;
+    /** Defaults to `() => new Date().toISOString()`. */
+    now?(): string;
+}
+
+export async function migrateSysNotificationToEvent(
+    opts: SysNotificationMigrationOptions,
+): Promise<SysNotificationMigrationResult> {
+    const driver = opts.driver as any;
+    const { data } = opts;
+    const now = opts.now ?? (() => new Date().toISOString());
+
+    if (typeof driver?.raw !== 'function') {
+        return {
+            status: 'error',
+            migrated: 0,
+            error: 'migrateSysNotificationToEvent: driver must expose a .raw(sql, bindings?) method.',
+        };
+    }
+
+    // No legacy `recipient_id` column → the table never held the inbox shape.
+    if (!(await columnExists(driver, EVENT_OBJECT, 'recipient_id'))) {
+        return { status: 'not_applicable', migrated: 0 };
+    }
+
+    // Only null-out columns that actually exist on this deployment.
+    const presentLegacy: string[] = [];
+    for (const col of LEGACY_COLUMNS) {
+        if (await columnExists(driver, EVENT_OBJECT, col)) presentLegacy.push(col);
+    }
+
+    let migrated = 0;
+    try {
+        const rows = await selectLegacyRows(driver);
+        if (rows.length === 0) return { status: 'already_done', migrated: 0 };
+
+        for (const row of rows) {
+            const id = String(row.id);
+            const recipientId = row.recipient_id != null ? String(row.recipient_id) : null;
+            if (!recipientId) continue; // defensive — guarded by the SELECT filter
+            const orgId = row.organization_id != null ? String(row.organization_id) : null;
+            const createdAt = row.created_at != null ? String(row.created_at) : now();
+            const title = row.title != null ? String(row.title) : (row.type != null ? String(row.type) : 'Notification');
+            const isRead = row.is_read === true || row.is_read === 1 || row.is_read === '1';
+            // One topic for both the inbox row and the rewritten event, so the
+            // materialization and its L2 event never disagree (empty/null legacy
+            // `type` → 'legacy').
+            const eventTopic = row.type != null && String(row.type).length > 0 ? String(row.type) : 'legacy';
+
+            // L5 in-app materialization.
+            await data.insert(INBOX_OBJECT, {
+                user_id: recipientId,
+                notification_id: id,
+                topic: eventTopic,
+                title,
+                body_md: row.body ?? null,
+                severity: 'info',
+                action_url: row.url ?? null,
+                organization_id: orgId,
+                created_at: createdAt,
+            });
+
+            // L5 receipt (read-state spine).
+            await data.insert(RECEIPT_OBJECT, {
+                notification_id: id,
+                delivery_id: null,
+                user_id: recipientId,
+                channel: 'inbox',
+                state: isRead ? 'read' : 'delivered',
+                at: isRead && row.read_at != null ? String(row.read_at) : createdAt,
+                organization_id: orgId,
+                created_at: createdAt,
+            });
+
+            // Rewrite the row itself to the L2 event shape (engine handles JSON).
+            await data.update(
+                EVENT_OBJECT,
+                {
+                    id,
+                    topic: eventTopic,
+                    severity: 'info',
+                    payload: {
+                        title: row.title ?? null,
+                        body: row.body ?? null,
+                        url: row.url ?? null,
+                        actorName: row.actor_name ?? null,
+                    },
+                },
+                { where: { id } },
+            );
+
+            // Clear the legacy inbox columns so the row no longer matches the
+            // migration filter (idempotency) and carries no stale recipient.
+            if (presentLegacy.length > 0) {
+                const setClause = presentLegacy.map((c) => `"${c}" = NULL`).join(', ');
+                await driver.raw(`UPDATE "${EVENT_OBJECT}" SET ${setClause} WHERE id = ?`, [id]);
+            }
+
+            migrated += 1;
+        }
+
+        return { status: 'migrated', migrated };
+    } catch (err: any) {
+        return { status: 'error', migrated, error: err?.message ?? String(err) };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+async function selectLegacyRows(driver: any): Promise<any[]> {
+    const result: any[] = await driver.raw(
+        `SELECT id, recipient_id, type, title, body, url, actor_name, is_read, read_at, created_at, organization_id ` +
+            `FROM "${EVENT_OBJECT}" WHERE recipient_id IS NOT NULL`,
+    );
+    // knex wraps some results as `[rows]`; normalize both shapes.
+    if (Array.isArray(result) && result.length > 0 && Array.isArray(result[0])) {
+        return result[0];
+    }
+    return Array.isArray(result) ? result : [];
+}
+
+async function columnExists(driver: any, table: string, column: string): Promise<boolean> {
+    // SQLite path: PRAGMA table_info. On Postgres/others this raises a syntax
+    // error — swallow it *locally* and fall through to information_schema (the
+    // outer-catch version of this would never reach the fallback, making the
+    // migration silently no-op on every non-SQLite DB).
+    try {
+        const rows: any = await driver.raw(`PRAGMA table_info("${table}")`);
+        const list: any[] = Array.isArray(rows)
+            ? (Array.isArray(rows[0]) ? rows[0] : rows)
+            : [];
+        if (list.length > 0 && list.some((r: any) => r?.name != null)) {
+            return list.some((r: any) => r?.name === column);
+        }
+    } catch {
+        /* not SQLite — fall through to information_schema */
+    }
+    // Postgres / others.
+    try {
+        const result: any = await driver.raw(
+            `SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name = ?`,
+            [table, column],
+        );
+        const list: any[] = Array.isArray(result)
+            ? (Array.isArray(result[0]) ? result[0] : result)
+            : [];
+        return list.length > 0;
+    } catch {
+        return false;
+    }
+}

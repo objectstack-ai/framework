@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
 import { AutomationEngine } from './engine.js';
 import { AutomationServicePlugin } from './plugin.js';
+import { registerScreenNodes } from './builtin/screen-nodes.js';
 import type { NodeExecutor } from './engine.js';
 import type { IAutomationService } from '@objectstack/spec/contracts';
 
@@ -433,6 +434,62 @@ describe('AutomationEngine', () => {
             expect(executed).toContain('after');
             // The suspension is consumed exactly once.
             expect(engine.listSuspendedRuns()).toHaveLength(0);
+        });
+
+        // ── Screen-flow runtime (interactive `screen` nodes) ──
+        const fakeScreenCtx = () => ({ logger: { info() {}, warn() {}, error() {} } }) as any;
+
+        it('suspends at a screen with fields, surfaces the spec, and resume sets bare vars', async () => {
+            registerScreenNodes(engine, fakeScreenCtx());
+            let captured: unknown = 'UNSET';
+            engine.registerNodeExecutor({
+                type: 'capture',
+                async execute(_node, variables) { captured = variables.get('new_assignee'); return { success: true }; },
+            });
+            engine.registerFlow('screen_flow', {
+                name: 'screen_flow', label: 'Screen Flow', type: 'screen',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'collect', type: 'screen', label: 'New Assignee', config: { fields: [{ name: 'new_assignee', label: 'New Assignee', type: 'text', required: true }] } },
+                    { id: 'apply', type: 'capture', label: 'Apply' },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'collect' },
+                    { id: 'e2', source: 'collect', target: 'apply' },
+                    { id: 'e3', source: 'apply', target: 'end' },
+                ],
+            });
+
+            const paused = await engine.execute('screen_flow');
+            expect(paused.status).toBe('paused');
+            expect(paused.screen).toMatchObject({ nodeId: 'collect', title: 'New Assignee' });
+            expect(paused.screen!.fields[0]).toMatchObject({ name: 'new_assignee', required: true, type: 'text' });
+            expect(captured).toBe('UNSET'); // downstream not run yet
+            // Re-fetchable for a refreshed client.
+            expect(engine.getSuspendedScreen(paused.runId!)).toMatchObject({ nodeId: 'collect' });
+
+            const done = await engine.resume(paused.runId!, { variables: { new_assignee: 'ada@example.com' } });
+            expect(done.success).toBe(true);
+            expect(done.status).toBeUndefined();
+            expect(captured).toBe('ada@example.com'); // bare var set on resume → downstream read it
+            expect(engine.getSuspendedScreen(paused.runId!)).toBeNull();
+        });
+
+        it('passes a field-less screen straight through (no pause)', async () => {
+            registerScreenNodes(engine, fakeScreenCtx());
+            engine.registerFlow('passthrough_screen', {
+                name: 'passthrough_screen', label: 'Passthrough', type: 'screen',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 's', type: 'screen', label: 'noop', config: {} },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [{ id: 'e1', source: 'start', target: 's' }, { id: 'e2', source: 's', target: 'end' }],
+            });
+            const r = await engine.execute('passthrough_screen');
+            expect(r.success).toBe(true);
+            expect(r.status).toBeUndefined();
         });
 
         it('should select the branch named by the resume signal label', async () => {
@@ -1330,6 +1387,25 @@ describe('AutomationEngine - Safe Expression Evaluation', () => {
         const vars = new Map<string, unknown>();
         expect(engine.evaluateCondition('true', vars)).toBe(true);
         expect(engine.evaluateCondition('false', vars)).toBe(false);
+    });
+
+    it('evaluates CEL record-change conditions with bare fields and previous.* snapshot', () => {
+        // The record-change trigger shape: the new record's fields are seeded at
+        // top level, plus a `previous` snapshot. Regression guard — a broken
+        // ExpressionEngine binding (e.g. an ESM `require` stub) made the CEL path
+        // throw and silently return false, skipping every record-change flow.
+        const vars = new Map<string, unknown>();
+        vars.set('status', 'done');
+        vars.set('assignee', 'newowner@example.com');
+        vars.set('previous', { status: 'in_review', assignee: 'ada@example.com' });
+
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'status == "done" && previous.status != "done"' }, vars)).toBe(true);
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'assignee != previous.assignee' }, vars)).toBe(true);
+
+        const unchanged = new Map<string, unknown>();
+        unchanged.set('status', 'done');
+        unchanged.set('previous', { status: 'done' });
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'status == "done" && previous.status != "done"' }, unchanged)).toBe(false);
     });
 
     it('should not execute malicious code', () => {

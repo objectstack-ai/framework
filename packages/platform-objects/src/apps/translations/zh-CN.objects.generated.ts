@@ -56,6 +56,9 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      me: {
+        label: "My Profile"
+      },
       all_users: {
         label: "全部用户"
       },
@@ -108,10 +111,28 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "修改邮箱",
         successMessage: "已发送验证邮件，请前往新邮箱确认。"
       },
+      resend_verification_email: {
+        label: "Resend Verification Email",
+        successMessage: "Verification email sent — check your inbox."
+      },
       delete_my_account: {
         label: "删除我的账号",
         confirmText: "确定要永久删除您的账户吗？此操作无法撤销——您的所有会话都将被终止，并将按照配置的保留策略移除您拥有的所有数据。",
         successMessage: "已删除账号"
+      },
+      enable_two_factor: {
+        label: "Enable Two-Factor Auth",
+        successMessage: "Two-factor authentication enabled. Scan the QR code or paste the otpauth URI into your authenticator app, then verify a code to complete setup."
+      },
+      disable_two_factor: {
+        label: "Disable Two-Factor Auth",
+        confirmText: "Turn off two-factor authentication? Your account will be less secure.",
+        successMessage: "Two-factor authentication disabled."
+      },
+      generate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Generate a new set of backup codes? Any previously generated codes will stop working.",
+        successMessage: "New backup codes generated — save them somewhere safe."
       }
     }
   },
@@ -331,6 +352,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "退出组织",
         confirmText: "要退出该组织吗？退出后你将失去对其所有资源的访问权限。",
         successMessage: "你已退出该组织"
+      },
+      change_slug: {
+        label: "Change Slug",
+        confirmText: "Renaming the slug rewrites every platform subdomain for this org and parks the old slug for 90 days. Continue?",
+        successMessage: "Organization slug changed"
       }
     }
   },
@@ -359,6 +385,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           admin: "管理员",
           member: "成员"
         }
+      }
+    },
+    _views: {
+      mine: {
+        label: "My Memberships"
       }
     },
     _actions: {
@@ -760,6 +791,10 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       backup_codes: {
         label: "备用恢复码",
         help: "JSON 序列化的备用恢复码"
+      },
+      verified: {
+        label: "Verified",
+        help: "Whether the enrollment was confirmed with a valid TOTP code (managed by better-auth)"
       }
     },
     _views: {
@@ -998,6 +1033,9 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      mine: {
+        label: "My Applications"
+      },
       active: {
         label: "启用"
       },
@@ -1180,473 +1218,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       expires_at: {
         label: "过期时间",
         help: "该密钥不再用于验证令牌的时间"
-      }
-    }
-  },
-  sys_role: {
-    label: "角色",
-    pluralLabel: "角色",
-    description: "用于 RBAC 访问控制的角色定义",
-    fields: {
-      label: {
-        label: "显示名称"
-      },
-      name: {
-        label: "API 名称",
-        help: "角色的唯一机器名称（例如 admin、editor、viewer）"
-      },
-      description: {
-        label: "描述"
-      },
-      permissions: {
-        label: "权限",
-        help: "权限字符串数组的 JSON 序列化内容"
-      },
-      active: {
-        label: "启用"
-      },
-      is_default: {
-        label: "默认角色",
-        help: "自动分配给新用户"
-      },
-      id: {
-        label: "角色 ID"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      active: {
-        label: "启用"
-      },
-      default_roles: {
-        label: "默认"
-      },
-      custom: {
-        label: "自定义"
-      },
-      all_roles: {
-        label: "全部"
-      }
-    },
-    _actions: {
-      activate_role: {
-        label: "激活角色",
-        successMessage: "角色已激活"
-      },
-      deactivate_role: {
-        label: "停用角色",
-        confirmText: "确定要停用此角色吗？拥有该角色的用户仍保留其分配，但在重新激活之前该角色将不再授予权限。",
-        successMessage: "角色已停用"
-      },
-      set_default_role: {
-        label: "设为默认",
-        confirmText: "将此角色设为新用户的默认角色吗？现有用户不受影响。",
-        successMessage: "已更新默认角色"
-      },
-      clone_role: {
-        label: "克隆角色",
-        successMessage: "已克隆角色"
-      }
-    }
-  },
-  sys_permission_set: {
-    label: "权限集",
-    pluralLabel: "权限集",
-    description: "用于精细化访问控制的命名权限分组",
-    fields: {
-      label: {
-        label: "显示名称"
-      },
-      name: {
-        label: "API 名称",
-        help: "权限集的唯一机器名称"
-      },
-      description: {
-        label: "描述"
-      },
-      object_permissions: {
-        label: "对象权限",
-        help: "对象级 CRUD 权限的 JSON 序列化内容"
-      },
-      field_permissions: {
-        label: "字段权限",
-        help: "字段级读写权限的 JSON 序列化内容"
-      },
-      system_permissions: {
-        label: "系统权限",
-        help: "系统能力名称的 JSON 序列化数组（例如 [\"setup.access\",\"studio.access\",\"manage_users\"]）"
-      },
-      row_level_security: {
-        label: "行级安全",
-        help: "行级安全策略的 JSON 序列化数组（USING/CHECK 子句）"
-      },
-      tab_permissions: {
-        label: "标签页权限",
-        help: "应用标签页可见性的 JSON 序列化映射（visible | hidden | default_on | default_off）"
-      },
-      active: {
-        label: "启用"
-      },
-      id: {
-        label: "权限集 ID"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      active: {
-        label: "启用"
-      },
-      inactive: {
-        label: "停用"
-      },
-      all_permsets: {
-        label: "全部"
-      }
-    },
-    _actions: {
-      activate_permission_set: {
-        label: "激活",
-        successMessage: "权限集已激活"
-      },
-      deactivate_permission_set: {
-        label: "停用",
-        confirmText: "确定要停用此权限集吗？现有分配仍将保留，但在重新激活之前将不再授予访问权限。",
-        successMessage: "权限集已停用"
-      },
-      clone_permission_set: {
-        label: "克隆",
-        successMessage: "已克隆权限集"
-      }
-    }
-  },
-  sys_user_permission_set: {
-    label: "用户权限集",
-    pluralLabel: "用户权限集",
-    description: "将权限集直接分配给用户（可按组织范围限定）。",
-    fields: {
-      id: {
-        label: "分配 ID",
-        help: "该分配记录的 UUID。"
-      },
-      user_id: {
-        label: "用户",
-        help: "指向 sys_user 的外键。"
-      },
-      permission_set_id: {
-        label: "权限集",
-        help: "指向 sys_permission_set 的外键。"
-      },
-      organization_id: {
-        label: "组织",
-        help: "可选的组织范围。NULL = 在所有组织上下文中都生效。"
-      },
-      granted_by: {
-        label: "授权人",
-        help: "授予该权限集的用户。"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    }
-  },
-  sys_role_permission_set: {
-    label: "角色权限集",
-    pluralLabel: "角色权限集",
-    description: "将权限集绑定到角色。",
-    fields: {
-      id: {
-        label: "绑定 ID",
-        help: "角色-权限集绑定记录的 UUID。"
-      },
-      role_id: {
-        label: "角色",
-        help: "指向 sys_role 的外键。"
-      },
-      permission_set_id: {
-        label: "权限集",
-        help: "指向 sys_permission_set 的外键。"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    }
-  },
-  sys_record_share: {
-    label: "记录共享",
-    pluralLabel: "记录共享",
-    description: "按记录粒度的共享授权——在 OWD 基础上提供显式访问",
-    fields: {
-      id: {
-        label: "共享 ID"
-      },
-      object_name: {
-        label: "对象",
-        help: "被共享记录的短对象名"
-      },
-      record_id: {
-        label: "记录",
-        help: "object_name 对应对象内该共享记录的主键"
-      },
-      recipient_type: {
-        label: "接收方类型",
-        help: "持有该授权的主体类型",
-        options: {
-          user: "用户",
-          group: "组",
-          role: "角色",
-          role_and_subordinates: "角色及下级",
-          guest: "访客"
-        }
-      },
-      recipient_id: {
-        label: "接收方",
-        help: "获得访问权限的用户 / 组 / 角色 ID"
-      },
-      access_level: {
-        label: "访问级别",
-        help: "接收方可以执行的操作——read | edit | full（转移 / 共享 / 删除）",
-        options: {
-          read: "读取",
-          edit: "编辑",
-          full: "完全访问"
-        }
-      },
-      source: {
-        label: "来源",
-        help: "该授权存在的原因——供规则求值器对账使用",
-        options: {
-          manual: "手动",
-          rule: "规则",
-          team: "团队",
-          inherited: "继承"
-        }
-      },
-      source_id: {
-        label: "来源 ID",
-        help: "当 source != manual 时，对应规则名 / 团队 ID"
-      },
-      granted_by: {
-        label: "授权人",
-        help: "创建该授权的用户（仅手动授权）"
-      },
-      reason: {
-        label: "原因",
-        help: "可选的自由文本说明，会展示给接收方"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      granted_to_me: {
-        label: "授予我的"
-      },
-      granted_by_me: {
-        label: "我授予的"
-      },
-      by_object: {
-        label: "按对象"
-      },
-      manual_grants: {
-        label: "手动授权"
-      },
-      rule_grants: {
-        label: "规则授权"
-      },
-      all_shares: {
-        label: "全部"
-      }
-    }
-  },
-  sys_sharing_rule: {
-    label: "共享规则",
-    pluralLabel: "共享规则",
-    description: "声明式共享规则，会自动生成 sys_record_share 授权。可在代码中通过 defineSharingRule() 编写，或在 Studio 条件构建器中维护。",
-    fields: {
-      id: {
-        label: "规则 ID"
-      },
-      organization_id: {
-        label: "组织",
-        help: "拥有该规则的租户；null = 全局"
-      },
-      name: {
-        label: "名称",
-        help: "唯一的 snake_case 规则名称"
-      },
-      label: {
-        label: "显示标签"
-      },
-      description: {
-        label: "描述"
-      },
-      object_name: {
-        label: "对象",
-        help: "短对象名（例如 opportunity、account）"
-      },
-      criteria_json: {
-        label: "条件（FilterCondition JSON）",
-        help: "针对 object_name 记录匹配的 JSON FilterCondition。为空表示匹配全部。"
-      },
-      recipient_type: {
-        label: "接收方类型",
-        help: "接收访问权限的主体类型——求值时会展开为用户授权。`department` 会沿 parent_department_id 树展开；`team` 为扁平结构（better-auth）。",
-        options: {
-          user: "用户",
-          team: "团队",
-          department: "部门",
-          role: "角色",
-          queue: "队列"
-        }
-      },
-      recipient_id: {
-        label: "接收方",
-        help: "根据 recipient_type 填写 department id / team id / role name / queue name / user id"
-      },
-      access_level: {
-        label: "访问级别",
-        options: {
-          read: "读取",
-          edit: "编辑",
-          full: "完全访问"
-        }
-      },
-      active: {
-        label: "启用",
-        help: "只有启用的规则才会参与生命周期求值"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      active: {
-        label: "启用"
-      },
-      inactive: {
-        label: "停用"
-      },
-      by_object: {
-        label: "按对象"
-      },
-      all_rules: {
-        label: "全部"
-      }
-    }
-  },
-  sys_share_link: {
-    label: "共享链接",
-    pluralLabel: "共享链接",
-    description: "授予对单条记录访问权限的不透明能力令牌。类似 Notion/Figma 的公开链接共享。",
-    fields: {
-      id: {
-        label: "链接 ID"
-      },
-      token: {
-        label: "令牌",
-        help: "URL 安全的不透明随机令牌（≥ 22 个字符）。本记录中唯一的机密信息。"
-      },
-      object_name: {
-        label: "对象",
-        help: "所共享记录的对象短名称（例如 ai_conversation、contracts_contract）"
-      },
-      record_id: {
-        label: "记录",
-        help: "object_name 内所共享记录的主键"
-      },
-      permission: {
-        label: "权限",
-        help: "链接持有者可对该记录执行的操作",
-        options: {
-          view: "查看",
-          comment: "评论",
-          edit: "编辑"
-        }
-      },
-      audience: {
-        label: "受众",
-        help: "在令牌校验之上额外施加的访问限制层",
-        options: {
-          public: "公开（可被索引）",
-          link_only: "任何持有链接的人",
-          signed_in: "已登录用户",
-          email: "指定邮箱"
-        }
-      },
-      expires_at: {
-        label: "过期时间",
-        help: "设置后，超过此时间点 resolveToken 将返回 null"
-      },
-      email_allowlist: {
-        label: "邮箱白名单",
-        help: "当 audience=email 时校验的小写邮箱地址"
-      },
-      password_hash: {
-        label: "密码哈希",
-        help: "Argon2/bcrypt 哈希值。设置后，界面会在呈现内容前提示输入密码。"
-      },
-      redact_fields: {
-        label: "按链接脱敏字段",
-        help: "在对象默认脱敏集之上，从响应中额外剔除的字段"
-      },
-      label: {
-        label: "标签",
-        help: "在共享对话框中显示的自由文本（例如 \"ACME Q3 合同\"）"
-      },
-      revoked_at: {
-        label: "撤销时间",
-        help: "设置后，该链接将被永久停用"
-      },
-      created_by: {
-        label: "创建人",
-        help: "链接的签发者"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      last_used_at: {
-        label: "最近使用时间",
-        help: "由 resolveToken 标记；仪表盘据此高亮显示活跃链接"
-      },
-      use_count: {
-        label: "使用次数",
-        help: "每次成功解析时由 resolveToken 递增"
-      }
-    },
-    _views: {
-      active_links: {
-        label: "活跃"
-      },
-      by_me: {
-        label: "我创建的"
-      },
-      revoked: {
-        label: "已撤销"
-      },
-      all_links: {
-        label: "全部"
       }
     }
   },
@@ -1979,28 +1550,26 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "通知 ID"
       },
-      recipient_id: {
-        label: "接收方",
-        help: "接收该通知的用户"
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
       },
-      type: {
-        label: "类型",
-        help: "通知类别——决定图标和排序优先级",
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          mention: "提及",
-          assignment: "分配",
-          comment_reply: "评论回复",
-          lead_converted: "线索转化",
-          task_due: "任务到期",
-          system: "系统"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      title: {
-        label: "标题"
-      },
-      body: {
-        label: "正文",
-        help: "可选的补充文本（单行摘要）"
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
       },
       source_object: {
         label: "来源对象",
@@ -2010,50 +1579,20 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "来源记录",
         help: "source_object 中的记录 ID"
       },
-      url: {
-        label: "深度链接",
-        help: "点击后跳转的可选 URL"
-      },
       actor_id: {
         label: "执行人",
         help: "触发该通知的用户（提及人、分配人）"
       },
-      actor_name: {
-        label: "执行人名称"
-      },
-      is_read: {
-        label: "已读",
-        help: "接收人确认后为 true"
-      },
-      read_at: {
-        label: "读取时间"
-      },
       created_at: {
         label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
       }
     },
     _views: {
-      unread: {
-        label: "未读"
+      recent: {
+        label: "Recent"
       },
-      mine: {
-        label: "我的"
-      },
-      all_notifications: {
-        label: "全部"
-      }
-    },
-    _actions: {
-      mark_read: {
-        label: "标记为已读",
-        successMessage: "已标记为已读"
-      },
-      mark_unread: {
-        label: "标记为未读",
-        successMessage: "已标记为未读"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -2331,142 +1870,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_request: {
-    label: "审批请求",
-    pluralLabel: "审批请求",
-    description: "按提交记录跟踪的实时审批实例",
-    fields: {
-      id: {
-        label: "请求 ID"
-      },
-      organization_id: {
-        label: "组织",
-        help: "拥有该审批请求的租户（从提交方上下文传播）"
-      },
-      process_name: {
-        label: "来源",
-        help: "请求来源 —— 节点驱动的审批为 `flow:<flowName|nodeId>`"
-      },
-      object_name: {
-        label: "对象"
-      },
-      record_id: {
-        label: "记录 ID"
-      },
-      submitter_id: {
-        label: "提交人"
-      },
-      submitter_comment: {
-        label: "提交备注"
-      },
-      status: {
-        label: "状态",
-        help: "请求的生命周期状态",
-        options: {
-          pending: "待处理",
-          approved: "已批准",
-          rejected: "已拒绝",
-          recalled: "已撤回"
-        }
-      },
-      current_step: {
-        label: "当前步骤",
-        help: "当前等待审批的步骤机器名称"
-      },
-      current_step_index: {
-        label: "当前步骤索引"
-      },
-      pending_approvers: {
-        label: "待审批人",
-        help: "可在当前步骤执行操作的用户 ID，逗号分隔"
-      },
-      payload_json: {
-        label: "快照",
-        help: "提交时的记录快照"
-      },
-      process_hash: {
-        label: "流程哈希",
-        help: "提交时审批流程主体的 sha256（ADR-0009 执行固定）。通过 sys_metadata_history 解析，因此流程升级不会影响进行中的请求。"
-      },
-      completed_at: {
-        label: "完成时间"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      my_pending: {
-        label: "我的待办"
-      },
-      submitted_by_me: {
-        label: "我提交的"
-      },
-      completed: {
-        label: "已完成"
-      },
-      all_requests: {
-        label: "全部"
-      }
-    }
-  },
-  sys_approval_action: {
-    label: "审批动作",
-    pluralLabel: "审批动作",
-    description: "追加写入的审批操作审计记录",
-    fields: {
-      id: {
-        label: "动作 ID"
-      },
-      organization_id: {
-        label: "组织",
-        help: "拥有该动作的租户（与父请求保持一致）"
-      },
-      request_id: {
-        label: "请求"
-      },
-      step_name: {
-        label: "步骤",
-        help: "执行该动作时对应步骤的机器名称"
-      },
-      step_index: {
-        label: "步骤索引"
-      },
-      action: {
-        label: "操作",
-        options: {
-          submit: "提交",
-          approve: "批准",
-          reject: "拒绝",
-          recall: "撤回",
-          escalate: "升级"
-        }
-      },
-      actor_id: {
-        label: "执行人"
-      },
-      comment: {
-        label: "评论"
-      },
-      created_at: {
-        label: "创建时间"
-      }
-    },
-    _views: {
-      recent: {
-        label: "最近"
-      },
-      by_actor: {
-        label: "按执行人"
-      },
-      all_actions: {
-        label: "全部"
-      }
-    }
-  },
   sys_job: {
     label: "后台任务",
     pluralLabel: "后台任务",
@@ -2657,70 +2060,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "更新时间"
-      }
-    }
-  },
-  sys_webhook: {
-    label: "Webhook",
-    pluralLabel: "Webhook",
-    description: "外发 HTTP Webhook 订阅。可在代码中通过 defineWebhook() 编写，或在 Studio 编辑器中维护；由 HTTP 连接器插件执行。",
-    fields: {
-      id: {
-        label: "Webhook ID"
-      },
-      name: {
-        label: "名称",
-        help: "唯一的 snake_case 名称——用于日志和审计引用"
-      },
-      label: {
-        label: "显示标签"
-      },
-      object_name: {
-        label: "对象",
-        help: "触发该 Webhook 的短对象名（留空 = 手动 / API 触发）"
-      },
-      triggers: {
-        label: "触发器",
-        help: "以逗号分隔的事件列表：create,update,delete,undelete,api"
-      },
-      url: {
-        label: "目标 URL",
-        help: "接收 POST 请求的外部端点"
-      },
-      method: {
-        label: "HTTP 方法",
-        help: "GET / POST / PUT / PATCH / DELETE"
-      },
-      description: {
-        label: "描述"
-      },
-      active: {
-        label: "启用",
-        help: "停用的 Webhook 会被调度器跳过"
-      },
-      definition_json: {
-        label: "定义",
-        help: "序列化的 Webhook JSON（参见 @objectstack/spec/automation/webhook）——包含完整的 headers/auth/retry/payload 配置"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      active: {
-        label: "启用"
-      },
-      inactive: {
-        label: "停用"
-      },
-      by_object: {
-        label: "按对象"
-      },
-      all_webhooks: {
-        label: "全部"
       }
     }
   },
@@ -3028,8 +2367,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "锁定状态",
         options: {
           none: "无",
-          "no-overlay": "禁止覆盖",
-          "no-delete": "禁止删除",
+          nooverlay: "no-overlay",
+          nodelete: "no-delete",
           full: "完全锁定"
         }
       },

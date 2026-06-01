@@ -802,6 +802,20 @@ export class ObjectQL implements IDataEngine {
           this.logger.debug('Registered manifest-as-app', { app: manifest.name, from: id });
       }
 
+      // 4b. Register navigation contributions (ADR-0029 D7) — nav items this
+      //     package injects into apps owned by other packages (e.g. a
+      //     capability plugin adding its menu into the `setup` app). Merged
+      //     into the target app's navigation on read by group id + priority.
+      if (Array.isArray((manifest as any).navigationContributions) && (manifest as any).navigationContributions.length > 0) {
+          for (const contribution of (manifest as any).navigationContributions) {
+              this._registry.registerAppNavContribution(contribution, id);
+          }
+          this.logger.debug('Registered navigation contributions', {
+              from: id,
+              count: (manifest as any).navigationContributions.length,
+          });
+      }
+
       // 5. Register all other metadata types generically
       const metadataArrayKeys = [
         // UI Protocol
@@ -1850,19 +1864,25 @@ export class ObjectQL implements IDataEngine {
 
        try {
            let result;
+           // Pre-update snapshot. Exposed to after-hooks via `hookContext.previous`
+           // (the HookContext contract documents `previous` for update/delete) and
+           // reused for object-level validation rules. Fetched once, only for
+           // single-id updates, when either a rule needs it (ADR-0020:
+           // state_machine / cross_field / script — a PATCH carries only changed
+           // fields) OR an afterUpdate hook is registered. The latter is what makes
+           // record-change flow triggers work: their start-condition gate reads
+           // `previous.*` (e.g. `status == "done" && previous.status != "done"`),
+           // which silently fails when `previous` is absent.
+           let priorRecord: Record<string, unknown> | null = null;
            const updateSchema = this._registry.getObject(object);
            if (hookContext.input.id) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
                validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
-               // ADR-0020: object-level rules (state_machine / cross_field /
-               // script) need the prior record — a PATCH carries only changed
-               // fields. Fetch it once, only when such a rule is declared.
-               let previous: Record<string, unknown> | null = null;
-               if (needsPriorRecord(updateSchema as any)) {
+               if (needsPriorRecord(updateSchema as any) || (this.hooks.get('afterUpdate')?.length ?? 0) > 0) {
                    const priorAst: QueryAST = { object, where: { id: hookContext.input.id }, limit: 1 };
-                   previous = await driver.findOne(object, priorAst, hookContext.input.options as any);
+                   priorRecord = await driver.findOne(object, priorAst, hookContext.input.options as any);
                }
-               evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous, logger: this.logger });
+               evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous: priorRecord, logger: this.logger });
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
@@ -1881,6 +1901,7 @@ export class ObjectQL implements IDataEngine {
 
            hookContext.event = 'afterUpdate';
            hookContext.result = result;
+           if (priorRecord) hookContext.previous = priorRecord;
            await this.triggerHooks('afterUpdate', hookContext);
 
            // Publish data.record.updated event to realtime service

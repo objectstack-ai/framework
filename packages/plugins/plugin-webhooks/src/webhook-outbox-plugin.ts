@@ -7,7 +7,6 @@ import type {
     IDataEngine,
     IRealtimeService,
 } from '@objectstack/spec/contracts';
-import { SysWebhook } from '@objectstack/platform-objects/integration';
 import { AutoEnqueuer, type AutoEnqueuerOptions } from './auto-enqueuer.js';
 import { WebhookDispatcher, type DispatcherOptions } from './dispatcher.js';
 import { MemoryWebhookOutbox } from './memory-outbox.js';
@@ -17,6 +16,7 @@ import {
     type DeliveryRetentionOptions,
 } from './retention.js';
 import { SqlWebhookOutbox } from './sql-outbox.js';
+import { SysWebhook } from './sys-webhook.object.js';
 import { SysWebhookDelivery } from './sys-webhook-delivery.object.js';
 
 export interface WebhookOutboxPluginOptions
@@ -117,12 +117,12 @@ export class WebhookOutboxPlugin implements Plugin {
             );
         }
 
-        // Register the schemas this plugin owns at runtime. `sys_webhook`
-        // (config) lives in @objectstack/platform-objects but no other
-        // plugin claims it — the webhook plugin is the natural owner
-        // since it's the consumer of those rows. `sys_webhook_delivery`
-        // (telemetry) is plugin-private. Registering them here means a
-        // stack just needs `plugins: [new WebhookOutboxPlugin(...)]`
+        // Register the schemas this plugin owns at runtime (ADR-0029 K2.a).
+        // Both `sys_webhook` (config) and `sys_webhook_delivery` (telemetry)
+        // are now defined and owned here — the webhook plugin ships its data
+        // model and behavior as one unit instead of importing `sys_webhook`
+        // from the @objectstack/platform-objects monolith. Registering them
+        // here means a stack just needs `plugins: [new WebhookOutboxPlugin(...)]`
         // and both objects auto-appear in REST/Studio/Setup nav.
         const manifest = ctx.getService<{ register(m: any): void }>('manifest');
         if (manifest && typeof manifest.register === 'function') {
@@ -136,11 +136,42 @@ export class WebhookOutboxPlugin implements Plugin {
                 description:
                     'Registers sys_webhook (configuration) and sys_webhook_delivery (durable outbox telemetry).',
                 objects: [SysWebhook, SysWebhookDelivery],
+                // ADR-0029 D7 — contribute the Webhooks entries into the
+                // Setup app's `group_integrations` slot. The plugin owns these
+                // objects (K2.a), so it ships their menu too; when the plugin
+                // isn't installed the slot stays empty.
+                navigationContributions: [
+                    {
+                        app: 'setup',
+                        group: 'group_integrations',
+                        priority: 100,
+                        items: [
+                            { id: 'nav_webhooks', type: 'object', label: 'Webhooks', objectName: 'sys_webhook', icon: 'webhook', requiresObject: 'sys_webhook' },
+                            { id: 'nav_webhook_deliveries', type: 'object', label: 'Webhook Deliveries', objectName: 'sys_webhook_delivery', icon: 'send', requiresObject: 'sys_webhook_delivery' },
+                        ],
+                    },
+                ],
             });
         } else {
             ctx.logger.warn?.(
                 '[webhook-outbox] manifest service unavailable — sys_webhook / sys_webhook_delivery will NOT appear in REST or Studio nav. Register MetadataService before WebhookOutboxPlugin.',
             );
+        }
+
+        // ADR-0029 D8 — contribute this plugin's object translations to the
+        // i18n service on kernel:ready (the i18n plugin may register later).
+        if (typeof (ctx as any).hook === 'function') {
+            (ctx as any).hook('kernel:ready', async () => {
+                try {
+                    const i18n = ctx.getService<any>('i18n');
+                    if (i18n && typeof i18n.loadTranslations === 'function') {
+                        const { WebhooksTranslations } = await import('./translations/index.js');
+                        for (const [locale, data] of Object.entries(WebhooksTranslations)) {
+                            i18n.loadTranslations(locale, data as Record<string, unknown>);
+                        }
+                    }
+                } catch { /* i18n optional */ }
+            });
         }
 
         const outbox = this.resolveOutbox(ctx);

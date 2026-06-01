@@ -12,11 +12,8 @@ import type {
 /** The object the inbox channel writes rows to. */
 export const INBOX_OBJECT = 'sys_inbox_message';
 
-/** The user identity object an email-shaped recipient is resolved against. */
-export const USER_OBJECT = 'sys_user';
-
-/** Cheap RFC-ish heuristic — "looks like an email" so we attempt id resolution. */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** The receipt object the inbox channel writes a `delivered` row to (ADR-0030). */
+export const RECEIPT_OBJECT = 'sys_notification_receipt';
 
 export interface InboxChannelOptions {
     /**
@@ -28,15 +25,8 @@ export interface InboxChannelOptions {
     getData(): IDataEngine | undefined;
     /** Object name override (default {@link INBOX_OBJECT}). */
     objectName?: string;
-    /**
-     * User identity object used to resolve an email-shaped recipient to its
-     * id (default {@link USER_OBJECT}). The inbox is keyed by user id, but
-     * flows commonly address recipients by email (e.g. an `assignee` field),
-     * so a recipient matching {@link EMAIL_SHAPE} is looked up by `email` and
-     * replaced with the matching user's `id`. Verbatim fallback applies when
-     * the recipient is not email-shaped, no user matches, or the lookup fails.
-     */
-    userObject?: string;
+    /** Receipt object name override (default {@link RECEIPT_OBJECT}). */
+    receiptObject?: string;
     /** Clock injection for deterministic tests. Defaults to `new Date()`. */
     now?(): string;
 }
@@ -48,39 +38,43 @@ export interface InboxChannelOptions {
  * call — we write a `sys_inbox_message` row in our own DB and the user's client
  * pulls it. So it needs no connector/transport. One delivery → one row keyed by
  * the recipient user id.
+ *
+ * Recipients arrive already resolved to user ids by the `RecipientResolver`
+ * (ADR-0030 P1) — the email→id fallback that used to live here moved up to the
+ * single resolution home, so the channel just keys the row by `recipient`.
  */
 export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel {
     const objectName = opts.objectName ?? INBOX_OBJECT;
-    const userObject = opts.userObject ?? USER_OBJECT;
+    const receiptObject = opts.receiptObject ?? RECEIPT_OBJECT;
     const now = opts.now ?? (() => new Date().toISOString());
 
     /**
-     * Map an email-shaped recipient to its user id; return the recipient
-     * unchanged for non-email recipients, on no match, or on any lookup error
-     * (the inbox row is best-effort keyed and must never fail on resolution).
+     * Write the `delivered` receipt for an inbox materialization. Best-effort:
+     * receipts are the read-state spine but a failure here must never turn a
+     * delivered message into a failed one — we log and move on. Skipped when the
+     * event id is absent (a synthetic/minimal stack with nothing to key on).
      */
-    async function resolveRecipient(
+    async function writeDeliveredReceipt(
         ctx: MessagingChannelContext,
         data: IDataEngine,
-        recipient: string,
-    ): Promise<string> {
-        if (!EMAIL_SHAPE.test(recipient)) return recipient;
+        r: { notificationId?: string; userId: string; organizationId?: string; at: string },
+    ): Promise<void> {
+        if (!r.notificationId) return;
         try {
-            const user = await data.findOne(userObject, {
-                where: { email: recipient },
-                fields: ['id'],
+            await data.insert(receiptObject, {
+                notification_id: r.notificationId,
+                delivery_id: null,
+                user_id: r.userId,
+                channel: 'inbox',
+                state: 'delivered',
+                at: r.at,
+                organization_id: r.organizationId ?? null,
+                created_at: r.at,
             });
-            const id = user?.id;
-            if (id != null && String(id).length > 0) return String(id);
-            ctx.logger.warn(
-                `[inbox] no '${userObject}' matched email '${recipient}'; keying inbox row by the email verbatim`,
-            );
-            return recipient;
         } catch (err) {
             ctx.logger.warn(
-                `[inbox] failed to resolve '${recipient}' to a user id (${(err as Error).message}); keying by the email verbatim`,
+                `[inbox] delivered receipt write failed for '${r.userId}' (${(err as Error).message}); inbox row stands`,
             );
-            return recipient;
         }
     }
 
@@ -98,26 +92,40 @@ export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel 
                 return { ok: true };
             }
 
-            const userId = await resolveRecipient(ctx, data, delivery.recipient);
+            const userId = delivery.recipient;
+            const at = now();
 
             const row: Record<string, unknown> = {
                 user_id: userId,
+                notification_id: n.notificationId ?? null,
                 topic: n.topic,
                 title: n.title,
                 body_md: n.body,
                 severity: n.severity ?? 'info',
                 action_url: n.actionUrl,
-                read: false,
-                created_at: now(),
+                organization_id: n.organizationId ?? null,
+                created_at: at,
             };
 
+            let inboxId: string | undefined;
             try {
                 const created = await data.insert(objectName, row);
                 const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
-                return { ok: true, externalId: id != null ? String(id) : undefined };
+                inboxId = id != null ? String(id) : undefined;
             } catch (err) {
                 return { ok: false, error: `inbox insert failed: ${(err as Error).message}` };
             }
+
+            // Read-state lives in the receipt (ADR-0030), not on the inbox row.
+            // Best-effort: a missing receipt must not fail a delivered message.
+            await writeDeliveredReceipt(ctx, data, {
+                notificationId: n.notificationId,
+                userId,
+                organizationId: n.organizationId,
+                at,
+            });
+
+            return { ok: true, externalId: inboxId };
         },
 
         classifyError(_err: unknown): ErrorClass {

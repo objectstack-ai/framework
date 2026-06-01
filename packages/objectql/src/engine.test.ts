@@ -245,6 +245,36 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('Update hooks — previous-record snapshot', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+        });
+
+        it('attaches the pre-update record to afterUpdate ctx.previous when an afterUpdate hook is registered', async () => {
+            // Regression: record-change flow triggers read `previous.*` in their
+            // start condition (e.g. `status == "done" && previous.status != "done"`).
+            // The engine must expose the pre-update row on the hook context.
+            vi.mocked(mockDriver.findOne).mockResolvedValue({ id: 't1', status: 'in_review', assignee: 'sam@example.com' });
+            vi.mocked(mockDriver.update).mockResolvedValue({ id: 't1', status: 'done', assignee: 'sam@example.com' } as any);
+
+            let captured: any = 'UNSET';
+            engine.registerHook('afterUpdate', async (ctx: any) => { captured = ctx.previous; }, { packageId: 'test' } as any);
+
+            await engine.update('task', { id: 't1', status: 'done' });
+
+            expect(mockDriver.findOne).toHaveBeenCalled();
+            expect(captured).toEqual({ id: 't1', status: 'in_review', assignee: 'sam@example.com' });
+        });
+
+        it('does not fetch the prior record when no afterUpdate hook is registered and no rule needs it', async () => {
+            vi.mocked(mockDriver.update).mockResolvedValue({ id: 't1' } as any);
+            await engine.update('task', { id: 't1', status: 'done' });
+            expect(mockDriver.findOne).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Expand Related Records', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);

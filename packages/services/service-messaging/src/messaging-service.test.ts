@@ -2,6 +2,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MessagingService } from './messaging-service.js';
+import { MemoryNotificationOutbox } from './memory-outbox.js';
 import type { Delivery, MessagingChannel, SendResult } from './channel.js';
 
 function silentLogger() {
@@ -23,6 +24,31 @@ function recordingChannel(id: string, result: SendResult = { ok: true }): {
                 return result;
             },
         },
+    };
+}
+
+/** A fake data engine capturing event inserts (and optionally a dedup hit). */
+function fakeData(findOneImpl?: (obj: string, q: any) => any) {
+    const inserts: Array<{ object: string; row: any }> = [];
+    const findOnes: Array<{ object: string; query: any }> = [];
+    return {
+        inserts,
+        findOnes,
+        getData: () => ({
+            async insert(object: string, row: any) {
+                inserts.push({ object, row });
+                return { id: `evt_${inserts.length}`, ...row };
+            },
+            async find() { return []; },
+            async findOne(object: string, query: any) {
+                findOnes.push({ object, query });
+                return findOneImpl ? findOneImpl(object, query) : null;
+            },
+            async update() { return {}; },
+            async delete() { return {}; },
+            async count() { return 0; },
+            async aggregate() { return []; },
+        }) as any,
     };
 }
 
@@ -59,22 +85,88 @@ describe('MessagingService', () => {
         });
     });
 
-    describe('emit() fan-out', () => {
-        it('defaults to the inbox channel and one delivery per recipient', async () => {
+    describe('emit() ingress + fan-out', () => {
+        it('defaults to the inbox channel and one delivery per resolved recipient', async () => {
             const inbox = recordingChannel('inbox', { ok: true, externalId: 'row_1' });
             service.registerChannel(inbox.channel);
 
             const result = await service.emit({
-                title: 'Deal closed',
-                body: 'Acme signed 🎉',
-                recipients: ['user_1', 'user_2'],
+                topic: 'deal.won',
+                audience: ['user_1', 'user_2'],
+                payload: { title: 'Deal closed', body: 'Acme signed 🎉' },
             });
 
             expect(inbox.seen.map((d) => d.recipient)).toEqual(['user_1', 'user_2']);
             expect(inbox.seen[0].channel).toBe('inbox');
+            expect(inbox.seen[0].notification.title).toBe('Deal closed');
             expect(result.delivered).toBe(2);
             expect(result.failed).toBe(0);
+            expect(result.notificationId).toMatch(/^evt_/); // synthesized w/o data layer
             expect(result.deliveries[0]).toMatchObject({ channel: 'inbox', recipient: 'user_1', ok: true, externalId: 'row_1' });
+        });
+
+        it('accepts a single (non-array) audience entry', async () => {
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            const result = await service.emit({ topic: 't', audience: 'user_9', payload: { title: 'Hi' } });
+            expect(inbox.seen.map((d) => d.recipient)).toEqual(['user_9']);
+            expect(result.delivered).toBe(1);
+        });
+
+        it('de-duplicates repeated recipients in the audience', async () => {
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            await service.emit({ topic: 't', audience: ['user_1', 'user_1'], payload: { title: 'Hi' } });
+            expect(inbox.seen.map((d) => d.recipient)).toEqual(['user_1']);
+        });
+
+        it('resolves role:/team:/owner_of: to 0 recipients when no directory (data) is present', async () => {
+            // Without a data engine the RecipientResolver can't query membership,
+            // so these selectors yield no recipients (rather than throwing).
+            // Directory-backed expansion is covered in recipient-resolver.test.ts.
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            const result = await service.emit({
+                topic: 't',
+                audience: ['role:admin', 'team:sales', { ownerOf: { object: 'lead', id: 'l1' } }],
+                payload: { title: 'Hi' },
+            });
+            expect(inbox.seen).toHaveLength(0);
+            expect(result.delivered).toBe(0);
+            expect(result.failed).toBe(0);
+        });
+
+        it('resolves role:/team:/owner_of: through the data engine when present', async () => {
+            const engine = {
+                async insert(_o: string, row: any) { return { id: 'evt_x', ...row }; },
+                async find(object: string) {
+                    if (object === 'sys_member') return [{ user_id: 'u_admin1' }, { user_id: 'u_admin2' }];
+                    if (object === 'sys_team_member') return [{ user_id: 'u_sales' }];
+                    return [];
+                },
+                async findOne(object: string) {
+                    return object === 'lead' ? { id: 'l1', owner_id: 'u_owner' } : null;
+                },
+                async update() { return {}; },
+                async delete() { return {}; },
+                async count() { return 0; },
+                async aggregate() { return []; },
+            } as any;
+            service = new MessagingService({ logger: silentLogger(), getData: () => engine });
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+
+            const result = await service.emit({
+                topic: 't',
+                audience: ['role:admin', 'team:sales', { ownerOf: { object: 'lead', id: 'l1' } }, 'u_admin1'],
+                payload: { title: 'Hi' },
+            });
+
+            // u_admin1 de-duped against the role expansion; owner resolved from the record.
+            expect(inbox.seen.map((d) => d.recipient).sort()).toEqual(
+                ['u_admin1', 'u_admin2', 'u_owner', 'u_sales'].sort(),
+            );
+            expect(result.delivered).toBe(4);
         });
 
         it('fans out across every requested channel', async () => {
@@ -84,10 +176,10 @@ describe('MessagingService', () => {
             service.registerChannel(email.channel);
 
             const result = await service.emit({
-                title: 'Hi',
-                body: 'there',
-                recipients: ['user_1'],
+                topic: 't',
+                audience: ['user_1'],
                 channels: ['inbox', 'email'],
+                payload: { title: 'Hi', body: 'there' },
             });
 
             expect(inbox.seen).toHaveLength(1);
@@ -95,12 +187,53 @@ describe('MessagingService', () => {
             expect(result.delivered).toBe(2);
         });
 
+        it('applies the preference filter — a muted channel is dropped, a mandatory topic bypasses it', async () => {
+            // Engine returns a preference muting `email` for user_1 on topic 't'.
+            const prefRow = { user_id: 'user_1', topic: 't', channel: 'email', enabled: false };
+            const engine = {
+                async insert(_o: string, row: any) { return { id: 'evt_1', ...row }; },
+                async find(object: string, query: any) {
+                    if (object === 'sys_notification_preference') {
+                        return query?.where?.topic === 't' ? [prefRow] : [];
+                    }
+                    return [];
+                },
+                async findOne() { return null; },
+                async update() { return {}; },
+                async delete() { return {}; },
+                async count() { return 0; },
+                async aggregate() { return []; },
+            } as any;
+
+            // Non-mandatory topic 't': email is muted → only inbox delivered.
+            const svc = new MessagingService({ logger: silentLogger(), getData: () => engine });
+            const inbox = recordingChannel('inbox');
+            const email = recordingChannel('email');
+            svc.registerChannel(inbox.channel);
+            svc.registerChannel(email.channel);
+            const r1 = await svc.emit({ topic: 't', audience: ['user_1'], channels: ['inbox', 'email'], payload: { title: 'Hi' } });
+            expect(inbox.seen).toHaveLength(1);
+            expect(email.seen).toHaveLength(0); // muted
+            expect(r1.delivered).toBe(1);
+
+            // Same mute, but topic is mandatory → bypass → both channels delivered.
+            const mandatory = new MessagingService({ logger: silentLogger(), getData: () => engine, mandatoryTopics: ['t'] });
+            const inbox2 = recordingChannel('inbox');
+            const email2 = recordingChannel('email');
+            mandatory.registerChannel(inbox2.channel);
+            mandatory.registerChannel(email2.channel);
+            const r2 = await mandatory.emit({ topic: 't', audience: ['user_1'], channels: ['inbox', 'email'], payload: { title: 'Hi' } });
+            expect(inbox2.seen).toHaveLength(1);
+            expect(email2.seen).toHaveLength(1); // mandatory bypass
+            expect(r2.delivered).toBe(2);
+        });
+
         it('reports a failed delivery per recipient when a channel is unregistered, without throwing', async () => {
             const result = await service.emit({
-                title: 'Hi',
-                body: 'there',
-                recipients: ['user_1', 'user_2'],
+                topic: 't',
+                audience: ['user_1', 'user_2'],
                 channels: ['email'],
+                payload: { title: 'Hi' },
             });
             expect(result.delivered).toBe(0);
             expect(result.failed).toBe(2);
@@ -114,16 +247,90 @@ describe('MessagingService', () => {
                     throw new Error('boom');
                 },
             });
-            const result = await service.emit({ title: 'x', body: 'y', recipients: ['user_1'] });
+            const result = await service.emit({ topic: 't', audience: ['user_1'], payload: { title: 'x' } });
             expect(result.failed).toBe(1);
             expect(result.deliveries[0].error).toContain('boom');
         });
 
         it('surfaces a channel-reported failure (ok:false)', async () => {
             service.registerChannel(recordingChannel('inbox', { ok: false, error: 'quota exceeded' }).channel);
-            const result = await service.emit({ title: 'x', body: 'y', recipients: ['user_1'] });
+            const result = await service.emit({ topic: 't', audience: ['user_1'], payload: { title: 'x' } });
             expect(result.failed).toBe(1);
             expect(result.deliveries[0].error).toBe('quota exceeded');
+        });
+    });
+
+    describe('emit() with a delivery outbox (P1)', () => {
+        it('enqueues a pending delivery per (recipient × channel) instead of fanning out inline', async () => {
+            const outbox = new MemoryNotificationOutbox(1);
+            const inbox = recordingChannel('inbox');
+            service = new MessagingService({ logger: silentLogger(), outbox });
+            service.registerChannel(inbox.channel);
+
+            const result = await service.emit({
+                topic: 'deal.won',
+                audience: ['user_1', 'user_2'],
+                payload: { title: 'Deal closed', body: 'Acme' },
+            });
+
+            // Nothing sent inline — the dispatcher owns the send.
+            expect(inbox.seen).toHaveLength(0);
+            expect(result.delivered).toBe(2); // 2 enqueued (accepted)
+            const rows = await outbox.list();
+            expect(rows).toHaveLength(2);
+            expect(rows.every((r) => r.status === 'pending')).toBe(true);
+            expect(rows[0].payload).toMatchObject({ title: 'Deal closed', body: 'Acme', severity: 'info' });
+            expect(rows.map((r) => r.recipientId).sort()).toEqual(['user_1', 'user_2']);
+        });
+    });
+
+    describe('emit() L2 event persistence', () => {
+        it('writes one sys_notification event row carrying topic/payload/severity/source/actor', async () => {
+            const data = fakeData();
+            service = new MessagingService({ logger: silentLogger(), getData: data.getData, now: () => '2026-06-01T00:00:00.000Z' });
+            service.registerChannel(recordingChannel('inbox').channel);
+
+            const result = await service.emit({
+                topic: 'task.assigned',
+                audience: ['user_1'],
+                severity: 'warning',
+                source: { object: 'task', id: 't_7' },
+                actorId: 'user_admin',
+                organizationId: 'org_1',
+                payload: { title: 'Assigned' },
+            });
+
+            const event = data.inserts.find((i) => i.object === 'sys_notification');
+            expect(event).toBeDefined();
+            expect(event!.row).toMatchObject({
+                topic: 'task.assigned',
+                severity: 'warning',
+                source_object: 'task',
+                source_id: 't_7',
+                actor_id: 'user_admin',
+                organization_id: 'org_1',
+                created_at: '2026-06-01T00:00:00.000Z',
+            });
+            expect(result.notificationId).toBe('evt_1');
+        });
+
+        it('is idempotent on dedupKey — a matching prior event skips fan-out', async () => {
+            const data = fakeData((obj) => (obj === 'sys_notification' ? { id: 'evt_existing' } : null));
+            service = new MessagingService({ logger: silentLogger(), getData: data.getData });
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+
+            const result = await service.emit({
+                topic: 'task.assigned',
+                audience: ['user_1'],
+                dedupKey: 'task.assigned:t_7:user_1',
+                payload: { title: 'Assigned' },
+            });
+
+            expect(result.deduped).toBe(true);
+            expect(result.notificationId).toBe('evt_existing');
+            expect(inbox.seen).toHaveLength(0); // no re-fan
+            expect(data.inserts.some((i) => i.object === 'sys_notification')).toBe(false);
         });
     });
 });

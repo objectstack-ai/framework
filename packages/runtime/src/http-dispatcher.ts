@@ -1677,6 +1677,8 @@ export class HttpDispatcher {
      *   POST   /:name/toggle         → toggleFlow
      *   GET    /:name/runs           → listRuns
      *   GET    /:name/runs/:runId    → getRun
+     *   POST   /:name/runs/:runId/resume → resume a paused run (screen input / ADR-0019)
+     *   GET    /:name/runs/:runId/screen → the screen a paused run awaits
      */
     async handleAutomation(path: string, method: string, body: any, context: HttpProtocolContext, query?: any): Promise<HttpDispatcherResult> {
         const automationService = await this.getService(CoreServiceName.enum.automation);
@@ -1818,8 +1820,38 @@ export class HttpDispatcher {
                 }
             }
 
+            // POST /:name/runs/:runId/resume → resume a paused run (screen-flow
+            // runtime / ADR-0019). Body `{ inputs }` = a screen node's collected
+            // values, applied as bare flow variables; `output`/`branchLabel` also
+            // forwarded for approval-style resumes. Returns the next paused
+            // `{ screen }` (multi-screen) or the completed result.
+            if (parts[1] === 'runs' && parts[2] && parts[3] === 'resume' && m === 'POST') {
+                if (typeof automationService.resume === 'function') {
+                    const b = (body && typeof body === 'object') ? body : {};
+                    const inputs = (b.inputs ?? b.variables);
+                    const signal: any = {};
+                    if (inputs && typeof inputs === 'object') signal.variables = inputs;
+                    if (b.output && typeof b.output === 'object') signal.output = b.output;
+                    if (typeof b.branchLabel === 'string') signal.branchLabel = b.branchLabel;
+                    const result = await automationService.resume(parts[2], signal);
+                    return { handled: true, response: this.success(result) };
+                }
+                return { handled: true, response: this.error('Resume not supported', 501) };
+            }
+
+            // GET /:name/runs/:runId/screen → the screen a paused run awaits
+            // (refresh-safe re-fetch for the UI flow-runner).
+            if (parts[1] === 'runs' && parts[2] && parts[3] === 'screen' && m === 'GET') {
+                if (typeof automationService.getSuspendedScreen === 'function') {
+                    const screen = automationService.getSuspendedScreen(parts[2]);
+                    if (!screen) return { handled: true, response: this.error('No pending screen for run', 404) };
+                    return { handled: true, response: this.success({ runId: parts[2], screen }) };
+                }
+                return { handled: true, response: this.error('Screen lookup not supported', 501) };
+            }
+
             // GET /:name/runs/:runId → getRun
-            if (parts[1] === 'runs' && parts[2] && m === 'GET') {
+            if (parts[1] === 'runs' && parts[2] && !parts[3] && m === 'GET') {
                 if (typeof automationService.getRun === 'function') {
                     const run = await automationService.getRun(parts[2]);
                     if (!run) return { handled: true, response: this.error('Execution not found', 404) };

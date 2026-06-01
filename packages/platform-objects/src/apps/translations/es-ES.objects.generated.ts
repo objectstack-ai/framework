@@ -56,6 +56,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      me: {
+        label: "My Profile"
+      },
       all_users: {
         label: "Todos los usuarios"
       },
@@ -108,10 +111,28 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Cambiar correo",
         successMessage: "Correo de verificación enviado; revisa la nueva dirección para confirmar."
       },
+      resend_verification_email: {
+        label: "Resend Verification Email",
+        successMessage: "Verification email sent — check your inbox."
+      },
       delete_my_account: {
         label: "Eliminar mi cuenta",
         confirmText: "¿Eliminar tu cuenta de forma permanente? Esta acción no se puede deshacer: se cerrarán todas tus sesiones y se eliminarán todos los datos de tu propiedad según la política de retención configurada.",
         successMessage: "Cuenta eliminada"
+      },
+      enable_two_factor: {
+        label: "Enable Two-Factor Auth",
+        successMessage: "Two-factor authentication enabled. Scan the QR code or paste the otpauth URI into your authenticator app, then verify a code to complete setup."
+      },
+      disable_two_factor: {
+        label: "Disable Two-Factor Auth",
+        confirmText: "Turn off two-factor authentication? Your account will be less secure.",
+        successMessage: "Two-factor authentication disabled."
+      },
+      generate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Generate a new set of backup codes? Any previously generated codes will stop working.",
+        successMessage: "New backup codes generated — save them somewhere safe."
       }
     }
   },
@@ -331,6 +352,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Abandonar organización",
         confirmText: "¿Abandonar esta organización? Perderá el acceso a todos sus recursos.",
         successMessage: "Ha abandonado la organización"
+      },
+      change_slug: {
+        label: "Change Slug",
+        confirmText: "Renaming the slug rewrites every platform subdomain for this org and parks the old slug for 90 days. Continue?",
+        successMessage: "Organization slug changed"
       }
     }
   },
@@ -359,6 +385,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           admin: "Administrador",
           member: "Miembro"
         }
+      }
+    },
+    _views: {
+      mine: {
+        label: "My Memberships"
       }
     },
     _actions: {
@@ -760,6 +791,10 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       backup_codes: {
         label: "Códigos de respaldo",
         help: "Códigos de recuperación de respaldo serializados en JSON."
+      },
+      verified: {
+        label: "Verified",
+        help: "Whether the enrollment was confirmed with a valid TOTP code (managed by better-auth)"
       }
     },
     _views: {
@@ -998,6 +1033,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      mine: {
+        label: "My Applications"
+      },
       active: {
         label: "Activo"
       },
@@ -1180,473 +1218,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       expires_at: {
         label: "Caduca el",
         help: "Momento en que la clave ya no podrá utilizarse para verificar tokens."
-      }
-    }
-  },
-  sys_role: {
-    label: "Rol",
-    pluralLabel: "Roles",
-    description: "Definiciones de rol para el control de acceso RBAC",
-    fields: {
-      label: {
-        label: "Nombre visible"
-      },
-      name: {
-        label: "Nombre de API",
-        help: "Nombre técnico único del rol (p. ej. admin, editor, viewer)."
-      },
-      description: {
-        label: "Descripción"
-      },
-      permissions: {
-        label: "Permisos",
-        help: "Matriz serializada en JSON de cadenas de permisos."
-      },
-      active: {
-        label: "Activo"
-      },
-      is_default: {
-        label: "Rol predeterminado",
-        help: "Se asigna automáticamente a los nuevos usuarios."
-      },
-      id: {
-        label: "ID de rol"
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      active: {
-        label: "Activo"
-      },
-      default_roles: {
-        label: "Predeterminado"
-      },
-      custom: {
-        label: "Personalizado"
-      },
-      all_roles: {
-        label: "Todos"
-      }
-    },
-    _actions: {
-      activate_role: {
-        label: "Activar rol",
-        successMessage: "Rol activado"
-      },
-      deactivate_role: {
-        label: "Desactivar rol",
-        confirmText: "¿Desactivar este rol? Los usuarios con el rol conservan su asignación, pero el rol deja de otorgar permisos hasta que se vuelva a activar.",
-        successMessage: "Rol desactivado"
-      },
-      set_default_role: {
-        label: "Establecer como predeterminado",
-        confirmText: "¿Convertir este en el rol predeterminado para los nuevos usuarios? Los usuarios existentes no se ven afectados.",
-        successMessage: "Rol predeterminado actualizado"
-      },
-      clone_role: {
-        label: "Clonar rol",
-        successMessage: "Rol clonado"
-      }
-    }
-  },
-  sys_permission_set: {
-    label: "Conjunto de permisos",
-    pluralLabel: "Conjuntos de permisos",
-    description: "Agrupaciones de permisos con nombre para un control de acceso detallado",
-    fields: {
-      label: {
-        label: "Nombre visible"
-      },
-      name: {
-        label: "Nombre de API",
-        help: "Nombre técnico único del conjunto de permisos."
-      },
-      description: {
-        label: "Descripción"
-      },
-      object_permissions: {
-        label: "Permisos de objeto",
-        help: "Permisos CRUD a nivel de objeto serializados en JSON."
-      },
-      field_permissions: {
-        label: "Permisos de campo",
-        help: "Permisos de lectura/escritura a nivel de campo serializados en JSON."
-      },
-      system_permissions: {
-        label: "Permisos del sistema",
-        help: "Array serializado en JSON de nombres de capacidades del sistema (p. ej. [\"setup.access\",\"studio.access\",\"manage_users\"])"
-      },
-      row_level_security: {
-        label: "Seguridad a nivel de fila",
-        help: "Array serializado en JSON de políticas de seguridad a nivel de fila (cláusulas USING/CHECK)"
-      },
-      tab_permissions: {
-        label: "Permisos de pestañas",
-        help: "Mapa serializado en JSON de la visibilidad de las pestañas de la app (visible | hidden | default_on | default_off)"
-      },
-      active: {
-        label: "Activo"
-      },
-      id: {
-        label: "ID de conjunto de permisos"
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      active: {
-        label: "Activo"
-      },
-      inactive: {
-        label: "Inactivo"
-      },
-      all_permsets: {
-        label: "Todos"
-      }
-    },
-    _actions: {
-      activate_permission_set: {
-        label: "Activar",
-        successMessage: "Conjunto de permisos activado"
-      },
-      deactivate_permission_set: {
-        label: "Desactivar",
-        confirmText: "¿Desactivar este conjunto de permisos? Las asignaciones existentes se mantienen, pero dejan de otorgar acceso hasta que se vuelva a activar.",
-        successMessage: "Conjunto de permisos desactivado"
-      },
-      clone_permission_set: {
-        label: "Clonar",
-        successMessage: "Conjunto de permisos clonado"
-      }
-    }
-  },
-  sys_user_permission_set: {
-    label: "Conjunto de permisos de usuario",
-    pluralLabel: "Conjuntos de permisos de usuario",
-    description: "Asignación directa de un conjunto de permisos a un usuario (opcionalmente con ámbito de organización).",
-    fields: {
-      id: {
-        label: "ID de asignación",
-        help: "UUID de la asignación."
-      },
-      user_id: {
-        label: "Usuario",
-        help: "Clave foránea a sys_user."
-      },
-      permission_set_id: {
-        label: "Conjunto de permisos",
-        help: "Clave foránea a sys_permission_set."
-      },
-      organization_id: {
-        label: "Organización",
-        help: "Ámbito de organización opcional. NULL = se aplica en cualquier contexto de organización."
-      },
-      granted_by: {
-        label: "Concedido por",
-        help: "Usuario que concedió este conjunto de permisos."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    }
-  },
-  sys_role_permission_set: {
-    label: "Conjunto de permisos de rol",
-    pluralLabel: "Conjuntos de permisos de rol",
-    description: "Vincula un conjunto de permisos a un rol.",
-    fields: {
-      id: {
-        label: "ID de vinculación",
-        help: "UUID de la vinculación rol-conjunto de permisos."
-      },
-      role_id: {
-        label: "Rol",
-        help: "Clave foránea a sys_role."
-      },
-      permission_set_id: {
-        label: "Conjunto de permisos",
-        help: "Clave foránea a sys_permission_set."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    }
-  },
-  sys_record_share: {
-    label: "Compartición de registro",
-    pluralLabel: "Comparticiones de registro",
-    description: "Concesión de compartición por registro; amplía OWD con acceso explícito.",
-    fields: {
-      id: {
-        label: "ID de compartición"
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto del registro compartido."
-      },
-      record_id: {
-        label: "Registro",
-        help: "Clave primaria del registro compartido dentro de object_name."
-      },
-      recipient_type: {
-        label: "Tipo de destinatario",
-        help: "Tipo de principal que posee la concesión.",
-        options: {
-          user: "Usuario",
-          group: "Grupo",
-          role: "Rol",
-          role_and_subordinates: "Rol y subordinados",
-          guest: "Invitado"
-        }
-      },
-      recipient_id: {
-        label: "Destinatario",
-        help: "ID del usuario/grupo/rol que recibe acceso."
-      },
-      access_level: {
-        label: "Nivel de acceso",
-        help: "Lo que puede hacer el destinatario: read | edit | full (transfer/share/delete).",
-        options: {
-          read: "Leer",
-          edit: "Editar",
-          full: "Total"
-        }
-      },
-      source: {
-        label: "Origen",
-        help: "Motivo por el que existe esta concesión; lo utiliza el evaluador de reglas para reconciliar.",
-        options: {
-          manual: "Manual",
-          rule: "Regla",
-          team: "Equipo",
-          inherited: "Heredado"
-        }
-      },
-      source_id: {
-        label: "ID de origen",
-        help: "Nombre de la regla / ID del equipo cuando source != manual."
-      },
-      granted_by: {
-        label: "Concedido por",
-        help: "Usuario que creó la concesión (solo manual)."
-      },
-      reason: {
-        label: "Motivo",
-        help: "Explicación opcional en texto libre que se muestra al destinatario."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      granted_to_me: {
-        label: "Concedidos a mí"
-      },
-      granted_by_me: {
-        label: "Concedidos por mí"
-      },
-      by_object: {
-        label: "Por objeto"
-      },
-      manual_grants: {
-        label: "Concesiones manuales"
-      },
-      rule_grants: {
-        label: "Concesiones por regla"
-      },
-      all_shares: {
-        label: "Todas"
-      }
-    }
-  },
-  sys_sharing_rule: {
-    label: "Regla de compartición",
-    pluralLabel: "Reglas de compartición",
-    description: "Regla de compartición declarativa que materializa automáticamente concesiones de sys_record_share. Se define mediante defineSharingRule() en código o con el generador de criterios de Studio.",
-    fields: {
-      id: {
-        label: "ID de regla"
-      },
-      organization_id: {
-        label: "Organización",
-        help: "Tenant que posee esta regla; null = global."
-      },
-      name: {
-        label: "Nombre",
-        help: "Nombre de regla snake_case único."
-      },
-      label: {
-        label: "Nombre visible"
-      },
-      description: {
-        label: "Descripción"
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto (p. ej. opportunity, account)."
-      },
-      criteria_json: {
-        label: "Criterios (JSON de FilterCondition)",
-        help: "FilterCondition JSON comparado con los registros de object_name. Vacío = coincide con todos."
-      },
-      recipient_type: {
-        label: "Tipo de destinatario",
-        help: "Tipo de principal que recibe acceso; se expande a concesiones de usuario durante la evaluación. `department` recorre el árbol parent_department_id; `team` es plano (better-auth).",
-        options: {
-          user: "Usuario",
-          team: "Equipo",
-          department: "Departamento",
-          role: "Rol",
-          queue: "Cola"
-        }
-      },
-      recipient_id: {
-        label: "Destinatario",
-        help: "ID de departamento / ID de equipo / nombre del rol / nombre de la cola / ID del usuario según recipient_type."
-      },
-      access_level: {
-        label: "Nivel de acceso",
-        options: {
-          read: "Leer",
-          edit: "Editar",
-          full: "Total"
-        }
-      },
-      active: {
-        label: "Activo",
-        help: "Solo las reglas activas participan en la evaluación del ciclo de vida."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      active: {
-        label: "Activo"
-      },
-      inactive: {
-        label: "Inactivo"
-      },
-      by_object: {
-        label: "Por objeto"
-      },
-      all_rules: {
-        label: "Todas"
-      }
-    }
-  },
-  sys_share_link: {
-    label: "Enlace de uso compartido",
-    pluralLabel: "Enlaces de uso compartido",
-    description: "Token de capacidad opaco que concede acceso a un único registro. Uso compartido mediante enlace público al estilo de Notion/Figma.",
-    fields: {
-      id: {
-        label: "ID del enlace"
-      },
-      token: {
-        label: "Token",
-        help: "Token aleatorio opaco seguro para URL (≥ 22 caracteres). El único secreto de esta fila."
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto del registro compartido (p. ej. ai_conversation, contracts_contract)"
-      },
-      record_id: {
-        label: "Registro",
-        help: "Clave principal del registro compartido dentro de object_name"
-      },
-      permission: {
-        label: "Permiso",
-        help: "Lo que el titular del enlace puede hacer con el registro",
-        options: {
-          view: "Ver",
-          comment: "Comentar",
-          edit: "Editar"
-        }
-      },
-      audience: {
-        label: "Audiencia",
-        help: "Capa de control aplicada por encima de la verificación del token",
-        options: {
-          public: "Público (indexable)",
-          link_only: "Cualquier persona con el enlace",
-          signed_in: "Usuarios con sesión iniciada",
-          email: "Correos específicos"
-        }
-      },
-      expires_at: {
-        label: "Caduca el",
-        help: "Cuando se establece, resolveToken devuelve null después de esta marca de tiempo"
-      },
-      email_allowlist: {
-        label: "Lista de correos permitidos",
-        help: "Direcciones en minúsculas que se comprueban cuando audience=email"
-      },
-      password_hash: {
-        label: "Hash de contraseña",
-        help: "Hash Argon2/bcrypt. Cuando se establece, la interfaz solicita una contraseña antes de mostrar el contenido."
-      },
-      redact_fields: {
-        label: "Campos ocultos por enlace",
-        help: "Campos adicionales que se eliminan de la respuesta, además del conjunto predeterminado del objeto"
-      },
-      label: {
-        label: "Etiqueta",
-        help: "Texto libre que se muestra en el cuadro de diálogo de uso compartido (p. ej. \"ACME Q3 contract\")"
-      },
-      revoked_at: {
-        label: "Revocado el",
-        help: "Cuando se establece, el enlace queda deshabilitado permanentemente"
-      },
-      created_by: {
-        label: "Creado por",
-        help: "Emisor del enlace"
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      last_used_at: {
-        label: "Último uso el",
-        help: "Lo registra resolveToken; el panel lo usa para resaltar los enlaces activos"
-      },
-      use_count: {
-        label: "Número de usos",
-        help: "Lo incrementa resolveToken en cada resolución correcta"
-      }
-    },
-    _views: {
-      active_links: {
-        label: "Activos"
-      },
-      by_me: {
-        label: "Creados por mí"
-      },
-      revoked: {
-        label: "Revocados"
-      },
-      all_links: {
-        label: "Todos"
       }
     }
   },
@@ -1979,28 +1550,26 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "ID de notificación"
       },
-      recipient_id: {
-        label: "Destinatario",
-        help: "Usuario al que se entrega la notificación."
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
       },
-      type: {
-        label: "Tipo",
-        help: "Categoría de notificación; controla el icono y la prioridad de ordenación.",
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          mention: "Mención",
-          assignment: "Asignación",
-          comment_reply: "Respuesta a comentario",
-          lead_converted: "Prospecto convertido",
-          task_due: "Tarea vencida",
-          system: "Sistema"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      title: {
-        label: "Título"
-      },
-      body: {
-        label: "Contenido",
-        help: "Texto secundario opcional (resumen de una línea)."
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
       },
       source_object: {
         label: "Objeto de origen",
@@ -2010,50 +1579,20 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Registro de origen",
         help: "ID del registro dentro de source_object."
       },
-      url: {
-        label: "Enlace profundo",
-        help: "URL opcional a la que navegar al hacer clic."
-      },
       actor_id: {
         label: "Actor",
         help: "Usuario que provocó la notificación (quien menciona, quien asigna)."
       },
-      actor_name: {
-        label: "Nombre del actor"
-      },
-      is_read: {
-        label: "Leído",
-        help: "Verdadero una vez que el destinatario la reconoce."
-      },
-      read_at: {
-        label: "Leído el"
-      },
       created_at: {
         label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
       }
     },
     _views: {
-      unread: {
-        label: "No leídas"
+      recent: {
+        label: "Recent"
       },
-      mine: {
-        label: "Mías"
-      },
-      all_notifications: {
-        label: "Todas"
-      }
-    },
-    _actions: {
-      mark_read: {
-        label: "Marcar como leído",
-        successMessage: "Notificación marcada como leída"
-      },
-      mark_unread: {
-        label: "Marcar como no leído",
-        successMessage: "Notificación marcada como no leída"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -2331,142 +1870,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_request: {
-    label: "Solicitud de aprobación",
-    pluralLabel: "Solicitudes de aprobación",
-    description: "Instancia activa de aprobación registrada por envío",
-    fields: {
-      id: {
-        label: "ID de solicitud"
-      },
-      organization_id: {
-        label: "Organización",
-        help: "Tenant que posee esta solicitud de aprobación (propagado desde el contexto del solicitante)."
-      },
-      process_name: {
-        label: "Origen",
-        help: "Origen de la solicitud — `flow:<flowName|nodeId>` para aprobaciones por nodo"
-      },
-      object_name: {
-        label: "Objeto"
-      },
-      record_id: {
-        label: "ID de registro"
-      },
-      submitter_id: {
-        label: "Solicitante"
-      },
-      submitter_comment: {
-        label: "Comentario del solicitante"
-      },
-      status: {
-        label: "Estado",
-        help: "Estado del ciclo de vida de la solicitud.",
-        options: {
-          pending: "Pendiente",
-          approved: "Aprobada",
-          rejected: "Rechazada",
-          recalled: "Retirada"
-        }
-      },
-      current_step: {
-        label: "Paso actual",
-        help: "Nombre técnico del paso pendiente de aprobación."
-      },
-      current_step_index: {
-        label: "Índice del paso actual"
-      },
-      pending_approvers: {
-        label: "Aprobadores pendientes",
-        help: "ID de usuario separados por comas que pueden actuar en el paso actual."
-      },
-      payload_json: {
-        label: "Instantánea",
-        help: "Instantánea del registro en el momento del envío."
-      },
-      process_hash: {
-        label: "Hash del proceso",
-        help: "sha256 del cuerpo del proceso de aprobación en el momento del envío (fijación de ejecución de ADR-0009). Se resuelve a través de sys_metadata_history para que las actualizaciones del proceso no afecten a las solicitudes en curso."
-      },
-      completed_at: {
-        label: "Completado el"
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      my_pending: {
-        label: "Mis pendientes"
-      },
-      submitted_by_me: {
-        label: "Enviadas por mí"
-      },
-      completed: {
-        label: "Completadas"
-      },
-      all_requests: {
-        label: "Todas"
-      }
-    }
-  },
-  sys_approval_action: {
-    label: "Acción de aprobación",
-    pluralLabel: "Acciones de aprobación",
-    description: "Registro de auditoría append-only para acciones de aprobación",
-    fields: {
-      id: {
-        label: "ID de acción"
-      },
-      organization_id: {
-        label: "Organización",
-        help: "Tenant que posee esta acción (refleja la solicitud principal)."
-      },
-      request_id: {
-        label: "Solicitud"
-      },
-      step_name: {
-        label: "Paso",
-        help: "Nombre técnico del paso en el momento de la acción."
-      },
-      step_index: {
-        label: "Índice del paso"
-      },
-      action: {
-        label: "Acción",
-        options: {
-          submit: "Enviar",
-          approve: "Aprobar",
-          reject: "Rechazar",
-          recall: "Retirar",
-          escalate: "Escalar"
-        }
-      },
-      actor_id: {
-        label: "Actor"
-      },
-      comment: {
-        label: "Comentario"
-      },
-      created_at: {
-        label: "Creado el"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recientes"
-      },
-      by_actor: {
-        label: "Por actor"
-      },
-      all_actions: {
-        label: "Todas"
-      }
-    }
-  },
   sys_job: {
     label: "Tarea en segundo plano",
     pluralLabel: "Tareas en segundo plano",
@@ -2657,70 +2060,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "Actualizado el"
-      }
-    }
-  },
-  sys_webhook: {
-    label: "Webhook",
-    pluralLabel: "Webhooks",
-    description: "Suscripción saliente de Webhook HTTP. Se crea mediante defineWebhook() en código o con el editor de Studio; la ejecuta el plugin del conector HTTP.",
-    fields: {
-      id: {
-        label: "ID de webhook"
-      },
-      name: {
-        label: "Nombre",
-        help: "Nombre snake_case único; se usa en los registros y en la auditoría."
-      },
-      label: {
-        label: "Nombre visible"
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto cuyos eventos activan este Webhook (vacío = activación manual / API)."
-      },
-      triggers: {
-        label: "Desencadenantes",
-        help: "Lista de eventos separada por comas: create,update,delete,undelete,api."
-      },
-      url: {
-        label: "URL de destino",
-        help: "Endpoint externo que recibe el POST."
-      },
-      method: {
-        label: "Método HTTP",
-        help: "GET / POST / PUT / PATCH / DELETE"
-      },
-      description: {
-        label: "Descripción"
-      },
-      active: {
-        label: "Activo",
-        help: "Los Webhooks inactivos se omiten en el despachador."
-      },
-      definition_json: {
-        label: "Definición",
-        help: "JSON serializado de Webhook (consulte @objectstack/spec/automation/webhook): configuración completa de cabeceras/auth/reintentos/payload."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      active: {
-        label: "Activo"
-      },
-      inactive: {
-        label: "Inactivo"
-      },
-      by_object: {
-        label: "Por objeto"
-      },
-      all_webhooks: {
-        label: "Todos"
       }
     }
   },
@@ -3028,8 +2367,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Estado de bloqueo",
         options: {
           none: "Ninguno",
-          "no-overlay": "Sin superposición",
-          "no-delete": "Sin eliminación",
+          nooverlay: "no-overlay",
+          nodelete: "no-delete",
           full: "Bloqueo total"
         }
       },

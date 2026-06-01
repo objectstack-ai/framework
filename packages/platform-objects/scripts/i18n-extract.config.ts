@@ -51,15 +51,10 @@ import {
 } from '../src/identity/index.js';
 
 // ── Security ──────────────────────────────────────────────────────────────
-import {
-  SysRole,
-  SysPermissionSet,
-  SysUserPermissionSet,
-  SysRolePermissionSet,
-  SysRecordShare,
-  SysSharingRule,
-  SysShareLink,
-} from '../src/security/index.js';
+// RBAC objects moved to @objectstack/plugin-security and sharing objects to
+// @objectstack/plugin-sharing (ADR-0029 K2 / D8). Their i18n extraction must
+// move to those plugins before the next regeneration; existing generated
+// bundles keep working until then.
 
 // ── Audit ─────────────────────────────────────────────────────────────────
 import {
@@ -73,15 +68,16 @@ import {
   SysEmailTemplate,
   SysSavedReport,
   SysReportSchedule,
-  SysApprovalRequest,
-  SysApprovalAction,
+  // sys_approval_* moved to @objectstack/plugin-approvals (ADR-0029 K2.b / D8).
   SysJob,
   SysJobRun,
   SysJobQueue,
 } from '../src/audit/index.js';
 
 // ── Integration ───────────────────────────────────────────────────────────
-import { SysWebhook } from '../src/integration/index.js';
+// sys_webhook moved to @objectstack/plugin-webhooks per ADR-0029 (K2.a).
+// Its i18n extraction must move to that plugin before the next regeneration
+// (ADR-0029 D8); existing generated bundles keep working until then.
 
 // ── Metadata ──────────────────────────────────────────────────────────────
 import {
@@ -145,14 +141,8 @@ export default defineStack({
     SysOauthConsent,
     SysJwks,
 
-    // Security
-    SysRole,
-    SysPermissionSet,
-    SysUserPermissionSet,
-    SysRolePermissionSet,
-    SysRecordShare,
-    SysSharingRule,
-    SysShareLink,
+    // Security: RBAC moved to @objectstack/plugin-security, sharing to
+    // @objectstack/plugin-sharing (ADR-0029 K2 / D8).
 
     // Audit
     SysAuditLog,
@@ -165,14 +155,12 @@ export default defineStack({
     SysEmailTemplate,
     SysSavedReport,
     SysReportSchedule,
-    SysApprovalRequest,
-    SysApprovalAction,
+    // sys_approval_* moved to @objectstack/plugin-approvals (ADR-0029 K2.b / D8).
     SysJob,
     SysJobRun,
     SysJobQueue,
 
-    // Integration
-    SysWebhook,
+    // Integration: sys_webhook moved to @objectstack/plugin-webhooks (ADR-0029 D8).
 
     // Metadata
     SysMetadataObject,

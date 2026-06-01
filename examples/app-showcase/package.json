@@ -20,6 +20,8 @@
     "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@objectstack/connector-rest": "workspace:*",
+    "@objectstack/connector-slack": "workspace:*",
     "@objectstack/runtime": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },

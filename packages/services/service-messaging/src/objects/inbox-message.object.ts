@@ -3,21 +3,42 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * `sys_inbox_message` — user-facing in-app notification rows (ADR-0012 §4, §11).
+ * `sys_inbox_message` — user-facing in-app notification rows (ADR-0012 §4, §11;
+ * ADR-0030 Layer 5).
  *
  * Written by the always-on `inbox` messaging channel, one row per
- * `(notification, recipient)`. The client pulls these for the in-app inbox;
+ * `(notification, recipient)`, as the **materialization** of an L2
+ * `sys_notification` event delivered to the in-app channel. The Console bell
+ * pulls these (ADR-0030 re-points the bell here from `sys_notification`);
  * `service-realtime` decides when to ping an online user. Belongs to
  * `service-messaging` per the "protocol + service ownership" pattern.
+ *
+ * Read-state is **not** stored here — it lives in `sys_notification_receipt`
+ * (ADR-0030), so cross-channel read semantics stay reachable. `notification_id`
+ * links back to the event; `delivery_id` links to the outbox row (P1).
  */
 export const InboxMessage = ObjectSchema.create({
     name: 'sys_inbox_message',
     label: 'Inbox Message',
     pluralLabel: 'Inbox Messages',
     icon: 'inbox',
-    description: 'User-facing in-app notification rows written by the inbox messaging channel.',
+    description: 'User-facing in-app notification rows materialized by the inbox messaging channel.',
     titleFormat: '{title}',
-    compactLayout: ['title', 'user_id', 'severity', 'read', 'created_at'],
+    compactLayout: ['title', 'user_id', 'severity', 'created_at'],
+
+    listViews: {
+        mine: {
+            type: 'grid',
+            name: 'mine',
+            label: 'Notifications',
+            data: { provider: 'object', object: 'sys_inbox_message' },
+            columns: ['title', 'topic', 'severity', 'created_at'],
+            filter: [{ field: 'user_id', operator: 'equals', value: '{current_user_id}' }],
+            sort: [{ field: 'created_at', order: 'desc' }],
+            pagination: { pageSize: 50 },
+            emptyState: { title: 'Inbox zero', message: 'No notifications.' },
+        },
+    },
 
     fields: {
         id: Field.text({
@@ -30,6 +51,17 @@ export const InboxMessage = ObjectSchema.create({
             label: 'Recipient User',
             required: true,
             searchable: true,
+        }),
+
+        notification_id: Field.text({
+            label: 'Notification Event',
+            searchable: true,
+            description: 'FK → sys_notification (the L2 event this row materializes)',
+        }),
+
+        delivery_id: Field.text({
+            label: 'Delivery',
+            description: 'FK → sys_notification_delivery (outbox row); null until P1',
         }),
 
         topic: Field.text({
@@ -57,10 +89,6 @@ export const InboxMessage = ObjectSchema.create({
 
         action_url: Field.text({
             label: 'Action URL',
-        }),
-
-        read: Field.boolean({
-            label: 'Read',
         }),
 
         created_at: Field.datetime({

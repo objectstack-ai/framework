@@ -5,6 +5,7 @@ import type { BetterAuthOptions } from 'better-auth';
 import { AuthConfig } from '@objectstack/spec/system';
 import {
   SETUP_APP,
+  SETUP_NAV_CONTRIBUTIONS,
   STUDIO_APP,
   ACCOUNT_APP,
   SystemOverviewDashboard,
@@ -143,6 +144,10 @@ export class AuthPlugin implements Plugin {
       // owner of its registration since it loads first among the trio
       // (auth + security + audit) that supplies the underlying objects.
       apps: [SETUP_APP, STUDIO_APP, ACCOUNT_APP],
+      // ADR-0029 D7 — the Setup App is a shell of group anchors; its entries
+      // for platform-objects-owned objects are contributed here. Capability
+      // plugins (e.g. plugin-webhooks) contribute their own slots' entries.
+      navigationContributions: SETUP_NAV_CONTRIBUTIONS,
       // Slotted record-detail pages for system objects — currently
       // sys_organization gets a Members / Invitations / Teams tab strip
       // (see SysOrganizationDetailPage for the rationale and the
@@ -195,6 +200,43 @@ export class AuthPlugin implements Plugin {
             }
           } catch {
             ctx.logger.info('Auth: no email service registered — auth callbacks will log instead of sending');
+          }
+
+          // Bind the email brand name (`{{appName}}`) to the live
+          // `branding.workspace_name` setting so the admin UI can rename the
+          // product without a redeploy. Only an *explicitly set* value
+          // overrides the configured `appName` — when the operator hasn't
+          // customised it (resolver returns the manifest default), we clear
+          // the override so the deployment's `appName` (e.g. `OS_APP_NAME`)
+          // keeps precedence. Mirrors EmailServicePlugin's settings binding.
+          try {
+            const settings = ctx.getService<any>('settings');
+            if (settings && typeof settings.get === 'function') {
+              const applyBrand = async () => {
+                try {
+                  const resolved = await settings.get('branding', 'workspace_name', {});
+                  const explicit = resolved && resolved.source !== 'default'
+                    ? resolved.value
+                    : undefined;
+                  this.authManager?.setAppName(
+                    typeof explicit === 'string' ? explicit : undefined,
+                  );
+                } catch (err: any) {
+                  ctx.logger.warn(
+                    'Auth: failed to apply branding.workspace_name: ' + (err?.message ?? err),
+                  );
+                }
+              };
+              await applyBrand();
+              if (typeof settings.subscribe === 'function') {
+                settings.subscribe('branding', () => {
+                  void applyBrand();
+                });
+                ctx.logger.info('Auth: bound appName to settings namespace=branding');
+              }
+            }
+          } catch {
+            // settings service is optional — keep the configured appName.
           }
         }
 

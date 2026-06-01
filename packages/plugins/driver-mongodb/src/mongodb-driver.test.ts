@@ -4,14 +4,30 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoDBDriver } from './mongodb-driver.js';
 
-describe('MongoDBDriver', () => {
-  let mongod: MongoMemoryServer;
+// `mongodb-memory-server` downloads a real MongoDB binary from
+// fastdl.mongodb.org on first use. In sandboxed / offline CI that download can
+// fail; when it does we **skip** this suite rather than failing the whole
+// package's test run (and, with it, the monorepo `Test Core` job). The startup
+// is attempted once here so availability is known at collection time — a
+// throwing `beforeAll` would *fail* every test instead of skipping it.
+let sharedMongod: MongoMemoryServer | undefined;
+try {
+  sharedMongod = await MongoMemoryServer.create({
+    instance: { launchTimeout: 60_000 },
+  });
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[driver-mongodb] Skipping MongoDBDriver suite — mongodb-memory-server could not start ' +
+      `(MongoDB binary unavailable / download blocked): ${(err as Error)?.message ?? String(err)}`,
+  );
+}
+
+describe.skipIf(!sharedMongod)('MongoDBDriver', () => {
+  const mongod = sharedMongod as MongoMemoryServer;
   let driver: MongoDBDriver;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create({
-      instance: { launchTimeout: 60_000 },
-    });
     const uri = mongod.getUri();
     driver = new MongoDBDriver({ url: uri, database: 'test_db' });
     await driver.connect();

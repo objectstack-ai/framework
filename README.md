@@ -112,7 +112,9 @@ pnpm docs:dev
 | Script | Description |
 | :--- | :--- |
 | `pnpm build` | Build all packages (excludes docs) |
-| `pnpm dev` | Run the minimal CRM example (`@objectstack/example-crm`) — REST + Studio |
+| `pnpm dev` | Run the showcase kitchen-sink example (`@objectstack/example-showcase`) — REST + Studio; exercises every metadata type, view, automation, AI & security chain |
+| `pnpm dev:showcase` | Same as `pnpm dev` (explicit alias) |
+| `pnpm dev:crm` | Run the minimal CRM example (`@objectstack/example-crm`) |
 | `pnpm dev:todo` | Run the Todo example (`@example/app-todo`) |
 | `pnpm studio:start` | Start the prebuilt Studio IDE |
 | `pnpm test` | Run all tests (Turborepo) |

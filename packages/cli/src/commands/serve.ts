@@ -163,8 +163,14 @@ export default class Serve extends Command {
    * Capabilities auto-added to every app's `requires` for every preset
    * EXCEPT `minimal`. These form the foundation that every server-side
    * runtime expects to exist (background work, settings persistence,
-   * transactional mail, file uploads). Apps may still list these in
-   * `requires:` explicitly — duplicates are de-duped.
+   * transactional mail, file uploads, notifications). Apps may still list
+   * these in `requires:` explicitly — duplicates are de-duped.
+   *
+   * `messaging` is foundational because, post-ADR-0030, notifications flow
+   * through a single ingress (`NotificationService.emit`): collaboration
+   * `@mention` / assignment (plugin-audit) and the `notify` flow node deliver
+   * via the messaging pipeline, and the Console bell reads its materialization
+   * (`sys_inbox_message`). Without it those notifications silently no-op.
    *
    * Opt out: `objectstack serve --preset minimal`.
    *
@@ -172,7 +178,7 @@ export default class Serve extends Command {
    * mirror this list on their per-project kernels.
    */
   static readonly ALWAYS_ON_CAPABILITIES: readonly string[] = Object.freeze([
-    'queue', 'job', 'cache', 'settings', 'email', 'storage', 'sharing',
+    'queue', 'job', 'cache', 'settings', 'email', 'storage', 'sharing', 'messaging',
   ]);
 
   /**

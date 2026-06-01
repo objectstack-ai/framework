@@ -9,7 +9,7 @@
  * authenticated execution context.
  */
 
-export { SysRecordShare, SysSharingRule, SysShareLink } from '@objectstack/platform-objects/security';
+export { SysRecordShare, SysSharingRule, SysShareLink } from './objects/index.js';
 export { SysDepartment, SysDepartmentMember } from '@objectstack/platform-objects/identity';
 export {
   SharingService,

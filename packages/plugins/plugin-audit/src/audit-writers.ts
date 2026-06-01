@@ -4,6 +4,37 @@ import type { HookContext } from '@objectstack/spec/data';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 
 /**
+ * Minimal structural view of `NotificationService.emit` (ADR-0030). Declared
+ * locally so plugin-audit takes no runtime dependency on service-messaging — it
+ * resolves whatever object is registered under the `messaging` service at hook
+ * time and routes collaboration notifications through the single ingress.
+ */
+export interface MessagingEmitSurface {
+  emit(input: {
+    topic: string;
+    audience: string[];
+    payload?: Record<string, unknown>;
+    severity?: 'info' | 'warning' | 'critical';
+    dedupKey?: string;
+    source?: { object: string; id: string };
+    actorId?: string;
+    organizationId?: string;
+  }): Promise<unknown>;
+}
+
+/** Options for {@link installAuditWriters}. */
+export interface AuditWriterOptions {
+  /**
+   * Lazily resolve the messaging service so collaboration `@mention` /
+   * assignment notifications go through the ADR-0030 single ingress rather than
+   * writing `sys_notification` directly. Returns `undefined` when messaging is
+   * not installed — those notifications are then skipped (no pipeline, no bell),
+   * matching the `notify` node's degradation.
+   */
+  getMessaging?(): MessagingEmitSurface | undefined;
+}
+
+/**
  * Audit writer hook installer.
  *
  * Subscribes to the ObjectQL engine's wildcard `before*` / `after*` lifecycle
@@ -102,8 +133,14 @@ function safeStringify(v: any): string {
  * `packageId` — calling twice with the same id replaces the previous
  * registration.
  */
-export function installAuditWriters(engine: any, packageId = 'com.objectstack.audit'): void {
+export function installAuditWriters(
+  engine: any,
+  packageId = 'com.objectstack.audit',
+  opts: AuditWriterOptions = {},
+): void {
   if (!engine || typeof engine.registerHook !== 'function') return;
+
+  const getMessaging = opts.getMessaging ?? (() => undefined);
 
   // Remove any prior installation so we can safely re-install on hot reload.
   if (typeof engine.unregisterHooksByPackage === 'function') {
@@ -252,17 +289,16 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
       const sys = api.sudo();
       await sys.object('sys_audit_log').create(auditRow);
       await sys.object('sys_activity').create(activityRow);
-      // M10.8: write per-user inbox notifications. Best-effort; never
-      // throws into the user-facing CRUD path. Covers two common cases:
+      // M10.8 / ADR-0030: notify the assignee. Best-effort; never throws into
+      // the user-facing CRUD path. Goes through the messaging single ingress
+      // (`emit`) — the inbox channel materializes the bell row — rather than
+      // writing `sys_notification` directly. If owner_id / assigned_to was
+      // newly set (or changed to a different user) on a non-system record, the
+      // recipient sees "Lead X was assigned to you" without polling.
       //
-      //   1. Assignment — if owner_id / assigned_to was newly set (or
-      //      changed to a different user) on a non-system record, drop
-      //      a notification into the recipient's inbox so they can see
-      //      "Lead X was assigned to you" without polling the record.
-      //
-      //   2. (Comment mentions are handled separately by the sys_comment
-      //       hook below since SKIP_OBJECTS excludes it from this writer.)
-      await writeAssignmentNotifications(sys, {
+      // (Comment mentions are handled separately by the sys_comment hook below
+      //  since SKIP_OBJECTS excludes it from this writer.)
+      await writeAssignmentNotifications(getMessaging(), {
         object: ctx.object,
         recordId: recordId ?? null,
         label,
@@ -292,8 +328,8 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
   const writeCommentMentions = async (ctx: HookContext) => {
     if (ctx.object !== 'sys_comment') return;
     if (ctx.event !== 'afterInsert') return;
-    const api: any = (ctx as any).api;
-    if (!api?.sudo) return;
+    const messaging = getMessaging();
+    if (!messaging) return; // no pipeline installed → no mention notifications
     const row: any = ctx.result;
     if (!row || typeof row !== 'object') return;
 
@@ -317,26 +353,29 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
     const bodyPreview = String(row.body ?? '').slice(0, 240);
     const sess: any = (ctx as any).session ?? {};
     const tenantId: string | null = sess.tenantId ?? row.organization_id ?? null;
+    const commentId = row.id != null ? String(row.id) : null;
 
-    const sys = api.sudo();
     for (const uid of userIds) {
       if (uid === actorId) continue; // don't notify the mention author
       try {
-        await sys.object('sys_notification').create({
-          recipient_id: uid,
-          type: 'mention',
-          title: actorName ? `${actorName} mentioned you` : 'You were mentioned',
-          body: bodyPreview,
-          source_object: source_object || null,
-          source_id: source_id || null,
-          actor_id: actorId,
-          actor_name: actorName,
-          is_read: false,
-          // Stamp tenant so the recipient's RLS sees it (see writeAssignmentNotifications).
-          organization_id: tenantId,
+        // ADR-0030 single ingress — emit() writes the L2 event and the inbox
+        // channel materializes the bell row + a delivered receipt.
+        await messaging.emit({
+          topic: 'collab.mention',
+          audience: [uid],
+          severity: 'info',
+          source: source_object ? { object: source_object, id: source_id ?? '' } : undefined,
+          actorId: actorId ?? undefined,
+          organizationId: tenantId ?? undefined,
+          dedupKey: commentId ? `collab.mention:${commentId}:${uid}` : undefined,
+          payload: {
+            title: actorName ? `${actorName} mentioned you` : 'You were mentioned',
+            body: bodyPreview,
+            actorName,
+          },
         });
       } catch (err) {
-        try { (engine as any).logger?.warn?.('Mention notification write failed', { uid, err: String((err as any)?.message ?? err) }); } catch {}
+        try { (engine as any).logger?.warn?.('Mention notification emit failed', { uid, err: String((err as any)?.message ?? err) }); } catch {}
       }
     }
   };
@@ -360,7 +399,7 @@ function pickOwner(rec: any): string | null {
 }
 
 async function writeAssignmentNotifications(
-  sys: any,
+  messaging: MessagingEmitSurface | undefined,
   params: {
     object: string;
     recordId: string | null;
@@ -372,6 +411,7 @@ async function writeAssignmentNotifications(
     tenantId: string | null;
   },
 ): Promise<void> {
+  if (!messaging) return; // no pipeline installed → no assignment notifications
   if (params.action === 'delete') return;
   if (!params.recordId) return;
 
@@ -382,21 +422,32 @@ async function writeAssignmentNotifications(
   if (newOwner === params.actorId) return; // self-assignment is silent
 
   try {
-    await sys.object('sys_notification').create({
-      recipient_id: newOwner,
-      type: 'assignment',
-      title: `${params.object} "${params.label}" assigned to you`,
-      body: null,
-      source_object: params.object,
-      source_id: params.recordId,
-      actor_id: params.actorId,
-      actor_name: null,
-      is_read: false,
-      // Stamp organization_id so the recipient (who lives in the same
-      // tenant as the action) sees the notification through RLS. Without
-      // this, sys_notification rows insert with NULL organization_id and
-      // the recipient's `tenant_isolation` policy denies them.
-      organization_id: params.tenantId,
+    // ADR-0030 single ingress — emit() writes the L2 event and the inbox
+    // channel materializes the bell row + a delivered receipt. organizationId
+    // is propagated so the recipient (same tenant as the action) sees the
+    // materialized row through RLS.
+    // Dedup only a true double-fire of the SAME write: scope the key by the
+    // record's write-version (updated_at). Without a version component the key
+    // would be permanent and a legitimate re-assignment back to a prior owner
+    // would be silently suppressed. When no version field exists, omit the key
+    // (every assignment notifies — same as the pre-ADR-0030 direct-write path).
+    const writeVersion =
+      (params.after && typeof params.after === 'object'
+        ? params.after.updated_at ?? params.after.modified_at ?? params.after.updated_date
+        : null) ?? null;
+    await messaging.emit({
+      topic: 'collab.assignment',
+      audience: [newOwner],
+      severity: 'info',
+      source: { object: params.object, id: params.recordId },
+      actorId: params.actorId ?? undefined,
+      organizationId: params.tenantId ?? undefined,
+      dedupKey: writeVersion
+        ? `collab.assignment:${params.object}:${params.recordId}:${newOwner}:${writeVersion}`
+        : undefined,
+      payload: {
+        title: `${params.object} "${params.label}" assigned to you`,
+      },
     });
   } catch {
     // best-effort; never throw into CRUD path

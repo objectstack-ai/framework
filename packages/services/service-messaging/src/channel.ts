@@ -17,8 +17,19 @@
  * transport — it writes a row in our own DB — so it needs no connector.
  */
 
-/** A platform → user notification, before fan-out to channels. */
+/**
+ * A platform → user notification, before fan-out to channels.
+ *
+ * This is the *internal* per-recipient unit the service hands to channels. The
+ * public ingress is {@link EmitInput} on `MessagingService.emit`, which writes
+ * the L2 `sys_notification` event first and then derives one of these per
+ * resolved recipient.
+ */
 export interface Notification {
+    /** Id of the L2 `sys_notification` event this delivery materializes. */
+    readonly notificationId?: string;
+    /** Tenant stamp propagated to materialization rows so RLS matches the recipient. */
+    readonly organizationId?: string;
     /** Topic id, e.g. `contract.approval_requested`. Optional in M1-minimal. */
     readonly topic?: string;
     /** Short headline shown in the inbox / email subject / push title. */

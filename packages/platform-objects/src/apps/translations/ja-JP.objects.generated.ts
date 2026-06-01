@@ -56,6 +56,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      me: {
+        label: "My Profile"
+      },
       all_users: {
         label: "すべてのユーザー"
       },
@@ -108,10 +111,28 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "メールアドレス変更",
         successMessage: "確認メールを送信しました。新しいメールアドレスで確認してください。"
       },
+      resend_verification_email: {
+        label: "Resend Verification Email",
+        successMessage: "Verification email sent — check your inbox."
+      },
       delete_my_account: {
         label: "アカウント削除",
         confirmText: "アカウントを完全に削除しますか？この操作は元に戻せません。すべてのセッションが終了され、設定された保持ポリシーに従って所有するすべてのデータが削除されます。",
         successMessage: "アカウントを削除しました"
+      },
+      enable_two_factor: {
+        label: "Enable Two-Factor Auth",
+        successMessage: "Two-factor authentication enabled. Scan the QR code or paste the otpauth URI into your authenticator app, then verify a code to complete setup."
+      },
+      disable_two_factor: {
+        label: "Disable Two-Factor Auth",
+        confirmText: "Turn off two-factor authentication? Your account will be less secure.",
+        successMessage: "Two-factor authentication disabled."
+      },
+      generate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Generate a new set of backup codes? Any previously generated codes will stop working.",
+        successMessage: "New backup codes generated — save them somewhere safe."
       }
     }
   },
@@ -331,6 +352,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "組織から退出",
         confirmText: "この組織から退出しますか？すべてのリソースへのアクセスを失います。",
         successMessage: "組織から退出しました"
+      },
+      change_slug: {
+        label: "Change Slug",
+        confirmText: "Renaming the slug rewrites every platform subdomain for this org and parks the old slug for 90 days. Continue?",
+        successMessage: "Organization slug changed"
       }
     }
   },
@@ -359,6 +385,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           admin: "管理者",
           member: "メンバー"
         }
+      }
+    },
+    _views: {
+      mine: {
+        label: "My Memberships"
       }
     },
     _actions: {
@@ -760,6 +791,10 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       backup_codes: {
         label: "バックアップコード",
         help: "JSON シリアライズされたバックアップ回復コード"
+      },
+      verified: {
+        label: "Verified",
+        help: "Whether the enrollment was confirmed with a valid TOTP code (managed by better-auth)"
       }
     },
     _views: {
@@ -998,6 +1033,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      mine: {
+        label: "My Applications"
+      },
       active: {
         label: "有効"
       },
@@ -1180,473 +1218,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       expires_at: {
         label: "有効期限",
         help: "このキーがトークン検証に使用できなくなる日時"
-      }
-    }
-  },
-  sys_role: {
-    label: "ロール",
-    pluralLabel: "ロール",
-    description: "RBAC アクセス制御のためのロール定義",
-    fields: {
-      label: {
-        label: "表示名"
-      },
-      name: {
-        label: "API 名",
-        help: "ロールの一意の機械名（例: admin、editor、viewer）"
-      },
-      description: {
-        label: "説明"
-      },
-      permissions: {
-        label: "権限",
-        help: "権限文字列の JSON シリアライズ配列"
-      },
-      active: {
-        label: "有効"
-      },
-      is_default: {
-        label: "デフォルトロール",
-        help: "新規ユーザーに自動的に割り当てられます"
-      },
-      id: {
-        label: "ロール ID"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      active: {
-        label: "有効"
-      },
-      default_roles: {
-        label: "デフォルト"
-      },
-      custom: {
-        label: "カスタム"
-      },
-      all_roles: {
-        label: "すべて"
-      }
-    },
-    _actions: {
-      activate_role: {
-        label: "ロールを有効化",
-        successMessage: "ロールが有効化されました"
-      },
-      deactivate_role: {
-        label: "ロールを無効化",
-        confirmText: "このロールを無効化しますか？このロールを持つユーザーの割り当ては維持されますが、再度有効化するまで権限の付与は停止されます。",
-        successMessage: "ロールが無効化されました"
-      },
-      set_default_role: {
-        label: "デフォルトに設定",
-        confirmText: "このロールを新規ユーザーのデフォルトロールにしますか？既存のユーザーには影響しません。",
-        successMessage: "デフォルトロールを更新しました"
-      },
-      clone_role: {
-        label: "ロールを複製",
-        successMessage: "ロールを複製しました"
-      }
-    }
-  },
-  sys_permission_set: {
-    label: "権限セット",
-    pluralLabel: "権限セット",
-    description: "細かいアクセス制御のための権限グループ",
-    fields: {
-      label: {
-        label: "表示名"
-      },
-      name: {
-        label: "API 名",
-        help: "権限セットの一意の機械名"
-      },
-      description: {
-        label: "説明"
-      },
-      object_permissions: {
-        label: "オブジェクト権限",
-        help: "JSON シリアライズされたオブジェクトレベルの CRUD 権限"
-      },
-      field_permissions: {
-        label: "フィールド権限",
-        help: "JSON シリアライズされたフィールドレベルの読み取り/書き込み権限"
-      },
-      system_permissions: {
-        label: "システム権限",
-        help: "システムケーパビリティ名のJSONシリアライズ配列（例: [\"setup.access\",\"studio.access\",\"manage_users\"]）"
-      },
-      row_level_security: {
-        label: "行レベルセキュリティ",
-        help: "行レベルセキュリティポリシーのJSONシリアライズ配列（USING/CHECK 句）"
-      },
-      tab_permissions: {
-        label: "タブ権限",
-        help: "アプリのタブ表示のJSONシリアライズマップ（visible | hidden | default_on | default_off）"
-      },
-      active: {
-        label: "有効"
-      },
-      id: {
-        label: "権限セット ID"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      active: {
-        label: "有効"
-      },
-      inactive: {
-        label: "無効"
-      },
-      all_permsets: {
-        label: "すべて"
-      }
-    },
-    _actions: {
-      activate_permission_set: {
-        label: "有効化",
-        successMessage: "権限セットが有効化されました"
-      },
-      deactivate_permission_set: {
-        label: "無効化",
-        confirmText: "この権限セットを無効化しますか？既存の割り当ては維持されますが、再度有効化するまでアクセスの付与は停止されます。",
-        successMessage: "権限セットが無効化されました"
-      },
-      clone_permission_set: {
-        label: "複製",
-        successMessage: "権限セットを複製しました"
-      }
-    }
-  },
-  sys_user_permission_set: {
-    label: "ユーザー権限セット",
-    pluralLabel: "ユーザー権限セット",
-    description: "ユーザーへの権限セットの直接割り当て（組織スコープ可能）。",
-    fields: {
-      id: {
-        label: "割り当て ID",
-        help: "割り当ての UUID。"
-      },
-      user_id: {
-        label: "ユーザー",
-        help: "sys_user への外部キー。"
-      },
-      permission_set_id: {
-        label: "権限セット",
-        help: "sys_permission_set への外部キー。"
-      },
-      organization_id: {
-        label: "組織",
-        help: "オプションの組織スコープ。NULL = すべての組織コンテキストで適用。"
-      },
-      granted_by: {
-        label: "付与者",
-        help: "この権限セットを付与したユーザー。"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    }
-  },
-  sys_role_permission_set: {
-    label: "ロール権限セット",
-    pluralLabel: "ロール権限セット",
-    description: "権限セットをロールにバインドします。",
-    fields: {
-      id: {
-        label: "バインド ID",
-        help: "ロール権限セットバインドの UUID。"
-      },
-      role_id: {
-        label: "ロール",
-        help: "sys_role への外部キー。"
-      },
-      permission_set_id: {
-        label: "権限セット",
-        help: "sys_permission_set への外部キー。"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    }
-  },
-  sys_record_share: {
-    label: "レコード共有",
-    pluralLabel: "レコード共有",
-    description: "レコードごとの共有付与 — OWD に明示的なアクセスを追加",
-    fields: {
-      id: {
-        label: "共有 ID"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "共有レコードの短いオブジェクト名"
-      },
-      record_id: {
-        label: "レコード",
-        help: "object_name 内の共有レコードの主キー"
-      },
-      recipient_type: {
-        label: "受信者タイプ",
-        help: "付与を保持するプリンシパルの種別",
-        options: {
-          user: "ユーザー",
-          group: "グループ",
-          role: "ロール",
-          role_and_subordinates: "ロールと下位階層",
-          guest: "ゲスト"
-        }
-      },
-      recipient_id: {
-        label: "受信者",
-        help: "アクセスを受け取るユーザー/グループ/ロールの ID"
-      },
-      access_level: {
-        label: "アクセスレベル",
-        help: "受信者に許可される操作 — read | edit | full（転送/共有/削除）",
-        options: {
-          read: "閲覧",
-          edit: "編集",
-          full: "フルアクセス"
-        }
-      },
-      source: {
-        label: "ソース",
-        help: "この付与が存在する理由 — ルール評価者が調整に使用",
-        options: {
-          manual: "手動",
-          rule: "ルール",
-          team: "チーム",
-          inherited: "継承"
-        }
-      },
-      source_id: {
-        label: "ソース ID",
-        help: "source != manual の場合のルール名 / チーム ID"
-      },
-      granted_by: {
-        label: "付与者",
-        help: "付与を作成したユーザー（手動のみ）"
-      },
-      reason: {
-        label: "理由",
-        help: "受信者に表示されるオプションの自由記述説明"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      granted_to_me: {
-        label: "自分への付与"
-      },
-      granted_by_me: {
-        label: "自分による付与"
-      },
-      by_object: {
-        label: "オブジェクト別"
-      },
-      manual_grants: {
-        label: "手動付与"
-      },
-      rule_grants: {
-        label: "ルール付与"
-      },
-      all_shares: {
-        label: "すべて"
-      }
-    }
-  },
-  sys_sharing_rule: {
-    label: "共有ルール",
-    pluralLabel: "共有ルール",
-    description: "sys_record_share 付与を自動マテリアライズする宣言的共有ルール。コードの defineSharingRule() または Studio の条件ビルダーで作成します。",
-    fields: {
-      id: {
-        label: "ルール ID"
-      },
-      organization_id: {
-        label: "組織",
-        help: "このルールを所有するテナント。null = グローバル"
-      },
-      name: {
-        label: "名前",
-        help: "一意の snake_case ルール名"
-      },
-      label: {
-        label: "表示名"
-      },
-      description: {
-        label: "説明"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "短いオブジェクト名（例: opportunity、account）"
-      },
-      criteria_json: {
-        label: "条件（FilterCondition JSON）",
-        help: "object_name のレコードに対してマッチする JSON FilterCondition。空 = すべてにマッチ。"
-      },
-      recipient_type: {
-        label: "受信者タイプ",
-        help: "アクセスを受け取るプリンシパルの種別 — 評価時にユーザー付与に展開されます。`department` は parent_department_id ツリーをたどります。`team` はフラット（better-auth）。",
-        options: {
-          user: "ユーザー",
-          team: "チーム",
-          department: "部門",
-          role: "ロール",
-          queue: "キュー"
-        }
-      },
-      recipient_id: {
-        label: "受信者",
-        help: "recipient_type に応じた部門 ID / チーム ID / ロール名 / キュー名 / ユーザー ID"
-      },
-      access_level: {
-        label: "アクセスレベル",
-        options: {
-          read: "閲覧",
-          edit: "編集",
-          full: "フルアクセス"
-        }
-      },
-      active: {
-        label: "有効",
-        help: "有効なルールのみがライフサイクル評価に参加します"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      active: {
-        label: "有効"
-      },
-      inactive: {
-        label: "無効"
-      },
-      by_object: {
-        label: "オブジェクト別"
-      },
-      all_rules: {
-        label: "すべて"
-      }
-    }
-  },
-  sys_share_link: {
-    label: "共有リンク",
-    pluralLabel: "共有リンク",
-    description: "単一レコードへのアクセスを許可する不透明なケーパビリティトークン。Notion / Figma スタイルの公開リンク共有。",
-    fields: {
-      id: {
-        label: "リンク ID"
-      },
-      token: {
-        label: "トークン",
-        help: "URL セーフな不透明ランダムトークン（22 文字以上）。この行で唯一の機密情報です。"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "共有対象レコードのオブジェクト短縮名（例: ai_conversation、contracts_contract）"
-      },
-      record_id: {
-        label: "レコード",
-        help: "object_name 内における共有対象レコードの主キー"
-      },
-      permission: {
-        label: "権限",
-        help: "リンク保持者がレコードに対して実行できる操作",
-        options: {
-          view: "閲覧",
-          comment: "コメント",
-          edit: "編集"
-        }
-      },
-      audience: {
-        label: "対象者",
-        help: "トークン検証の上に適用されるアクセス制御レイヤー",
-        options: {
-          public: "公開（インデックス可能）",
-          link_only: "リンクを知っている全員",
-          signed_in: "サインイン済みユーザー",
-          email: "特定のメールアドレス"
-        }
-      },
-      expires_at: {
-        label: "有効期限",
-        help: "設定すると、このタイムスタンプ以降は resolveToken が null を返します"
-      },
-      email_allowlist: {
-        label: "メール許可リスト",
-        help: "audience=email のときに照合される小文字のメールアドレス"
-      },
-      password_hash: {
-        label: "パスワードハッシュ",
-        help: "Argon2/bcrypt ハッシュ。設定すると、表示前に UI がパスワードの入力を求めます。"
-      },
-      redact_fields: {
-        label: "リンク単位のマスキング",
-        help: "オブジェクト既定のマスキング集合に加えて、レスポンスから除外する追加フィールド"
-      },
-      label: {
-        label: "ラベル",
-        help: "共有ダイアログに表示される自由記述テキスト（例: \"ACME Q3 contract\"）"
-      },
-      revoked_at: {
-        label: "失効日時",
-        help: "設定すると、リンクは恒久的に無効化されます"
-      },
-      created_by: {
-        label: "作成者",
-        help: "リンクの発行者"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      last_used_at: {
-        label: "最終使用日時",
-        help: "resolveToken によって記録されます。ダッシュボードでアクティブなリンクを強調表示するために使用されます"
-      },
-      use_count: {
-        label: "使用回数",
-        help: "解決が成功するたびに resolveToken によって加算されます"
-      }
-    },
-    _views: {
-      active_links: {
-        label: "アクティブ"
-      },
-      by_me: {
-        label: "自分が作成"
-      },
-      revoked: {
-        label: "失効済み"
-      },
-      all_links: {
-        label: "すべて"
       }
     }
   },
@@ -1979,28 +1550,26 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "通知 ID"
       },
-      recipient_id: {
-        label: "受信者",
-        help: "通知が配信されるユーザー"
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
       },
-      type: {
-        label: "タイプ",
-        help: "通知カテゴリー — アイコンと並び替え優先度を決定します",
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          mention: "メンション",
-          assignment: "割り当て",
-          comment_reply: "コメント返信",
-          lead_converted: "リード変換",
-          task_due: "タスク期限",
-          system: "システム"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      title: {
-        label: "タイトル"
-      },
-      body: {
-        label: "本文",
-        help: "オプションの補足テキスト（1行サマリー）"
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
       },
       source_object: {
         label: "ソースオブジェクト",
@@ -2010,50 +1579,20 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "ソースレコード",
         help: "source_object 内のレコード ID"
       },
-      url: {
-        label: "ディープリンク",
-        help: "クリック時に遷移するオプションの URL"
-      },
       actor_id: {
         label: "操作者",
         help: "通知を引き起こしたユーザー（メンション者、担当者）"
       },
-      actor_name: {
-        label: "操作者名"
-      },
-      is_read: {
-        label: "既読",
-        help: "受信者が確認すると true になります"
-      },
-      read_at: {
-        label: "既読日時"
-      },
       created_at: {
         label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
       }
     },
     _views: {
-      unread: {
-        label: "未読"
+      recent: {
+        label: "Recent"
       },
-      mine: {
-        label: "自分の通知"
-      },
-      all_notifications: {
-        label: "すべて"
-      }
-    },
-    _actions: {
-      mark_read: {
-        label: "既読にする",
-        successMessage: "通知を既読にしました"
-      },
-      mark_unread: {
-        label: "未読にする",
-        successMessage: "通知を未読にしました"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -2331,142 +1870,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_request: {
-    label: "承認リクエスト",
-    pluralLabel: "承認リクエスト",
-    description: "送信ごとに追跡されるライブ承認インスタンス",
-    fields: {
-      id: {
-        label: "リクエスト ID"
-      },
-      organization_id: {
-        label: "組織",
-        help: "この承認リクエストを所有するテナント（送信者コンテキストから伝播）"
-      },
-      process_name: {
-        label: "ソース",
-        help: "リクエストの発生元 — ノード駆動の承認では `flow:<flowName|nodeId>`"
-      },
-      object_name: {
-        label: "オブジェクト"
-      },
-      record_id: {
-        label: "レコード ID"
-      },
-      submitter_id: {
-        label: "送信者"
-      },
-      submitter_comment: {
-        label: "送信者コメント"
-      },
-      status: {
-        label: "ステータス",
-        help: "リクエストのライフサイクル状態",
-        options: {
-          pending: "保留中",
-          approved: "承認済み",
-          rejected: "却下済み",
-          recalled: "取り消し済み"
-        }
-      },
-      current_step: {
-        label: "現在のステップ",
-        help: "承認待ちのステップの機械名"
-      },
-      current_step_index: {
-        label: "現在のステップ番号"
-      },
-      pending_approvers: {
-        label: "承認待ち承認者",
-        help: "現在のステップを処理できるユーザー ID のカンマ区切りリスト"
-      },
-      payload_json: {
-        label: "スナップショット",
-        help: "送信時のレコードスナップショット"
-      },
-      process_hash: {
-        label: "プロセスハッシュ",
-        help: "送信時点の承認プロセス本体の sha256（ADR-0009 の実行ピン留め）。sys_metadata_history を介して解決されるため、プロセスのアップグレードは処理中のリクエストに影響しません。"
-      },
-      completed_at: {
-        label: "完了日時"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      my_pending: {
-        label: "自分の保留中"
-      },
-      submitted_by_me: {
-        label: "自分が送信"
-      },
-      completed: {
-        label: "完了済み"
-      },
-      all_requests: {
-        label: "すべて"
-      }
-    }
-  },
-  sys_approval_action: {
-    label: "承認アクション",
-    pluralLabel: "承認アクション",
-    description: "承認アクションの追記専用監査証跡",
-    fields: {
-      id: {
-        label: "アクション ID"
-      },
-      organization_id: {
-        label: "組織",
-        help: "このアクションを所有するテナント（親リクエストと同じ）"
-      },
-      request_id: {
-        label: "リクエスト"
-      },
-      step_name: {
-        label: "ステップ",
-        help: "アクション時点のステップの機械名"
-      },
-      step_index: {
-        label: "ステップ番号"
-      },
-      action: {
-        label: "アクション",
-        options: {
-          submit: "申請",
-          approve: "承認",
-          reject: "却下",
-          recall: "取消",
-          escalate: "エスカレーション"
-        }
-      },
-      actor_id: {
-        label: "操作者"
-      },
-      comment: {
-        label: "コメント"
-      },
-      created_at: {
-        label: "作成日時"
-      }
-    },
-    _views: {
-      recent: {
-        label: "最近"
-      },
-      by_actor: {
-        label: "操作者別"
-      },
-      all_actions: {
-        label: "すべて"
-      }
-    }
-  },
   sys_job: {
     label: "ジョブ",
     pluralLabel: "ジョブ",
@@ -2657,70 +2060,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "更新日時"
-      }
-    }
-  },
-  sys_webhook: {
-    label: "Webhook",
-    pluralLabel: "Webhook",
-    description: "送信 HTTP Webhook サブスクリプション。defineWebhook() またはスタジオエディタで作成し、HTTP コネクタプラグインが実行します。",
-    fields: {
-      id: {
-        label: "Webhook ID"
-      },
-      name: {
-        label: "名前",
-        help: "一意の snake_case 名 — ログおよび監査で参照"
-      },
-      label: {
-        label: "表示名"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "このウェブフックを発火するイベントのオブジェクト短縮名（空白 = 手動 / API トリガー）"
-      },
-      triggers: {
-        label: "トリガー",
-        help: "カンマ区切りのイベントリスト: create,update,delete,undelete,api"
-      },
-      url: {
-        label: "ターゲット URL",
-        help: "POST を受信する外部エンドポイント"
-      },
-      method: {
-        label: "HTTP メソッド",
-        help: "GET / POST / PUT / PATCH / DELETE"
-      },
-      description: {
-        label: "説明"
-      },
-      active: {
-        label: "有効",
-        help: "無効にするとディスパッチャにスキップされます"
-      },
-      definition_json: {
-        label: "定義",
-        help: "シリアライズされた Webhook JSON（@objectstack/spec/automation/webhook 参照）— ヘッダー/認証/リトライ/ペイロード設定を含む"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      active: {
-        label: "有効"
-      },
-      inactive: {
-        label: "無効"
-      },
-      by_object: {
-        label: "オブジェクト別"
-      },
-      all_webhooks: {
-        label: "すべて"
       }
     }
   },
@@ -3028,8 +2367,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "ロック状態",
         options: {
           none: "なし",
-          "no-overlay": "オーバーレイ禁止",
-          "no-delete": "削除禁止",
+          nooverlay: "no-overlay",
+          nodelete: "no-delete",
           full: "完全ロック"
         }
       },
