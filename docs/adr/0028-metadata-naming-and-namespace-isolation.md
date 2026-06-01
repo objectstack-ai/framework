@@ -2,7 +2,8 @@
 
 **Status**: Proposed (2026-06-01)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: [ADR-0004](./0004-object-namespace-prefix.md) (object namespace prefix — *this ADR supersedes its hand-written-literal authoring rule*), [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0008](./0008-metadata-repository-and-change-log.md) (Repository · ChangeLog · Cache · Registry; `MetaRef = org/type/name`), [ADR-0010](./0010-metadata-protection-model.md) (protection model), [ADR-0019](./0019-app-as-consumer-unit.md) (app as the consumer-installable unit), [ADR-0025](./0025-plugin-package-distribution.md) (package distribution)
+**Supersedes**: the hand-written object-namespace-prefix authoring rule documented in `packages/spec/src/kernel/manifest.zod.ts` (the `namespace` field) and enforced by `validateNamespacePrefix()` in `packages/spec/src/stack.zod.ts` — there is no standalone ADR for that rule today.
+**Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0008](./0008-metadata-repository-and-change-log.md) (Repository · ChangeLog · Cache · Registry; `MetaRef = org/type/name`), [ADR-0010](./0010-metadata-protection-model.md) (protection model), [ADR-0019](./0019-app-as-consumer-unit.md) (app as the consumer-installable unit), [ADR-0025](./0025-plugin-package-distribution.md) (package distribution)
 **Consumers**: `@objectstack/spec` (manifest + stack validators), `@objectstack/objectql` (`SchemaRegistry`, `StorageNameMapping`, ownership model), `@objectstack/plugins/driver-sql` (physical table derivation), `@objectstack/rest` + `@objectstack/api` (route + generated-surface naming), `@objectstack/services/service-automation` (connector registry), `@objectstack/services/service-ai` (tool registry), `@objectstack/platform-objects` (kernel object ownership), `@objectstack/cli` (`os validate`)
 
 ---
@@ -311,9 +312,9 @@ possible.
 
 - A large, cross-cutting refactor (spec validators, registry, SQL driver,
   REST/API generators, connector + AI registries, `platform-objects`, CLI).
-- Reintroduces a *qualified reference* form (`sys.x`) — the very thing ADR-0004
-  avoided — but now as one deterministic, allow-listed rule rather than an
-  arbitrary alternative, and only for kernel/cross-boundary refs.
+- Reintroduces a *qualified reference* form (`sys.x`) — the very thing the
+  hand-written-literal rule avoided — but now as one deterministic, allow-listed
+  rule rather than an arbitrary alternative, and only for kernel/cross-boundary refs.
 - Requires a logical→physical mapping to be honored on **every** data path; any
   raw-SQL escape hatch is a correctness hazard (see Leak-points).
 - Migration touches every existing package and artifact; needs the codemod and a
