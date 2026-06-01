@@ -4,6 +4,7 @@
 "@objectstack/plugin-audit": minor
 "@objectstack/service-automation": minor
 "@objectstack/metadata": minor
+"@objectstack/cli": patch
 ---
 
 ADR-0030 P0 (framework) — converge notifications onto a single ingress and the
@@ -42,6 +43,13 @@ delivery, not a row producers write.
 **Migration (`@objectstack/metadata`)**
 - Idempotent `migrateSysNotificationToEvent` splits legacy `sys_notification`
   inbox rows into `sys_inbox_message` + receipts and rewrites the event row.
+
+**Startup (`@objectstack/cli`)**
+- `messaging` is now a foundational capability — added to
+  `ALWAYS_ON_CAPABILITIES`, so every non-`minimal` preset starts
+  `MessagingServicePlugin`. This keeps collaboration `@mention` / assignment
+  notifications (which now flow through the pipeline) working out of the box.
+  `--preset minimal` opts out.
 
 The Console bell repoint (objectui) and phases P1–P3 are tracked in
 `docs/handoff/adr-0030-notification-convergence.md`.

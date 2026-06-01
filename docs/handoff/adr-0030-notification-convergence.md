@@ -99,10 +99,16 @@ flipped — the inbox is being populated the whole time.)
 
 ## Behavior notes / watch-outs
 
-- **Messaging is now required for collaboration notifications.** With no
-  `messaging` service registered, `@mention`/assignment are skipped (warned), the
-  same way the `notify` node already degrades. Ensure `MessagingServicePlugin` is
-  installed wherever `plugin-audit` is and the bell is expected to light up.
+- **Messaging is now foundational (auto-on).** Collaboration notifications
+  require the messaging pipeline (with no `messaging` service registered,
+  `@mention`/assignment are skipped + warned, like the `notify` node). To make
+  this work out of the box, `messaging` was added to
+  `Serve.ALWAYS_ON_CAPABILITIES` (`packages/cli/src/commands/serve.ts`) — every
+  non-`minimal` preset now starts `MessagingServicePlugin`. **Cloud / per-project
+  hosts** load capabilities from the artifact's `requires` (no shared always-on
+  list), so artifact builders should include `messaging` in the foundational
+  `requires` to mirror this. `--preset minimal` still opts out (and then
+  collaboration notifications no-op by design).
 - **No mark-read endpoint yet.** P0 added the receipt object + `delivered` writes;
   flipping to `read` needs a small write path (a receipt upsert action or REST
   route). Decide whether that lands as the tail of P0 (alongside objectui) or P1.
