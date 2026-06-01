@@ -1,5 +1,312 @@
 # @objectstack/platform-objects
 
+## 7.4.0
+
+### Minor Changes
+
+- c72daad: ADR-0029 D7 — Setup app navigation contributions.
+
+  Adds the UI-layer analog of object `own`/`extend`: a package can contribute
+  navigation items into an app it does not own, so a shared admin app can be a
+  thin shell while each capability plugin ships the menu for the objects it owns.
+
+  - **`@objectstack/spec`** — new `NavigationContributionSchema` (`{ app, group?,
+priority, items }`) and an optional `navigationContributions` field on the
+    manifest.
+  - **`@objectstack/objectql`** — `SchemaRegistry.registerAppNavContribution()`
+    plus lazy merge in `getApp` / `getAllApps` (by target group id + priority,
+    cloning so the stored app is never mutated); the engine wires
+    `manifest.navigationContributions` during app registration.
+  - **`@objectstack/platform-objects`** — the Setup app becomes a **shell** of
+    empty group anchors; its entries for platform-objects-owned objects move to
+    `SETUP_NAV_CONTRIBUTIONS`.
+  - **`@objectstack/plugin-auth`** — registers `SETUP_NAV_CONTRIBUTIONS` alongside
+    the Setup app it already registers.
+  - **`@objectstack/plugin-webhooks`** — contributes its `Webhooks` /
+    `Webhook Deliveries` entries into the Setup `group_integrations` slot (it owns
+    `sys_webhook` / `sys_webhook_delivery` per K2.a), demonstrating end-to-end
+    cross-plugin contribution.
+
+  The rendered Setup nav is identical to the former static artifact — just
+  assembled from its owners. A disabled/absent capability contributes nothing and
+  its slot stays empty (in addition to the existing `requiresObject` gating).
+  This unblocks moving each remaining K2 domain's menu out of the monolith with
+  its objects.
+
+- eea3f1b: ADR-0029 K0 + K2.a — single-owner invariant and webhooks ownership pilot.
+
+  **K0 (`@objectstack/objectql`)** — add `SchemaRegistry.assertSingleOwnerPerObject()`,
+  the install-time backstop for the kernel-decomposition invariant: every
+  registered object must resolve to exactly one `own` contributor. A second
+  cross-package owner is already rejected at registration time; this additionally
+  catches "extend with no owner" (which would otherwise resolve to nothing). Call
+  after kernel bootstrap completes.
+
+  **K2.a (`@objectstack/plugin-webhooks` ← `@objectstack/platform-objects`)** — move
+  the `sys_webhook` object definition out of the `platform-objects` monolith into
+  `@objectstack/plugin-webhooks`, where it joins its sibling `sys_webhook_delivery`
+  so the plugin owns both its data model and behavior as one unit. `sys_webhook` is
+  no longer exported from `@objectstack/platform-objects` (or its `/integration`
+  subpath, now an empty barrel); import it from `@objectstack/plugin-webhooks/schema`
+  instead. Runtime behavior is unchanged — the webhook plugin already registered
+  `sys_webhook` at runtime; only the definition's home moved. Setup-app navigation
+  (which references `sys_webhook` by name) and existing i18n bundles (object-name
+  keyed) continue to work. Per ADR-0029 D8, migrating the object's i18n extraction
+  into the plugin is a tracked follow-up before the next translation regeneration.
+
+- e478e0c: ADR-0029 K2 — security domain ownership (RBAC + sharing) + Setup nav contributions.
+
+  Moves the security objects out of the `@objectstack/platform-objects` monolith
+  into the two capability plugins that already register and operate them, split by
+  concern (the two are orthogonal — sharing objects never reference RBAC objects):
+
+  - **`@objectstack/plugin-security`** (RBAC) gains `sys_role`,
+    `sys_permission_set`, `sys_user_permission_set`, `sys_role_permission_set`,
+    and the `defaultPermissionSets` seed (which its `bootstrap-platform-admin`
+    already consumes). The RBAC + default-permission-set tests move with them.
+  - **`@objectstack/plugin-sharing`** gains `sys_record_share`,
+    `sys_sharing_rule`, `sys_share_link`.
+  - `@objectstack/platform-objects` no longer defines/exports any security
+    objects; the `/security` subpath is now an empty barrel. Runtime is unchanged
+    (both plugins already registered these objects at runtime).
+
+  **D7 navigation** — the Setup app's `group_access_control` is now assembled from
+  three sources: `plugin-security` contributes Roles / Permission Sets (priority
+  100), `plugin-sharing` contributes Sharing Rules / Record Shares (priority 200),
+  and `platform-objects` keeps only API Keys (`sys_api_key`, an identity object,
+  priority 300) — preserving the original menu order.
+
+  **i18n (D8)** — the objects are removed from the `platform-objects` i18n extract
+  config; existing generated bundles keep working at runtime (object-name keyed).
+  Migrating the i18n extraction to the owning plugins remains the tracked
+  follow-up.
+
+- 4cc2ced: ADR-0029 K2.b — approvals domain ownership + Setup nav contribution.
+
+  Moves `sys_approval_request` / `sys_approval_action` out of the
+  `@objectstack/platform-objects` monolith into `@objectstack/plugin-approvals`,
+  which already registers and operates them — so the plugin now owns its data
+  model, behavior, and admin menu as one unit.
+
+  - The object definitions move to `plugin-approvals`; `platform-objects` no
+    longer exports them from `/audit`. Runtime is unchanged (the plugin already
+    registered them at runtime).
+  - **D7 navigation** — the Setup app's `group_approvals` entries (`Requests`,
+    `Action History`) move out of `platform-objects`' `SETUP_NAV_CONTRIBUTIONS`
+    into `plugin-approvals`' `navigationContributions`. The plugin fills the slot
+    it owns; when the plugin is absent the slot stays empty.
+  - **i18n (D8)** — the objects are removed from the `platform-objects` i18n
+    extract config; their existing generated translation bundles keep working at
+    runtime (object-name keyed). Migrating the i18n extraction/bundles to the
+    plugin remains the tracked cross-cutting follow-up (best done with the
+    `os i18n extract` tooling, not hand-edited generated files).
+
+- 13632b1: ADR-0030 P0 (framework) — converge notifications onto a single ingress and the
+  layered model. Every producer now publishes through
+  `NotificationService.emit(EmitInput)`; the in-app inbox is a materialization of
+  delivery, not a row producers write.
+
+  **Single ingress (`@objectstack/service-messaging`) — breaking**
+
+  - `MessagingService.emit` takes the new `EmitInput` contract (`topic` /
+    `audience` / `payload` / `severity` / `dedupKey` / `source` / `actorId` /
+    `organizationId` / `channels`) instead of the flat `Notification` shape. It
+    writes the L2 `sys_notification` event (idempotent on `dedupKey`), resolves the
+    audience, then fans out; it returns `{ notificationId, deduped, deliveries,
+delivered, failed }`.
+  - New `sys_notification_receipt` object — the read-state spine
+    (`delivered|read|clicked|dismissed`), keyed `(notification_id, user_id,
+channel)`. The inbox channel writes a `delivered` receipt on materialization.
+  - `sys_inbox_message`: adds `notification_id` / `delivery_id`, **drops `read`**
+    (read-state moved to the receipt), adds the user `mine` list view.
+
+  **Event re-model (`@objectstack/platform-objects`) — breaking**
+
+  - `sys_notification` is re-modeled from a per-user inbox into the L2 **event**
+    (`topic`, `payload`, `severity`, `dedup_key`, `source_*`, `actor_id`). Removes
+    `recipient_id` / `is_read` / `read_at` / `type` / `title` / `body` / `url` /
+    `actor_name` and the inbox actions/views. App-nav: the account inbox points at
+    `sys_inbox_message`; Setup shows the notification event log.
+
+  **Producers routed through `emit()`**
+
+  - `@objectstack/service-automation`: the `notify` node maps its config to
+    `EmitInput`.
+  - `@objectstack/plugin-audit`: collaboration `@mention` → `collab.mention` and
+    assignment → `collab.assignment` (both with a `dedupKey`); no more direct
+    `sys_notification` writes. Collaboration notifications now require
+    `MessagingServicePlugin` (they degrade to a warn otherwise).
+
+  **Migration (`@objectstack/metadata`)**
+
+  - Idempotent `migrateSysNotificationToEvent` splits legacy `sys_notification`
+    inbox rows into `sys_inbox_message` + receipts and rewrites the event row.
+
+  **Startup (`@objectstack/cli`, `@objectstack/runtime`)**
+
+  - `messaging` is now a foundational capability. On `objectstack serve` it is
+    added to `ALWAYS_ON_CAPABILITIES` (every non-`minimal` preset starts it); on
+    cloud per-project kernels the capability loader expands `requires` to add
+    `messaging` whenever `audit` is present. This keeps collaboration `@mention` /
+    assignment notifications (which now flow through the pipeline) working out of
+    the box on both paths. `--preset minimal` opts out.
+
+  The Console bell repoint (objectui) and phases P1–P3 are tracked in
+  `docs/handoff/adr-0030-notification-convergence.md`.
+
+### Patch Changes
+
+- 23c7107: ADR-0020 — converge the three "state machine" declaration shapes to one
+  **enforced** `state_machine` validation rule.
+
+  Before this change a record state machine could be declared three ways (a
+  `workflow` metadata type, an `object.stateMachines` map, or a `state_machine`
+  validation rule) and **none of them were enforced at runtime** — a declarative
+  guardrail that was pure decoration, and a hallucination trap for AI authors.
+
+  **Enforcement (`@objectstack/objectql`)**
+
+  - New `validation/rule-validator.ts` evaluates the object's `validations` union
+    on the write path: `evaluateValidationRules`, `needsPriorRecord`, and the
+    `legalNextStates` introspection helper (all exported from the package root).
+  - `state_machine` rules reject illegal `field` transitions on update (with the
+    rule's `message`); `script` / `cross_field` predicate rules now also fire
+    (they were silently broken on PATCH updates because only the patch, not the
+    prior record, was available). The engine plumbs the prior record into
+    rule evaluation on single-row update; multi-row (`updateMany`) updates log a
+    warning and skip rule evaluation rather than enforce on incomplete data.
+
+  **Convergence / retirement (`@objectstack/spec`) — breaking**
+
+  - Retires the `workflow` metadata type (removed from the metadata-type enum,
+    the registry, the schema map, the `workflows` collection key, and the
+    plural→singular mapping).
+  - Removes the `object.stateMachines` map and the `stack.workflows` array. The
+    `state_machine` validation rule is the single canonical home.
+  - The XState-style `StateMachineSchema` file is **kept** (still used by the
+    agent conversation lifecycle and the discovery protocol); only its role as
+    the `workflow` metadata-type backing schema was removed. The optional
+    `workflow` **RPC service** surface (`CoreServiceName.workflow`,
+    `/api/v1/workflow`, `IWorkflowService`) is kept as a documented follow-up.
+
+  **Introspection (`@objectstack/runtime`)**
+
+  - Adds `GET /metadata/objects/:name/state/:field?from=:state`, returning the
+    legal next states for a field (`next: null` when no FSM governs the field,
+    `[]` for a declared dead-end) so UIs/agents read the transition table instead
+    of re-deriving it.
+
+  **Surfaces (`@objectstack/platform-objects`, `@objectstack/cli`)**
+
+  - Studio drops the standalone "Workflow Rules" nav (state machines are edited
+    alongside the object's other validation rules).
+  - `explain` no longer lists `workflow` as a related metadata type.
+
+  Migration: replace a `workflow` / `StateMachineConfig` declaration with a
+  `state_machine` validation rule on the object (`field` + `{ from: [allowedTo] }`
+  transition table), and move any side-effecting actions (emails, task creation)
+  into a record-triggered or scheduled Flow (ADR-0019). See the migrated
+  `examples/app-crm` flows for the pattern.
+
+- 4404572: ADR-0029 D8 — migrate i18n ownership for the moved domains to their plugins.
+
+  The object translations for the domains decomposed in K2.a/K2.b/K2 previously
+  lived in the `@objectstack/platform-objects` generated bundles even though the
+  objects now live in their capability plugins. This moves each domain's i18n
+  extraction + bundles to the owning plugin, preserving every hand-translated
+  string (zh-CN / ja-JP / es-ES):
+
+  - Each plugin gains a build-time `scripts/i18n-extract.config.ts` and a
+    `src/translations/` bundle (`{locale}.objects.generated.ts` + an `index.ts`
+    barrel), generated with `os i18n extract` and self-baselined so re-runs
+    preserve translations.
+  - Each plugin loads its bundle at runtime on `kernel:ready` via
+    `i18n.loadTranslations` (the i18n service is optional — load is best-effort).
+    - `plugin-webhooks` ← `sys_webhook`, `sys_webhook_delivery`
+    - `plugin-approvals` ← `sys_approval_request`, `sys_approval_action`
+    - `plugin-security` ← `sys_role`, `sys_permission_set`,
+      `sys_user_permission_set`, `sys_role_permission_set`
+    - `plugin-sharing` ← `sys_record_share`, `sys_sharing_rule`, `sys_share_link`
+  - `@objectstack/platform-objects` translation bundles are regenerated to drop
+    those objects' keys (its extract config already excluded them); all other
+    objects' translations and the metadata-form bundles are preserved.
+
+  Net runtime effect is unchanged (same translations load, now contributed by the
+  package that owns each object) — closing the D8 follow-up tracked since K2.a.
+
+- 82eb6cf: Fix system-metadata translations: locale fallback, app/dashboard localization, and coverage gaps.
+
+  Switching the UI language left many surfaces in English. Three root causes
+  are addressed:
+
+  - **Locale fallback (server).** The metadata translation resolver
+    (`@objectstack/spec` `i18n-resolver`) now resolves a requested locale
+    against the locales actually present in the bundle (exact →
+    case-insensitive → base-language → variant), so a request for `zh`
+    correctly hits the `zh-CN` bundle instead of falling back to English.
+    This mirrors `resolveLocale` in `@objectstack/core` and benefits every
+    resolver (objects, views, actions, settings, metadata forms).
+
+  - **App & dashboard localization (server).** Added `translateApp` and
+    `translateDashboard` resolvers and wired `app`/`dashboard` into the REST
+    `/meta` translation path. App labels, sidebar/navigation group labels,
+    and dashboard titles/widgets were previously never localized at the API
+    boundary even though the translation data existed.
+
+  - **Coverage & quality (data).** Added translations for the previously
+    untranslated platform objects `sys_share_link`, `sys_view_definition`,
+    and `sys_metadata_audit` (and registered them in the i18n-extract config
+    so future extractions keep them). Replaced English placeholder strings
+    left in the `zh-CN` / `ja-JP` / `es-ES` object and metadata-form bundles
+    (notably action `confirmText` / `successMessage` prompts). Added the
+    missing `es-ES` built-in Settings bundle in `@objectstack/service-settings`.
+
+- c381977: Harden the notification pipeline: race-safe dedup + opt-in retention (ADR-0030).
+
+  **Race-safe dedup.** `sys_notification.dedup_key` is now declared a **UNIQUE**
+  index (was a plain index), and `emit()` **converges on a unique-key conflict**:
+  the pre-insert `dedup_key` check is a fast-path, but if a concurrent `emit`
+  raced past it and inserted first, our insert hits the violation — we catch it
+  and converge to the winner's event (a dedup hit) instead of throwing or
+  double-emitting. This mirrors the delivery outbox's enqueue convergence and
+  stops a record-change storm from producing duplicate bell notifications. SQL
+  treats NULLs as distinct, so the common events with no `dedup_key` are
+  unconstrained. (Enforcement is per-driver: where declared indexes are
+  materialized the conflict path activates; drivers that don't materialize them
+  fall back to the best-effort fast-path — the catch is simply never taken. Note
+  the SQL driver currently doesn't sync declared object indexes, which already
+  affects the delivery/receipt unique indexes — tracked separately.)
+
+  **Opt-in retention.** New `NotificationRetention` sweeper + plugin options
+  `retentionDays` / `retentionSweepMs`. Every `emit()` writes a `sys_notification`
+  event (plus delivery/materialization/receipt rows), so a high-frequency
+  periodic flow grows the tables unbounded. When `retentionDays > 0`, a
+  low-frequency sweep (default hourly, timer `unref`'d) bulk-deletes events,
+  deliveries, inbox messages and receipts older than the cutoff — a notification
+  ages out wholesale, keeping the model consistent (no dangling `notification_id`)
+  and the bell (recent-only) unaffected. The delivery row's epoch-ms `created_at`
+  vs the others' ISO `created_at` is handled per target. **Default off** — no
+  notification data is deleted without explicit operator policy. Each target is
+  isolated (one object's failure doesn't abort the sweep), and the sweep runs
+  under a system context (retention is a cross-tenant operator policy).
+
+  Tests: +7 `service-messaging` cases (converge-on-conflict, non-conflict
+  rethrow, retention cutoff-formatting per target, no-engine / non-positive
+  no-ops, failure isolation, missing-count) — 102 passing.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

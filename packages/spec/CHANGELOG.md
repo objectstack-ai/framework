@@ -1,5 +1,278 @@
 # @objectstack/spec
 
+## 7.4.0
+
+### Minor Changes
+
+- 23c7107: ADR-0020 — converge the three "state machine" declaration shapes to one
+  **enforced** `state_machine` validation rule.
+
+  Before this change a record state machine could be declared three ways (a
+  `workflow` metadata type, an `object.stateMachines` map, or a `state_machine`
+  validation rule) and **none of them were enforced at runtime** — a declarative
+  guardrail that was pure decoration, and a hallucination trap for AI authors.
+
+  **Enforcement (`@objectstack/objectql`)**
+
+  - New `validation/rule-validator.ts` evaluates the object's `validations` union
+    on the write path: `evaluateValidationRules`, `needsPriorRecord`, and the
+    `legalNextStates` introspection helper (all exported from the package root).
+  - `state_machine` rules reject illegal `field` transitions on update (with the
+    rule's `message`); `script` / `cross_field` predicate rules now also fire
+    (they were silently broken on PATCH updates because only the patch, not the
+    prior record, was available). The engine plumbs the prior record into
+    rule evaluation on single-row update; multi-row (`updateMany`) updates log a
+    warning and skip rule evaluation rather than enforce on incomplete data.
+
+  **Convergence / retirement (`@objectstack/spec`) — breaking**
+
+  - Retires the `workflow` metadata type (removed from the metadata-type enum,
+    the registry, the schema map, the `workflows` collection key, and the
+    plural→singular mapping).
+  - Removes the `object.stateMachines` map and the `stack.workflows` array. The
+    `state_machine` validation rule is the single canonical home.
+  - The XState-style `StateMachineSchema` file is **kept** (still used by the
+    agent conversation lifecycle and the discovery protocol); only its role as
+    the `workflow` metadata-type backing schema was removed. The optional
+    `workflow` **RPC service** surface (`CoreServiceName.workflow`,
+    `/api/v1/workflow`, `IWorkflowService`) is kept as a documented follow-up.
+
+  **Introspection (`@objectstack/runtime`)**
+
+  - Adds `GET /metadata/objects/:name/state/:field?from=:state`, returning the
+    legal next states for a field (`next: null` when no FSM governs the field,
+    `[]` for a declared dead-end) so UIs/agents read the transition table instead
+    of re-deriving it.
+
+  **Surfaces (`@objectstack/platform-objects`, `@objectstack/cli`)**
+
+  - Studio drops the standalone "Workflow Rules" nav (state machines are edited
+    alongside the object's other validation rules).
+  - `explain` no longer lists `workflow` as a related metadata type.
+
+  Migration: replace a `workflow` / `StateMachineConfig` declaration with a
+  `state_machine` validation rule on the object (`field` + `{ from: [allowedTo] }`
+  transition table), and move any side-effecting actions (emails, task creation)
+  into a record-triggered or scheduled Flow (ADR-0019). See the migrated
+  `examples/app-crm` flows for the pattern.
+
+- c72daad: ADR-0029 D7 — Setup app navigation contributions.
+
+  Adds the UI-layer analog of object `own`/`extend`: a package can contribute
+  navigation items into an app it does not own, so a shared admin app can be a
+  thin shell while each capability plugin ships the menu for the objects it owns.
+
+  - **`@objectstack/spec`** — new `NavigationContributionSchema` (`{ app, group?,
+priority, items }`) and an optional `navigationContributions` field on the
+    manifest.
+  - **`@objectstack/objectql`** — `SchemaRegistry.registerAppNavContribution()`
+    plus lazy merge in `getApp` / `getAllApps` (by target group id + priority,
+    cloning so the stored app is never mutated); the engine wires
+    `manifest.navigationContributions` during app registration.
+  - **`@objectstack/platform-objects`** — the Setup app becomes a **shell** of
+    empty group anchors; its entries for platform-objects-owned objects move to
+    `SETUP_NAV_CONTRIBUTIONS`.
+  - **`@objectstack/plugin-auth`** — registers `SETUP_NAV_CONTRIBUTIONS` alongside
+    the Setup app it already registers.
+  - **`@objectstack/plugin-webhooks`** — contributes its `Webhooks` /
+    `Webhook Deliveries` entries into the Setup `group_integrations` slot (it owns
+    `sys_webhook` / `sys_webhook_delivery` per K2.a), demonstrating end-to-end
+    cross-plugin contribution.
+
+  The rendered Setup nav is identical to the former static artifact — just
+  assembled from its owners. A disabled/absent capability contributes nothing and
+  its slot stays empty (in addition to the existing `requiresObject` gating).
+  This unblocks moving each remaining K2 domain's menu out of the monolith with
+  its objects.
+
+- f115182: ADR-0019 — App as the consumer-facing unit. The consumer Marketplace surfaces
+  exactly one user-visible noun, the App.
+
+  - Adds `CONSUMER_INSTALLABLE_TYPES` and `isConsumerInstallable(type)` (the single
+    source of truth for "what a consumer can install").
+  - Constrains `MarketplaceListingSchema.packageType` to `CONSUMER_INSTALLABLE_TYPES`
+    (default `app`) so a non-App (driver/server/plugin/…) listing cannot be
+    represented — the "consumers see only Apps" guarantee is enforced in the data
+    contract, not a forgettable query filter.
+  - `defineStack()` now enforces **at most one App per package**: a package with
+    `manifest.type === 'app'` may not define more than one app — the banned "suite
+    contains apps" shape throws with a clear fix (fold into one app with multiple
+    tabs, or split into separate packages). Zero apps is allowed; non-`app`
+    package types are unconstrained. Non-breaking for existing stacks.
+
+  The package `type` enum is unchanged; the additions are non-breaking. No
+  runtime/registry/execution changes.
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 1.
+
+  Adds the spec foundation and the DDL gate for federating mature external
+  databases without ObjectStack ever mutating their schema:
+
+  - `Datasource.schemaMode` (`managed` | `external` | `validate-only`) and
+    `Datasource.external` settings, with a cross-field invariant.
+  - `Object.external` binding (remote table/schema, writability, column map).
+  - Shared error contract: `ExternalSchemaMismatchError`,
+    `ExternalWriteForbiddenError`, `ExternalSchemaModeViolationError`
+    (stable `code`s) + structured `SchemaDiffEntry` rendering.
+  - `driver-sql` DDL gate: schema-mutating DDL (`initObjects`/`syncSchema`/
+    `dropTable`) is rejected when `schemaMode !== 'managed'`.
+
+  All changes are additive and backward-compatible (`schemaMode` defaults to
+  `'managed'`).
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 2 (service core).
+
+  Adds the federation service contract, the type-compatibility matrix, and a
+  new service package that introspects, drafts, and validates federated
+  objects:
+
+  - `@objectstack/spec`:
+    - `data/type-compat.ts` — dialect-aware SQL↔field-type matrix
+      (`canonicalizeSqlType`, `suggestFieldType`, `isCompatible`) for
+      postgres/mysql/sqlite/snowflake/bigquery/mongo.
+    - `contracts/external-datasource-service.ts` — `IExternalDatasourceService`
+      plus `RemoteTable`, `GenerateDraftOpts`, `ObjectDraft`,
+      `SchemaValidationResult`/`Report`.
+  - `@objectstack/service-external-datasource` (new): implements the service —
+    `listRemoteTables`, `generateObjectDraft` (renders a reviewable
+    `*.object.ts` with `// REVIEW:` markers), `validateObject`/`validateAll`
+    (structured `SchemaDiffEntry` diffs), and `refreshCatalog`. Decoupled from
+    the kernel via injected I/O; kernel plugin registers it as the
+    `external-datasource` service.
+
+  REST routes and the `os datasource` CLI commands follow in a subsequent
+  slice.
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 3 spec: `external_catalog`
+  metadata type.
+
+  - Registers `external_catalog` in `MetadataTypeSchema` and
+    `DEFAULT_METADATA_TYPE_REGISTRY` (system domain, `allowRuntimeCreate: true`,
+    not org-overridable).
+  - Adds `data/external-catalog.zod.ts` — `ExternalCatalogSchema` /
+    `ExternalTableSchema` / `ExternalColumnSchema` for persisting a cached
+    remote-schema snapshot of a federated datasource (consumed by
+    `refreshCatalog`, the boot-validation gate, and Studio's schema browser).
+
+- ff3d006: Screen-flow runtime — interactive `screen` nodes (suspend → render → resume).
+
+  A `screen` node that declares input fields now suspends the run on entry
+  (reusing the ADR-0019 durable pause), surfaces a `ScreenSpec` describing the
+  form, and resumes with the collected values applied as **bare** flow variables
+  so downstream nodes read them via `{var}`. (`waitForInput: false` forces the
+  old server pass-through.)
+
+  - **spec**: `AutomationResult.screen?: ScreenSpec`, `ResumeSignal.variables?`
+    (bare vars), `IAutomationService.getSuspendedScreen?(runId)`.
+  - **service-automation**: the `screen` executor builds the `ScreenSpec` and
+    suspends when fields are present; the suspend/resume plumbing threads the
+    screen through `FlowSuspendSignal` → `SuspendedRun` → the paused result;
+    `resume()` sets `signal.variables` as bare flow variables; `getSuspendedScreen`.
+  - **runtime**: `POST /api/v1/automation/:name/runs/:runId/resume` (body
+    `{ inputs }`) and `GET …/runs/:runId/screen`, wired through both the
+    dispatcher route table and `handleAutomation`.
+
+  Verified end-to-end headlessly: the showcase Reassign Wizard launches → pauses
+  at the "New Assignee" screen → resumes with the input → the task is reassigned.
+  The objectui `FlowRunner` UI that renders these screens ships separately.
+
+- 5e831de: Seed data: first-class identity binding + loud failures (fixes #1389)
+
+  Records seeded via `defineDataset` / `defineStack({ data })` can now bind to a
+  platform user with `cel\`os.user.id\``(and to the org with`cel\`os.org.id\``),
+  which previously never resolved at boot.
+
+  - **`os.user` / `os.org` now actually resolve.** The runtime provisions a
+    deterministic, non-loginable system user (`usr_system`, role `system`)
+    _before_ any seed runs and binds it to `os.user`, so identity-derived seed
+    values resolve even on a fresh boot — before the first human sign-up. The
+    human login admin remains a separate better-auth identity and need not own
+    seed data. Exposed as the canonical `SystemUserId.SYSTEM` constant.
+  - **New `SeedLoaderConfig.identity`** carries the `os.user` / `os.org` subject
+    into CEL evaluation (`@objectstack/spec`).
+  - **Failures are loud, not silent.** A record whose CEL value can't resolve
+    (e.g. a required `cel\`os.user.id\`` with no identity) — or that fails to
+    write — is now counted as an error, marks the load unsuccessful, and logs an
+    actionable message, instead of being silently dropped.
+
+### Patch Changes
+
+- 58b450b: Make metadata labels follow the active UI language without a page refresh (#1319).
+
+  The client now carries the active locale on every request (`Accept-Language`,
+  `setLocale`/`getLocale`), the protocol ETag is locale-aware so cached metadata
+  no longer collides across languages, and the `client-react` metadata hooks
+  refetch when the locale changes. The `apps/account` console wires its router
+  locale through so a language switch relabels server-resolved object/field/view
+  labels in place instead of leaving the UI half-translated until reload.
+
+- 82eb6cf: Fix system-metadata translations: locale fallback, app/dashboard localization, and coverage gaps.
+
+  Switching the UI language left many surfaces in English. Three root causes
+  are addressed:
+
+  - **Locale fallback (server).** The metadata translation resolver
+    (`@objectstack/spec` `i18n-resolver`) now resolves a requested locale
+    against the locales actually present in the bundle (exact →
+    case-insensitive → base-language → variant), so a request for `zh`
+    correctly hits the `zh-CN` bundle instead of falling back to English.
+    This mirrors `resolveLocale` in `@objectstack/core` and benefits every
+    resolver (objects, views, actions, settings, metadata forms).
+
+  - **App & dashboard localization (server).** Added `translateApp` and
+    `translateDashboard` resolvers and wired `app`/`dashboard` into the REST
+    `/meta` translation path. App labels, sidebar/navigation group labels,
+    and dashboard titles/widgets were previously never localized at the API
+    boundary even though the translation data existed.
+
+  - **Coverage & quality (data).** Added translations for the previously
+    untranslated platform objects `sys_share_link`, `sys_view_definition`,
+    and `sys_metadata_audit` (and registered them in the i18n-extract config
+    so future extractions keep them). Replaced English placeholder strings
+    left in the `zh-CN` / `ja-JP` / `es-ES` object and metadata-form bundles
+    (notably action `confirmText` / `successMessage` prompts). Added the
+    missing `es-ES` built-in Settings bundle in `@objectstack/service-settings`.
+
+- 13d8653: Record-change flow trigger — auto-launch flows on data mutations.
+
+  Completes the automation engine's `FlowTrigger` extension point so flows whose
+  `start` node declares a record-change trigger (`config: { objectName,
+triggerType: 'record-after-update', condition }`) actually fire on the matching
+  mutation. Previously the slot was dead — nothing called `trigger.start` — so
+  such flows could only run via a manual `engine.execute()`.
+
+  **Engine baseline (`@objectstack/service-automation`)**
+
+  - Redefines `FlowTrigger` around a parsed `FlowTriggerBinding` (flowName,
+    object, event, condition, schedule, raw config). The engine parses the start
+    node and hands the trigger a normalized binding, keeping trigger plugins
+    decoupled from flow-definition internals (mirrors `connector_action` ↔
+    `connector-rest`).
+  - Ordering-independent, bidirectional wiring: `registerFlow`/`toggleFlow`
+    activate bindings; `registerTrigger` retro-binds already-registered flows (a
+    trigger plugin wires up on `kernel:ready`, after flows are pulled in);
+    `unregisterFlow`/`unregisterTrigger`/disable tear them down.
+  - Centralized start-condition gate in `execute()`: the start node's `condition`
+    (e.g. `status == 'done' && previous.status != 'done'`) is evaluated once for
+    every trigger type and manual runs; false ⇒ `{ skipped: true }`.
+  - Seeds `record`, flattened record fields, and `previous` into flow variables.
+  - New `getActiveTriggerBindings()` getter + exports `FlowTriggerBinding`.
+
+  **Spec (`@objectstack/spec`)**
+
+  - Adds `previous?` to `AutomationContext` — the pre-update "old" row, so flows
+    can gate on transitions.
+
+  **New package (`@objectstack/plugin-trigger-record-change`)**
+
+  - The concrete trigger: subscribes to ObjectQL lifecycle hooks
+    (`record-after-update` → `afterUpdate`, etc.), builds an `AutomationContext`
+    from the new/old record, and runs the flow. Error-isolated (a flow failure
+    never breaks the CRUD write); graceful degrade when the automation service or
+    ObjectQL engine is absent (mirrors `plugin-audit`).
+
+  The `schedule` trigger (ticker/cron + `sys_job` lifecycle) is a follow-up.
+
 ## 7.3.0
 
 ### Minor Changes

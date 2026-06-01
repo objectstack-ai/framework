@@ -1,5 +1,36 @@
 # @objectstack/service-ai
 
+## 7.4.0
+
+### Minor Changes
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 4: AI awareness.
+
+  `SchemaRetriever.renderSnippet` now annotates federated objects in the
+  auto-injected schema context, e.g.
+  `### wh_order — Warehouse Order [external, read-only, datasource=warehouse]`,
+  so the LLM knows an object comes from a customer's production database and must
+  not propose schema changes or unsafe writes. `ObjectShape` gains `datasource`
+
+  - `external` (read from object metadata). Managed objects are unannotated.
+
+### Patch Changes
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/types@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

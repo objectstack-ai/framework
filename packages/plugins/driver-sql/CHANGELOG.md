@@ -1,5 +1,65 @@
 # @objectstack/driver-sql
 
+## 7.4.0
+
+### Minor Changes
+
+- 24c9013: fix(driver-sql): materialize declared object-level indexes (#1459)
+
+  The SQL driver synced columns and field-level `unique`, but silently dropped
+  object-level declared `indexes` (`ObjectSchema.indexes: [{ fields, unique }]`).
+  As a result several documented multi-column UNIQUE / dedup guarantees were
+  never enforced at the DB level — a fresh `dev --fresh` sqlite DB showed only
+  primary-key autoindexes.
+
+  `initObjects` now materializes declared indexes (`syncDeclaredIndexes`) after
+  the table is created/altered:
+
+  - single- and multi-column indexes, including `UNIQUE`
+  - NULL-distinct semantics (the cross-dialect default), so multiple NULL rows
+    stay insertable while non-NULL duplicates are rejected — matching the
+    convergence-on-conflict pattern the messaging pipeline relies on
+  - idempotent: deterministic, length-bounded index names + per-dialect
+    existing-index introspection (sqlite/pg/mysql); "already exists" races are
+    absorbed
+  - indexes referencing a non-materialized (virtual `formula`) column are skipped
+    with a warning instead of failing sync
+
+  The `indexes` driver capability flag is now `true`.
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 1.
+
+  Adds the spec foundation and the DDL gate for federating mature external
+  databases without ObjectStack ever mutating their schema:
+
+  - `Datasource.schemaMode` (`managed` | `external` | `validate-only`) and
+    `Datasource.external` settings, with a cross-field invariant.
+  - `Object.external` binding (remote table/schema, writability, column map).
+  - Shared error contract: `ExternalSchemaMismatchError`,
+    `ExternalWriteForbiddenError`, `ExternalSchemaModeViolationError`
+    (stable `code`s) + structured `SchemaDiffEntry` rendering.
+  - `driver-sql` DDL gate: schema-mutating DDL (`initObjects`/`syncSchema`/
+    `dropTable`) is rejected when `schemaMode !== 'managed'`.
+
+  All changes are additive and backward-compatible (`schemaMode` defaults to
+  `'managed'`).
+
+### Patch Changes
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/core@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes
