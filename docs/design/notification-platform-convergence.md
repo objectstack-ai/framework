@@ -4,6 +4,14 @@
 **Refines/realizes**: [ADR-0012](../adr/0012-notification-platform.md) · **Channels on connectors**: [ADR-0022](../adr/0022-connectors-vs-messaging-channels.md)
 **Audience**: the implementing agent. This is the executable spec; ADR-0030 holds the *why*.
 
+> **Status (2026-06-01):** P0, P1, P2, P3a, and **P3b-1 (quiet-hours) are shipped**
+> (PRs #1434/#1441/#1444/#1449/#1453). The §4 checklists below are the original
+> plan — for the current done/remaining breakdown see
+> [ADR-0030 § Implementation status & remaining work](../adr/0030-notification-platform-convergence.md#implementation-status--remaining-work)
+> and [docs/handoff/adr-0030-notification-convergence.md](../handoff/adr-0030-notification-convergence.md).
+> **Remaining:** P3b-2 (digest), the cross-repo objectui bell cut-over +
+> mark-read write path, and the incremental channels / hardening items.
+
 ---
 
 ## 0. The governing rule
