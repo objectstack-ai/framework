@@ -425,3 +425,140 @@ describe('MessagingService', () => {
         });
     });
 });
+
+/**
+ * A stateful in-memory engine for the inbox read API (ADR-0030). Supports the
+ * flat-equality `where` filters listInbox/markRead/markAllRead issue, plus
+ * `update(..., { where: { id } })` mutation and `insert`.
+ */
+function inboxEngine(seed: { inbox?: any[]; receipts?: any[] } = {}) {
+    const store: Record<string, any[]> = {
+        sys_inbox_message: [...(seed.inbox ?? [])],
+        sys_notification_receipt: [...(seed.receipts ?? [])],
+    };
+    let seq = 0;
+    const matches = (row: any, where: any = {}) =>
+        Object.entries(where).every(([k, v]) => String(row[k]) === String(v));
+    const engine = {
+        store,
+        async find(object: string, query: any = {}) {
+            let rows = (store[object] ?? []).filter((r) => matches(r, query.where));
+            const ob = Array.isArray(query.orderBy) ? query.orderBy : [];
+            if (ob.some((o: any) => o.field === 'created_at' && o.order === 'desc')) {
+                rows = [...rows].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+            }
+            return typeof query.limit === 'number' ? rows.slice(0, query.limit) : rows;
+        },
+        async findOne(object: string, query: any = {}) {
+            return (store[object] ?? []).find((r) => matches(r, query.where)) ?? null;
+        },
+        async insert(object: string, row: any) {
+            const created = { id: `row_${++seq}`, ...row };
+            (store[object] ??= []).push(created);
+            return created;
+        },
+        async update(object: string, data: any, options: any = {}) {
+            for (const r of store[object] ?? []) {
+                if (matches(r, options.where)) Object.assign(r, data);
+            }
+            return {};
+        },
+        async delete() { return {}; },
+        async count() { return 0; },
+        async aggregate() { return []; },
+    };
+    return engine as any;
+}
+
+describe('MessagingService — inbox read API (ADR-0030)', () => {
+    const logger = silentLogger();
+
+    it('lists inbox rows joined with receipt read-state and counts unread', async () => {
+        const engine = inboxEngine({
+            inbox: [
+                { id: 'm1', user_id: 'u1', notification_id: 'n1', topic: 'collab.mention', title: 'A', body_md: 'a', action_url: '/x', created_at: '2026-01-01T00:00:01Z' },
+                { id: 'm2', user_id: 'u1', notification_id: 'n2', topic: 'task.assigned', title: 'B', body_md: 'b', created_at: '2026-01-01T00:00:02Z' },
+                { id: 'm3', user_id: 'u2', notification_id: 'n3', topic: 'x', title: 'C', created_at: '2026-01-01T00:00:03Z' },
+            ],
+            receipts: [
+                { id: 'r1', notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'read' },
+                { id: 'r2', notification_id: 'n2', user_id: 'u1', channel: 'inbox', state: 'delivered' },
+            ],
+        });
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        const res = await svc.listInbox('u1');
+        // Only u1's rows; newest first; n2 unread, n1 read.
+        expect(res.notifications.map((n) => n.id)).toEqual(['n2', 'n1']);
+        expect(res.unreadCount).toBe(1);
+        const n1 = res.notifications.find((n) => n.id === 'n1')!;
+        expect(n1).toMatchObject({ type: 'collab.mention', title: 'A', body: 'a', read: true, actionUrl: '/x' });
+        expect(res.notifications.find((n) => n.id === 'n2')!.read).toBe(false);
+    });
+
+    it('filters by read state when requested', async () => {
+        const engine = inboxEngine({
+            inbox: [
+                { id: 'm1', user_id: 'u1', notification_id: 'n1', title: 'A', created_at: '1' },
+                { id: 'm2', user_id: 'u1', notification_id: 'n2', title: 'B', created_at: '2' },
+            ],
+            receipts: [{ id: 'r1', notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'read' }],
+        });
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        expect((await svc.listInbox('u1', { read: false })).notifications.map((n) => n.id)).toEqual(['n2']);
+        expect((await svc.listInbox('u1', { read: true })).notifications.map((n) => n.id)).toEqual(['n1']);
+    });
+
+    it('markRead updates the existing delivered receipt in place (no duplicate)', async () => {
+        const engine = inboxEngine({
+            inbox: [{ id: 'm1', user_id: 'u1', notification_id: 'n1', title: 'A', created_at: '1' }],
+            receipts: [{ id: 'r1', notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'delivered' }],
+        });
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        const res = await svc.markRead('u1', ['n1']);
+        expect(res).toEqual({ success: true, readCount: 1 });
+        const receipts = engine.store.sys_notification_receipt;
+        expect(receipts).toHaveLength(1); // updated in place, not duplicated
+        expect(receipts[0]).toMatchObject({ id: 'r1', state: 'read' });
+        expect(receipts[0].at).toBeTruthy();
+    });
+
+    it('markRead inserts a read receipt when none exists yet', async () => {
+        const engine = inboxEngine({
+            inbox: [{ id: 'm1', user_id: 'u1', notification_id: 'n1', title: 'A', created_at: '1' }],
+        });
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        const res = await svc.markRead('u1', ['n1']);
+        expect(res.readCount).toBe(1);
+        const receipts = engine.store.sys_notification_receipt;
+        expect(receipts).toHaveLength(1);
+        expect(receipts[0]).toMatchObject({ notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'read' });
+    });
+
+    it('markAllRead flips every unread message and leaves already-read ones', async () => {
+        const engine = inboxEngine({
+            inbox: [
+                { id: 'm1', user_id: 'u1', notification_id: 'n1', title: 'A', created_at: '1' },
+                { id: 'm2', user_id: 'u1', notification_id: 'n2', title: 'B', created_at: '2' },
+            ],
+            receipts: [{ id: 'r1', notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'read' }],
+        });
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        const res = await svc.markAllRead('u1');
+        expect(res.readCount).toBe(1); // only n2 was unread
+        expect((await svc.listInbox('u1')).unreadCount).toBe(0);
+    });
+
+    it('degrades to empty without a data engine or user id', async () => {
+        const noData = new MessagingService({ logger });
+        expect(await noData.listInbox('u1')).toEqual({ notifications: [], unreadCount: 0 });
+        expect(await noData.markRead('u1', ['n1'])).toEqual({ success: true, readCount: 0 });
+
+        const svc = new MessagingService({ logger, getData: () => inboxEngine() });
+        expect(await svc.listInbox('')).toEqual({ notifications: [], unreadCount: 0 });
+    });
+});

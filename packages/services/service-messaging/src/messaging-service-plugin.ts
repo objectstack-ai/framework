@@ -129,6 +129,15 @@ export class MessagingServicePlugin implements Plugin {
 
         ctx.registerService('messaging', service);
 
+        // ADR-0030: the messaging service also backs the `notification` core
+        // service slot — it owns the in-app inbox + receipts, so it answers the
+        // `/api/v1/notifications` REST surface (list / mark-read / mark-all-read)
+        // via its inbox read API. Registering it here makes the dispatcher
+        // resolve + advertise those routes (`hasNotification`). The legacy
+        // INotificationService `send()` abstraction is unused; nothing consumes
+        // the slot expecting it.
+        ctx.registerService('notification', service);
+
         // Register the messaging objects so their rows can be written. The
         // preference/subscription objects (ADR-0030 P2) are Studio-configurable,
         // so contribute them to the Setup app's Configuration slot (ADR-0029 D7)

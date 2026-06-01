@@ -10,9 +10,29 @@ import { RecipientResolver } from './recipient-resolver.js';
 import { PreferenceResolver, type PreferenceTarget } from './preference-resolver.js';
 import type { INotificationOutbox } from './outbox.js';
 import type { EnqueueHttpInput, HttpDelivery, HttpDeliveryStatus, IHttpOutbox } from './http-outbox.js';
+import { INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channel.js';
 
 /** The L2 event object every `emit()` writes one row to (ADR-0030). */
 export const NOTIFICATION_EVENT_OBJECT = 'sys_notification';
+
+/** Receipt states that count as "read" for the inbox unread badge (ADR-0030). */
+const READ_RECEIPT_STATES = new Set(['read', 'clicked', 'dismissed']);
+
+/**
+ * One row of the inbox list REST response — the `Notification` shape in the API
+ * spec (`NotificationSchema`). `id` is the notification's event id
+ * (`notification_id`), which keys its read-state receipt, falling back to the
+ * inbox row id for synthetic/legacy rows that carry no event id.
+ */
+export interface InboxNotificationView {
+    id: string;
+    type: string;
+    title: string;
+    body: string;
+    read: boolean;
+    actionUrl?: string;
+    createdAt: string;
+}
 
 /**
  * Audience selector for {@link EmitInput}. P0 resolves explicit user ids and
@@ -222,6 +242,140 @@ export class MessagingService {
     /** All registered channel ids. */
     getRegisteredChannels(): string[] {
         return [...this.channels.keys()];
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Inbox read API (ADR-0030) — backs /api/v1/notifications            */
+    /*                                                                     */
+    /*  The REST notification surface reads the L5 `sys_inbox_message`      */
+    /*  materialization joined with the `sys_notification_receipt`         */
+    /*  read-state spine — NOT the re-modeled `sys_notification` L2 event   */
+    /*  (which carries no recipient/read columns). Mark-read upserts the    */
+    /*  receipt, keyed `(notification_id, user_id, channel:'inbox')`.       */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * List the signed-in user's in-app inbox, joined with read-state.
+     *
+     * A message is unread until its event has a `read`/`clicked`/`dismissed`
+     * receipt; the `read` filter (when given) is applied in-memory after the
+     * join. `unreadCount` is computed over the fetched window (bounded by
+     * `limit`, like the Console bell's poll). Returns the REST contract shape
+     * (`ListNotificationsResponseSchema`): `{ notifications, unreadCount }`.
+     */
+    async listInbox(
+        userId: string,
+        opts: { read?: boolean; type?: string; limit?: number } = {},
+    ): Promise<{ notifications: InboxNotificationView[]; unreadCount: number }> {
+        const data = this.ctx.getData?.();
+        if (!data || !userId) return { notifications: [], unreadCount: 0 };
+
+        const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+        const where: Record<string, unknown> = { user_id: userId };
+        if (opts.type) where.topic = opts.type;
+
+        const [rows, receipts] = await Promise.all([
+            data.find(INBOX_OBJECT, { where, orderBy: [{ field: 'created_at', order: 'desc' }], limit }) as Promise<Array<Record<string, unknown>>>,
+            // Read-state spine. Best-effort: if receipts are unavailable the
+            // inbox still lists (everything reads as unread) rather than erroring.
+            (data.find(RECEIPT_OBJECT, { where: { user_id: userId, channel: 'inbox' } }) as Promise<Array<Record<string, unknown>>>)
+                .catch(() => [] as Array<Record<string, unknown>>),
+        ]);
+
+        // notification_id → most-advanced receipt state (read/clicked/dismissed
+        // wins over a plain delivered one).
+        const stateByNotif = new Map<string, string>();
+        for (const r of receipts) {
+            const nid = r?.notification_id != null ? String(r.notification_id) : '';
+            if (!nid) continue;
+            const state = String(r.state ?? 'delivered');
+            const prev = stateByNotif.get(nid);
+            if (!prev || (!READ_RECEIPT_STATES.has(prev) && READ_RECEIPT_STATES.has(state))) {
+                stateByNotif.set(nid, state);
+            }
+        }
+
+        let unreadCount = 0;
+        const all: InboxNotificationView[] = rows.map((m) => {
+            const nid = m?.notification_id != null ? String(m.notification_id) : null;
+            const state = nid ? stateByNotif.get(nid) : undefined;
+            const read = state ? READ_RECEIPT_STATES.has(state) : false;
+            if (!read) unreadCount += 1;
+            return {
+                id: nid ?? String(m.id),
+                type: (m.topic as string) ?? 'notification',
+                title: (m.title as string) ?? '',
+                body: (m.body_md as string) ?? '',
+                read,
+                actionUrl: (m.action_url as string) ?? undefined,
+                createdAt: (m.created_at as string) ?? this.now(),
+            };
+        });
+
+        const notifications = opts.read === undefined ? all : all.filter((n) => n.read === opts.read);
+        return { notifications, unreadCount };
+    }
+
+    /**
+     * Mark specific notifications read by upserting their inbox receipts to
+     * `read`. Updates the existing `delivered` receipt in place (keyed
+     * `(notification_id, user_id, channel:'inbox')`); inserts one only when
+     * absent. `ids` are notification (event) ids. Returns the REST contract
+     * shape (`MarkNotificationsReadResponseSchema`): `{ success, readCount }`.
+     */
+    async markRead(userId: string, ids: readonly string[]): Promise<{ success: boolean; readCount: number }> {
+        const data = this.ctx.getData?.();
+        if (!data || !userId || !ids?.length) return { success: true, readCount: 0 };
+        const at = this.now();
+        let readCount = 0;
+        for (const id of ids) {
+            const nid = String(id ?? '');
+            if (!nid) continue;
+            try {
+                readCount += await this.upsertReadReceipt(data, userId, nid, at);
+            } catch (err) {
+                this.ctx.logger.warn(`[messaging] markRead failed for '${nid}': ${(err as Error).message}`);
+            }
+        }
+        return { success: true, readCount };
+    }
+
+    /**
+     * Mark every currently-unread inbox message for the user as read. Returns
+     * `{ success, readCount }` (`MarkAllNotificationsReadResponseSchema`).
+     */
+    async markAllRead(userId: string): Promise<{ success: boolean; readCount: number }> {
+        const data = this.ctx.getData?.();
+        if (!data || !userId) return { success: true, readCount: 0 };
+        const { notifications } = await this.listInbox(userId, { read: false, limit: 200 });
+        return this.markRead(userId, notifications.map((n) => n.id));
+    }
+
+    /** Upsert a `read` receipt for one notification; returns 1 when it persisted. */
+    private async upsertReadReceipt(
+        data: IDataEngine,
+        userId: string,
+        notificationId: string,
+        at: string,
+    ): Promise<number> {
+        const existing = await data.findOne(RECEIPT_OBJECT, {
+            where: { notification_id: notificationId, user_id: userId, channel: 'inbox' },
+            fields: ['id'],
+        });
+        if (existing?.id) {
+            await data.update(RECEIPT_OBJECT, { state: 'read', at }, { where: { id: existing.id } } as never);
+        } else {
+            await data.insert(RECEIPT_OBJECT, {
+                notification_id: notificationId,
+                delivery_id: null,
+                user_id: userId,
+                channel: 'inbox',
+                state: 'read',
+                at,
+                created_at: at,
+            });
+        }
+        return 1;
     }
 
     /**
