@@ -58,6 +58,8 @@ The codebase scan found the kernel is a monolith with split ownership:
 | ~60 lookup fields converge on the **hub objects `sys_user` / `sys_organization`**, referenced from every domain (incl. `service-ai`'s `ai_conversations.user_id`). | scan |
 | `RESERVED_NAMESPACES = {'base','system'}` — `sys` is **not** reserved. "Apps may reference but never define `sys_*`" is documented intent with **no enforcing validator**. | `registry.ts:13`; `manifest.zod.ts:66-70` |
 | `scope: cloud\|system\|project` and `managedBy: platform\|config\|system\|append-only\|better-auth` already mark system data. | `manifest.zod.ts:133`; `object.zod.ts:354-385` |
+| The **`setup` admin app is a static monolith** that hard-references every `sys_*` object as nav entries — and its own comment notes it was made static *because* the objects were centralized (the older `@objectstack/plugin-setup` that assembled it at runtime was deleted). | `platform-objects/src/apps/setup.app.ts` |
+| `manifest.contributes.menus` exists in the schema but is **consumed nowhere** — a vestigial, unimplemented contribution point. No app-navigation merge / `appExtensions` analog to `objectExtensions` exists. | `manifest.zod.ts` (`contributes.menus`); no consumer found |
 
 ### How mainstream platforms structure the kernel
 
@@ -150,6 +152,38 @@ import surface during migration. Shared schema fragments (audit/system field
 mixins, common lookups) move to a small `platform-objects-base` (or `spec`)
 module that capability plugins import, so decomposition does not duplicate them.
 
+### D7 — Shared admin surfaces are "shell + slots"; capability plugins contribute navigation
+
+Decomposition breaks the premise that lets the `setup` app be a static monolith
+(it hard-references every `sys_*` object, and was made static *because* the
+objects were centralized). The fix mirrors `own`/`extend` at the UI layer:
+
+- The `setup` app is **owned by a base package** (revived `plugin-setup` or the
+  base tier) and defines only the **shell + stable group/category anchors
+  ("slots")** — `Overview`, `Apps`, `People & Org`, `Access Control`,
+  `Automation`, `Security`, `Developer`, … It does **not** enumerate capability
+  objects.
+- Each capability plugin **contributes** its nav entries into a named slot via a
+  declarative **navigation contribution** — the UI-layer analog of
+  `objectExtensions`. This finally implements the vestigial
+  `manifest.contributes.menus` (or a proper `appExtensions` /
+  `navigationContributions` schema): `{ app: 'setup', group: 'security', items:
+  [...], priority }`.
+- The loader **merges contributions into the owning app by group id + priority**,
+  exactly as object extenders merge (owner shell first, contributions by
+  ascending priority).
+- Each entry stays **gated by the existing nav fields** `requiresObject` /
+  `requiredPermissions` (already in the App nav schema, e.g.
+  `requiresObject: 'sys_package_installation'`). This doubles as the
+  enable/disable mechanism: a disabled capability registers no objects, so its
+  gated menu entries simply don't render — no dangling links.
+
+This is the general extension point a marketplace needs anyway: any app
+(third-party included) becomes navigation-extensible, not just `setup`. Scope
+for this ADR is the `setup` app and first-party capability contributions;
+generalizing app-extension to arbitrary apps is a follow-up. References inside
+contributions follow ADR-0028's naming model (`sys.audit_log`, etc.).
+
 ---
 
 ## Migration plan (template-transparent, independently shippable)
@@ -163,18 +197,25 @@ the ADR-0028 naming flip.
   install-time check that every `sys_*` object resolves to exactly one owner.
   *Exit:* registry resolves the full current kernel identically with explicit
   single owners; no resolution diffs.
-- **K1 — Base identity + reserved namespace.** Extract the core-mandatory hub
-  (`sys_user`/`sys_organization`/`sys_metadata*`) into the always-present base
-  package; add `sys` to `RESERVED_NAMESPACES`; wire dependency edges. No object
-  moves owner yet beyond the hub.
-  *Exit:* identity/auth bootstrap green; load-order deterministic.
+- **K1 — Base identity + reserved namespace + setup shell.** Extract the
+  core-mandatory hub (`sys_user`/`sys_organization`/`sys_metadata*`) into the
+  always-present base package; add `sys` to `RESERVED_NAMESPACES`; wire dependency
+  edges. Implement the **navigation-contribution mechanism** (D7) and reduce the
+  `setup` app to its shell + group anchors owned by the base package; the existing
+  hard-coded entries become base-package contributions for now. No capability
+  object moves owner yet beyond the hub.
+  *Exit:* identity/auth bootstrap green; load-order deterministic; `setup` renders
+  identically, now assembled from contributions.
 - **K2 — Move ownership to capability plugins (incrementally, one domain at a
   time).** For each domain (audit → jobs → email → approvals → sharing →
   webhooks), relocate the `*.object.ts` definitions into the owning plugin and
-  switch its manifest from "declare `namespace:'sys'`" to actual `own`. Keep a
-  `platform-objects` re-export facade so importers don't break mid-migration.
-  *Exit per domain:* that domain's objects resolve to the new owner; its tests
-  green; cross-domain lookups to the hub still resolve.
+  switch its manifest from "declare `namespace:'sys'`" to actual `own`, and move
+  that domain's `setup` nav entries out of the base shell into the plugin as
+  navigation contributions (D7). Keep a `platform-objects` re-export facade so
+  importers don't break mid-migration.
+  *Exit per domain:* that domain's objects resolve to the new owner; its setup
+  menu entries render via its own contribution; its tests green; cross-domain
+  lookups to the hub still resolve.
 - **K3 — Boundary enforcement.** Flip the app-cannot-define-kernel check
   warn→error. Classify the scattered `ai`/`mail`/`branding`/`prefs`/`feat`/… —
   each object either folds into the kernel contract (owned by its capability
@@ -219,6 +260,10 @@ the ADR-0028 naming flip.
   `platform-objects-base`.
 - Whether disabled capabilities should hard-remove their tables or leave them
   dormant (interacts with `managedBy` and uninstall semantics).
+- The navigation-contribution schema (D7): revive/extend the vestigial
+  `manifest.contributes.menus` vs add a first-class `appExtensions` /
+  `navigationContributions` collection — and how far to generalize app-extension
+  beyond the `setup` app (arbitrary third-party apps) in this ADR vs a follow-up.
 
 ---
 
