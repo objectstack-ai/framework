@@ -12,6 +12,7 @@
  * Scope (built-in baseline):
  *  - logic   — decision / assignment            (engine core)
  *  - logic   — loop                              (structured iteration container, ADR-0031)
+ *  - logic   — parallel                          (structured parallel block, implicit join, ADR-0031)
  *  - data    — get/create/update/delete_record   (platform CRUD baseline)
  *  - human   — screen / script                   (core flow capability)
  *  - io      — http_request                       (foundational outbound I/O)
@@ -30,6 +31,7 @@ import type { PluginContext } from '@objectstack/core';
 import type { AutomationEngine } from '../engine.js';
 import { registerLogicNodes } from './logic-nodes.js';
 import { registerLoopNode } from './loop-node.js';
+import { registerParallelNode } from './parallel-node.js';
 import { registerCrudNodes } from './crud-nodes.js';
 import { registerScreenNodes } from './screen-nodes.js';
 import { registerHttpNodes } from './http-nodes.js';
@@ -40,6 +42,7 @@ import { registerSubflowNode } from './subflow-node.js';
 
 export { registerLogicNodes } from './logic-nodes.js';
 export { registerLoopNode } from './loop-node.js';
+export { registerParallelNode } from './parallel-node.js';
 export { registerCrudNodes } from './crud-nodes.js';
 export { registerScreenNodes } from './screen-nodes.js';
 export { registerHttpNodes } from './http-nodes.js';
@@ -56,6 +59,7 @@ export { registerSubflowNode } from './subflow-node.js';
 export function installBuiltinNodes(engine: AutomationEngine, ctx: PluginContext): void {
     registerLogicNodes(engine, ctx);
     registerLoopNode(engine, ctx);
+    registerParallelNode(engine, ctx);
     registerCrudNodes(engine, ctx);
     registerScreenNodes(engine, ctx);
     registerHttpNodes(engine, ctx);

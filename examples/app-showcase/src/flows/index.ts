@@ -561,6 +561,78 @@ export const BatchRemindersFlow = defineFlow({
   ],
 });
 
+/**
+ * Fan-out Notify — demonstrates the ADR-0031 **structured parallel block**.
+ *
+ * The `parallel` node declares two branch regions in `config.branches[]`; both
+ * run concurrently in the enclosing variable scope and **join implicitly** at
+ * block end (the engine continues once both complete). There is no
+ * author-visible split/join gateway. The node's ordinary out-edge (`→ end`) is
+ * the after-block continuation.
+ */
+export const FanOutNotifyFlow = defineFlow({
+  name: 'showcase_fan_out_notify',
+  label: 'Fan-out Notify (Parallel)',
+  description: 'Notifies owner and watchers concurrently via a parallel block, joining before completion (ADR-0031).',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Completed',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-update',
+        condition: 'status == "done" && previous.status != "done"',
+      },
+    },
+    {
+      id: 'fan_out',
+      type: 'parallel',
+      label: 'Notify in parallel',
+      config: {
+        branches: [
+          {
+            name: 'Email the owner',
+            nodes: [
+              {
+                id: 'email_owner',
+                type: 'script',
+                label: 'Email Owner',
+                config: {
+                  actionType: 'email',
+                  inputs: { to: '{record.project.owner}', subject: '✅ Done: {record.title}' },
+                },
+              },
+            ],
+            edges: [],
+          },
+          {
+            name: 'Post to Slack',
+            nodes: [
+              {
+                id: 'slack_post',
+                type: 'script',
+                label: 'Slack Notify',
+                config: {
+                  actionType: 'slack',
+                  inputs: { channel: '#tasks', text: 'Task done: {record.title}' },
+                },
+              },
+            ],
+            edges: [],
+          },
+        ],
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'fan_out' },
+    { id: 'e2', source: 'fan_out', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
@@ -573,4 +645,5 @@ export const allFlows = [
   NotifyOwnerSubflow,
   TaskDoneNotifyOwnerFlow,
   BatchRemindersFlow,
+  FanOutNotifyFlow,
 ];
