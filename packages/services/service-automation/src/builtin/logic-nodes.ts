@@ -5,7 +5,10 @@ import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { AutomationEngine } from '../engine.js';
 
 /**
- * Logic built-in nodes — decision / assignment / loop.
+ * Logic built-in nodes — decision / assignment.
+ *
+ * (The `loop` container is registered separately — see `loop-node.ts` — as a
+ * structured iteration construct per ADR-0031.)
  *
  * Part of the automation engine's foundational vocabulary, so the core
  * {@link AutomationServicePlugin} seeds them directly (ADR-0018). These are NOT
@@ -52,27 +55,5 @@ export function registerLogicNodes(engine: AutomationEngine, ctx: PluginContext)
             },
         });
 
-        // loop node — iterate over a collection
-        engine.registerNodeExecutor({
-            type: 'loop',
-            descriptor: defineActionDescriptor({
-                type: 'loop', version: '1.0.0', name: 'Loop',
-                description: 'Iterate over a collection.',
-                icon: 'repeat', category: 'logic', source: 'builtin',
-            }),
-            async execute(node, variables, _context) {
-                const config = node.config as Record<string, unknown> | undefined;
-                const collectionName = config?.collection as string | undefined;
-                if (collectionName) {
-                    const collection = variables.get(collectionName);
-                    if (Array.isArray(collection)) {
-                        variables.set('$loopItems', collection);
-                        variables.set('$loopIndex', 0);
-                    }
-                }
-                return { success: true };
-            },
-        });
-
-        ctx.logger.info('[Logic Nodes] 3 built-in node executors registered');
+        ctx.logger.info('[Logic Nodes] 2 built-in node executors registered');
 }

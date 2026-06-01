@@ -129,6 +129,29 @@ structured containers; **to be decided in the implementation ADR/PR**:
 The choice, plus designer rendering of containers and migration of existing
 flows, is the first task below.
 
+### Representation decision (#1479) — **(B) nested sub-structure**
+
+The implementation adopts **(B)**: each container carries its body as a
+self-contained region in `config` — `config.body` for `loop`,
+`config.branches[]` for `parallel`, `config.try`/`config.catch` for `try_catch`
+(see `@objectstack/spec` `automation/control-flow.zod.ts`). Rationale:
+
+1. **Well-formed by construction.** A nested region is its *own* graph, so
+   single-entry is intrinsic and there are no scope markers to balance or leak
+   across — validation (`analyzeRegion`/`validateControlFlow`) is local.
+2. **The shared `engine.ts` traversal stays untouched.** The container executor
+   runs its body via a scoped `AutomationEngine.runRegion()`; the main DAG
+   `traverseNext` never learns about scope markers (deliberate, given the
+   multi-agent discipline around `engine.ts`). The container's ordinary
+   out-edges remain the after-loop/after-block continuation, so the DAG
+   invariant for ordinary edges holds.
+3. **Cleaner AST for AI** — the design center (ADR-0010/0011).
+
+Existing flat-graph loops (a `loop` node with no `config.body`) keep their legacy
+behavior — the constructs are **additive**, activated only when the nested
+structure is present. Migrating legacy flat loops and designer rendering of
+nested containers (in `../objectui`) are deferred follow-ups.
+
 ## Consequences
 
 - **Positive**: AI (and humans) author from a small set of constructs that are
