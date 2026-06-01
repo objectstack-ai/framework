@@ -593,12 +593,52 @@ export default class Serve extends Command {
              resolvedDriverLabel = 'SqlDriver(mysql2)';
              resolvedDatabaseUrl = databaseUrl;
            } else if (isDev) {
-             // Default in dev: in-memory driver
-             const { InMemoryDriver } = await import('@objectstack/driver-memory');
-             await kernel.use(new DriverPlugin(new InMemoryDriver()));
-             trackPlugin('MemoryDriver');
-             resolvedDriverLabel = 'InMemoryDriver';
-             resolvedDatabaseUrl = '(in-memory)';
+             // Default in dev: prefer SQLite for production-like SQL semantics,
+             // falling back to the pure-JS in-memory driver (mingo) only when the
+             // native `better-sqlite3` binary is unavailable — not built, ABI
+             // mismatch after a Node upgrade, or a blocked prebuild download.
+             //
+             // knex loads its client lazily (at first query, not at construction),
+             // so the only reliable signal inside this registration window is to
+             // actually open a connection: connect() runs `SELECT 1`, which forces
+             // better-sqlite3 to load. If that throws we drop to the in-memory
+             // driver instead of letting the failure surface much later — as a
+             // missing-module crash on the first real query — or be swallowed by
+             // the silent catch below, leaving the kernel with no driver at all.
+             let sqliteDriver: any;
+             let sqliteOk = false;
+             try {
+               const { SqlDriver } = await import('@objectstack/driver-sql');
+               sqliteDriver = new SqlDriver({
+                 client: 'better-sqlite3',
+                 connection: { filename: ':memory:' },
+                 useNullAsDefault: true,
+               });
+               await sqliteDriver.connect();
+               sqliteOk = true;
+             } catch {
+               sqliteOk = false;
+               if (sqliteDriver?.disconnect) {
+                 try { await sqliteDriver.disconnect(); } catch { /* ignore */ }
+               }
+             }
+
+             if (sqliteOk) {
+               await kernel.use(new DriverPlugin(sqliteDriver));
+               trackPlugin('SqlDriver');
+               resolvedDriverLabel = 'SqlDriver(sqlite)';
+               resolvedDatabaseUrl = ':memory:';
+             } else {
+               const { InMemoryDriver } = await import('@objectstack/driver-memory');
+               await kernel.use(new DriverPlugin(new InMemoryDriver()));
+               trackPlugin('MemoryDriver');
+               resolvedDriverLabel = 'InMemoryDriver';
+               resolvedDatabaseUrl = '(in-memory)';
+               console.warn(chalk.yellow(
+                 '  ⚠ better-sqlite3 unavailable — dev falling back to InMemoryDriver (mingo, not real SQL).\n' +
+                 '    Rebuild better-sqlite3, or set OS_DATABASE_URL / OS_DATABASE_DRIVER for SQL fidelity.'
+               ));
+             }
            }
          } catch (e: any) {
            // silent

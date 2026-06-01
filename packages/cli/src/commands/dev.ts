@@ -71,7 +71,7 @@ export default class Dev extends Command {
       default: false,
     }),
     'seed-admin': Flags.boolean({
-      description: 'After the server is ready, POST /api/v1/auth/sign-up/email to seed an admin account. Default: on when --fresh.',
+      description: 'After the server is ready, POST /api/v1/auth/sign-up/email to seed an admin account. Default: on (idempotent — creates the admin only on an empty DB, skips if the email already exists). Disable with --no-seed-admin.',
       allowNo: true,
     }),
     'admin-email': Flags.string({
@@ -206,12 +206,19 @@ export default class Dev extends Command {
       );
 
       // ── Seed admin account after the server is ready ────────────────
-      // `--seed-admin` defaults to ON when `--fresh` is set; otherwise
-      // OFF (so we don't surprise long-lived dev DBs with extra users).
-      // Uses better-auth's public sign-up endpoint, which the dev-mode
-      // bootstrap bypass (auth-manager.ts) lets through even when
-      // OS_DISABLE_SIGNUP=true for the very first user.
-      const seedAdmin = flags['seed-admin'] ?? flags.fresh;
+      // `--seed-admin` defaults to ON in dev. The seed is idempotent and
+      // NON-DESTRUCTIVE: it POSTs the public sign-up endpoint, which creates
+      // `admin@objectos.ai` only on an EMPTY DB (then `bootstrapPlatformAdmin`
+      // in @objectstack/plugin-security promotes that first user to platform
+      // admin). When the email already exists — i.e. a persistent dev DB you
+      // signed up against before — better-auth returns 422/400 and we skip
+      // (see the `r.status === 422 || 400` branch below), so a custom password
+      // is never overwritten. There's therefore no need to gate on ephemeral
+      // vs persistent: seeding an empty DB is exactly what you want, and a
+      // populated DB is left untouched.
+      // The dev-mode bootstrap bypass (auth-manager.ts) lets the very first
+      // sign-up through even when OS_DISABLE_SIGNUP=true.
+      const seedAdmin = flags['seed-admin'] ?? true;
       if (seedAdmin) {
         void this.seedAdminAccount({
           port: port ?? '3000',
