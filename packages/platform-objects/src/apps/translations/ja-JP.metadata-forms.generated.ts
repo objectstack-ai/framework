@@ -60,17 +60,122 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       fields: {
         helpText: "このオブジェクトが保存する列を追加"
       },
-      "fields.name": {
-        helpText: "snake_case 識別子"
-      },
       "fields.label": {
         helpText: "表示ラベル"
       },
       "fields.type": {
         helpText: "フィールド型"
       },
+      "fields.description": {
+        helpText: "Developer documentation for this column"
+      },
+      "fields.required": {
+        helpText: "Must be set on every record"
+      },
+      "fields.unique": {
+        helpText: "Disallow duplicate values"
+      },
+      "fields.indexed": {
+        helpText: "Create a database index for faster querying"
+      },
+      "fields.readonly": {
+        helpText: "Visible but never user-editable"
+      },
+      "fields.immutable": {
+        helpText: "Editable on create, locked thereafter"
+      },
+      "fields.hidden": {
+        helpText: "Hidden from default UI"
+      },
+      "fields.searchable": {
+        helpText: "Include in full-text search"
+      },
+      "fields.sortable": {
+        helpText: "Allow sorting on this column"
+      },
+      "fields.filterable": {
+        helpText: "Allow filtering on this column"
+      },
+      "fields.defaultValue": {
+        helpText: "Default value for new records (JSON literal)"
+      },
+      "fields.placeholder": {
+        helpText: "Placeholder hint"
+      },
+      "fields.maxLength": {
+        helpText: "Max characters"
+      },
+      "fields.minLength": {
+        helpText: "Min characters"
+      },
+      "fields.min": {
+        helpText: "Minimum value"
+      },
+      "fields.max": {
+        helpText: "Maximum value"
+      },
+      "fields.precision": {
+        helpText: "Total digits"
+      },
+      "fields.scale": {
+        helpText: "Decimal places"
+      },
+      "fields.options": {
+        helpText: "Available choices"
+      },
+      "fields.options.icon": {
+        helpText: "Lucide icon name"
+      },
       "fields.reference": {
         helpText: "対象オブジェクト（lookup/master_detail 用）"
+      },
+      "fields.referenceFilter": {
+        helpText: "CEL filter applied to the picker"
+      },
+      "fields.cascadeDelete": {
+        helpText: "Delete children when parent is deleted"
+      },
+      "fields.multiple": {
+        helpText: "Allow selecting multiple records"
+      },
+      "fields.formula": {
+        helpText: "CEL formula expression"
+      },
+      "fields.returnType": {
+        helpText: "Result type for formulas"
+      },
+      "fields.summaryType": {
+        helpText: "Aggregation"
+      },
+      "fields.summaryField": {
+        helpText: "Field on child object to aggregate"
+      },
+      "fields.displayFormat": {
+        helpText: "e.g. \"INV-{0000}\""
+      },
+      "fields.startingNumber": {
+        helpText: "Starting sequence value"
+      },
+      "fields.language": {
+        helpText: "Editor language (e.g. sql, javascript)"
+      },
+      "fields.validation": {
+        helpText: "CEL predicate — must evaluate true"
+      },
+      "fields.errorMessage": {
+        helpText: "Shown when validation fails"
+      },
+      "fields.audit": {
+        helpText: "Audit changes to this field"
+      },
+      "fields.trackHistory": {
+        helpText: "Keep change history"
+      },
+      "fields.pii": {
+        helpText: "Personally identifiable information"
+      },
+      "fields.encrypted": {
+        helpText: "Encrypt at rest"
       },
       capabilities: {
         helpText: "システム機能の有効/無効"
@@ -742,57 +847,14 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       }
     }
   },
-  workflow: {
-    label: "ワークフロー",
-    sections: {
-      basics: {
-        label: "基本",
-        description: "ID と発火元のオブジェクト/イベント。"
-      },
-      actions: {
-        label: "アクション",
-        description: "発火時にこのワークフローが行う処理。"
-      },
-      advanced: {
-        label: "詳細",
-        description: "順序と実行動作。"
-      }
-    },
-    fields: {
-      name: {
-        helpText: "一意識別子（snake_case）"
-      },
-      objectName: {
-        helpText: "このワークフローを発火するオブジェクト"
-      },
-      triggerType: {
-        helpText: "実行タイミング: on_create, on_update, on_delete, schedule"
-      },
-      active: {
-        helpText: "このワークフローの有効/無効"
-      },
-      description: {
-        helpText: "このワークフローの処理内容"
-      },
-      criteria: {
-        helpText: "CEL 式: この条件が true の場合のみ実行"
-      },
-      actions: {
-        helpText: "即時実行するアクション（field update, email, API call など）"
-      },
-      timeTriggers: {
-        helpText: "スケジュールアクション（例: 期限 1 日前にリマインダー送信）"
-      },
-      executionOrder: {
-        helpText: "複数ワークフロー一致時の実行順（小さいほど早い）"
-      }
-    }
-  },
   job: {
     label: "バックグラウンドジョブ"
   },
   datasource: {
     label: "データソース"
+  },
+  external_catalog: {
+    label: "External Catalog"
   },
   translation: {
     label: "翻訳"
@@ -817,27 +879,47 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "件名",
         description: "件名行。{{var.path}} 補間をサポート。"
       },
-      body: {
-        label: "本文",
-        description: "メール本文。変数には {{var}} を使用。エディターは body 型に基づきハイライト。"
+      html_body: {
+        label: "HTML body",
+        description: "Rich HTML body. Most clients strip <head>, so use inline styles."
       },
-      variables_and_attachments: {
-        label: "変数と添付ファイル",
-        description: "宣言済みテンプレート変数と任意の添付ファイル。"
+      plain_text_body: {
+        label: "Plain-text body",
+        description: "Optional plain-text alternative. When omitted, the service strips tags from the HTML body to derive one. Providing one improves spam scoring."
+      },
+      variables: {
+        label: "Variables",
+        description: "Declared variables. Rendered as hints in Studio and validated by sendTemplate() when required."
+      },
+      delivery_overrides: {
+        label: "Delivery overrides",
+        description: "Optional per-template overrides for From / Reply-To."
+      },
+      status: {
+        label: "Status"
       }
     },
     fields: {
-      id: {
-        helpText: "テンプレート id（例: auth.password_reset）"
+      name: {
+        helpText: "Dotted snake_case (e.g. auth.password_reset, crm.welcome)"
       },
-      body: {
-        helpText: "本文コンテンツ。Body Type に基づき HTML、プレーンテキスト、Markdown としてレンダリング。"
+      locale: {
+        helpText: "BCP-47 tag — e.g. en-US, zh-CN"
       },
       variables: {
         helpText: "subject/body で参照する変数名リスト"
       },
-      attachments: {
-        helpText: "[{ \"name\": \"...\", \"url\": \"...\" }]"
+      fromOverride: {
+        helpText: "{ \"name\": \"Acme Sales\", \"address\": \"sales@acme.com\" }"
+      },
+      replyTo: {
+        helpText: "Reply-To email address"
+      },
+      active: {
+        helpText: "When unchecked, sendTemplate() returns TEMPLATE_INACTIVE."
+      },
+      isSystem: {
+        helpText: "Built-in template; tenants may override but should not delete."
       }
     }
   },

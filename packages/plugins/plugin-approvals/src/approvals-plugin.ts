@@ -66,6 +66,21 @@ export class ApprovalsServicePlugin implements Plugin {
         },
       ],
     });
+    // ADR-0029 D8 — contribute this plugin's object translations to the i18n
+    // service on kernel:ready (the i18n plugin may register after this one).
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', async () => {
+        try {
+          const i18n = ctx.getService<any>('i18n');
+          if (i18n && typeof i18n.loadTranslations === 'function') {
+            const { ApprovalsTranslations } = await import('./translations/index.js');
+            for (const [locale, data] of Object.entries(ApprovalsTranslations)) {
+              i18n.loadTranslations(locale, data as Record<string, unknown>);
+            }
+          }
+        } catch { /* i18n optional */ }
+      });
+    }
     ctx.logger.info('ApprovalsServicePlugin: schemas registered');
   }
 

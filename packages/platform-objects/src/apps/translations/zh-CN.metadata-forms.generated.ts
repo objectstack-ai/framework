@@ -60,17 +60,122 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       fields: {
         helpText: "添加该对象将存储的列"
       },
-      "fields.name": {
-        helpText: "snake_case 标识符"
-      },
       "fields.label": {
         helpText: "展示用标签"
       },
       "fields.type": {
         helpText: "字段类型"
       },
+      "fields.description": {
+        helpText: "Developer documentation for this column"
+      },
+      "fields.required": {
+        helpText: "Must be set on every record"
+      },
+      "fields.unique": {
+        helpText: "Disallow duplicate values"
+      },
+      "fields.indexed": {
+        helpText: "Create a database index for faster querying"
+      },
+      "fields.readonly": {
+        helpText: "Visible but never user-editable"
+      },
+      "fields.immutable": {
+        helpText: "Editable on create, locked thereafter"
+      },
+      "fields.hidden": {
+        helpText: "Hidden from default UI"
+      },
+      "fields.searchable": {
+        helpText: "Include in full-text search"
+      },
+      "fields.sortable": {
+        helpText: "Allow sorting on this column"
+      },
+      "fields.filterable": {
+        helpText: "Allow filtering on this column"
+      },
+      "fields.defaultValue": {
+        helpText: "Default value for new records (JSON literal)"
+      },
+      "fields.placeholder": {
+        helpText: "Placeholder hint"
+      },
+      "fields.maxLength": {
+        helpText: "Max characters"
+      },
+      "fields.minLength": {
+        helpText: "Min characters"
+      },
+      "fields.min": {
+        helpText: "Minimum value"
+      },
+      "fields.max": {
+        helpText: "Maximum value"
+      },
+      "fields.precision": {
+        helpText: "Total digits"
+      },
+      "fields.scale": {
+        helpText: "Decimal places"
+      },
+      "fields.options": {
+        helpText: "Available choices"
+      },
+      "fields.options.icon": {
+        helpText: "Lucide icon name"
+      },
       "fields.reference": {
         helpText: "目标对象（用于 lookup / master_detail）"
+      },
+      "fields.referenceFilter": {
+        helpText: "CEL filter applied to the picker"
+      },
+      "fields.cascadeDelete": {
+        helpText: "Delete children when parent is deleted"
+      },
+      "fields.multiple": {
+        helpText: "Allow selecting multiple records"
+      },
+      "fields.formula": {
+        helpText: "CEL formula expression"
+      },
+      "fields.returnType": {
+        helpText: "Result type for formulas"
+      },
+      "fields.summaryType": {
+        helpText: "Aggregation"
+      },
+      "fields.summaryField": {
+        helpText: "Field on child object to aggregate"
+      },
+      "fields.displayFormat": {
+        helpText: "e.g. \"INV-{0000}\""
+      },
+      "fields.startingNumber": {
+        helpText: "Starting sequence value"
+      },
+      "fields.language": {
+        helpText: "Editor language (e.g. sql, javascript)"
+      },
+      "fields.validation": {
+        helpText: "CEL predicate — must evaluate true"
+      },
+      "fields.errorMessage": {
+        helpText: "Shown when validation fails"
+      },
+      "fields.audit": {
+        helpText: "Audit changes to this field"
+      },
+      "fields.trackHistory": {
+        helpText: "Keep change history"
+      },
+      "fields.pii": {
+        helpText: "Personally identifiable information"
+      },
+      "fields.encrypted": {
+        helpText: "Encrypt at rest"
       },
       capabilities: {
         helpText: "启用或禁用系统功能"
@@ -742,57 +847,14 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       }
     }
   },
-  workflow: {
-    label: "工作流",
-    sections: {
-      basics: {
-        label: "基础信息",
-        description: "名称与触发条件"
-      },
-      actions: {
-        label: "执行动作",
-        description: "满足条件后做什么"
-      },
-      advanced: {
-        label: "高级设置",
-        description: "执行顺序与错误处理"
-      }
-    },
-    fields: {
-      name: {
-        helpText: "唯一标识符（snake_case）"
-      },
-      objectName: {
-        helpText: "触发此工作流的对象"
-      },
-      triggerType: {
-        helpText: "何时触发：on_create、on_update、on_delete、schedule"
-      },
-      active: {
-        helpText: "启用或禁用此工作流"
-      },
-      description: {
-        helpText: "此工作流的用途说明"
-      },
-      criteria: {
-        helpText: "CEL 表达式：仅当条件为真时执行"
-      },
-      actions: {
-        helpText: "立即执行的动作（字段更新、邮件、API 调用等）"
-      },
-      timeTriggers: {
-        helpText: "定时动作（如截止前 1 天发提醒）"
-      },
-      executionOrder: {
-        helpText: "同时匹配多个工作流时的执行顺序（数字越小越先执行）"
-      }
-    }
-  },
   job: {
     label: "后台作业"
   },
   datasource: {
     label: "数据源"
+  },
+  external_catalog: {
+    label: "External Catalog"
   },
   translation: {
     label: "翻译"
@@ -817,27 +879,47 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "主题",
         description: "邮件主题模板"
       },
-      body: {
-        label: "正文",
-        description: "邮件正文内容"
+      html_body: {
+        label: "HTML body",
+        description: "Rich HTML body. Most clients strip <head>, so use inline styles."
       },
-      variables_and_attachments: {
-        label: "变量与附件",
-        description: "可注入的变量与附件列表"
+      plain_text_body: {
+        label: "Plain-text body",
+        description: "Optional plain-text alternative. When omitted, the service strips tags from the HTML body to derive one. Providing one improves spam scoring."
+      },
+      variables: {
+        label: "Variables",
+        description: "Declared variables. Rendered as hints in Studio and validated by sendTemplate() when required."
+      },
+      delivery_overrides: {
+        label: "Delivery overrides",
+        description: "Optional per-template overrides for From / Reply-To."
+      },
+      status: {
+        label: "Status"
       }
     },
     fields: {
-      id: {
-        helpText: "唯一标识符（snake_case）"
+      name: {
+        helpText: "Dotted snake_case (e.g. auth.password_reset, crm.welcome)"
       },
-      body: {
-        helpText: "支持变量插值的邮件正文"
+      locale: {
+        helpText: "BCP-47 tag — e.g. en-US, zh-CN"
       },
       variables: {
         helpText: "模板内可引用的变量与默认值"
       },
-      attachments: {
-        helpText: "附件列表（文件引用或 URL）"
+      fromOverride: {
+        helpText: "{ \"name\": \"Acme Sales\", \"address\": \"sales@acme.com\" }"
+      },
+      replyTo: {
+        helpText: "Reply-To email address"
+      },
+      active: {
+        helpText: "When unchecked, sendTemplate() returns TEMPLATE_INACTIVE."
+      },
+      isSystem: {
+        helpText: "Built-in template; tenants may override but should not delete."
       }
     }
   },

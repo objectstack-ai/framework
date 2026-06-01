@@ -56,6 +56,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      me: {
+        label: "My Profile"
+      },
       all_users: {
         label: "All Users"
       },
@@ -108,10 +111,28 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Change Email",
         successMessage: "Verification email sent — check the new address to confirm."
       },
+      resend_verification_email: {
+        label: "Resend Verification Email",
+        successMessage: "Verification email sent — check your inbox."
+      },
       delete_my_account: {
         label: "Delete My Account",
         confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
         successMessage: "Account deleted"
+      },
+      enable_two_factor: {
+        label: "Enable Two-Factor Auth",
+        successMessage: "Two-factor authentication enabled. Scan the QR code or paste the otpauth URI into your authenticator app, then verify a code to complete setup."
+      },
+      disable_two_factor: {
+        label: "Disable Two-Factor Auth",
+        confirmText: "Turn off two-factor authentication? Your account will be less secure.",
+        successMessage: "Two-factor authentication disabled."
+      },
+      generate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Generate a new set of backup codes? Any previously generated codes will stop working.",
+        successMessage: "New backup codes generated — save them somewhere safe."
       }
     }
   },
@@ -331,6 +352,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Leave Organization",
         confirmText: "Leave this organization? You will lose access to all of its resources.",
         successMessage: "You have left the organization"
+      },
+      change_slug: {
+        label: "Change Slug",
+        confirmText: "Renaming the slug rewrites every platform subdomain for this org and parks the old slug for 90 days. Continue?",
+        successMessage: "Organization slug changed"
       }
     }
   },
@@ -359,6 +385,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           admin: "Admin",
           member: "Member"
         }
+      }
+    },
+    _views: {
+      mine: {
+        label: "My Memberships"
       }
     },
     _actions: {
@@ -760,6 +791,10 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       backup_codes: {
         label: "Backup Codes",
         help: "JSON-serialized backup recovery codes"
+      },
+      verified: {
+        label: "Verified",
+        help: "Whether the enrollment was confirmed with a valid TOTP code (managed by better-auth)"
       }
     },
     _views: {
@@ -998,6 +1033,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      mine: {
+        label: "My Applications"
+      },
       active: {
         label: "Active"
       },
@@ -1180,473 +1218,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       expires_at: {
         label: "Expires At",
         help: "When the key may no longer be used to verify tokens"
-      }
-    }
-  },
-  sys_role: {
-    label: "Role",
-    pluralLabel: "Roles",
-    description: "Role definitions for RBAC access control",
-    fields: {
-      label: {
-        label: "Display Name"
-      },
-      name: {
-        label: "API Name",
-        help: "Unique machine name for the role (e.g. admin, editor, viewer)"
-      },
-      description: {
-        label: "Description"
-      },
-      permissions: {
-        label: "Permissions",
-        help: "JSON-serialized array of permission strings"
-      },
-      active: {
-        label: "Active"
-      },
-      is_default: {
-        label: "Default Role",
-        help: "Automatically assigned to new users"
-      },
-      id: {
-        label: "Role ID"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      active: {
-        label: "Active"
-      },
-      default_roles: {
-        label: "Default"
-      },
-      custom: {
-        label: "Custom"
-      },
-      all_roles: {
-        label: "All"
-      }
-    },
-    _actions: {
-      activate_role: {
-        label: "Activate Role",
-        successMessage: "Role activated"
-      },
-      deactivate_role: {
-        label: "Deactivate Role",
-        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
-        successMessage: "Role deactivated"
-      },
-      set_default_role: {
-        label: "Set as Default",
-        confirmText: "Make this the default role for new users? Existing users are unaffected.",
-        successMessage: "Default role updated"
-      },
-      clone_role: {
-        label: "Clone Role",
-        successMessage: "Role cloned"
-      }
-    }
-  },
-  sys_permission_set: {
-    label: "Permission Set",
-    pluralLabel: "Permission Sets",
-    description: "Named permission groupings for fine-grained access control",
-    fields: {
-      label: {
-        label: "Display Name"
-      },
-      name: {
-        label: "API Name",
-        help: "Unique machine name for the permission set"
-      },
-      description: {
-        label: "Description"
-      },
-      object_permissions: {
-        label: "Object Permissions",
-        help: "JSON-serialized object-level CRUD permissions"
-      },
-      field_permissions: {
-        label: "Field Permissions",
-        help: "JSON-serialized field-level read/write permissions"
-      },
-      system_permissions: {
-        label: "System Permissions",
-        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
-      },
-      row_level_security: {
-        label: "Row-Level Security",
-        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
-      },
-      tab_permissions: {
-        label: "Tab Permissions",
-        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
-      },
-      active: {
-        label: "Active"
-      },
-      id: {
-        label: "Permission Set ID"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      active: {
-        label: "Active"
-      },
-      inactive: {
-        label: "Inactive"
-      },
-      all_permsets: {
-        label: "All"
-      }
-    },
-    _actions: {
-      activate_permission_set: {
-        label: "Activate",
-        successMessage: "Permission set activated"
-      },
-      deactivate_permission_set: {
-        label: "Deactivate",
-        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
-        successMessage: "Permission set deactivated"
-      },
-      clone_permission_set: {
-        label: "Clone",
-        successMessage: "Permission set cloned"
-      }
-    }
-  },
-  sys_user_permission_set: {
-    label: "User Permission Set",
-    pluralLabel: "User Permission Sets",
-    description: "Direct assignment of a permission set to a user (optionally scoped to an organization).",
-    fields: {
-      id: {
-        label: "Assignment ID",
-        help: "UUID of the assignment."
-      },
-      user_id: {
-        label: "User",
-        help: "Foreign key to sys_user."
-      },
-      permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
-      },
-      organization_id: {
-        label: "Organization",
-        help: "Optional organization scope. NULL = applies in every org context."
-      },
-      granted_by: {
-        label: "Granted By",
-        help: "User who granted this permission set."
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    }
-  },
-  sys_role_permission_set: {
-    label: "Role Permission Set",
-    pluralLabel: "Role Permission Sets",
-    description: "Binds a permission set to a role.",
-    fields: {
-      id: {
-        label: "Binding ID",
-        help: "UUID of the role-permission-set binding."
-      },
-      role_id: {
-        label: "Role",
-        help: "Foreign key to sys_role."
-      },
-      permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    }
-  },
-  sys_record_share: {
-    label: "Record Share",
-    pluralLabel: "Record Shares",
-    description: "Per-record sharing grant — extends OWD with explicit access",
-    fields: {
-      id: {
-        label: "Share ID"
-      },
-      object_name: {
-        label: "Object",
-        help: "Short object name of the shared record"
-      },
-      record_id: {
-        label: "Record",
-        help: "Primary key of the shared record within object_name"
-      },
-      recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that holds the grant",
-        options: {
-          user: "user",
-          group: "group",
-          role: "role",
-          role_and_subordinates: "role_and_subordinates",
-          guest: "guest"
-        }
-      },
-      recipient_id: {
-        label: "Recipient",
-        help: "ID of the user/group/role that receives access"
-      },
-      access_level: {
-        label: "Access Level",
-        help: "What the recipient can do — read | edit | full (transfer/share/delete)",
-        options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
-        }
-      },
-      source: {
-        label: "Source",
-        help: "Why this grant exists — used by the rule evaluator to reconcile",
-        options: {
-          manual: "manual",
-          rule: "rule",
-          team: "team",
-          inherited: "inherited"
-        }
-      },
-      source_id: {
-        label: "Source ID",
-        help: "Rule name / team id when source != manual"
-      },
-      granted_by: {
-        label: "Granted By",
-        help: "User that created the grant (manual only)"
-      },
-      reason: {
-        label: "Reason",
-        help: "Optional free-text explanation surfaced to the recipient"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      granted_to_me: {
-        label: "Granted to Me"
-      },
-      granted_by_me: {
-        label: "Granted by Me"
-      },
-      by_object: {
-        label: "By Object"
-      },
-      manual_grants: {
-        label: "Manual Grants"
-      },
-      rule_grants: {
-        label: "Rule Grants"
-      },
-      all_shares: {
-        label: "All"
-      }
-    }
-  },
-  sys_sharing_rule: {
-    label: "Sharing Rule",
-    pluralLabel: "Sharing Rules",
-    description: "Declarative sharing rule that auto-materialises sys_record_share grants. Authored via defineSharingRule() in code or the Studio criteria builder.",
-    fields: {
-      id: {
-        label: "Rule ID"
-      },
-      organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this rule; null = global"
-      },
-      name: {
-        label: "Name",
-        help: "Unique snake_case rule name"
-      },
-      label: {
-        label: "Display Label"
-      },
-      description: {
-        label: "Description"
-      },
-      object_name: {
-        label: "Object",
-        help: "Short object name (e.g. opportunity, account)"
-      },
-      criteria_json: {
-        label: "Criteria (FilterCondition JSON)",
-        help: "JSON FilterCondition matched against records of object_name. Empty = match all."
-      },
-      recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).",
-        options: {
-          user: "user",
-          team: "team",
-          department: "department",
-          role: "role",
-          queue: "queue"
-        }
-      },
-      recipient_id: {
-        label: "Recipient",
-        help: "department id / team id / role name / queue name / user id depending on recipient_type"
-      },
-      access_level: {
-        label: "Access Level",
-        options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
-        }
-      },
-      active: {
-        label: "Active",
-        help: "Only active rules participate in lifecycle evaluation"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      active: {
-        label: "Active"
-      },
-      inactive: {
-        label: "Inactive"
-      },
-      by_object: {
-        label: "By Object"
-      },
-      all_rules: {
-        label: "All"
-      }
-    }
-  },
-  sys_share_link: {
-    label: "Share Link",
-    pluralLabel: "Share Links",
-    description: "Opaque capability token granting access to a single record. Notion/Figma-style public link sharing.",
-    fields: {
-      id: {
-        label: "Link ID"
-      },
-      token: {
-        label: "Token",
-        help: "Opaque URL-safe random token (≥ 22 chars). The only secret in this row."
-      },
-      object_name: {
-        label: "Object",
-        help: "Short object name of the shared record (e.g. ai_conversation, contracts_contract)"
-      },
-      record_id: {
-        label: "Record",
-        help: "Primary key of the shared record within object_name"
-      },
-      permission: {
-        label: "Permission",
-        help: "What the link holder can do with the record",
-        options: {
-          view: "View",
-          comment: "Comment",
-          edit: "Edit"
-        }
-      },
-      audience: {
-        label: "Audience",
-        help: "Gating layer applied on top of the token check",
-        options: {
-          public: "Public (indexable)",
-          link_only: "Anyone with the link",
-          signed_in: "Signed-in users",
-          email: "Specific emails"
-        }
-      },
-      expires_at: {
-        label: "Expires At",
-        help: "When set, resolveToken returns null after this timestamp"
-      },
-      email_allowlist: {
-        label: "Email Allowlist",
-        help: "Lowercased addresses checked when audience=email"
-      },
-      password_hash: {
-        label: "Password Hash",
-        help: "Argon2/bcrypt hash. When set, the UI prompts for a password before rendering."
-      },
-      redact_fields: {
-        label: "Per-Link Redactions",
-        help: "Extra fields stripped from the response, on top of the object-default set"
-      },
-      label: {
-        label: "Label",
-        help: "Free-text shown in the share dialog (e.g. \"ACME Q3 contract\")"
-      },
-      revoked_at: {
-        label: "Revoked At",
-        help: "When set, the link is permanently disabled"
-      },
-      created_by: {
-        label: "Created By",
-        help: "Issuer of the link"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      last_used_at: {
-        label: "Last Used At",
-        help: "Stamped by resolveToken; used by the dashboard to highlight active links"
-      },
-      use_count: {
-        label: "Use Count",
-        help: "Incremented by resolveToken on every successful resolution"
-      }
-    },
-    _views: {
-      active_links: {
-        label: "Active"
-      },
-      by_me: {
-        label: "Created by Me"
-      },
-      revoked: {
-        label: "Revoked"
-      },
-      all_links: {
-        label: "All"
       }
     }
   },
@@ -1979,28 +1550,26 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "Notification ID"
       },
-      recipient_id: {
-        label: "Recipient",
-        help: "User the notification is delivered to"
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
       },
-      type: {
-        label: "Type",
-        help: "Notification category — drives icon + sort priority",
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          mention: "mention",
-          assignment: "assignment",
-          comment_reply: "comment_reply",
-          lead_converted: "lead_converted",
-          task_due: "task_due",
-          system: "system"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      title: {
-        label: "Title"
-      },
-      body: {
-        label: "Body",
-        help: "Optional secondary text (one-line summary)"
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
       },
       source_object: {
         label: "Source Object",
@@ -2010,50 +1579,20 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Source Record",
         help: "Record id within source_object"
       },
-      url: {
-        label: "Deep Link",
-        help: "Optional URL to navigate to when clicked"
-      },
       actor_id: {
         label: "Actor",
         help: "User who caused the notification (mentioner, assigner)"
       },
-      actor_name: {
-        label: "Actor Name"
-      },
-      is_read: {
-        label: "Read",
-        help: "True once recipient acknowledges"
-      },
-      read_at: {
-        label: "Read At"
-      },
       created_at: {
         label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
       }
     },
     _views: {
-      unread: {
-        label: "Unread"
+      recent: {
+        label: "Recent"
       },
-      mine: {
-        label: "Mine"
-      },
-      all_notifications: {
-        label: "All"
-      }
-    },
-    _actions: {
-      mark_read: {
-        label: "Mark as Read",
-        successMessage: "Notification marked as read"
-      },
-      mark_unread: {
-        label: "Mark as Unread",
-        successMessage: "Notification marked as unread"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -2331,142 +1870,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_request: {
-    label: "Approval Request",
-    pluralLabel: "Approval Requests",
-    description: "Live approval instance tracked per submission",
-    fields: {
-      id: {
-        label: "Request ID"
-      },
-      organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this approval request (propagated from submitter context)"
-      },
-      process_name: {
-        label: "Source",
-        help: "Origin of the request — `flow:<flowName|nodeId>` for node-driven approvals"
-      },
-      object_name: {
-        label: "Object"
-      },
-      record_id: {
-        label: "Record ID"
-      },
-      submitter_id: {
-        label: "Submitter"
-      },
-      submitter_comment: {
-        label: "Submitter Comment"
-      },
-      status: {
-        label: "Status",
-        help: "Lifecycle state of the request",
-        options: {
-          pending: "pending",
-          approved: "approved",
-          rejected: "rejected",
-          recalled: "recalled"
-        }
-      },
-      current_step: {
-        label: "Current Step",
-        help: "Machine name of the step awaiting approval"
-      },
-      current_step_index: {
-        label: "Current Step Index"
-      },
-      pending_approvers: {
-        label: "Pending Approvers",
-        help: "Comma-separated user ids who can act on the current step"
-      },
-      payload_json: {
-        label: "Snapshot",
-        help: "Record snapshot at submission time"
-      },
-      process_hash: {
-        label: "Process Hash",
-        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
-      },
-      completed_at: {
-        label: "Completed At"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      my_pending: {
-        label: "My Pending"
-      },
-      submitted_by_me: {
-        label: "I Submitted"
-      },
-      completed: {
-        label: "Completed"
-      },
-      all_requests: {
-        label: "All"
-      }
-    }
-  },
-  sys_approval_action: {
-    label: "Approval Action",
-    pluralLabel: "Approval Actions",
-    description: "Append-only audit trail for approval actions",
-    fields: {
-      id: {
-        label: "Action ID"
-      },
-      organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this action (mirrors the parent request)"
-      },
-      request_id: {
-        label: "Request"
-      },
-      step_name: {
-        label: "Step",
-        help: "Machine name of the step at the time of the action"
-      },
-      step_index: {
-        label: "Step Index"
-      },
-      action: {
-        label: "Action",
-        options: {
-          submit: "submit",
-          approve: "approve",
-          reject: "reject",
-          recall: "recall",
-          escalate: "escalate"
-        }
-      },
-      actor_id: {
-        label: "Actor"
-      },
-      comment: {
-        label: "Comment"
-      },
-      created_at: {
-        label: "Created At"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recent"
-      },
-      by_actor: {
-        label: "By Actor"
-      },
-      all_actions: {
-        label: "All"
-      }
-    }
-  },
   sys_job: {
     label: "Background Job",
     pluralLabel: "Background Jobs",
@@ -2657,70 +2060,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "Updated At"
-      }
-    }
-  },
-  sys_webhook: {
-    label: "Webhook",
-    pluralLabel: "Webhooks",
-    description: "Outbound HTTP webhook subscription. Authored via defineWebhook() in code or the Studio editor; executed by the HTTP connector plugin.",
-    fields: {
-      id: {
-        label: "Webhook ID"
-      },
-      name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced in logs and audit"
-      },
-      label: {
-        label: "Display Label"
-      },
-      object_name: {
-        label: "Object",
-        help: "Short object name whose events fire this webhook (blank = manual / API-triggered)"
-      },
-      triggers: {
-        label: "Triggers",
-        help: "Comma-separated event list: create,update,delete,undelete,api"
-      },
-      url: {
-        label: "Target URL",
-        help: "External endpoint that receives the POST"
-      },
-      method: {
-        label: "HTTP Method",
-        help: "GET / POST / PUT / PATCH / DELETE"
-      },
-      description: {
-        label: "Description"
-      },
-      active: {
-        label: "Active",
-        help: "Inactive webhooks are skipped by the dispatcher"
-      },
-      definition_json: {
-        label: "Definition",
-        help: "Serialised Webhook JSON (see @objectstack/spec/automation/webhook) — full headers/auth/retry/payload config"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      active: {
-        label: "Active"
-      },
-      inactive: {
-        label: "Inactive"
-      },
-      by_object: {
-        label: "By Object"
-      },
-      all_webhooks: {
-        label: "All"
       }
     }
   },
@@ -3028,8 +2367,8 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Lock State",
         options: {
           none: "none",
-          "no-overlay": "no-overlay",
-          "no-delete": "no-delete",
+          nooverlay: "no-overlay",
+          nodelete: "no-delete",
           full: "full"
         }
       },
