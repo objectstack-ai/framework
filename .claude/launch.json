@@ -15,10 +15,24 @@
       "port": 3001
     },
     {
+      "name": "app-showcase (3001)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@objectstack/example-showcase", "dev", "--port", "3001"],
+      "port": 3001,
+      "autoPort": false
+    },
+    {
       "name": "docs (next.js)",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@objectstack/docs", "dev", "--", "-p", "3002"],
       "port": 3002
+    },
+    {
+      "name": "showcase-console",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd /Users/zhuangjianguo/Documents/GitHub/objectui && DEV_PROXY_TARGET=http://localhost:3700 VITE_SERVER_URL=http://localhost:3700 pnpm --filter @object-ui/console exec vite --port 5790 --strictPort"],
+      "port": 5790,
+      "autoPort": false
     }
   ]
 }

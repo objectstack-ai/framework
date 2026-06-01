@@ -18,9 +18,12 @@ const accounts = defineDataset(Account, {
   mode: 'upsert',
   externalId: 'name',
   records: [
-    { name: 'Northwind', industry: 'retail', annual_revenue: 8_000_000, website: 'https://northwind.example' },
-    { name: 'Contoso', industry: 'technology', annual_revenue: 25_000_000, website: 'https://contoso.example' },
-    { name: 'Fabrikam', industry: 'healthcare', annual_revenue: 12_000_000, website: 'https://fabrikam.example' },
+    // `status` is required and no default is applied at seed-insert time, so it
+    // must be set explicitly or the row is rejected (this is why Accounts was
+    // empty). `hq` also exercises the location field.
+    { name: 'Northwind', industry: 'retail', annual_revenue: 8_000_000, website: 'https://northwind.example', status: 'active', hq: { lat: 47.6062, lng: -122.3321 } },
+    { name: 'Contoso', industry: 'technology', annual_revenue: 25_000_000, website: 'https://contoso.example', status: 'active', hq: { lat: 37.7749, lng: -122.4194 } },
+    { name: 'Fabrikam', industry: 'healthcare', annual_revenue: 12_000_000, website: 'https://fabrikam.example', status: 'prospect', hq: { lat: 40.7128, lng: -74.0060 } },
   ],
 });
 
@@ -41,16 +44,16 @@ const tasks = defineDataset(Task, {
   mode: 'upsert',
   externalId: 'title',
   records: [
-    { title: 'Audit current IA', project: { externalId: 'Website Relaunch' }, assignee: 'ada@example.com', status: 'done', priority: 'medium', estimate_hours: 8, progress: 100, done: true, created_at: cel`daysAgo(20)`, start_date: cel`daysAgo(20)`, end_date: cel`daysAgo(18)`, due_date: cel`daysAgo(18)` },
-    { title: 'Design system', project: { externalId: 'Website Relaunch' }, assignee: 'ada@example.com', status: 'in_review', priority: 'high', estimate_hours: 24, progress: 80, done: false, created_at: cel`daysAgo(14)`, start_date: cel`daysAgo(12)`, end_date: cel`daysFromNow(2)`, due_date: cel`daysFromNow(2)` },
-    { title: 'Build homepage', project: { externalId: 'Website Relaunch' }, assignee: 'sam@example.com', status: 'in_progress', priority: 'high', estimate_hours: 40, progress: 45, done: false, created_at: cel`daysAgo(8)`, start_date: cel`daysAgo(6)`, end_date: cel`daysFromNow(10)`, due_date: cel`daysFromNow(10)` },
-    { title: 'SEO migration plan', project: { externalId: 'Website Relaunch' }, assignee: 'sam@example.com', status: 'todo', priority: 'medium', estimate_hours: 16, progress: 0, done: false, created_at: cel`daysAgo(3)`, start_date: cel`daysFromNow(5)`, end_date: cel`daysFromNow(15)`, due_date: cel`daysFromNow(15)` },
-    { title: 'Content backlog', project: { externalId: 'Website Relaunch' }, assignee: 'grace@example.com', status: 'backlog', priority: 'low', estimate_hours: 12, progress: 0, done: false, created_at: cel`daysAgo(2)`, due_date: cel`daysFromNow(30)` },
-    { title: 'Ingest pipeline', project: { externalId: 'Data Platform' }, assignee: 'linus@example.com', status: 'in_progress', priority: 'urgent', estimate_hours: 60, progress: 55, done: false, created_at: cel`daysAgo(40)`, start_date: cel`daysAgo(35)`, end_date: cel`daysFromNow(20)`, due_date: cel`daysFromNow(20)` },
-    { title: 'Warehouse schema', project: { externalId: 'Data Platform' }, assignee: 'linus@example.com', status: 'in_review', priority: 'high', estimate_hours: 30, progress: 90, done: false, created_at: cel`daysAgo(25)`, start_date: cel`daysAgo(22)`, end_date: cel`daysFromNow(3)`, due_date: cel`daysFromNow(3)` },
-    { title: 'PII access review', project: { externalId: 'Compliance Audit' }, assignee: 'grace@example.com', status: 'todo', priority: 'urgent', estimate_hours: 20, progress: 0, done: false, created_at: cel`daysAgo(5)`, start_date: cel`daysFromNow(2)`, end_date: cel`daysFromNow(12)`, due_date: cel`daysFromNow(12)` },
-    { title: 'Evidence collection', project: { externalId: 'Compliance Audit' }, assignee: 'grace@example.com', status: 'backlog', priority: 'medium', estimate_hours: 18, progress: 0, done: false, created_at: cel`daysAgo(1)`, due_date: cel`daysFromNow(25)` },
-    { title: 'App wireframes', project: { externalId: 'Mobile App' }, assignee: 'ada@example.com', status: 'done', priority: 'medium', estimate_hours: 16, progress: 100, done: true, created_at: cel`daysAgo(10)`, start_date: cel`daysAgo(10)`, end_date: cel`daysAgo(6)`, due_date: cel`daysAgo(6)` },
+    { title: 'Audit current IA', project: { externalId: 'Website Relaunch' }, assignee: 'ada@example.com', status: 'done', priority: 'medium', estimate_hours: 8, progress: 100, done: true, created_at: cel`daysAgo(20)`, start_date: cel`daysAgo(20)`, end_date: cel`daysAgo(18)`, due_date: cel`daysAgo(18)`, location: { lat: 47.6062, lng: -122.3321 } },
+    { title: 'Design system', project: { externalId: 'Website Relaunch' }, assignee: 'ada@example.com', status: 'in_review', priority: 'high', estimate_hours: 24, progress: 80, done: false, created_at: cel`daysAgo(14)`, start_date: cel`daysAgo(12)`, end_date: cel`daysFromNow(2)`, due_date: cel`daysFromNow(2)`, location: { lat: 37.7749, lng: -122.4194 } },
+    { title: 'Build homepage', project: { externalId: 'Website Relaunch' }, assignee: 'sam@example.com', status: 'in_progress', priority: 'high', estimate_hours: 40, progress: 45, done: false, created_at: cel`daysAgo(8)`, start_date: cel`daysAgo(6)`, end_date: cel`daysFromNow(10)`, due_date: cel`daysFromNow(10)`, location: { lat: 40.7128, lng: -74.0060 } },
+    { title: 'SEO migration plan', project: { externalId: 'Website Relaunch' }, assignee: 'sam@example.com', status: 'todo', priority: 'medium', estimate_hours: 16, progress: 0, done: false, created_at: cel`daysAgo(3)`, start_date: cel`daysFromNow(5)`, end_date: cel`daysFromNow(15)`, due_date: cel`daysFromNow(15)`, location: { lat: 30.2672, lng: -97.7431 } },
+    { title: 'Content backlog', project: { externalId: 'Website Relaunch' }, assignee: 'grace@example.com', status: 'backlog', priority: 'low', estimate_hours: 12, progress: 0, done: false, created_at: cel`daysAgo(2)`, due_date: cel`daysFromNow(30)`, location: { lat: 41.8781, lng: -87.6298 } },
+    { title: 'Ingest pipeline', project: { externalId: 'Data Platform' }, assignee: 'linus@example.com', status: 'in_progress', priority: 'urgent', estimate_hours: 60, progress: 55, done: false, created_at: cel`daysAgo(40)`, start_date: cel`daysAgo(35)`, end_date: cel`daysFromNow(20)`, due_date: cel`daysFromNow(20)`, location: { lat: 39.7392, lng: -104.9903 } },
+    { title: 'Warehouse schema', project: { externalId: 'Data Platform' }, assignee: 'linus@example.com', status: 'in_review', priority: 'high', estimate_hours: 30, progress: 90, done: false, created_at: cel`daysAgo(25)`, start_date: cel`daysAgo(22)`, end_date: cel`daysFromNow(3)`, due_date: cel`daysFromNow(3)`, location: { lat: 42.3601, lng: -71.0589 } },
+    { title: 'PII access review', project: { externalId: 'Compliance Audit' }, assignee: 'grace@example.com', status: 'todo', priority: 'urgent', estimate_hours: 20, progress: 0, done: false, created_at: cel`daysAgo(5)`, start_date: cel`daysFromNow(2)`, end_date: cel`daysFromNow(12)`, due_date: cel`daysFromNow(12)`, location: { lat: 38.9072, lng: -77.0369 } },
+    { title: 'Evidence collection', project: { externalId: 'Compliance Audit' }, assignee: 'grace@example.com', status: 'backlog', priority: 'medium', estimate_hours: 18, progress: 0, done: false, created_at: cel`daysAgo(1)`, due_date: cel`daysFromNow(25)`, location: { lat: 34.0522, lng: -118.2437 } },
+    { title: 'App wireframes', project: { externalId: 'Mobile App' }, assignee: 'ada@example.com', status: 'done', priority: 'medium', estimate_hours: 16, progress: 100, done: true, created_at: cel`daysAgo(10)`, start_date: cel`daysAgo(10)`, end_date: cel`daysAgo(6)`, due_date: cel`daysAgo(6)`, location: { lat: 45.5152, lng: -122.6784 } },
   ],
 });
 
