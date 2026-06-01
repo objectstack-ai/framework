@@ -1332,6 +1332,25 @@ describe('AutomationEngine - Safe Expression Evaluation', () => {
         expect(engine.evaluateCondition('false', vars)).toBe(false);
     });
 
+    it('evaluates CEL record-change conditions with bare fields and previous.* snapshot', () => {
+        // The record-change trigger shape: the new record's fields are seeded at
+        // top level, plus a `previous` snapshot. Regression guard — a broken
+        // ExpressionEngine binding (e.g. an ESM `require` stub) made the CEL path
+        // throw and silently return false, skipping every record-change flow.
+        const vars = new Map<string, unknown>();
+        vars.set('status', 'done');
+        vars.set('assignee', 'newowner@example.com');
+        vars.set('previous', { status: 'in_review', assignee: 'ada@example.com' });
+
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'status == "done" && previous.status != "done"' }, vars)).toBe(true);
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'assignee != previous.assignee' }, vars)).toBe(true);
+
+        const unchanged = new Map<string, unknown>();
+        unchanged.set('status', 'done');
+        unchanged.set('previous', { status: 'done' });
+        expect(engine.evaluateCondition({ dialect: 'cel', source: 'status == "done" && previous.status != "done"' }, unchanged)).toBe(false);
+    });
+
     it('should not execute malicious code', () => {
         const vars = new Map<string, unknown>();
         // These should all return false safely

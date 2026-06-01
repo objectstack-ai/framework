@@ -7,6 +7,13 @@ import type { Logger } from '@objectstack/spec/contracts';
 import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
 import type { Connector } from '@objectstack/spec/integration';
 import { ConnectorSchema } from '@objectstack/spec/integration';
+// Static import (not a lazy `require`): the engine ships as ESM ("type":"module"),
+// where a CommonJS `require('@objectstack/formula')` resolves to tsup's throwing
+// `__require` stub. That threw on every CEL evaluation and the catch below
+// silently returned `false`, so EVERY start-node / edge condition (record-change
+// `previous.*`, `budget > 100000`, …) skipped its flow. A static import binds the
+// engine at module load in both ESM and CJS builds.
+import { ExpressionEngine } from '@objectstack/formula';
 
 // ─── Node Executor Interface (Plugin Extension Point) ───────────────
 
@@ -1287,8 +1294,6 @@ export class AutomationEngine implements IAutomationService {
         // the equivalent `vars.step.result` CEL identifier path.
         if (dialect === 'cel' || (isEnvelope && !dialect)) {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { ExpressionEngine } = require('@objectstack/formula') as typeof import('@objectstack/formula');
                 const vars: Record<string, unknown> = {};
                 for (const [key, value] of variables) {
                     // Convert "step.result" keys into nested object paths.
