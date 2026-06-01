@@ -81,6 +81,19 @@ export const CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
         pkg: '@objectstack/service-job',
         export: 'JobServicePlugin',
     },
+    messaging: {
+        // Backs the `notify` flow node (ADR-0012): delivers to a user's
+        // channels (inbox by default → `sys_inbox_message` rows).
+        pkg: '@objectstack/service-messaging',
+        export: 'MessagingServicePlugin',
+    },
+    triggers: {
+        // Concrete flow triggers — record-change (ObjectQL hooks) + schedule
+        // (cron/interval via the job service; pair `triggers` with `job`).
+        pkg: '@objectstack/plugin-trigger-record-change',
+        export: 'RecordChangeTriggerPlugin',
+        extras: [{ pkg: '@objectstack/plugin-trigger-schedule', export: 'ScheduleTriggerPlugin' }],
+    },
     realtime: {
         pkg: '@objectstack/service-realtime',
         export: 'RealtimeServicePlugin',

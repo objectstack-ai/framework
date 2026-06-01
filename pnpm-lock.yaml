@@ -499,6 +499,12 @@ importers:
       '@objectstack/plugin-sharing':
         specifier: workspace:*
         version: link:../plugins/plugin-sharing
+      '@objectstack/plugin-trigger-record-change':
+        specifier: workspace:*
+        version: link:../plugins/plugin-trigger-record-change
+      '@objectstack/plugin-trigger-schedule':
+        specifier: workspace:*
+        version: link:../plugins/plugin-trigger-schedule
       '@objectstack/plugin-webhooks':
         specifier: workspace:*
         version: link:../plugins/plugin-webhooks
@@ -529,6 +535,9 @@ importers:
       '@objectstack/service-job':
         specifier: workspace:*
         version: link:../services/service-job
+      '@objectstack/service-messaging':
+        specifier: workspace:*
+        version: link:../services/service-messaging
       '@objectstack/service-package':
         specifier: workspace:*
         version: link:../services/service-package
