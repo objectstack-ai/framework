@@ -16,3 +16,8 @@ export {
     addSysMetadataOverlayIndex,
     type AddSysMetadataOverlayIndexResult,
 } from './add-sys-metadata-overlay-index.js';
+export {
+    migrateSysNotificationToEvent,
+    type SysNotificationMigrationResult,
+    type SysNotificationMigrationOptions,
+} from './migrate-sys-notification-to-event.js';

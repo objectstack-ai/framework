@@ -12,6 +12,9 @@ import type {
 /** The object the inbox channel writes rows to. */
 export const INBOX_OBJECT = 'sys_inbox_message';
 
+/** The receipt object the inbox channel writes a `delivered` row to (ADR-0030). */
+export const RECEIPT_OBJECT = 'sys_notification_receipt';
+
 /** The user identity object an email-shaped recipient is resolved against. */
 export const USER_OBJECT = 'sys_user';
 
@@ -28,6 +31,8 @@ export interface InboxChannelOptions {
     getData(): IDataEngine | undefined;
     /** Object name override (default {@link INBOX_OBJECT}). */
     objectName?: string;
+    /** Receipt object name override (default {@link RECEIPT_OBJECT}). */
+    receiptObject?: string;
     /**
      * User identity object used to resolve an email-shaped recipient to its
      * id (default {@link USER_OBJECT}). The inbox is keyed by user id, but
@@ -51,6 +56,7 @@ export interface InboxChannelOptions {
  */
 export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel {
     const objectName = opts.objectName ?? INBOX_OBJECT;
+    const receiptObject = opts.receiptObject ?? RECEIPT_OBJECT;
     const userObject = opts.userObject ?? USER_OBJECT;
     const now = opts.now ?? (() => new Date().toISOString());
 
@@ -84,6 +90,36 @@ export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel 
         }
     }
 
+    /**
+     * Write the `delivered` receipt for an inbox materialization. Best-effort:
+     * receipts are the read-state spine but a failure here must never turn a
+     * delivered message into a failed one — we log and move on. Skipped when the
+     * event id is absent (a synthetic/minimal stack with nothing to key on).
+     */
+    async function writeDeliveredReceipt(
+        ctx: MessagingChannelContext,
+        data: IDataEngine,
+        r: { notificationId?: string; userId: string; organizationId?: string; at: string },
+    ): Promise<void> {
+        if (!r.notificationId) return;
+        try {
+            await data.insert(receiptObject, {
+                notification_id: r.notificationId,
+                delivery_id: null,
+                user_id: r.userId,
+                channel: 'inbox',
+                state: 'delivered',
+                at: r.at,
+                organization_id: r.organizationId ?? null,
+                created_at: r.at,
+            });
+        } catch (err) {
+            ctx.logger.warn(
+                `[inbox] delivered receipt write failed for '${r.userId}' (${(err as Error).message}); inbox row stands`,
+            );
+        }
+    }
+
     return {
         id: 'inbox',
 
@@ -99,25 +135,39 @@ export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel 
             }
 
             const userId = await resolveRecipient(ctx, data, delivery.recipient);
+            const at = now();
 
             const row: Record<string, unknown> = {
                 user_id: userId,
+                notification_id: n.notificationId ?? null,
                 topic: n.topic,
                 title: n.title,
                 body_md: n.body,
                 severity: n.severity ?? 'info',
                 action_url: n.actionUrl,
-                read: false,
-                created_at: now(),
+                organization_id: n.organizationId ?? null,
+                created_at: at,
             };
 
+            let inboxId: string | undefined;
             try {
                 const created = await data.insert(objectName, row);
                 const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
-                return { ok: true, externalId: id != null ? String(id) : undefined };
+                inboxId = id != null ? String(id) : undefined;
             } catch (err) {
                 return { ok: false, error: `inbox insert failed: ${(err as Error).message}` };
             }
+
+            // Read-state lives in the receipt (ADR-0030), not on the inbox row.
+            // Best-effort: a missing receipt must not fail a delivered message.
+            await writeDeliveredReceipt(ctx, data, {
+                notificationId: n.notificationId,
+                userId,
+                organizationId: n.organizationId,
+                at,
+            });
+
+            return { ok: true, externalId: inboxId };
         },
 
         classifyError(_err: unknown): ErrorClass {

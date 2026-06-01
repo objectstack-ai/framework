@@ -4,7 +4,7 @@ import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import { MessagingService } from './messaging-service.js';
 import { createInboxChannel } from './inbox-channel.js';
-import { InboxMessage } from './objects/index.js';
+import { InboxMessage, NotificationReceipt } from './objects/index.js';
 
 export interface MessagingServicePluginOptions {
     /**
@@ -45,19 +45,24 @@ export class MessagingServicePlugin implements Plugin {
     }
 
     async init(ctx: PluginContext): Promise<void> {
-        const service = new MessagingService({ logger: ctx.logger });
+        // Shared lazy data-engine resolver — used both to persist the L2
+        // `sys_notification` event in `emit()` and by the inbox channel to
+        // materialize rows. Resolved lazily so it works regardless of plugin
+        // init order.
+        const getData = (): IDataEngine | undefined => {
+            try {
+                return (
+                    ctx.getService<IDataEngine>('data') ??
+                    ctx.getService<IDataEngine>('objectql')
+                );
+            } catch {
+                return undefined;
+            }
+        };
+
+        const service = new MessagingService({ logger: ctx.logger, getData });
 
         if (this.options.registerInbox) {
-            const getData = (): IDataEngine | undefined => {
-                try {
-                    return (
-                        ctx.getService<IDataEngine>('data') ??
-                        ctx.getService<IDataEngine>('objectql')
-                    );
-                } catch {
-                    return undefined;
-                }
-            };
             service.registerChannel(createInboxChannel({ getData }));
         }
 
@@ -70,7 +75,7 @@ export class MessagingServicePlugin implements Plugin {
             version: '1.0.0',
             type: 'plugin',
             scope: 'system',
-            objects: [InboxMessage],
+            objects: [InboxMessage, NotificationReceipt],
         });
 
         ctx.logger.info(

@@ -73,13 +73,15 @@ export const ACCOUNT_APP: App = {
       defaultOpen: true,
       children: [
         {
+          // ADR-0030: the user-facing inbox is the materialization
+          // (sys_inbox_message), not the L2 event (sys_notification).
           id: 'nav_account_notifications',
           type: 'object',
           label: 'Notifications',
-          objectName: 'sys_notification',
-          viewName: 'unread',
+          objectName: 'sys_inbox_message',
+          viewName: 'mine',
           icon: 'bell',
-          requiresObject: 'sys_notification',
+          requiresObject: 'sys_inbox_message',
         },
         {
           id: 'nav_account_approvals',

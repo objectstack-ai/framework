@@ -35,7 +35,7 @@ function fakeMessaging() {
     const service: MessagingServiceSurface = {
         async emit(n) {
             emitted.push(n);
-            return { delivered: n.recipients.length, failed: 0 };
+            return { notificationId: 'evt_1', delivered: n.audience.length, failed: 0 };
         },
     };
     return { service, emitted };
@@ -105,12 +105,14 @@ describe('notify (baseline node)', () => {
             expect(messaging.emitted).toHaveLength(1);
             expect(messaging.emitted[0]).toMatchObject({
                 topic: 'deal.won',
-                title: 'Deal Acme closed',
-                body: 'Congrats on Acme',
-                recipients: ['user_1', 'user_2'],
+                audience: ['user_1', 'user_2'],
                 channels: ['inbox', 'email'],
                 severity: 'info',
-                actionUrl: '/opps/42',
+                payload: {
+                    title: 'Deal Acme closed',
+                    body: 'Congrats on Acme',
+                    url: '/opps/42',
+                },
             });
             expect(result.output).toMatchObject({ 'notify.delivered': 2 });
         });
@@ -122,7 +124,7 @@ describe('notify (baseline node)', () => {
             }));
             const result = await engine.execute('notify_flow');
             expect(result.success).toBe(true);
-            expect(messaging.emitted[0]).toMatchObject({ title: 'Heads up', recipients: ['user_9'] });
+            expect(messaging.emitted[0]).toMatchObject({ audience: ['user_9'], payload: { title: 'Heads up' } });
         });
 
         it('fails the step when title is missing', async () => {
