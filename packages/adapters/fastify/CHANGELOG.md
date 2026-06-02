@@ -1,5 +1,22 @@
 # @objectstack/fastify
 
+## 7.6.0
+
+### Patch Changes
+
+- 3377e38: fix(release): stop the fixed-group major cascade caused by internal `@objectstack/*` peerDependencies.
+
+  These packages declared workspace peerDependencies on other framework packages
+  in the changesets `fixed` group. Inside a fixed group, changesets rewrites those
+  peer ranges on every release and treats a peer-range change as breaking → major,
+  which cascaded to **all 69 packages → 8.0.0** on _any_ minor changeset. Required
+  internal peers are now regular `dependencies`; optional ones move to
+  `devDependencies` (kept for in-workspace tests, no longer a published peer edge).
+  Releases now bump correctly (patch/minor) instead of a spurious major.
+
+- Updated dependencies [8e539cc]
+  - @objectstack/runtime@7.6.0
+
 ## 7.5.0
 
 ## 7.4.1

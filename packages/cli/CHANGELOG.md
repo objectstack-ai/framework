@@ -1,5 +1,184 @@
 # @objectstack/cli
 
+## 7.6.0
+
+### Minor Changes
+
+- c4a4cbd: ADR-0032 (phase 1): validate-by-default expression layer — no silent failure.
+
+  Kills the #1491 class where a malformed predicate (e.g. the `{record.x}`
+  template-brace-in-CEL mistake) silently evaluated to `false` and made a flow
+  "fire" with no effect:
+
+  - **service-automation**: flow `evaluateCondition` no longer swallows CEL
+    failures to `false` — it throws an attributed, corrective error; and
+    `registerFlow` now parse-validates every predicate (start/decision/edge
+    condition) at registration, failing loudly with the offending location +
+    source + the fix.
+  - **formula**: new shared validator — `validateExpression(role, src, schema?)`,
+    `introspectScope`, `CEL_STDLIB_FUNCTIONS` — with schema-aware field-existence
+    - did-you-mean. The `{{ }}` template engine gains a formatter whitelist
+      (`currency`/`number`/`percent`/`date`/`datetime`/`truncate`/`upper`/`lower`/
+      `default`/…) with defined value→string semantics; arbitrary logic in holes is
+      rejected. Plain `{{ path }}` stays back-compatible.
+  - **cli**: `objectstack compile` validates every flow / validation-rule /
+    field-formula predicate against the resolved object schema and fails the
+    build with located, corrective messages.
+  - **service-ai**: new agent-callable `validate_expression` tool so authoring
+    agents self-correct before committing.
+  - **spec**: fix the `FlowSchema` JSDoc example that taught the bad
+    `condition: "{amount} < 500"` single-brace form.
+
+### Patch Changes
+
+- 8c01eea: fix(dev): seed the dev admin in-process and fix the port-drift seed failure.
+
+  `os dev` (and `pnpm dev:showcase`) seeded the admin over HTTP against a
+  hard-coded `localhost:3000`. In dev, `serve` auto-shifts off a busy port, so
+  the seed POST hit the wrong server (or nothing) and the running instance never
+  got an admin. A second, divergent seed in `plugin-dev` inserted a
+  credential-less `sys_user` row that could not log in.
+
+  Consolidate to a single in-process seed:
+
+  - **`@objectstack/plugin-auth`** — `maybeSeedDevAdmin()` runs on `kernel:ready`
+    and creates `admin@objectos.ai` / `admin123` through better-auth's real
+    `signUpEmail` pipeline (hashed credential), so the account is loginable;
+    `plugin-security` then promotes it to platform admin. Empty-DB only
+    (excludes the system service account), idempotent, never overwrites an
+    existing account. Hard-gated to `NODE_ENV=development`; opt out with
+    `OS_SEED_ADMIN=0`.
+  - **`@objectstack/cli`** — removed the HTTP seed; `--seed-admin` now passes
+    `OS_SEED_ADMIN[_EMAIL|_PASSWORD]` to the serve child. `serve` publishes its
+    actually-bound port over IPC and to a `runtime.<env>.json` state file under
+    `OS_HOME`.
+  - **`@objectstack/plugin-dev`** — removed the credential-less raw insert;
+    `seedAdminUser` maps to the unified `OS_SEED_ADMIN` toggle.
+
+- 3377e38: fix(release): stop the fixed-group major cascade caused by internal `@objectstack/*` peerDependencies.
+
+  These packages declared workspace peerDependencies on other framework packages
+  in the changesets `fixed` group. Inside a fixed group, changesets rewrites those
+  peer ranges on every release and treats a peer-range change as breaking → major,
+  which cascaded to **all 69 packages → 8.0.0** on _any_ minor changeset. Required
+  internal peers are now regular `dependencies`; optional ones move to
+  `devDependencies` (kept for in-workspace tests, no longer a published peer edge).
+  Releases now bump correctly (patch/minor) instead of a spurious major.
+
+- 55866f5: Fail loud instead of silently minting an ephemeral encryption key; ship a persistent env-master-key provider as the default (#1507).
+
+  The default `ICryptoProvider` backs every secret-at-rest in the platform —
+  encrypted settings (`sys_setting.value_enc`), ObjectQL `secret` fields, and
+  runtime datasource credentials. Its key resolution previously fell back,
+  **silently**, to a fresh per-process `randomBytes(32)` key (or auto-minted a
+  new on-disk key on every boot) when no stable key was available. In an
+  ephemeral-FS container or a multi-node cluster, each restart / each node then
+  encrypts under a different key, and every previously-written `sys_secret` value
+  becomes undecryptable. The failure was invisible at encrypt and boot time and
+  only surfaced later as "all my saved passwords / API keys / DB credentials
+  fail to decrypt".
+
+  - **Renamed `InMemoryCryptoProvider` → `LocalCryptoProvider`.** The old name
+    implied an ephemeral key when the provider in fact persists one.
+    `InMemoryCryptoProvider` stays as a deprecated alias for backward
+    compatibility.
+  - **Added `OS_SECRET_KEY`** as the canonical production master key (32-byte
+    hex or base64), the documented production default. `OS_DEV_CRYPTO_KEY`
+    remains the dev convenience key.
+  - **Fail-loud in production.** When `NODE_ENV=production` and no stable key
+    source (env var or a pre-existing persisted file) is available, the provider
+    now throws an actionable error at construction instead of generating a key —
+    turning silent data-loss into a config error at boot. It never auto-mints a
+    key in production. Development and test keep the ergonomic fallback
+    (persisted dev key / ephemeral test key).
+  - `serve` surfaces the production-key error verbatim and refuses to wire an
+    unstable provider for `secret` fields.
+
+  KMS / Vault providers (managed custody, per-tenant keys, automatic rotation)
+  remain future/enterprise plug-ins behind the same `ICryptoProvider` seam;
+  "your stored secret is still there after a reboot" stays open-source.
+
+- b7a4f14: fix(dev): surface the seeded dev-admin credentials in the `serve` startup banner.
+
+  When the runtime seeds the dev admin on an empty DB, the confirmation was
+  emitted via `ctx.logger` during `runtime.start()` — inside serve's boot-quiet
+  window — so it was swallowed and never reached the console. plugin-auth now
+  records the seed result on the `auth` service and `serve` prints it in the
+  ready banner (after stdout is restored), e.g.:
+
+  ```
+    🔑  Dev admin: admin@objectos.ai / admin123
+        seeded on empty DB · dev only — do not use in production
+  ```
+
+  Shown only when an admin was actually seeded this boot (empty DB) — never on a
+  DB that already had a user, so stale credentials are never displayed. Visible
+  in both `serve --dev` and `os dev` (the child's stdout is inherited).
+
+- Updated dependencies [955d4c8]
+- Updated dependencies [11905fa]
+- Updated dependencies [c4a4cbd]
+- Updated dependencies [b046ec2]
+- Updated dependencies [2170ad9]
+- Updated dependencies [02d6359]
+- Updated dependencies [cf03ef2]
+- Updated dependencies [7648242]
+- Updated dependencies [bb04824]
+- Updated dependencies [8c01eea]
+- Updated dependencies [8fa1e7f]
+- Updated dependencies [d8aa11d]
+- Updated dependencies [3377e38]
+- Updated dependencies [be20aa4]
+- Updated dependencies [7ae6abc]
+- Updated dependencies [55866f5]
+- Updated dependencies [8e539cc]
+- Updated dependencies [b7a4f14]
+- Updated dependencies [60f9c45]
+- Updated dependencies [f06a6a5]
+- Updated dependencies [4ee139d]
+  - @objectstack/service-messaging@7.6.0
+  - @objectstack/service-automation@7.6.0
+  - @objectstack/spec@7.6.0
+  - @objectstack/plugin-webhooks@7.6.0
+  - @objectstack/formula@7.6.0
+  - @objectstack/service-ai@7.6.0
+  - @objectstack/client@7.6.0
+  - @objectstack/objectql@7.6.0
+  - @objectstack/service-datasource@7.6.0
+  - @objectstack/plugin-auth@7.6.0
+  - @objectstack/plugin-email@7.6.0
+  - @objectstack/driver-sqlite-wasm@7.6.0
+  - @objectstack/platform-objects@7.6.0
+  - @objectstack/service-settings@7.6.0
+  - @objectstack/runtime@7.6.0
+  - @objectstack/plugin-approvals@7.6.0
+  - @objectstack/account@7.6.0
+  - @objectstack/core@7.6.0
+  - @objectstack/observability@7.6.0
+  - @objectstack/driver-memory@7.6.0
+  - @objectstack/driver-mongodb@7.6.0
+  - @objectstack/driver-sql@7.6.0
+  - @objectstack/plugin-audit@7.6.0
+  - @objectstack/plugin-hono-server@7.6.0
+  - @objectstack/plugin-mcp-server@7.6.0
+  - @objectstack/plugin-org-scoping@7.6.0
+  - @objectstack/plugin-reports@7.6.0
+  - @objectstack/plugin-security@7.6.0
+  - @objectstack/plugin-sharing@7.6.0
+  - @objectstack/plugin-trigger-record-change@7.6.0
+  - @objectstack/plugin-trigger-schedule@7.6.0
+  - @objectstack/rest@7.6.0
+  - @objectstack/service-analytics@7.6.0
+  - @objectstack/service-cache@7.6.0
+  - @objectstack/service-feed@7.6.0
+  - @objectstack/service-job@7.6.0
+  - @objectstack/service-package@7.6.0
+  - @objectstack/service-queue@7.6.0
+  - @objectstack/service-realtime@7.6.0
+  - @objectstack/service-storage@7.6.0
+  - @objectstack/types@7.6.0
+  - @objectstack/console@7.6.0
+
 ## 7.5.0
 
 ### Patch Changes
