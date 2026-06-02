@@ -1279,13 +1279,6 @@ importers:
       '@objectstack/core':
         specifier: workspace:*
         version: link:../../core
-      '@objectstack/spec':
-        specifier: workspace:*
-        version: link:../../spec
-      '@objectstack/types':
-        specifier: workspace:*
-        version: link:../../types
-    devDependencies:
       '@objectstack/driver-memory':
         specifier: workspace:^
         version: link:../driver-memory
@@ -1313,6 +1306,13 @@ importers:
       '@objectstack/service-i18n':
         specifier: workspace:^
         version: link:../../services/service-i18n
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../../spec
+      '@objectstack/types':
+        specifier: workspace:*
+        version: link:../../types
+    devDependencies:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1

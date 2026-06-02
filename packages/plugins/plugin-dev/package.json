@@ -19,9 +19,7 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "@objectstack/types": "workspace:*"
-  },
-  "devDependencies": {
+    "@objectstack/types": "workspace:*",
     "@objectstack/driver-memory": "workspace:^",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/plugin-auth": "workspace:^",
@@ -30,7 +28,9 @@
     "@objectstack/plugin-security": "workspace:^",
     "@objectstack/rest": "workspace:^",
     "@objectstack/runtime": "workspace:^",
-    "@objectstack/service-i18n": "workspace:^",
+    "@objectstack/service-i18n": "workspace:^"
+  },
+  "devDependencies": {
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

@@ -10,5 +10,10 @@ export default defineConfig({
     dts: true,
     format: ['esm', 'cjs'],
     target: 'es2020',
-    external: ['vitest'],
+    // Driver packages are loaded via optional, lazy `await import('@objectstack/driver-*')`
+    // (default-datasource-driver-factory) — and pull in optional native clients
+    // (mysql / pg / better-sqlite3 / mongodb). They must stay EXTERNAL so esbuild
+    // never tries to bundle/resolve those optional natives. (They are devDeps for
+    // tests; previously they were optional peerDeps, which tsup auto-externalized.)
+    external: ['vitest', /^@objectstack\/driver-/],
 });
