@@ -2,7 +2,7 @@
   "name": "@objectstack/platform-objects",
   "version": "7.6.0",
   "license": "Apache-2.0",
-  "description": "Core platform object schemas for ObjectStack — identity, security, audit, tenant, and metadata objects",
+  "description": "Core platform object schemas for ObjectStack \u2014 identity, security, audit, tenant, and metadata objects",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -67,6 +67,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@objectstack/metadata-core": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {

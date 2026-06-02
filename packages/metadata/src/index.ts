@@ -20,7 +20,7 @@ export { RemoteLoader } from './loaders/remote-loader.js';
 export { DatabaseLoader, type DatabaseLoaderOptions } from './loaders/database-loader.js';
 
 // Objects
-export { SysMetadataObject, SysMetadataHistoryObject } from '@objectstack/platform-objects/metadata';
+export { SysMetadataObject, SysMetadataHistoryObject } from '@objectstack/metadata-core';
 
 // Routes
 // NOTE: `registerMetadataHistoryRoutes` (Hono-style) was removed —

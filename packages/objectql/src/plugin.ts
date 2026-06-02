@@ -4,6 +4,12 @@ import { ObjectQL } from './engine.js';
 import { ObjectStackProtocolImplementation } from './protocol.js';
 import { Plugin, PluginContext } from '@objectstack/core';
 import { StorageNameMapping } from '@objectstack/spec/system';
+import {
+  SysMetadataObject,
+  SysMetadataHistoryObject,
+  SysMetadataAuditObject,
+  SysViewDefinitionObject,
+} from '@objectstack/metadata-core';
 
 export type { Plugin, PluginContext };
 
@@ -140,6 +146,37 @@ export class ObjectQLPlugin implements Plugin {
     ctx.logger.info('ObjectQL engine registered', {
         services: ['objectql', 'data', 'manifest'],
     });
+
+    // Register the metadata-storage objects this engine's own protocol reads
+    // and writes — `sys_metadata` (loadMetaFromDb / getMetaItems / saveMetaItem),
+    // its history/audit siblings, and `sys_view_definition`. Doing it here
+    // guarantees their tables get schema-synced in start() even when no
+    // MetadataPlugin is present (e.g. standalone "host config" apps, where the
+    // CLI auto-registers a bare ObjectQLPlugin and nothing else owns these
+    // tables → "no such table: sys_metadata" on every read).
+    //
+    // Gated on `environmentId === undefined` — the SAME condition that gates
+    // `restoreMetadataFromDb` below: platform / standalone kernels own their
+    // local sys_metadata, whereas per-project (cloud) kernels source metadata
+    // from the control plane and must NOT provision these tables locally.
+    // Definitions live in @objectstack/metadata-core (shared by this protocol
+    // and the metadata layer's DatabaseLoader). registerApp is idempotent, so
+    // a MetadataPlugin that also registers them is harmless.
+    if (this.environmentId === undefined) {
+      this.ql.registerApp({
+        id: 'com.objectstack.metadata-objects',
+        name: 'Metadata Platform Objects',
+        version: '1.0.0',
+        type: 'plugin',
+        scope: 'system',
+        objects: [
+          SysMetadataObject,
+          SysMetadataHistoryObject,
+          SysMetadataAuditObject,
+          SysViewDefinitionObject,
+        ],
+      });
+    }
 
     // Register Protocol Implementation
     const protocolShim = new ObjectStackProtocolImplementation(
