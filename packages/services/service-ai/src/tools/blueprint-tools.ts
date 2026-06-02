@@ -301,31 +301,45 @@ function appBody(
  * sealed `sys_package_version` model from ADR-0027, which is separate.
  */
 async function ensureAppPackage(
+  protocol: DraftCapableProtocol | undefined,
   pkgSvc: BlueprintPackageService | undefined,
   app: { name: string; label?: string; icon?: string },
 ): Promise<{ id: string; name: string; created: boolean } | null> {
-  if (!pkgSvc?.get || !pkgSvc?.publish) return null;
   const id = `app.${app.name}`;
   const name = app.label ?? app.name;
+  const manifest: Record<string, unknown> = {
+    id,
+    name,
+    version: '1.0.0',
+    type: 'application',
+    namespace: app.name,
+    // Must NOT be 'system'/'cloud' — Studio's package selector filters those
+    // out (studio.app.ts optionsSource). 'environment' keeps it visible.
+    scope: 'environment',
+    ...(app.icon ? { icon: app.icon } : {}),
+  };
   try {
-    const existing = await pkgSvc.get(id);
-    if (existing) return { id, name: existing.manifest?.name ?? name, created: false };
-    const res = await pkgSvc.publish({
-      manifest: {
-        id,
-        name,
-        version: '1.0.0',
-        type: 'application',
-        namespace: app.name,
-        // Must NOT be 'system'/'cloud' — Studio's package selector filters those
-        // out (studio.app.ts optionsSource). 'environment' keeps it visible.
-        scope: 'environment',
-        ...(app.icon ? { icon: app.icon } : {}),
-      },
-      metadata: { createdBy: 'ai', source: 'database' },
-    });
-    if (res && res.success === false) return null; // degrade to package-less
-    return { id, name, created: true };
+    // Idempotency: reuse an existing package when we can look one up.
+    if (pkgSvc?.get) {
+      const existing = await pkgSvc.get(id);
+      if (existing) return { id, name: existing.manifest?.name ?? name, created: false };
+    }
+    // Preferred write path: the canonical `protocol.installPackage` primitive
+    // lands the package in BOTH the in-memory registry (Studio's selector reads
+    // this) and the durable `sys_packages` table — so the app package actually
+    // surfaces in Studio (ADR-0033 consolidation).
+    if (protocol?.installPackage) {
+      await protocol.installPackage({ manifest });
+      return { id, name, created: true };
+    }
+    // Fallback (older/remote protocol): the `package` service writes only
+    // `sys_packages`. Preserves prior behaviour when the primitive is absent.
+    if (pkgSvc?.publish) {
+      const res = await pkgSvc.publish({ manifest, metadata: { createdBy: 'ai', source: 'database' } });
+      if (res && res.success === false) return null; // degrade to package-less
+      return { id, name, created: true };
+    }
+    return null; // no write path available → package-less
   } catch {
     return null; // never block the build on packaging
   }
@@ -356,7 +370,7 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
     // Zero-package UX: if the blueprint has an app, ensure a writable home
     // package up front and bind every drafted artifact to it. Best-effort —
     // `null` (no package service / publish failed) falls back to package-less.
-    const appPackage = blueprint.app ? await ensureAppPackage(ctx.packageService, blueprint.app) : null;
+    const appPackage = blueprint.app ? await ensureAppPackage(ctx.protocol, ctx.packageService, blueprint.app) : null;
     const packageId = appPackage?.id;
 
     const drafted: Array<{ type: string; name: string }> = [];

@@ -1383,9 +1383,21 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ packages, total: packages.length }) };
             }
 
-            // POST /packages → install package
+            // POST /packages → install package.
+            // Route through the canonical `protocol.installPackage` primitive so
+            // the install lands in BOTH the in-memory registry (what this list/detail
+            // reads) AND the durable `sys_packages` table. Fall back to the bare
+            // registry write only when the protocol service/method is unavailable.
             if (parts.length === 0 && m === 'POST') {
-                const pkg = registry.installPackage(body.manifest || body, body.settings);
+                const manifest = body.manifest || body;
+                let pkg: any;
+                const protocolSvc: any = await this.resolveService('protocol').catch(() => null);
+                if (protocolSvc && typeof protocolSvc.installPackage === 'function') {
+                    const out = await protocolSvc.installPackage({ manifest, settings: body.settings });
+                    pkg = out?.package ?? out;
+                } else {
+                    pkg = registry.installPackage(manifest, body.settings);
+                }
                 const res = this.success(pkg);
                 res.status = 201;
                 return { handled: true, response: res };
