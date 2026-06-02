@@ -147,6 +147,37 @@ export function installAuditWriters(
     engine.unregisterHooksByPackage(packageId);
   }
 
+  // Whether a given object's *registered* schema declares a field. The
+  // SchemaRegistry auto-injects `organization_id` only in multi-tenant mode
+  // (`applySystemFields({ multiTenant })`), so on single-tenant stacks the
+  // `sys_audit_log` / `sys_activity` tables have no `organization_id` column.
+  // Unconditionally stamping it there made every audit INSERT fail with
+  // "table sys_audit_log has no column named organization_id" (the error was
+  // swallowed, so audit logging was silently non-functional). Resolve the
+  // field set lazily from the engine schema and cache it — object schemas are
+  // static after registration.
+  const fieldSetCache = new Map<string, Set<string> | null>();
+  const objectHasField = (objectName: string, field: string): boolean => {
+    let set = fieldSetCache.get(objectName);
+    if (set === undefined) {
+      set = null;
+      try {
+        const schema: any =
+          typeof (engine as any).getSchema === 'function' ? (engine as any).getSchema(objectName) : null;
+        const fields = schema?.fields;
+        if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+          set = new Set<string>(Object.keys(fields));
+        } else if (Array.isArray(fields)) {
+          set = new Set<string>(fields.map((f: any) => f?.name).filter(Boolean));
+        }
+      } catch {
+        /* ignore — best-effort; absence just means we skip the stamp */
+      }
+      fieldSetCache.set(objectName, set);
+    }
+    return set != null && set.has(field);
+  };
+
   /**
    * beforeUpdate / beforeDelete: capture "previous" snapshot via api.sudo()
    * so we can compute the diff in the afterXxx hook. We attach the snapshot
@@ -250,17 +281,21 @@ export function installAuditWriters(
       record_id: recordId ?? null,
       old_value: oldValue ? safeStringify(oldValue) : null,
       new_value: newValue ? safeStringify(newValue) : null,
-      // `tenant_id` is the schema-declared "tenant context" lookup; the
-      // platform-default `organization_id` column is what RLS gates on
-      // (`organization_id = current_user.organization_id`). The audit
-      // writer runs through `api.sudo()` which bypasses the
-      // SecurityPlugin's auto-stamping of `organization_id`, so we
-      // stamp both columns explicitly here. Without `organization_id`,
-      // non-admin members would see 0 rows on Setup dashboards because
-      // RLS would deny every audit row as wrong-tenant.
-      organization_id: tenantId ?? null,
+      // `tenant_id` is the schema-declared "tenant context" lookup.
       tenant_id: tenantId ?? null,
     };
+    // The platform-default `organization_id` column is what RLS gates on
+    // (`organization_id = current_user.organization_id`). The audit writer
+    // runs through `api.sudo()` which bypasses the SecurityPlugin's
+    // auto-stamping of `organization_id`, so we stamp it explicitly here —
+    // without it, non-admin members would see 0 rows on Setup dashboards
+    // because RLS would deny every audit row as wrong-tenant. But the column
+    // only exists in multi-tenant deployments (the SchemaRegistry auto-injects
+    // it conditionally); stamping it on a single-tenant table that lacks the
+    // column made every audit INSERT fail. Only stamp it when declared.
+    if (objectHasField('sys_audit_log', 'organization_id')) {
+      auditRow.organization_id = tenantId ?? null;
+    }
 
     const label = recordLabel(after ?? before, recordId ?? '');
     const summary =
@@ -280,10 +315,13 @@ export function installAuditWriters(
       record_id: recordId ?? null,
       record_label: label,
       metadata: newValue || oldValue ? safeStringify({ old: oldValue, new: newValue }) : null,
-      // Same rationale as auditRow: stamp the tenant column so RLS
-      // matches the recipient's organization on read.
-      organization_id: tenantId ?? null,
     };
+    // Same rationale as auditRow: stamp the tenant column so RLS matches the
+    // recipient's organization on read — but only when the (auto-injected)
+    // column actually exists, so single-tenant activity writes don't fail.
+    if (objectHasField('sys_activity', 'organization_id')) {
+      activityRow.organization_id = tenantId ?? null;
+    }
 
     try {
       const sys = api.sudo();
