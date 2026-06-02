@@ -1,5 +1,7 @@
 # @objectstack/account
 
+## 7.6.0
+
 ## 7.5.0
 
 ## 7.4.1

@@ -1,5 +1,41 @@
 # @objectstack/service-external-datasource
 
+## 7.6.0
+
+### Patch Changes
+
+- bb04824: fix(build): don't bundle lazily-imported optional drivers (fixes build break from #1524).
+
+  After moving optional internal `@objectstack/*` peerDependencies off `peer` (to
+  stop the changesets fixed-group major cascade), tsup no longer auto-externalized
+  them and began bundling the lazily `await import()`-ed driver packages — pulling
+  in their optional native clients (`mysql` / `oracledb` via knex) and failing the
+  build. Fix: `service-datasource` externalizes `@objectstack/driver-*` in tsup
+  (kept as devDeps for tests); `plugin-dev` moves its framework packages to
+  `dependencies` (auto-externalized; it's a dev-only plugin). Full build green.
+
+- 3377e38: fix(release): stop the fixed-group major cascade caused by internal `@objectstack/*` peerDependencies.
+
+  These packages declared workspace peerDependencies on other framework packages
+  in the changesets `fixed` group. Inside a fixed group, changesets rewrites those
+  peer ranges on every release and treats a peer-range change as breaking → major,
+  which cascaded to **all 69 packages → 8.0.0** on _any_ minor changeset. Required
+  internal peers are now regular `dependencies`; optional ones move to
+  `devDependencies` (kept for in-workspace tests, no longer a published peer edge).
+  Releases now bump correctly (patch/minor) instead of a spurious major.
+
+- Updated dependencies [955d4c8]
+- Updated dependencies [c4a4cbd]
+- Updated dependencies [b046ec2]
+- Updated dependencies [2170ad9]
+- Updated dependencies [02d6359]
+- Updated dependencies [7648242]
+- Updated dependencies [8fa1e7f]
+- Updated dependencies [55866f5]
+- Updated dependencies [60f9c45]
+  - @objectstack/spec@7.6.0
+  - @objectstack/core@7.6.0
+
 ## 7.5.0
 
 ### Patch Changes
