@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { SolutionBlueprint } from '@objectstack/spec/ai';
+import { SolutionBlueprintStrictSchema, type SolutionBlueprint } from '@objectstack/spec/ai';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import {
   registerBlueprintTools,
@@ -285,5 +285,71 @@ describe('apply_blueprint handler', () => {
       { id: 'nav_contact', label: 'Contact', order: 1, type: 'object', objectName: 'contact' },
       { id: 'nav_sales', label: 'Sales', order: 2, type: 'dashboard', dashboardName: 'sales' },
     ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// OpenAI strict structured outputs (live-verified bug: optional fields made
+// OpenAI reject the schema; the model emits null for "empty" fields)
+// ═══════════════════════════════════════════════════════════════════
+
+describe('blueprint ⨯ OpenAI strict structured outputs', () => {
+  // A blueprint shaped like the strict mirror's output: every optional field
+  // present as `null` rather than absent.
+  const bpWithNulls: any = {
+    summary: 's',
+    assumptions: [],
+    questions: null,
+    objects: [
+      {
+        name: 'project',
+        label: 'Project',
+        description: null,
+        fields: [
+          { name: 'name', label: null, type: 'text', required: null, reference: null, options: null },
+        ],
+      },
+    ],
+    views: null,
+    dashboards: null,
+    app: null,
+  };
+
+  it('propose_blueprint uses the strict mirror schema and strips the model\'s nulls', async () => {
+    const registry = new ToolRegistry();
+    const generateObject = vi.fn(async () => ({ object: bpWithNulls, model: 'mock', usage: undefined }));
+    registerBlueprintTools(registry, {
+      ai: { generateObject } as any,
+      protocol: createMockProtocol().protocol,
+      metadataService: createMockMetadataService(),
+    });
+
+    const parsed = parse(await registry.execute(call('propose_blueprint', { goal: 'x' })));
+
+    // The OpenAI-strict mirror is the output contract sent to generateObject.
+    expect((generateObject.mock.calls[0] as unknown[])[1]).toBe(SolutionBlueprintStrictSchema);
+    // Nulls are stripped so the result conforms to the lenient schema.
+    expect(parsed.status).toBe('blueprint_proposed');
+    expect(parsed.blueprint.objects[0].description).toBeUndefined();
+    expect(parsed.blueprint.objects[0].fields[0].label).toBeUndefined();
+    expect(parsed.blueprint.views).toBeUndefined();
+    expect(parsed.blueprint.app).toBeUndefined();
+  });
+
+  it('apply_blueprint tolerates a blueprint carrying nulls (strips before validating)', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai,
+      protocol: proto.protocol,
+      metadataService: createMockMetadataService(),
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: bpWithNulls })));
+    expect(parsed.status).toBe('drafted');
+    expect(parsed.drafted).toEqual([{ type: 'object', name: 'project' }]);
+    // null field props were stripped, not persisted as null
+    const project = proto.drafts.get('object:project') as any;
+    expect(project.fields.name).toEqual({ type: 'text' });
   });
 });

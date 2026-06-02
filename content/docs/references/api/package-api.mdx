@@ -36,8 +36,8 @@ DELETE /api/v1/packages/:packageId           — Uninstall a package
 ## TypeScript Usage
 
 ```typescript
-import { GetInstalledPackageRequest, GetInstalledPackageResponse, ListInstalledPackagesRequest, ListInstalledPackagesResponse, PackageApiErrorCode, PackageInstallRequest, PackageInstallResponse, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeRequest, PackageUpgradeResponse, ResolveDependenciesRequest, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
-import type { GetInstalledPackageRequest, GetInstalledPackageResponse, ListInstalledPackagesRequest, ListInstalledPackagesResponse, PackageApiErrorCode, PackageInstallRequest, PackageInstallResponse, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeRequest, PackageUpgradeResponse, ResolveDependenciesRequest, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
+import { GetInstalledPackageRequest, ListInstalledPackagesRequest, PackageApiErrorCode, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeResponse, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
+import type { GetInstalledPackageRequest, ListInstalledPackagesRequest, PackageApiErrorCode, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeResponse, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
 
 // Validate data
 const result = GetInstalledPackageRequest.parse(data);
@@ -56,22 +56,6 @@ const result = GetInstalledPackageRequest.parse(data);
 
 ---
 
-## GetInstalledPackageResponse
-
-Get installed package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **success** | `boolean` | ✅ | Operation success status |
-| **error** | `Object` | optional | Error details if success is false |
-| **meta** | `Object` | optional | Response metadata |
-| **data** | `Object` | ✅ | Installed package details |
-
-
----
-
 ## ListInstalledPackagesRequest
 
 List installed packages request
@@ -84,22 +68,6 @@ List installed packages request
 | **enabled** | `boolean` | optional | Filter by enabled state |
 | **limit** | `integer` | ✅ | Maximum number of packages to return |
 | **cursor** | `string` | optional | Cursor for pagination |
-
-
----
-
-## ListInstalledPackagesResponse
-
-List installed packages response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **success** | `boolean` | ✅ | Operation success status |
-| **error** | `Object` | optional | Error details if success is false |
-| **meta** | `Object` | optional | Response metadata |
-| **data** | `Object` | ✅ |  |
 
 
 ---
@@ -121,39 +89,6 @@ List installed packages response
 * `rollback_failed`
 * `snapshot_not_found`
 * `upload_failed`
-
-
----
-
-## PackageInstallRequest
-
-Install package request
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **manifest** | `Object` | ✅ | Package manifest to install |
-| **settings** | `Record<string, any>` | optional | User-provided settings at install time |
-| **enableOnInstall** | `boolean` | ✅ | Whether to enable immediately after install |
-| **platformVersion** | `string` | optional | Current platform version for compatibility verification |
-| **artifactRef** | `Object` | optional | Artifact reference for marketplace installation |
-
-
----
-
-## PackageInstallResponse
-
-Install package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **success** | `boolean` | ✅ | Operation success status |
-| **error** | `Object` | optional | Error details if success is false |
-| **meta** | `Object` | optional | Response metadata |
-| **data** | `Object` | ✅ |  |
 
 
 ---
@@ -200,25 +135,6 @@ Rollback package response
 
 ---
 
-## PackageUpgradeRequest
-
-Upgrade package request
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **packageId** | `string` | ✅ | Package ID to upgrade |
-| **targetVersion** | `string` | optional | Target version (defaults to latest) |
-| **manifest** | `Object` | optional | New manifest for the target version |
-| **createSnapshot** | `boolean` | ✅ | Whether to create a pre-upgrade backup snapshot |
-| **mergeStrategy** | `Enum<'keep-custom' \| 'accept-incoming' \| 'three-way-merge'>` | ✅ | How to handle customer customizations |
-| **dryRun** | `boolean` | ✅ | Preview upgrade without making changes |
-| **skipValidation** | `boolean` | ✅ | Skip pre-upgrade compatibility checks |
-
-
----
-
 ## PackageUpgradeResponse
 
 Upgrade package response
@@ -231,20 +147,6 @@ Upgrade package response
 | **error** | `Object` | optional | Error details if success is false |
 | **meta** | `Object` | optional | Response metadata |
 | **data** | `Object` | ✅ |  |
-
-
----
-
-## ResolveDependenciesRequest
-
-Resolve dependencies request
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **manifest** | `Object` | ✅ | Package manifest to resolve dependencies for |
-| **platformVersion** | `string` | optional | Current platform version for compatibility filtering |
 
 
 ---

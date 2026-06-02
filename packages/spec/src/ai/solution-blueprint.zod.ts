@@ -141,3 +141,91 @@ export type SolutionBlueprint = z.infer<typeof SolutionBlueprintSchema>;
 export function defineSolutionBlueprint(config: z.input<typeof SolutionBlueprintSchema>): SolutionBlueprint {
   return SolutionBlueprintSchema.parse(config);
 }
+
+// ---------------------------------------------------------------------------
+// Strict structured-output mirror (OpenAI / Vercel AI Gateway)
+//
+// OpenAI's *strict* structured outputs (what `generateObject` uses through the
+// gateway) require that EVERY property is listed in `required` and reject
+// open-ended `additionalProperties` (i.e. `z.record`). The authoring schema
+// above is deliberately lenient (optional fields, a free-form `seedData`
+// record), which OpenAI rejects with:
+//   "'required' … must include every key in properties. Missing 'label'."
+//
+// This mirror expresses the SAME shape in a strict-compatible way — every key
+// present, "optional" → `.nullable()`, and the un-representable `seedData`
+// record dropped (Phase C only *reports* seed data; it never applies it, and
+// the agent can still describe it in prose). It is used ONLY as the
+// `generateObject` output contract. The model emits `null` for empty fields;
+// the blueprint tools strip those nulls so the lenient {@link
+// SolutionBlueprintSchema} (and every existing consumer/test) is unchanged.
+// ---------------------------------------------------------------------------
+
+const StrictField = z.object({
+  name: z.string().describe('Field machine name (snake_case)'),
+  label: z.string().nullable().describe('Human-readable field label, or null'),
+  type: FieldType.describe('Field data type'),
+  required: z.boolean().nullable().describe('Whether the field is required, or null'),
+  reference: z.string().nullable().describe('Target object for lookup/master_detail, or null'),
+  options: z.array(z.object({ label: z.string(), value: z.string() })).nullable()
+    .describe('Choices for select-family fields, or null'),
+});
+
+const StrictObject = z.object({
+  name: z.string().describe('Object machine name (snake_case)'),
+  label: z.string().nullable().describe('Human-readable singular label, or null'),
+  description: z.string().nullable().describe('What this object represents, or null'),
+  fields: z.array(StrictField).describe('Fields to create on the object'),
+});
+
+const StrictView = z.object({
+  object: z.string().describe('Object this view displays (snake_case)'),
+  name: z.string().describe('View machine name (snake_case)'),
+  label: z.string().nullable().describe('Human-readable view label, or null'),
+  type: z.enum(['list', 'form', 'kanban', 'calendar']).nullable().describe('View kind, or null for list'),
+  columns: z.array(z.string()).nullable().describe('Field names shown as columns, or null'),
+});
+
+const StrictDashboard = z.object({
+  name: z.string().describe('Dashboard machine name (snake_case)'),
+  label: z.string().nullable().describe('Human-readable dashboard label, or null'),
+  widgets: z.array(z.object({
+    id: z.string().describe('Widget id (snake_case)'),
+    title: z.string().nullable().describe('Widget title, or null'),
+    object: z.string().nullable().describe('Source object, or null'),
+    chart: z.enum(['metric', 'bar', 'line', 'pie', 'table']).nullable().describe('Visualization, or null'),
+  })).nullable().describe('Widgets to place on the dashboard, or null'),
+});
+
+const StrictNavItem = z.object({
+  type: z.enum(['object', 'dashboard']).describe('What this nav entry opens'),
+  target: z.string().describe('Object or dashboard machine name to surface (snake_case)'),
+  label: z.string().nullable().describe('Nav entry label, or null'),
+  icon: z.string().nullable().describe('Lucide icon name, or null'),
+});
+
+const StrictApp = z.object({
+  name: z.string().describe('App machine name (snake_case)'),
+  label: z.string().nullable().describe('App display label, or null'),
+  icon: z.string().nullable().describe('Lucide icon for the App Launcher, or null'),
+  nav: z.array(StrictNavItem).nullable()
+    .describe('Navigation entries; null to auto-surface every created object and dashboard'),
+});
+
+/**
+ * OpenAI-strict-compatible mirror of {@link SolutionBlueprintSchema}, used only
+ * as the `generateObject` output contract (see comment above). Validate / apply
+ * still go through the lenient `SolutionBlueprintSchema`.
+ */
+export const SolutionBlueprintStrictSchema = z.object({
+  summary: z.string().describe('One-line description of the proposed solution'),
+  assumptions: z.array(z.string()).describe('Design assumptions made from the underspecified goal'),
+  questions: z.array(z.string()).nullable()
+    .describe('At most 1-2 structure-deciding questions to confirm before building, or null'),
+  objects: z.array(StrictObject).describe('Objects (tables) to create'),
+  views: z.array(StrictView).nullable().describe('Views to create, or null'),
+  dashboards: z.array(StrictDashboard).nullable().describe('Dashboards to create, or null'),
+  app: StrictApp.nullable()
+    .describe('The navigation shell (app) that surfaces the created objects/dashboards, or null'),
+});
+export type SolutionBlueprintStrict = z.infer<typeof SolutionBlueprintStrictSchema>;

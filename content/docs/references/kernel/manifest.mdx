@@ -5,35 +5,23 @@ description: Manifest protocol schemas
 
 {/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
 
-Schema for the ObjectStack Manifest.
+Structured permission grants requested by a plugin (ADR-0025 §3.2).
 
-This defines the structure of a package configuration in the ObjectStack ecosystem.
+Each list scopes one capability surface the plugin may touch. The
 
-All packages (apps, plugins, drivers, modules) must conform to this schema.
+install-time consent flow (ADR §3.5 step 2) turns this declaration into
 
-@example App Package
+the persisted `granted_permissions` set enforced at load by the
 
-```yaml
+PluginPermissionEnforcer.
 
-id: com.acme.crm
+@example
 
-version: 1.0.0
+```jsonc
 
-type: app
+\{ "services": ["object", "http"], "hooks": ["record.beforeInsert"],
 
-name: Acme CRM
-
-description: Customer Relationship Management system
-
-permissions:
-
-- system.user.read
-
-- system.object.create
-
-objects:
-
-- "./src/objects/*.object.yml"
+"network": ["api.acme.com"], "fs": [] \}
 
 ```
 
@@ -44,40 +32,99 @@ objects:
 ## TypeScript Usage
 
 ```typescript
-import { Manifest } from '@objectstack/spec/kernel';
-import type { Manifest } from '@objectstack/spec/kernel';
+import { ManifestPermissions, PluginEngines, PluginIntegrity, PluginPackaging, PluginPermissions, PluginRuntime } from '@objectstack/spec/kernel';
+import type { ManifestPermissions, PluginEngines, PluginIntegrity, PluginPackaging, PluginPermissions, PluginRuntime } from '@objectstack/spec/kernel';
 
 // Validate data
-const result = Manifest.parse(data);
+const result = ManifestPermissions.parse(data);
 ```
 
 ---
 
-## Manifest
+## ManifestPermissions
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string[]`
+
+---
+
+#### Option 2
+
+Structured plugin permission grants (ADR-0025 §3.2)
 
 ### Properties
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **id** | `string` | ✅ | Unique package identifier (reverse domain style) |
-| **namespace** | `string` | optional | Short namespace identifier; also the mandatory prefix of every object name (e.g. "todo" → object names "todo_task", "todo_project") |
-| **defaultDatasource** | `string` | ✅ | Default datasource for all objects in this package |
-| **version** | `string` | ✅ | Package version (semantic versioning) |
-| **type** | `Enum<'plugin' \| 'ui' \| 'driver' \| 'server' \| 'app' \| 'theme' \| 'agent' \| 'objectql' \| 'module' \| 'gateway' \| 'adapter'>` | ✅ | Type of package |
-| **scope** | `Enum<'cloud' \| 'system' \| 'project'>` | ✅ | Deployment scope: cloud | system | project |
-| **name** | `string` | ✅ | Human-readable package name |
-| **description** | `string` | optional | Package description |
-| **permissions** | `string[]` | optional | Array of required permission strings |
-| **objects** | `string[]` | optional | Glob patterns for ObjectQL schemas files |
-| **datasources** | `string[]` | optional | Glob patterns for Datasource definitions |
-| **dependencies** | `Record<string, string>` | optional | Package dependencies |
-| **configuration** | `Object` | optional | Plugin configuration settings |
-| **contributes** | `Object` | optional | Platform contributions |
-| **data** | `Object[]` | optional | Initial seed data (prefer top-level data field) |
-| **capabilities** | `Object` | optional | Plugin capability declarations for interoperability |
-| **extensions** | `Record<string, any>` | optional | Extension points and contributions |
-| **loading** | `Object` | optional | Plugin loading and runtime behavior configuration |
-| **engine** | `Object` | optional | Platform compatibility requirements |
+| **services** | `string[]` | optional | Platform services the plugin may resolve (e.g. "object", "http") |
+| **hooks** | `string[]` | optional | Lifecycle hooks the plugin may register (e.g. "record.beforeInsert") |
+| **network** | `string[]` | optional | Network hosts the plugin may reach (e.g. "api.acme.com") |
+| **fs** | `string[]` | optional | Filesystem paths the plugin may access |
+
+---
+
+
+---
+
+## PluginEngines
+
+Plugin compatibility ranges (ADR-0025 §3.2)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **platform** | `string` | optional | ObjectStack platform release range (SemVer, e.g. ">=4.0 &lt;5") |
+| **protocol** | `string` | optional | Runtime/metadata protocol range, checked first (ADR §3.10 #3) |
+
+
+---
+
+
+---
+
+## PluginPackaging
+
+Dependency packaging strategy (ADR-0025 §3.3)
+
+### Allowed Values
+
+* `bundled`
+* `manifest-deps`
+
+
+---
+
+## PluginPermissions
+
+Structured plugin permission grants (ADR-0025 §3.2)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **services** | `string[]` | optional | Platform services the plugin may resolve (e.g. "object", "http") |
+| **hooks** | `string[]` | optional | Lifecycle hooks the plugin may register (e.g. "record.beforeInsert") |
+| **network** | `string[]` | optional | Network hosts the plugin may reach (e.g. "api.acme.com") |
+| **fs** | `string[]` | optional | Filesystem paths the plugin may access |
+
+
+---
+
+## PluginRuntime
+
+Plugin trust tier (ADR-0025 §3.6)
+
+### Allowed Values
+
+* `node`
+* `sandbox`
+* `worker`
 
 
 ---

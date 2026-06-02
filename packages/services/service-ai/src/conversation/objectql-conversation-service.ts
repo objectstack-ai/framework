@@ -190,7 +190,22 @@ export class ObjectQLConversationService implements IAIConversationService {
         const textParts = parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text);
         const toolCalls = parts.filter(p => p.type === 'tool-call');
         contentStr = textParts.join('');
-        if (toolCalls.length > 0) toolCallsJson = JSON.stringify(toolCalls);
+        if (toolCalls.length > 0) {
+          toolCallsJson = JSON.stringify(toolCalls);
+          // A tool-only assistant turn carries no text, but `content` is a
+          // required field. Persist a readable placeholder synthesized from the
+          // tool names so the row is valid AND the NEXT turn's rebuilt context
+          // still records that these tools ran — without it the insert fails,
+          // the turn is dropped, and the agent loses the thread (e.g. re-runs
+          // propose_blueprint instead of apply_blueprint). ADR-0033 live-verify.
+          if (!contentStr) {
+            const names = toolCalls
+              .map(tc => (tc as { toolName?: string }).toolName)
+              .filter((n): n is string => !!n)
+              .join(', ');
+            contentStr = names ? `(called ${names})` : '(tool call)';
+          }
+        }
       }
     } else if (message.role === 'tool') {
       contentStr = JSON.stringify(message.content);
@@ -208,7 +223,10 @@ export class ObjectQLConversationService implements IAIConversationService {
       id: msgId,
       conversation_id: conversationId,
       role: message.role,
-      content: contentStr,
+      // `content` is required — never persist an empty string (defensive net
+      // for any role that produced no text; the assistant tool-only case above
+      // already substitutes a tool-name placeholder).
+      content: contentStr && contentStr.length > 0 ? contentStr : '(no content)',
       tool_calls: toolCallsJson,
       tool_call_id: toolCallId,
       model: extras?.model ?? null,

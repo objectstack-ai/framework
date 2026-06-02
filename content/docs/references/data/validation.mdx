@@ -15,23 +15,51 @@ type-safe validation system similar to Salesforce's validation rules but with en
 
 Validation rules are applied at the data layer to ensure data integrity and enforce business logic.
 
-The system supports multiple validation types:
+A validation rule is a **deterministic, synchronous, side-effect-free predicate over a single
 
-1. **Script Validation**: Formula-based validation using expressions
+record** — it must be decidable from the incoming write (and, on update, the prior record) with
 
-2. **Uniqueness Validation**: Enforce unique constraints across fields
+no I/O. Everything advertised here runs on the write path (see
 
-3. **State Machine Validation**: Control allowed state transitions
+`objectql/src/validation/rule-validator.ts`); nothing is a silent no-op.
 
-4. **Format Validation**: Validate field formats (email, URL, regex, etc.)
+The system supports these validation types:
 
-5. **Cross-Field Validation**: Validate relationships between multiple fields
+1. **Script Validation**: Formula-based validation using a CEL predicate
 
-6. **Async Validation**: Remote validation via API calls
+2. **State Machine Validation**: Control allowed state transitions
 
-7. **Custom Validation**: User-defined validation functions
+3. **Format Validation**: Validate a field's value (email, URL, phone, JSON, regex)
 
-8. **Conditional Validation**: Apply validations based on conditions
+4. **Cross-Field Validation**: Validate relationships between multiple fields
+
+5. **JSON Schema Validation**: Validate a JSON field against a JSON Schema
+
+6. **Conditional Validation**: Apply a nested rule based on a CEL condition
+
+## Deliberately NOT validation rules
+
+These were once declared here but never enforced. Because the contract above rules them out
+
+(they need I/O or are client-side concerns), they were removed rather than left as silent
+
+no-ops. Use the layer that already does each one correctly:
+
+- **Uniqueness** → a unique **index** (`ObjectSchema.indexes`, `\{ fields, unique: true \}`,
+
+with `partial` for a scoped/conditional constraint), or field-level `unique: true`. A
+
+SELECT-then-INSERT "rule" is inherently racy (TOCTOU); a DB unique constraint is not.
+
+- **Async / remote validation** → a client-form concern (`debounce`/`validatorUrl` only mean
+
+anything against keystrokes) and an SSRF/latency hazard on the server write path. Keep it in
+
+the form layer, or enforce the underlying invariant with a `unique` index / lifecycle hook.
+
+- **Custom handler** → a `beforeInsert` / `beforeUpdate` lifecycle hook, the typed, supported
+
+extension point for arbitrary validation code.
 
 ## Salesforce Comparison
 
@@ -80,62 +108,12 @@ severity: 'error'
 ## TypeScript Usage
 
 ```typescript
-import { AsyncValidation, CustomValidator, FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
-import type { AsyncValidation, CustomValidator, FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
+import { FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
+import type { FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
 
 // Validate data
-const result = AsyncValidation.parse(data);
+const result = FormatValidation.parse(data);
 ```
-
----
-
-## AsyncValidation
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **name** | `string` | ✅ | Unique rule name (snake_case) |
-| **label** | `string` | optional | Human-readable label for the rule listing |
-| **description** | `string` | optional | Administrative notes explaining the business reason |
-| **active** | `boolean` | ✅ |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
-| **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
-| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
-| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
-| **message** | `string` | ✅ | Error message to display to the user |
-| **type** | `string` | ✅ |  |
-| **field** | `string` | ✅ | Field to validate |
-| **validatorUrl** | `string` | optional | External API endpoint for validation |
-| **method** | `Enum<'GET' \| 'POST'>` | ✅ | HTTP method for external call |
-| **headers** | `Record<string, string>` | optional | Custom headers for the request |
-| **validatorFunction** | `string` | optional | Reference to custom validator function |
-| **timeout** | `number` | ✅ | Timeout in milliseconds |
-| **debounce** | `number` | optional | Debounce delay in milliseconds |
-| **params** | `Record<string, any>` | optional | Additional parameters to pass to validator |
-
-
----
-
-## CustomValidator
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **name** | `string` | ✅ | Unique rule name (snake_case) |
-| **label** | `string` | optional | Human-readable label for the rule listing |
-| **description** | `string` | optional | Administrative notes explaining the business reason |
-| **active** | `boolean` | ✅ |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
-| **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
-| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
-| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
-| **message** | `string` | ✅ | Error message to display to the user |
-| **type** | `string` | ✅ |  |
-| **handler** | `string` | ✅ | Name of the custom validation function registered in the system |
-| **params** | `Record<string, any>` | optional | Parameters passed to the custom handler |
-
 
 ---
 

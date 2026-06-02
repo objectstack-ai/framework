@@ -48,8 +48,8 @@ and rollback capabilities.
 ## TypeScript Usage
 
 ```typescript
-import { MetadataChangeType, MetadataDiffItem, RollbackPackageRequest, RollbackPackageResponse, UpgradeImpactLevel, UpgradePackageRequest, UpgradePackageResponse, UpgradePhase, UpgradePlan, UpgradeSnapshot } from '@objectstack/spec/kernel';
-import type { MetadataChangeType, MetadataDiffItem, RollbackPackageRequest, RollbackPackageResponse, UpgradeImpactLevel, UpgradePackageRequest, UpgradePackageResponse, UpgradePhase, UpgradePlan, UpgradeSnapshot } from '@objectstack/spec/kernel';
+import { MetadataChangeType, MetadataDiffItem, RollbackPackageRequest, RollbackPackageResponse, UpgradeImpactLevel, UpgradePackageResponse, UpgradePhase, UpgradePlan } from '@objectstack/spec/kernel';
+import type { MetadataChangeType, MetadataDiffItem, RollbackPackageRequest, RollbackPackageResponse, UpgradeImpactLevel, UpgradePackageResponse, UpgradePhase, UpgradePlan } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = MetadataChangeType.parse(data);
@@ -134,25 +134,6 @@ Severity of upgrade impact
 
 ---
 
-## UpgradePackageRequest
-
-Upgrade package request
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **packageId** | `string` | ✅ | Package ID to upgrade |
-| **targetVersion** | `string` | optional | Target version (defaults to latest) |
-| **manifest** | `Object` | optional | New manifest (if installing from local) |
-| **createSnapshot** | `boolean` | ✅ | Whether to create a pre-upgrade backup snapshot |
-| **mergeStrategy** | `Enum<'keep-custom' \| 'accept-incoming' \| 'three-way-merge'>` | ✅ | How to handle customer customizations |
-| **dryRun** | `boolean` | ✅ | Preview upgrade without making changes |
-| **skipValidation** | `boolean` | ✅ | Skip pre-upgrade compatibility checks |
-
-
----
-
 ## UpgradePackageResponse
 
 Upgrade package response
@@ -211,28 +192,6 @@ Upgrade analysis plan generated before execution
 | **dependencyUpgrades** | `Object[]` | optional | Dependent packages that also need upgrading |
 | **estimatedDuration** | `integer` | optional | Estimated upgrade duration in seconds |
 | **summary** | `string` | optional | Human-readable upgrade summary |
-
-
----
-
-## UpgradeSnapshot
-
-Pre-upgrade state snapshot for rollback capability
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **id** | `string` | ✅ | Snapshot identifier |
-| **packageId** | `string` | ✅ | Package identifier |
-| **fromVersion** | `string` | ✅ | Version before upgrade |
-| **toVersion** | `string` | ✅ | Target upgrade version |
-| **tenantId** | `string` | optional | Tenant identifier |
-| **previousManifest** | `Object` | ✅ | Complete manifest of the previous package version |
-| **metadataSnapshot** | `Object[]` | ✅ | Snapshot of all package metadata |
-| **customizationSnapshot** | `Record<string, any>[]` | optional | Snapshot of customer customizations |
-| **createdAt** | `string` | ✅ | Snapshot creation timestamp |
-| **expiresAt** | `string` | optional | Snapshot expiry timestamp |
 
 
 ---

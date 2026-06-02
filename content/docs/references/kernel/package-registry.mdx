@@ -9,21 +9,27 @@ description: Package Registry protocol schemas
 
 Defines the runtime state and lifecycle operations for installed packages.
 
-## Key Distinction: Package vs App
+## Key Distinction: App vs Package (ADR-0019)
 
-- **Package (Manifest)**: The unit of installation — a deployable artifact containing
+- **App (AppSchema)**: the one consumer-facing unit — what a tenant downloads,
 
-metadata (objects, actions, flows, etc.) and optionally one or more Apps.
+opens, and uninstalls. Only `type: app` packages are consumer-installable
 
-- **App (AppSchema)**: A UI navigation shell defined inside a package.
+(see `isConsumerInstallable`), and a consumer package defines **at most one
 
-A package may contain:
+app** — there is no "suite contains apps" aggregator.
 
-- Zero apps (pure functionality plugin, e.g. a storage driver)
+- **Package (Manifest)**: the internal / control-plane artifact term (the
 
-- One app (typical business application)
+"row" in the installed-packages table). Never surfaced to consumers as a
 
-- Multiple apps (suite of applications)
+separate noun.
+
+- **Internal contributions** (plugin/driver/server/…): the "frameworks inside
+
+the .app bundle" — bundled within an App or operator-provisioned; a consumer
+
+never installs them directly.
 
 ## Architecture Alignment
 
@@ -42,8 +48,8 @@ A package may contain:
 ## TypeScript Usage
 
 ```typescript
-import { DisablePackageRequest, DisablePackageResponse, EnablePackageRequest, EnablePackageResponse, GetPackageRequest, GetPackageResponse, InstallPackageRequest, InstallPackageResponse, InstalledPackage, ListPackagesRequest, ListPackagesResponse, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
-import type { DisablePackageRequest, DisablePackageResponse, EnablePackageRequest, EnablePackageResponse, GetPackageRequest, GetPackageResponse, InstallPackageRequest, InstallPackageResponse, InstalledPackage, ListPackagesRequest, ListPackagesResponse, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
+import { DisablePackageRequest, EnablePackageRequest, GetPackageRequest, ListPackagesRequest, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
+import type { DisablePackageRequest, EnablePackageRequest, GetPackageRequest, ListPackagesRequest, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = DisablePackageRequest.parse(data);
@@ -64,20 +70,6 @@ Disable package request
 
 ---
 
-## DisablePackageResponse
-
-Disable package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **package** | `Object` | ✅ | Disabled package details |
-| **message** | `string` | optional | Disable status message |
-
-
----
-
 ## EnablePackageRequest
 
 Enable package request
@@ -87,20 +79,6 @@ Enable package request
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Package ID to enable |
-
-
----
-
-## EnablePackageResponse
-
-Enable package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **package** | `Object` | ✅ | Enabled package details |
-| **message** | `string` | optional | Enable status message |
 
 
 ---
@@ -118,74 +96,6 @@ Get package request
 
 ---
 
-## GetPackageResponse
-
-Get package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **package** | `Object` | ✅ | Package details |
-
-
----
-
-## InstallPackageRequest
-
-Install package request
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **manifest** | `Object` | ✅ | Package manifest to install |
-| **settings** | `Record<string, any>` | optional | User-provided settings at install time |
-| **enableOnInstall** | `boolean` | ✅ | Whether to enable immediately after install |
-| **platformVersion** | `string` | optional | Current platform version for compatibility verification |
-
-
----
-
-## InstallPackageResponse
-
-Install package response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **package** | `Object` | ✅ | Installed package details |
-| **message** | `string` | optional | Installation status message |
-| **dependencyResolution** | `Object` | optional | Dependency resolution result from install analysis |
-
-
----
-
-## InstalledPackage
-
-Installed package with runtime lifecycle state
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **manifest** | `Object` | ✅ | Full package manifest |
-| **status** | `Enum<'installed' \| 'disabled' \| 'installing' \| 'upgrading' \| 'uninstalling' \| 'error'>` | ✅ | Package state: installed, disabled, installing, upgrading, uninstalling, or error |
-| **enabled** | `boolean` | ✅ | Whether the package is currently enabled |
-| **installedAt** | `string` | optional | Installation timestamp |
-| **updatedAt** | `string` | optional | Last update timestamp |
-| **installedVersion** | `string` | optional | Currently installed version for quick access |
-| **previousVersion** | `string` | optional | Version before the last upgrade |
-| **statusChangedAt** | `string` | optional | Status change timestamp |
-| **errorMessage** | `string` | optional | Error message when status is error |
-| **settings** | `Record<string, any>` | optional | User-provided configuration settings |
-| **upgradeHistory** | `Object[]` | optional | Version upgrade history |
-| **registeredNamespaces** | `string[]` | optional | Namespace prefixes registered by this package |
-
-
----
-
 ## ListPackagesRequest
 
 List packages request
@@ -197,20 +107,6 @@ List packages request
 | **status** | `Enum<'installed' \| 'disabled' \| 'installing' \| 'upgrading' \| 'uninstalling' \| 'error'>` | optional | Filter by package status |
 | **type** | `Enum<'plugin' \| 'ui' \| 'driver' \| 'server' \| 'app' \| 'theme' \| 'agent' \| 'objectql' \| 'module' \| 'gateway' \| 'adapter'>` | optional | Filter by package type |
 | **enabled** | `boolean` | optional | Filter by enabled state |
-
-
----
-
-## ListPackagesResponse
-
-List packages response
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **packages** | `Object[]` | ✅ | List of installed packages |
-| **total** | `number` | ✅ | Total package count |
 
 
 ---

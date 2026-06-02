@@ -294,6 +294,28 @@ describe('ObjectQLConversationService', () => {
     }
   });
 
+  it('persists a tool-only assistant turn with a non-empty content placeholder (ADR-0033 — `content` is required, so empty text from a tool-only turn must not be stored)', async () => {
+    const conv = await service.create();
+    const insertSpy = vi.spyOn(engine, 'insert');
+    const msg: ModelMessage = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'tool-call' as const, toolCallId: 'c1', toolName: 'propose_blueprint', input: {} },
+      ],
+    };
+    // Previously the empty text content failed the required `content` field,
+    // dropped the turn, and the agent lost context (re-proposed instead of
+    // applying). It must persist with a tool-name placeholder.
+    await expect(service.addMessage(conv.id, msg)).resolves.toBeDefined();
+    const row = insertSpy.mock.calls
+      .map((c) => c[1] as Record<string, unknown>)
+      .find((d) => d.role === 'assistant' && 'tool_calls' in d && d.tool_calls);
+    expect(row).toBeTruthy();
+    expect(typeof row!.content).toBe('string');
+    expect((row!.content as string).length).toBeGreaterThan(0);
+    expect(row!.content as string).toContain('propose_blueprint');
+  });
+
   it('should throw when adding message to non-existent conversation', async () => {
     const msg: ModelMessage = { role: 'user', content: 'Hello' };
     await expect(service.addMessage('conv_ghost', msg)).rejects.toThrow(

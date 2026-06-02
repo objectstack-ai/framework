@@ -200,6 +200,7 @@ Public-facing package listing on the marketplace
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Listing ID (matches package manifest ID) |
 | **packageId** | `string` | ✅ | Package identifier |
+| **packageType** | `Enum<'app'>` | ✅ | Consumer-installable package type (ADR-0019: only `app` is listable) |
 | **publisherId** | `string` | ✅ | Publisher ID |
 | **status** | `Enum<'draft' \| 'submitted' \| 'in-review' \| 'approved' \| 'published' \| 'rejected' \| 'suspended' \| 'deprecated' \| 'unlisted'>` | ✅ | Publication state: draft, published, under-review, suspended, deprecated, or unlisted |
 | **name** | `string` | ✅ | Display name |

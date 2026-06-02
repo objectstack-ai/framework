@@ -1,0 +1,161 @@
+---
+title: Solution Blueprint
+description: Solution Blueprint protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Solution Blueprint Schema (ADR-0033 §4 — plan-first authoring)
+
+The structured-output target an AI agent emits for a *high-level* goal
+
+("build me a project-management system") instead of transcribing a field
+
+list. It is a **simplified proposal shape** — deliberately lighter than the
+
+full [ObjectSchema](ObjectSchema) / [ViewSchema](ViewSchema) / [DashboardSchema](DashboardSchema).
+
+The `apply_blueprint` tool expands each entry into a proper metadata body
+
+and stages it as a draft (so the per-type Zod schema still validates the
+
+real artifact at write time).
+
+The blueprint is **never persisted on its own**: the agent presents it for
+
+conversational confirmation/edit (cheap), and only on human approval does it
+
+batch-draft. This is the safety valve for low-specificity input.
+
+<Callout type="info">
+**Source:** `packages/spec/src/ai/solution-blueprint.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint } from '@objectstack/spec/ai';
+import type { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint } from '@objectstack/spec/ai';
+
+// Validate data
+const result = BlueprintApp.parse(data);
+```
+
+---
+
+## BlueprintApp
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | App machine name (snake_case) |
+| **label** | `string` | optional | App display label |
+| **icon** | `string` | optional | Lucide icon for the App Launcher |
+| **nav** | `Object[]` | optional | Navigation entries; omit to auto-surface every created object and dashboard |
+
+
+---
+
+## BlueprintDashboard
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Dashboard machine name (snake_case) |
+| **label** | `string` | optional | Human-readable dashboard label |
+| **widgets** | `Object[]` | optional | Widgets to place on the dashboard |
+
+
+---
+
+## BlueprintField
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Field machine name (snake_case) |
+| **label** | `string` | optional | Human-readable field label |
+| **type** | `Enum<'text' \| 'textarea' \| 'email' \| 'url' \| 'phone' \| 'password' \| 'secret' \| 'markdown' \| 'html' \| 'richtext' \| 'number' \| 'currency' \| 'percent' \| 'date' \| 'datetime' \| 'time' \| 'boolean' \| 'toggle' \| 'select' \| 'multiselect' \| 'radio' \| 'checkboxes' \| 'lookup' \| 'master_detail' \| 'tree' \| 'image' \| 'file' \| 'avatar' \| 'video' \| 'audio' \| 'formula' \| 'summary' \| 'autonumber' \| 'composite' \| 'repeater' \| 'record' \| 'location' \| 'address' \| 'code' \| 'json' \| 'color' \| 'rating' \| 'slider' \| 'signature' \| 'qrcode' \| 'progress' \| 'tags' \| 'vector'>` | ✅ | Field data type |
+| **required** | `boolean` | optional | Whether the field is required |
+| **reference** | `string` | optional | Target object name for lookup / master_detail relationship fields |
+| **options** | `Object[]` | optional | Choices for select / multiselect / radio fields |
+
+
+---
+
+## BlueprintNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `Enum<'object' \| 'dashboard'>` | ✅ | What this nav entry opens |
+| **target** | `string` | ✅ | Object or dashboard machine name to surface (snake_case) |
+| **label** | `string` | optional | Nav entry label (defaults to the target label/name) |
+| **icon** | `string` | optional | Lucide icon name for the nav entry |
+
+
+---
+
+## BlueprintObject
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Object machine name (snake_case) |
+| **label** | `string` | optional | Human-readable singular label |
+| **description** | `string` | optional | What this object represents |
+| **fields** | `Object[]` | ✅ | Fields to create on the object |
+
+
+---
+
+## BlueprintSeed
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | ✅ | Target object name (snake_case) |
+| **records** | `Record<string, any>[]` | ✅ | Rows to seed |
+
+
+---
+
+## BlueprintView
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | ✅ | Object this view displays (snake_case) |
+| **name** | `string` | ✅ | View machine name (snake_case) |
+| **label** | `string` | optional | Human-readable view label |
+| **type** | `Enum<'list' \| 'form' \| 'kanban' \| 'calendar'>` | ✅ | View kind |
+| **columns** | `string[]` | optional | Field names shown as columns (in order) |
+
+
+---
+
+## SolutionBlueprint
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **summary** | `string` | ✅ | One-line description of the proposed solution |
+| **assumptions** | `string[]` | ✅ | Design assumptions made from the underspecified goal |
+| **questions** | `string[]` | optional | At most 1-2 structure-deciding questions to confirm before building |
+| **objects** | `Object[]` | ✅ | Objects (tables) to create |
+| **views** | `Object[]` | optional | Views to create |
+| **dashboards** | `Object[]` | optional | Dashboards to create |
+| **app** | `Object` | optional | The navigation shell (app) that surfaces the created objects/dashboards to end users |
+| **seedData** | `Object[]` | optional | Suggested seed data (reported, not auto-applied in Phase C) |
+
+
+---
+

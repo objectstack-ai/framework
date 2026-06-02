@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { IAIService, IMetadataService, ModelMessage } from '@objectstack/spec/contracts';
-import { SolutionBlueprintSchema, type SolutionBlueprint } from '@objectstack/spec/ai';
+import { SolutionBlueprintSchema, SolutionBlueprintStrictSchema, type SolutionBlueprint } from '@objectstack/spec/ai';
 import { stageDraft, type DraftCapableProtocol } from './metadata-tools.js';
 import type { ToolHandler, ToolRegistry } from './tool-registry.js';
 import { proposeBlueprintTool } from './propose-blueprint.tool.js';
@@ -9,6 +9,28 @@ import { applyBlueprintTool } from './apply-blueprint.tool.js';
 
 export { proposeBlueprintTool } from './propose-blueprint.tool.js';
 export { applyBlueprintTool } from './apply-blueprint.tool.js';
+
+/**
+ * Recursively drop object keys whose value is `null`. The OpenAI-strict output
+ * contract ({@link SolutionBlueprintStrictSchema}) requires every key present
+ * and emits `null` for "empty" optional fields; stripping those nulls makes the
+ * result conform to the lenient {@link SolutionBlueprintSchema} (which uses
+ * `.optional()` — absent, not null) so every downstream consumer is unchanged.
+ */
+function stripNulls<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNulls(v)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v === null) continue;
+      out[k] = stripNulls(v);
+    }
+    return out as T;
+  }
+  return value;
+}
 
 /** All blueprint (plan-first) tool definitions. */
 export const BLUEPRINT_TOOL_DEFINITIONS = [proposeBlueprintTool, applyBlueprintTool];
@@ -112,12 +134,16 @@ function createProposeBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
 
     let blueprint: SolutionBlueprint;
     try {
-      const generated = await ctx.ai.generateObject(messages, SolutionBlueprintSchema, {
+      // Use the OpenAI-strict-compatible mirror as the output contract (the
+      // lenient SolutionBlueprintSchema's optional fields make OpenAI strict
+      // structured outputs reject the schema). Strip the nulls it emits so the
+      // result conforms to the lenient schema everything else consumes.
+      const generated = await ctx.ai.generateObject(messages, SolutionBlueprintStrictSchema, {
         schemaName: 'SolutionBlueprint',
         schemaDescription:
-          'A proposed solution: objects + fields + relationships + views + dashboards + an app (navigation shell) + seed data, with stated assumptions.',
+          'A proposed solution: objects + fields + relationships + views + dashboards + an app (navigation shell), with stated assumptions. Use null for fields that do not apply.',
       });
-      blueprint = generated.object;
+      blueprint = stripNulls(generated.object) as SolutionBlueprint;
     } catch (err) {
       return JSON.stringify({
         error: `Failed to design blueprint: ${err instanceof Error ? err.message : String(err)}`,
@@ -254,7 +280,10 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
 
     // Defensive: the model re-emits the (possibly edited) blueprint — validate
     // it before fanning out so a malformed plan fails fast with fixable issues.
-    const parsed = SolutionBlueprintSchema.safeParse(raw);
+    // Strip any nulls first: the strict output contract emits `null` for empty
+    // optional fields, and the model may carry those through to this call; the
+    // lenient schema expects them absent.
+    const parsed = SolutionBlueprintSchema.safeParse(stripNulls(raw));
     if (!parsed.success) {
       return JSON.stringify({
         error: 'Blueprint failed validation — fix and resend.',

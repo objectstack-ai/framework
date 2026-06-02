@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   SolutionBlueprintSchema,
+  SolutionBlueprintStrictSchema,
   defineSolutionBlueprint,
   type SolutionBlueprint,
 } from './solution-blueprint.zod';
@@ -134,5 +135,57 @@ describe('SolutionBlueprintSchema', () => {
         app: { name: 'pm', nav: [{ type: 'flow', target: 'project' }] },
       }),
     ).toThrow();
+  });
+});
+
+// The strict mirror is what `generateObject` sends to OpenAI: every property
+// must be present in `required` (optional → nullable), and no open `z.record`
+// (seedData dropped). A live run proved the lenient schema's optional fields
+// made OpenAI strict structured outputs reject the request.
+describe('SolutionBlueprintStrictSchema (OpenAI strict mirror)', () => {
+  const strictBp = {
+    summary: 's',
+    assumptions: [],
+    questions: null,
+    objects: [
+      {
+        name: 'project',
+        label: null,
+        description: null,
+        fields: [
+          { name: 'name', label: null, type: 'text', required: null, reference: null, options: null },
+        ],
+      },
+    ],
+    views: null,
+    dashboards: null,
+    app: null,
+  };
+
+  it('accepts a blueprint with null for every optional field', () => {
+    const parsed = SolutionBlueprintStrictSchema.parse(strictBp);
+    expect(parsed.objects[0].fields[0].type).toBe('text');
+    expect(parsed.views).toBeNull();
+    expect(parsed.app).toBeNull();
+  });
+
+  it('requires every top-level key to be present (OpenAI strict needs all in `required`)', () => {
+    const { views: _v, ...missingViews } = strictBp;
+    expect(() => SolutionBlueprintStrictSchema.parse(missingViews)).toThrow();
+  });
+
+  it('requires every (nullable) field key to be present — omitting `label` throws', () => {
+    const badField = {
+      ...strictBp,
+      objects: [
+        { name: 'x', label: null, description: null, fields: [{ name: 'f', type: 'text', required: null, reference: null, options: null }] },
+      ],
+    };
+    // `f` is missing the (nullable, required) `label` key.
+    expect(() => SolutionBlueprintStrictSchema.parse(badField)).toThrow();
+  });
+
+  it('drops the un-strict-able seedData record (OpenAI strict cannot represent open key/value maps)', () => {
+    expect('seedData' in SolutionBlueprintStrictSchema.shape).toBe(false);
   });
 });
