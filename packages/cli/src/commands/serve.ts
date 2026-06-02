@@ -1684,15 +1684,24 @@ export default class Serve extends Command {
           // cleartext (by design).
           let secrets: any = undefined;
           try {
-            const { InMemoryCryptoProvider } = await import(
+            const { LocalCryptoProvider } = await import(
               /* webpackIgnore: true */ '@objectstack/service-settings'
             );
-            sharedCryptoProvider = sharedCryptoProvider ?? new InMemoryCryptoProvider();
+            // First block to touch `sharedCryptoProvider` (still undefined
+            // here), so create it directly; the secret-field wiring below
+            // reuses this instance so every sys_secret shares one key.
+            sharedCryptoProvider = new LocalCryptoProvider();
             secrets = createDatasourceSecretBinder({
               engine: lazySecretEngine,
               cryptoProvider: sharedCryptoProvider,
             });
           } catch (cryptoErr: any) {
+            // Best-effort fail-closed: leave `secrets` undefined so the plugin
+            // rejects secret-bearing create/update rather than storing
+            // cleartext. A production deployment with no stable key still
+            // aborts boot loudly at the secret-field wiring below (where
+            // LocalCryptoProvider's "Refusing to start in production" error is
+            // rethrown), so we don't duplicate that abort here.
             console.warn(
               chalk.yellow(
                 `  ⚠ datasource admin: no CryptoProvider (${cryptoErr?.message ?? cryptoErr}); secret-bearing datasource create/update will fail closed`,
@@ -1791,40 +1800,51 @@ export default class Serve extends Command {
       // objectql's `secret` field type encrypts on write to `sys_secret`
       // and fails closed when no ICryptoProvider is registered. objectql
       // must NOT depend on a crypto implementation (layering), so the
-      // host injects one here. Dev/self-host gets an independent
-      // InMemoryCryptoProvider; production hosts swap this for a
-      // KMS/Vault-backed provider (e.g. via an env-gated branch or a
-      // dedicated plugin) before secrets are written. We resolve the
-      // data engine by its registered service name and feature-detect
-      // `setCryptoProvider` so older engines / alternate data services
-      // degrade gracefully (writing a secret then fails closed, as
-      // designed, rather than silently storing cleartext).
+      // host injects one here. Dev/self-host gets a LocalCryptoProvider
+      // (AES-256-GCM keyed off `OS_SECRET_KEY` or a persisted dev key);
+      // production hosts swap this for a KMS/Vault-backed provider (e.g.
+      // via an env-gated branch or a dedicated plugin) before secrets are
+      // written. We resolve the data engine by its registered service name
+      // and feature-detect `setCryptoProvider` so older engines / alternate
+      // data services degrade gracefully (writing a secret then fails
+      // closed, as designed, rather than silently storing cleartext).
       try {
         const dataEngine: any =
           kernel.getService?.('data') ?? kernel.getService?.('objectql');
         if (dataEngine && typeof dataEngine.setCryptoProvider === 'function') {
           if (!sharedCryptoProvider) {
-            const { InMemoryCryptoProvider } = await import(
+            const { LocalCryptoProvider } = await import(
               /* webpackIgnore: true */ '@objectstack/service-settings'
             );
-            sharedCryptoProvider = new InMemoryCryptoProvider();
+            // In production LocalCryptoProvider throws when no stable key
+            // (OS_SECRET_KEY / persisted file) is available — the fail-loud
+            // guard against silently minting an ephemeral key and losing
+            // every sys_secret value after a restart. Let that error be loud:
+            // secret writes must not proceed under an unstable key.
+            sharedCryptoProvider = new LocalCryptoProvider();
           }
           dataEngine.setCryptoProvider(sharedCryptoProvider);
           if (isDev) {
             console.log(
               chalk.dim(
-                '  ↪ secret fields: InMemoryCryptoProvider wired (dev) — swap for KMS/Vault in production',
+                '  ↪ secret fields: LocalCryptoProvider wired (dev) — set OS_SECRET_KEY and swap for KMS/Vault in production',
               ),
             );
           }
         }
       } catch (err: any) {
-        // Non-fatal: without a provider, secret writes fail closed by
-        // design. Surface a hint so operators know why a `secret` field
+        const msg = String(err?.message ?? err);
+        if (msg.includes('Refusing to start in production')) {
+          // Fail-loud config error: print the actionable guidance verbatim.
+          console.error(chalk.red(msg));
+          throw err;
+        }
+        // Otherwise non-fatal: without a provider, secret writes fail closed
+        // by design. Surface a hint so operators know why a `secret` field
         // write might reject.
         console.warn(
           chalk.yellow(
-            `  ⚠ secret fields: no CryptoProvider wired (${err?.message ?? err}); writing a secret field will fail closed`,
+            `  ⚠ secret fields: no CryptoProvider wired (${msg}); writing a secret field will fail closed`,
           ),
         );
       }
