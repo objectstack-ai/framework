@@ -9,6 +9,7 @@ import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
 import { readEnvWithDeprecation } from '@objectstack/types';
+import { resolveObjectStackHome } from '@objectstack/runtime';
 import {
   printHeader,
   printKV,
@@ -1600,14 +1601,15 @@ export default class Serve extends Command {
         }
       }
 
+      // Shared dev crypto provider for ALL of sys_secret (datasource creds
+      // below + secret fields after start). One instance ⇒ one key, so every
+      // encrypted secret decrypts under the same provider. Created lazily by
+      // whichever block runs first.
+      let sharedCryptoProvider: any = undefined;
+
       // ── External Datasource Federation (ADR-0015) ─────────────────
       // Federation (introspect / draft / import / validate of external
-      // tables) ships in the open framework. The runtime-UI datasource
-      // *lifecycle* (ADR-0015 Addendum — the "Add Datasource" wizard backend:
-      // create / update / remove runtime datasources) was extracted into the
-      // private `@objectstack/datasource-admin` package; a private host wires
-      // its `DatasourceAdminServicePlugin` + routes after the data/metadata
-      // services exist (see that package's README).
+      // tables) ships in the open framework.
       try {
         const dsMod: any = await import('@objectstack/service-external-datasource');
         const { ExternalDatasourceServicePlugin } = dsMod;
@@ -1635,7 +1637,120 @@ export default class Serve extends Command {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
-          console.error(`[Datasource] runtime-UI lifecycle wiring failed: ${msg}`);
+          console.error(`[Datasource] federation wiring failed: ${msg}`);
+        }
+      }
+
+      // ── Runtime Datasource Admin (ADR-0015 Addendum) ──────────────
+      // The "Add Datasource" wizard backend: list / test / create / update /
+      // remove datasources defined in the UI at runtime. This is open-source
+      // *mechanism* (`@objectstack/service-datasource-admin`); the tier line
+      // falls on which ICryptoProvider / driver factory a host injects, not on
+      // whether the UI can manage datasources. Mounted by default so a
+      // self-host runtime is a complete low-code platform out of the box.
+      //
+      // Credentials are bound through the SAME crypto provider used for
+      // `secret` fields below (`sharedCryptoProvider`), so every secret in
+      // `sys_secret` (settings, secret fields, datasource creds) shares one
+      // key. Wired BEFORE runtime.start() so the plugin's kernel:ready boot
+      // rehydration (which decrypts persisted creds) has its binder ready.
+      try {
+        const adminMod: any = await import('@objectstack/service-datasource-admin');
+        const {
+          DatasourceAdminServicePlugin,
+          createDefaultDatasourceDriverFactory,
+          createDatasourceSecretBinder,
+          registerDatasourceAdminRoutes,
+        } = adminMod;
+
+        if (
+          DatasourceAdminServicePlugin &&
+          !hasPluginMatching(['service-datasource-admin', 'DatasourceAdminServicePlugin'])
+        ) {
+          // Lazy data-engine surface for the secret store (resolved per call
+          // so it works whether the engine is registered as 'data' or
+          // 'objectql', and regardless of init ordering).
+          const resolveEngine = (): any =>
+            kernel.getService?.('data') ?? kernel.getService?.('objectql');
+          const lazySecretEngine = {
+            insert: (o: string, d: any, opt?: any) => resolveEngine()?.insert(o, d, opt),
+            delete: (o: string, opt?: any) => resolveEngine()?.delete(o, opt),
+            find: (o: string, q?: any) => resolveEngine()?.find(o, q),
+          };
+
+          // Fail-closed binder over the shared dev crypto provider. If the
+          // provider can't be created, leave `secrets` undefined — the plugin
+          // then rejects secret-bearing create/update instead of storing
+          // cleartext (by design).
+          let secrets: any = undefined;
+          try {
+            const { LocalCryptoProvider } = await import(
+              /* webpackIgnore: true */ '@objectstack/service-settings'
+            );
+            sharedCryptoProvider = sharedCryptoProvider ?? new LocalCryptoProvider();
+            secrets = createDatasourceSecretBinder({
+              engine: lazySecretEngine,
+              cryptoProvider: sharedCryptoProvider,
+            });
+          } catch (cryptoErr: any) {
+            // Best-effort fail-closed: leave `secrets` undefined so the plugin
+            // rejects secret-bearing create/update rather than storing
+            // cleartext. A production deployment with no stable key still
+            // aborts boot loudly at the secret-field wiring below (where
+            // LocalCryptoProvider's "Refusing to start in production" error is
+            // rethrown), so we don't duplicate that abort here.
+            console.warn(
+              chalk.yellow(
+                `  ⚠ datasource admin: no CryptoProvider (${cryptoErr?.message ?? cryptoErr}); secret-bearing datasource create/update will fail closed`,
+              ),
+            );
+          }
+
+          await kernel.use(
+            new DatasourceAdminServicePlugin({
+              driverFactory: createDefaultDatasourceDriverFactory(),
+              secrets,
+            }),
+          );
+          trackPlugin('DatasourceAdminServicePlugin');
+
+          // REST routes under /api/v1/datasources. Registered via a tiny
+          // plugin so it resolves http.server during init (same pattern as
+          // the hostname guard above).
+          const adminRoutePlugin: any = {
+            name: 'com.objectstack.cli.datasource-admin-routes',
+            version: '1.0.0',
+            init: async (ctx: any) => {
+              try {
+                const httpServer: any =
+                  ctx.getService?.('http.server') ?? ctx.getService?.('http-server');
+                if (!httpServer || typeof httpServer.get !== 'function') {
+                  ctx.logger?.warn?.(
+                    '[datasource-admin] http.server unavailable; REST routes not installed',
+                  );
+                  return;
+                }
+                registerDatasourceAdminRoutes(httpServer, ctx, '/api/v1');
+              } catch (routeErr: any) {
+                ctx.logger?.warn?.(
+                  `[datasource-admin] route registration failed: ${routeErr?.message ?? routeErr}`,
+                );
+              }
+            },
+          };
+          await kernel.use(adminRoutePlugin);
+          trackPlugin('DatasourceAdminRoutes');
+
+          if (isDev) {
+            console.log(
+              chalk.dim('  ↪ datasource admin: runtime UI lifecycle wired (/api/v1/datasources)'),
+            );
+          }
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+          console.error(`[Datasource] runtime-UI admin wiring failed: ${msg}`);
         }
       }
 
@@ -1694,15 +1809,18 @@ export default class Serve extends Command {
         const dataEngine: any =
           kernel.getService?.('data') ?? kernel.getService?.('objectql');
         if (dataEngine && typeof dataEngine.setCryptoProvider === 'function') {
-          const { LocalCryptoProvider } = await import(
-            /* webpackIgnore: true */ '@objectstack/service-settings'
-          );
-          // In production LocalCryptoProvider throws when no stable key
-          // (OS_SECRET_KEY / persisted file) is available — that is the
-          // fail-loud guard against silently minting an ephemeral key and
-          // losing every sys_secret value after a restart. Let that error
-          // be loud: secret writes must not proceed under an unstable key.
-          dataEngine.setCryptoProvider(new LocalCryptoProvider());
+          if (!sharedCryptoProvider) {
+            const { LocalCryptoProvider } = await import(
+              /* webpackIgnore: true */ '@objectstack/service-settings'
+            );
+            // In production LocalCryptoProvider throws when no stable key
+            // (OS_SECRET_KEY / persisted file) is available — the fail-loud
+            // guard against silently minting an ephemeral key and losing
+            // every sys_secret value after a restart. Let that error be loud:
+            // secret writes must not proceed under an unstable key.
+            sharedCryptoProvider = new LocalCryptoProvider();
+          }
+          dataEngine.setCryptoProvider(sharedCryptoProvider);
           if (isDev) {
             console.log(
               chalk.dim(
@@ -1764,6 +1882,17 @@ export default class Serve extends Command {
         }
       }
 
+      // Surface the dev admin seeded this boot (if any) in the banner. The
+      // seed runs in-process during runtime.start() under serve's boot-quiet
+      // window, so plugin-auth records the result on the `auth` service and
+      // we print it here, after stdout is restored. Visible in both
+      // `serve --dev` and `os dev` (the child's stdout is inherited).
+      let seededAdmin: { email: string; password: string } | undefined;
+      try {
+        const authSvc: any = kernel.getService?.('auth');
+        if (authSvc?.devSeedResult?.email) seededAdmin = authSvc.devSeedResult;
+      } catch { /* auth service not present — nothing to show */ }
+
       // ── Clean startup summary ──────────────────────────────────────
       printServerReady({
         port,
@@ -1776,7 +1905,37 @@ export default class Serve extends Command {
         driverLabel: resolvedDriverLabel,
         databaseUrl: redactDbUrl(resolvedDatabaseUrl),
         multiTenant: String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false',
+        seededAdmin,
       });
+
+      // ── Publish the actually-bound port ────────────────────────────
+      // `port` here is the port the HTTP server actually bound — already
+      // resolved past any dev auto-shift (busy 3000 → 3001). Publish it so
+      // supervisors and the `os dev` parent never have to guess:
+      //   • IPC: when spawned with an 'ipc' channel (as `os dev` does), the
+      //     parent learns the real port without polling.
+      //   • runtime.json: a small state file under OS_HOME for external
+      //     supervisors / health checks (pid + port + url).
+      const runtimeUrl = `http://localhost:${port}`;
+      try {
+        if (typeof process.send === 'function') {
+          process.send({ type: 'objectstack:listening', port: Number(port), url: runtimeUrl });
+        }
+      } catch { /* IPC channel closed — best-effort */ }
+      try {
+        const environmentId = process.env.OS_ENVIRONMENT_ID ?? 'env_local';
+        const runtimeFile = path.join(resolveObjectStackHome(), `runtime.${environmentId}.json`);
+        fs.mkdirSync(path.dirname(runtimeFile), { recursive: true });
+        fs.writeFileSync(runtimeFile, JSON.stringify({
+          pid: process.pid,
+          port: Number(port),
+          url: runtimeUrl,
+          environmentId,
+          startedAt: new Date().toISOString(),
+        }, null, 2));
+        const cleanupRuntimeFile = () => { try { fs.rmSync(runtimeFile, { force: true }); } catch { /* noop */ } };
+        process.on('exit', cleanupRuntimeFile);
+      } catch { /* non-fatal — supervision file is best-effort */ }
 
       // Kernel already registers SIGINT/SIGTERM handlers during bootstrap.
       // No duplicate handler needed here — just keep the process alive.
