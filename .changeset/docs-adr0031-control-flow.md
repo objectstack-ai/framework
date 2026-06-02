@@ -13,3 +13,8 @@ docs(automation): document ADR-0031 control-flow constructs; fix dangling refere
   (like `Flow`/`FlowEdge`) and so have no JSON-Schema page; the index previously
   carded every `.zod.ts`, producing a dangling "Control Flow" 404 link. Cards
   now align with `meta.json` (generated pages only).
+- **doc generator (build fix)**: `escapeMdxDescription` now escapes a lone `<`
+  or `{` that has no matching close (e.g. a SemVer range like `">=4.0 <5"` in a
+  `.describe()`). MDX parsed the bare `<5` as a JSX tag and failed the entire
+  docs build (`Unexpected character` in `kernel/manifest.mdx`); the docs site now
+  builds again.

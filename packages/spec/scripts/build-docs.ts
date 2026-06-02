@@ -185,6 +185,12 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
           i = end;
           continue;
         }
+        // No matching close — a lone `<` / `{` (e.g. a SemVer range like
+        // ">=4.0 <5" in a `.describe()`). MDX would parse it as the start of a
+        // JSX tag / expression and fail the whole docs build, so escape the
+        // single character as inline code.
+        out += '`' + ch + '`';
+        continue;
       }
       out += ch;
     }
