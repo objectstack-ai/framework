@@ -1,6 +1,6 @@
 # ADR-0033: AI-assisted metadata authoring — one agent brain, draft-gated review, type-agnostic apply, open-core boundary
 
-**Status**: Proposed (2026-06-02)
+**Status**: Accepted (2026-06-02)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type + org overlay), [ADR-0010 (protection)](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0010 (NL→flow)](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring of metadata / actions-as-tools — **the design center**), [ADR-0019](./0019-approval-as-flow-node.md) (approvals as a flow node), [ADR-0027](./0027-metadata-authoring-lifecycle.md) (**staged authoring · draft · publish · promote** — *this ADR routes every AI write through its draft workspace*), [ADR-0032](./0032-unified-expression-layer.md) (validate-by-default, AI-authored expressions)
 **Consumers**: `@objectstack/services/service-ai` (agents, skills, tools, the structured-output/blueprint path), `@objectstack/spec` (per-type Zod schemas + structured-output targets), `@objectstack/rest` (`/meta/*?mode=draft`, `/api/v1/ai/*`), `@objectstack/cli`, `../objectui` (Studio: per-type designers, the global chat, the review/diff confirm surface)
