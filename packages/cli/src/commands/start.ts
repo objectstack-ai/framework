@@ -62,7 +62,11 @@ export default class Start extends Command {
       default: true,
       allowNo: true,
     }),
-    verbose: Flags.boolean({ char: 'v', description: 'Verbose output' }),
+    verbose: Flags.boolean({ char: 'v', description: 'Verbose output (shortcut for --log-level debug)' }),
+    'log-level': Flags.string({
+      description: 'Kernel logger level forwarded to `serve` (overrides $OS_LOG_LEVEL / $LOG_LEVEL; default `warn`). One of: debug | info | warn | error | fatal | silent.',
+      options: ['debug', 'info', 'warn', 'error', 'fatal', 'silent'],
+    }),
 
     // Home directory — where persistent runtime state lives.
     home: Flags.string({
@@ -241,6 +245,7 @@ export default class Start extends Command {
         'serve',
         flags.ui ? '--ui' : '--no-ui',
         ...(flags.verbose ? ['--verbose'] : []),
+        ...(flags['log-level'] ? ['--log-level', flags['log-level']] : []),
       ],
       { stdio: 'inherit', env: localEnv },
     );

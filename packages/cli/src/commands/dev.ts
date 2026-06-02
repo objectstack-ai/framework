@@ -20,7 +20,11 @@ export default class Dev extends Command {
   static override flags = {
     watch: Flags.boolean({ char: 'w', description: 'Enable watch mode (default)', default: true }),
     ui: Flags.boolean({ description: 'Enable the bundled Console portal at /_console/' }),
-    verbose: Flags.boolean({ char: 'v', description: 'Verbose output' }),
+    verbose: Flags.boolean({ char: 'v', description: 'Verbose output (shortcut for --log-level debug)' }),
+    'log-level': Flags.string({
+      description: 'Kernel logger level forwarded to `serve` (overrides $OS_LOG_LEVEL / $LOG_LEVEL; default `warn`). One of: debug | info | warn | error | fatal | silent.',
+      options: ['debug', 'info', 'warn', 'error', 'fatal', 'silent'],
+    }),
     port: Flags.string({ char: 'p', description: 'Server port (overrides $PORT)' }),
     preset: Flags.string({
       description: 'Plugin tier preset forwarded to `serve`: minimal | default | full',
@@ -212,6 +216,7 @@ export default class Dev extends Command {
           ...(port ? ['--port', port] : []),
           ...(flags.ui ? ['--ui'] : []),
           ...(flags.verbose ? ['--verbose'] : []),
+          ...(flags['log-level'] ? ['--log-level', flags['log-level']] : []),
           ...(flags.preset ? ['--preset', flags.preset] : []),
         ],
         // 'ipc' adds a message channel so the serve child can report the

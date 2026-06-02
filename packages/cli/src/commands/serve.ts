@@ -10,6 +10,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
 import { readEnvWithDeprecation } from '@objectstack/types';
 import { resolveObjectStackHome } from '@objectstack/runtime';
+import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
   printHeader,
   printKV,
@@ -158,6 +159,11 @@ export default class Serve extends Command {
       description: 'Plugin tier preset: minimal | default | full (overridden by config.tiers if set)',
       options: ['minimal', 'default', 'full'],
     }),
+    'log-level': Flags.string({
+      description: 'Kernel logger level. Defaults to $OS_LOG_LEVEL / $LOG_LEVEL, else `warn` so flow/hook execution failures surface (ADR-0032). Use `silent` to fully quiet the runtime.',
+      options: [...LOG_LEVELS],
+    }),
+    verbose: Flags.boolean({ char: 'v', description: 'Verbose output — shortcut for --log-level debug.' }),
   };
 
   /**
@@ -481,8 +487,18 @@ export default class Serve extends Command {
       // Import ObjectStack runtime
       const { Runtime } = await import('@objectstack/runtime');
 
-      // Set kernel logger to 'silent' — the CLI manages its own output
-      const loggerConfig = { level: 'silent' as const };
+      // Resolve the kernel logger level. Honors --verbose / --log-level and
+      // $OS_LOG_LEVEL / $LOG_LEVEL, defaulting to `warn` so flow/hook
+      // execution failures surface even when the CLI manages its own output
+      // (ADR-0032 "fail loudly"; see #1533). `--log-level silent` restores the
+      // old fully-quiet behavior.
+      const loggerConfig = {
+        level: resolveLogLevel({
+          verbose: flags.verbose,
+          flag: flags['log-level'],
+          envLevel: readLogLevelEnv(),
+        }),
+      };
 
       const runtime = new Runtime({
         kernel: {
