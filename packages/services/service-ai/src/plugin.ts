@@ -626,6 +626,33 @@ export class AIServicePlugin implements Plugin {
       protocolService = undefined;
     }
 
+    // Lazy `package` service accessor so the blueprint tools can give an app a
+    // writable "home" package automatically — zero-package app building. Resolved
+    // PER CALL (at apply_blueprint time, long after startup) so service init
+    // order doesn't matter and a later-loaded `package` capability (the
+    // opt-in `marketplace` tier) is picked up. Throws when absent → ensureAppPackage
+    // catches it and degrades to package-less drafting.
+    const resolvePackage = (): any | undefined => {
+      try {
+        const pk = ctx.getService<any>('package');
+        return pk && typeof pk.get === 'function' && typeof pk.publish === 'function' ? pk : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const packageService = {
+      get: async (id: string) => {
+        const pk = resolvePackage();
+        if (!pk) throw new Error('package service unavailable');
+        return pk.get(id);
+      },
+      publish: async (p: unknown) => {
+        const pk = resolvePackage();
+        if (!pk) throw new Error('package service unavailable');
+        return pk.publish(p);
+      },
+    };
+
     // Data tools require only the data engine. When metadata service is
     // wired we also pass it (+ protocol) so the tools can validate
     // field references at runtime and reject hallucinated field names
@@ -807,6 +834,7 @@ export class AIServicePlugin implements Plugin {
           ai: this.service,
           protocol: protocolService,
           metadataService,
+          packageService: packageService as any,
         });
         ctx.logger.info('[AI] Plan-first blueprint tools registered');
 

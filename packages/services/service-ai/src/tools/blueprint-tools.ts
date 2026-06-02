@@ -40,17 +40,33 @@ export const BLUEPRINT_TOOL_DEFINITIONS = [proposeBlueprintTool, applyBlueprintT
 // ---------------------------------------------------------------------------
 
 /**
+ * The narrow slice of the runtime `package` service the blueprint tools use to
+ * give an app a home (see {@link ensureAppPackage}). A subset of the service
+ * registered at `ctx.registerService('package', …)` in `@objectstack/service-package`.
+ */
+export interface BlueprintPackageService {
+  /** Look up a package by id (latest version); null/undefined when absent. */
+  get(packageId: string): Promise<{ manifest?: { name?: string } } | null | undefined>;
+  /** Insert/publish a package record (writable, source:'database'). */
+  publish(data: { manifest: Record<string, unknown>; metadata?: Record<string, unknown> }):
+    Promise<{ success?: boolean; error?: string } | undefined>;
+}
+
+/**
  * Services the plan-first blueprint tools need (ADR-0033 §4).
  *
  * - {@link IAIService} drives `generateObject` for the structured blueprint.
  * - `protocol` is the draft-capable write path reused from the metadata tools
  *   ({@link stageDraft}) — every artifact is staged, never published.
  * - {@link IMetadataService} is a fallback enumerator for existing objects.
+ * - `packageService` (optional) lets a blueprint's app auto-create a writable
+ *   "app package" home so the user never has to make one (zero-package UX).
  */
 export interface BlueprintToolContext {
   ai: IAIService;
   protocol?: DraftCapableProtocol;
   metadataService: IMetadataService;
+  packageService?: BlueprintPackageService;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +287,50 @@ function appBody(
   };
 }
 
+/**
+ * Give a blueprint's app a writable "home" package so the user never has to
+ * create one (mainstream AI builders — Power Apps' default solution, Salesforce
+ * orgs — never make a business user make a package to start building). Idempotent:
+ * one app ⇒ one `app.<name>` package. Returns the package descriptor, or `null`
+ * to fall back to today's package-less drafting (no package service wired, or
+ * publish failed) — never throws, never blocks the build.
+ *
+ * NOTE: this stamps the *legacy* `sys_metadata.package_id` (a real grouping that
+ * shows in Studio's package selector and is the foundation for later
+ * version/export/promote). Full cross-environment promotion still needs the
+ * sealed `sys_package_version` model from ADR-0027, which is separate.
+ */
+async function ensureAppPackage(
+  pkgSvc: BlueprintPackageService | undefined,
+  app: { name: string; label?: string; icon?: string },
+): Promise<{ id: string; name: string; created: boolean } | null> {
+  if (!pkgSvc?.get || !pkgSvc?.publish) return null;
+  const id = `app.${app.name}`;
+  const name = app.label ?? app.name;
+  try {
+    const existing = await pkgSvc.get(id);
+    if (existing) return { id, name: existing.manifest?.name ?? name, created: false };
+    const res = await pkgSvc.publish({
+      manifest: {
+        id,
+        name,
+        version: '1.0.0',
+        type: 'application',
+        namespace: app.name,
+        // Must NOT be 'system'/'cloud' — Studio's package selector filters those
+        // out (studio.app.ts optionsSource). 'environment' keeps it visible.
+        scope: 'environment',
+        ...(app.icon ? { icon: app.icon } : {}),
+      },
+      metadata: { createdBy: 'ai', source: 'database' },
+    });
+    if (res && res.success === false) return null; // degrade to package-less
+    return { id, name, created: true };
+  } catch {
+    return null; // never block the build on packaging
+  }
+}
+
 function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
   return async (args, exec) => {
     const raw = (args as { blueprint?: unknown }).blueprint;
@@ -293,11 +353,17 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
     const blueprint = parsed.data;
     const actor = exec?.actor?.id;
 
+    // Zero-package UX: if the blueprint has an app, ensure a writable home
+    // package up front and bind every drafted artifact to it. Best-effort —
+    // `null` (no package service / publish failed) falls back to package-less.
+    const appPackage = blueprint.app ? await ensureAppPackage(ctx.packageService, blueprint.app) : null;
+    const packageId = appPackage?.id;
+
     const drafted: Array<{ type: string; name: string }> = [];
     const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
 
     const record = async (type: string, name: string, item: unknown) => {
-      const res = await stageDraft(ctx.protocol, { type, name, item, actor });
+      const res = await stageDraft(ctx.protocol, { type, name, item, actor, packageId });
       if (res.ok) drafted.push({ type, name });
       else failed.push({ type, name, error: res.error ?? 'unknown error', ...(res.code ? { code: res.code } : {}) });
     };
@@ -326,12 +392,16 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
 
     const summaryParts = [`drafted ${drafted.length} artifact(s)`];
     if (failed.length) summaryParts.push(`${failed.length} failed`);
+    if (appPackage) summaryParts.push(`grouped under app package "${appPackage.name}"`);
     if (seedDataProposed.length) summaryParts.push(`${seedDataProposed.length} seed set(s) proposed (not applied)`);
 
     return JSON.stringify({
       status: failed.length && !drafted.length ? 'failed' : 'drafted',
       drafted,
       failed,
+      // The app's artifacts were auto-homed in a writable package (zero user
+      // package steps); informational only — no action required.
+      ...(appPackage ? { package: appPackage } : {}),
       // Phase C does not auto-apply seed data — no runtime-draftable `dataset`
       // type exists; surface it so a human can wire it deliberately.
       seedDataProposed,

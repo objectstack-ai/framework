@@ -67,7 +67,11 @@ export default defineStack({
   //                   autolaunched / schedule flows below actually auto-fire.
   //   • job         — JobServicePlugin, the timing backend the schedule trigger
   //                   delegates to (interval / cron jobs).
-  requires: ['ui', 'automation', 'approvals', 'messaging', 'triggers', 'job'],
+  //   • marketplace — PackageServicePlugin (sys_packages store). Enables the AI
+  //                   blueprint flow to auto-create a writable "app package" home
+  //                   (ADR-0033 zero-package app building) and the Studio package
+  //                   selector to list DB packages.
+  requires: ['ui', 'automation', 'approvals', 'messaging', 'triggers', 'job', 'marketplace'],
 
   // Concrete connectors for the `connector_action` node. The baseline engine
   // ships the dispatch node + an empty registry; these plugins populate it.

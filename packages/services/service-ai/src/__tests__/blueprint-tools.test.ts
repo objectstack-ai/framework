@@ -353,3 +353,112 @@ describe('blueprint ⨯ OpenAI strict structured outputs', () => {
     expect(project.fields.name).toEqual({ type: 'text' });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// Zero-package app building — apply_blueprint auto-homes the app's artifacts
+// in a writable app package (one app ⇒ one package), best-effort.
+// ═══════════════════════════════════════════════════════════════════
+
+function createMockPackageService(existing: string[] = []) {
+  const published: any[] = [];
+  const get = vi.fn(async (id: string) =>
+    existing.includes(id) ? { manifest: { id, name: id } } : null,
+  );
+  const publish = vi.fn(async (data: any) => {
+    published.push(data);
+    return { success: true };
+  });
+  return { svc: { get, publish }, get, publish, published };
+}
+
+const APP_BLUEPRINT: SolutionBlueprint = {
+  summary: 'pm',
+  assumptions: [],
+  objects: [{ name: 'project', label: 'Project', fields: [{ name: 'name', type: 'text' }] }],
+  views: [{ object: 'project', name: 'all_projects', type: 'list', columns: ['name'] }],
+  app: { name: 'project_management', label: '项目管理', nav: [{ type: 'object', target: 'project' }] },
+};
+
+describe('apply_blueprint — auto app package', () => {
+  it('creates app.<name> once and binds every artifact to it', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    const pkg = createMockPackageService();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+
+    // looked up, found absent, published exactly one app package
+    expect(pkg.get).toHaveBeenCalledWith('app.project_management');
+    expect(pkg.publish).toHaveBeenCalledOnce();
+    expect(pkg.published[0].manifest).toMatchObject({
+      id: 'app.project_management', type: 'application', namespace: 'project_management', scope: 'environment',
+    });
+    // every staged artifact carries the package id
+    expect(proto.saveMetaItem.mock.calls.length).toBe(3); // object + view + app
+    for (const c of proto.saveMetaItem.mock.calls) {
+      expect(c[0].packageId).toBe('app.project_management');
+      expect(c[0].mode).toBe('draft');
+    }
+    expect(parsed.package).toEqual({ id: 'app.project_management', name: '项目管理', created: true });
+  });
+
+  it('reuses an existing app package (no second publish) and still binds', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    const pkg = createMockPackageService(['app.project_management']);
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+    expect(pkg.publish).not.toHaveBeenCalled();
+    expect(parsed.package).toEqual({ id: 'app.project_management', name: 'app.project_management', created: false });
+    for (const c of proto.saveMetaItem.mock.calls) expect(c[0].packageId).toBe('app.project_management');
+  });
+
+  it('falls back to package-less drafting when no package service is wired', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol, metadataService: createMockMetadataService(),
+    });
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+    expect(parsed.status).toBe('drafted');
+    expect(parsed.package).toBeUndefined();
+    for (const c of proto.saveMetaItem.mock.calls) expect(c[0].packageId).toBeUndefined();
+  });
+
+  it('does nothing package-wise when the blueprint has no app', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    const pkg = createMockPackageService();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: SAMPLE_BLUEPRINT })));
+    expect(pkg.get).not.toHaveBeenCalled();
+    expect(pkg.publish).not.toHaveBeenCalled();
+    expect(parsed.package).toBeUndefined();
+  });
+
+  it('still drafts when publish fails (degrades to package-less, never blocks)', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocol();
+    const pkg = createMockPackageService();
+    pkg.publish.mockResolvedValueOnce({ success: false, error: 'boom' } as any);
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+    expect(parsed.status).toBe('drafted');
+    expect(parsed.package).toBeUndefined();
+    for (const c of proto.saveMetaItem.mock.calls) expect(c[0].packageId).toBeUndefined();
+  });
+});
