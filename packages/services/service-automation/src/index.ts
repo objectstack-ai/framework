@@ -12,7 +12,22 @@ export type {
     RegisteredConnector,
     ConnectorDescriptor,
     ConnectorActionDescriptor,
+    SuspendedRun,
+    SuspendedRunStore,
+    StepLogEntry,
 } from './engine.js';
+
+// Durable suspended-run persistence (ADR-0019). The in-memory store is the
+// default; the ObjectQL-backed store persists pauses across process restarts.
+export {
+    InMemorySuspendedRunStore,
+    ObjectStoreSuspendedRunStore,
+} from './suspended-run-store.js';
+export type { SuspendedRunStoreEngine } from './suspended-run-store.js';
+
+// The sys_automation_run object backing the durable store — registered by
+// AutomationServicePlugin and exported for hosts wiring a custom store.
+export { SysAutomationRun } from './sys-automation-run.object.js';
 
 // Kernel plugin — seeds all built-in nodes; this is the only plugin needed for
 // a fully-functional automation capability.
