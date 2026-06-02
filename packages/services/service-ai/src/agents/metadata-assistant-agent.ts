@@ -40,8 +40,10 @@ Always answer in the same language the user is using. If the user's request is a
     maxTokens: 4096,
   },
 
-  // Capability bundle lives on the skill; the agent only references it.
-  skills: ['metadata_authoring'],
+  // Capability bundles live on the skills; the agent only references them.
+  // `metadata_authoring` = per-item authoring (draft-gated); `solution_design`
+  // = plan-first blueprint authoring for whole-system goals (ADR-0033 §4).
+  skills: ['metadata_authoring', 'solution_design'],
 
   active: true,
   visibility: 'global',

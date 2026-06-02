@@ -34,3 +34,4 @@ export * from './usage.zod';
 export * from './mcp.zod';
 export * from './knowledge-source.zod';
 export * from './knowledge-document.zod';
+export * from './solution-blueprint.zod';
