@@ -1339,6 +1339,23 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Whether the host kernel runs in multi-tenant mode — read once from
+   * `OS_MULTI_ORG_ENABLED` (or the deprecated `OS_MULTI_TENANT`), matching how
+   * the SchemaRegistry / SecurityPlugin pick the mode. Used to gate the
+   * tenant-audit warning: it's only meaningful where tenant isolation is
+   * actually enforced (org-scoping installed).
+   */
+  private _multiTenantMode?: boolean;
+  protected isMultiTenantMode(): boolean {
+    if (this._multiTenantMode === undefined) {
+      const raw =
+        process.env.OS_MULTI_ORG_ENABLED ?? process.env.OS_MULTI_TENANT ?? 'false';
+      this._multiTenantMode = String(raw).toLowerCase() !== 'false';
+    }
+    return this._multiTenantMode;
+  }
+
+  /**
    * Apply a `WHERE tenant_field = ?` clause to the given query builder
    * when:
    *   1. `options.tenantId` is provided by the caller, AND
@@ -1402,6 +1419,13 @@ export class SqlDriver implements IDataDriver {
   ): void {
     if (process.env.OS_TENANT_AUDIT === '0') return;
     if ((options as any)?.bypassTenantAudit === true) return;
+    // Only meaningful in multi-tenant deployments. Single-tenant stacks have no
+    // tenant isolation, yet the kernel now ALWAYS provisions an `organization_id`
+    // column (its existence is decoupled from the tenant flag). Column presence
+    // alone therefore no longer implies "tenant-scoped" — without this gate every
+    // system/sudo write (e.g. the notification/http delivery dispatchers' claim
+    // updates) would spam a meaningless warning on single-tenant boots.
+    if (!this.isMultiTenantMode()) return;
     const tenantId = (options as any)?.tenantId;
     if (tenantId !== undefined && tenantId !== null && tenantId !== '') return;
     const field = this.resolveTenantField(object);
