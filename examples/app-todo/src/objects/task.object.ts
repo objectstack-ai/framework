@@ -1,4 +1,4 @@
-import { P, cel, tmpl } from '@objectstack/spec';
+import { P, tmpl } from '@objectstack/spec';
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
@@ -199,73 +199,13 @@ export const Task = ObjectSchema.create({
       condition: P`record.is_recurring == true && isBlank(record.recurrence_type)`,
     },
   ],
-  
-  workflows: [
-    {
-      name: 'set_completed_flag',
-      objectName: 'todo_task',
-      triggerType: 'on_create_or_update',
-      criteria: P`record.status != previous.status`,
-      active: true,
-      actions: [
-        {
-          name: 'update_completed_flag',
-          type: 'field_update',
-          field: 'is_completed',
-          value: cel`record.status == "completed"`,
-        }
-      ],
-    },
-    {
-      name: 'set_completed_date',
-      objectName: 'todo_task',
-      triggerType: 'on_update',
-      criteria: P`record.status != previous.status && record.status == "completed"`,
-      active: true,
-      actions: [
-        {
-          name: 'set_date',
-          type: 'field_update',
-          field: 'completed_date',
-          value: cel`now()`,
-        },
-        {
-          name: 'set_progress',
-          type: 'field_update',
-          field: 'progress_percent',
-          value: '100',
-        }
-      ],
-    },
-    {
-      name: 'check_overdue',
-      objectName: 'todo_task',
-      triggerType: 'on_create_or_update',
-      criteria: P`record.due_date < today() && record.is_completed == false`,
-      active: true,
-      actions: [
-        {
-          name: 'set_overdue_flag',
-          type: 'field_update',
-          field: 'is_overdue',
-          value: 'true',
-        }
-      ],
-    },
-    {
-      name: 'notify_on_urgent',
-      objectName: 'todo_task',
-      triggerType: 'on_create_or_update',
-      criteria: P`record.priority == "urgent" && record.is_completed == false`,
-      active: true,
-      actions: [
-        {
-          name: 'email_owner',
-          type: 'email_alert',
-          template: 'urgent_task_alert',
-          recipients: ['{owner.email}'],
-        }
-      ],
-    },
-  ],
+
+  // NOTE (#1535): object-level `workflows[]` is NOT a supported ObjectSchema
+  // field — it was silently stripped at build and never ran (ADR-0032 "no
+  // silent failure"). Record-triggered automation for this object lives in the
+  // supported mechanisms instead:
+  //   • `task.hook.ts`        — lifecycle hook (defaults, completion logic)
+  //   • `actions/task.handlers.ts` — stamps `completed_date` on completion
+  //   • `flows/task.flow.ts`  — record_change + schedule flows (completion /
+  //                              recurrence, reminders, overdue escalation)
 });

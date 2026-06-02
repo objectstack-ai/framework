@@ -34,12 +34,10 @@ export const SysSettingAudit = ObjectSchema.create({
   isSystem: true,
   managedBy: 'system',
   description: 'Append-only audit trail for SettingsService mutations.',
-  scope: 'tenant',
   compactLayout: ['namespace', 'key', 'scope', 'action', 'actor_id', 'created_at'],
-  defaultViewName: 'recent',
-  views: {
+  listViews: {
     recent: {
-      type: 'list',
+      type: 'grid',
       name: 'recent',
       label: 'Recent',
       columns: ['created_at', 'namespace', 'key', 'scope', 'action', 'actor_id', 'source'],
