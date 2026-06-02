@@ -206,7 +206,7 @@ export const ConvertLeadScreenFlow = defineFlow({
     { id: 'e1',  source: 'start',                    target: 'get_lead',                  type: 'default' },
     { id: 'e2',  source: 'get_lead',                 target: 'check_converted',            type: 'default' },
     // guard branches
-    { id: 'e3a', source: 'check_converted',          target: 'screen_already_converted',   type: 'default', condition: "{lead_record.status} == 'converted'", label: 'Yes' },
+    { id: 'e3a', source: 'check_converted',          target: 'screen_already_converted',   type: 'default', condition: "lead_record.status == 'converted'", label: 'Yes' },
     { id: 'e3b', source: 'check_converted',          target: 'screen_qualify',             type: 'default', label: 'No' },
     { id: 'e3c', source: 'screen_already_converted', target: 'end',                        type: 'default' },
     // main path

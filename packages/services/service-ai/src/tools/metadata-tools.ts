@@ -15,6 +15,7 @@ export { modifyFieldTool } from './modify-field.tool.js';
 export { deleteFieldTool } from './delete-field.tool.js';
 export { listObjectsTool } from './list-objects.tool.js';
 export { describeObjectTool } from './describe-object.tool.js';
+export { validateExpressionTool } from './validate-expression.tool.js';
 
 import { createObjectTool } from './create-object.tool.js';
 import { addFieldTool } from './add-field.tool.js';
@@ -22,6 +23,8 @@ import { modifyFieldTool } from './modify-field.tool.js';
 import { deleteFieldTool } from './delete-field.tool.js';
 import { listObjectsTool } from './list-objects.tool.js';
 import { describeObjectTool } from './describe-object.tool.js';
+import { validateExpressionTool } from './validate-expression.tool.js';
+import { validateExpression, introspectScope, type FieldRole } from '@objectstack/formula';
 
 /** All built-in metadata management tool definitions (Tool metadata). */
 export const METADATA_TOOL_DEFINITIONS: Tool[] = [
@@ -31,6 +34,7 @@ export const METADATA_TOOL_DEFINITIONS: Tool[] = [
   deleteFieldTool,
   listObjectsTool,
   describeObjectTool,
+  validateExpressionTool,
 ];
 
 // ---------------------------------------------------------------------------
@@ -189,6 +193,42 @@ export interface MetadataToolContext {
 // ---------------------------------------------------------------------------
 // Handler Factories
 // ---------------------------------------------------------------------------
+
+/**
+ * validate_expression (ADR-0032 §1e) — run the shared validator on an
+ * expression before it is saved, so the agent self-corrects at authoring time.
+ * Resolves the object's field names (when `objectName` is given) for
+ * schema-aware field-existence checks.
+ */
+function createValidateExpressionHandler(ctx: MetadataToolContext): ToolHandler {
+  return async (args) => {
+    const { role, source, objectName } = args as { role?: string; source?: string; objectName?: string };
+    if (!source || typeof source !== 'string') {
+      return JSON.stringify({ ok: false, errors: [{ message: '"source" is required' }] });
+    }
+    const fieldRole: FieldRole = role === 'template' || role === 'value' ? role : 'predicate';
+
+    let fields: string[] | undefined;
+    if (objectName) {
+      try {
+        const objectDef = (await ctx.metadataService.getObject(objectName)) as ObjectDef | undefined;
+        if (objectDef?.fields) fields = Object.keys(objectDef.fields);
+      } catch {
+        // schema lookup is best-effort — fall back to syntax-only validation
+      }
+    }
+
+    const result = validateExpression(fieldRole, source, objectName ? { objectName, fields } : undefined);
+    const scope = introspectScope(fieldRole, objectName ? { objectName, fields } : undefined);
+    return JSON.stringify({
+      ok: result.ok,
+      errors: result.errors,
+      dialect: scope.dialect,
+      // On failure, surface what IS in scope so the agent can fix the reference.
+      ...(result.ok ? {} : { availableFields: scope.fields, roots: scope.roots, functions: scope.functions }),
+    });
+  };
+}
 
 function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
   return async (args) => {
@@ -605,4 +645,5 @@ export function registerMetadataTools(
   registry.register(deleteFieldTool, createDeleteFieldHandler(context));
   registry.register(listObjectsTool, createListObjectsHandler(context));
   registry.register(describeObjectTool, createDescribeObjectHandler(context));
+  registry.register(validateExpressionTool, createValidateExpressionHandler(context));
 }

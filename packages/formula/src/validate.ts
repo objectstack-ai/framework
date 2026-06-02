@@ -1,0 +1,207 @@
+/**
+ * Shared expression validator (ADR-0032 §Decision 1/5).
+ *
+ * One validator, used by every author surface — `objectstack build`,
+ * `registerFlow`/metadata registration, and the agent-callable
+ * `validate_expression` tool — so a malformed expression is caught the same
+ * way everywhere, with a message written for **self-correction** (Decision 1d):
+ * it states what is wrong AND the correct form.
+ *
+ * Field roles map to dialects (Decision 2):
+ *   - `predicate`  → bare CEL returning bool (`record.rating >= 4`)
+ *   - `value`      → bare CEL of any type   (`daysFromNow(3)`)
+ *   - `template`   → text with `{{ path }}` holes (`Hot lead: {{ record.name }}`)
+ *
+ * The #1 author error (human or LLM) is wrapping a field reference in single
+ * `{…}` braces inside a CEL field — `{x}` parses as a CEL map literal and fails.
+ * This validator detects that specific mistake and returns the exact fix.
+ */
+
+import { celEngine } from './cel-engine';
+import { templateEngine } from './template-engine';
+
+export type FieldRole = 'predicate' | 'value' | 'template';
+
+/**
+ * Loose input accepted by the validator: a bare string, or any object exposing
+ * `dialect`/`source` (the Expression envelope, or a not-yet-narrowed value from
+ * a `config.condition` / `edge.condition` field). Kept structural so call sites
+ * need not pre-narrow to the strict {@link Expression} dialect union.
+ */
+export type ExprInput = string | { dialect?: string; source?: string } | null | undefined;
+
+/** Optional schema context for field-existence checks (Decision 1b, v1). */
+export interface ExprSchemaHint {
+  /** Object the expression is authored against (for error text). */
+  objectName?: string;
+  /** Known top-level field names, so `record.<field>` can be checked. */
+  fields?: readonly string[];
+}
+
+export interface ExprValidationError {
+  /** Self-correcting message: what is wrong + the correct form. */
+  message: string;
+  /** The offending source, echoed for location. */
+  source: string;
+}
+
+export interface ExprValidationResult {
+  ok: boolean;
+  errors: ExprValidationError[];
+}
+
+/** A bare `{x}` that is NOT part of a `{{x}}` mustache hole. */
+const SINGLE_BRACE_RE = /(?:^|[^{])\{\s*([A-Za-z_$][\w.$]*)\s*\}(?!\})/;
+/** `record.<field>` / `previous.<field>` head references for field-existence. */
+const RECORD_REF_RE = /\b(?:record|previous)\.([A-Za-z_$][\w$]*)/g;
+
+/** The dialect a field role expects (Decision 2). */
+export function expectedDialect(role: FieldRole): 'cel' | 'template' {
+  return role === 'template' ? 'template' : 'cel';
+}
+
+function toSource(input: ExprInput): { dialect?: string; source: string } {
+  if (input == null) return { source: '' };
+  if (typeof input === 'string') return { source: input };
+  return { dialect: input.dialect, source: input.source ?? '' };
+}
+
+function bracesHint(source: string): string | null {
+  const m = SINGLE_BRACE_RE.exec(source);
+  if (!m) return null;
+  const ref = m[1];
+  return (
+    `it looks like a \`{${ref}}\` template brace was used inside a CEL expression — ` +
+    `\`{…}\` parses as a CEL map literal and fails. Write the bare reference instead, e.g. \`${ref}\`.`
+  );
+}
+
+function checkFieldExistence(source: string, schema: ExprSchemaHint | undefined, errors: ExprValidationError[]): void {
+  if (!schema?.fields || schema.fields.length === 0) return;
+  const known = new Set(schema.fields);
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  RECORD_REF_RE.lastIndex = 0;
+  while ((m = RECORD_REF_RE.exec(source)) !== null) {
+    const field = m[1];
+    if (seen.has(field) || known.has(field)) continue;
+    seen.add(field);
+    const suggestion = nearest(field, schema.fields);
+    errors.push({
+      source,
+      message:
+        `unknown field \`${field}\`${schema.objectName ? ` on \`${schema.objectName}\`` : ''}` +
+        (suggestion ? ` — did you mean \`${suggestion}\`?` : ''),
+    });
+  }
+}
+
+/** Cheap edit-distance suggestion for typo'd field names. */
+function nearest(name: string, candidates: readonly string[]): string | undefined {
+  let best: string | undefined;
+  let bestD = Infinity;
+  for (const c of candidates) {
+    const d = levenshtein(name, c);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return bestD <= Math.max(2, Math.floor(name.length / 3)) ? best : undefined;
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= m; i++) {
+      const tmp = dp[i];
+      dp[i] = Math.min(dp[i] + 1, dp[i - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return dp[m];
+}
+
+/**
+ * Validate one expression for a given field role. Never throws — returns a
+ * structured result. Call sites decide whether to throw (build/registration)
+ * or report (agent tool).
+ */
+export function validateExpression(
+  role: FieldRole,
+  input: ExprInput,
+  schema?: ExprSchemaHint,
+): ExprValidationResult {
+  const { dialect, source } = toSource(input);
+  const errors: ExprValidationError[] = [];
+  if (!source.trim()) return { ok: true, errors };
+
+  if (role === 'template') {
+    // Templates must be the `template` dialect (or untyped string). Reject a
+    // CEL envelope mistakenly placed in a text field.
+    if (dialect && dialect !== 'template') {
+      errors.push({ source, message: `expected a text template but got a \`${dialect}\` expression.` });
+      return { ok: false, errors };
+    }
+    const compiled = templateEngine.compile(source);
+    if (!compiled.ok) {
+      errors.push({ source, message: `invalid template: ${compiled.error.message} (holes use \`{{ path }}\`).` });
+    }
+    // A single `{x}` in a template is the legacy/deprecated form (ADR-0032 §3).
+    const hint = SINGLE_BRACE_RE.test(source) ? bracesHintForTemplate(source) : null;
+    if (hint) errors.push({ source, message: hint });
+    return { ok: errors.length === 0, errors };
+  }
+
+  // predicate | value → CEL
+  if (dialect && dialect !== 'cel') {
+    errors.push({ source, message: `expected a CEL expression but got a \`${dialect}\` dialect.` });
+    return { ok: false, errors };
+  }
+  const compiled = celEngine.compile(source);
+  if (!compiled.ok) {
+    const hint = bracesHint(source);
+    errors.push({
+      source,
+      message:
+        `invalid CEL ${role}: ${compiled.error.message}` +
+        (hint ? ` — ${hint}` : ` — ${role}s are bare CEL (e.g. \`record.rating >= 4\`).`),
+    });
+  } else {
+    checkFieldExistence(source, schema, errors);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function bracesHintForTemplate(source: string): string {
+  const m = SINGLE_BRACE_RE.exec(source);
+  const ref = m?.[1] ?? 'field';
+  return `single-brace \`{${ref}}\` is not a valid template hole — use double braces: \`{{ ${ref} }}\`.`;
+}
+
+/**
+ * Introspect what an author (esp. an agent) may use in a field (Decision 1e):
+ * the expected dialect, the in-scope field references, and the callable
+ * functions. Feeds the authoring context so the model does not guess.
+ */
+export function introspectScope(role: FieldRole, schema?: ExprSchemaHint): {
+  dialect: 'cel' | 'template';
+  fields: string[];
+  roots: string[];
+  functions: string[];
+} {
+  return {
+    dialect: expectedDialect(role),
+    fields: [...(schema?.fields ?? [])],
+    roots: ['record', 'previous', 'input', 'os', 'vars'],
+    functions: CEL_STDLIB_FUNCTIONS,
+  };
+}
+
+/** Public catalog of CEL stdlib functions available in expressions. */
+export const CEL_STDLIB_FUNCTIONS: string[] = [
+  'now', 'today', 'daysFromNow', 'daysBetween', 'date', 'datetime', 'timestamp',
+  'isBlank', 'isEmpty', 'coalesce', 'len', 'size', 'int', 'float', 'string', 'bool',
+  'upper', 'lower', 'trim', 'contains', 'startsWith', 'endsWith', 'matches',
+  'has', 'min', 'max', 'abs', 'round',
+];

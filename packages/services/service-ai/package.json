@@ -20,6 +20,7 @@
   "dependencies": {
     "@ai-sdk/provider": "^3.0.10",
     "@objectstack/core": "workspace:*",
+    "@objectstack/formula": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "ai": "^6.0.193",

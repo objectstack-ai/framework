@@ -52,8 +52,8 @@ function createMockMetadataService(
 // ═══════════════════════════════════════════════════════════════════
 
 describe('Metadata Tool Definitions', () => {
-  it('should define exactly 6 tools', () => {
-    expect(METADATA_TOOL_DEFINITIONS).toHaveLength(6);
+  it('should define exactly 7 tools', () => {
+    expect(METADATA_TOOL_DEFINITIONS).toHaveLength(7);
   });
 
   it('should include all expected tool names', () => {
@@ -65,6 +65,7 @@ describe('Metadata Tool Definitions', () => {
       'delete_field',
       'list_objects',
       'describe_object',
+      'validate_expression',
     ]);
   });
 
@@ -156,14 +157,15 @@ describe('registerMetadataTools', () => {
     registerMetadataTools(registry, { metadataService });
   });
 
-  it('should register all 6 tools', () => {
-    expect(registry.size).toBe(6);
+  it('should register all 7 tools', () => {
+    expect(registry.size).toBe(7);
     expect(registry.has('create_object')).toBe(true);
     expect(registry.has('add_field')).toBe(true);
     expect(registry.has('modify_field')).toBe(true);
     expect(registry.has('delete_field')).toBe(true);
     expect(registry.has('list_objects')).toBe(true);
     expect(registry.has('describe_object')).toBe(true);
+    expect(registry.has('validate_expression')).toBe(true);
   });
 });
 
@@ -188,10 +190,10 @@ describe('registerDataTools + registerMetadataTools — unified list/describe', 
     const sizeAfterBoth = registry.size;
 
     // Data tools define: query_records, get_record, aggregate_data (3)
-    // Metadata tools define: create_object, add_field, modify_field, delete_field, list_objects, describe_object (6)
-    // Total should be 3 + 6 = 9
+    // Metadata tools define: create_object, add_field, modify_field, delete_field, list_objects, describe_object, validate_expression (7)
+    // Total should be 3 + 7 = 10
     expect(sizeAfterData).toBe(3);
-    expect(sizeAfterBoth).toBe(sizeAfterData + 6);
+    expect(sizeAfterBoth).toBe(sizeAfterData + 7);
 
     // Unified list/describe should be present (from metadata tools)
     expect(registry.has('list_objects')).toBe(true);
