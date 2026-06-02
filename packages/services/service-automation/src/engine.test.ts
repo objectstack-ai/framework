@@ -376,6 +376,59 @@ describe('AutomationEngine', () => {
             expect(() => engine.evaluateCondition({ dialect: 'cel', source: '{record.rating} >= 4' }, vars))
                 .toThrow(/source:|template braces|bare CEL/);
         });
+
+        // ADR-0032 §1c / #1534 — numeric fields that serialize as strings
+        // (`Field.rating` → `"5.0"`, `Field.currency` → `"250000.00"`) used to
+        // fault under strict CEL (`no such overload: dyn >= int`) and silently
+        // dead-end the flow at the decision node. The condition must now compare
+        // as a number so the matching edge is taken.
+        it('takes a decision edge gated on a string-serialized numeric field — #1534', async () => {
+            const vars = new Map<string, unknown>([['record', { rating: '5.0', amount: '250000.00' }]]);
+            expect(engine.evaluateCondition({ dialect: 'cel', source: 'record.rating >= 4' }, vars)).toBe(true);
+            expect(engine.evaluateCondition({ dialect: 'cel', source: 'record.amount > 100000' }, vars)).toBe(true);
+            expect(engine.evaluateCondition({ dialect: 'cel', source: 'record.rating >= 4' },
+                new Map([['record', { rating: '2.5' }]]))).toBe(false);
+        });
+
+        it('routes through a decision instead of dead-ending when rating is "5.0" — #1534', async () => {
+            const executed: string[] = [];
+            engine.registerNodeExecutor({
+                type: 'decision',
+                async execute() { return { success: true }; },
+            });
+            engine.registerNodeExecutor({
+                type: 'assignment',
+                async execute(node) {
+                    executed.push(node.id);
+                    return { success: true };
+                },
+            });
+
+            engine.registerFlow('hot_lead', {
+                name: 'hot_lead',
+                label: 'Hot Lead Routing',
+                type: 'record_change',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'check', type: 'decision', label: 'Check' },
+                    { id: 'hot', type: 'assignment', label: 'Hot' },
+                    { id: 'cold', type: 'assignment', label: 'Cold' },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'check' },
+                    { id: 'e2', source: 'check', target: 'hot', condition: 'record.rating >= 4' },
+                    { id: 'e3', source: 'check', target: 'cold', condition: 'record.rating < 4' },
+                    { id: 'e4', source: 'hot', target: 'end' },
+                    { id: 'e5', source: 'cold', target: 'end' },
+                ],
+            });
+
+            const result = await engine.execute('hot_lead', { record: { rating: '5.0' }, object: 'crm_lead' });
+            expect(result.success).toBe(true);
+            expect(executed).toContain('hot');
+            expect(executed).not.toContain('cold');
+        });
     });
 
     describe('Durable Suspend / Resume (ADR-0019)', () => {

@@ -59,6 +59,54 @@ function coerce(value: unknown): unknown {
   return value;
 }
 
+/**
+ * A string that is *entirely* a JS number literal: optional sign, integer
+ * and/or fractional part, optional exponent. Deliberately strict — `"5.0"`,
+ * `"250000.00"`, `"-3"`, `"1e3"` match; `"5px"`, `"0x10"`, `" "`, `""`,
+ * `"1,000"`, `"v2"` do not.
+ */
+const NUMERIC_STRING_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/**
+ * cel-js raises `no such overload: dyn <op> int` (and kin) when a comparison
+ * or arithmetic operator sees a `string` on one side and a number on the
+ * other. ADR-0032 §1c — numeric fields that serialize as strings (`Field.rating`
+ * → `"5.0"`, `Field.currency` → `"250000.00"`, `Field.percent`) trip this in
+ * flow conditions / formulas (#1530, #1534) even though the schema and the
+ * build-time validator treat them as numeric.
+ */
+function isNumericOverloadError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /no such overload/i.test(message);
+}
+
+/**
+ * Recursively coerce string values that are *entirely* numeric literals into
+ * numbers. Used only on the {@link isNumericOverloadError} retry path, so it
+ * can never change a comparison that already evaluated cleanly — it only
+ * rescues one that already faulted. Dates and non-numeric strings pass through
+ * untouched (a zip like `"02134"` only changes if the surrounding expression
+ * already faulted, in which case the original loud error is preserved when the
+ * retry still cannot type-check).
+ */
+function hydrateNumericStrings(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length > 0 && NUMERIC_STRING_RE.test(trimmed)) {
+      const n = Number(trimmed);
+      if (Number.isFinite(n)) return n;
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(hydrateNumericStrings);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = hydrateNumericStrings(v);
+    return out;
+  }
+  return value;
+}
+
 function classifyError(err: unknown): EvalResult<never> {
   const message = err instanceof Error ? err.message : String(err);
   let kind: 'parse' | 'type' | 'runtime' | 'bounds' = 'runtime';
@@ -114,8 +162,27 @@ export const celEngine: DialectEngine = {
     try {
       const env = buildEnv(now);
       const scope = buildScope(ctx);
-      const raw = env.evaluate(source, scope);
-      return { ok: true, value: coerce(raw) as T };
+      try {
+        const raw = env.evaluate(source, scope);
+        return { ok: true, value: coerce(raw) as T };
+      } catch (err) {
+        // ADR-0032 §1c — string-serialized numeric fields (`rating` → `"5.0"`,
+        // `amount` → `"250000.00"`) make `record.rating >= 4` raise CEL's
+        // `no such overload: dyn >= int`. Hydrate purely-numeric strings to
+        // numbers and retry ONCE. This only runs after a fault, so a comparison
+        // that already evaluated cleanly is never re-interpreted; if the retry
+        // still cannot type-check, the original loud error is reported (#1534).
+        if (!isNumericOverloadError(err)) throw err;
+        const hydrated = hydrateNumericStrings(scope) as Record<string, unknown>;
+        try {
+          const raw = env.evaluate(source, hydrated);
+          return { ok: true, value: coerce(raw) as T };
+        } catch {
+          // Hydration did not resolve it — surface the original fault, not the
+          // retry's, so the message reflects what the author actually wrote.
+          throw err;
+        }
+      }
     } catch (err) {
       return classifyError(err);
     }
