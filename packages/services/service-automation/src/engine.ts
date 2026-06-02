@@ -190,9 +190,10 @@ export interface ConnectorDescriptor {
 // ─── Core Automation Engine ─────────────────────────────────────────
 
 /**
- * Internal execution step log entry.
+ * Execution step log entry. Part of a {@link SuspendedRun}'s persisted state, so
+ * it survives serialization to a durable {@link SuspendedRunStore}.
  */
-interface StepLogEntry {
+export interface StepLogEntry {
     nodeId: string;
     nodeType: string;
     nodeLabel?: string;
@@ -242,12 +243,15 @@ function isSuspendSignal(err: unknown): err is FlowSuspendSignal {
 }
 
 /**
- * A run paused at a node, awaiting {@link AutomationEngine.resume}. Held
- * in-memory, matching the engine's existing in-memory run model — durable
- * persistence of suspended runs across process restart is a follow-up tracked
- * with run-state persistence generally (ADR-0019 §Consequences).
+ * A run paused at a node, awaiting {@link AutomationEngine.resume} (ADR-0019).
+ *
+ * Held in an in-memory hot cache and — when a {@link SuspendedRunStore} is
+ * configured — mirrored to durable storage so the pause survives a process
+ * restart. Every field is JSON-serializable (the engine's variable `Map` is
+ * snapshotted as a plain object) so the whole record round-trips through a
+ * store.
  */
-interface SuspendedRun {
+export interface SuspendedRun {
     runId: string;
     flowName: string;
     flowVersion?: number;
@@ -262,6 +266,28 @@ interface SuspendedRun {
     correlation?: string;
     /** Screen the run paused on (screen-flow runtime), for re-fetch + UI render. */
     screen?: ScreenSpec;
+}
+
+/**
+ * Pluggable durable store for suspended runs (ADR-0019). The engine persists a
+ * {@link SuspendedRun} on suspend and deletes it on terminal completion; on
+ * {@link AutomationEngine.resume} of a run not in the in-memory cache (e.g.
+ * after a process restart) it rehydrates from here.
+ *
+ * The default is purely in-memory (no store); a host wires a DB-backed store
+ * (`ObjectStoreSuspendedRunStore`, on `sys_automation_run`) for production /
+ * serverless deployments where the process hibernates between suspend and
+ * resume.
+ */
+export interface SuspendedRunStore {
+    /** Persist (insert or replace) a suspended run. */
+    save(run: SuspendedRun): Promise<void>;
+    /** Load a suspended run by id, or `null` if not stored. */
+    load(runId: string): Promise<SuspendedRun | null>;
+    /** Remove a suspended run's durable record (idempotent). */
+    delete(runId: string): Promise<void>;
+    /** List all currently-stored suspended runs. */
+    list(): Promise<SuspendedRun[]>;
 }
 
 export class AutomationEngine implements IAutomationService {
@@ -282,12 +308,88 @@ export class AutomationEngine implements IAutomationService {
     private executionLogs: ExecutionLogEntry[] = [];
     private maxLogSize = 1000;
     private logger: Logger;
-    private runCounter = 0;
-    /** Runs paused at a node, keyed by runId (ADR-0019). In-memory, see {@link SuspendedRun}. */
+    /**
+     * Runs paused at a node, keyed by runId (ADR-0019). In-memory hot cache —
+     * mirrored to {@link store} when one is configured, so a pause survives a
+     * process restart. See {@link SuspendedRun}.
+     */
     private suspendedRuns = new Map<string, SuspendedRun>();
+    /**
+     * Optional durable backing for {@link suspendedRuns}. When set, suspended
+     * runs are persisted on suspend and rehydrated on resume after a restart;
+     * when absent, behaviour is purely in-memory (the historical default).
+     */
+    private store?: SuspendedRunStore;
+    /**
+     * Run ids currently mid-resume — an in-process idempotency guard so a
+     * duplicate `resume(runId)` can't re-enter and double-run side effects.
+     */
+    private resuming = new Set<string>();
 
-    constructor(logger: Logger) {
+    constructor(logger: Logger, store?: SuspendedRunStore) {
         this.logger = logger;
+        this.store = store;
+    }
+
+    /**
+     * Attach (or replace) the durable {@link SuspendedRunStore}. Used by the
+     * service plugin to upgrade the engine to DB-backed persistence once the
+     * ObjectQL engine is available (the engine is constructed earlier, during
+     * `init`, before services are wired).
+     */
+    setSuspendedRunStore(store: SuspendedRunStore): void {
+        this.store = store;
+    }
+
+    /**
+     * Generate a process-unique run id. Includes a random component so ids do
+     * not collide with runs persisted by a previous process lifetime (a plain
+     * incrementing counter would reissue `run_1` after a restart, clashing with
+     * a still-suspended durable run).
+     */
+    private nextRunId(): string {
+        const g = globalThis as { crypto?: { randomUUID?: () => string } };
+        const rand = g.crypto?.randomUUID
+            ? g.crypto.randomUUID()
+            : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        return `run_${rand}`;
+    }
+
+    /**
+     * Persist a suspended run to the in-memory cache and (best-effort) the
+     * durable store. A store failure is logged but does not fail the run — the
+     * in-memory copy still allows in-process resume; only cross-restart
+     * durability is lost.
+     */
+    private async persistSuspendedRun(run: SuspendedRun): Promise<void> {
+        this.suspendedRuns.set(run.runId, run);
+        if (this.store) {
+            try {
+                await this.store.save(run);
+            } catch (err) {
+                this.logger.warn(
+                    `[automation] failed to persist suspended run '${run.runId}' to durable store (kept in memory only): ${(err as Error).message}`,
+                );
+            }
+        }
+    }
+
+    /**
+     * Drop a suspended run from the in-memory cache and (best-effort) the
+     * durable store. Called once the run is claimed for resume or reaches a
+     * terminal state.
+     */
+    private async forgetSuspendedRun(runId: string): Promise<void> {
+        this.suspendedRuns.delete(runId);
+        if (this.store) {
+            try {
+                await this.store.delete(runId);
+            } catch (err) {
+                this.logger.warn(
+                    `[automation] failed to delete suspended run '${runId}' from durable store: ${(err as Error).message}`,
+                );
+            }
+        }
     }
 
     // ── Plugin Extension API ──────────────────────────────
@@ -730,7 +832,7 @@ export class AutomationEngine implements IAutomationService {
             variables.set('previous', context.previous);
         }
 
-        const runId = `run_${++this.runCounter}`;
+        const runId = this.nextRunId();
         // Expose the run id to executors (ADR-0019): a pausing node (e.g. Approval)
         // reads `$runId` to map its external state back to this run for resume.
         variables.set('$runId', runId);
@@ -810,7 +912,7 @@ export class AutomationEngine implements IAutomationService {
             // caller can later `resume()` it. This is NOT a failure.
             if (isSuspendSignal(err)) {
                 const durationMs = Date.now() - startTime;
-                this.suspendedRuns.set(runId, {
+                await this.persistSuspendedRun({
                     runId,
                     flowName,
                     flowVersion: flow.version,
@@ -888,87 +990,81 @@ export class AutomationEngine implements IAutomationService {
      * returns `{ status: 'paused', runId }` afresh.
      */
     async resume(runId: string, signal?: ResumeSignal): Promise<AutomationResult> {
-        const run = this.suspendedRuns.get(runId);
-        if (!run) {
-            return { success: false, error: `No suspended run '${runId}'` };
+        // Idempotency guard (set synchronously, before any await): reject a
+        // concurrent duplicate resume of the same run so side effects can't run
+        // twice. A duplicate that arrives *after* this one finishes finds no
+        // suspended run and returns the "no suspended run" error below.
+        if (this.resuming.has(runId)) {
+            return { success: false, error: `Run '${runId}' is already being resumed` };
         }
-        const flow = this.flows.get(run.flowName);
-        if (!flow) {
-            return { success: false, error: `Flow '${run.flowName}' not found for run '${runId}'` };
-        }
-        const node = flow.nodes.find(n => n.id === run.nodeId);
-        if (!node) {
-            return { success: false, error: `Suspended node '${run.nodeId}' no longer exists in flow '${run.flowName}'` };
-        }
-        // Consume the suspension — a run resumes exactly once per pause.
-        this.suspendedRuns.delete(runId);
-
-        // Restore variable context and apply the resume signal's output as if it
-        // were the node's output, so downstream edges branch on it.
-        const variables = new Map<string, unknown>(Object.entries(run.variables));
-        if (signal?.output) {
-            for (const [key, value] of Object.entries(signal.output)) {
-                variables.set(`${run.nodeId}.${key}`, value);
-            }
-        }
-        // Bare flow variables — a `screen` node's collected inputs land under
-        // their plain names so downstream `{var}` interpolation / conditions
-        // read them directly (e.g. `new_assignee` → update_record fields).
-        if (signal?.variables) {
-            for (const [key, value] of Object.entries(signal.variables)) {
-                variables.set(key, value);
-            }
-        }
-
-        const steps = run.steps;
-        const context = run.context;
-
+        this.resuming.add(runId);
         try {
-            await this.traverseNext(node, flow, variables, context, steps, signal?.branchLabel);
-
-            // Collect output variables
-            const output: Record<string, unknown> = {};
-            if (flow.variables) {
-                for (const v of flow.variables) {
-                    if (v.isOutput) output[v.name] = variables.get(v.name);
+            // Hot path: suspended in this process. Cold path: rehydrate from the
+            // durable store (e.g. the process restarted since the pause, ADR-0019).
+            let run = this.suspendedRuns.get(runId) ?? null;
+            if (!run && this.store) {
+                try {
+                    run = await this.store.load(runId);
+                } catch (err) {
+                    this.logger.warn(
+                        `[automation] failed to load suspended run '${runId}' from durable store: ${(err as Error).message}`,
+                    );
                 }
             }
-            const durationMs = Date.now() - run.startTime;
-            this.recordLog({
-                id: runId,
-                flowName: run.flowName,
-                flowVersion: run.flowVersion,
-                status: 'completed',
-                startedAt: run.startedAt,
-                completedAt: new Date().toISOString(),
-                durationMs,
-                trigger: {
-                    type: context.event ?? 'manual',
-                    userId: context.userId,
-                    object: context.object,
-                },
-                steps,
-                output,
-            });
-            return { success: true, output, durationMs };
-        } catch (err: unknown) {
-            // Re-suspended at a downstream node: persist a fresh continuation.
-            if (isSuspendSignal(err)) {
+            if (!run) {
+                return { success: false, error: `No suspended run '${runId}'` };
+            }
+            const flow = this.flows.get(run.flowName);
+            if (!flow) {
+                return { success: false, error: `Flow '${run.flowName}' not found for run '${runId}'` };
+            }
+            const node = flow.nodes.find(n => n.id === run.nodeId);
+            if (!node) {
+                return { success: false, error: `Suspended node '${run.nodeId}' no longer exists in flow '${run.flowName}'` };
+            }
+            // Consume the suspension *before* running downstream work — a run
+            // resumes exactly once per pause, and a duplicate resume after a
+            // partial restart must not double-run side effects.
+            await this.forgetSuspendedRun(runId);
+
+            // Restore variable context and apply the resume signal's output as if it
+            // were the node's output, so downstream edges branch on it.
+            const variables = new Map<string, unknown>(Object.entries(run.variables));
+            if (signal?.output) {
+                for (const [key, value] of Object.entries(signal.output)) {
+                    variables.set(`${run.nodeId}.${key}`, value);
+                }
+            }
+            // Bare flow variables — a `screen` node's collected inputs land under
+            // their plain names so downstream `{var}` interpolation / conditions
+            // read them directly (e.g. `new_assignee` → update_record fields).
+            if (signal?.variables) {
+                for (const [key, value] of Object.entries(signal.variables)) {
+                    variables.set(key, value);
+                }
+            }
+
+            const steps = run.steps;
+            const context = run.context;
+
+            try {
+                await this.traverseNext(node, flow, variables, context, steps, signal?.branchLabel);
+
+                // Collect output variables
+                const output: Record<string, unknown> = {};
+                if (flow.variables) {
+                    for (const v of flow.variables) {
+                        if (v.isOutput) output[v.name] = variables.get(v.name);
+                    }
+                }
                 const durationMs = Date.now() - run.startTime;
-                this.suspendedRuns.set(runId, {
-                    ...run,
-                    nodeId: err.nodeId,
-                    variables: Object.fromEntries(variables),
-                    steps,
-                    correlation: err.correlation,
-                    screen: err.screen,
-                });
                 this.recordLog({
                     id: runId,
                     flowName: run.flowName,
                     flowVersion: run.flowVersion,
-                    status: 'paused',
+                    status: 'completed',
                     startedAt: run.startedAt,
+                    completedAt: new Date().toISOString(),
                     durationMs,
                     trigger: {
                         type: context.event ?? 'manual',
@@ -976,35 +1072,71 @@ export class AutomationEngine implements IAutomationService {
                         object: context.object,
                     },
                     steps,
+                    output,
                 });
-                return { success: true, status: 'paused', runId, durationMs, screen: err.screen };
-            }
+                return { success: true, output, durationMs };
+            } catch (err: unknown) {
+                // Re-suspended at a downstream node: persist a fresh continuation.
+                if (isSuspendSignal(err)) {
+                    const durationMs = Date.now() - run.startTime;
+                    await this.persistSuspendedRun({
+                        ...run,
+                        nodeId: err.nodeId,
+                        variables: Object.fromEntries(variables),
+                        steps,
+                        correlation: err.correlation,
+                        screen: err.screen,
+                    });
+                    this.recordLog({
+                        id: runId,
+                        flowName: run.flowName,
+                        flowVersion: run.flowVersion,
+                        status: 'paused',
+                        startedAt: run.startedAt,
+                        durationMs,
+                        trigger: {
+                            type: context.event ?? 'manual',
+                            userId: context.userId,
+                            object: context.object,
+                        },
+                        steps,
+                    });
+                    return { success: true, status: 'paused', runId, durationMs, screen: err.screen };
+                }
 
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            const durationMs = Date.now() - run.startTime;
-            this.recordLog({
-                id: runId,
-                flowName: run.flowName,
-                flowVersion: run.flowVersion,
-                status: 'failed',
-                startedAt: run.startedAt,
-                completedAt: new Date().toISOString(),
-                durationMs,
-                trigger: {
-                    type: context.event ?? 'manual',
-                    userId: context.userId,
-                    object: context.object,
-                },
-                steps,
-                error: errorMessage,
-            });
-            return { success: false, error: errorMessage, durationMs };
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                const durationMs = Date.now() - run.startTime;
+                this.recordLog({
+                    id: runId,
+                    flowName: run.flowName,
+                    flowVersion: run.flowVersion,
+                    status: 'failed',
+                    startedAt: run.startedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs,
+                    trigger: {
+                        type: context.event ?? 'manual',
+                        userId: context.userId,
+                        object: context.object,
+                    },
+                    steps,
+                    error: errorMessage,
+                });
+                return { success: false, error: errorMessage, durationMs };
+            }
+        } finally {
+            this.resuming.delete(runId);
         }
     }
 
     /**
      * List the runs currently suspended awaiting {@link resume} (ADR-0019).
      * Backs operability surfaces such as a "pending approvals" view.
+     *
+     * Synchronous — reads the in-memory cache only, so after a process restart
+     * runs that suspended in a prior lifetime are not listed here even though
+     * they remain durably stored and resumable by id. Use
+     * {@link listSuspendedRunsDurable} to include those.
      */
     listSuspendedRuns(): Array<{ runId: string; flowName: string; nodeId: string; correlation?: string }> {
         return [...this.suspendedRuns.values()].map(r => ({
@@ -1013,6 +1145,30 @@ export class AutomationEngine implements IAutomationService {
             nodeId: r.nodeId,
             correlation: r.correlation,
         }));
+    }
+
+    /**
+     * Like {@link listSuspendedRuns} but includes runs held only in the durable
+     * {@link SuspendedRunStore} (e.g. suspended before a restart). The in-memory
+     * cache takes precedence on id collisions. Falls back to the in-memory list
+     * when no store is configured.
+     */
+    async listSuspendedRunsDurable(): Promise<Array<{ runId: string; flowName: string; nodeId: string; correlation?: string }>> {
+        const byId = new Map<string, { runId: string; flowName: string; nodeId: string; correlation?: string }>();
+        if (this.store) {
+            try {
+                for (const r of await this.store.list()) {
+                    byId.set(r.runId, { runId: r.runId, flowName: r.flowName, nodeId: r.nodeId, correlation: r.correlation });
+                }
+            } catch (err) {
+                this.logger.warn(`[automation] failed to list suspended runs from durable store: ${(err as Error).message}`);
+            }
+        }
+        // In-memory entries win — they are the freshest copy.
+        for (const r of this.suspendedRuns.values()) {
+            byId.set(r.runId, { runId: r.runId, flowName: r.flowName, nodeId: r.nodeId, correlation: r.correlation });
+        }
+        return [...byId.values()];
     }
 
     /**
@@ -1592,7 +1748,7 @@ export class AutomationEngine implements IAutomationService {
             variables.set('$record', context.record);
         }
 
-        const runId = `run_${++this.runCounter}`;
+        const runId = this.nextRunId();
         const startedAt = new Date().toISOString();
         const steps: StepLogEntry[] = [];
 

@@ -5,6 +5,7 @@ import { LiteKernel } from '@objectstack/core';
 import { AutomationEngine } from './engine.js';
 import { AutomationServicePlugin } from './plugin.js';
 import { registerScreenNodes } from './builtin/screen-nodes.js';
+import { InMemorySuspendedRunStore } from './suspended-run-store.js';
 import type { NodeExecutor } from './engine.js';
 import type { IAutomationService } from '@objectstack/spec/contracts';
 
@@ -561,6 +562,141 @@ describe('AutomationEngine', () => {
             const resumed = await e.resume(paused.runId!);
             expect(resumed.success).toBe(true);
             expect(resumed.status).toBeUndefined();
+        });
+
+        // ── Durable persistence across a process restart (ADR-0019) ──
+        //
+        // A shared SuspendedRunStore stands in for a database: suspend on one
+        // engine instance, then resume on a brand-new instance backed by the
+        // same store — simulating a cold boot after the original process is gone.
+        describe('Durable persistence across process restart', () => {
+            function buildEngine(
+                store: InMemorySuspendedRunStore,
+                captured: { snapshot?: unknown; ran: string[] },
+            ) {
+                const e = new AutomationEngine(createTestLogger(), store);
+                e.registerNodeExecutor({
+                    type: 'pause_node',
+                    async execute() {
+                        // Snapshot a nested object + array so we can assert the
+                        // variable map round-trips through the store.
+                        return {
+                            success: true,
+                            suspend: true,
+                            correlation: 'req_1',
+                            output: { snapshot: { nested: { value: 42 }, arr: [1, 2, 3] } },
+                        };
+                    },
+                });
+                e.registerNodeExecutor({
+                    type: 'branch_node',
+                    async execute(node, variables) {
+                        captured.ran.push(node.id);
+                        captured.snapshot = variables.get('pause.snapshot');
+                        return { success: true };
+                    },
+                });
+                e.registerFlow('approval_flow', {
+                    name: 'approval_flow', label: 'Approval Flow', type: 'autolaunched',
+                    nodes: [
+                        { id: 'start', type: 'start', label: 'Start' },
+                        { id: 'pause', type: 'pause_node', label: 'Approval' },
+                        { id: 'approved', type: 'branch_node', label: 'Approved' },
+                        { id: 'rejected', type: 'branch_node', label: 'Rejected' },
+                        { id: 'end', type: 'end', label: 'End' },
+                    ],
+                    edges: [
+                        { id: 'e1', source: 'start', target: 'pause' },
+                        { id: 'e2', source: 'pause', target: 'approved', label: 'approve' },
+                        { id: 'e3', source: 'pause', target: 'rejected', label: 'reject' },
+                        { id: 'e4', source: 'approved', target: 'end' },
+                        { id: 'e5', source: 'rejected', target: 'end' },
+                    ],
+                });
+                return e;
+            }
+
+            it('survives a full restart: suspend on one engine, resume on a fresh one', async () => {
+                const store = new InMemorySuspendedRunStore();
+
+                // Process lifetime #1 — the run suspends at the approval node.
+                const a = { snapshot: undefined as unknown, ran: [] as string[] };
+                const engineA = buildEngine(store, a);
+                const paused = await engineA.execute('approval_flow');
+                expect(paused.status).toBe('paused');
+                expect(paused.runId).toBeDefined();
+                expect(await store.list()).toHaveLength(1);
+
+                // Process lifetime #2 — a brand-new engine cold-boots. The run is
+                // NOT in its in-memory cache…
+                const b = { snapshot: undefined as unknown, ran: [] as string[] };
+                const engineB = buildEngine(store, b);
+                expect(engineB.listSuspendedRuns()).toHaveLength(0);
+                // …but it is visible and resumable via the durable store.
+                const durable = await engineB.listSuspendedRunsDurable();
+                expect(durable).toHaveLength(1);
+                expect(durable[0]).toMatchObject({
+                    runId: paused.runId, flowName: 'approval_flow', nodeId: 'pause', correlation: 'req_1',
+                });
+
+                const resumed = await engineB.resume(paused.runId!, {
+                    branchLabel: 'approve', output: { decision: 'approved' },
+                });
+                expect(resumed.success).toBe(true);
+                expect(resumed.status).toBeUndefined();
+                // Continued down the correct branch on the fresh engine.
+                expect(b.ran).toContain('approved');
+                expect(b.ran).not.toContain('rejected');
+                // Variables (nested object + array) round-tripped through the store.
+                expect(b.snapshot).toEqual({ nested: { value: 42 }, arr: [1, 2, 3] });
+                // The durable record is consumed on terminal completion.
+                expect(await store.list()).toHaveLength(0);
+                expect(await engineB.listSuspendedRunsDurable()).toHaveLength(0);
+            });
+
+            it('resume is idempotent: a duplicate resume does not double-run downstream', async () => {
+                const store = new InMemorySuspendedRunStore();
+                const a = { snapshot: undefined as unknown, ran: [] as string[] };
+                const engineA = buildEngine(store, a);
+                const paused = await engineA.execute('approval_flow');
+
+                // Fresh engine (restart) resumes once.
+                const b = { snapshot: undefined as unknown, ran: [] as string[] };
+                const engineB = buildEngine(store, b);
+                const first = await engineB.resume(paused.runId!, { branchLabel: 'approve' });
+                expect(first.success).toBe(true);
+                expect(b.ran.filter(x => x === 'approved')).toHaveLength(1);
+
+                // A second resume of the same run finds nothing — no double-run.
+                const second = await engineB.resume(paused.runId!, { branchLabel: 'approve' });
+                expect(second.success).toBe(false);
+                expect(second.error).toContain('No suspended run');
+                expect(b.ran.filter(x => x === 'approved')).toHaveLength(1);
+            });
+
+            it('listSuspendedRunsDurable falls back to the in-memory list with no store', async () => {
+                const e = new AutomationEngine(createTestLogger()); // no store
+                e.registerNodeExecutor({
+                    type: 'pause_node',
+                    async execute() { return { success: true, suspend: true, correlation: 'req_1' }; },
+                });
+                e.registerFlow('p', {
+                    name: 'p', label: 'P', type: 'autolaunched',
+                    nodes: [
+                        { id: 'start', type: 'start', label: 'Start' },
+                        { id: 'pause', type: 'pause_node', label: 'Pause' },
+                        { id: 'end', type: 'end', label: 'End' },
+                    ],
+                    edges: [
+                        { id: 'e1', source: 'start', target: 'pause' },
+                        { id: 'e2', source: 'pause', target: 'end' },
+                    ],
+                });
+                const paused = await e.execute('p');
+                const durable = await e.listSuspendedRunsDurable();
+                expect(durable).toHaveLength(1);
+                expect(durable[0].runId).toBe(paused.runId);
+            });
         });
     });
 
