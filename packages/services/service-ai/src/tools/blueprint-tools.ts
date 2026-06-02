@@ -97,6 +97,10 @@ function createProposeBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
           '- If (and only if) a genuinely structure-deciding choice is unclear, put at most 1-2 ' +
           'short `questions`; otherwise pick the most likely interpretation and proceed.\n' +
           '- Do NOT invent field types — use the allowed enum values.\n' +
+          '- Include an `app` (navigation shell) that surfaces the created objects (and any ' +
+          'dashboards) so the user can actually open the solution: give it a snake_case `name`, a ' +
+          'friendly `label`, and a Lucide `icon`. Keep it to a single app with a flat list of nav ' +
+          'entries (you may omit `nav` to auto-surface every object and dashboard).\n' +
           `- ${existingNote}\n` +
           'This is a PROPOSAL. Nothing is built from it until the human approves.',
       },
@@ -111,7 +115,7 @@ function createProposeBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
       const generated = await ctx.ai.generateObject(messages, SolutionBlueprintSchema, {
         schemaName: 'SolutionBlueprint',
         schemaDescription:
-          'A proposed solution: objects + fields + relationships + views + dashboards + seed data, with stated assumptions.',
+          'A proposed solution: objects + fields + relationships + views + dashboards + an app (navigation shell) + seed data, with stated assumptions.',
       });
       blueprint = generated.object;
     } catch (err) {
@@ -128,6 +132,7 @@ function createProposeBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
         objects: blueprint.objects?.length ?? 0,
         views: blueprint.views?.length ?? 0,
         dashboards: blueprint.dashboards?.length ?? 0,
+        app: blueprint.app ? 1 : 0,
         seedData: blueprint.seedData?.length ?? 0,
       },
       questions: blueprint.questions ?? [],
@@ -204,6 +209,42 @@ function dashboardBody(d: NonNullable<SolutionBlueprint['dashboards']>[number]):
   };
 }
 
+/**
+ * Convert the blueprint's app into an `app` metadata body — the navigation
+ * shell end users open in the App Launcher. When the blueprint gives no
+ * explicit `nav`, auto-surface every created object (then every dashboard) as a
+ * top-level nav entry. Never sets `isDefault` (don't hijack the default app).
+ */
+function appBody(
+  app: NonNullable<SolutionBlueprint['app']>,
+  blueprint: SolutionBlueprint,
+): Record<string, unknown> {
+  const navSource: Array<{ type: 'object' | 'dashboard'; target: string; label?: string; icon?: string }> =
+    app.nav && app.nav.length > 0
+      ? app.nav
+      : [
+          ...(blueprint.objects ?? []).map((o) => ({ type: 'object' as const, target: o.name, label: o.label })),
+          ...(blueprint.dashboards ?? []).map((d) => ({ type: 'dashboard' as const, target: d.name, label: d.label })),
+        ];
+  const navigation = navSource.map((n, i) => {
+    const base = {
+      id: `nav_${n.target}`,
+      label: n.label ?? n.target,
+      ...(n.icon ? { icon: n.icon } : {}),
+      order: i,
+    };
+    return n.type === 'dashboard'
+      ? { ...base, type: 'dashboard', dashboardName: n.target }
+      : { ...base, type: 'object', objectName: n.target };
+  });
+  return {
+    name: app.name,
+    label: app.label ?? app.name,
+    ...(app.icon ? { icon: app.icon } : {}),
+    navigation,
+  };
+}
+
 function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
   return async (args, exec) => {
     const raw = (args as { blueprint?: unknown }).blueprint;
@@ -243,6 +284,10 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
     }
     for (const d of blueprint.dashboards ?? []) {
       await record('dashboard', d.name, dashboardBody(d));
+    }
+    // The app (navigation shell) is drafted last — it references everything above.
+    if (blueprint.app) {
+      await record('app', blueprint.app.name, appBody(blueprint.app, blueprint));
     }
 
     const seedDataProposed = (blueprint.seedData ?? []).map((s) => ({

@@ -19,12 +19,12 @@ export const SOLUTION_DESIGN_SKILL: Skill = {
   instructions: `Use this skill when the user asks you to build a whole SYSTEM, APP, or MODULE ("build me a CRM", "I need an applicant tracking system"), not a single object or field.
 
 The flow is PLAN-FIRST and has two steps:
-1. propose_blueprint — design a structured blueprint (objects, fields, relationships, views, dashboards) from the goal. This creates NOTHING. Present it to the user: summarize the objects/views, state your assumptions, and ask any (at most 1-2) structure-deciding questions the tool returned.
+1. propose_blueprint — design a structured blueprint (objects, fields, relationships, views, dashboards, and an app that surfaces them in the navigation) from the goal. This creates NOTHING. Present it to the user: summarize the objects/views and the app, state your assumptions, and ask any (at most 1-2) structure-deciding questions the tool returned.
 2. apply_blueprint — ONLY after the user approves (or edits) the blueprint, call this to batch-draft every artifact. Pass the approved/edited blueprint object.
 
 Hard rules:
 - NEVER call apply_blueprint before the user has explicitly approved the blueprint. The blueprint-confirm step is the safety valve against mass-generating unreviewed artifacts.
-- Everything apply_blueprint creates is a DRAFT. Tell the user the artifacts are "drafted for your review" and that they must publish them in the designer to make them live. Never say they are live/created/applied.
+- Everything apply_blueprint creates is a DRAFT — including the app (navigation shell), which the user will find in the App Launcher once published. Tell the user the artifacts are "drafted for your review" and that they must publish them in the designer to make them live. Never say they are live/created/applied.
 - If apply_blueprint reports per-item failures, explain which items failed and why, and offer to fix them (e.g. via update_metadata) — the successfully drafted items still stand.
 - Seed data in a blueprint is a suggestion only; it is not auto-applied.
 - Always answer in the same language the user is using.

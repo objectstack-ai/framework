@@ -75,6 +75,33 @@ export const BlueprintDashboardSchema = lazySchema(() => z.object({
 export type BlueprintDashboard = z.infer<typeof BlueprintDashboardSchema>;
 
 /**
+ * A proposed navigation item in the blueprint app — points at one of the
+ * created objects or dashboards. `apply_blueprint` expands it into the full
+ * `AppSchema` nav item (object → list view, dashboard → dashboard view).
+ */
+export const BlueprintNavItemSchema = lazySchema(() => z.object({
+  type: z.enum(['object', 'dashboard']).default('object').describe('What this nav entry opens'),
+  target: z.string().regex(SNAKE_CASE).describe('Object or dashboard machine name to surface (snake_case)'),
+  label: z.string().optional().describe('Nav entry label (defaults to the target label/name)'),
+  icon: z.string().optional().describe('Lucide icon name for the nav entry'),
+}));
+export type BlueprintNavItem = z.infer<typeof BlueprintNavItemSchema>;
+
+/**
+ * The navigation shell (the thing end users open in the App Launcher) that
+ * surfaces the solution. When `nav` is omitted, `apply_blueprint` auto-builds
+ * one nav entry per created object (then per dashboard).
+ */
+export const BlueprintAppSchema = lazySchema(() => z.object({
+  name: z.string().regex(SNAKE_CASE).describe('App machine name (snake_case)'),
+  label: z.string().optional().describe('App display label'),
+  icon: z.string().optional().describe('Lucide icon for the App Launcher'),
+  nav: z.array(BlueprintNavItemSchema).optional()
+    .describe('Navigation entries; omit to auto-surface every created object and dashboard'),
+}));
+export type BlueprintApp = z.infer<typeof BlueprintAppSchema>;
+
+/**
  * Seed data the agent suggests. Mirrors {@link DatasetSchema.records}. NOTE:
  * Phase C does NOT auto-apply seed data — there is no runtime-draftable
  * `dataset` metadata type (seed = code-loaded `*.seed.ts`). `apply_blueprint`
@@ -100,6 +127,8 @@ export const SolutionBlueprintSchema = lazySchema(() => z.object({
   objects: z.array(BlueprintObjectSchema).describe('Objects (tables) to create'),
   views: z.array(BlueprintViewSchema).optional().describe('Views to create'),
   dashboards: z.array(BlueprintDashboardSchema).optional().describe('Dashboards to create'),
+  app: BlueprintAppSchema.optional()
+    .describe('The navigation shell (app) that surfaces the created objects/dashboards to end users'),
   seedData: z.array(BlueprintSeedSchema).optional()
     .describe('Suggested seed data (reported, not auto-applied in Phase C)'),
 }));

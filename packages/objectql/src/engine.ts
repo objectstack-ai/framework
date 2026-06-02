@@ -1835,10 +1835,20 @@ export class ObjectQL implements IDataEngine {
      this.assertWriteAllowed(object, 'update');
      const driver = this.getDriver(object);
      
-     // 1. Extract ID from data or where if it's a single update by ID
+     // 1. Extract ID from data or where if it's a single update by ID.
+     //    Only a SCALAR `where.id` means "update one row by primary key". An
+     //    operator object ({ $in: [...] }, { $ne: ... }, …) is a multi-row
+     //    predicate — treating it as an id would bind the object literally
+     //    (e.g. `WHERE id = {"$in":[...]}`, which SQLite rejects). Leave `id`
+     //    undefined in that case so the call routes to updateMany (requires
+     //    options.multi=true), where applyFilters compiles the operator.
      let id = data.id;
      if (!id && options?.where && typeof options.where === 'object' && 'id' in options.where) {
-         id = (options.where as Record<string, unknown>).id;
+         const whereId = (options.where as Record<string, unknown>).id;
+         const t = typeof whereId;
+         if (whereId !== null && (t === 'string' || t === 'number' || t === 'bigint')) {
+             id = whereId;
+         }
      }
 
      const opCtx: OperationContext = {

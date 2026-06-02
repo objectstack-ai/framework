@@ -471,18 +471,25 @@ describe('SchemaRegistry', () => {
 describe('applySystemFields', () => {
     const baseLead: any = { name: 'lead', label: 'Lead', fields: { first_name: { type: 'text' } } };
 
-    it('injects organization_id when multiTenant is true and field is missing', () => {
+    it('injects an indexed organization_id when multiTenant is true and field is missing', () => {
         const out = applySystemFields(baseLead, { multiTenant: true });
         expect(out.fields.organization_id).toBeDefined();
         expect(out.fields.organization_id.type).toBe('lookup');
         expect(out.fields.organization_id.reference).toBe('sys_organization');
+        // Multi-tenant stacks index the column (per-tenant filtering).
+        expect(out.fields.organization_id.indexed).toBe(true);
         // author-declared field still present
         expect(out.fields.first_name).toBeDefined();
     });
 
-    it('skips organization_id injection when multiTenant is false (but still injects audit fields)', () => {
+    it('still injects organization_id when multiTenant is false, but unindexed', () => {
+        // The COLUMN is always provisioned (decoupled from the tenant flag) so
+        // sudo writers can always stamp it; only the index is gated, since a
+        // single-tenant DB never filters by organization.
         const out = applySystemFields(baseLead, { multiTenant: false });
-        expect(out.fields.organization_id).toBeUndefined();
+        expect(out.fields.organization_id).toBeDefined();
+        expect(out.fields.organization_id.type).toBe('lookup');
+        expect(out.fields.organization_id.indexed).toBe(false);
         // audit fields are tenant-independent — still injected
         expect(out.fields.created_at).toBeDefined();
         expect(out.fields.updated_at).toBeDefined();

@@ -125,11 +125,13 @@ export type RegistryLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
  */
 export interface SchemaRegistryOptions {
   /**
-   * Whether the host kernel runs in multi-tenant mode. When `true`, the
-   * registry auto-injects `organization_id` (lookup → sys_organization)
-   * into every registered user object that doesn't already declare it and
-   * isn't `managedBy` an external subsystem or explicitly opted-out via
-   * `systemFields: false`.
+   * Whether the host kernel runs in multi-tenant mode. The `organization_id`
+   * column itself is auto-injected regardless of this flag (lookup →
+   * sys_organization, on every registered object that doesn't already declare
+   * it, isn't `managedBy` an external subsystem, and hasn't opted out via
+   * `systemFields`/`tenancy.enabled:false`). When `true` the injected column
+   * is additionally INDEXED — single-tenant stacks skip the index since
+   * nothing ever filters by organization.
    *
    * Sourced from the `OS_MULTI_TENANT` env var when not explicitly set —
    * matches how the SecurityPlugin and CLI startup banner pick the mode.
@@ -152,9 +154,12 @@ export interface SchemaRegistryOptions {
  * via the natural `{ ...sys, ...authored }` merge.
  *
  * Currently injects:
- *   - `organization_id` — multi-tenant deployments. Required-false (the
- *     SecurityPlugin populates it on insert; nullable rows are still
- *     filtered out by the `tenant_isolation` RLS USING clause).
+ *   - `organization_id` — always provisioned (unless the object opts out via
+ *     `systemFields`/`tenancy.enabled:false` or is `better-auth` managed) so
+ *     the column never depends on the global multi-tenant flag. Required-false;
+ *     org-scoping populates it on insert in multi-tenant mode, and it stays
+ *     NULL on single-tenant stacks. Only the column's INDEX is gated on
+ *     `multiTenant` (no per-tenant filtering exists single-tenant).
  *   - `created_at` / `created_by` / `updated_at` / `updated_by` — audit
  *     fields. Marked `system: true, readonly: true` so detail views can
  *     surface them in a dedicated "System Information" section while
@@ -196,7 +201,16 @@ export function applySystemFields(
   // SecurityPlugin's RLS layer would filter every cross-org read down
   // to 0 rows even though the schema explicitly disabled multi-tenancy.
   const tenancyDisabled = (schema as any).tenancy?.enabled === false;
-  const wantTenant = opts.multiTenant && sf?.tenant !== false && !tenancyDisabled;
+  // The `organization_id` COLUMN is provisioned unconditionally (subject only
+  // to the explicit opt-outs above) — its existence no longer depends on the
+  // global multi-tenant flag. Decoupling "does the column exist" from "is
+  // tenancy enabled" is what stops sudo writers (audit / messaging / inbox /
+  // outbox …) from failing with "no column named organization_id" on
+  // single-tenant stacks: they can always stamp the column, it just stays NULL
+  // when no tenant context exists. The multi-tenant flag now governs only
+  // whether the column is INDEXED — on a single-tenant DB nothing ever filters
+  // by organization, so the index would be dead weight.
+  const wantTenant = sf?.tenant !== false && !tenancyDisabled;
   const wantAudit = sf?.audit !== false;
 
   const additions: Record<string, any> = {};
@@ -207,11 +221,12 @@ export function applySystemFields(
       reference: 'sys_organization',
       label: 'Organization',
       required: false,
-      indexed: true,
+      indexed: opts.multiTenant,
       hidden: true,
       readonly: true,
       system: true,
-      description: 'Tenant scope (auto-populated by SecurityPlugin on insert).',
+      description:
+        'Tenant scope (auto-populated by org-scoping on insert; NULL on single-tenant stacks).',
     };
   }
 

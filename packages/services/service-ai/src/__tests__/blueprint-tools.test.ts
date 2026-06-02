@@ -117,7 +117,7 @@ describe('propose_blueprint handler', () => {
     const parsed = parse(await registry.execute(call('propose_blueprint', { goal: 'build a project tracker' })));
     expect(parsed.status).toBe('blueprint_proposed');
     expect(parsed.blueprint.objects).toHaveLength(2);
-    expect(parsed.counts).toEqual({ objects: 2, views: 1, dashboards: 0, seedData: 1 });
+    expect(parsed.counts).toEqual({ objects: 2, views: 1, dashboards: 0, app: 0, seedData: 1 });
     // Crucially: proposing creates no drafts.
     expect(saveMetaItem).not.toHaveBeenCalled();
     expect(generateObject).toHaveBeenCalledOnce();
@@ -238,5 +238,52 @@ describe('apply_blueprint handler', () => {
     await registry.execute(call('apply_blueprint', { blueprint: bp }));
     const view = drafts.get('view:all_leads') as any;
     expect(view.list.columns).toEqual(['name', 'email']);
+  });
+
+  it('drafts the app (navigation shell) with explicit nav referencing the objects', async () => {
+    const bp: SolutionBlueprint = {
+      ...SAMPLE_BLUEPRINT,
+      app: {
+        name: 'project_mgmt',
+        label: 'Project Management',
+        icon: 'kanban',
+        nav: [
+          { type: 'object', target: 'project', label: 'Projects' },
+          { type: 'object', target: 'task' },
+        ],
+      },
+    };
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: bp })));
+    expect(parsed.drafted).toContainEqual({ type: 'app', name: 'project_mgmt' });
+    expect(saveMetaItem).toHaveBeenCalledWith(expect.objectContaining({ type: 'app', mode: 'draft' }));
+
+    const app = drafts.get('app:project_mgmt') as any;
+    expect(app.label).toBe('Project Management');
+    expect(app.icon).toBe('kanban');
+    expect(app.isDefault).toBeUndefined(); // never hijack the default app
+    expect(app.navigation).toEqual([
+      { id: 'nav_project', label: 'Projects', order: 0, type: 'object', objectName: 'project' },
+      { id: 'nav_task', label: 'task', order: 1, type: 'object', objectName: 'task' },
+    ]);
+  });
+
+  it('auto-surfaces every object then dashboard when app.nav is omitted', async () => {
+    const bp: SolutionBlueprint = {
+      summary: 'crm',
+      assumptions: [],
+      objects: [
+        { name: 'account', label: 'Account', fields: [{ name: 'name', type: 'text' }] },
+        { name: 'contact', label: 'Contact', fields: [{ name: 'name', type: 'text' }] },
+      ],
+      dashboards: [{ name: 'sales', label: 'Sales', widgets: [] }],
+      app: { name: 'crm', label: 'CRM' },
+    };
+    await registry.execute(call('apply_blueprint', { blueprint: bp }));
+    const app = drafts.get('app:crm') as any;
+    expect(app.navigation).toEqual([
+      { id: 'nav_account', label: 'Account', order: 0, type: 'object', objectName: 'account' },
+      { id: 'nav_contact', label: 'Contact', order: 1, type: 'object', objectName: 'contact' },
+      { id: 'nav_sales', label: 'Sales', order: 2, type: 'dashboard', dashboardName: 'sales' },
+    ]);
   });
 });

@@ -275,6 +275,45 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('Update routing — where.id operator objects', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+            (mockDriver as any).updateMany = vi.fn().mockResolvedValue(2);
+        });
+
+        it('routes where:{id:{$in:[...]}} + multi to updateMany, not single update', async () => {
+            // Regression: a multi-row predicate on `id` ({ $in: [...] }) was
+            // mis-extracted as a scalar id and bound literally by the driver
+            // (`WHERE id = {"$in":[...]}`), which SQLite rejects. It must route
+            // to updateMany so the operator is compiled to `WHERE id IN (...)`.
+            await engine.update(
+                'task',
+                { status: 'in_flight' },
+                { where: { id: { $in: ['a', 'b'] }, status: 'pending' }, multi: true } as any,
+            );
+
+            expect((mockDriver as any).updateMany).toHaveBeenCalledTimes(1);
+            const [obj, ast] = (mockDriver as any).updateMany.mock.calls[0];
+            expect(obj).toBe('task');
+            expect(ast.where).toEqual({ id: { $in: ['a', 'b'] }, status: 'pending' });
+            // The single-row update path must NOT have been taken.
+            expect(mockDriver.update).not.toHaveBeenCalled();
+        });
+
+        it('still treats a scalar where.id as a single-row update', async () => {
+            vi.mocked(mockDriver.update).mockResolvedValue({ id: 't1' } as any);
+            await engine.update('task', { status: 'done' }, { where: { id: 't1' } } as any);
+            expect(mockDriver.update).toHaveBeenCalledTimes(1);
+            const [obj, id, data] = vi.mocked(mockDriver.update).mock.calls[0];
+            expect(obj).toBe('task');
+            expect(id).toBe('t1');
+            expect(data).toEqual({ status: 'done' });
+            expect((mockDriver as any).updateMany).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Expand Related Records', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);
