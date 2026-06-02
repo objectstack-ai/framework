@@ -1,6 +1,6 @@
 # ADR-0031: Structured control-flow for flows (loop / parallel / try-catch) — native + AI-authored, BPMN as interop
 
-**Status**: Proposed (2026-06-01)
+**Status**: Accepted (2026-06-02) — implemented in #1482 (spec + loop), #1489 (parallel), #1499 (try/catch/retry), #1500 (BPMN mapping); docs #1497. Follow-ups: #1504 (BPMN XML plugin), #1505 (region step logs).
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open action registry — node types are an open vocabulary, executors are the source of truth), [ADR-0019](./0019-approval-as-flow-node.md) (durable-pause node via suspend/resume), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI flow authoring — **the design center**)
 **Consumers**: `@objectstack/services/service-automation` (engine + builtin executors), `@objectstack/spec` (`automation/flow.zod.ts`, `automation/bpmn-interop.zod.ts`, `studio/flow-builder.zod.ts`), `../objectui` (flow designer)
