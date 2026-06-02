@@ -43,7 +43,7 @@
     "@objectstack/account": "workspace:*",
     "@objectstack/client": "workspace:*",
     "@objectstack/console": "workspace:*",
-    "@objectstack/core": "workspace:*",
+    "@objectstack/core": "workspace:^",
     "@objectstack/driver-memory": "workspace:^",
     "@objectstack/driver-mongodb": "workspace:^",
     "@objectstack/driver-sql": "workspace:^",
@@ -92,9 +92,6 @@
     "tsx": "^4.22.4",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
-  },
-  "peerDependencies": {
-    "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.50",

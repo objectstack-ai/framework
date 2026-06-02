@@ -21,7 +21,7 @@
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*"
   },
-  "peerDependencies": {
+  "devDependencies": {
     "@objectstack/driver-memory": "workspace:^",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/plugin-auth": "workspace:^",
@@ -30,47 +30,7 @@
     "@objectstack/plugin-security": "workspace:^",
     "@objectstack/rest": "workspace:^",
     "@objectstack/runtime": "workspace:^",
-    "@objectstack/service-i18n": "workspace:^"
-  },
-  "peerDependenciesMeta": {
-    "@objectstack/driver-memory": {
-      "optional": true
-    },
-    "@objectstack/objectql": {
-      "optional": true
-    },
-    "@objectstack/runtime": {
-      "optional": true
-    },
-    "@objectstack/plugin-auth": {
-      "optional": true
-    },
-    "@objectstack/plugin-hono-server": {
-      "optional": true
-    },
-    "@objectstack/plugin-org-scoping": {
-      "optional": true
-    },
-    "@objectstack/plugin-security": {
-      "optional": true
-    },
-    "@objectstack/rest": {
-      "optional": true
-    },
-    "@objectstack/service-i18n": {
-      "optional": true
-    }
-  },
-  "devDependencies": {
-    "@objectstack/driver-memory": "workspace:*",
-    "@objectstack/objectql": "workspace:*",
-    "@objectstack/plugin-auth": "workspace:*",
-    "@objectstack/plugin-hono-server": "workspace:*",
-    "@objectstack/plugin-org-scoping": "workspace:*",
-    "@objectstack/plugin-security": "workspace:*",
-    "@objectstack/rest": "workspace:*",
-    "@objectstack/runtime": "workspace:*",
-    "@objectstack/service-i18n": "workspace:*",
+    "@objectstack/service-i18n": "workspace:^",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

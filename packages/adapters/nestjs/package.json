@@ -11,8 +11,7 @@
   },
   "peerDependencies": {
     "@nestjs/common": "^11.1.19",
-    "@nestjs/core": "^11.1.19",
-    "@objectstack/runtime": "workspace:^"
+    "@nestjs/core": "^11.1.19"
   },
   "devDependencies": {
     "@nestjs/common": "^11.1.24",
@@ -45,5 +44,8 @@
   ],
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@objectstack/runtime": "workspace:^"
   }
 }

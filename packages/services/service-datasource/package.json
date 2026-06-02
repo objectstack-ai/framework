@@ -29,16 +29,6 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },
-  "peerDependencies": {
-    "@objectstack/driver-memory": "workspace:*",
-    "@objectstack/driver-mongodb": "workspace:*",
-    "@objectstack/driver-sql": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@objectstack/driver-sql": { "optional": true },
-    "@objectstack/driver-mongodb": { "optional": true },
-    "@objectstack/driver-memory": { "optional": true }
-  },
   "devDependencies": {
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-sql": "workspace:*",
@@ -46,7 +36,8 @@
     "@types/node": "^25.9.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "@objectstack/driver-mongodb": "workspace:*"
   },
   "keywords": [
     "objectstack",

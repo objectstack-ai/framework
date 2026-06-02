@@ -318,10 +318,11 @@ importers:
         version: 6.0.3
 
   packages/adapters/express:
-    devDependencies:
+    dependencies:
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
+    devDependencies:
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -336,10 +337,11 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/adapters/fastify:
-    devDependencies:
+    dependencies:
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
+    devDependencies:
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -355,13 +357,13 @@ importers:
       '@objectstack/plugin-hono-server':
         specifier: workspace:*
         version: link:../../plugins/plugin-hono-server
+      '@objectstack/runtime':
+        specifier: workspace:^
+        version: link:../../runtime
       '@objectstack/types':
         specifier: workspace:*
         version: link:../../types
     devDependencies:
-      '@objectstack/runtime':
-        specifier: workspace:*
-        version: link:../../runtime
       hono:
         specifier: ^4.12.23
         version: 4.12.23
@@ -373,6 +375,10 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/adapters/nestjs:
+    dependencies:
+      '@objectstack/runtime':
+        specifier: workspace:^
+        version: link:../../runtime
     devDependencies:
       '@nestjs/common':
         specifier: ^11.1.24
@@ -380,9 +386,6 @@ importers:
       '@nestjs/core':
         specifier: ^11.1.24
         version: 11.1.24(@nestjs/common@11.1.24(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@objectstack/runtime':
-        specifier: workspace:*
-        version: link:../../runtime
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -391,10 +394,11 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/adapters/nextjs:
-    devDependencies:
+    dependencies:
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
+    devDependencies:
       next:
         specifier: ^16.2.6
         version: 16.2.6(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -412,10 +416,11 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/adapters/nuxt:
-    devDependencies:
+    dependencies:
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
+    devDependencies:
       h3:
         specifier: ^1.15.11
         version: 1.15.11
@@ -427,10 +432,11 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/adapters/sveltekit:
-    devDependencies:
+    dependencies:
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
+    devDependencies:
       '@sveltejs/kit':
         specifier: ^2.61.1
         version: 2.61.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.55.3)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.3)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -456,7 +462,7 @@ importers:
         specifier: workspace:*
         version: link:../console
       '@objectstack/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@objectstack/driver-memory':
         specifier: workspace:^
@@ -1281,31 +1287,31 @@ importers:
         version: link:../../types
     devDependencies:
       '@objectstack/driver-memory':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../driver-memory
       '@objectstack/objectql':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../objectql
       '@objectstack/plugin-auth':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-auth
       '@objectstack/plugin-hono-server':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-hono-server
       '@objectstack/plugin-org-scoping':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-org-scoping
       '@objectstack/plugin-security':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-security
       '@objectstack/rest':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../rest
       '@objectstack/runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../runtime
       '@objectstack/service-i18n':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../services/service-i18n
       '@types/node':
         specifier: ^25.9.1
@@ -1403,6 +1409,9 @@ importers:
       '@objectstack/objectql':
         specifier: workspace:*
         version: link:../../objectql
+      '@objectstack/runtime':
+        specifier: workspace:^
+        version: link:../../runtime
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../spec
@@ -1413,9 +1422,6 @@ importers:
         specifier: ^2.14.6
         version: 2.14.6(@types/node@25.9.1)(typescript@6.0.3)
     devDependencies:
-      '@objectstack/runtime':
-        specifier: workspace:*
-        version: link:../../runtime
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -1704,7 +1710,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@objectstack/embedder-openai':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../plugins/embedder-openai
       '@objectstack/platform-objects':
         specifier: workspace:*
@@ -1831,9 +1837,6 @@ importers:
       '@objectstack/core':
         specifier: workspace:*
         version: link:../../core
-      '@objectstack/driver-mongodb':
-        specifier: workspace:*
-        version: link:../../plugins/driver-mongodb
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../spec
@@ -1841,6 +1844,9 @@ importers:
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:../../plugins/driver-memory
+      '@objectstack/driver-mongodb':
+        specifier: workspace:*
+        version: link:../../plugins/driver-mongodb
       '@objectstack/driver-sql':
         specifier: workspace:*
         version: link:../../plugins/driver-sql

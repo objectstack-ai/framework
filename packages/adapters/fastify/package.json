@@ -17,7 +17,6 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@objectstack/runtime": "workspace:^",
     "fastify": "^5.8.5"
   },
   "devDependencies": {
@@ -51,5 +50,8 @@
   ],
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@objectstack/runtime": "workspace:^"
   }
 }
