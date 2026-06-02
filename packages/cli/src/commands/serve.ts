@@ -1754,6 +1754,17 @@ export default class Serve extends Command {
         }
       }
 
+      // Surface the dev admin seeded this boot (if any) in the banner. The
+      // seed runs in-process during runtime.start() under serve's boot-quiet
+      // window, so plugin-auth records the result on the `auth` service and
+      // we print it here, after stdout is restored. Visible in both
+      // `serve --dev` and `os dev` (the child's stdout is inherited).
+      let seededAdmin: { email: string; password: string } | undefined;
+      try {
+        const authSvc: any = kernel.getService?.('auth');
+        if (authSvc?.devSeedResult?.email) seededAdmin = authSvc.devSeedResult;
+      } catch { /* auth service not present — nothing to show */ }
+
       // ── Clean startup summary ──────────────────────────────────────
       printServerReady({
         port,
@@ -1766,6 +1777,7 @@ export default class Serve extends Command {
         driverLabel: resolvedDriverLabel,
         databaseUrl: redactDbUrl(resolvedDatabaseUrl),
         multiTenant: String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false',
+        seededAdmin,
       });
 
       // ── Publish the actually-bound port ────────────────────────────
