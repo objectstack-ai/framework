@@ -1687,7 +1687,10 @@ export default class Serve extends Command {
             const { LocalCryptoProvider } = await import(
               /* webpackIgnore: true */ '@objectstack/service-settings'
             );
-            sharedCryptoProvider = sharedCryptoProvider ?? new LocalCryptoProvider();
+            // First block to touch `sharedCryptoProvider` (still undefined
+            // here), so create it directly; the secret-field wiring below
+            // reuses this instance so every sys_secret shares one key.
+            sharedCryptoProvider = new LocalCryptoProvider();
             secrets = createDatasourceSecretBinder({
               engine: lazySecretEngine,
               cryptoProvider: sharedCryptoProvider,
