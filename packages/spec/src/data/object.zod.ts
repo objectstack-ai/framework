@@ -716,6 +716,104 @@ function snakeCaseToLabel(name: string): string {
 }
 
 /**
+ * Known-confusable schema keys → precise authoring guidance.
+ *
+ * ADR-0032's "no silent failure" principle applied to metadata *shape*: an
+ * unknown top-level key on `ObjectSchema.create()` used to be discarded by
+ * Zod's default `.strip()`, so a misauthored schema key vanished with no
+ * error, no warning, and a green `tsc` — shipping dead metadata the author
+ * believed they had wired up (issue #1535, object-level `workflows: [...]`).
+ *
+ * These entries turn the most likely mistakes into a fixable error that points
+ * at the *supported* mechanism rather than a generic "unknown key".
+ */
+const UNKNOWN_KEY_GUIDANCE: Record<string, string> = {
+  workflows:
+    '`workflows` is not an ObjectSchema field. Object-level, record-triggered ' +
+    'automation is authored as a lifecycle hook (`src/objects/<name>.hook.ts`, ' +
+    'registered via `defineHook()`) or as a top-level `record_change` flow — ' +
+    'not as `workflows[]` on the object schema.',
+  workflow:
+    '`workflow` is not an ObjectSchema field. Record-triggered automation is ' +
+    'authored as a lifecycle hook (`src/objects/<name>.hook.ts`) or a top-level ' +
+    '`record_change` flow.',
+  hooks:
+    '`hooks` is not an ObjectSchema field. Lifecycle hooks live in their own ' +
+    '`src/objects/<name>.hook.ts` module, registered via `defineHook()`.',
+  triggers:
+    '`triggers` is not an ObjectSchema field. Use a lifecycle hook ' +
+    '(`src/objects/<name>.hook.ts`) or a top-level `record_change` flow.',
+};
+
+/** Levenshtein edit distance — backs the "did you mean" hint for typo'd keys. */
+function editDistance(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+/** Closest known key within a small edit distance, for typo hints (`indexs` → `indexes`). */
+function suggestKey(unknown: string, knownKeys: string[]): string | undefined {
+  let best: string | undefined;
+  let bestDist = Infinity;
+  for (const key of knownKeys) {
+    const d = editDistance(unknown.toLowerCase(), key.toLowerCase());
+    if (d < bestDist) {
+      bestDist = d;
+      best = key;
+    }
+  }
+  // Only suggest when the keys are genuinely close (guards against noise).
+  return best !== undefined && bestDist <= Math.max(2, Math.floor(unknown.length / 3))
+    ? best
+    : undefined;
+}
+
+/**
+ * Builds a precise, fixable error for unknown top-level keys on
+ * `ObjectSchema.create()` — the metadata-shape analogue of ADR-0032's "no
+ * silent failure" (issue #1535). Because authored `*.object.ts` modules call
+ * `create()`, this surfaces as a located build error instead of a silently
+ * stripped field.
+ */
+function unknownKeyError(objectName: unknown, unknownKeys: string[], knownKeys: string[]): Error {
+  const name = typeof objectName === 'string' && objectName.length > 0 ? objectName : '<unnamed>';
+  const lines = unknownKeys.map((key) => {
+    const guidance = UNKNOWN_KEY_GUIDANCE[key];
+    if (guidance) return `  • ${guidance}`;
+    const suggestion = suggestKey(key, knownKeys);
+    return suggestion
+      ? `  • \`${key}\` is not an ObjectSchema field — did you mean \`${suggestion}\`?`
+      : `  • \`${key}\` is not an ObjectSchema field.`;
+  });
+  return new Error(
+    `ObjectSchema.create('${name}'): unknown key(s) — ${unknownKeys.join(', ')}.\n` +
+    'These keys would previously have been stripped silently at build, shipping ' +
+    'dead metadata with no diagnostic (ADR-0032 "no silent failure", issue #1535).\n\n' +
+    `${lines.join('\n')}\n\n` +
+    'Remove the unknown key(s), fix the typo, or move the logic to a supported mechanism.',
+  );
+}
+
+/**
+ * Rejects excess top-level keys at compile time: any key of `T` that is not a
+ * key of the ObjectSchema input shape is constrained to `never`, turning the
+ * silent strip into a `tsc` error at the authoring site as well as at build.
+ */
+type NoExcessObjectKeys<T> = T &
+  Record<Exclude<keyof T, keyof z.input<typeof ObjectSchemaBase>>, never>;
+
+/**
  * Enhanced ObjectSchema with Factory
  */
 export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
@@ -725,7 +823,10 @@ export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
    * Enhancements over raw schema:
    * - **Auto-label**: Generates `label` from `name` if not provided (snake_case → Title Case).
    * - **Validation**: Runs Zod `.parse()` to validate the config at creation time.
-   * 
+   * - **No silent strip** (ADR-0032 / #1535): unknown top-level keys (e.g. a
+   *   typo'd `validation`, or an object-level `workflows[]`) are rejected with a
+   *   precise, fixable error instead of being discarded by Zod's `.strip()`.
+   *
    * @example
    * ```ts
    * const Task = ObjectSchema.create({
@@ -737,10 +838,20 @@ export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
    * });
    * ```
    */
-  create: <const T extends z.input<typeof ObjectSchemaBase>>(config: T): Omit<ServiceObject, 'fields'> & Pick<T, 'fields'> => {
+  create: <const T extends z.input<typeof ObjectSchemaBase>>(config: NoExcessObjectKeys<T>): Omit<ServiceObject, 'fields'> & Pick<T, 'fields'> => {
+    // ADR-0032 "no silent failure" for schema shape (issue #1535): an unknown
+    // top-level key here used to be discarded silently by Zod's `.strip()`. We
+    // reject it with a located, fixable message *before* parsing so authors get
+    // a build error instead of vanished metadata.
+    const cfg = config as T & Record<string, unknown>;
+    const knownKeys = Object.keys(ObjectSchemaBase.shape);
+    const unknownKeys = Object.keys(cfg).filter((k) => !knownKeys.includes(k));
+    if (unknownKeys.length > 0) {
+      throw unknownKeyError(cfg.name, unknownKeys, knownKeys);
+    }
     const withDefaults = {
-      ...config,
-      label: config.label ?? snakeCaseToLabel(config.name),
+      ...cfg,
+      label: cfg.label ?? snakeCaseToLabel(cfg.name as string),
     };
     return ObjectSchemaBase.parse(withDefaults) as Omit<ServiceObject, 'fields'> & Pick<T, 'fields'>;
   },

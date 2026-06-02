@@ -316,7 +316,7 @@ Mirror these CRM-style patterns when designing enterprise metadata objects:
 | Capability gating | `src/objects/*.object.ts` | Use `enable` flags (`trackHistory`, `apiMethods`, `files`, `feeds`, `activities`) per object |
 | Index + validation pairing | `src/objects/*.object.ts` | Keep `indexes[]` aligned to common filters and enforce invariants with `validations[]` |
 | Relationship constraints | `src/objects/*.object.ts` | Use `lookup` + `referenceFilters` for constrained child selection |
-| Lifecycle workflow | `src/objects/*.object.ts` | Use `workflows[]` for field updates triggered by record changes |
+| Lifecycle automation | `src/objects/*.hook.ts` | Use a lifecycle **hook** (`defineHook()`) or a top-level `record_change` flow for field updates triggered by record changes. There is **no** object-level `workflows[]` field — authoring one is a build error (#1535). |
 | State transitions | `src/objects/*.state.ts` | Prefer explicit `stateMachines` for lifecycle-heavy objects |
 
 For metadata authoring, keep expressions in CEL (`P\`...\``, `F\`...\``,

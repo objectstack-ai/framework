@@ -709,6 +709,54 @@ describe('ObjectSchema.create()', () => {
       fields: { InvalidField: { type: 'text' } },
     })).toThrow();
   });
+
+  // ADR-0032 "no silent failure" for metadata shape (issue #1535): unknown
+  // top-level keys used to be stripped silently, shipping dead metadata.
+  describe('unknown-key rejection (#1535)', () => {
+    it('rejects object-level `workflows` with guidance toward hooks/record_change', () => {
+      expect(() => ObjectSchema.create({
+        name: 'demo',
+        fields: { status: { type: 'text' } },
+        // @ts-expect-error — `workflows` is not an ObjectSchema field
+        workflows: [{ name: 'stamp', triggerType: 'on_update', actions: [] }],
+      })).toThrow(/workflows/);
+    });
+
+    it('error message points at the supported mechanism, not just "unknown key"', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: { status: { type: 'text' } },
+          // @ts-expect-error — `workflows` is not an ObjectSchema field
+          workflows: [],
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('lifecycle hook');
+      expect(message).toContain('record_change');
+      expect(message).toContain('#1535');
+    });
+
+    it('suggests the intended key on a typo (`validation` → `validations`)', () => {
+      expect(() => ObjectSchema.create({
+        name: 'demo',
+        fields: { status: { type: 'text' } },
+        // @ts-expect-error — typo'd key
+        validation: [],
+      })).toThrow(/did you mean `validations`/);
+    });
+
+    it('does not strip — a supported key like `validations` still parses', () => {
+      const obj = ObjectSchema.create({
+        name: 'demo',
+        fields: { status: { type: 'text' } },
+        validations: [],
+      });
+      expect(obj.validations).toEqual([]);
+    });
+  });
 });
 
 // ============================================================================
