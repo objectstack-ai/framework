@@ -183,6 +183,13 @@ export function getClient_WasmSqlite(): any {
       if (isDdl) {
         db.run(obj.sql, bindings as any);
         obj.response = [];
+        // Track BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE so the connection never
+        // flushes (sql.js `export()` closes+reopens the db, aborting the txn)
+        // mid-transaction. Must run before markDirty so a COMMIT/ROLLBACK has
+        // already cleared the transaction flag when the deferred flush fires.
+        if (/^\s*(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i.test(obj.sql)) {
+          connection.noteTransactionControl(obj.sql);
+        }
         connection.markDirty('run');
         return obj;
       }

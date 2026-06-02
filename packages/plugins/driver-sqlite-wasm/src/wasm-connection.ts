@@ -110,6 +110,26 @@ export class WasmSqliteConnection {
   private destroyed = false;
   private logger: { warn: (msg: string, meta?: unknown) => void };
 
+  /**
+   * Whether a `BEGIN…COMMIT/ROLLBACK` transaction is currently open. Tracked
+   * because sql.js's {@link Database.export} closes and reopens the database
+   * (it has no in-place serialize), and closing a connection rolls back any
+   * open transaction. Flushing mid-transaction would therefore silently
+   * abort it, leaving the eventual `COMMIT` to fail with
+   * "cannot commit - no transaction is active". We defer the flush until the
+   * transaction fully closes. See {@link noteTransactionControl}.
+   */
+  private rootTxActive = false;
+  /** Open `SAVEPOINT` depth (nested transactions emitted by Knex). */
+  private savepointDepth = 0;
+  /** A flush was requested while a transaction was open; run it on close. */
+  private flushDeferred = false;
+
+  /** True while any transaction (root or savepoint) is in flight. */
+  private get inTransaction(): boolean {
+    return this.rootTxActive || this.savepointDepth > 0;
+  }
+
   constructor(opts: WasmConnectionOptions) {
     this.filename = opts.filename;
     this.persist = opts.persist ?? 'on-disconnect';
@@ -160,6 +180,42 @@ export class WasmSqliteConnection {
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database();
   }
 
+  /**
+   * Update transaction state from a transaction-control statement and, when a
+   * transaction has just fully closed, run any flush that was deferred while
+   * it was open. Called by the Knex dialect for every `BEGIN` / `COMMIT` /
+   * `ROLLBACK` / `SAVEPOINT` / `RELEASE` statement.
+   *
+   * We bias toward "in transaction": an unrecognised form leaves the flag set,
+   * which at worst delays a flush (safe) rather than exporting mid-transaction
+   * (which would abort it).
+   */
+  noteTransactionControl(sql: string): void {
+    const s = sql.trim().toUpperCase();
+    if (/^BEGIN\b/.test(s)) {
+      this.rootTxActive = true;
+    } else if (/^(COMMIT|END)\b/.test(s)) {
+      // A COMMIT/END ends the whole transaction regardless of savepoint nesting.
+      this.rootTxActive = false;
+      this.savepointDepth = 0;
+    } else if (/^ROLLBACK\s+TO\b/.test(s)) {
+      // Rolls back to a savepoint but keeps the (outer) transaction open.
+    } else if (/^ROLLBACK\b/.test(s)) {
+      this.rootTxActive = false;
+      this.savepointDepth = 0;
+    } else if (/^SAVEPOINT\b/.test(s)) {
+      this.savepointDepth += 1;
+    } else if (/^RELEASE\b/.test(s)) {
+      this.savepointDepth = Math.max(0, this.savepointDepth - 1);
+    }
+    // If the transaction just fully closed and a flush was deferred (or the
+    // committing statement itself left us dirty), persist now.
+    if (!this.inTransaction && (this.flushDeferred || this.dirty)) {
+      this.flushDeferred = false;
+      void this.flush();
+    }
+  }
+
   /** Hint that a mutation just executed; schedule a flush if needed. */
   markDirty(method?: string): void {
     if (this.isEphemeral || !this.fs) return;
@@ -183,6 +239,14 @@ export class WasmSqliteConnection {
   /** Force a write of the current database state to disk. */
   async flush(): Promise<void> {
     if (this.isEphemeral || !this.fs || this.destroyed) return;
+    // Never export while a transaction is open: sql.js's `export()` closes and
+    // reopens the database, which rolls back the in-flight transaction and
+    // makes the subsequent COMMIT fail. Defer until the transaction closes
+    // (handled in `noteTransactionControl`).
+    if (this.inTransaction) {
+      this.flushDeferred = true;
+      return;
+    }
     // If a flush is already in flight, wait for it and then re-flush so any
     // writes that arrived after the in-flight flush's `db.export()` call get
     // persisted too. Without this, on-write mode loses writes that happen
@@ -229,6 +293,11 @@ export class WasmSqliteConnection {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    // Any transaction still open at close is abandoned and will be rolled back
+    // by `db.close()`; clear the flag so the final flush is not deferred and
+    // already-committed data is persisted.
+    this.rootTxActive = false;
+    this.savepointDepth = 0;
     try {
       await this.flush();
     } finally {
