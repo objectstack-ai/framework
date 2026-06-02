@@ -17,6 +17,14 @@ import {
     runKVContract,
     runCounterContract,
 } from '@objectstack/service-cluster/testing';
+// Load the driver entrypoint at module eval — importing it registers the
+// 'redis' cluster driver as a side-effect, which `defineCluster({ driver:
+// 'redis' })` then resolves. Doing this here (not via `await import()` inside
+// the timed test bodies) keeps the one-time cold module-load cost out of the
+// per-test 5s timeout — the wiring tests below were flaky on slow CI for
+// exactly that reason (the first test paid the full import cost and timed out).
+import './index.js';
+import { defineCluster } from '@objectstack/service-cluster';
 
 import { RedisPubSub } from './pubsub.js';
 import { RedisLock } from './lock.js';
@@ -118,8 +126,6 @@ describe('IPubSub contract — redis(mock)', () => {
 
 describe('Redis driver — wiring', () => {
     it('exports a registerable driver and defineCluster picks it up', async () => {
-        await import('./index.js');
-        const { defineCluster } = await import('@objectstack/service-cluster');
         const client = makeClient();
         const cluster = defineCluster({
             driver: 'redis',
@@ -145,8 +151,6 @@ describe('Redis driver — wiring', () => {
     });
 
     it('does NOT quit caller-owned client on close', async () => {
-        await import('./index.js');
-        const { defineCluster } = await import('@objectstack/service-cluster');
         const client = makeClient();
         const cluster = defineCluster({
             driver: 'redis',
