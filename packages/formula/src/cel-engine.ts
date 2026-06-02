@@ -65,7 +65,11 @@ function coerce(value: unknown): unknown {
  * `"250000.00"`, `"-3"`, `"1e3"` match; `"5px"`, `"0x10"`, `" "`, `""`,
  * `"1,000"`, `"v2"` do not.
  */
-const NUMERIC_STRING_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+// The fractional part is a single optional `(?:\.\d*)?` group anchored by the
+// literal `.` — never the ambiguous `\d+\.?\d*`, whose adjacent unbounded
+// quantifiers (`\d+\d*` when the dot is absent) backtrack polynomially on long
+// digit runs (CodeQL ReDoS). This matches the same strings without the hazard.
+const NUMERIC_STRING_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 /**
  * cel-js raises `no such overload: dyn <op> int` (and kin) when a comparison
