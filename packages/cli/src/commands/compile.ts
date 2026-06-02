@@ -8,6 +8,7 @@ import { ZodError } from 'zod';
 import { ObjectStackDefinitionSchema, normalizeStackInput } from '@objectstack/spec';
 import { loadConfig } from '../utils/config.js';
 import { lowerCallables } from '../utils/lower-callables.js';
+import { validateStackExpressions } from '../utils/validate-expressions.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
   printHeader,
@@ -120,6 +121,27 @@ export default class Compile extends Command {
         console.log('');
         printError('Validation failed');
         formatZodErrors(result.error as unknown as ZodError);
+        this.exit(1);
+      }
+
+      // 3b. Validate expressions against the resolved schema (ADR-0032 §1a/1b).
+      //     The whole normalized stack is in hand here, so flow/validation
+      //     predicates are checked for CEL syntax AND that `record.<field>`
+      //     references exist on the target object — failing the build with a
+      //     located, corrective message instead of a silent runtime `false`.
+      if (!flags.json) printStep('Validating expressions (ADR-0032)...');
+      const exprIssues = validateStackExpressions(result.data as Record<string, unknown>);
+      if (exprIssues.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'expression validation failed', issues: exprIssues }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Expression validation failed (${exprIssues.length} issue${exprIssues.length > 1 ? 's' : ''})`);
+        for (const i of exprIssues.slice(0, 50)) {
+          console.log(`  • ${i.where}: ${i.message}`);
+          console.log(`      source: \`${i.source}\``);
+        }
         this.exit(1);
       }
 

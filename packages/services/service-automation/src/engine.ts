@@ -14,7 +14,7 @@ import { ConnectorSchema } from '@objectstack/spec/integration';
 // silently returned `false`, so EVERY start-node / edge condition (record-change
 // `previous.*`, `budget > 100000`, …) skipped its flow. A static import binds the
 // engine at module load in both ESM and CJS builds.
-import { ExpressionEngine } from '@objectstack/formula';
+import { ExpressionEngine, validateExpression } from '@objectstack/formula';
 
 // ─── Node Executor Interface (Plugin Extension Point) ───────────────
 
@@ -608,6 +608,13 @@ export class AutomationEngine implements IAutomationService {
         // executeNode() already throws NO_EXECUTOR at run time for unknown types.
         this.validateNodeTypes(name, parsed);
 
+        // ADR-0032 §Decision 1a — parse-validate every predicate at registration,
+        // so a malformed condition (e.g. the #1491 `{record.x}` template-brace-in-
+        // CEL mistake) is a LOUD registration error with the offending source,
+        // not a silent runtime `false`. Hard-fail: a broken predicate is never
+        // safe to run.
+        this.validateFlowExpressions(name, parsed);
+
         // Version history management
         const history = this.flowVersionHistory.get(name) ?? [];
         history.push({
@@ -1061,6 +1068,48 @@ export class AutomationEngine implements IAutomationService {
     }
 
     /**
+     * ADR-0032 §Decision 1a — parse-validate every predicate in the flow at
+     * registration. Predicates are bare CEL; this catches the #1491 class
+     * (`{record.x}` template braces in a condition → CEL parse error) and any
+     * other malformed predicate LOUDLY, with the offending location + source +
+     * a corrective hint, instead of letting it fail silently at run time.
+     *
+     * Only the *predicate* surfaces are checked here (start/node `config.condition`
+     * and `edge.condition`) — node string fields are templates (a different
+     * dialect) and are validated by the template engine, not as CEL.
+     */
+    private validateFlowExpressions(flowName: string, flow: FlowParsed): void {
+        const failures: string[] = [];
+
+        const check = (where: string, raw: unknown): void => {
+            if (raw == null) return;
+            // Conditions are predicates (bare CEL). Delegate to the one shared
+            // validator (ADR-0032 §5) so the corrective message matches the CLI
+            // build and the agent `validate_expression` tool exactly.
+            const result = validateExpression('predicate', raw as string | { dialect?: string; source?: string });
+            for (const e of result.errors) {
+                failures.push(`  • ${where}: ${e.message}\n      source: \`${e.source}\``);
+            }
+        };
+
+        for (const node of flow.nodes) {
+            const cfg = (node.config ?? {}) as Record<string, unknown>;
+            // start-node trigger gate + decision/branch predicates live in config.condition
+            check(`node '${node.id}' (${node.type}) condition`, cfg.condition);
+        }
+        for (const edge of flow.edges) {
+            check(`edge '${edge.id}' (${edge.source}→${edge.target}) condition`, edge.condition as unknown);
+        }
+
+        if (failures.length > 0) {
+            throw new Error(
+                `Flow '${flowName}' has ${failures.length} invalid condition${failures.length > 1 ? 's' : ''} (ADR-0032 §1a). ` +
+                `Conditions are bare CEL — do not wrap field references in \`{…}\` template braces:\n${failures.join('\n')}`,
+            );
+        }
+    }
+
+    /**
      * Detect cycles in the flow graph (DAG validation).
      * Uses DFS with coloring (white/gray/black) to detect back edges.
      * Throws an error with cycle details if a cycle is found.
@@ -1453,10 +1502,27 @@ export class AutomationEngine implements IAutomationService {
                     { dialect: 'cel', source: exprStr },
                     { extra: { ...vars, vars }, record: vars },
                 );
-                if (!result.ok) return false;
+                // ADR-0032 §Decision 1c — NO silent fallback. A non-`ok` result is a
+                // real fault (malformed predicate, or — pre build-validation — a
+                // `{…}` template mistakenly written into a CEL condition). Surfacing
+                // it as a thrown, attributed error makes execute()'s catch record a
+                // loud flow failure, instead of the old `return false` that made a
+                // broken condition indistinguishable from "condition not met" (#1491).
+                if (!result.ok) {
+                    throw new Error(
+                        `condition failed to evaluate as CEL: ${result.error?.message ?? 'unknown error'} — ` +
+                        `source: \`${exprStr}\`. Conditions are bare CEL (e.g. \`record.rating >= 4\`); ` +
+                        `do not wrap field references in \`{…}\` template braces.`,
+                    );
+                }
                 return Boolean(result.value);
-            } catch {
-                return false;
+            } catch (err) {
+                // Re-throw with the source attached (ADR-0032 §1d — errors written
+                // for self-correction). Never swallow to `false`.
+                const msg = (err as Error)?.message ?? String(err);
+                throw new Error(
+                    msg.includes('source:') ? msg : `condition evaluation error: ${msg} — source: \`${exprStr}\``,
+                );
             }
         }
 

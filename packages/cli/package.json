@@ -48,6 +48,7 @@
     "@objectstack/driver-mongodb": "workspace:^",
     "@objectstack/driver-sql": "workspace:^",
     "@objectstack/driver-sqlite-wasm": "workspace:^",
+    "@objectstack/formula": "workspace:*",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/observability": "workspace:^",
     "@objectstack/platform-objects": "workspace:*",

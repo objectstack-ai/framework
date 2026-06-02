@@ -19,3 +19,4 @@ export { modifyFieldTool } from './modify-field.tool.js';
 export { deleteFieldTool } from './delete-field.tool.js';
 export { listObjectsTool } from './list-objects.tool.js';
 export { describeObjectTool } from './describe-object.tool.js';
+export { validateExpressionTool } from './validate-expression.tool.js';

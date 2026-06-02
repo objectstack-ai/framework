@@ -342,6 +342,39 @@ describe('AutomationEngine', () => {
             expect(executed).toContain('yes_branch');
             expect(executed).not.toContain('no_branch');
         });
+
+        // ADR-0032 §Decision 1a — a malformed condition (the #1491 `{record.x}`
+        // template-brace-in-CEL mistake) is rejected LOUDLY at registration, with
+        // the offending location + source + a corrective hint — not silently at
+        // run time.
+        it('rejects a brace-in-CEL condition at registration — #1491 (Decision 1a)', () => {
+            const register = () =>
+                engine.registerFlow('bad_condition', {
+                    name: 'bad_condition',
+                    label: 'Bad Condition',
+                    type: 'record_change',
+                    nodes: [
+                        { id: 'check', type: 'decision', label: 'Check', config: { condition: '{record.rating} >= 4' } },
+                        { id: 'start', type: 'start', label: 'Start' },
+                        { id: 'end', type: 'end', label: 'End' },
+                    ],
+                    edges: [
+                        { id: 'e1', source: 'start', target: 'check' },
+                        { id: 'e2', source: 'check', target: 'end', condition: '{record.rating} >= 4' },
+                    ],
+                });
+            expect(register).toThrow(/\{record\.rating\} >= 4/);
+            expect(register).toThrow(/template braces|bare CEL/);
+        });
+
+        // ADR-0032 §Decision 1c — defense in depth: if a malformed predicate ever
+        // reaches the runtime evaluator (bypassing registration validation), it
+        // THROWS an attributed error rather than swallowing to `false`.
+        it('evaluateCondition throws (never returns false) on a malformed CEL predicate — Decision 1c', () => {
+            const vars = new Map<string, unknown>([['record', { rating: 5 }]]);
+            expect(() => engine.evaluateCondition({ dialect: 'cel', source: '{record.rating} >= 4' }, vars))
+                .toThrow(/source:|template braces|bare CEL/);
+        });
     });
 
     describe('Durable Suspend / Resume (ADR-0019)', () => {

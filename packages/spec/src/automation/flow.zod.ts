@@ -210,8 +210,11 @@ export const FlowEdgeSchema = lazySchema(() => z.object({
  *   ],
  *   edges: [
  *     { id: "e1", source: "start", target: "check_amount" },
- *     { id: "e2", source: "check_amount", target: "auto_approve", condition: "{amount} < 500" },
- *     { id: "e3", source: "check_amount", target: "submit_for_approval", condition: "{amount} >= 500" }
+ *     // Conditions are bare CEL (ADR-0032). Reference fields directly —
+ *     // `record.amount`, `previous.status`, `<var>.field` — and DO NOT wrap them
+ *     // in `{…}` template braces: `{amount}` parses as a CEL map literal and fails.
+ *     { id: "e2", source: "check_amount", target: "auto_approve", condition: "record.amount < 500" },
+ *     { id: "e3", source: "check_amount", target: "submit_for_approval", condition: "record.amount >= 500" }
  *   ]
  * }
  */
