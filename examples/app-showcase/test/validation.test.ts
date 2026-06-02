@@ -34,6 +34,20 @@ describe('showcase Account validation rules (write-path enforcement)', () => {
     });
   });
 
+  describe('format — billing_email named format', () => {
+    it('rejects a malformed email', () => {
+      expect(() => evaluateValidationRules(schema, { billing_email: 'nope' }, 'insert')).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('accepts a valid email', () => {
+      expect(() =>
+        evaluateValidationRules(schema, { billing_email: 'ar@acme.com' }, 'insert'),
+      ).not.toThrow();
+    });
+  });
+
   describe('json_schema — support_config shape', () => {
     it('accepts a conforming config', () => {
       expect(() =>
@@ -83,6 +97,17 @@ describe('showcase Account validation rules (write-path enforcement)', () => {
           previous: { status: 'prospect' },
         }),
       ).not.toThrow();
+    });
+
+    it('otherwise-branch: rejects a churn reason set on a non-churned account', () => {
+      expect(() =>
+        evaluateValidationRules(
+          schema,
+          { status: 'active', churn_reason: 'left over' },
+          'update',
+          { previous: { status: 'prospect' } },
+        ),
+      ).toThrow(ValidationError);
     });
   });
 });
