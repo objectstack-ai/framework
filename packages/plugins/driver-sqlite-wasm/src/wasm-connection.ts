@@ -106,7 +106,7 @@ export class WasmSqliteConnection {
   private dirty = false;
   private debounceMs = 0;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingFlush: Promise<void> | null = null;
+  private flushChain: Promise<void> | null = null;
   private destroyed = false;
   private logger: { warn: (msg: string, meta?: unknown) => void };
 
@@ -208,9 +208,12 @@ export class WasmSqliteConnection {
     } else if (/^RELEASE\b/.test(s)) {
       this.savepointDepth = Math.max(0, this.savepointDepth - 1);
     }
-    // If the transaction just fully closed and a flush was deferred (or the
-    // committing statement itself left us dirty), persist now.
-    if (!this.inTransaction && (this.flushDeferred || this.dirty)) {
+    // If the transaction just fully closed and a flush was deferred while it
+    // was open, run it now. We key off `flushDeferred` (set only when
+    // `markDirty` actually wanted to flush) rather than `dirty`, so persist
+    // modes that don't flush per-write — e.g. `on-disconnect` — still defer to
+    // close() instead of flushing on every COMMIT.
+    if (!this.inTransaction && this.flushDeferred) {
       this.flushDeferred = false;
       void this.flush();
     }
@@ -236,7 +239,18 @@ export class WasmSqliteConnection {
     // 'on-disconnect' → flush only at close()
   }
 
-  /** Force a write of the current database state to disk. */
+  /**
+   * Force a write of the current database state to disk.
+   *
+   * Flushes are strictly serialized through a single promise chain: every call
+   * appends an export+write step that runs after all previously-queued steps.
+   * This matters because sql.js `export()` mutates the live connection (it
+   * closes and reopens the database), so two exports must never overlap — and
+   * because the returned promise must not resolve until the caller's own write
+   * has hit disk (deterministic for tests and for `close()`). Each step
+   * re-checks `dirty` at run time, so a no-op write collapses cheaply and a
+   * write that arrived mid-flush is captured by the next queued step.
+   */
   async flush(): Promise<void> {
     if (this.isEphemeral || !this.fs || this.destroyed) return;
     // Never export while a transaction is open: sql.js's `export()` closes and
@@ -247,43 +261,27 @@ export class WasmSqliteConnection {
       this.flushDeferred = true;
       return;
     }
-    // If a flush is already in flight, wait for it and then re-flush so any
-    // writes that arrived after the in-flight flush's `db.export()` call get
-    // persisted too. Without this, on-write mode loses writes that happen
-    // between a flush's synchronous export and its async file write.
-    if (this.pendingFlush) {
-      await this.pendingFlush;
-      if (!this.dirty || this.destroyed) return;
-    }
-    if (!this.dirty) return;
 
-    this.pendingFlush = (async () => {
+    const prev = this.flushChain;
+    const step = (prev ?? Promise.resolve()).then(async () => {
+      if (!this.dirty || this.destroyed || this.inTransaction) return;
+      // Snapshot dirty=false before export so a concurrent write re-marks us
+      // and is picked up by the next queued step.
+      this.dirty = false;
       try {
-        // Snapshot dirty=false BEFORE export so concurrent writes that occur
-        // during the async writeFile mark us dirty again and trigger another
-        // flush via markDirty.
-        this.dirty = false;
         const exported = this.db.export();
         // sql.js returns a Uint8Array; Buffer.from on it shares memory but
-        // works fine for writeFile.
+        // works fine for the synchronous writeFile enqueue below.
         await this.fs!.writeFile(this.filename, Buffer.from(exported));
       } catch (err) {
-        // Restore dirty state so a subsequent flush retries.
-        this.dirty = true;
+        this.dirty = true; // let a later flush retry
         throw err;
-      } finally {
-        this.pendingFlush = null;
       }
-    })();
-
-    await this.pendingFlush;
-
-    // A write that arrived after `db.export()` (synchronous) but before the
-    // file write completed will have set dirty=true again. Re-flush to
-    // persist it.
-    if (this.dirty && !this.destroyed) {
-      await this.flush();
-    }
+    });
+    // Keep the chain tail alive but swallow its rejection there so one failed
+    // flush doesn't poison every future flush; the awaited `step` still throws.
+    this.flushChain = step.catch(() => {});
+    await step;
   }
 
   /** Close the database, flushing any pending writes first. */

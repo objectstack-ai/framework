@@ -60,7 +60,8 @@ describe('SqliteWasmDriver on-write persistence + transactions (#1494)', () => {
     await knex.transaction(async (trx: any) => {
       await trx('acct').insert({ id: 'p1', name: 'persisted' });
     });
-    // Awaiting flush() resolves the deferred (post-commit) write to disk.
+    // flush() awaits the post-commit write to disk (the per-write persist is
+    // deferred until the transaction closes, then performed exactly once).
     await (driver as any).flush();
 
     expect(statSync(file).size).toBeGreaterThan(0);
