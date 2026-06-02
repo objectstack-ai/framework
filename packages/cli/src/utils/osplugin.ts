@@ -29,7 +29,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 
 /** A single file destined for the archive. `path` is POSIX, archive-relative. */
 export interface ArchiveFile {
@@ -131,4 +131,37 @@ export function createTar(files: ArchiveFile[]): Buffer {
 /** ustar + gzip → the `.osplugin` blob bytes. */
 export function createTarGz(files: ArchiveFile[]): Buffer {
   return gzipSync(createTar(files), { level: 9 });
+}
+
+/**
+ * Parse a ustar buffer back into its files — the inverse of {@link createTar}.
+ * Reads regular-file entries only; stops at the end-of-archive zero block.
+ */
+export function readTar(buf: Uint8Array): ArchiveFile[] {
+  const b = Buffer.from(buf);
+  const files: ArchiveFile[] = [];
+  let off = 0;
+  while (off + BLOCK <= b.length) {
+    const name = b.toString('utf8', off, off + 100).replace(/\0.*$/s, '');
+    if (!name) break; // zero block → end of archive
+    const size = parseInt(b.toString('ascii', off + 124, off + 136).replace(/\0.*$/s, '').trim(), 8) || 0;
+    files.push({ path: name, data: new Uint8Array(b.subarray(off + BLOCK, off + BLOCK + size)) });
+    off += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+  }
+  return files;
+}
+
+/** gunzip + untar an `.osplugin` blob into its files. */
+export function readTarGz(blob: Uint8Array): ArchiveFile[] {
+  return readTar(gunzipSync(Buffer.from(blob)));
+}
+
+/**
+ * Extract + parse the compiled `objectstack.plugin.json` from an `.osplugin`
+ * blob. Throws if the manifest is absent or not valid JSON.
+ */
+export function readOspluginManifest(blob: Uint8Array): Record<string, unknown> {
+  const entry = readTarGz(blob).find((f) => f.path === MANIFEST_FILENAME);
+  if (!entry) throw new Error(`${MANIFEST_FILENAME} not found in artifact`);
+  return JSON.parse(Buffer.from(entry.data).toString('utf8')) as Record<string, unknown>;
 }
