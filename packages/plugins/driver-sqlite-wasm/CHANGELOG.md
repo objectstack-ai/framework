@@ -1,5 +1,14 @@
 # @objectstack/driver-sqlite-wasm
 
+## 7.7.0
+
+### Patch Changes
+
+- Updated dependencies [f06b64e]
+  - @objectstack/spec@7.7.0
+  - @objectstack/core@7.7.0
+  - @objectstack/driver-sql@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes

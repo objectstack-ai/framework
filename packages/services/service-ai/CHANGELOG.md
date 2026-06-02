@@ -1,5 +1,33 @@
 # @objectstack/service-ai
 
+## 7.7.0
+
+### Minor Changes
+
+- 984ddff: feat(service-ai): ADR-0033 Phase A — draft-gate AI metadata authoring
+
+  AI metadata mutations no longer publish straight to the live schema. Every write now routes through the ADR-0027 draft workspace via `protocol.saveMetaItem({ mode:'draft' })` — nothing an agent authors goes live until a human reviews the diff and publishes. The draft is the approval gate (the never-enforced `requiresConfirmation` flag is retired).
+
+  Adds a type-agnostic apply surface — `create_metadata` / `update_metadata` / `describe_metadata` / `list_metadata` — that works for any metadata type (view, dashboard, flow, …), validated against each type's Zod schema with errors fed back to the agent for self-correction. The existing object/field tools become thin draft-writing wrappers. Tool results return `{ status:'drafted', type, name, summary, changedKeys }`.
+
+- f06b64e: feat(ai): ADR-0033 Phase C — plan-first blueprint authoring
+
+  For high-level goals ("build me a project-management system") the metadata assistant now designs before it builds. Adds a `SolutionBlueprintSchema` (`@objectstack/spec/ai`) describing proposed objects, fields, relationships, views, dashboards, and seed data with stated assumptions, plus two tools:
+
+  - `propose_blueprint(goal)` — emits a structured blueprint via structured output. **Nothing is persisted**; the agent presents it for conversational confirmation and asks at most 1–2 structure-deciding questions.
+  - `apply_blueprint(blueprint)` — only after the human approves, batch-drafts every artifact through the Phase A draft path (`protocol.saveMetaItem({mode:'draft'})`), validated per-type and partial-tolerant (a bad item is reported, the rest still draft). Seed data is reported as proposed, not auto-applied (no runtime `dataset` type).
+
+  A new `solution_design` skill carries the plan-first instructions and is bound to `metadata_assistant` alongside `metadata_authoring`. The shared draft-write primitive is exported from the metadata tools as `stageDraft` and reused, keeping one draft-write path.
+
+### Patch Changes
+
+- Updated dependencies [f06b64e]
+- Updated dependencies [825ab06]
+  - @objectstack/spec@7.7.0
+  - @objectstack/formula@7.7.0
+  - @objectstack/core@7.7.0
+  - @objectstack/types@7.7.0
+
 ## 7.6.0
 
 ### Minor Changes

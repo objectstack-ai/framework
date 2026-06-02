@@ -1,5 +1,17 @@
 # @objectstack/plugin-approvals
 
+## 7.7.0
+
+### Patch Changes
+
+- Updated dependencies [f06b64e]
+- Updated dependencies [825ab06]
+  - @objectstack/spec@7.7.0
+  - @objectstack/formula@7.7.0
+  - @objectstack/core@7.7.0
+  - @objectstack/platform-objects@7.7.0
+  - @objectstack/metadata-core@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes
