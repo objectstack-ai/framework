@@ -633,6 +633,78 @@ export const FanOutNotifyFlow = defineFlow({
   ],
 });
 
+/**
+ * Resilient Sync — demonstrates the ADR-0031 **try/catch/retry** construct.
+ *
+ * The `try_catch` node runs a protected `try` region (an outbound HTTP push);
+ * on failure it retries with exponential backoff, and if it still fails the
+ * `catch` region records the failure with the caught error bound to `$error`.
+ * Both regions are single-entry/single-exit and run in the enclosing scope; the
+ * node's ordinary out-edge (`→ end`) is the after-block continuation.
+ */
+export const ResilientSyncFlow = defineFlow({
+  name: 'showcase_resilient_sync',
+  label: 'Resilient Sync (Try/Catch/Retry)',
+  description: 'Pushes a task to an external system, retrying on failure and recording errors via try/catch (ADR-0031).',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Completed',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-update',
+        condition: 'status == "done" && previous.status != "done"',
+      },
+    },
+    {
+      id: 'guarded_push',
+      type: 'try_catch',
+      label: 'Push with retry',
+      config: {
+        retry: { maxRetries: 3, retryDelayMs: 1000, backoffMultiplier: 2, maxRetryDelayMs: 10000 },
+        errorVariable: '$error',
+        try: {
+          nodes: [
+            {
+              id: 'push',
+              type: 'http_request',
+              label: 'Push to CRM',
+              config: {
+                url: 'https://api.example.com/v1/tasks',
+                method: 'POST',
+                body: { id: '{record.id}', title: '{record.title}', status: 'done' },
+              },
+            },
+          ],
+          edges: [],
+        },
+        catch: {
+          nodes: [
+            {
+              id: 'record_failure',
+              type: 'update_record',
+              label: 'Flag Sync Failure',
+              config: {
+                objectName: 'showcase_task',
+                filter: { id: '{record.id}' },
+                fields: { sync_status: 'failed', sync_error: '{$error.message}' },
+              },
+            },
+          ],
+          edges: [],
+        },
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'guarded_push' },
+    { id: 'e2', source: 'guarded_push', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
@@ -646,4 +718,5 @@ export const allFlows = [
   TaskDoneNotifyOwnerFlow,
   BatchRemindersFlow,
   FanOutNotifyFlow,
+  ResilientSyncFlow,
 ];
