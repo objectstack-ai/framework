@@ -19,12 +19,13 @@ import { AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEval
 import { EvalRunner } from './eval/index.js';
 import { registerDataTools } from './tools/data-tools.js';
 import { registerMetadataTools } from './tools/metadata-tools.js';
+import { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS } from './tools/blueprint-tools.js';
 import { registerQueryDataTool } from './tools/query-data.tool.js';
 import { registerActionsAsTools } from './tools/action-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
 import { SkillRegistry } from './skill-registry.js';
 import { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
-import { DATA_EXPLORER_SKILL, METADATA_AUTHORING_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
+import { DATA_EXPLORER_SKILL, METADATA_AUTHORING_SKILL, SOLUTION_DESIGN_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
 import { VercelLLMAdapter } from './adapters/vercel-adapter.js';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ModelRegistry } from './model-registry.js';
@@ -799,9 +800,19 @@ export class AIServicePlugin implements Plugin {
         registerMetadataTools(this.service.toolRegistry, { metadataService, protocol: protocolService });
         ctx.logger.info('[AI] Built-in metadata tools registered');
 
-        // Register metadata tools as metadata (for Studio visibility)
+        // Plan-first blueprint tools (ADR-0033 §4) — design a whole solution,
+        // confirm, then batch-draft. Needs the AI service for structured output
+        // and the protocol for draft writes (reused via stageDraft).
+        registerBlueprintTools(this.service.toolRegistry, {
+          ai: this.service,
+          protocol: protocolService,
+          metadataService,
+        });
+        ctx.logger.info('[AI] Plan-first blueprint tools registered');
+
+        // Register metadata + blueprint tools as metadata (for Studio visibility)
         const { METADATA_TOOL_DEFINITIONS } = await import('./tools/metadata-tools.js');
-        for (const toolDef of METADATA_TOOL_DEFINITIONS) {
+        for (const toolDef of [...METADATA_TOOL_DEFINITIONS, ...BLUEPRINT_TOOL_DEFINITIONS]) {
           const toolExists =
             typeof metadataService.exists === 'function'
               ? await withTimeout(metadataService.exists('tool', toolDef.name))
@@ -821,7 +832,7 @@ export class AIServicePlugin implements Plugin {
             }
           }
         }
-        ctx.logger.info(`[AI] ${METADATA_TOOL_DEFINITIONS.length} metadata tools registered as metadata`);
+        ctx.logger.info(`[AI] ${METADATA_TOOL_DEFINITIONS.length + BLUEPRINT_TOOL_DEFINITIONS.length} metadata + blueprint tools registered as metadata`);
 
         // Register the built-in metadata_assistant agent
         try {
@@ -861,6 +872,25 @@ export class AIServicePlugin implements Plugin {
           }
         } catch (err) {
           ctx.logger.warn('[AI] Failed to register metadata_authoring skill', err instanceof Error ? { error: err.message } : { error: String(err) });
+        }
+
+        // Register the built-in solution_design skill (plan-first blueprint authoring)
+        try {
+          const skillExists =
+            typeof metadataService.exists === 'function'
+              ? await withTimeout(metadataService.exists('skill', SOLUTION_DESIGN_SKILL.name))
+              : false;
+
+          if (skillExists === null) {
+            ctx.logger.warn('[AI] Metadata service timed out checking solution_design skill, skipping');
+          } else if (!skillExists) {
+            await withTimeout(metadataService.register('skill', SOLUTION_DESIGN_SKILL.name, SOLUTION_DESIGN_SKILL));
+            ctx.logger.info('[AI] solution_design skill registered');
+          } else {
+            ctx.logger.debug('[AI] solution_design skill already exists, skipping auto-registration');
+          }
+        } catch (err) {
+          ctx.logger.warn('[AI] Failed to register solution_design skill', err instanceof Error ? { error: err.message } : { error: String(err) });
         }
       } catch (err) {
         ctx.logger.debug('[AI] Failed to register metadata tools', err instanceof Error ? err : undefined);

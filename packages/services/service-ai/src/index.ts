@@ -30,8 +30,12 @@ export { registerDataTools, DATA_TOOL_DEFINITIONS } from './tools/data-tools.js'
 export type { DataToolContext } from './tools/data-tools.js';
 
 // Metadata tools
-export { registerMetadataTools, METADATA_TOOL_DEFINITIONS } from './tools/metadata-tools.js';
-export type { MetadataToolContext } from './tools/metadata-tools.js';
+export { registerMetadataTools, METADATA_TOOL_DEFINITIONS, stageDraft } from './tools/metadata-tools.js';
+export type { MetadataToolContext, StageDraftInput, StageDraftResult, DraftCapableProtocol } from './tools/metadata-tools.js';
+
+// Blueprint tools (ADR-0033 §4 — plan-first authoring)
+export { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS, proposeBlueprintTool, applyBlueprintTool } from './tools/blueprint-tools.js';
+export type { BlueprintToolContext } from './tools/blueprint-tools.js';
 
 // Knowledge tools
 export { registerKnowledgeTools, SEARCH_KNOWLEDGE_TOOL } from './tools/knowledge-tools.js';
@@ -84,6 +88,7 @@ export { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
 export {
   DATA_EXPLORER_SKILL,
   METADATA_AUTHORING_SKILL,
+  SOLUTION_DESIGN_SKILL,
   ACTIONS_EXECUTOR_SKILL,
 } from './skills/index.js';
 

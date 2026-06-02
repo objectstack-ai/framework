@@ -6,8 +6,11 @@ export type { ToolHandler, ToolExecutionResult } from './tool-registry.js';
 export { registerDataTools, DATA_TOOL_DEFINITIONS } from './data-tools.js';
 export type { DataToolContext } from './data-tools.js';
 
-export { registerMetadataTools, METADATA_TOOL_DEFINITIONS } from './metadata-tools.js';
-export type { MetadataToolContext } from './metadata-tools.js';
+export { registerMetadataTools, METADATA_TOOL_DEFINITIONS, stageDraft } from './metadata-tools.js';
+export type { MetadataToolContext, StageDraftInput, StageDraftResult, DraftCapableProtocol } from './metadata-tools.js';
+
+export { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS } from './blueprint-tools.js';
+export type { BlueprintToolContext } from './blueprint-tools.js';
 
 export { registerKnowledgeTools, SEARCH_KNOWLEDGE_TOOL } from './knowledge-tools.js';
 export type { KnowledgeToolContext } from './knowledge-tools.js';
@@ -24,3 +27,5 @@ export { createMetadataTool } from './create-metadata.tool.js';
 export { updateMetadataTool } from './update-metadata.tool.js';
 export { describeMetadataTool } from './describe-metadata.tool.js';
 export { listMetadataTool } from './list-metadata.tool.js';
+export { proposeBlueprintTool } from './propose-blueprint.tool.js';
+export { applyBlueprintTool } from './apply-blueprint.tool.js';

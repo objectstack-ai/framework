@@ -270,26 +270,51 @@ interface ApplyDraftInput {
   changedKeys: string[];
 }
 
+/** The draft-capable subset of the ObjectStack protocol (a `saveMetaItem` that
+ *  honours `mode:'draft'`). Shared by the metadata tools and the blueprint
+ *  apply step so there is one draft-write path. */
+export type DraftCapableProtocol = NonNullable<MetadataToolContext['protocol']>;
+
+/** Input to {@link stageDraft} — the type/name/body plus provenance. */
+export interface StageDraftInput {
+  type: string;
+  name: string;
+  item: unknown;
+  actor?: string;
+  packageId?: string | null;
+  /** See {@link ApplyDraftInput.force}. Defaults to `true` for draft writes. */
+  force?: boolean;
+}
+
+/** Structured outcome of a single draft write (no JSON, no throw). */
+export interface StageDraftResult {
+  ok: boolean;
+  error?: string;
+  code?: string;
+  issues?: unknown;
+}
+
 /**
- * Stage `item` as a draft and return the ADR-0033 result envelope
- * `{ status:'drafted', type, name, summary, changedKeys }`. On validation /
- * destructive-change rejection, returns the structured error as a string so
- * the tool-call loop feeds it back to the model for self-correction (same
- * validate-by-default spine as ADR-0032 / the `validate_expression` tool) —
- * it never throws.
+ * The single ADR-0033 draft-write primitive: stage `item` via
+ * `protocol.saveMetaItem({ mode:'draft' })`. Validates against the per-type Zod
+ * schema (ADR-0005) and never throws — a rejection comes back as
+ * `{ ok:false, error, code, issues }` so callers can feed it to the model or
+ * collect per-item results (the blueprint apply step). Safe by default: with no
+ * draft-capable protocol it refuses rather than falling back to publish.
  */
-async function applyDraft(ctx: MetadataToolContext, input: ApplyDraftInput): Promise<string> {
-  if (!ctx.protocol?.saveMetaItem) {
-    // Safe by default: with no draft-capable protocol wired we refuse rather
-    // than fall back to an immediate-publish path. (In a real runtime the
-    // ObjectQL protocol service is always present.)
-    return JSON.stringify({
+export async function stageDraft(
+  protocol: DraftCapableProtocol | undefined,
+  input: StageDraftInput,
+): Promise<StageDraftResult> {
+  if (!protocol?.saveMetaItem) {
+    return {
+      ok: false,
       error:
         'Draft persistence is unavailable: no protocol service is wired, so metadata changes cannot be staged for review.',
-    });
+    };
   }
   try {
-    await ctx.protocol.saveMetaItem({
+    await protocol.saveMetaItem({
       type: input.type,
       name: input.name,
       item: input.item,
@@ -300,21 +325,40 @@ async function applyDraft(ctx: MetadataToolContext, input: ApplyDraftInput): Pro
         ? { packageId: input.packageId }
         : {}),
     });
-    return JSON.stringify({
-      status: 'drafted',
-      type: input.type,
-      name: input.name,
-      summary: input.summary,
-      changedKeys: input.changedKeys,
-    });
+    return { ok: true };
   } catch (err) {
     const e = err as { message?: string; code?: string; issues?: unknown };
-    return JSON.stringify({
+    return {
+      ok: false,
       error: e.message ?? String(err),
       ...(e.code ? { code: e.code } : {}),
       ...(e.issues ? { issues: e.issues } : {}),
+    };
+  }
+}
+
+/**
+ * Stage `item` as a draft and return the ADR-0033 result envelope
+ * `{ status:'drafted', type, name, summary, changedKeys }` as a JSON string.
+ * Thin wrapper over {@link stageDraft} that shapes the per-tool envelope and
+ * the error feedback the tool-call loop expects.
+ */
+async function applyDraft(ctx: MetadataToolContext, input: ApplyDraftInput): Promise<string> {
+  const res = await stageDraft(ctx.protocol, input);
+  if (!res.ok) {
+    return JSON.stringify({
+      error: res.error,
+      ...(res.code ? { code: res.code } : {}),
+      ...(res.issues ? { issues: res.issues } : {}),
     });
   }
+  return JSON.stringify({
+    status: 'drafted',
+    type: input.type,
+    name: input.name,
+    summary: input.summary,
+    changedKeys: input.changedKeys,
+  });
 }
 
 /**

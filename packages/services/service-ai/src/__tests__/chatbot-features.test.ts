@@ -1072,9 +1072,10 @@ describe('METADATA_ASSISTANT_AGENT', () => {
     expect(METADATA_ASSISTANT_AGENT.visibility).toBe('global');
   });
 
-  it('should reference the metadata_authoring skill (capability bundle moved to skill metadata)', () => {
+  it('should reference the metadata_authoring + solution_design skills (capability bundles moved to skill metadata)', () => {
     expect(METADATA_ASSISTANT_AGENT.tools ?? []).toHaveLength(0);
-    expect(METADATA_ASSISTANT_AGENT.skills).toEqual(['metadata_authoring']);
+    // ADR-0033: per-item authoring + plan-first blueprint authoring.
+    expect(METADATA_ASSISTANT_AGENT.skills).toEqual(['metadata_authoring', 'solution_design']);
   });
 
   it('should keep the schema-architect persona in instructions', () => {
