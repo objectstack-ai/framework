@@ -177,6 +177,18 @@ nested containers (in `../objectui`) are deferred follow-ups.
    construct in spec + designer.
 5. **BPMN mapping** — `bpmn-interop` import/export ↔ structured constructs.
 
+### Delivery status
+
+Tasks 1–5 are shipped. Task 5 landed as a **model-level** mapping
+(`@objectstack/spec` `automation/bpmn-mapping.ts`): `exportConstructsToBpmn` /
+`importBpmnToConstructs` translate between the structured constructs and the
+BPMN gateway/boundary/multi-instance vocabulary on the flow model
+(nodes + edges + config), round-trippable via an `osConstruct` extension marker,
+with best-effort folding of foreign BPMN gateways. BPMN 2.0 **XML**
+(de)serialization layers on top and stays a **plugin** concern (per
+`bpmn-interop.zod.ts`, "Priority: Low"). Designer rendering of the constructs
+(in `../objectui`) is tracked separately.
+
 ## Non-goals / deferred
 
 - Author-visible low-level BPMN `parallel_gateway` / `join_gateway` /

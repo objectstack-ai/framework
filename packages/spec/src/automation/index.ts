@@ -13,3 +13,4 @@ export * from './sync.zod';
 export * from './state-machine.zod';
 export * from './node-executor.zod';
 export * from './bpmn-interop.zod';
+export * from './bpmn-mapping';
