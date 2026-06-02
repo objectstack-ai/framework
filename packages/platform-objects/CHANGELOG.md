@@ -1,5 +1,50 @@
 # @objectstack/platform-objects
 
+## 7.7.0
+
+### Patch Changes
+
+- 023bf93: fix(spec): reject unknown top-level keys on `ObjectSchema.create()` (#1535)
+
+  `ObjectSchemaBase` is a plain `z.object({...})` (Zod default `.strip()`), so any
+  unknown top-level key passed to `ObjectSchema.create()` — `workflows`, a typo'd
+  `validation`/`indexs`, etc. — was discarded silently: no error, no warning, and a
+  green `tsc`. Declarative metadata an author believed they shipped (e.g. object-level
+  `workflows: [...]`) vanished from every built artifact, dead from day one. This is the
+  metadata-shape analogue of ADR-0032's "no silent failure" principle.
+
+  `create()` now rejects unknown top-level keys with a precise, fixable build error that
+  names the offending key(s), suggests the intended key on a likely typo
+  (`validation` → `validations`), and — for known-confusable keys like `workflows` —
+  points authors at the supported mechanism (a lifecycle hook `src/objects/<name>.hook.ts`
+  or a top-level `record_change` flow; there is no object-level `workflows[]` field). The
+  factory signature also constrains excess keys to `never`, so the mistake is caught at
+  `tsc` time as well as at build.
+
+  The non-strict `ObjectSchema.parse()` load path (registry/artifact validation) is
+  unchanged.
+
+  Also fixes two platform objects (`sys_secret`, `sys_setting_audit`) that carried
+  silently-stripped `views`/`scope`/`defaultViewName` keys: their intended list views are
+  migrated to the supported `listViews` field (`type: 'list'` → `'grid'`) so they now
+  render instead of being dropped. The `objectstack-data` skill's CRM blueprint no longer
+  teaches the non-existent `workflows[]` shape.
+
+- 764c747: fix(metadata): home the metadata-storage objects in metadata-core and register them from ObjectQL
+
+  Standalone "host config" apps boot without `@objectstack/metadata`'s MetadataPlugin, so nobody registered the metadata-storage objects (`sys_metadata`, `_history`, `_audit`, `sys_view_definition`) into ObjectQL — their tables were never schema-synced and ObjectQL's own protocol (`loadMetaFromDb` / `getMetaItems`) failed with `no such table: sys_metadata` on every read.
+
+  - Move the four storage-object definitions from `@objectstack/platform-objects/metadata` to `@objectstack/metadata-core` (the lowest package shared by their real consumers); `platform-objects/metadata` now re-exports them for back-compat.
+  - `ObjectQLPlugin` registers these objects itself (gated on `environmentId === undefined`, mirroring `restoreMetadataFromDb`) so their tables always sync on platform/standalone kernels.
+  - Gate the SQL driver's tenant-audit warning on actual multi-tenant mode — `organization_id` now exists on every table, so column presence alone no longer implies "tenant-scoped"; single-tenant boots no longer spam the warning for system writes.
+
+- Updated dependencies [b391955]
+- Updated dependencies [f06b64e]
+- Updated dependencies [023bf93]
+- Updated dependencies [764c747]
+  - @objectstack/spec@7.7.0
+  - @objectstack/metadata-core@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes

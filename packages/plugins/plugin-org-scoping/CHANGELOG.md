@@ -1,5 +1,17 @@
 # @objectstack/plugin-org-scoping
 
+## 7.7.0
+
+### Patch Changes
+
+- Updated dependencies [b391955]
+- Updated dependencies [f06b64e]
+- Updated dependencies [023bf93]
+- Updated dependencies [764c747]
+  - @objectstack/spec@7.7.0
+  - @objectstack/platform-objects@7.7.0
+  - @objectstack/core@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes
