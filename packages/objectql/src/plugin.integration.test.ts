@@ -978,14 +978,16 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Act
       await kernel.bootstrap();
 
-      // Assert — loadMetaFromDb must appear before any syncSchema call
+      // Assert — the RESTORED object must be synced AFTER it was hydrated from
+      // sys_metadata, so its table exists. (The built-in metadata-storage
+      // objects — sys_metadata, … — are registered up-front by ObjectQLPlugin
+      // and synced in the FIRST pass, i.e. before loadMetaFromDb; only the
+      // DB-restored custom objects depend on the post-hydration second pass.)
       const loadIdx = operations.indexOf('loadMetaFromDb');
       expect(loadIdx).toBeGreaterThanOrEqual(0);
 
-      const firstSync = operations.findIndex((op) => op.startsWith('syncSchema:'));
-      if (firstSync >= 0) {
-        expect(loadIdx).toBeLessThan(firstSync);
-      }
+      const restoredSyncIdx = operations.indexOf('syncSchema:restored_obj');
+      expect(restoredSyncIdx).toBeGreaterThan(loadIdx);
     });
   });
 

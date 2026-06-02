@@ -891,6 +891,9 @@ importers:
 
   packages/metadata-core:
     dependencies:
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../spec
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -982,6 +985,9 @@ importers:
 
   packages/platform-objects:
     dependencies:
+      '@objectstack/metadata-core':
+        specifier: workspace:*
+        version: link:../metadata-core
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec

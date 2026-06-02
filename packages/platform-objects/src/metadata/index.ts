@@ -1,19 +1,23 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * platform-objects/metadata — Metadata Storage Objects
+ * platform-objects/metadata — BACK-COMPAT RE-EXPORT.
  *
- * `sys_metadata` + `sys_metadata_history` are the canonical, single-source-of-truth
- * storage substrate for ALL metadata customisations (see ADR 0005). The previously
- * shipped per-type projection objects (`sys_object`, `sys_view`, `sys_flow`,
- * `sys_agent`, `sys_tool`) were removed in 2026-05 — they duplicated Zod schemas
- * from `@objectstack/spec` and the projection pipeline they fed has been removed
- * along with them. Out-of-box metadata lives in the compiled artifact (loaded by
- * `SchemaRegistry`); customer overrides live in `sys_metadata` as JSON.
+ * The metadata-storage object definitions (`sys_metadata`,
+ * `sys_metadata_history`, `sys_metadata_audit`, `sys_view_definition`) have
+ * MOVED to `@objectstack/metadata-core` — the lowest package shared by their
+ * actual consumers (the ObjectQL protocol that reads/writes them, and the
+ * metadata layer's `DatabaseLoader`). They no longer live in platform-objects.
+ *
+ * This module re-exports them so the legacy `@objectstack/platform-objects/metadata`
+ * import path keeps working during the migration. Prefer importing from
+ * `@objectstack/metadata-core` directly.
  */
 
-export { SysMetadataObject, SysMetadataObject as SysMetadata } from './sys-metadata.object.js';
-export { SysMetadataHistoryObject } from './sys-metadata-history.object.js';
-export { SysMetadataAuditObject } from './sys-metadata-audit.object.js';
-// Runtime view storage (shared / personal layers) — "Object has-many View".
-export { SysViewDefinitionObject } from './sys-view-definition.object.js';
+export {
+  SysMetadataObject,
+  SysMetadata,
+  SysMetadataHistoryObject,
+  SysMetadataAuditObject,
+  SysViewDefinitionObject,
+} from '@objectstack/metadata-core';

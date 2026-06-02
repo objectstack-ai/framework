@@ -13,7 +13,7 @@ import {
     SysMetadataHistoryObject,
     SysMetadataAuditObject,
     SysViewDefinitionObject,
-} from '@objectstack/platform-objects/metadata';
+} from '@objectstack/metadata-core';
 
 // `SysMetadataObject` + `SysMetadataHistoryObject` are the customer overlay
 // storage substrate (ADR-0005). They must always be auto-provisioned so

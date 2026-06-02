@@ -36,6 +36,7 @@
     "change-log"
   ],
   "dependencies": {
+    "@objectstack/spec": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
