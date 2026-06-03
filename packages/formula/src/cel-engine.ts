@@ -72,6 +72,17 @@ function coerce(value: unknown): unknown {
 const NUMERIC_STRING_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 /**
+ * A string that is an ISO-8601 date (`"2026-06-20"`) or date-time
+ * (`"2026-06-20T08:15:35.244Z"`, `"2026-06-20 08:15"`, `"...+02:00"`). Strict
+ * and anchored — no nested unbounded quantifiers, so no ReDoS hazard (every
+ * sub-group is bounded or a single `\.\d+`). `Field.date` / `Field.datetime`
+ * serialize to these; cel-js compares them as `string` and faults against the
+ * `google.protobuf.Timestamp` returned by `today()` / `now()` / `daysFromNow()`.
+ */
+const ISO_TEMPORAL_STRING_RE =
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
  * cel-js raises `no such overload: dyn <op> int` (and kin) when a comparison
  * or arithmetic operator sees a `string` on one side and a number on the
  * other. ADR-0032 §1c — numeric fields that serialize as strings (`Field.rating`
@@ -85,27 +96,33 @@ function isNumericOverloadError(err: unknown): boolean {
 }
 
 /**
- * Recursively coerce string values that are *entirely* numeric literals into
- * numbers. Used only on the {@link isNumericOverloadError} retry path, so it
- * can never change a comparison that already evaluated cleanly — it only
- * rescues one that already faulted. Dates and non-numeric strings pass through
- * untouched (a zip like `"02134"` only changes if the surrounding expression
- * already faulted, in which case the original loud error is preserved when the
- * retry still cannot type-check).
+ * Recursively coerce string values that faulted a CEL overload into their
+ * intended primitive: entirely-numeric literals → `number` (#1534), and
+ * ISO-8601 date / date-time strings → `Date` (cel-js `google.protobuf.Timestamp`)
+ * (#1530). Used only on the {@link isNumericOverloadError} retry path, so it can
+ * never change a comparison that already evaluated cleanly — it only rescues one
+ * that already faulted. Strings that are neither (a zip like `"02134"`, free
+ * text) pass through untouched; if the retry still cannot type-check, the
+ * original loud error is preserved.
  */
-function hydrateNumericStrings(value: unknown): unknown {
+function hydrateOverloadStrings(value: unknown): unknown {
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (trimmed.length > 0 && NUMERIC_STRING_RE.test(trimmed)) {
-      const n = Number(trimmed);
-      if (Number.isFinite(n)) return n;
+    if (trimmed.length > 0) {
+      if (NUMERIC_STRING_RE.test(trimmed)) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) return n;
+      } else if (ISO_TEMPORAL_STRING_RE.test(trimmed)) {
+        const ms = Date.parse(trimmed);
+        if (!Number.isNaN(ms)) return new Date(ms);
+      }
     }
     return value;
   }
-  if (Array.isArray(value)) return value.map(hydrateNumericStrings);
+  if (Array.isArray(value)) return value.map(hydrateOverloadStrings);
   if (value && typeof value === 'object' && !(value instanceof Date)) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = hydrateNumericStrings(v);
+    for (const [k, v] of Object.entries(value)) out[k] = hydrateOverloadStrings(v);
     return out;
   }
   return value;
@@ -170,14 +187,18 @@ export const celEngine: DialectEngine = {
         const raw = env.evaluate(source, scope);
         return { ok: true, value: coerce(raw) as T };
       } catch (err) {
-        // ADR-0032 §1c — string-serialized numeric fields (`rating` → `"5.0"`,
-        // `amount` → `"250000.00"`) make `record.rating >= 4` raise CEL's
-        // `no such overload: dyn >= int`. Hydrate purely-numeric strings to
-        // numbers and retry ONCE. This only runs after a fault, so a comparison
-        // that already evaluated cleanly is never re-interpreted; if the retry
-        // still cannot type-check, the original loud error is reported (#1534).
+        // ADR-0032 §1c — string-serialized fields make CEL raise
+        // `no such overload`: numeric fields (`rating` → `"5.0"`,
+        // `amount` → `"250000.00"`) on `record.rating >= 4` (#1534), and
+        // date/datetime fields (`end_date` → `"2026-06-20"`) on
+        // `record.end_date <= daysFromNow(60)` (#1530), since cel-js compares the
+        // raw string against the `google.protobuf.Timestamp` from `today()` etc.
+        // Hydrate those strings to number / Date and retry ONCE. This only runs
+        // after a fault, so a comparison that already evaluated cleanly is never
+        // re-interpreted; if the retry still cannot type-check, the original loud
+        // error is reported.
         if (!isNumericOverloadError(err)) throw err;
-        const hydrated = hydrateNumericStrings(scope) as Record<string, unknown>;
+        const hydrated = hydrateOverloadStrings(scope) as Record<string, unknown>;
         try {
           const raw = env.evaluate(source, hydrated);
           return { ok: true, value: coerce(raw) as T };
