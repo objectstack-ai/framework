@@ -1524,6 +1524,47 @@ export class RestServer {
             });
         }
 
+        // GET /meta/_drafts - Pending DRAFT items (ADR-0033)
+        //
+        // Surfaces draft-state metadata that the active-only `/meta/:type`
+        // list hides, so the console can show a "pending changes" view and
+        // draft-aware package contents (a just-built app package no longer
+        // looks empty). Optionally narrowed by `?packageId=` and/or `?type=`.
+        //
+        // Registered BEFORE `/meta/:type` so the `_drafts` segment is not
+        // captured as a `:type` parameter.
+        if (metadata.endpoints.items !== false) {
+            this.routeManager.register({
+                method: 'GET',
+                path: `${metaPath}/_drafts`,
+                handler: async (req: any, res: any) => {
+                    try {
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        if (typeof (p as any).listDrafts !== 'function') {
+                            res.status(501).json({
+                                error: 'not_implemented',
+                                message: 'protocol.listDrafts() is not available in this kernel',
+                            });
+                            return;
+                        }
+                        const result = await (p as any).listDrafts({
+                            packageId: (req.query?.packageId as string | undefined) || undefined,
+                            type: (req.query?.type as string | undefined) || undefined,
+                        });
+                        res.json(result);
+                    } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
+                        sendError(res, error);
+                    }
+                },
+                metadata: {
+                    summary: 'List pending draft metadata items',
+                    tags: ['metadata'],
+                },
+            });
+        }
+
         // GET /meta/:type - List items of a type
         if (metadata.endpoints.items !== false) {
             this.routeManager.register({

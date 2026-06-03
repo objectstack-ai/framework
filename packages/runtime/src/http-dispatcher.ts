@@ -975,7 +975,7 @@ export class HttpDispatcher {
         // so the console can show what an AI authored but nobody published yet.
         // `_drafts` is intercepted before the generic `:type` handler below so it
         // is never mistaken for a metadata type name.
-        if (parts.length === 1 && parts[0] === '_drafts' && method === 'GET') {
+        if (parts.length === 1 && parts[0] === '_drafts' && (!method || method.toUpperCase() === 'GET')) {
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.listDrafts === 'function') {
                 try {

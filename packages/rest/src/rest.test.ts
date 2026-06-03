@@ -1185,6 +1185,10 @@ describe('RestServer project-scoped routing', () => {
     const paths = rest.getRoutes().map(r => r.path);
     expect(paths).toContain('/api/v1/data/:object');
     expect(paths.some(p => p.includes('/environments/:environmentId'))).toBe(false);
+    // ADR-0033 drafts list endpoint, registered BEFORE the greedy `/meta/:type`
+    // param route so `_drafts` isn't captured as a type name.
+    expect(paths).toContain('/api/v1/meta/_drafts');
+    expect(paths.indexOf('/api/v1/meta/_drafts')).toBeLessThan(paths.indexOf('/api/v1/meta/:type'));
   });
 
   it("registers both unscoped and scoped routes in 'auto' mode", () => {

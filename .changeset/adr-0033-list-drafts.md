@@ -1,5 +1,6 @@
 ---
 "@objectstack/objectql": minor
+"@objectstack/rest": patch
 "@objectstack/runtime": patch
 ---
 
@@ -9,6 +10,6 @@ AI-authored metadata lands as drafts (`sys_metadata` rows with `state='draft'`, 
 
 - `SysMetadataRepository.listDrafts({type?, packageId?})` lists draft rows (mirrors `list()` but scoped to `state='draft'`, optionally narrowed by package), returning a light header projection (no body) with `packageId`.
 - `protocol.listDrafts({packageId?, type?, organizationId?})` exposes it over the overlay repo.
-- `GET /api/v1/meta/_drafts?packageId=&type=` surfaces it to the console (the `_drafts` segment is intercepted before the generic `:type` list handler so it's never treated as a metadata type).
+- `GET /api/v1/meta/_drafts?packageId=&type=` surfaces it to the console. Registered in the REST server before the greedy `/meta/:type` route (and mirrored in the dispatcher) so `_drafts` is never captured as a metadata type name.
 
 Read-only; no behavior change to existing list/publish paths. Powers the upcoming Studio "drafts/pending changes" view and draft-aware package contents.
