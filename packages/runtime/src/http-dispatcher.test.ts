@@ -1003,6 +1003,58 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // GET /metadata/_drafts — ADR-0033 pending-changes list
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('GET /metadata/_drafts', () => {
+        it('routes to protocol.listDrafts with packageId + type and returns drafts', async () => {
+            const listDrafts = vi.fn().mockResolvedValue({
+                drafts: [{ type: 'object', name: 'course', packageId: 'app.edu', updatedAt: 't1', updatedBy: 'ai' }],
+            });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ listDrafts });
+                return null;
+            });
+
+            const result = await dispatcher.handleMetadata('_drafts', { request: {} }, 'GET', undefined, {
+                packageId: 'app.edu',
+                type: 'object',
+            });
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(listDrafts).toHaveBeenCalledWith(
+                expect.objectContaining({ packageId: 'app.edu', type: 'object' }),
+            );
+            expect((result.response as any)?.body?.data?.drafts?.[0]?.name).toBe('course');
+        });
+
+        it('returns 501 when the protocol does not implement listDrafts', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({});
+                return null;
+            });
+
+            const result = await dispatcher.handleMetadata('_drafts', { request: {} }, 'GET', undefined, {});
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(501);
+        });
+
+        it('is not mistaken for a metadata type (does not hit getMetaItems)', async () => {
+            const getMetaItems = vi.fn().mockResolvedValue({ items: [] });
+            const listDrafts = vi.fn().mockResolvedValue({ drafts: [] });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ getMetaItems, listDrafts });
+                return null;
+            });
+
+            await dispatcher.handleMetadata('_drafts', { request: {} }, 'GET', undefined, {});
+            expect(listDrafts).toHaveBeenCalledTimes(1);
+            expect(getMetaItems).not.toHaveBeenCalled();
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // Metadata getPublished Endpoint
     // ═══════════════════════════════════════════════════════════════
 

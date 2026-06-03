@@ -970,6 +970,29 @@ export class HttpDispatcher {
             }
         }
         
+        // GET /metadata/_drafts?packageId=&type=  (ADR-0033 pending-changes list)
+        // Surfaces draft-state metadata the active-only `getMetaItems` list hides,
+        // so the console can show what an AI authored but nobody published yet.
+        // `_drafts` is intercepted before the generic `:type` handler below so it
+        // is never mistaken for a metadata type name.
+        if (parts.length === 1 && parts[0] === '_drafts' && method === 'GET') {
+            const protocol = await this.resolveService('protocol');
+            if (protocol && typeof protocol.listDrafts === 'function') {
+                try {
+                    const organizationId = await this.resolveActiveOrganizationId(_context);
+                    const data = await protocol.listDrafts({
+                        packageId: query?.packageId || undefined,
+                        type: query?.type || undefined,
+                        organizationId,
+                    });
+                    return { handled: true, response: this.success(data) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e.message, 500) };
+                }
+            }
+            return { handled: true, response: this.error('Draft listing not supported', 501) };
+        }
+
         // GET /metadata/:type (List items of type) OR /metadata/:objectName (Legacy)
         if (parts.length === 1) {
             const typeOrName = parts[0];

@@ -3688,6 +3688,36 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     /**
+     * List pending DRAFT metadata (ADR-0033) for the org, optionally narrowed
+     * by `packageId` and/or `type`. The list reads of `getMetaItems` only see
+     * the ACTIVE registry; this exposes what an AI authored but a human hasn't
+     * published yet, so the console can show a "pending changes" surface and a
+     * just-built app package isn't displayed as empty. No body is returned.
+     */
+    async listDrafts(request?: {
+        packageId?: string;
+        type?: string;
+        organizationId?: string;
+    }): Promise<{
+        drafts: Array<{
+            type: string;
+            name: string;
+            packageId: string | null;
+            updatedAt: string | null;
+            updatedBy: string | null;
+        }>;
+    }> {
+        await this.ensureOverlayIndex();
+        const orgId = request?.organizationId ?? null;
+        const repo = this.getOverlayRepo(orgId);
+        const drafts = await repo.listDrafts({
+            ...(request?.type ? { type: PLURAL_TO_SINGULAR[request.type] ?? request.type } : {}),
+            ...(request?.packageId ? { packageId: request.packageId } : {}),
+        });
+        return { drafts };
+    }
+
+    /**
      * Restore the body recorded at history `toVersion` as the new
      * live row. Writes a history event with `op='revert'`. 404
      * (`[version_not_found]`) when the target version doesn't exist;

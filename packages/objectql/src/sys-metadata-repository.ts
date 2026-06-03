@@ -685,6 +685,42 @@ export class SysMetadataRepository implements MetadataRepository {
   }
 
   /**
+   * List pending DRAFT rows (ADR-0033) for this org, optionally narrowed by
+   * `type` and/or `packageId`. Unlike {@link list} (which is hard-scoped to
+   * `state='active'`), this reads `state='draft'` so the console can surface
+   * what an AI authored but a human hasn't published yet. Returns a light
+   * header projection (no body) suitable for a "pending changes" list.
+   */
+  async listDrafts(filter?: {
+    type?: string;
+    packageId?: string;
+  }): Promise<
+    Array<{
+      type: string;
+      name: string;
+      packageId: string | null;
+      updatedAt: string | null;
+      updatedBy: string | null;
+    }>
+  > {
+    this.assertOpen();
+    const where: Record<string, unknown> = {
+      organization_id: this.organizationId,
+      state: 'draft',
+    };
+    if (filter?.type) where.type = filter.type;
+    if (filter?.packageId) where.package_id = filter.packageId;
+    const rows = await this.engine.find('sys_metadata', { where });
+    return (rows as any[]).map((row) => ({
+      type: row.type,
+      name: row.name,
+      packageId: row.package_id ?? null,
+      updatedAt: row.updated_at ?? row.created_at ?? null,
+      updatedBy: row.updated_by ?? row.created_by ?? null,
+    }));
+  }
+
+  /**
    * Yield every history event for `(org, type?, name?)` from the
    * durable log, ordered by per-(type,name) `version` ascending. When
    * `filter.type`/`filter.name` are unset the consumer gets the full
