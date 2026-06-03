@@ -1,5 +1,54 @@
 # @objectstack/runtime
 
+## 7.9.0
+
+### Patch Changes
+
+- ac1fc4c: feat(metadata): draft-overlay reads so an admin can render the console off pending drafts before publish
+
+  ADR-0033's loop is `build (draft) → review → publish`, but "review" was only a JSON diff — the one thing that actually confirms an AI/hand-authored change (the rendered object page / kanban / form / nav) only existed _after_ publish. That forces publishing unreviewed metadata just to look at it, defeating the draft gate.
+
+  This adds a request-scoped **draft-overlay read mode** to the metadata resolution layer:
+
+  - `getMetaItems({ …, previewDrafts })` — after the active overlay, overlays `state='draft'` rows on top (draft WINS on name collision; draft-only items surface too). Drafts are never hydrated into the process-wide SchemaRegistry.
+  - `getMetaItem({ …, previewDrafts })` — non-strict: prefers a draft row if one exists, else falls back to the active value (unlike the strict `state:'draft'` mode, which 404s `no_draft`).
+  - Every overlaid item is tagged `_draft: true` so the UI can badge it and show a "preview" banner.
+  - The runtime HTTP dispatcher threads `?preview=draft` on `GET /metadata/:type` and `GET /metadata/:type/:name` into these reads.
+
+  The same overlay also unblocks the AI authoring agent referencing its own just-drafted objects (a follow-up will point `list_metadata` at it). Admin gating of the `?preview=draft` flag is a deliberate follow-up step.
+
+  Note: a brand-new draft object has no physical table until publish, so preview renders its _shape_ (form/view/kanban/nav) but shows no data; field-additions to existing objects preview fully.
+
+- ac1fc4c: feat(packages): one-click discard-drafts and full delete for a package
+
+  Two distinct package-level lifecycle operations, both built on the per-item delete primitive:
+
+  - **`discardPackageDrafts(packageId)`** — drop every pending DRAFT bound to the package, reverting it to its last published baseline. NON-destructive: active/published metadata and physical tables are untouched. Use case: "I edited this app for a while and it turned out worse than before — abandon all my changes." Routes through the sys_metadata path (no metadata-service dependency, unlike the existing `POST /packages/:id/revert`, which 503s without a metadata service). REST: `POST /packages/:id/discard-drafts`.
+
+  - **`deletePackage(packageId)`** — remove the ENTIRE package: every `sys_metadata` row (active + draft) and, by default, the physical table of each object it defined (DESTRUCTIVE). `keepData: true` removes metadata but preserves tables; the `sys_`-table guard still applies. Use case: "I don't want this package anymore." `DELETE /packages/:id` now performs this persisted removal in addition to the in-memory registry unregister it already did (previously it left AI/runtime packages' rows and tables behind); `?keepData=true` opts out of teardown.
+
+  Drafts are deleted before active rows so each object's table is torn down exactly once. Per-item failures are collected without aborting the rest.
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+  - @objectstack/objectql@7.9.0
+  - @objectstack/rest@7.9.0
+  - @objectstack/spec@7.9.0
+  - @objectstack/core@7.9.0
+  - @objectstack/types@7.9.0
+  - @objectstack/metadata@7.9.0
+  - @objectstack/observability@7.9.0
+  - @objectstack/formula@7.9.0
+  - @objectstack/driver-memory@7.9.0
+  - @objectstack/driver-sql@7.9.0
+  - @objectstack/driver-sqlite-wasm@7.9.0
+  - @objectstack/plugin-auth@7.9.0
+  - @objectstack/plugin-org-scoping@7.9.0
+  - @objectstack/plugin-security@7.9.0
+  - @objectstack/service-cluster@7.9.0
+  - @objectstack/service-i18n@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes

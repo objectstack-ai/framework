@@ -1,5 +1,13 @@
 # @objectstack/driver-sqlite-wasm
 
+## 7.9.0
+
+### Patch Changes
+
+- @objectstack/spec@7.9.0
+- @objectstack/core@7.9.0
+- @objectstack/driver-sql@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes

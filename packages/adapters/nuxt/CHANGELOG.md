@@ -1,5 +1,13 @@
 # @objectstack/nuxt
 
+## 7.9.0
+
+### Patch Changes
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+  - @objectstack/runtime@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes
