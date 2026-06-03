@@ -1933,6 +1933,12 @@ export class RestServer {
                         ? 'draft' as const
                         : undefined;
 
+                    // `?dropStorage=true` also tears down the object's physical
+                    // table (object + active only). Used by the "discard a
+                    // previewed object" flow so a publish-to-preview leaves no
+                    // orphan table. Destructive — opt-in, defaults off.
+                    const dropStorage = req.query?.dropStorage === 'true' || req.query?.dropStorage === '1';
+
                     const result = await (p as any).deleteMetaItem({
                         type: req.params.type,
                         name: req.params.name,
@@ -1940,6 +1946,7 @@ export class RestServer {
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
                         ...(stateParam ? { state: stateParam } : {}),
+                        ...(dropStorage ? { dropStorage: true } : {}),
                     });
                     res.json(result);
                 } catch (error: any) {

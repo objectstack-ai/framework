@@ -2362,6 +2362,23 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Drop the physical storage (table/collection) backing an object — the
+   * inverse of {@link syncObjectSchema}. DESTRUCTIVE: deletes all rows in the
+   * table. Used by the protocol delete path when the caller explicitly opts
+   * into storage teardown (e.g. discarding an object that was published only
+   * to preview it). No-op when the object's driver does not expose `dropTable`.
+   * Resolves the physical table name from the registered definition, falling
+   * back to the bare name if the def was already removed.
+   */
+  async dropObjectSchema(objectName: string): Promise<void> {
+    const obj = this._registry.getObject(objectName) as any;
+    const driver = this.getDriverForObject(objectName);
+    if (!driver || typeof (driver as any).dropTable !== 'function') return;
+    const tableName = StorageNameMapping.resolveTableName(obj ?? ({ name: objectName } as any));
+    await (driver as any).dropTable(tableName);
+  }
+
+  /**
    * Get a registered driver by datasource name.
    * Alias matching @objectql/core datasource() API.
    *

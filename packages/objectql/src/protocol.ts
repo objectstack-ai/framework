@@ -1131,7 +1131,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getMetaItems(request: { type: string; packageId?: string; organizationId?: string }) {
+    async getMetaItems(request: { type: string; packageId?: string; organizationId?: string; previewDrafts?: boolean }) {
         const { packageId } = request;
         let items: unknown[] = [];
 
@@ -1231,6 +1231,55 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         } catch {
             // DB not available — fall through with whatever we already have.
+        }
+
+        // ADR-0033 draft-overlay preview: when the caller opts in (admin-gated
+        // upstream — see http-dispatcher), overlay `state='draft'` rows on top of
+        // the active result so the rendered console can preview pending changes
+        // BEFORE publish (instead of only reading them as a JSON diff). Draft rows
+        // WIN over active on name collision, and draft-only items (e.g. a brand-new
+        // AI-authored object) surface too. Each overlaid item is tagged `_draft:true`
+        // so the UI can badge it and show the "PREVIEW — drafts" banner. We do NOT
+        // hydrate the SchemaRegistry from drafts — drafts must never leak into the
+        // process-wide registry or to non-preview reads.
+        if (request.previewDrafts) {
+            try {
+                const orgId = (request as any).organizationId as string | undefined;
+                const queryDrafts = async (oid: string | null): Promise<any[]> => {
+                    const whereClause: Record<string, unknown> = { type: request.type, state: 'draft', organization_id: oid };
+                    if (packageId) whereClause.package_id = packageId;
+                    let rs = await this.engine.find('sys_metadata', { where: whereClause });
+                    if (!rs || rs.length === 0) {
+                        const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                        if (alt) {
+                            const altWhere: Record<string, unknown> = { type: alt, state: 'draft', organization_id: oid };
+                            if (packageId) altWhere.package_id = packageId;
+                            rs = await this.engine.find('sys_metadata', { where: altWhere });
+                        }
+                    }
+                    return rs ?? [];
+                };
+                const draftRecords = [...(await queryDrafts(null)), ...(orgId ? await queryDrafts(orgId) : [])];
+                if (draftRecords.length > 0) {
+                    const byName = new Map<string, any>();
+                    for (const existing of items) {
+                        const entry = existing as any;
+                        if (entry && typeof entry === 'object' && 'name' in entry) byName.set(entry.name, entry);
+                    }
+                    for (const record of draftRecords) {
+                        const data = typeof record.metadata === 'string' ? JSON.parse(record.metadata) : record.metadata;
+                        if (data && typeof data === 'object' && 'name' in data) {
+                            const recPkg = (record as { package_id?: string | null }).package_id ?? undefined;
+                            if (recPkg && (data as any)._packageId === undefined) (data as any)._packageId = recPkg;
+                            (data as any)._draft = true;
+                            byName.set(data.name, data);
+                        }
+                    }
+                    items = Array.from(byName.values());
+                }
+            } catch {
+                // DB unavailable — serve the active result unchanged.
+            }
         }
 
         // Merge with MetadataService (runtime-registered items: agents, tools, etc.)
@@ -1334,12 +1383,50 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getMetaItem(request: { type: string, name: string, packageId?: string, organizationId?: string, state?: 'active' | 'draft' }) {
+    async getMetaItem(request: { type: string, name: string, packageId?: string, organizationId?: string, state?: 'active' | 'draft', previewDrafts?: boolean }) {
         let item: unknown;
         const orgId = request.organizationId;
         // Studio's editor opens a draft buffer with `state: 'draft'`;
         // runtime loaders omit it and get the live published row.
         const readState: 'active' | 'draft' = request.state === 'draft' ? 'draft' : 'active';
+
+        // ADR-0033 draft-overlay preview (non-strict): when the caller opts in
+        // (admin-gated upstream), prefer a `state='draft'` row if one exists, else
+        // fall back to the active read below. This differs from the strict
+        // `state:'draft'` mode, which 404s (`no_draft`) when no draft exists — the
+        // render path must degrade to the published value, not error. The draft
+        // item is tagged `_draft:true` so the UI can badge it.
+        if (request.previewDrafts && readState !== 'draft') {
+            try {
+                const findDraft = async (oid: string | null): Promise<any | undefined> => {
+                    const rec = await this.engine.findOne('sys_metadata', {
+                        where: { type: request.type, name: request.name, state: 'draft', organization_id: oid },
+                    });
+                    if (rec) return rec;
+                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                    if (alt) {
+                        return await this.engine.findOne('sys_metadata', {
+                            where: { type: alt, name: request.name, state: 'draft', organization_id: oid },
+                        });
+                    }
+                    return undefined;
+                };
+                const draftRec = (orgId ? await findDraft(orgId) : undefined) ?? await findDraft(null);
+                if (draftRec) {
+                    const draftItem = typeof draftRec.metadata === 'string'
+                        ? JSON.parse(draftRec.metadata)
+                        : draftRec.metadata;
+                    if (draftItem && typeof draftItem === 'object') {
+                        const recPkg = (draftRec as { package_id?: string | null }).package_id ?? undefined;
+                        if (recPkg && (draftItem as any)._packageId === undefined) (draftItem as any)._packageId = recPkg;
+                        (draftItem as any)._draft = true;
+                    }
+                    return { type: request.type, name: request.name, item: decorateMetadataItem(request.type, draftItem) };
+                }
+            } catch {
+                // DB unavailable — fall through to the active read.
+            }
+        }
 
         // 1. Customization overlay lookup (sys_metadata).
         //    Per ADR-0005 (revised), org-scoped row wins; env-wide
@@ -3234,6 +3321,39 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
     }
 
+    /**
+     * Inverse of {@link ensureObjectStorage}: drop an object's physical table.
+     * DESTRUCTIVE — deletes the table and all its rows. Only invoked when a
+     * delete explicitly opts into storage teardown (see {@link deleteMetaItem}'s
+     * `dropStorage`), so publishing an object solely to preview it can be undone
+     * without leaving an orphan table. Best-effort: a failure is logged, not
+     * thrown — the metadata delete already succeeded, and a stray table is
+     * reclaimed by the next sync/drop rather than blocking the delete.
+     */
+    private async dropObjectStorage(type: string, name: string): Promise<void> {
+        if (type !== 'object' && type !== 'objects') return;
+        try {
+            await this.engine.dropObjectSchema(name);
+        } catch (err: any) {
+            console.warn(`[Protocol] table drop failed for object '${name}': ${err?.message ?? err}`);
+        }
+    }
+
+    /**
+     * Guard for storage teardown on delete. Drops a physical table only when
+     * the caller opted in AND it is safe: object types only (others have no
+     * table), active state only (drafts were never materialised), and never a
+     * `sys_`-prefixed platform table.
+     */
+    private shouldDropStorage(type: string, name: string, dropStorage: boolean | undefined, state: 'active' | 'draft'): boolean {
+        if (!dropStorage) return false;
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        if (singular !== 'object') return false;
+        if (state !== 'active') return false;
+        if (name.startsWith('sys_')) return false;
+        return true;
+    }
+
     async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string, parentVersion?: string | null, actor?: string, force?: boolean, mode?: 'draft' | 'publish', packageId?: string | null }) {
         if (!request.item) {
             throw new Error('Item data is required');
@@ -3830,6 +3950,132 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     /**
+     * Discard every pending DRAFT bound to a package — the NON-destructive
+     * inverse of {@link publishPackageDrafts}. Drops only `state='draft'` rows
+     * (via the per-item delete primitive), reverting the package to its last
+     * published baseline; active/published metadata and physical tables are
+     * left untouched.
+     *
+     * Use case: "I edited this app for a while and it turned out worse than
+     * before — abandon all my changes." Routes through the sys_metadata path
+     * (no metadata-service dependency, unlike `POST /packages/:id/revert`).
+     */
+    async discardPackageDrafts(request: {
+        packageId: string;
+        organizationId?: string;
+        actor?: string;
+    }): Promise<{
+        success: boolean;
+        discardedCount: number;
+        failedCount: number;
+        discarded: Array<{ type: string; name: string }>;
+        failed: Array<{ type: string; name: string; error: string; code?: string }>;
+    }> {
+        await this.ensureOverlayIndex();
+        const orgId = request.organizationId ?? null;
+        const repo = this.getOverlayRepo(orgId);
+        const drafts = await repo.listDrafts({ packageId: request.packageId });
+
+        const discarded: Array<{ type: string; name: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
+
+        for (const d of drafts) {
+            try {
+                await this.deleteMetaItem({
+                    type: d.type,
+                    name: d.name,
+                    state: 'draft',
+                    ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                });
+                discarded.push({ type: d.type, name: d.name });
+            } catch (e: any) {
+                failed.push({
+                    type: d.type,
+                    name: d.name,
+                    error: e?.message ?? 'discard failed',
+                    ...(e?.code ? { code: e.code } : {}),
+                });
+            }
+        }
+
+        return {
+            success: failed.length === 0 && discarded.length > 0,
+            discardedCount: discarded.length,
+            failedCount: failed.length,
+            discarded,
+            failed,
+        };
+    }
+
+    /**
+     * Delete an ENTIRE package: every `sys_metadata` row bound to it (active
+     * AND draft) and — by default — the physical table of each object it
+     * defined. DESTRUCTIVE: removes the app and its data. Use case: "I don't
+     * want this package anymore."
+     *
+     * Set `keepData: true` to remove the metadata but preserve object tables.
+     * The `sys_`-table guard in {@link deleteMetaItem} still applies, so
+     * platform storage is never dropped. Drafts are removed before active rows
+     * so each object's table is torn down once. Per-item failures are collected
+     * without aborting the rest.
+     */
+    async deletePackage(request: {
+        packageId: string;
+        organizationId?: string;
+        actor?: string;
+        keepData?: boolean;
+    }): Promise<{
+        success: boolean;
+        deletedCount: number;
+        failedCount: number;
+        deleted: Array<{ type: string; name: string; state: string }>;
+        failed: Array<{ type: string; name: string; error: string; code?: string }>;
+    }> {
+        const where: Record<string, unknown> = { package_id: request.packageId };
+        if (request.organizationId) where.organization_id = request.organizationId;
+        const rows = (await this.engine.find('sys_metadata', { where })) as any[];
+
+        const dropStorage = request.keepData !== true;
+        // Delete drafts before active so an object's table is dropped once (on
+        // the active delete), not pre-empted by a draft delete.
+        const ordered = [...rows].sort((a, b) => (a.state === 'draft' ? 0 : 1) - (b.state === 'draft' ? 0 : 1));
+
+        const deleted: Array<{ type: string; name: string; state: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
+
+        for (const row of ordered) {
+            const state: 'active' | 'draft' = row.state === 'draft' ? 'draft' : 'active';
+            try {
+                await this.deleteMetaItem({
+                    type: row.type,
+                    name: row.name,
+                    state,
+                    ...(row.organization_id ? { organizationId: row.organization_id } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                    ...(dropStorage ? { dropStorage: true } : {}),
+                });
+                deleted.push({ type: row.type, name: row.name, state });
+            } catch (e: any) {
+                failed.push({
+                    type: row.type,
+                    name: row.name,
+                    error: e?.message ?? 'delete failed',
+                    ...(e?.code ? { code: e.code } : {}),
+                });
+            }
+        }
+
+        return {
+            success: failed.length === 0 && deleted.length > 0,
+            deletedCount: deleted.length,
+            failedCount: failed.length,
+            deleted,
+            failed,
+        };
+    }
+
+    /**
      * Restore the body recorded at history `toVersion` as the new
      * live row. Writes a history event with `op='revert'`. 404
      * (`[version_not_found]`) when the target version doesn't exist;
@@ -4038,6 +4284,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         parentVersion?: string | null;
         actor?: string;
         state?: 'active' | 'draft';
+        /**
+         * When true, also drop the object's physical table after the metadata
+         * is removed (object + active only; never `sys_`). Default false keeps
+         * delete non-destructive to data. Used by the "discard a previewed
+         * object" flow so a publish-to-preview leaves no orphan table.
+         */
+        dropStorage?: boolean;
     }): Promise<{
         success: boolean;
         message?: string;
@@ -4154,6 +4407,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                 }
 
+                // Storage teardown (opt-in): drop the now-orphaned physical table
+                // for a discarded object so a publish-to-preview leaves no residue.
+                if (this.shouldDropStorage(request.type, request.name, request.dropStorage, targetState)) {
+                    await this.dropObjectStorage(singularTypeForRepo, request.name);
+                }
+
                 // ADR-0010 — success audit (best-effort).
                 await this.recordMetadataAudit({
                     type: request.type,
@@ -4213,6 +4472,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 };
             }
             await this.engine.delete('sys_metadata', { where: { id: existing.id } });
+
+            // Storage teardown (opt-in) — see the repo-path branch above.
+            {
+                const targetState: 'active' | 'draft' = request.state === 'draft' ? 'draft' : 'active';
+                if (this.shouldDropStorage(request.type, request.name, request.dropStorage, targetState)) {
+                    await this.dropObjectStorage(PLURAL_TO_SINGULAR[request.type] ?? request.type, request.name);
+                }
+            }
 
             if (this.environmentId === undefined) {
                 try {

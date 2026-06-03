@@ -134,6 +134,77 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
         });
     });
 
+    describe('getMetaItems draft-overlay preview (ADR-0033)', () => {
+        const seedActiveAndDraft = () => mockEngine.find.mockImplementation((_t: string, opts: any) => {
+            const w = opts?.where ?? {};
+            if (w.type !== 'app') return Promise.resolve([]);
+            if (w.state === 'active') {
+                return Promise.resolve([
+                    { type: 'app', name: 'shared', state: 'active', metadata: JSON.stringify({ name: 'shared', label: 'Active' }) },
+                    { type: 'app', name: 'published_only', state: 'active', metadata: JSON.stringify({ name: 'published_only', label: 'Pub' }) },
+                ]);
+            }
+            if (w.state === 'draft') {
+                return Promise.resolve([
+                    { type: 'app', name: 'shared', state: 'draft', package_id: 'app.x', metadata: JSON.stringify({ name: 'shared', label: 'Draft' }) },
+                    { type: 'app', name: 'draft_only', state: 'draft', package_id: 'app.x', metadata: JSON.stringify({ name: 'draft_only', label: 'New' }) },
+                ]);
+            }
+            return Promise.resolve([]);
+        });
+
+        it('overlays drafts on active when previewDrafts is set (draft wins, draft-only surfaces, _draft tagged)', async () => {
+            seedActiveAndDraft();
+            const result = await protocol.getMetaItems({ type: 'app', previewDrafts: true });
+            const items = result.items as any[];
+            expect(items.map((i) => i.name).sort()).toEqual(['draft_only', 'published_only', 'shared']);
+            const shared = items.find((i) => i.name === 'shared');
+            expect(shared.label).toBe('Draft');     // draft wins over active
+            expect(shared._draft).toBe(true);
+            const draftOnly = items.find((i) => i.name === 'draft_only');
+            expect(draftOnly._draft).toBe(true);
+            expect(draftOnly._packageId).toBe('app.x');
+            expect(items.find((i) => i.name === 'published_only')._draft).toBeUndefined(); // active untouched
+        });
+
+        it('hides drafts by default (no previewDrafts)', async () => {
+            seedActiveAndDraft();
+            const result = await protocol.getMetaItems({ type: 'app' });
+            const items = result.items as any[];
+            expect(items.map((i) => i.name).sort()).toEqual(['published_only', 'shared']);
+            expect(items.find((i) => i.name === 'shared').label).toBe('Active');
+            expect(items.some((i) => i.name === 'draft_only')).toBe(false);
+        });
+    });
+
+    describe('getMetaItem draft-overlay preview (ADR-0033)', () => {
+        it('returns the draft when previewDrafts and a draft exists (_draft tagged, non-strict)', async () => {
+            mockEngine.findOne.mockImplementation((_t: string, opts: any) => {
+                const w = opts?.where ?? {};
+                if (w.state === 'draft' && w.name === 'lead') {
+                    return Promise.resolve({ type: 'object', name: 'lead', state: 'draft', package_id: 'app.x', metadata: JSON.stringify({ name: 'lead', label: 'Draft Lead' }) });
+                }
+                return Promise.resolve(null);
+            });
+            const res: any = await protocol.getMetaItem({ type: 'object', name: 'lead', previewDrafts: true });
+            expect(res.item.label).toBe('Draft Lead');
+            expect(res.item._draft).toBe(true);
+        });
+
+        it('falls back to active when previewDrafts but no draft exists (no no_draft 404)', async () => {
+            mockEngine.findOne.mockImplementation((_t: string, opts: any) => {
+                const w = opts?.where ?? {};
+                if (w.state === 'active' && w.name === 'lead') {
+                    return Promise.resolve({ type: 'object', name: 'lead', state: 'active', metadata: JSON.stringify({ name: 'lead', label: 'Active Lead' }) });
+                }
+                return Promise.resolve(null); // no draft row
+            });
+            const res: any = await protocol.getMetaItem({ type: 'object', name: 'lead', previewDrafts: true });
+            expect(res.item.label).toBe('Active Lead');
+            expect(res.item._draft).toBeUndefined();
+        });
+    });
+
     describe('saveMetaItem', () => {
         it('should throw when item data is missing', async () => {
             await expect(

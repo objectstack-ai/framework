@@ -947,7 +947,11 @@ export class HttpDispatcher {
                 if (protocol && typeof protocol.getMetaItem === 'function') {
                      try {
                         const organizationId = await this.resolveActiveOrganizationId(_context);
-                        const data = await protocol.getMetaItem({ type: singularType, name, packageId, organizationId });
+                        // ADR-0033 draft-overlay preview: `?preview=draft` makes the
+                        // detail read prefer a pending draft (falling back to active).
+                        // Admin gating is layered on top in a follow-up (step 2).
+                        const previewDrafts = query?.preview === 'draft';
+                        const data = await protocol.getMetaItem({ type: singularType, name, packageId, organizationId, previewDrafts });
                         return { handled: true, response: this.success(data) };
                      } catch (e: any) {
                         // Protocol might throw if not found or not supported
@@ -1004,7 +1008,11 @@ export class HttpDispatcher {
             if (protocol && typeof protocol.getMetaItems === 'function') {
                 try {
                     const organizationId = await this.resolveActiveOrganizationId(_context);
-                    const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId });
+                    // ADR-0033 draft-overlay preview: `?preview=draft` overlays
+                    // pending drafts on the active list so an (admin) reviewer can
+                    // render the console off drafts before publishing.
+                    const previewDrafts = query?.preview === 'draft';
+                    const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId, previewDrafts });
                     // Return any valid response from protocol (including empty items arrays)
                     if (data && (data.items !== undefined || Array.isArray(data))) {
                         return { handled: true, response: this.success(data) };
@@ -1487,6 +1495,30 @@ export class HttpDispatcher {
                 return { handled: true, response: this.error('Draft publishing not supported', 501) };
             }
 
+            // POST /packages/:id/discard-drafts → drop every pending DRAFT bound
+            // to the package, reverting it to its last published baseline
+            // ("abandon all my changes"). NON-destructive: active metadata and
+            // physical tables are untouched. Routes through the sys_metadata
+            // path (no metadata-service dependency, unlike /revert below).
+            if (parts.length === 2 && parts[1] === 'discard-drafts' && m === 'POST') {
+                const id = decodeURIComponent(parts[0]);
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).discardPackageDrafts === 'function') {
+                    try {
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const result = await (protocol as any).discardPackageDrafts({
+                            packageId: id,
+                            ...(organizationId ? { organizationId } : {}),
+                            ...(body?.actor ? { actor: body.actor } : {}),
+                        });
+                        return { handled: true, response: this.success(result) };
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+                return { handled: true, response: this.error('Draft discarding not supported', 501) };
+            }
+
             // POST /packages/:id/revert → revert package to last published state
             if (parts.length === 2 && parts[1] === 'revert' && m === 'POST') {
                 const id = decodeURIComponent(parts[0]);
@@ -1517,12 +1549,39 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(pkg) };
             }
 
-            // DELETE /packages/:id → uninstall package
+            // DELETE /packages/:id → delete the package. Unregisters it from the
+            // in-memory registry AND removes its persisted sys_metadata rows
+            // (active + draft), tearing down each object's physical table by
+            // default. `?keepData=true` preserves object tables (metadata-only
+            // delete). Use case: "I don't want this package anymore."
             if (parts.length === 1 && m === 'DELETE') {
                 const id = decodeURIComponent(parts[0]);
-                const success = registry.uninstallPackage(id);
-                if (!success) return { handled: true, response: this.error(`Package '${id}' not found`, 404) };
-                return { handled: true, response: this.success({ success: true }) };
+                const registryRemoved = registry.uninstallPackage(id);
+
+                // Persisted removal (AI/runtime packages live in sys_metadata, not
+                // just the in-memory registry — the registry uninstall alone would
+                // leave the rows and tables behind).
+                let persisted: unknown = undefined;
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).deletePackage === 'function') {
+                    try {
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const keepData = query?.keepData === 'true' || query?.keepData === '1';
+                        persisted = await (protocol as any).deletePackage({
+                            packageId: id,
+                            ...(organizationId ? { organizationId } : {}),
+                            ...(keepData ? { keepData: true } : {}),
+                        });
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+
+                const deletedCount = (persisted as any)?.deletedCount ?? 0;
+                if (!registryRemoved && deletedCount === 0) {
+                    return { handled: true, response: this.error(`Package '${id}' not found`, 404) };
+                }
+                return { handled: true, response: this.success({ success: true, registryRemoved, persisted }) };
             }
         } catch (e: any) {
             return { handled: true, response: this.error(e.message, e.statusCode || 500) };
