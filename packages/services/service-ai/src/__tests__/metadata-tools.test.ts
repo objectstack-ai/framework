@@ -115,14 +115,15 @@ const call = (toolName: string, input: Record<string, unknown>, id = 't') => ({
 // ═══════════════════════════════════════════════════════════════════
 
 describe('Metadata Tool Definitions', () => {
-  it('should define exactly 11 tools', () => {
-    expect(METADATA_TOOL_DEFINITIONS).toHaveLength(11);
+  it('should define exactly 12 tools', () => {
+    expect(METADATA_TOOL_DEFINITIONS).toHaveLength(12);
   });
 
   it('should include all expected tool names', () => {
     const names = METADATA_TOOL_DEFINITIONS.map(t => t.name);
     expect(names).toEqual([
       // ADR-0033 type-agnostic apply surface first
+      'get_metadata_schema',
       'create_metadata',
       'update_metadata',
       'describe_metadata',
@@ -230,14 +231,70 @@ describe('registerMetadataTools', () => {
     registerMetadataTools(registry, { metadataService, protocol });
   });
 
-  it('should register all 11 tools', () => {
-    expect(registry.size).toBe(11);
+  it('should register all 12 tools', () => {
+    expect(registry.size).toBe(12);
     for (const name of [
+      'get_metadata_schema',
       'create_metadata', 'update_metadata', 'describe_metadata', 'list_metadata',
       'create_object', 'add_field', 'modify_field', 'delete_field',
       'list_objects', 'describe_object', 'validate_expression',
     ]) {
       expect(registry.has(name)).toBe(true);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// get_metadata_schema — lets the AI read the real protocol on demand
+// ═══════════════════════════════════════════════════════════════════
+
+describe('get_metadata_schema', () => {
+  let registry: ToolRegistry;
+
+  beforeEach(() => {
+    registry = new ToolRegistry();
+    const { protocol } = createMockProtocol();
+    registerMetadataTools(registry, { metadataService: createMockMetadataService(), protocol });
+  });
+
+  it('returns the JSON Schema (contract) for a known type', async () => {
+    const parsed = parse(await registry.execute(call('get_metadata_schema', { type: 'view' })));
+    expect(parsed.type).toBe('view');
+    expect(parsed.jsonSchema).toBeTruthy();
+    // A JSON-Schema-shaped object (has $schema/type/properties or $ref/anyOf).
+    const js = parsed.jsonSchema as Record<string, unknown>;
+    expect(
+      typeof js === 'object' &&
+        ('properties' in js || 'anyOf' in js || '$ref' in js || 'oneOf' in js || '$defs' in js),
+    ).toBe(true);
+    expect(parsed.error).toBeUndefined();
+  });
+
+  it('resolves a plural type to its singular schema', async () => {
+    const parsed = parse(await registry.execute(call('get_metadata_schema', { type: 'views' })));
+    expect(parsed.type).toBe('view');
+    expect(parsed.jsonSchema).toBeTruthy();
+  });
+
+  it('returns a helpful error for an unknown type', async () => {
+    const parsed = parse(await registry.execute(call('get_metadata_schema', { type: 'nonsense_type' })));
+    expect(parsed.jsonSchema).toBeUndefined();
+    expect(String(parsed.error)).toContain('nonsense_type');
+  });
+
+  // Every app-development metadata type must yield a usable contract — including
+  // object/action, whose schemas wrap/nest a transform pipe that trips Zod v4's
+  // toJSONSchema (handled by the robust unwrap-and-recurse converter).
+  it('serializes ALL app-development metadata types (no validation-blind spots)', async () => {
+    const types = [
+      'object', 'field', 'view', 'page', 'dashboard', 'report',
+      'app', 'flow', 'action', 'agent', 'role',
+    ];
+    for (const type of types) {
+      const parsed = parse(await registry.execute(call('get_metadata_schema', { type })));
+      expect(parsed.error, `'${type}' should serialize`).toBeUndefined();
+      expect(parsed.jsonSchema, `'${type}' should return a schema`).toBeTruthy();
+      expect(parsed.jsonSchema.type ?? parsed.jsonSchema.properties ?? parsed.jsonSchema.anyOf).toBeTruthy();
     }
   });
 });
@@ -264,15 +321,16 @@ describe('registerDataTools + registerMetadataTools — unified list/describe', 
     const sizeAfterBoth = registry.size;
 
     // Data tools define: query_records, get_record, aggregate_data (3)
-    // Metadata tools define 11.
+    // Metadata tools define 12.
     expect(sizeAfterData).toBe(3);
-    expect(sizeAfterBoth).toBe(sizeAfterData + 11);
+    expect(sizeAfterBoth).toBe(sizeAfterData + 12);
 
     expect(registry.has('list_objects')).toBe(true);
     expect(registry.has('describe_object')).toBe(true);
     expect(registry.has('query_records')).toBe(true);
     expect(registry.has('create_object')).toBe(true);
     expect(registry.has('create_metadata')).toBe(true);
+    expect(registry.has('get_metadata_schema')).toBe(true);
   });
 });
 

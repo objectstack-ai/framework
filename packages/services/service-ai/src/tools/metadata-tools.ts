@@ -4,6 +4,8 @@ import type { IMetadataService } from '@objectstack/spec/contracts';
 import type { Tool } from '@objectstack/spec/ai';
 import type { ToolHandler } from './tool-registry.js';
 import type { ToolRegistry } from './tool-registry.js';
+import { z } from 'zod';
+import { getMetadataTypeSchema } from '@objectstack/spec/kernel';
 
 // ---------------------------------------------------------------------------
 // Tool Metadata — individual .tool.ts files (single source of truth)
@@ -20,6 +22,7 @@ export { createMetadataTool } from './create-metadata.tool.js';
 export { updateMetadataTool } from './update-metadata.tool.js';
 export { describeMetadataTool } from './describe-metadata.tool.js';
 export { listMetadataTool } from './list-metadata.tool.js';
+export { getMetadataSchemaTool } from './get-metadata-schema.tool.js';
 
 import { createObjectTool } from './create-object.tool.js';
 import { addFieldTool } from './add-field.tool.js';
@@ -32,11 +35,13 @@ import { createMetadataTool } from './create-metadata.tool.js';
 import { updateMetadataTool } from './update-metadata.tool.js';
 import { describeMetadataTool } from './describe-metadata.tool.js';
 import { listMetadataTool } from './list-metadata.tool.js';
+import { getMetadataSchemaTool } from './get-metadata-schema.tool.js';
 import { validateExpression, introspectScope, type FieldRole } from '@objectstack/formula';
 
 /** All built-in metadata management tool definitions (Tool metadata). */
 export const METADATA_TOOL_DEFINITIONS: Tool[] = [
   // ADR-0033 type-agnostic apply surface (preferred for any metadata type)
+  getMetadataSchemaTool,
   createMetadataTool,
   updateMetadataTool,
   describeMetadataTool,
@@ -1017,6 +1022,103 @@ function createListMetadataHandler(ctx: MetadataToolContext): ToolHandler {
   };
 }
 
+// JSON-Schema conversion options for the authoring contract: emit the INPUT
+// side of the schema (what the agent writes — `io:'input'` skips the output of
+// transforms) and degrade anything genuinely unrepresentable to permissive
+// `{}` instead of throwing.
+const TO_JSON_SCHEMA_OPTS = {
+  target: 'draft-2020-12',
+  io: 'input',
+  unrepresentable: 'any',
+} as Parameters<typeof z.toJSONSchema>[1];
+
+/** Peel any top-level `pipe` (transform/refine) chain down to its INPUT schema. */
+function unwrapToInput(schema: unknown): unknown {
+  let cur = schema as { _zod?: { def?: { type?: string; in?: unknown } } };
+  for (let i = 0; i < 12; i++) {
+    const def = cur?._zod?.def;
+    if (def?.type === 'pipe' && def.in) cur = def.in as typeof cur;
+    else break;
+  }
+  return cur;
+}
+
+/**
+ * Robustly convert ANY metadata-type Zod schema to JSON Schema. Some schemas
+ * (object, action, …) wrap a `.transform()`/refine pipe or nest one (e.g. an
+ * object's `actions: z.array(ActionSchema)`), which makes Zod v4's
+ * `toJSONSchema` throw. We peel pipes to their input and, when the whole-schema
+ * conversion still fails, recurse property-by-property / element-by-element so
+ * every type yields a usable contract (an unconvertible leaf degrades to a
+ * placeholder rather than failing the whole call).
+ */
+function metadataTypeToJsonSchema(schema: unknown): Record<string, unknown> {
+  const s = unwrapToInput(schema);
+  try {
+    return z.toJSONSchema(s as z.ZodType, TO_JSON_SCHEMA_OPTS) as Record<string, unknown>;
+  } catch {
+    const def = (s as { _zod?: { def?: { type?: string; shape?: Record<string, unknown>; element?: unknown; innerType?: unknown } } })?._zod?.def;
+    if (def?.type === 'object' && def.shape) return objectShapeToJsonSchema(def.shape);
+    if (def?.type === 'array' && def.element) return { type: 'array', items: metadataTypeToJsonSchema(def.element) };
+    if (def?.type === 'optional' && def.innerType) return metadataTypeToJsonSchema(def.innerType);
+    return { description: '(schema omitted — not representable as JSON Schema)' };
+  }
+}
+
+function objectShapeToJsonSchema(shape: Record<string, unknown>): Record<string, unknown> {
+  const properties: Record<string, unknown> = {};
+  const omitted: string[] = [];
+  for (const [key, value] of Object.entries(shape)) {
+    try {
+      properties[key] = metadataTypeToJsonSchema(value);
+    } catch {
+      omitted.push(key);
+    }
+  }
+  return {
+    type: 'object',
+    properties,
+    ...(omitted.length ? { 'x-omittedProperties': omitted } : {}),
+  };
+}
+
+/**
+ * `get_metadata_schema` — return the JSON Schema (contract) for a metadata type
+ * so the agent can author a correct payload in one shot instead of guessing the
+ * shape of complex types and learning from validation errors. The schema is
+ * derived from the SAME live Zod schema `saveMetaItem` validates against
+ * ({@link getMetadataTypeSchema}).
+ */
+function createGetMetadataSchemaHandler(_ctx: MetadataToolContext): ToolHandler {
+  return async (args) => {
+    const raw = (args as { type?: string }).type;
+    if (!raw || typeof raw !== 'string') {
+      return JSON.stringify({ error: '"type" is required, e.g. "view", "dashboard", "flow".' });
+    }
+    // Accept a plural ("views") by falling back to the singular form.
+    const candidates = raw.endsWith('s') ? [raw, raw.slice(0, -1)] : [raw];
+    let resolved: { type: string; schema: z.ZodType } | undefined;
+    for (const t of candidates) {
+      const s = getMetadataTypeSchema(t);
+      if (s) { resolved = { type: t, schema: s }; break; }
+    }
+    if (!resolved) {
+      return JSON.stringify({
+        error: `No schema registered for metadata type '${raw}'. Use a singular type like: object, view, page, dashboard, report, app, flow.`,
+      });
+    }
+    try {
+      const jsonSchema = metadataTypeToJsonSchema(resolved.schema);
+      return JSON.stringify({ type: resolved.type, jsonSchema });
+    } catch (err) {
+      return JSON.stringify({
+        type: resolved.type,
+        error: `Schema for '${resolved.type}' could not be serialized: ${(err as Error)?.message ?? String(err)}`,
+      });
+    }
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public Registration Helper
 // ---------------------------------------------------------------------------
@@ -1039,6 +1141,7 @@ export function registerMetadataTools(
   context: MetadataToolContext,
 ): void {
   // ADR-0033 type-agnostic apply surface.
+  registry.register(getMetadataSchemaTool, createGetMetadataSchemaHandler(context));
   registry.register(createMetadataTool, createCreateMetadataHandler(context));
   registry.register(updateMetadataTool, createUpdateMetadataHandler(context));
   registry.register(describeMetadataTool, createDescribeMetadataHandler(context));
