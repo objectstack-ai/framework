@@ -1,5 +1,24 @@
 # @objectstack/example-todo
 
+## 4.0.37
+
+### Patch Changes
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [4705fb8]
+  - @objectstack/service-ai@7.9.0
+  - @objectstack/objectql@7.9.0
+  - @objectstack/runtime@7.9.0
+  - @objectstack/client@7.9.0
+  - @objectstack/spec@7.9.0
+  - @objectstack/metadata@7.9.0
+  - @objectstack/driver-sqlite-wasm@7.9.0
+  - @objectstack/service-knowledge@7.9.0
+  - @objectstack/knowledge-memory@7.9.0
+
 ## 4.0.36
 
 ### Patch Changes

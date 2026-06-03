@@ -1,5 +1,16 @@
 # @objectstack/example-showcase
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+  - @objectstack/runtime@7.9.0
+  - @objectstack/spec@7.9.0
+  - @objectstack/connector-rest@7.9.0
+  - @objectstack/connector-slack@7.9.0
+
 ## 0.1.6
 
 ### Patch Changes

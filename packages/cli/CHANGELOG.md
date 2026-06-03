@@ -1,5 +1,57 @@
 # @objectstack/cli
 
+## 7.9.0
+
+### Patch Changes
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [4705fb8]
+  - @objectstack/service-ai@7.9.0
+  - @objectstack/objectql@7.9.0
+  - @objectstack/rest@7.9.0
+  - @objectstack/runtime@7.9.0
+  - @objectstack/client@7.9.0
+  - @objectstack/plugin-sharing@7.9.0
+  - @objectstack/spec@7.9.0
+  - @objectstack/console@7.9.0
+  - @objectstack/core@7.9.0
+  - @objectstack/types@7.9.0
+  - @objectstack/observability@7.9.0
+  - @objectstack/formula@7.9.0
+  - @objectstack/platform-objects@7.9.0
+  - @objectstack/driver-memory@7.9.0
+  - @objectstack/driver-sql@7.9.0
+  - @objectstack/driver-mongodb@7.9.0
+  - @objectstack/driver-sqlite-wasm@7.9.0
+  - @objectstack/plugin-approvals@7.9.0
+  - @objectstack/plugin-audit@7.9.0
+  - @objectstack/plugin-auth@7.9.0
+  - @objectstack/plugin-email@7.9.0
+  - @objectstack/plugin-hono-server@7.9.0
+  - @objectstack/plugin-mcp-server@7.9.0
+  - @objectstack/plugin-org-scoping@7.9.0
+  - @objectstack/plugin-reports@7.9.0
+  - @objectstack/plugin-security@7.9.0
+  - @objectstack/plugin-webhooks@7.9.0
+  - @objectstack/plugin-trigger-record-change@7.9.0
+  - @objectstack/plugin-trigger-schedule@7.9.0
+  - @objectstack/service-analytics@7.9.0
+  - @objectstack/service-automation@7.9.0
+  - @objectstack/service-cache@7.9.0
+  - @objectstack/service-datasource@7.9.0
+  - @objectstack/service-feed@7.9.0
+  - @objectstack/service-job@7.9.0
+  - @objectstack/service-messaging@7.9.0
+  - @objectstack/service-package@7.9.0
+  - @objectstack/service-queue@7.9.0
+  - @objectstack/service-realtime@7.9.0
+  - @objectstack/service-settings@7.9.0
+  - @objectstack/service-storage@7.9.0
+  - @objectstack/account@7.9.0
+
 ## 7.8.0
 
 ### Minor Changes
