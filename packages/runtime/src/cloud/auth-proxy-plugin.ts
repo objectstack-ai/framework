@@ -349,6 +349,67 @@ export class AuthProxyPlugin implements Plugin {
                         }
                     }
 
+                    // ── set-initial-password ────────────────────────────
+                    // POST /api/v1/auth/set-initial-password { newPassword }
+                    //
+                    // The "Set local password" affordance the sso-exchange
+                    // recovery redirect points at. The full AuthPlugin registers
+                    // this route, but AuthPlugin is skipped on a per-environment
+                    // runtime, so without this the request falls through to
+                    // better-auth (no such route) and 404s. Mirrors AuthPlugin's
+                    // handler against THIS environment's auth context. (#1544)
+                    if (c.req.method === 'POST' && subPath === 'set-initial-password') {
+                        try {
+                            let body: any = {};
+                            try { body = await c.req.json(); } catch { body = {}; }
+                            const newPassword: unknown = body?.newPassword;
+                            if (typeof newPassword !== 'string' || newPassword.length === 0) {
+                                return c.json({ success: false, error: { code: 'invalid_request', message: 'newPassword is required' } }, 400);
+                            }
+                            if (typeof authSvc?.getAuthContext !== 'function') {
+                                return c.json({ success: false, error: { code: 'unavailable', message: 'Auth context unavailable' } }, 503);
+                            }
+                            // Resolve the caller's session on this environment.
+                            let userId: string | undefined;
+                            try {
+                                const api = typeof authSvc.getApi === 'function' ? await authSvc.getApi() : null;
+                                const session = await api?.getSession?.({ headers: c.req.raw.headers });
+                                userId = session?.user?.id ? String(session.user.id) : undefined;
+                            } catch { /* fall through to 401 */ }
+                            if (!userId) {
+                                return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
+                            }
+                            const setPwCtx: any = await authSvc.getAuthContext();
+                            if (!setPwCtx?.internalAdapter || !setPwCtx?.password) {
+                                return c.json({ success: false, error: { code: 'unavailable', message: 'Auth context unavailable' } }, 503);
+                            }
+                            const minLen = setPwCtx.password?.config?.minPasswordLength ?? 8;
+                            const maxLen = setPwCtx.password?.config?.maxPasswordLength ?? 128;
+                            if (newPassword.length < minLen) {
+                                return c.json({ success: false, error: { code: 'password_too_short', message: `Password must be at least ${minLen} characters` } }, 400);
+                            }
+                            if (newPassword.length > maxLen) {
+                                return c.json({ success: false, error: { code: 'password_too_long', message: `Password must be at most ${maxLen} characters` } }, 400);
+                            }
+                            const accounts = await setPwCtx.internalAdapter.findAccounts(userId);
+                            const existingCredential = accounts?.find?.((a: any) => a.providerId === 'credential' && a.password);
+                            if (existingCredential) {
+                                return c.json({ success: false, error: { code: 'credential_account_exists', message: 'A local password is already set for this account. Use change-password instead.' } }, 409);
+                            }
+                            const passwordHash = await setPwCtx.password.hash(newPassword);
+                            await setPwCtx.internalAdapter.createAccount({
+                                userId,
+                                providerId: 'credential',
+                                accountId: userId,
+                                password: passwordHash,
+                            });
+                            return c.json({ success: true });
+                        } catch (err: any) {
+                            ctx.logger?.error?.('[AuthProxyPlugin] set-initial-password failed', err instanceof Error ? err : new Error(String(err)));
+                            return c.json({ success: false, error: { code: 'set_password_failed', message: String(err?.message ?? err) } }, 500);
+                        }
+                    }
+
                     const fn = await resolveAuthHandler(authSvc);
                     if (!fn) {
                         return c.json({ error: 'auth_service_unavailable', environmentId }, 503);
