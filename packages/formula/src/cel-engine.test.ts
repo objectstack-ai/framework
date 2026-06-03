@@ -147,4 +147,79 @@ describe('celEngine', () => {
       expect(r.ok).toBe(false);
     });
   });
+
+  // ADR-0032 §1c — string-serialized date/datetime fields (#1530). Field.date
+  // serializes to "YYYY-MM-DD" and Field.datetime to a full ISO string; cel-js
+  // compares those raw strings against the google.protobuf.Timestamp returned by
+  // today()/now()/daysFromNow() and faults `no such overload`, which previously
+  // surfaced as a silent `null`.
+  describe('date/datetime-string field hydration (#1530)', () => {
+    const now = new Date('2026-06-02T08:00:00Z');
+
+    it('compares a date-only field against today()/daysFromNow() (is_expiring_soon)', () => {
+      const r = celEngine.evaluate(
+        cel('record.end_date >= today() && record.end_date <= daysFromNow(60)'),
+        { now, record: { end_date: '2026-06-20' } },
+      );
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('returns false (not a fault) when the date compare is unmet', () => {
+      const r = celEngine.evaluate(cel('record.end_date <= daysFromNow(60)'), {
+        now,
+        record: { end_date: '2027-01-01' },
+      });
+      expect(r).toEqual({ ok: true, value: false });
+    });
+
+    it('handles is_overdue: a past date-only field < today()', () => {
+      const r = celEngine.evaluate(cel('record.due_date < today()'), {
+        now,
+        record: { due_date: '2026-05-31' },
+      });
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('hydrates a full ISO datetime field against now()', () => {
+      const r = celEngine.evaluate(cel('record.resolution_due_at < now()'), {
+        now,
+        record: { resolution_due_at: '2026-06-01T08:15:35.244Z' },
+      });
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('supports timestamp arithmetic on hydrated date fields (today() - hire_date)', () => {
+      // hire_date ~2.4y before `now` → tenure exceeds 2 years (17520h).
+      const r = celEngine.evaluate(
+        cel('(today() - record.hire_date) > duration("17520h")'),
+        { now, record: { hire_date: '2024-01-01' } },
+      );
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('hydrates date + numeric strings together in one record', () => {
+      const r = celEngine.evaluate(
+        cel('record.amount >= 1000 && record.end_date >= today()'),
+        { now, record: { amount: '2500.00', end_date: '2026-06-20' } },
+      );
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('does not coerce non-temporal strings (still faults loudly)', () => {
+      const r = celEngine.evaluate(cel('record.end_date <= today()'), {
+        now,
+        record: { end_date: 'soon' },
+      });
+      expect(r.ok).toBe(false);
+    });
+
+    it('leaves genuine date-string equality untouched (no spurious coercion)', () => {
+      // string == string type-checks, so the retry never runs and the value
+      // stays a string.
+      const r = celEngine.evaluate(cel('record.end_date == "2026-06-20"'), {
+        record: { end_date: '2026-06-20' },
+      });
+      expect(r).toEqual({ ok: true, value: true });
+    });
+  });
 });
