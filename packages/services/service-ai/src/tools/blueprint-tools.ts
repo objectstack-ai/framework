@@ -131,6 +131,19 @@ function createProposeBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
           'Rules:\n' +
           '- Use snake_case for every object, field, and view name.\n' +
           '- Prefer a small, sensible field set per object over an exhaustive one.\n' +
+          '- Model record STATUS / lifecycle stage as a single `select` field on the ' +
+          'main object (e.g. a `status` field with options like draft/submitted/approved/' +
+          'rejected/paid), NOT as a separate table.\n' +
+          '- A PROCESS is not data. Do NOT create objects for approvals, approval ' +
+          'steps/records, workflows, routing, sign-offs, or audit trails (no ' +
+          '`approval`, `approval_record`, `approval_step`, `workflow`, `process` tables). ' +
+          'Approval/automation logic belongs in a separate FLOW authored after this ' +
+          'blueprint, and the trail comes from platform history — never a hand-built table. ' +
+          'Model only the PEOPLE the process references (approver / reviewer / owner) as ' +
+          '`lookup` fields to the user object.\n' +
+          '- If the goal implies an approval or automation process, add an `assumption` ' +
+          'stating the approval *flow* will be drafted as a separate step (it is not part ' +
+          'of this data blueprint).\n' +
           '- State the design choices you made as `assumptions`.\n' +
           '- If (and only if) a genuinely structure-deciding choice is unclear, put at most 1-2 ' +
           'short `questions`; otherwise pick the most likely interpretation and proceed.\n' +
