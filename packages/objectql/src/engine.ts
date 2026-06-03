@@ -2344,6 +2344,24 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Sync a SINGLE object's physical storage (create/alter its table) on
+   * demand. Boot-time {@link syncSchemas} runs once at startup, so an object
+   * that becomes live at runtime (e.g. publishing a drafted object) has a
+   * registry entry but no table — data CRUD then fails with "no such table"
+   * until the next restart. Calling this right after the object is registered
+   * makes it immediately usable. Idempotent: the SQL driver only creates the
+   * table when absent (and alters to add new columns).
+   */
+  async syncObjectSchema(objectName: string): Promise<void> {
+    const obj = this._registry.getObject(objectName) as any;
+    if (!obj) return;
+    const driver = this.getDriverForObject(objectName);
+    if (!driver || typeof (driver as any).syncSchema !== 'function') return;
+    const tableName = StorageNameMapping.resolveTableName(obj);
+    await (driver as any).syncSchema(tableName, obj);
+  }
+
+  /**
    * Get a registered driver by datasource name.
    * Alias matching @objectql/core datasource() API.
    *

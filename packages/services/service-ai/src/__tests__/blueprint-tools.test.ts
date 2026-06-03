@@ -189,6 +189,33 @@ describe('apply_blueprint handler', () => {
     expect(view.list.columns).toEqual(['title']);
   });
 
+  it('emits kanban config (groupByField + columns) — explicit groupBy wins, else infers the select field', async () => {
+    const blueprint = {
+      summary: 'recruiting',
+      objects: [{
+        name: 'lead',
+        label: 'Lead',
+        fields: [
+          { name: 'name', label: 'Name', type: 'text' },
+          { name: 'stage', label: 'Stage', type: 'select', options: [{ label: 'New', value: 'new' }] },
+        ],
+      }],
+      views: [
+        { object: 'lead', name: 'lead_board', label: 'Board', type: 'kanban', columns: ['name', 'stage'] },
+        { object: 'lead', name: 'lead_board2', label: 'Board2', type: 'kanban', columns: ['name'], groupBy: 'stage' },
+      ],
+    };
+    await registry.execute(call('apply_blueprint', { blueprint }));
+
+    // Inferred from the object's first select field.
+    const inferred = drafts.get('view:lead_board') as any;
+    expect(inferred.list.type).toBe('kanban');
+    expect(inferred.list.kanban).toEqual({ groupByField: 'stage', columns: ['name', 'stage'] });
+    // Explicit groupBy on the view wins.
+    const explicit = drafts.get('view:lead_board2') as any;
+    expect(explicit.list.kanban.groupByField).toBe('stage');
+  });
+
   it('reports seed data as proposed-but-not-applied', async () => {
     const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: SAMPLE_BLUEPRINT })));
     expect(parsed.seedDataProposed).toEqual([{ object: 'project', rows: 2 }]);

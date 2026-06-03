@@ -3189,6 +3189,25 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
     }
 
+    /**
+     * Ensure a just-PUBLISHED object's physical table exists so it is usable
+     * for data CRUD immediately — without a server restart. Registering the
+     * object (above) only updates the in-memory registry; the table is created
+     * by the driver's schema sync, which otherwise only runs at boot. Without
+     * this, inserting into a freshly-published object fails with "no such
+     * table" (surfaced as `object_not_found`) until the next restart.
+     * Best-effort + non-fatal: drivers without DDL (or read-only datasources)
+     * simply no-op, and a sync failure must not abort the publish.
+     */
+    private async ensureObjectStorage(type: string, name: string): Promise<void> {
+        if (type !== 'object' && type !== 'objects') return;
+        try {
+            await this.engine.syncObjectSchema(name);
+        } catch (err: any) {
+            console.warn(`[Protocol] table sync failed for object '${name}': ${err?.message ?? err}`);
+        }
+    }
+
     async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string, parentVersion?: string | null, actor?: string, force?: boolean, mode?: 'draft' | 'publish', packageId?: string | null }) {
         if (!request.item) {
             throw new Error('Item data is required');
@@ -3437,6 +3456,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 // object registry (would defeat the staging buffer).
                 if (mode === 'publish') {
                     this.applyObjectRegistryMutation(request);
+                    await this.ensureObjectStorage(request.type, request.name);
                 }
                 // ADR-0010 — success audit (best-effort).
                 await this.recordMetadataAudit({
@@ -3665,6 +3685,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 name: request.name,
                 item: result.item.body,
             });
+            // Create the object's table now so it's CRUD-able without a restart.
+            await this.ensureObjectStorage(request.type, request.name);
             return {
                 success: true,
                 version: result.version,

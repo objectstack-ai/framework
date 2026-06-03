@@ -58,6 +58,8 @@ export const BlueprintViewSchema = lazySchema(() => z.object({
   type: z.enum(['list', 'form', 'kanban', 'calendar']).default('list').describe('View kind'),
   columns: z.array(z.string().regex(SNAKE_CASE)).optional()
     .describe('Field names shown as columns (in order)'),
+  groupBy: z.string().regex(SNAKE_CASE).optional()
+    .describe('REQUIRED for kanban views: the select/status field whose options become the board columns (e.g. "stage", "status"). Without it a kanban renders as a plain list.'),
 }));
 export type BlueprintView = z.infer<typeof BlueprintViewSchema>;
 
@@ -184,6 +186,7 @@ const StrictView = z.object({
   label: z.string().nullable().describe('Human-readable view label, or null'),
   type: z.enum(['list', 'form', 'kanban', 'calendar']).nullable().describe('View kind, or null for list'),
   columns: z.array(z.string()).nullable().describe('Field names shown as columns, or null'),
+  groupBy: z.string().nullable().describe('REQUIRED for kanban: the select/status field whose options become the board columns (e.g. "stage"). Null for non-kanban views.'),
 });
 
 const StrictDashboard = z.object({
