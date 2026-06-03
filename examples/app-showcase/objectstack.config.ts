@@ -24,7 +24,6 @@ import {
 } from './src/security/index.js';
 import { allThemes } from './src/themes/index.js';
 import { ShowcaseTranslationBundle } from './src/translations/index.js';
-import { allDatasources } from './src/datasources/index.js';
 import { allPortals } from './src/portals/index.js';
 import { ShowcaseSeedData } from './src/data/index.js';
 
@@ -91,11 +90,10 @@ export default defineStack({
   ],
 
   // Infrastructure
-  datasources: allDatasources,
-  datasourceMapping: [
-    { namespace: 'showcase', datasource: 'showcase_primary' },
-    { default: true, datasource: 'showcase_primary' },
-  ],
+  // No explicit datasource: the standalone CLI anchors a persistent sqlite
+  // database at `<project>/.objectstack/data/standalone.db`, so data and
+  // AI-authored metadata survive restarts (a `:memory:` datasource would wipe
+  // everything on every restart, which makes local app-building unusable).
 
   // i18n
   translations: [ShowcaseTranslationBundle],

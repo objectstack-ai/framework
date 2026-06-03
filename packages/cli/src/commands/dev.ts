@@ -10,6 +10,39 @@ import path from 'path';
 import { printHeader, printKV, printStep, printError } from '../utils/format.js';
 import { readEnvWithDeprecation } from '@objectstack/types';
 
+/**
+ * Resolve the persistent default database URL for `objectstack dev`.
+ *
+ * `dev` should keep your work between restarts — the historical serve default
+ * of `:memory:` wipes all data (and AI-authored metadata) on every restart,
+ * which makes local app-building unusable. So when the user has NOT chosen a
+ * database another way, default to a project-anchored sqlite file at
+ * `<cwd>/.objectstack/data/dev.db` (gitignored, per-project).
+ *
+ * Returns `undefined` (i.e. "don't impose a default") when the user already
+ * selected a database, so the existing resolution wins:
+ *   - `--database <url>` flag
+ *   - `--fresh` (its own ephemeral temp DB)
+ *   - `OS_DATABASE_URL` / `DATABASE_URL` env
+ *   - an explicit in-memory driver (`--database-driver memory` or
+ *     `OS_DATABASE_DRIVER=memory`)
+ */
+export function resolveDefaultDevDbUrl(opts: {
+  databaseFlag?: string;
+  freshDbUrl?: string;
+  databaseDriverFlag?: string;
+  env: Record<string, string | undefined>;
+  cwd: string;
+}): string | undefined {
+  if (opts.databaseFlag || opts.freshDbUrl) return undefined;
+  const envDbUrl = (opts.env.OS_DATABASE_URL ?? opts.env.DATABASE_URL)?.trim();
+  if (envDbUrl) return undefined;
+  const forcedMemory =
+    opts.databaseDriverFlag === 'memory' || opts.env.OS_DATABASE_DRIVER?.trim() === 'memory';
+  if (forcedMemory) return undefined;
+  return `file:${path.join(opts.cwd, '.objectstack', 'data', 'dev.db')}`;
+}
+
 export default class Dev extends Command {
   static override description = 'Start development mode with hot-reload';
 
@@ -186,7 +219,23 @@ export default class Dev extends Command {
       // idempotent (empty-DB only) and never overwrites an existing account.
       const seedAdmin = flags['seed-admin'] ?? true;
 
-      const effectiveDb = flags.database ?? freshDbUrl;
+      // Default `dev` to a PERSISTENT, project-anchored sqlite database so
+      // AI-authored metadata and records survive restarts. The historical
+      // serve default is `:memory:`, which silently wipes everything on every
+      // restart — fine for throwaway demos, but it makes local app-building
+      // unusable (build an app, restart, it's gone). See {@link resolveDefaultDevDbUrl}
+      // for the opt-out matrix (--fresh / --database / OS_DATABASE_URL / memory driver).
+      const defaultDevDb = resolveDefaultDevDbUrl({
+        databaseFlag: flags.database,
+        freshDbUrl,
+        databaseDriverFlag: flags['database-driver'],
+        env: process.env,
+        cwd: process.cwd(),
+      });
+      if (defaultDevDb) {
+        fs.mkdirSync(path.dirname(defaultDevDb.replace(/^file:/, '')), { recursive: true });
+      }
+      const effectiveDb = flags.database ?? freshDbUrl ?? defaultDevDb;
       const localEnv: NodeJS.ProcessEnv = {
         ...process.env,
         OS_ENVIRONMENT_ID: environmentId,
