@@ -1131,7 +1131,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getMetaItems(request: { type: string; packageId?: string; organizationId?: string }) {
+    async getMetaItems(request: { type: string; packageId?: string; organizationId?: string; previewDrafts?: boolean }) {
         const { packageId } = request;
         let items: unknown[] = [];
 
@@ -1231,6 +1231,55 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         } catch {
             // DB not available — fall through with whatever we already have.
+        }
+
+        // ADR-0033 draft-overlay preview: when the caller opts in (admin-gated
+        // upstream — see http-dispatcher), overlay `state='draft'` rows on top of
+        // the active result so the rendered console can preview pending changes
+        // BEFORE publish (instead of only reading them as a JSON diff). Draft rows
+        // WIN over active on name collision, and draft-only items (e.g. a brand-new
+        // AI-authored object) surface too. Each overlaid item is tagged `_draft:true`
+        // so the UI can badge it and show the "PREVIEW — drafts" banner. We do NOT
+        // hydrate the SchemaRegistry from drafts — drafts must never leak into the
+        // process-wide registry or to non-preview reads.
+        if (request.previewDrafts) {
+            try {
+                const orgId = (request as any).organizationId as string | undefined;
+                const queryDrafts = async (oid: string | null): Promise<any[]> => {
+                    const whereClause: Record<string, unknown> = { type: request.type, state: 'draft', organization_id: oid };
+                    if (packageId) whereClause.package_id = packageId;
+                    let rs = await this.engine.find('sys_metadata', { where: whereClause });
+                    if (!rs || rs.length === 0) {
+                        const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                        if (alt) {
+                            const altWhere: Record<string, unknown> = { type: alt, state: 'draft', organization_id: oid };
+                            if (packageId) altWhere.package_id = packageId;
+                            rs = await this.engine.find('sys_metadata', { where: altWhere });
+                        }
+                    }
+                    return rs ?? [];
+                };
+                const draftRecords = [...(await queryDrafts(null)), ...(orgId ? await queryDrafts(orgId) : [])];
+                if (draftRecords.length > 0) {
+                    const byName = new Map<string, any>();
+                    for (const existing of items) {
+                        const entry = existing as any;
+                        if (entry && typeof entry === 'object' && 'name' in entry) byName.set(entry.name, entry);
+                    }
+                    for (const record of draftRecords) {
+                        const data = typeof record.metadata === 'string' ? JSON.parse(record.metadata) : record.metadata;
+                        if (data && typeof data === 'object' && 'name' in data) {
+                            const recPkg = (record as { package_id?: string | null }).package_id ?? undefined;
+                            if (recPkg && (data as any)._packageId === undefined) (data as any)._packageId = recPkg;
+                            (data as any)._draft = true;
+                            byName.set(data.name, data);
+                        }
+                    }
+                    items = Array.from(byName.values());
+                }
+            } catch {
+                // DB unavailable — serve the active result unchanged.
+            }
         }
 
         // Merge with MetadataService (runtime-registered items: agents, tools, etc.)
@@ -1334,12 +1383,50 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getMetaItem(request: { type: string, name: string, packageId?: string, organizationId?: string, state?: 'active' | 'draft' }) {
+    async getMetaItem(request: { type: string, name: string, packageId?: string, organizationId?: string, state?: 'active' | 'draft', previewDrafts?: boolean }) {
         let item: unknown;
         const orgId = request.organizationId;
         // Studio's editor opens a draft buffer with `state: 'draft'`;
         // runtime loaders omit it and get the live published row.
         const readState: 'active' | 'draft' = request.state === 'draft' ? 'draft' : 'active';
+
+        // ADR-0033 draft-overlay preview (non-strict): when the caller opts in
+        // (admin-gated upstream), prefer a `state='draft'` row if one exists, else
+        // fall back to the active read below. This differs from the strict
+        // `state:'draft'` mode, which 404s (`no_draft`) when no draft exists — the
+        // render path must degrade to the published value, not error. The draft
+        // item is tagged `_draft:true` so the UI can badge it.
+        if (request.previewDrafts && readState !== 'draft') {
+            try {
+                const findDraft = async (oid: string | null): Promise<any | undefined> => {
+                    const rec = await this.engine.findOne('sys_metadata', {
+                        where: { type: request.type, name: request.name, state: 'draft', organization_id: oid },
+                    });
+                    if (rec) return rec;
+                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                    if (alt) {
+                        return await this.engine.findOne('sys_metadata', {
+                            where: { type: alt, name: request.name, state: 'draft', organization_id: oid },
+                        });
+                    }
+                    return undefined;
+                };
+                const draftRec = (orgId ? await findDraft(orgId) : undefined) ?? await findDraft(null);
+                if (draftRec) {
+                    const draftItem = typeof draftRec.metadata === 'string'
+                        ? JSON.parse(draftRec.metadata)
+                        : draftRec.metadata;
+                    if (draftItem && typeof draftItem === 'object') {
+                        const recPkg = (draftRec as { package_id?: string | null }).package_id ?? undefined;
+                        if (recPkg && (draftItem as any)._packageId === undefined) (draftItem as any)._packageId = recPkg;
+                        (draftItem as any)._draft = true;
+                    }
+                    return { type: request.type, name: request.name, item: decorateMetadataItem(request.type, draftItem) };
+                }
+            } catch {
+                // DB unavailable — fall through to the active read.
+            }
+        }
 
         // 1. Customization overlay lookup (sys_metadata).
         //    Per ADR-0005 (revised), org-scoped row wins; env-wide

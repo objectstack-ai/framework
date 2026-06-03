@@ -947,7 +947,11 @@ export class HttpDispatcher {
                 if (protocol && typeof protocol.getMetaItem === 'function') {
                      try {
                         const organizationId = await this.resolveActiveOrganizationId(_context);
-                        const data = await protocol.getMetaItem({ type: singularType, name, packageId, organizationId });
+                        // ADR-0033 draft-overlay preview: `?preview=draft` makes the
+                        // detail read prefer a pending draft (falling back to active).
+                        // Admin gating is layered on top in a follow-up (step 2).
+                        const previewDrafts = query?.preview === 'draft';
+                        const data = await protocol.getMetaItem({ type: singularType, name, packageId, organizationId, previewDrafts });
                         return { handled: true, response: this.success(data) };
                      } catch (e: any) {
                         // Protocol might throw if not found or not supported
@@ -1004,7 +1008,11 @@ export class HttpDispatcher {
             if (protocol && typeof protocol.getMetaItems === 'function') {
                 try {
                     const organizationId = await this.resolveActiveOrganizationId(_context);
-                    const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId });
+                    // ADR-0033 draft-overlay preview: `?preview=draft` overlays
+                    // pending drafts on the active list so an (admin) reviewer can
+                    // render the console off drafts before publishing.
+                    const previewDrafts = query?.preview === 'draft';
+                    const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId, previewDrafts });
                     // Return any valid response from protocol (including empty items arrays)
                     if (data && (data.items !== undefined || Array.isArray(data))) {
                         return { handled: true, response: this.success(data) };
