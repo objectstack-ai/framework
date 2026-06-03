@@ -3321,6 +3321,39 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
     }
 
+    /**
+     * Inverse of {@link ensureObjectStorage}: drop an object's physical table.
+     * DESTRUCTIVE — deletes the table and all its rows. Only invoked when a
+     * delete explicitly opts into storage teardown (see {@link deleteMetaItem}'s
+     * `dropStorage`), so publishing an object solely to preview it can be undone
+     * without leaving an orphan table. Best-effort: a failure is logged, not
+     * thrown — the metadata delete already succeeded, and a stray table is
+     * reclaimed by the next sync/drop rather than blocking the delete.
+     */
+    private async dropObjectStorage(type: string, name: string): Promise<void> {
+        if (type !== 'object' && type !== 'objects') return;
+        try {
+            await this.engine.dropObjectSchema(name);
+        } catch (err: any) {
+            console.warn(`[Protocol] table drop failed for object '${name}': ${err?.message ?? err}`);
+        }
+    }
+
+    /**
+     * Guard for storage teardown on delete. Drops a physical table only when
+     * the caller opted in AND it is safe: object types only (others have no
+     * table), active state only (drafts were never materialised), and never a
+     * `sys_`-prefixed platform table.
+     */
+    private shouldDropStorage(type: string, name: string, dropStorage: boolean | undefined, state: 'active' | 'draft'): boolean {
+        if (!dropStorage) return false;
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        if (singular !== 'object') return false;
+        if (state !== 'active') return false;
+        if (name.startsWith('sys_')) return false;
+        return true;
+    }
+
     async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string, parentVersion?: string | null, actor?: string, force?: boolean, mode?: 'draft' | 'publish', packageId?: string | null }) {
         if (!request.item) {
             throw new Error('Item data is required');
@@ -4125,6 +4158,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         parentVersion?: string | null;
         actor?: string;
         state?: 'active' | 'draft';
+        /**
+         * When true, also drop the object's physical table after the metadata
+         * is removed (object + active only; never `sys_`). Default false keeps
+         * delete non-destructive to data. Used by the "discard a previewed
+         * object" flow so a publish-to-preview leaves no orphan table.
+         */
+        dropStorage?: boolean;
     }): Promise<{
         success: boolean;
         message?: string;
@@ -4241,6 +4281,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                 }
 
+                // Storage teardown (opt-in): drop the now-orphaned physical table
+                // for a discarded object so a publish-to-preview leaves no residue.
+                if (this.shouldDropStorage(request.type, request.name, request.dropStorage, targetState)) {
+                    await this.dropObjectStorage(singularTypeForRepo, request.name);
+                }
+
                 // ADR-0010 — success audit (best-effort).
                 await this.recordMetadataAudit({
                     type: request.type,
@@ -4300,6 +4346,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 };
             }
             await this.engine.delete('sys_metadata', { where: { id: existing.id } });
+
+            // Storage teardown (opt-in) — see the repo-path branch above.
+            {
+                const targetState: 'active' | 'draft' = request.state === 'draft' ? 'draft' : 'active';
+                if (this.shouldDropStorage(request.type, request.name, request.dropStorage, targetState)) {
+                    await this.dropObjectStorage(PLURAL_TO_SINGULAR[request.type] ?? request.type, request.name);
+                }
+            }
 
             if (this.environmentId === undefined) {
                 try {

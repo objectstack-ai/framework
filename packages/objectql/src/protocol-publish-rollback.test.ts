@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ObjectStackProtocolImplementation } from './protocol';
 
 /**
@@ -317,5 +317,45 @@ describe('publishMetaItem / rollbackMetaItem / diffMetaItem', () => {
         });
         expect((diff as any).added.map((e: any) => e.path)).toContain('extra');
         expect((diff as any).changed.map((e: any) => e.path).sort()).toEqual(['columns', 'label']);
+    });
+});
+
+describe('deleteMetaItem — storage teardown (dropStorage)', () => {
+    const seedActiveObject = async (name: string) => {
+        const { engine, rows } = makeStubEngine();
+        engine.syncObjectSchema = vi.fn();
+        engine.dropObjectSchema = vi.fn();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({ type: 'object', name, item: { name, label: name, fields: { title: { type: 'text' } } } });
+        return { engine, rows, protocol };
+    };
+
+    it('drops the physical table when dropStorage is set (object + active)', async () => {
+        const { engine, protocol } = await seedActiveObject('expense_claim');
+        const res = await protocol.deleteMetaItem({ type: 'object', name: 'expense_claim', dropStorage: true });
+        expect(res.success).toBe(true);
+        expect(engine.dropObjectSchema).toHaveBeenCalledTimes(1);
+        expect(engine.dropObjectSchema).toHaveBeenCalledWith('expense_claim');
+    });
+
+    it('does NOT drop the table by default (delete stays non-destructive to data)', async () => {
+        const { engine, protocol } = await seedActiveObject('expense_claim');
+        await protocol.deleteMetaItem({ type: 'object', name: 'expense_claim' });
+        expect(engine.dropObjectSchema).not.toHaveBeenCalled();
+    });
+
+    it('never drops a sys_-prefixed platform table even with dropStorage', async () => {
+        const { engine, protocol } = await seedActiveObject('sys_secret');
+        await protocol.deleteMetaItem({ type: 'object', name: 'sys_secret', dropStorage: true });
+        expect(engine.dropObjectSchema).not.toHaveBeenCalled();
+    });
+
+    it('does not drop storage for a non-object type even with dropStorage', async () => {
+        const { engine, rows } = makeStubEngine();
+        engine.dropObjectSchema = vi.fn();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({ type: 'dashboard', name: 'sales', item: { name: 'sales', label: 'Sales', widgets: [] } });
+        await protocol.deleteMetaItem({ type: 'dashboard', name: 'sales', dropStorage: true });
+        expect(engine.dropObjectSchema).not.toHaveBeenCalled();
     });
 });
