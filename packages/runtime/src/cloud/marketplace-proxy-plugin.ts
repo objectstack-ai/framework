@@ -232,18 +232,20 @@ export class MarketplaceProxyPlugin implements Plugin {
                     // Preserve the full /api/v1/marketplace/... path on cloud.
                     const target = `${cloudUrl}${incomingUrl.pathname}${incomingUrl.search}`;
 
-                    // Forward only safe, idempotent methods. We intentionally
-                    // do NOT proxy POST / PUT / DELETE here — those would
-                    // need credentialled cloud auth which the tenant runtime
-                    // does not carry.
+                    // Browse-only mechanism: this plugin forwards only safe,
+                    // idempotent GET/HEAD (it carries no credentialled cloud
+                    // auth). It does NOT own install *policy* — that is a host
+                    // concern (ObjectStack Cloud supplies a credentialled
+                    // install route via the `extraPlugins` seam; see ADR
+                    // docs/design/cloud-account-binding-marketplace-install.md
+                    // §5.2). So instead of dead-ending non-GET with a 405
+                    // "install via cloud", we PASS THROUGH: a host-supplied
+                    // handler mounted after this plugin can claim the request;
+                    // if none does, the app returns its normal 404. This
+                    // removes the browse-only install dead-end (framework#1548)
+                    // without this plugin pretending to know install policy.
                     if (method !== 'GET' && method !== 'HEAD') {
-                        return c.json({
-                            success: false,
-                            error: {
-                                code: 'marketplace_method_not_allowed',
-                                message: `Marketplace proxy only forwards GET/HEAD; install via cloud.`,
-                            },
-                        }, 405);
+                        return next();
                     }
 
                     // Cache lookup. Key includes accept-language because
