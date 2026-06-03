@@ -195,6 +195,32 @@ export class PackageServicePlugin implements Plugin {
 
     ctx.registerService('package', packageService);
     logger.info('Package service initialized');
+
+    // Reconcile durable packages back into the in-memory registry (ADR-0033
+    // consolidation). Packages persisted to `sys_packages` — AI-authored app
+    // packages, or anything HTTP-installed in a previous run — must survive a
+    // restart and surface in the registry-backed read paths (the dispatcher's
+    // `/api/v1/packages` list/detail and `getMetaItems({type:'package'})`, i.e.
+    // Studio's package selector). Never clobber a package already registered
+    // from the filesystem. Best-effort and non-fatal.
+    try {
+      const registry = (objectql as unknown as { registry?: any }).registry;
+      if (registry?.installPackage && registry?.getPackage) {
+        let hydrated = 0;
+        for (const rec of await packageService.list()) {
+          const id = rec?.manifest?.id;
+          if (id && !registry.getPackage(id)) {
+            registry.installPackage(rec.manifest);
+            hydrated++;
+          }
+        }
+        if (hydrated > 0) {
+          logger.info(`Hydrated ${hydrated} package(s) from sys_packages into registry`);
+        }
+      }
+    } catch (error) {
+      logger.debug(`Package hydration from sys_packages skipped: ${(error as Error)?.message}`);
+    }
   }
 
   private async ensureTable(objectql: IDataEngine, logger: any): Promise<void> {

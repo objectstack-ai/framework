@@ -955,6 +955,54 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // Package install — POST /packages routes through protocol.installPackage
+    // (ADR-0033 consolidation: registry + sys_packages in one primitive)
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('POST /packages install', () => {
+        it('routes through protocol.installPackage and returns the unwrapped package', async () => {
+            const installPackage = vi.fn().mockResolvedValue({
+                package: { manifest: { id: 'app.demo' }, status: 'installed' },
+                message: 'Installed package: app.demo',
+            });
+            const mockRegistry = { installPackage: vi.fn(), getAllPackages: vi.fn().mockReturnValue([]) };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ installPackage });
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const manifest = { id: 'app.demo', name: 'Demo', version: '1.0.0', type: 'application' };
+            const result = await dispatcher.handlePackages('', 'POST', { manifest, settings: { a: 1 } }, {}, { request: {} });
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(201);
+            expect(installPackage).toHaveBeenCalledWith({ manifest, settings: { a: 1 } });
+            expect(mockRegistry.installPackage).not.toHaveBeenCalled(); // primitive owns the write
+            expect((result.response as any)?.body?.data?.manifest?.id).toBe('app.demo');
+        });
+
+        it('falls back to registry.installPackage when the protocol lacks the method', async () => {
+            const mockRegistry = {
+                installPackage: vi.fn().mockReturnValue({ manifest: { id: 'app.fb' }, status: 'installed' }),
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({}); // no installPackage
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const manifest = { id: 'app.fb', name: 'FB', version: '1.0.0', type: 'application' };
+            const result = await dispatcher.handlePackages('', 'POST', { manifest }, {}, { request: {} });
+
+            expect(result.response?.status).toBe(201);
+            expect(mockRegistry.installPackage).toHaveBeenCalledWith(manifest, undefined);
+            expect((result.response as any)?.body?.data?.manifest?.id).toBe('app.fb');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // Metadata getPublished Endpoint
     // ═══════════════════════════════════════════════════════════════
 

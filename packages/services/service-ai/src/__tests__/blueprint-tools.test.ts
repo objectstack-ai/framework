@@ -462,3 +462,73 @@ describe('apply_blueprint — auto app package', () => {
     for (const c of proto.saveMetaItem.mock.calls) expect(c[0].packageId).toBeUndefined();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// ADR-0033 consolidation — when the protocol exposes the canonical
+// `installPackage` primitive, the app package is written through it (registry
+// + sys_packages) instead of the legacy package-service publish, so the app
+// actually surfaces in Studio.
+// ═══════════════════════════════════════════════════════════════════
+
+function createMockProtocolWithInstall(existingObjects: string[] = []) {
+  const base = createMockProtocol(existingObjects);
+  const installPackage = vi.fn(async (req: any) => ({ package: { manifest: req.manifest }, message: 'ok' }));
+  (base.protocol as any).installPackage = installPackage;
+  return { ...base, installPackage };
+}
+
+describe('apply_blueprint — app package via protocol.installPackage', () => {
+  it('prefers protocol.installPackage over the legacy publish and binds artifacts', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocolWithInstall();
+    const pkg = createMockPackageService();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+
+    expect(proto.installPackage).toHaveBeenCalledOnce();
+    expect((proto.installPackage.mock.calls[0] as any[])[0].manifest).toMatchObject({
+      id: 'app.project_management', type: 'application', namespace: 'project_management', scope: 'environment',
+    });
+    expect(pkg.publish).not.toHaveBeenCalled(); // canonical primitive wins; legacy publish skipped
+    expect(parsed.package).toEqual({ id: 'app.project_management', name: '项目管理', created: true });
+    expect(proto.saveMetaItem.mock.calls.length).toBe(3); // object + view + app
+    for (const c of proto.saveMetaItem.mock.calls) {
+      expect(c[0].packageId).toBe('app.project_management');
+      expect(c[0].mode).toBe('draft');
+    }
+  });
+
+  it('installs via protocol.installPackage even with no package service wired', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocolWithInstall();
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol, metadataService: createMockMetadataService(),
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+
+    expect(proto.installPackage).toHaveBeenCalledOnce();
+    expect(parsed.package).toEqual({ id: 'app.project_management', name: '项目管理', created: true });
+    for (const c of proto.saveMetaItem.mock.calls) expect(c[0].packageId).toBe('app.project_management');
+  });
+
+  it('reuses an existing package (get-guard) without calling installPackage', async () => {
+    const registry = new ToolRegistry();
+    const proto = createMockProtocolWithInstall();
+    const pkg = createMockPackageService(['app.project_management']);
+    registerBlueprintTools(registry, {
+      ai: createMockAi().ai, protocol: proto.protocol,
+      metadataService: createMockMetadataService(), packageService: pkg.svc as any,
+    });
+
+    const parsed = parse(await registry.execute(call('apply_blueprint', { blueprint: APP_BLUEPRINT })));
+
+    expect(proto.installPackage).not.toHaveBeenCalled();
+    expect(pkg.publish).not.toHaveBeenCalled();
+    expect(parsed.package).toEqual({ id: 'app.project_management', name: 'app.project_management', created: false });
+  });
+});

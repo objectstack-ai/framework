@@ -10,7 +10,9 @@ import type {
     BatchUpdateRequest,
     BatchUpdateResponse,
     UpdateManyDataRequest,
-    DeleteManyDataRequest
+    DeleteManyDataRequest,
+    InstallPackageRequest,
+    InstallPackageResponse
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import type { IFeedService } from '@objectstack/spec/contracts';
@@ -4379,5 +4381,45 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const svc = this.requireFeedService();
         const unsubscribed = await svc.unsubscribe(request.object, request.recordId, 'current_user');
         return { success: true, data: { object: request.object, recordId: request.recordId, unsubscribed } };
+    }
+
+    /**
+     * Install a package from a manifest — the single canonical write primitive
+     * for the package subsystem (ADR-0033 consolidation).
+     *
+     * It writes BOTH stores that the runtime keeps for packages, so a package
+     * surfaces consistently no matter which read path is used:
+     *   1. the in-memory `SchemaRegistry` (what the dispatcher's
+     *      `/api/v1/packages` list/detail and `getMetaItems({type:'package'})`
+     *      read — i.e. what Studio's package selector shows), and
+     *   2. the durable `sys_packages` table via the optional `package` service
+     *      (so the package survives a restart; that service re-hydrates these
+     *      rows back into the registry on boot).
+     *
+     * The DB write is best-effort and non-fatal: when the `package` service is
+     * absent (e.g. the `marketplace` capability is off) the package is still
+     * registered in-memory and visible for the lifetime of the process.
+     */
+    async installPackage(request: InstallPackageRequest): Promise<InstallPackageResponse> {
+        const manifest = request.manifest;
+        const pkg = this.engine.registry.installPackage(manifest as any, request.settings);
+
+        // Best-effort durable persistence to `sys_packages`.
+        try {
+            const services = this.getServicesRegistry?.();
+            const pkgSvc = services?.get('package') as
+                | { publish?: (data: { manifest: unknown; metadata: unknown }) => Promise<unknown> }
+                | undefined;
+            if (pkgSvc?.publish && (manifest as any)?.version) {
+                await pkgSvc.publish({ manifest, metadata: {} });
+            }
+        } catch (e) {
+            // Non-fatal: registry write already succeeded; log and continue.
+            console.warn(
+                `[protocol.installPackage] sys_packages persist skipped for '${(manifest as any)?.id}': ${(e as Error)?.message}`,
+            );
+        }
+
+        return { package: pkg as any, message: `Installed package: ${(manifest as any)?.id}` };
     }
 }

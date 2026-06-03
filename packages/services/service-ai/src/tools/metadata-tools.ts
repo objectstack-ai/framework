@@ -232,6 +232,18 @@ export interface MetadataToolContext {
       mode?: 'draft' | 'publish';
       packageId?: string | null;
     }): Promise<unknown>;
+    /**
+     * Install a package from a manifest — the canonical write primitive that
+     * lands the package in BOTH the in-memory registry (Studio's selector reads
+     * this) and the durable `sys_packages` table (ADR-0033 consolidation). The
+     * runtime object backing `ctx.protocol` is the full
+     * ObjectStackProtocolImplementation, which provides this; older/remote
+     * protocols may omit it (callers fall back to the `package` service).
+     */
+    installPackage?(request: {
+      manifest: Record<string, unknown>;
+      settings?: Record<string, unknown>;
+    }): Promise<{ package?: unknown; message?: string } | unknown>;
   };
 }
 
