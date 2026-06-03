@@ -269,6 +269,37 @@ export class SeedLoaderService implements ISeedLoaderService {
         const fieldValue = record[ref.field];
         if (fieldValue === undefined || fieldValue === null) continue;
 
+        // LOUD FAILURE: a reference must be a natural-key string (or an
+        // internal id). An object value — e.g. the wrapper `{ externalId: 'X' }`
+        // — never resolves: it would otherwise fall through unresolved and reach
+        // the driver as a non-bindable value ("SQLite3 can only bind ..."). This
+        // used to be silently skipped (and only crashed on a persistent DB's
+        // update path), so catch it here and report the actionable fix instead.
+        if (typeof fieldValue === 'object') {
+          const wrapped = (fieldValue as Record<string, unknown>).externalId;
+          const hint =
+            wrapped !== undefined
+              ? ` Pass the natural key directly: ${ref.field}: ${JSON.stringify(wrapped)}.`
+              : ` Pass the target's ${ref.targetField} value as a plain string.`;
+          const error: ReferenceResolutionError = {
+            sourceObject: objectName,
+            field: ref.field,
+            targetObject: ref.targetObject,
+            targetField: ref.targetField,
+            attemptedValue: fieldValue,
+            recordIndex: i,
+            message:
+              `Invalid reference for ${objectName}.${ref.field}: expected a ` +
+              `${ref.targetObject}.${ref.targetField} natural-key string but got an object.${hint}`,
+          };
+          errors.push(error);
+          allErrors.push(error);
+          this.logger.warn(`[SeedLoader] ${error.message}`, { recordIndex: i });
+          // Drop the unresolvable value so it never reaches the driver.
+          record[ref.field] = null;
+          continue;
+        }
+
         // Skip if value looks like an internal ID (not a natural key)
         if (typeof fieldValue !== 'string' || this.looksLikeInternalId(fieldValue)) continue;
 

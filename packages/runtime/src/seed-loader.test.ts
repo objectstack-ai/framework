@@ -407,6 +407,48 @@ describe('SeedLoaderService', () => {
       expect(result.summary.totalReferencesResolved).toBe(0);
     });
 
+    it('should fail loudly when a reference is an object wrapper, not write it to the driver', async () => {
+      const metadata = createMockMetadata({
+        account: { name: 'account', fields: { name: { type: 'text' } } },
+        contact: {
+          name: 'contact',
+          fields: {
+            name: { type: 'text' },
+            account_id: { type: 'lookup', reference: 'account' },
+          },
+        },
+      });
+      const engine = createMockEngine();
+      const loader = new SeedLoaderService(engine, metadata, logger);
+
+      const result = await loader.load({
+        datasets: [
+          { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme Corp' }] },
+          // The previously-masked bug: a `{ externalId: 'X' }` wrapper instead of
+          // the plain natural-key string. Must be rejected, never handed to the driver.
+          { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: { externalId: 'Acme Corp' } }] },
+        ],
+        config: {
+          dryRun: false, haltOnError: false, multiPass: true,
+          defaultMode: 'upsert', batchSize: 1000, transaction: false,
+        },
+      });
+
+      // Load is marked unsuccessful and the error is actionable.
+      expect(result.success).toBe(false);
+      const refError = result.errors.find((e) => e.sourceObject === 'contact' && e.field === 'account_id');
+      expect(refError).toBeDefined();
+      expect(refError!.message).toContain('expected a account.name natural-key string');
+      expect(refError!.message).toContain("account_id: \"Acme Corp\"");
+
+      // The object wrapper must NOT reach the driver (it would throw "can only
+      // bind"); the guard drops it to null instead.
+      const contactInsertCall = (engine.insert as any).mock.calls.find((c: any[]) => c[0] === 'contact');
+      if (contactInsertCall) {
+        expect(contactInsertCall[1].account_id).toBeNull();
+      }
+    });
+
     it('should skip reference resolution for values that look like UUIDs', async () => {
       const metadata = createMockMetadata({
         account: { name: 'account', fields: { name: { type: 'text' } } },
