@@ -3950,6 +3950,132 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     /**
+     * Discard every pending DRAFT bound to a package — the NON-destructive
+     * inverse of {@link publishPackageDrafts}. Drops only `state='draft'` rows
+     * (via the per-item delete primitive), reverting the package to its last
+     * published baseline; active/published metadata and physical tables are
+     * left untouched.
+     *
+     * Use case: "I edited this app for a while and it turned out worse than
+     * before — abandon all my changes." Routes through the sys_metadata path
+     * (no metadata-service dependency, unlike `POST /packages/:id/revert`).
+     */
+    async discardPackageDrafts(request: {
+        packageId: string;
+        organizationId?: string;
+        actor?: string;
+    }): Promise<{
+        success: boolean;
+        discardedCount: number;
+        failedCount: number;
+        discarded: Array<{ type: string; name: string }>;
+        failed: Array<{ type: string; name: string; error: string; code?: string }>;
+    }> {
+        await this.ensureOverlayIndex();
+        const orgId = request.organizationId ?? null;
+        const repo = this.getOverlayRepo(orgId);
+        const drafts = await repo.listDrafts({ packageId: request.packageId });
+
+        const discarded: Array<{ type: string; name: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
+
+        for (const d of drafts) {
+            try {
+                await this.deleteMetaItem({
+                    type: d.type,
+                    name: d.name,
+                    state: 'draft',
+                    ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                });
+                discarded.push({ type: d.type, name: d.name });
+            } catch (e: any) {
+                failed.push({
+                    type: d.type,
+                    name: d.name,
+                    error: e?.message ?? 'discard failed',
+                    ...(e?.code ? { code: e.code } : {}),
+                });
+            }
+        }
+
+        return {
+            success: failed.length === 0 && discarded.length > 0,
+            discardedCount: discarded.length,
+            failedCount: failed.length,
+            discarded,
+            failed,
+        };
+    }
+
+    /**
+     * Delete an ENTIRE package: every `sys_metadata` row bound to it (active
+     * AND draft) and — by default — the physical table of each object it
+     * defined. DESTRUCTIVE: removes the app and its data. Use case: "I don't
+     * want this package anymore."
+     *
+     * Set `keepData: true` to remove the metadata but preserve object tables.
+     * The `sys_`-table guard in {@link deleteMetaItem} still applies, so
+     * platform storage is never dropped. Drafts are removed before active rows
+     * so each object's table is torn down once. Per-item failures are collected
+     * without aborting the rest.
+     */
+    async deletePackage(request: {
+        packageId: string;
+        organizationId?: string;
+        actor?: string;
+        keepData?: boolean;
+    }): Promise<{
+        success: boolean;
+        deletedCount: number;
+        failedCount: number;
+        deleted: Array<{ type: string; name: string; state: string }>;
+        failed: Array<{ type: string; name: string; error: string; code?: string }>;
+    }> {
+        const where: Record<string, unknown> = { package_id: request.packageId };
+        if (request.organizationId) where.organization_id = request.organizationId;
+        const rows = (await this.engine.find('sys_metadata', { where })) as any[];
+
+        const dropStorage = request.keepData !== true;
+        // Delete drafts before active so an object's table is dropped once (on
+        // the active delete), not pre-empted by a draft delete.
+        const ordered = [...rows].sort((a, b) => (a.state === 'draft' ? 0 : 1) - (b.state === 'draft' ? 0 : 1));
+
+        const deleted: Array<{ type: string; name: string; state: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
+
+        for (const row of ordered) {
+            const state: 'active' | 'draft' = row.state === 'draft' ? 'draft' : 'active';
+            try {
+                await this.deleteMetaItem({
+                    type: row.type,
+                    name: row.name,
+                    state,
+                    ...(row.organization_id ? { organizationId: row.organization_id } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                    ...(dropStorage ? { dropStorage: true } : {}),
+                });
+                deleted.push({ type: row.type, name: row.name, state });
+            } catch (e: any) {
+                failed.push({
+                    type: row.type,
+                    name: row.name,
+                    error: e?.message ?? 'delete failed',
+                    ...(e?.code ? { code: e.code } : {}),
+                });
+            }
+        }
+
+        return {
+            success: failed.length === 0 && deleted.length > 0,
+            deletedCount: deleted.length,
+            failedCount: failed.length,
+            deleted,
+            failed,
+        };
+    }
+
+    /**
      * Restore the body recorded at history `toVersion` as the new
      * live row. Writes a history event with `op='revert'`. 404
      * (`[version_not_found]`) when the target version doesn't exist;
