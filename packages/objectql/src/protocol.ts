@@ -296,6 +296,32 @@ function resolveOverlaySchema(type: string, _item: unknown): z.ZodTypeAny | null
 }
 
 /**
+ * Guarantee a `view` body carries a top-level `name`.
+ *
+ * {@link ObjectStackProtocolImplementation.getMetaItems} only surfaces a
+ * sys_metadata overlay row when its parsed body has a top-level `name` (objects
+ * and dashboards include one; some view producers — notably loose `{ list }`
+ * fragments — do not, so the view is silently dropped from the object's view
+ * list and never appears as a tab). We stamp the save name here, at the single
+ * write chokepoint, without otherwise reshaping the document.
+ *
+ * Deliberately does NOT convert shape: both the `defineView` container form
+ * (`{ list, listViews, … }`) and the `{ name, object, viewKind, config }`
+ * record form are valid and the console consumes both — reshaping a container
+ * into a record risks producing an invalid record (e.g. a non-`<object>.<key>`
+ * name). Structural validity is enforced separately by the view metadata schema
+ * during the spec-validation step. No-op for non-view types and bodies that
+ * already carry a `name`.
+ */
+export function normalizeViewMetadata(type: string, item: unknown, saveName: string): unknown {
+    const singular = PLURAL_TO_SINGULAR[type] ?? type;
+    if (singular !== 'view') return item;
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    const it = item as Record<string, unknown>;
+    return it.name ? it : { ...it, name: saveName };
+}
+
+/**
  * ADR-0010 §3.3 — Overlay the artifact's metadata-protection envelope
  * onto a returned item so artifact-level lock/packageId/provenance
  * always wins over whatever was persisted in the `sys_metadata` overlay
@@ -3336,6 +3362,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 throw err;
             }
         }
+
+        // Normalize loose `view` bodies to the canonical record shape BEFORE
+        // validation + persistence, so no producer (AI tools, hand-authoring,
+        // Studio) can persist a view that validates but the console can't bind
+        // or render (missing top-level name/object/viewKind). See
+        // {@link normalizeViewMetadata}.
+        request.item = normalizeViewMetadata(request.type, request.item, request.name);
 
         // Spec-conformance check: if a Zod schema is registered for this
         // overlay type (see OVERLAY_VALIDATION_SCHEMAS), validate the payload

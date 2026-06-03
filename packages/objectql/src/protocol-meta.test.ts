@@ -360,14 +360,14 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
                 expect(persisted.objectName).toBe('lead');
             });
 
-            it('rejects a view missing the required `columns` field with 422', async () => {
-                // Container shape (the only shape Studio + defineView() emit
-                // now) with an inner ListView that is missing `columns`.
+            it('rejects an invalid view (container with a listView missing `columns`) with 422', async () => {
+                // The `defineView` container shape (left intact by the view-write
+                // normalizer) is strictly validated: a named sub-view missing the
+                // required `columns` is rejected.
                 const invalid = {
-                    list: {
-                        type: 'grid',
-                        data: { provider: 'object', object: 'lead' },
-                        // columns: missing
+                    list: { type: 'grid', data: { provider: 'object', object: 'lead' }, columns: ['name'] },
+                    listViews: {
+                        bad: { type: 'grid', data: { provider: 'object', object: 'lead' } }, // columns missing
                     },
                 };
                 let caught: any;
