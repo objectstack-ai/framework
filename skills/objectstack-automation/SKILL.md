@@ -56,8 +56,8 @@ parallel. Flows are the primary automation building block in ObjectStack.
 | `autolaunched` | Runs without user interaction — triggered by events, APIs, or other flows |
 | `screen` | Interactive — presents UI screens to the user (wizards, forms) |
 | `schedule` | Runs on a cron schedule (daily cleanup, weekly reports) |
-| `record_triggered` | Fires automatically on record create/update/delete |
-| `platform_event` | Fires on platform events (webhooks, message queue) |
+| `record_change` | Fires automatically on record create/update/delete (bind via the `start` node's `triggerType`) |
+| `api` | Invoked explicitly via the API / `engine.execute()` |
 
 ### Flow Node Types
 
@@ -125,43 +125,30 @@ variables: {
 
 ### Flow Example — Auto-Escalate Overdue Cases
 
+> **Nodes connect via `edges`, not a `next` property.** The engine traverses
+> `flow.edges` (`{ source, target }`); a bare `next:` on a node is ignored.
+> `update_record` selects rows with **`filter`** and writes with **`fields`**
+> (a single call updates *every* matching row — no per-row loop needed).
+
 ```typescript
 {
   name: 'escalate_overdue_cases',
   type: 'schedule',
   schedule: cron`0 9 * * *`,    // daily at 09:00
   nodes: [
+    { id: 'start', type: 'start' },
     {
-      id: 'start',
-      type: 'start',
-      next: 'find_overdue',
-    },
-    {
-      id: 'find_overdue',
-      type: 'query_record',
+      id: 'escalate_overdue',
+      type: 'update_record',
       config: {
         object: 'support_case',
+        // which rows to update — `filter`, not `recordId`
         filter: [
           { field: 'status', operator: 'in', value: ['new', 'open'] },
           { field: 'due_date', operator: 'less_than', value: cel`today()` },
         ],
-      },
-      next: 'loop_cases',
-    },
-    {
-      id: 'loop_cases',
-      type: 'loop',
-      config: { collection: '$find_overdue.records' },
-      next: 'update_status',
-      afterLoop: 'notify_manager',
-    },
-    {
-      id: 'update_status',
-      type: 'update_record',
-      config: {
-        object: 'support_case',
-        recordId: '$loop_cases.current.id',
-        values: { status: 'escalated' },
+        // what to write — `fields`, not `values`
+        fields: { status: 'escalated' },
       },
     },
     {
@@ -170,11 +157,15 @@ variables: {
       config: {
         url: 'https://hooks.slack.com/services/...',
         method: 'POST',
-        body: { text: 'Escalated $find_overdue.records.length overdue cases.' },
+        body: { text: 'Escalated overdue support cases.' },
       },
-      next: 'end',
     },
     { id: 'end', type: 'end' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start',            target: 'escalate_overdue' },
+    { id: 'e2', source: 'escalate_overdue', target: 'notify_manager' },
+    { id: 'e3', source: 'notify_manager',   target: 'end' },
   ],
 }
 ```
@@ -249,10 +240,21 @@ is one diagram a reviewer (or AI) can read end-to-end.
 {
   name: 'opportunity_discount_approval',
   label: 'Opportunity Discount Approval',
-  type: 'record_triggered',
-  trigger: { object: 'opportunity', event: 'after_update' },
+  type: 'record_change',
   nodes: [
-    { id: 'start', type: 'start' },
+    // Record-change flows bind via the START NODE's config — there is no
+    // separate top-level `trigger`. `triggerType` is one of
+    // `record-(before|after)-(create|update|delete)`; `condition` (bare CEL)
+    // gates whether the flow launches.
+    {
+      id: 'start',
+      type: 'start',
+      config: {
+        objectName: 'opportunity',
+        triggerType: 'record-after-update',
+        condition: cel`record.amount > 100000`,
+      },
+    },
     {
       id: 'manager_review',
       type: 'approval',
@@ -276,7 +278,7 @@ is one diagram a reviewer (or AI) can read end-to-end.
       },
     },
     { id: 'mark_won', type: 'update_record',
-      config: { object: 'opportunity', recordId: '$record.id', values: { stage: 'closed_won' } } },
+      config: { object: 'opportunity', filter: { id: '{record.id}' }, fields: { stage: 'closed_won' } } },
     { id: 'approved', type: 'end' },
     { id: 'rejected', type: 'end' },
   ],
@@ -371,32 +373,55 @@ These are wired on the **graph**, not in node config:
 
 ## Triggers — Event-Driven Automation
 
-Triggers fire automatically when data events occur.
+A `record_change` flow fires automatically on a data event. There is **no
+standalone trigger object and no top-level `trigger` / `event` key** — the
+binding lives entirely in the flow's **`start` node `config`**, which the
+automation engine parses (`resolveTriggerBinding`) and wires to the matching
+ObjectQL lifecycle hook.
 
-### Trigger Events
+### Prerequisite — enable the `triggers` capability
 
-| Event | Fires When |
-|:------|:-----------|
-| `before_insert` | Before a record is created (can modify/reject) |
-| `after_insert` | After a record is created |
-| `before_update` | Before a record is updated |
-| `after_update` | After a record is updated |
-| `before_delete` | Before a record is deleted |
-| `after_delete` | After a record is deleted |
+Record-change (and schedule) triggers ship as a plugin gated behind the
+`triggers` capability. **Without it the flows register but never fire.** Add it
+to the package config (pair with `job` for schedule/cron triggers):
 
-### Trigger Configuration
+```typescript
+defineStack({
+  // …
+  requires: ['automation', 'triggers'],   // + 'job' for scheduled flows
+});
+```
+
+### Trigger Types (start-node `config.triggerType`)
+
+| `triggerType` | Fires | ObjectQL hook |
+|:------|:------|:------|
+| `record-before-create` | before insert (can modify/reject) | `beforeInsert` |
+| `record-after-create` | after insert | `afterInsert` |
+| `record-before-update` | before update | `beforeUpdate` |
+| `record-after-update` | after update | `afterUpdate` |
+| `record-before-delete` | before delete | `beforeDelete` |
+| `record-after-delete` | after delete | `afterDelete` |
+
+### Trigger Configuration — on the `start` node
 
 ```typescript
 {
   name: 'notify_on_escalation',
-  object: 'support_case',
-  event: 'after_update',
-  condition: P`previous.status != 'escalated' && record.status == 'escalated'`,
-  action: {
-    type: 'flow',
-    flow: 'send_escalation_notification',
-    input: { case_id: '$record.id' },
-  },
+  type: 'record_change',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      config: {
+        objectName: 'support_case',
+        triggerType: 'record-after-update',
+        // bare CEL; gates whether the flow launches on the event
+        condition: cel`previous.status != 'escalated' && record.status == 'escalated'`,
+      },
+    },
+    // …downstream nodes, connected via `edges`
+  ],
 }
 ```
 
@@ -438,11 +463,11 @@ Triggers fire automatically when data events occur.
 
 ### Trigger Design
 
-1. **Prefer `after_*` triggers** unless you need to modify/reject the record.
-2. **Avoid infinite loops:** Do not update the same object in an `after_update`
-   trigger without a guard condition.
-3. **Use `condition`** to narrow when the trigger fires — avoid running
-   expensive logic on every save.
+1. **Prefer `record-after-*` triggers** unless you need to modify/reject the record.
+2. **Avoid infinite loops:** Do not update the same object in a
+   `record-after-update` trigger without a guard condition.
+3. **Use the start-node `condition`** to narrow when the trigger fires — avoid
+   running expensive logic on every save.
 
 ---
 
@@ -453,8 +478,8 @@ Triggers fire automatically when data events occur.
 2. **Unmatched `parallel_gateway` / `join_gateway`.** Every fork must have a
    corresponding join.
 3. **Missing `end` node.** Every path through the flow must terminate.
-4. **`before_*` trigger throwing unhandled errors.** This silently prevents
-   the record operation — always provide a user-friendly error message.
+4. **`record-before-*` trigger throwing unhandled errors.** This silently
+   prevents the record operation — always provide a user-friendly error message.
 5. **Scheduled flows without idempotency.** If the flow runs twice
    accidentally, the result should be the same.
 
