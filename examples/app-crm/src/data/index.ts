@@ -22,9 +22,9 @@ const contacts = defineDataset(Contact, {
   mode: 'upsert',
   externalId: 'email',
   records: [
-    { first_name: 'Ada',    last_name: 'Lovelace', email: 'ada@acme.example',    account: { externalId: 'Acme Corp' } },
-    { first_name: 'Linus',  last_name: 'Torvalds', email: 'linus@globex.example', account: { externalId: 'Globex Ltd' } },
-    { first_name: 'Grace',  last_name: 'Hopper',   email: 'grace@initech.example', account: { externalId: 'Initech' } },
+    { first_name: 'Ada',    last_name: 'Lovelace', email: 'ada@acme.example',    account: 'Acme Corp' },
+    { first_name: 'Linus',  last_name: 'Torvalds', email: 'linus@globex.example', account: 'Globex Ltd' },
+    { first_name: 'Grace',  last_name: 'Hopper',   email: 'grace@initech.example', account: 'Initech' },
   ],
 });
 
@@ -33,26 +33,26 @@ const opportunities = defineDataset(Opportunity, {
   externalId: 'name',
   records: [
     // --- Open pipeline (no close yet) -----------------------------------
-    { name: 'Acme — Q3 Platform Renewal', account: { externalId: 'Acme Corp' },  stage: 'proposal',       amount: 120_000, probability: 70, close_date: cel`daysFromNow(30)` },
-    { name: 'Globex — New CRM Rollout',   account: { externalId: 'Globex Ltd' }, stage: 'qualification',  amount: 450_000, probability: 40, close_date: cel`daysFromNow(60)` },
-    { name: 'Initech — Expansion',        account: { externalId: 'Initech' },    stage: 'prospecting',    amount:  80_000, probability: 20, close_date: cel`daysFromNow(45)` },
-    { name: 'Acme — Add-on Module',       account: { externalId: 'Acme Corp' },  stage: 'qualification',  amount:  60_000, probability: 35, close_date: cel`daysFromNow(20)` },
+    { name: 'Acme — Q3 Platform Renewal', account: 'Acme Corp',  stage: 'proposal',       amount: 120_000, probability: 70, close_date: cel`daysFromNow(30)` },
+    { name: 'Globex — New CRM Rollout',   account: 'Globex Ltd', stage: 'qualification',  amount: 450_000, probability: 40, close_date: cel`daysFromNow(60)` },
+    { name: 'Initech — Expansion',        account: 'Initech',    stage: 'prospecting',    amount:  80_000, probability: 20, close_date: cel`daysFromNow(45)` },
+    { name: 'Acme — Add-on Module',       account: 'Acme Corp',  stage: 'qualification',  amount:  60_000, probability: 35, close_date: cel`daysFromNow(20)` },
 
     // --- Recently closed-won (current quarter — drives "Won This Quarter") -
-    { name: 'Initech — Pilot',                  account: { externalId: 'Initech' },    stage: 'closed_won', amount:  35_000, probability: 100, close_date: cel`daysAgo(7)` },
-    { name: 'Acme — Support Tier Upgrade',      account: { externalId: 'Acme Corp' },  stage: 'closed_won', amount:  90_000, probability: 100, close_date: cel`daysAgo(14)` },
-    { name: 'Globex — Analytics Pack',          account: { externalId: 'Globex Ltd' }, stage: 'closed_won', amount: 110_000, probability: 100, close_date: cel`daysAgo(21)` },
+    { name: 'Initech — Pilot',                  account: 'Initech',    stage: 'closed_won', amount:  35_000, probability: 100, close_date: cel`daysAgo(7)` },
+    { name: 'Acme — Support Tier Upgrade',      account: 'Acme Corp',  stage: 'closed_won', amount:  90_000, probability: 100, close_date: cel`daysAgo(14)` },
+    { name: 'Globex — Analytics Pack',          account: 'Globex Ltd', stage: 'closed_won', amount: 110_000, probability: 100, close_date: cel`daysAgo(21)` },
 
     // --- Previous-quarter wins (drives the "vs last quarter" comparison) ---
-    { name: 'Initech — POC',                    account: { externalId: 'Initech' },    stage: 'closed_won', amount:  25_000, probability: 100, close_date: cel`daysAgo(95)` },
-    { name: 'Globex — Initial Seats',           account: { externalId: 'Globex Ltd' }, stage: 'closed_won', amount: 145_000, probability: 100, close_date: cel`daysAgo(110)` },
+    { name: 'Initech — POC',                    account: 'Initech',    stage: 'closed_won', amount:  25_000, probability: 100, close_date: cel`daysAgo(95)` },
+    { name: 'Globex — Initial Seats',           account: 'Globex Ltd', stage: 'closed_won', amount: 145_000, probability: 100, close_date: cel`daysAgo(110)` },
 
     // --- Prior-year wins in the same window (drives "YoY" comparison) ------
-    { name: 'Acme — Year-Ago Renewal',          account: { externalId: 'Acme Corp' },  stage: 'closed_won', amount:  75_000, probability: 100, close_date: cel`daysAgo(380)` },
-    { name: 'Globex — Year-Ago Implementation', account: { externalId: 'Globex Ltd' }, stage: 'closed_won', amount: 210_000, probability: 100, close_date: cel`daysAgo(400)` },
+    { name: 'Acme — Year-Ago Renewal',          account: 'Acme Corp',  stage: 'closed_won', amount:  75_000, probability: 100, close_date: cel`daysAgo(380)` },
+    { name: 'Globex — Year-Ago Implementation', account: 'Globex Ltd', stage: 'closed_won', amount: 210_000, probability: 100, close_date: cel`daysAgo(400)` },
 
     // --- Closed lost (kept out of pipeline sum) ----------------------------
-    { name: 'Initech — Cancelled Eval',         account: { externalId: 'Initech' },    stage: 'closed_lost', amount: 15_000, probability: 0, close_date: cel`daysAgo(30)` },
+    { name: 'Initech — Cancelled Eval',         account: 'Initech',    stage: 'closed_lost', amount: 15_000, probability: 0, close_date: cel`daysAgo(30)` },
   ],
 });
 
@@ -66,7 +66,7 @@ const leads = defineDataset(Lead, {
       title: 'Director of Research', phone: '+1-555-0101',
       status: 'new', source: 'web', lead_score: 0,
       assigned_to: 'ada@acme.example',
-      account: { externalId: 'Acme Corp' },
+      account: 'Acme Corp',
     },
     // In qualification — high-value referral lead
     {
@@ -81,7 +81,7 @@ const leads = defineDataset(Lead, {
       title: 'CTO', phone: '+1-555-0303',
       status: 'qualified', source: 'event', lead_score: 85,
       assigned_to: 'grace@initech.example',
-      account: { externalId: 'Initech' },
+      account: 'Initech',
     },
     // Disqualified — poor fit
     {
@@ -96,7 +96,7 @@ const leads = defineDataset(Lead, {
       title: 'Chief Inventor', phone: '+1-555-0505',
       status: 'converted', source: 'partner', lead_score: 90,
       assigned_to: 'ada@acme.example',
-      converted_opportunity: { externalId: 'Acme — Q3 Platform Renewal' },
+      converted_opportunity: 'Acme — Q3 Platform Renewal',
     },
   ],
 });
@@ -109,9 +109,9 @@ const activities = defineDataset(Activity, {
       subject: 'Discovery Call — Bletchley Systems',
       type: 'call', status: 'completed',
       due_date: cel`daysAgo(3)`,
-      contact: { externalId: 'ada@acme.example' },
-      account: { externalId: 'Acme Corp' },
-      opportunity: { externalId: 'Acme — Q3 Platform Renewal' },
+      contact: 'ada@acme.example',
+      account: 'Acme Corp',
+      opportunity: 'Acme — Q3 Platform Renewal',
       duration_minutes: 45,
       outcome: 'Strong interest confirmed; sending proposal next week.',
     },
@@ -119,9 +119,9 @@ const activities = defineDataset(Activity, {
       subject: 'Product Demo — Globex New CRM',
       type: 'meeting', status: 'planned',
       due_date: cel`daysFromNow(5)`,
-      contact: { externalId: 'linus@globex.example' },
-      account: { externalId: 'Globex Ltd' },
-      opportunity: { externalId: 'Globex — New CRM Rollout' },
+      contact: 'linus@globex.example',
+      account: 'Globex Ltd',
+      opportunity: 'Globex — New CRM Rollout',
       duration_minutes: 90,
       description: 'Full platform walkthrough with IT and operations stakeholders.',
     },
@@ -129,25 +129,25 @@ const activities = defineDataset(Activity, {
       subject: 'Follow-up Email — Initech Expansion',
       type: 'email', status: 'completed',
       due_date: cel`daysAgo(7)`,
-      contact: { externalId: 'grace@initech.example' },
-      account: { externalId: 'Initech' },
-      opportunity: { externalId: 'Initech — Expansion' },
+      contact: 'grace@initech.example',
+      account: 'Initech',
+      opportunity: 'Initech — Expansion',
       outcome: 'Sent pricing breakdown; awaiting procurement sign-off.',
     },
     {
       subject: 'Proposal Review — Helix Analytics',
       type: 'task', status: 'in_progress',
       due_date: cel`daysFromNow(2)`,
-      contact: { externalId: 'grace@initech.example' },
-      account: { externalId: 'Initech' },
+      contact: 'grace@initech.example',
+      account: 'Initech',
       description: 'Prepare and review the commercial proposal before sending to Helix.',
     },
     {
       subject: 'Quarterly Business Review — Acme Corp',
       type: 'meeting', status: 'planned',
       due_date: cel`daysFromNow(14)`,
-      contact: { externalId: 'ada@acme.example' },
-      account: { externalId: 'Acme Corp' },
+      contact: 'ada@acme.example',
+      account: 'Acme Corp',
       duration_minutes: 60,
       description: 'QBR covering renewal roadmap and upsell opportunities.',
     },
