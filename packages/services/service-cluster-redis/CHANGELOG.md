@@ -1,5 +1,12 @@
 # @objectstack/service-cluster-redis
 
+## 7.9.0
+
+### Patch Changes
+
+- @objectstack/spec@7.9.0
+- @objectstack/service-cluster@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes

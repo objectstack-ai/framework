@@ -1,5 +1,25 @@
 # @objectstack/plugin-dev
 
+## 7.9.0
+
+### Patch Changes
+
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+- Updated dependencies [ac1fc4c]
+  - @objectstack/objectql@7.9.0
+  - @objectstack/rest@7.9.0
+  - @objectstack/runtime@7.9.0
+  - @objectstack/spec@7.9.0
+  - @objectstack/core@7.9.0
+  - @objectstack/types@7.9.0
+  - @objectstack/driver-memory@7.9.0
+  - @objectstack/plugin-auth@7.9.0
+  - @objectstack/plugin-hono-server@7.9.0
+  - @objectstack/plugin-org-scoping@7.9.0
+  - @objectstack/plugin-security@7.9.0
+  - @objectstack/service-i18n@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes

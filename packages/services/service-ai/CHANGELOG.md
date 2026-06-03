@@ -1,5 +1,36 @@
 # @objectstack/service-ai
 
+## 7.9.0
+
+### Patch Changes
+
+- ac1fc4c: fix(ai): authoring tools can see their own drafts; blueprint surfaces the package to bind to
+
+  Two gaps that broke the multi-step "build app → author a flow for it" path (found while verifying the new solution_design guardrail):
+
+  1. **The agent couldn't discover its own draft objects.** `list_objects` / `list_metadata` read `getMetaItems` **active-only**, so a brand-new object the agent had just drafted (never published) was reported as "not found" when it then tried to author an approval flow against it. They now pass `previewDrafts: true`, overlaying pending drafts on the active list (older runtimes ignore the flag → stay active-only). `describe_metadata` was already draft-first.
+
+  2. **The auto-authored flow had no package to bind to.** `apply_blueprint` already homes its artifacts in an app package, but its result only nested the id under `package`. It now also surfaces a top-level `packageId` and a `bindingHint` telling the agent to pass that `packageId` to `create_metadata` when it drafts follow-up automation (e.g. the approval flow) — so the flow lands in the app package instead of becoming an orphan draft.
+
+  Together with the solution_design process guardrail, this makes the "model the data, then proactively draft the approval flow bound to the app" flow actually executable end-to-end.
+
+- 4705fb8: fix(ai): solution_design no longer models a process/approval as a table
+
+  Asking the assistant to "design expense reimbursement" made it, by default, invent an `approval_record` TABLE to represent the approval process — a non-functional "process-as-data" anti-pattern. It only switched to a flow after the user pushed back.
+
+  Hardens the default in two places:
+
+  - **`propose_blueprint` generation prompt** (the "metadata architect" system message): status/lifecycle is modeled as a `select` field, never a table; it must NOT create `approval` / `approval_record` / `approval_step` / `workflow` / `process` objects (a process is a flow, its trail comes from platform history); the people a process references (approver/reviewer/owner) are `lookup` fields; and if the goal implies a process it adds an assumption that the approval _flow_ is a separate step.
+
+  - **`solution_design` skill instructions**: the same modeling rules, plus — when the goal involves a process — the agent now PROACTIVELY drafts the approval flow after `apply_blueprint` (call `get_metadata_schema('flow')`, then `create_metadata(type:'flow', …)` with the approval node(s), bound to the same app package) instead of waiting for the user to ask "now create the flow". Optionally adds a `state_machine` rule to block illegal status transitions.
+
+  Regression-tested: `solution-design-guardrail.test.ts` asserts the skill instructions carry the no-process-as-table rule, status-as-select, and the proactive-flow step.
+
+  - @objectstack/spec@7.9.0
+  - @objectstack/core@7.9.0
+  - @objectstack/types@7.9.0
+  - @objectstack/formula@7.9.0
+
 ## 7.8.0
 
 ### Minor Changes

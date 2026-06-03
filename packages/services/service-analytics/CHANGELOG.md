@@ -1,5 +1,12 @@
 # Changelog — @objectstack/service-analytics
 
+## 7.9.0
+
+### Patch Changes
+
+- @objectstack/spec@7.9.0
+- @objectstack/core@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes

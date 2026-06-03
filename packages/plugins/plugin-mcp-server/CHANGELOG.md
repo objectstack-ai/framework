@@ -1,5 +1,13 @@
 # @objectstack/plugin-mcp-server
 
+## 7.9.0
+
+### Patch Changes
+
+- @objectstack/spec@7.9.0
+- @objectstack/core@7.9.0
+- @objectstack/types@7.9.0
+
 ## 7.8.0
 
 ### Patch Changes
