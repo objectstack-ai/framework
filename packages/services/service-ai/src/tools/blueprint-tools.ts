@@ -214,6 +214,7 @@ const LIST_TYPE: Record<string, string> = { list: 'grid', kanban: 'kanban', cale
 function viewBody(
   v: NonNullable<SolutionBlueprint['views']>[number],
   columnsByObject: Map<string, string[]>,
+  groupFieldByObject?: Map<string, string>,
 ): Record<string, unknown> {
   const cols = v.columns?.length ? v.columns : columnsByObject.get(v.object) ?? ['name'];
   const data = { provider: 'object', object: v.object };
@@ -227,14 +228,21 @@ function viewBody(
       ...(v.label ? { label: v.label } : {}),
     };
   }
-  return {
-    list: {
-      type: LIST_TYPE[v.type] ?? 'grid',
-      data,
-      columns: cols,
-      ...(v.label ? { label: v.label } : {}),
-    },
+  const list: Record<string, unknown> = {
+    type: LIST_TYPE[v.type] ?? 'grid',
+    data,
+    columns: cols,
+    ...(v.label ? { label: v.label } : {}),
   };
+  // A kanban board needs a group-by field to form its columns; without it the
+  // renderer falls back to a flat grid. Prefer the blueprint's explicit
+  // `groupBy`, else infer the object's first select/status field.
+  if (v.type === 'kanban') {
+    const groupByField = v.groupBy || groupFieldByObject?.get(v.object);
+    // KanbanConfig requires both the group-by field and the card columns.
+    if (groupByField) list.kanban = { groupByField, columns: cols };
+  }
+  return { list };
 }
 
 /** Convert a blueprint dashboard into a `dashboard` metadata body. */
@@ -384,12 +392,16 @@ function createApplyBlueprintHandler(ctx: BlueprintToolContext): ToolHandler {
 
     // Objects first (views/dashboards reference them).
     const columnsByObject = new Map<string, string[]>();
+    const groupFieldByObject = new Map<string, string>();
     for (const o of blueprint.objects ?? []) {
       columnsByObject.set(o.name, (o.fields ?? []).map((f) => f.name));
+      // Remember the first select field — the natural kanban group-by column.
+      const sel = (o.fields ?? []).find((f) => f.type === 'select');
+      if (sel) groupFieldByObject.set(o.name, sel.name);
       await record('object', o.name, objectBody(o));
     }
     for (const v of blueprint.views ?? []) {
-      await record('view', v.name, viewBody(v, columnsByObject));
+      await record('view', v.name, viewBody(v, columnsByObject, groupFieldByObject));
     }
     for (const d of blueprint.dashboards ?? []) {
       await record('dashboard', d.name, dashboardBody(d));
