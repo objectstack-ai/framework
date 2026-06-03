@@ -14,6 +14,7 @@ export default defineConfig({
       '@objectstack/spec/kernel': path.resolve(__dirname, '../spec/src/kernel/index.ts'),
       '@objectstack/spec/shared': path.resolve(__dirname, '../spec/src/shared/index.ts'),
       '@objectstack/spec/system': path.resolve(__dirname, '../spec/src/system/index.ts'),
+      '@objectstack/spec/ui': path.resolve(__dirname, '../spec/src/ui/index.ts'),
       '@objectstack/spec': path.resolve(__dirname, '../spec/src/index.ts'),
       '@objectstack/types': path.resolve(__dirname, '../types/src/index.ts'),
     },

@@ -64,6 +64,21 @@ export interface ObjectOSStackConfig {
     artifactCacheTtlMs?: number;
     /** API prefix (carried for parity with cloud-stack). Default: /api/v1. */
     apiPrefix?: string;
+    /**
+     * Host-supplied runtime plugins appended to the stack's default plugin
+     * list. This is the official seam for a host (e.g. the ObjectStack Cloud
+     * repo) to add **product/policy** plugins — marketplace install, cloud-
+     * account binding, set-initial-password — to the otherwise-neutral
+     * framework runtime, WITHOUT a framework release and without reaching into
+     * the returned array by hand.
+     *
+     * They are appended last, so they mount their routes after the framework
+     * plugins and can override/augment behaviour (e.g. supply a credentialled
+     * install path that the browse-only MarketplaceProxyPlugin deliberately
+     * does not). See docs/design/cloud-account-binding-marketplace-install.md
+     * (ADR §5.2 — "framework exposes seams; cloud supplies metadata + policy").
+     */
+    extraPlugins?: Plugin[];
 }
 
 export interface ObjectOSStackResult {
@@ -252,7 +267,17 @@ export async function createObjectOSStack(config: ObjectOSStackConfig): Promise<
     const enginePlugins = await createHostEnginePlugins();
 
     return {
-        plugins: [...enginePlugins, new ObjectOSEnvironmentPlugin(merged), new AuthProxyPlugin(), new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl }), new RuntimeConfigPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl, installLocal: false })],
+        plugins: [
+            ...enginePlugins,
+            new ObjectOSEnvironmentPlugin(merged),
+            new AuthProxyPlugin(),
+            new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl }),
+            new RuntimeConfigPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl, installLocal: false }),
+            // Host-supplied product/policy plugins (the official seam — see
+            // ObjectOSStackConfig.extraPlugins). Appended last so they mount
+            // after the framework defaults.
+            ...(config.extraPlugins ?? []),
+        ],
         api: {
             enableProjectScoping: true,
             projectResolution: 'auto',
