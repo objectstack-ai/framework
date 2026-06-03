@@ -6,26 +6,9 @@ export type { ToolHandler, ToolExecutionResult } from './tool-registry.js';
 export { registerDataTools, DATA_TOOL_DEFINITIONS } from './data-tools.js';
 export type { DataToolContext } from './data-tools.js';
 
-export { registerMetadataTools, METADATA_TOOL_DEFINITIONS, stageDraft } from './metadata-tools.js';
-export type { MetadataToolContext, StageDraftInput, StageDraftResult, DraftCapableProtocol } from './metadata-tools.js';
-
-export { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS } from './blueprint-tools.js';
-export type { BlueprintToolContext } from './blueprint-tools.js';
-
 export { registerKnowledgeTools, SEARCH_KNOWLEDGE_TOOL } from './knowledge-tools.js';
 export type { KnowledgeToolContext } from './knowledge-tools.js';
 
-// Individual tool metadata exports
-export { createObjectTool } from './create-object.tool.js';
-export { addFieldTool } from './add-field.tool.js';
-export { modifyFieldTool } from './modify-field.tool.js';
-export { deleteFieldTool } from './delete-field.tool.js';
-export { listObjectsTool } from './list-objects.tool.js';
-export { describeObjectTool } from './describe-object.tool.js';
-export { validateExpressionTool } from './validate-expression.tool.js';
-export { createMetadataTool } from './create-metadata.tool.js';
-export { updateMetadataTool } from './update-metadata.tool.js';
-export { describeMetadataTool } from './describe-metadata.tool.js';
-export { listMetadataTool } from './list-metadata.tool.js';
-export { proposeBlueprintTool } from './propose-blueprint.tool.js';
-export { applyBlueprintTool } from './apply-blueprint.tool.js';
+// NOTE: the AI metadata-authoring tools (metadata-tools, blueprint-tools,
+// package-tools, and the create-object / add-field / *-metadata.tool surfaces)
+// moved to the cloud-only @objectstack/service-ai-studio package.

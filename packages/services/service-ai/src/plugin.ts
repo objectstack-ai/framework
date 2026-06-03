@@ -18,14 +18,12 @@ import { AiConversationObject, AiMessageObject, AiPendingActionObject, AiTraceOb
 import { AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEvalRunView } from './views/index.js';
 import { EvalRunner } from './eval/index.js';
 import { registerDataTools } from './tools/data-tools.js';
-import { registerMetadataTools } from './tools/metadata-tools.js';
-import { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS } from './tools/blueprint-tools.js';
 import { registerQueryDataTool } from './tools/query-data.tool.js';
 import { registerActionsAsTools } from './tools/action-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
 import { SkillRegistry } from './skill-registry.js';
-import { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
-import { DATA_EXPLORER_SKILL, METADATA_AUTHORING_SKILL, SOLUTION_DESIGN_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
+import { DATA_CHAT_AGENT } from './agents/index.js';
+import { DATA_EXPLORER_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
 import { VercelLLMAdapter } from './adapters/vercel-adapter.js';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ModelRegistry } from './model-registry.js';
@@ -626,33 +624,6 @@ export class AIServicePlugin implements Plugin {
       protocolService = undefined;
     }
 
-    // Lazy `package` service accessor so the blueprint tools can give an app a
-    // writable "home" package automatically — zero-package app building. Resolved
-    // PER CALL (at apply_blueprint time, long after startup) so service init
-    // order doesn't matter and a later-loaded `package` capability (the
-    // opt-in `marketplace` tier) is picked up. Throws when absent → ensureAppPackage
-    // catches it and degrades to package-less drafting.
-    const resolvePackage = (): any | undefined => {
-      try {
-        const pk = ctx.getService<any>('package');
-        return pk && typeof pk.get === 'function' && typeof pk.publish === 'function' ? pk : undefined;
-      } catch {
-        return undefined;
-      }
-    };
-    const packageService = {
-      get: async (id: string) => {
-        const pk = resolvePackage();
-        if (!pk) throw new Error('package service unavailable');
-        return pk.get(id);
-      },
-      publish: async (p: unknown) => {
-        const pk = resolvePackage();
-        if (!pk) throw new Error('package service unavailable');
-        return pk.publish(p);
-      },
-    };
-
     // Data tools require only the data engine. When metadata service is
     // wired we also pass it (+ protocol) so the tools can validate
     // field references at runtime and reject hallucinated field names
@@ -821,109 +792,13 @@ export class AIServicePlugin implements Plugin {
       ctx.logger.debug('[AI] Data engine not available, skipping data tools');
     }
 
-    // Metadata tools require only the metadata service
-    if (metadataService) {
-      try {
-        registerMetadataTools(this.service.toolRegistry, { metadataService, protocol: protocolService });
-        ctx.logger.info('[AI] Built-in metadata tools registered');
-
-        // Plan-first blueprint tools (ADR-0033 §4) — design a whole solution,
-        // confirm, then batch-draft. Needs the AI service for structured output
-        // and the protocol for draft writes (reused via stageDraft).
-        registerBlueprintTools(this.service.toolRegistry, {
-          ai: this.service,
-          protocol: protocolService,
-          metadataService,
-          packageService: packageService as any,
-        });
-        ctx.logger.info('[AI] Plan-first blueprint tools registered');
-
-        // Register metadata + blueprint tools as metadata (for Studio visibility)
-        const { METADATA_TOOL_DEFINITIONS } = await import('./tools/metadata-tools.js');
-        for (const toolDef of [...METADATA_TOOL_DEFINITIONS, ...BLUEPRINT_TOOL_DEFINITIONS]) {
-          const toolExists =
-            typeof metadataService.exists === 'function'
-              ? await withTimeout(metadataService.exists('tool', toolDef.name))
-              : false;
-
-          if (toolExists === null) {
-            ctx.logger.warn('[AI] Metadata service timed out checking tool existence (non-fatal), skipping persistence');
-            break;
-          }
-
-          if (!toolExists) {
-            try {
-              await withTimeout(metadataService.register('tool', toolDef.name, toolDef));
-            } catch (err) {
-              ctx.logger.warn('[AI] Failed to persist tool metadata (non-fatal)',
-                err instanceof Error ? { tool: toolDef.name, error: err.message } : { tool: toolDef.name });
-            }
-          }
-        }
-        ctx.logger.info(`[AI] ${METADATA_TOOL_DEFINITIONS.length + BLUEPRINT_TOOL_DEFINITIONS.length} metadata + blueprint tools registered as metadata`);
-
-        // Register the built-in metadata_assistant agent
-        try {
-          const agentExists =
-            typeof metadataService.exists === 'function'
-              ? await withTimeout(metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name))
-              : false;
-
-          if (agentExists === null) {
-            ctx.logger.warn('[AI] Metadata service timed out checking metadata_assistant agent, skipping');
-          } else if (!agentExists) {
-            await withTimeout(metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT));
-            console.log('[AI] Registered metadata_assistant agent to metadataService');
-            ctx.logger.info('[AI] metadata_assistant agent registered');
-          } else {
-            console.log('[AI] metadata_assistant agent already exists, skipping');
-            ctx.logger.debug('[AI] metadata_assistant agent already exists, skipping auto-registration');
-          }
-        } catch (err) {
-          ctx.logger.warn('[AI] Failed to register metadata_assistant agent', err instanceof Error ? { error: err.message, stack: err.stack } : { error: String(err) });
-        }
-
-        // Register the built-in metadata_authoring skill (capability bundle for metadata_assistant)
-        try {
-          const skillExists =
-            typeof metadataService.exists === 'function'
-              ? await withTimeout(metadataService.exists('skill', METADATA_AUTHORING_SKILL.name))
-              : false;
-
-          if (skillExists === null) {
-            ctx.logger.warn('[AI] Metadata service timed out checking metadata_authoring skill, skipping');
-          } else if (!skillExists) {
-            await withTimeout(metadataService.register('skill', METADATA_AUTHORING_SKILL.name, METADATA_AUTHORING_SKILL));
-            ctx.logger.info('[AI] metadata_authoring skill registered');
-          } else {
-            ctx.logger.debug('[AI] metadata_authoring skill already exists, skipping auto-registration');
-          }
-        } catch (err) {
-          ctx.logger.warn('[AI] Failed to register metadata_authoring skill', err instanceof Error ? { error: err.message } : { error: String(err) });
-        }
-
-        // Register the built-in solution_design skill (plan-first blueprint authoring)
-        try {
-          const skillExists =
-            typeof metadataService.exists === 'function'
-              ? await withTimeout(metadataService.exists('skill', SOLUTION_DESIGN_SKILL.name))
-              : false;
-
-          if (skillExists === null) {
-            ctx.logger.warn('[AI] Metadata service timed out checking solution_design skill, skipping');
-          } else if (!skillExists) {
-            await withTimeout(metadataService.register('skill', SOLUTION_DESIGN_SKILL.name, SOLUTION_DESIGN_SKILL));
-            ctx.logger.info('[AI] solution_design skill registered');
-          } else {
-            ctx.logger.debug('[AI] solution_design skill already exists, skipping auto-registration');
-          }
-        } catch (err) {
-          ctx.logger.warn('[AI] Failed to register solution_design skill', err instanceof Error ? { error: err.message } : { error: String(err) });
-        }
-      } catch (err) {
-        ctx.logger.debug('[AI] Failed to register metadata tools', err instanceof Error ? err : undefined);
-      }
-    }
+    // NOTE: AI-driven metadata authoring (the metadata_assistant agent, the
+    // metadata/blueprint/package authoring tools, and the metadata_authoring /
+    // solution_design skills) is a commercial feature and now ships in the
+    // cloud-only @objectstack/service-ai-studio package. It attaches via the
+    // `ai:ready` hook below — the same extension point any third-party tool
+    // plugin uses — so the open-source runtime keeps the generic AI chat/data
+    // capabilities while authoring "intelligence" is layered on in the cloud.
 
     // Trigger hook to notify AI service is ready — other plugins can register tools
     await ctx.trigger('ai:ready', this.service);

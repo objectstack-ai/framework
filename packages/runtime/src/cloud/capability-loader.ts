@@ -56,6 +56,16 @@ export const CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
         pkg: '@objectstack/service-ai',
         export: 'AIServicePlugin',
     },
+    // AI Studio — AI-driven metadata authoring ("online development"). This is
+    // a commercial capability that ships in the private @objectstack/service-ai-studio
+    // package (not part of the open-source framework). The dynamic import below
+    // silently skips when the package isn't installed, so the open-source build
+    // is unaffected; cloud and enterprise installs that ship the package light it
+    // up. Pair with `ai` in `requires` (it attaches via the `ai:ready` hook).
+    aiStudio: {
+        pkg: '@objectstack/service-ai-studio',
+        export: 'AIStudioPlugin',
+    },
     analytics: {
         pkg: '@objectstack/service-analytics',
         export: 'AnalyticsServicePlugin',

@@ -79,6 +79,15 @@ export interface ObjectOSStackConfig {
      * (ADR §5.2 — "framework exposes seams; cloud supplies metadata + policy").
      */
     extraPlugins?: Plugin[];
+    /**
+     * Capability tokens force-mounted on EVERY per-environment kernel, in
+     * addition to whatever the app artifact declares in `requires`. Merged and
+     * de-duped with `bundle.requires` before the capability loader runs. This
+     * is the host seam for a cloud operator to make a capability ubiquitous
+     * across all tenants without editing each app — e.g. `['ai','aiStudio']`
+     * so every cloud environment supports AI-driven online development.
+     */
+    defaultRequires?: string[];
 }
 
 export interface ObjectOSStackResult {
@@ -209,6 +218,7 @@ class ObjectOSEnvironmentPlugin implements Plugin {
             client: client as ArtifactApiClient,
             envRegistry,
             logger: ctx.logger,
+            defaultRequires: this.config.defaultRequires,
         });
 
         const kernelManager = new KernelManager({

@@ -41,6 +41,14 @@ export interface RuntimeConfigPluginConfig {
     /** Override the `features.installLocal` flag. Default: false. */
     installLocal?: boolean;
     /**
+     * Override the `features.aiStudio` flag — whether the SPA should surface
+     * AI-driven metadata authoring ("online development") affordances. Default:
+     * true (the actual authoring capability is still gated server-side by the
+     * presence of the `metadata_assistant` agent / @objectstack/service-ai-studio
+     * package; set false to force-hide the authoring UI for a tier/deployment).
+     */
+    aiStudio?: boolean;
+    /**
      * Report this runtime as a single-environment deployment (CLI
      * `objectstack dev` / `os serve`). Defaults to `false` for
      * multi-tenant ObjectOS.
@@ -63,6 +71,7 @@ export class RuntimeConfigPlugin implements Plugin {
 
     private readonly cloudUrl: string;
     private readonly installLocal: boolean;
+    private readonly aiStudio: boolean;
     private readonly singleEnvironment: boolean;
     private readonly productName: string;
     private readonly productShortName: string;
@@ -74,6 +83,7 @@ export class RuntimeConfigPlugin implements Plugin {
             ? ''
             : (resolveCloudUrl(config.controlPlaneUrl) ?? '');
         this.installLocal = !!config.installLocal;
+        this.aiStudio = config.aiStudio !== false; // default true (override-to-hide)
         this.singleEnvironment = !!config.singleEnvironment;
         const envName = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_NAME : undefined)?.trim();
         const envShort = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_SHORT_NAME : undefined)?.trim();
@@ -113,6 +123,7 @@ export class RuntimeConfigPlugin implements Plugin {
             const features = {
                 installLocal: this.installLocal,
                 marketplace: true,
+                aiStudio: this.aiStudio,
             };
             let envRegistry: any = null;
             try { envRegistry = ctx.getService('env-registry'); } catch { /* not mounted (file/CLI mode) */ }
