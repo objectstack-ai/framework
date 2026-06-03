@@ -1348,10 +1348,27 @@ export default class Serve extends Command {
         (p: any) => p.name === 'com.objectstack.service-ai'
             || p.constructor?.name === 'AIServicePlugin'
       );
+      // Resolve optional plugin packages from the HOST APP's context (the app
+      // being served declares them as deps — including private packages like
+      // @objectstack/service-ai-studio that the framework CLI itself does not
+      // depend on). A bare import would resolve relative to the CLI's location
+      // and miss a package linked into the app's node_modules. Falls back to a
+      // bare import for framework-owned packages.
+      const { createRequire: _createRequire } = await import('node:module');
+      const { pathToFileURL: _pathToFileURL } = await import('node:url');
+      const _nodePath = await import('node:path');
+      const _hostRequire = _createRequire(_nodePath.join(process.cwd(), 'package.json'));
+      const importFromHost = async (pkg: string): Promise<any> => {
+        try {
+          return await import(_pathToFileURL(_hostRequire.resolve(pkg)).href);
+        } catch {
+          return import(/* webpackIgnore: true */ pkg);
+        }
+      };
       if (!hasAIPlugin && tierEnabled('ai')) {
         try {
           const aiPkg = '@objectstack/service-ai';
-          const { AIServicePlugin } = await import(/* webpackIgnore: true */ aiPkg);
+          const { AIServicePlugin } = await importFromHost(aiPkg);
 
           // AIServicePlugin will auto-detect LLM provider from environment variables
           // (AI_GATEWAY_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY)
@@ -1379,7 +1396,7 @@ export default class Serve extends Command {
         if (!hasAIStudio) {
           try {
             const studioPkg = '@objectstack/service-ai-studio';
-            const { AIStudioPlugin } = await import(/* webpackIgnore: true */ studioPkg);
+            const { AIStudioPlugin } = await importFromHost(studioPkg);
             await kernel.use(new AIStudioPlugin());
             trackPlugin('AIStudio');
           } catch (err: unknown) {

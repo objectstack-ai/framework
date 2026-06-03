@@ -19,6 +19,33 @@
  */
 
 import type { ObjectKernel } from '@objectstack/core';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+/**
+ * Import an optional capability package, resolving it from the HOST APP's
+ * context first.
+ *
+ * The host app (a tenant runtime like apps/objectos, or an enterprise
+ * objectos-ee install) is what declares optional plugin packages — including
+ * private ones such as `@objectstack/service-ai-studio` that are NOT part of
+ * the framework's own dependency graph. A bare `import(pkg)` from this file
+ * resolves relative to the framework package's location, which cannot see a
+ * package linked into the *app's* node_modules (the failure surfaces as
+ * "Cannot find package … imported from …/framework/…"). Anchoring a
+ * `createRequire` at the app's cwd resolves it from the app's node_modules.
+ * Falls back to a bare import for framework-owned packages.
+ */
+async function importFromHost(pkg: string): Promise<any> {
+    try {
+        const req = createRequire(join(process.cwd(), 'package.json'));
+        const resolved = req.resolve(pkg);
+        return await import(pathToFileURL(resolved).href);
+    } catch {
+        return import(/* webpackIgnore: true */ pkg);
+    }
+}
 
 export interface CapabilitySpec {
     /** npm package name to import. */
@@ -161,7 +188,7 @@ export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<s
         }
 
         try {
-            const mod: any = await import(/* webpackIgnore: true */ spec.pkg);
+            const mod: any = await importFromHost(spec.pkg);
             const Ctor = mod[spec.export];
             if (!Ctor) {
                 logger.warn?.(
@@ -187,7 +214,7 @@ export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<s
             if (spec.extras) {
                 for (const ex of spec.extras) {
                     try {
-                        const exMod: any = await import(/* webpackIgnore: true */ ex.pkg);
+                        const exMod: any = await importFromHost(ex.pkg);
                         const ExCtor = exMod[ex.export];
                         if (ExCtor) {
                             await kernel.use(new ExCtor());
