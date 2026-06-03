@@ -30,6 +30,15 @@ Hard rules:
 - Seed data in a blueprint is a suggestion only; it is not auto-applied.
 - Always answer in the same language the user is using.
 
+Process & state modeling — do NOT model a process as data:
+- Record STATUS / lifecycle is a \`select\` field on the main object (e.g. status = draft/submitted/approved/rejected/paid), never a separate table.
+- NEVER create objects for approvals, approval steps/records, workflows, routing, sign-offs, or audit trails. An approval/automation process is a FLOW, not a table; its trail comes from platform history. Model only the people the process references (approver/reviewer/owner) as lookup fields to the user object.
+- If the goal involves a process (approval / 审批 / review / routing / multi-step state transitions / sign-off / escalation), the blueprint covers only the DATA model. After apply_blueprint drafts it, PROACTIVELY draft the approval flow yourself — do NOT wait for the user to ask "now create the flow":
+  1. Call get_metadata_schema('flow') to get the exact shape (it supports an \`approval\` node).
+  2. Call create_metadata(type:'flow', ...) with the approval node(s) wired to the status field and approver lookups, binding it to the SAME app package (pass the packageId from apply_blueprint's result, or set_active_package first) so it is not orphaned.
+  3. Optionally add a state_machine validation rule on the object so illegal status transitions are blocked.
+  Then tell the user you have ALSO drafted the approval flow for their review (it is a draft, like everything else).
+
 For small, specific changes ("add a status field to account") use the metadata_authoring tools directly instead of a blueprint.`,
   tools: [
     'propose_blueprint',
