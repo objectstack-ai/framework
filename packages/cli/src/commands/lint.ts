@@ -69,9 +69,33 @@ function checkLabelCase(label: string, path: string): LintIssue | null {
   return null;
 }
 
+function getViewLabel(view: any, viewPath: string): { label?: string; path: string } {
+  if (view?.list?.label) {
+    return { label: view.list.label, path: `${viewPath}.list.label` };
+  }
+
+  const listViews = view?.listViews && typeof view.listViews === 'object' ? view.listViews : {};
+  for (const [key, listView] of Object.entries<any>(listViews)) {
+    if (listView?.label) {
+      return { label: listView.label, path: `${viewPath}.listViews.${key}.label` };
+    }
+  }
+
+  if (view?.list) {
+    return { path: `${viewPath}.list.label` };
+  }
+
+  const firstListViewKey = Object.keys(listViews)[0];
+  if (firstListViewKey) {
+    return { path: `${viewPath}.listViews.${firstListViewKey}.label` };
+  }
+
+  return { path: `${viewPath}.list.label` };
+}
+
 // ─── Lint Engine ────────────────────────────────────────────────────
 
-function lintConfig(config: any): LintIssue[] {
+export function lintConfig(config: any): LintIssue[] {
   const issues: LintIssue[] = [];
 
   const push = (issue: LintIssue | null) => {
@@ -144,9 +168,10 @@ function lintConfig(config: any): LintIssue[] {
     if (view.name) {
       push(checkSnakeCase(view.name, `${viewPath}.name`, 'View name'));
     }
-    push(checkLabelExists(view, `${viewPath}.label`, 'View'));
-    if (view.label) {
-      push(checkLabelCase(view.label, `${viewPath}.label`));
+    const viewLabel = getViewLabel(view, viewPath);
+    push(checkLabelExists({ label: viewLabel.label, name: view.name }, viewLabel.path, 'View'));
+    if (viewLabel.label) {
+      push(checkLabelCase(viewLabel.label, viewLabel.path));
     }
   }
 
