@@ -20,7 +20,20 @@ import { SkillRegistry } from '../skill-registry.js';
 import type { AgentChatContext } from '../agent-runtime.js';
 import { buildAgentRoutes } from '../routes/agent-routes.js';
 import { DATA_CHAT_AGENT } from '../agents/data-chat-agent.js';
-import { METADATA_ASSISTANT_AGENT } from '../agents/metadata-assistant-agent.js';
+
+// The real metadata_assistant agent moved to the cloud-only
+// @objectstack/service-ai-studio package (AI authoring is a commercial
+// feature). This local stub stands in as a generic "second agent" fixture
+// for the runtime/route agent-listing tests below. It derives from the real
+// data_chat agent so it satisfies AgentSchema, then overrides identity fields.
+const METADATA_ASSISTANT_AGENT = {
+  ...DATA_CHAT_AGENT,
+  name: 'metadata_assistant',
+  label: 'Metadata Assistant',
+  role: 'Schema Architect',
+  active: true,
+  visibility: 'global',
+} as any;
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -345,74 +358,9 @@ describe('Data Tools', () => {
       expect(registry.has('aggregate_data')).toBe(true);
     });
 
-    it('list_objects should return object names and labels (via metadata tools)', async () => {
-      // list_objects is now part of metadata tools — register them
-      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
-      registerMetadataTools(registry, { metadataService });
-
-      (metadataService.listObjects as any).mockResolvedValue([
-        { name: 'account', label: 'Account', fields: { name: { type: 'text' } } },
-        { name: 'contact', label: 'Contact', fields: {} },
-      ]);
-
-      const result = await registry.execute({
-        type: 'tool-call' as const,
-        toolCallId: 'c1',
-        toolName: 'list_objects',
-        input: {},
-      });
-
-      const parsed = JSON.parse((result.output as any).value);
-      expect(parsed.objects).toHaveLength(2);
-      expect(parsed.objects[0]).toEqual(expect.objectContaining({ name: 'account', label: 'Account' }));
-    });
-
-    it('describe_object should return field schema (via metadata tools)', async () => {
-      // describe_object is now part of metadata tools — register them
-      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
-      registerMetadataTools(registry, { metadataService });
-
-      (metadataService.getObject as any).mockResolvedValue({
-        name: 'account',
-        label: 'Account',
-        fields: {
-          name: { type: 'text', label: 'Account Name', required: true },
-          revenue: { type: 'number', label: 'Revenue' },
-        },
-      });
-
-      const result = await registry.execute({
-        type: 'tool-call' as const,
-        toolCallId: 'c1',
-        toolName: 'describe_object',
-        input: { objectName: 'account' },
-      });
-
-      const parsed = JSON.parse((result.output as any).value);
-      expect(parsed.name).toBe('account');
-      // Unified handler returns fields as array (not object)
-      const nameField = parsed.fields.find((f: any) => f.name === 'name');
-      expect(nameField.type).toBe('text');
-      expect(nameField.required).toBe(true);
-      const revenueField = parsed.fields.find((f: any) => f.name === 'revenue');
-      expect(revenueField.type).toBe('number');
-    });
-
-    it('describe_object should return error for unknown object (via metadata tools)', async () => {
-      // describe_object is now part of metadata tools — register them
-      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
-      registerMetadataTools(registry, { metadataService });
-
-      const result = await registry.execute({
-        type: 'tool-call' as const,
-        toolCallId: 'c1',
-        toolName: 'describe_object',
-        input: { objectName: 'nonexistent' },
-      });
-
-      const parsed = JSON.parse((result.output as any).value);
-      expect(parsed.error).toContain('not found');
-    });
+    // NOTE: list_objects / describe_object are part of the metadata authoring
+    // tools, which moved to the cloud-only @objectstack/service-ai-studio
+    // package. Their tests live there now (see metadata-tools.test.ts).
 
     it('query_records should call dataEngine.find with correct params', async () => {
       const records = [{ id: '1', name: 'Acme' }, { id: '2', name: 'Beta' }];
@@ -1059,49 +1007,5 @@ describe('DATA_CHAT_AGENT', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// Metadata Assistant Agent Spec
-// ═══════════════════════════════════════════════════════════════════
-
-describe('METADATA_ASSISTANT_AGENT', () => {
-  it('should be a valid agent definition', () => {
-    expect(METADATA_ASSISTANT_AGENT.name).toBe('metadata_assistant');
-    expect(METADATA_ASSISTANT_AGENT.label).toBe('Metadata Assistant');
-    expect(METADATA_ASSISTANT_AGENT.role).toBe('Schema Architect');
-    expect(METADATA_ASSISTANT_AGENT.active).toBe(true);
-    expect(METADATA_ASSISTANT_AGENT.visibility).toBe('global');
-  });
-
-  it('should reference the metadata_authoring + solution_design skills (capability bundles moved to skill metadata)', () => {
-    expect(METADATA_ASSISTANT_AGENT.tools ?? []).toHaveLength(0);
-    // ADR-0033: per-item authoring + plan-first blueprint authoring.
-    expect(METADATA_ASSISTANT_AGENT.skills).toEqual(['metadata_authoring', 'solution_design']);
-  });
-
-  it('should keep the schema-architect persona in instructions', () => {
-    const instructions = METADATA_ASSISTANT_AGENT.instructions;
-    expect(instructions).toMatch(/architect/i);
-  });
-
-  it('should have guardrails configured', () => {
-    expect(METADATA_ASSISTANT_AGENT.guardrails).toBeDefined();
-    expect(METADATA_ASSISTANT_AGENT.guardrails!.maxTokensPerInvocation).toBeGreaterThan(0);
-    expect(METADATA_ASSISTANT_AGENT.guardrails!.blockedTopics).toBeDefined();
-  });
-
-  it('should have model config with low temperature for schema ops', () => {
-    expect(METADATA_ASSISTANT_AGENT.model).toBeDefined();
-    expect(METADATA_ASSISTANT_AGENT.model!.temperature).toBeLessThanOrEqual(0.5);
-  });
-
-  it('should allow higher maxIterations for multi-step schema changes', () => {
-    expect(METADATA_ASSISTANT_AGENT.planning).toBeDefined();
-    expect(METADATA_ASSISTANT_AGENT.planning!.maxIterations).toBeGreaterThanOrEqual(10);
-    expect(METADATA_ASSISTANT_AGENT.planning!.allowReplan).toBe(true);
-  });
-
-  it('should have instructions mentioning the architect persona', () => {
-    const instructions = METADATA_ASSISTANT_AGENT.instructions;
-    expect(instructions).toMatch(/architect|metadata/i);
-  });
-});
+// NOTE: the METADATA_ASSISTANT_AGENT spec tests moved with the agent to the
+// cloud-only @objectstack/service-ai-studio package (metadata-assistant-agent.test.ts).

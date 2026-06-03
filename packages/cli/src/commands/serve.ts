@@ -1365,6 +1365,31 @@ export default class Serve extends Command {
           }
           // @objectstack/service-ai not installed — AI features unavailable
         }
+
+        // 4b. Auto-register AI Studio (AI-driven metadata authoring / "online
+        // development") when the private @objectstack/service-ai-studio package
+        // is installed. It is NOT part of the open-source framework: the dynamic
+        // import below silently skips when absent, so open-source installs get
+        // the generic AI runtime only. Enterprise installs that ship the package
+        // get full AI authoring. AIStudioPlugin attaches via the `ai:ready` hook.
+        const hasAIStudio = plugins.some(
+          (p: any) => p.name === 'com.objectstack.service-ai-studio'
+              || p.constructor?.name === 'AIStudioPlugin'
+        );
+        if (!hasAIStudio) {
+          try {
+            const studioPkg = '@objectstack/service-ai-studio';
+            const { AIStudioPlugin } = await import(/* webpackIgnore: true */ studioPkg);
+            await kernel.use(new AIStudioPlugin());
+            trackPlugin('AIStudio');
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+              console.error('[AI Studio] AIStudioPlugin failed to start:', msg);
+            }
+            // @objectstack/service-ai-studio not installed — AI authoring unavailable
+          }
+        }
       }
 
       // 5. Capability resolver — auto-load service plugins declared in

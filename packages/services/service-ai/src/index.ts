@@ -29,40 +29,15 @@ export type { ToolHandler, ToolExecutionResult } from './tools/tool-registry.js'
 export { registerDataTools, DATA_TOOL_DEFINITIONS } from './tools/data-tools.js';
 export type { DataToolContext } from './tools/data-tools.js';
 
-// Metadata tools
-export { registerMetadataTools, METADATA_TOOL_DEFINITIONS, stageDraft } from './tools/metadata-tools.js';
-export type { MetadataToolContext, StageDraftInput, StageDraftResult, DraftCapableProtocol } from './tools/metadata-tools.js';
-
-// Blueprint tools (ADR-0033 §4 — plan-first authoring)
-export { registerBlueprintTools, BLUEPRINT_TOOL_DEFINITIONS, proposeBlueprintTool, applyBlueprintTool } from './tools/blueprint-tools.js';
-export type { BlueprintToolContext } from './tools/blueprint-tools.js';
+// NOTE: AI metadata-authoring (metadata tools, plan-first blueprint tools,
+// package context tools, and the metadata_assistant agent + authoring skills)
+// moved to the cloud-only @objectstack/service-ai-studio package. The generic
+// AI runtime, data tools, knowledge tools, and the metadata WRITE mechanism in
+// the kernel stay open here.
 
 // Knowledge tools
 export { registerKnowledgeTools, SEARCH_KNOWLEDGE_TOOL } from './tools/knowledge-tools.js';
 export type { KnowledgeToolContext } from './tools/knowledge-tools.js';
-
-// Individual tool metadata (first-class Tool definitions via defineTool)
-export {
-  createObjectTool,
-  addFieldTool,
-  modifyFieldTool,
-  deleteFieldTool,
-  listObjectsTool,
-  describeObjectTool,
-} from './tools/metadata-tools.js';
-
-// Package tools
-export { registerPackageTools, PACKAGE_TOOL_DEFINITIONS } from './tools/package-tools.js';
-export type { PackageToolContext, IPackageRegistry, IConversationService } from './tools/package-tools.js';
-
-// Individual package tool metadata
-export {
-  listPackagesTool,
-  getPackageTool,
-  createPackageTool,
-  getActivePackageTool,
-  setActivePackageTool,
-} from './tools/package-tools.js';
 
 // Action tools (write-side: turn declarative Actions into AI-callable tools)
 export {
@@ -82,13 +57,11 @@ export { SkillRegistry } from './skill-registry.js';
 export type { SkillContext, SkillSummary } from './skill-registry.js';
 
 // Built-in agents
-export { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
+export { DATA_CHAT_AGENT } from './agents/index.js';
 
 // Built-in skills
 export {
   DATA_EXPLORER_SKILL,
-  METADATA_AUTHORING_SKILL,
-  SOLUTION_DESIGN_SKILL,
   ACTIONS_EXECUTOR_SKILL,
 } from './skills/index.js';
 

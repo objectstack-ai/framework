@@ -61,6 +61,12 @@ export interface ArtifactKernelFactoryConfig {
      * `process.env.OS_AUTH_SECRET` / `AUTH_SECRET` at construction time.
      */
     authBaseSecret?: string;
+    /**
+     * Capability tokens force-mounted on every per-environment kernel, merged
+     * (and de-duped by the loader) with the artifact's own `requires`. Lets a
+     * host make a capability ubiquitous across tenants — e.g. `['ai','aiStudio']`.
+     */
+    defaultRequires?: string[];
 }
 
 /**
@@ -81,12 +87,14 @@ export class ArtifactKernelFactory implements EnvironmentKernelFactory {
     private readonly logger: NonNullable<ArtifactKernelFactoryConfig['logger']>;
     private readonly kernelConfig?: ArtifactKernelFactoryConfig['kernelConfig'];
     private readonly authBaseSecret: string;
+    private readonly defaultRequires: string[];
 
     constructor(config: ArtifactKernelFactoryConfig) {
         this.client = config.client;
         this.envRegistry = config.envRegistry;
         this.logger = config.logger ?? console;
         this.kernelConfig = config.kernelConfig;
+        this.defaultRequires = config.defaultRequires ?? [];
         this.authBaseSecret = (
             config.authBaseSecret
             ?? readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'])
@@ -363,8 +371,13 @@ export class ArtifactKernelFactory implements EnvironmentKernelFactory {
             (Array.isArray(bundle?.requires) ? bundle.requires : null) ??
             (Array.isArray(sys?.requires) ? sys.requires : null) ??
             [];
-        const requires: string[] = (requiresRaw as unknown[])
-            .filter((x): x is string => typeof x === 'string' && x.length > 0);
+        // Merge host-forced defaults (e.g. cloud's ['ai','aiStudio']) with the
+        // artifact's own requires. loadCapabilities de-dupes via a Set, so
+        // overlap is safe.
+        const requires: string[] = [
+            ...(requiresRaw as unknown[]),
+            ...this.defaultRequires,
+        ].filter((x): x is string => typeof x === 'string' && x.length > 0);
 
         if (requires.length > 0) {
             const installed = await loadCapabilities({
