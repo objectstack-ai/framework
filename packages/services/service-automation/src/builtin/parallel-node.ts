@@ -4,7 +4,7 @@ import type { PluginContext } from '@objectstack/core';
 import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { FlowRegionParsed } from '@objectstack/spec/automation';
 import type { AutomationContext } from '@objectstack/spec/contracts';
-import type { AutomationEngine } from '../engine.js';
+import type { AutomationEngine, StepLogEntry } from '../engine.js';
 
 /** One branch of a parallel block — a region plus an optional label. */
 interface ParallelBranch extends FlowRegionParsed {
@@ -75,17 +75,25 @@ export function registerParallelNode(engine: AutomationEngine, ctx: PluginContex
         };
       }
 
+      let branchSteps: StepLogEntry[][];
       try {
         // Implicit join: continue once when ALL branches have completed.
-        await Promise.all(
-          branches.map(branch => engine.runRegion(branch, variables, context ?? ({} as AutomationContext))),
+        // #1479: each branch returns its body steps, tagged with the branch index.
+        branchSteps = await Promise.all(
+          branches.map((branch, i) =>
+            engine.runRegion(branch, variables, context ?? ({} as AutomationContext), {
+              parentNodeId: node.id,
+              iteration: i,
+              regionKind: 'parallel-branch',
+            }),
+          ),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { success: false, error: `parallel '${node.id}': branch failed — ${message}` };
       }
 
-      return { success: true, output: { branches: branches.length } };
+      return { success: true, output: { branches: branches.length }, childSteps: branchSteps.flat() };
     },
   });
 

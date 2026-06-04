@@ -92,6 +92,34 @@ describe('loop container executor (ADR-0031)', () => {
     ]);
   });
 
+  it('surfaces each iteration\'s body steps in the run log, tagged with parentNodeId + index (#1479)', async () => {
+    engine.registerFlow('loop_flow', loopFlow(
+      {
+        collection: '{items}',
+        iteratorVariable: 'item',
+        indexVariable: 'i',
+        body: { nodes: [{ id: 'b', type: 'collect', label: 'Body', config: { itemVar: 'item', idxVar: 'i' } }], edges: [] },
+      },
+      { items: ['a', 'b', 'c'] },
+    ));
+
+    await engine.execute('loop_flow');
+    const runs = await engine.listRuns('loop_flow');
+    const bodySteps = runs[0].steps.filter(s => s.nodeId === 'b');
+
+    // One body step per iteration, each tagged with the loop container + index.
+    expect(bodySteps).toHaveLength(3);
+    expect(bodySteps.map(s => s.iteration)).toEqual([0, 1, 2]);
+    expect(bodySteps.every(s => s.parentNodeId === 'loop')).toBe(true);
+    expect(bodySteps.every(s => s.regionKind === 'loop-body')).toBe(true);
+
+    // The container step and the after-loop step stay un-grouped (top level).
+    const loopStep = runs[0].steps.find(s => s.nodeId === 'loop');
+    const afterStep = runs[0].steps.find(s => s.nodeId === 'after');
+    expect(loopStep?.parentNodeId).toBeUndefined();
+    expect(afterStep?.parentNodeId).toBeUndefined();
+  });
+
   it('runs a multi-node body region in order each iteration', async () => {
     engine.registerFlow('loop_flow', loopFlow(
       {

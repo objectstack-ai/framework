@@ -84,6 +84,25 @@ describe('parallel block executor (ADR-0031)', () => {
     expect(order.filter(o => o === 'after')).toHaveLength(1);
   });
 
+  it('surfaces each branch\'s steps in the run log, tagged with parentNodeId + branch index (#1479)', async () => {
+    engine.registerFlow('par_flow', parallelFlow([
+      { name: 'A', nodes: [{ id: 'a', type: 'setvar', label: 'A', config: { key: 'a', value: 1 } }], edges: [] },
+      { name: 'B', nodes: [{ id: 'b', type: 'setvar', label: 'B', config: { key: 'b', value: 2 } }], edges: [] },
+    ]));
+
+    await engine.execute('par_flow');
+    const runs = await engine.listRuns('par_flow');
+
+    const stepA = runs[0].steps.find(s => s.nodeId === 'a');
+    const stepB = runs[0].steps.find(s => s.nodeId === 'b');
+    expect(stepA?.parentNodeId).toBe('par');
+    expect(stepA?.iteration).toBe(0);
+    expect(stepA?.regionKind).toBe('parallel-branch');
+    expect(stepB?.parentNodeId).toBe('par');
+    expect(stepB?.iteration).toBe(1);
+    expect(stepB?.regionKind).toBe('parallel-branch');
+  });
+
   it('joins only after the slowest branch completes', async () => {
     // Branch "slow" awaits several microtasks; "fast" resolves immediately.
     // The join ('after') must still be last.
