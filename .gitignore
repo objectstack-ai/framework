@@ -115,3 +115,6 @@ studio-crm.png
 examples/app-crm/storage/
 
 .objectstack
+
+# Local agent tooling
+.codex/
