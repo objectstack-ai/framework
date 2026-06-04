@@ -10,6 +10,18 @@ import {
 import { readEnvWithDeprecation } from '@objectstack/types';
 
 /**
+ * Re-export the `Hono` type from the copy of `hono` this adapter owns.
+ *
+ * Downstream apps (e.g. the cloud control plane) only need the `Hono` TYPE to
+ * annotate the app returned by {@link createHonoApp}. Importing it from here —
+ * rather than adding their own `hono` dependency — guarantees there is exactly
+ * ONE `hono` across the framework boundary, so the app's type matches without
+ * any version-pinning / pnpm.overrides alignment dance. `hono` stays a normal
+ * runtime dependency of THIS package, so standalone `os start` is unaffected.
+ */
+export type { Hono } from 'hono';
+
+/**
  * Minimal structural interface matching KernelManager from @objectstack/service-cloud.
  * Declared locally to avoid a circular build dependency.
  */
