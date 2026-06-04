@@ -75,6 +75,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-v3-
 
+      - name: Setup Turbo cache
+        uses: actions/cache@v5
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-
+            ${{ runner.os }}-turbo-${{ github.job }}-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -127,11 +136,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-v3-
 
+      - name: Setup Turbo cache
+        uses: actions/cache@v5
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-
+            ${{ runner.os }}-turbo-${{ github.job }}-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build packages (excluding docs)
-        run: pnpm --filter !@objectstack/docs -r build
+        run: pnpm build
 
       - name: Verify build outputs
         run: |

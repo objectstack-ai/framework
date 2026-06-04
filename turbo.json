@@ -1,14 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["tsconfig.json", "tsup.config.ts"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!dist/**", "!coverage/**", "!.turbo/**"]
+    },
+    "@objectstack/metadata#test": {
       "dependsOn": ["build"],
-      "outputs": ["coverage/**"],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!dist/**", "!coverage/**", "!.turbo/**"]
     },
     "test:e2e": {
       "dependsOn": ["build"],

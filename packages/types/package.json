@@ -13,13 +13,15 @@
     }
   },
   "scripts": {
-    "build": "tsup --config ../../tsup.config.ts"
+    "build": "tsup --config ../../tsup.config.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "keywords": [
     "objectstack",
