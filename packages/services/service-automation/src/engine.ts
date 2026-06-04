@@ -76,6 +76,14 @@ export interface NodeExecutionResult {
      * the form and `resume()` with the values.
      */
     screen?: ScreenSpec;
+    /**
+     * #1479: step logs produced inside the node's structured region(s). A
+     * container node (`loop` / `parallel` / `try_catch`) collects the
+     * {@link AutomationEngine.runRegion} return value(s) here; {@link AutomationEngine.executeNode}
+     * appends them to the parent run log right after the container's own step,
+     * so per-iteration / per-branch body steps surface in run observability.
+     */
+    childSteps?: StepLogEntry[];
 }
 
 // ─── Trigger Interface (Plugin Extension Point) ─────────────────────
@@ -202,6 +210,18 @@ export interface StepLogEntry {
     completedAt?: string;
     durationMs?: number;
     error?: { code: string; message: string; stack?: string };
+    /**
+     * #1479: structured-region grouping. When a step ran inside a `loop` /
+     * `parallel` / `try_catch` body region, these tag it with its **immediate**
+     * container so run observability can distinguish per-iteration / per-branch
+     * body steps from top-level ones. Set by {@link AutomationEngine.runRegion}
+     * (innermost wins — never overwritten as steps bubble through nested regions).
+     */
+    parentNodeId?: string;
+    /** Zero-based loop iteration or parallel branch index of the enclosing region. */
+    iteration?: number;
+    /** Which region kind the step ran in: `loop-body` | `parallel-branch` | `try` | `catch`. */
+    regionKind?: string;
 }
 
 /**
@@ -1471,6 +1491,12 @@ export class AutomationEngine implements IAutomationService {
                 durationMs: Date.now() - stepStart,
             });
 
+            // #1479: fold a structured-region container's body/branch/handler
+            // steps into the run log, right after the container's own step.
+            if (result.childSteps?.length) {
+                steps.push(...result.childSteps);
+            }
+
             // Write back output variables
             if (result.output) {
                 for (const [key, value] of Object.entries(result.output)) {
@@ -1564,8 +1590,13 @@ export class AutomationEngine implements IAutomationService {
      * nodes/edges, so the main DAG traversal (`traverseNext`) is never aware of
      * scope markers — keeping the shared traversal untouched.
      *
-     * Body step logs are kept in a region-local array (not yet merged into the
-     * parent run log); surfacing per-iteration steps is a follow-up.
+     * #1479: the executed body steps are **returned** (tagged with `grouping`)
+     * so the calling container node can fold them into the parent run log via
+     * `NodeExecutionResult.childSteps`. Tagging only fills fields left undefined,
+     * so when regions nest, each step keeps its **innermost** container's
+     * `parentNodeId` / `iteration` / `regionKind`. On failure the region throws
+     * as before (preserving `try_catch` retry semantics); a failed attempt's
+     * partial steps are not surfaced.
      *
      * Durable pause (`suspend`) inside a region is not supported in this
      * iteration — it is converted into a clear error (mirrors the `subflow`
@@ -1575,7 +1606,8 @@ export class AutomationEngine implements IAutomationService {
         region: FlowRegionParsed,
         variables: Map<string, unknown>,
         context: AutomationContext,
-    ): Promise<void> {
+        grouping?: { parentNodeId: string; iteration?: number; regionKind?: string },
+    ): Promise<StepLogEntry[]> {
         const entryId = findRegionEntry(region);
         const entry = region.nodes.find(n => n.id === entryId);
         if (!entry) {
@@ -1583,8 +1615,6 @@ export class AutomationEngine implements IAutomationService {
         }
         // A synthetic flow view — executeNode/traverseNext only read `nodes`/`edges`.
         const subFlow = { nodes: region.nodes, edges: region.edges ?? [] } as unknown as FlowParsed;
-        // TODO(#1479): merge region step logs into the parent run log so
-        // per-iteration body steps surface in run observability.
         const regionSteps: StepLogEntry[] = [];
         try {
             await this.executeNode(entry, subFlow, variables, context, regionSteps);
@@ -1596,6 +1626,19 @@ export class AutomationEngine implements IAutomationService {
             }
             throw err;
         }
+        // Tag this region's steps with their immediate container. Innermost wins:
+        // a step that already carries a `parentNodeId` (set by a nested region)
+        // is left untouched.
+        if (grouping) {
+            for (const step of regionSteps) {
+                if (step.parentNodeId === undefined) {
+                    step.parentNodeId = grouping.parentNodeId;
+                    if (grouping.iteration !== undefined) step.iteration = grouping.iteration;
+                    if (grouping.regionKind !== undefined) step.regionKind = grouping.regionKind;
+                }
+            }
+        }
+        return regionSteps;
     }
 
     /**

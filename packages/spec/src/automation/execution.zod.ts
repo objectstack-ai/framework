@@ -58,6 +58,13 @@ export const ExecutionStepLogSchema = lazySchema(() => z.object({
     stack: z.string().optional().describe('Stack trace'),
   }).optional().describe('Error details if step failed'),
   retryAttempt: z.number().int().min(0).optional().describe('Retry attempt number (0 = first try)'),
+  // #1479: structured-region grouping. Tag a step that ran inside a
+  // `loop` / `parallel` / `try_catch` body region with its immediate container,
+  // so run observability can nest per-iteration / per-branch body steps under
+  // the container instead of showing it as a single opaque step.
+  parentNodeId: z.string().optional().describe('Enclosing structured-region container node ID (loop/parallel/try_catch)'),
+  iteration: z.number().int().min(0).optional().describe('Zero-based loop iteration or parallel branch index of the enclosing region'),
+  regionKind: z.string().optional().describe('Region kind the step ran in: loop-body | parallel-branch | try | catch'),
 }));
 export type ExecutionStepLog = z.infer<typeof ExecutionStepLogSchema>;
 

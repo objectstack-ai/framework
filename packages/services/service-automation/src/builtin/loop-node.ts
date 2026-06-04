@@ -4,7 +4,7 @@ import type { PluginContext } from '@objectstack/core';
 import { defineActionDescriptor, LOOP_MAX_ITERATIONS_CEILING } from '@objectstack/spec/automation';
 import type { FlowRegionParsed } from '@objectstack/spec/automation';
 import type { AutomationContext } from '@objectstack/spec/contracts';
-import type { AutomationEngine } from '../engine.js';
+import type { AutomationEngine, StepLogEntry } from '../engine.js';
 import { interpolate } from './template.js';
 
 /**
@@ -110,15 +110,22 @@ export function registerLoopNode(engine: AutomationEngine, ctx: PluginContext): 
       }
 
       let iterations = 0;
+      const childSteps: StepLogEntry[] = [];
       for (let i = 0; i < collection.length; i++) {
         variables.set(iteratorVariable, collection[i]);
         if (indexVariable) variables.set(indexVariable, i);
         // Body runs in the shared scope; iterator var + mutations are visible.
-        await engine.runRegion(body, variables, context ?? ({} as AutomationContext));
+        // #1479: collect each iteration's body steps, tagged with the index.
+        const iterSteps = await engine.runRegion(body, variables, context ?? ({} as AutomationContext), {
+          parentNodeId: node.id,
+          iteration: i,
+          regionKind: 'loop-body',
+        });
+        childSteps.push(...iterSteps);
         iterations++;
       }
 
-      return { success: true, output: { iterations } };
+      return { success: true, output: { iterations }, childSteps };
     },
   });
 

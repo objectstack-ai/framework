@@ -98,6 +98,31 @@ describe('try/catch/retry executor (ADR-0031)', () => {
     expect(ran[ran.length - 1]).toBe('after'); // downstream continued after catch
   });
 
+  it('surfaces the try region steps tagged regionKind=try (#1479)', async () => {
+    engine.registerFlow('tc_flow', tcFlow({
+      try: { nodes: [{ id: 't', type: 'ok', label: 'T', config: { tag: 'try' } }], edges: [] },
+    }));
+
+    await engine.execute('tc_flow');
+    const runs = await engine.listRuns('tc_flow');
+    const tryStep = runs[0].steps.find(s => s.nodeId === 't');
+    expect(tryStep?.parentNodeId).toBe('tc');
+    expect(tryStep?.regionKind).toBe('try');
+  });
+
+  it('surfaces the catch region steps tagged regionKind=catch when the try fails (#1479)', async () => {
+    engine.registerFlow('tc_flow', tcFlow({
+      try: { nodes: [{ id: 't', type: 'boom', label: 'T' }], edges: [] },
+      catch: { nodes: [{ id: 'c', type: 'handler', label: 'C' }], edges: [] },
+    }));
+
+    await engine.execute('tc_flow');
+    const runs = await engine.listRuns('tc_flow');
+    const catchStep = runs[0].steps.find(s => s.nodeId === 'c');
+    expect(catchStep?.parentNodeId).toBe('tc');
+    expect(catchStep?.regionKind).toBe('catch');
+  });
+
   it('retries the try region with backoff and succeeds without running catch', async () => {
     engine.registerFlow('tc_flow', tcFlow({
       try: { nodes: [{ id: 't', type: 'flaky', label: 'T', config: { failTimes: 2 } }], edges: [] },

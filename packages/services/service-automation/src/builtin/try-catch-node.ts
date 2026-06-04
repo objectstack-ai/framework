@@ -104,8 +104,12 @@ export function registerTryCatchNode(engine: AutomationEngine, ctx: PluginContex
           if (delay > 0) await new Promise(r => setTimeout(r, delay));
         }
         try {
-          await engine.runRegion(tryRegion, variables, ctxOrEmpty);
-          return { success: true, output: { attempts: attempt + 1, caught: false } };
+          // #1479: surface the successful try region's steps.
+          const trySteps = await engine.runRegion(tryRegion, variables, ctxOrEmpty, {
+            parentNodeId: node.id,
+            regionKind: 'try',
+          });
+          return { success: true, output: { attempts: attempt + 1, caught: false }, childSteps: trySteps };
         } catch (err) {
           lastError = err instanceof Error ? err.message : String(err);
         }
@@ -115,8 +119,16 @@ export function registerTryCatchNode(engine: AutomationEngine, ctx: PluginContex
       if (catchRegion != null) {
         variables.set(errorVariable, { nodeId: node.id, message: lastError });
         try {
-          await engine.runRegion(catchRegion, variables, ctxOrEmpty);
-          return { success: true, output: { attempts: maxRetries + 1, caught: true, error: lastError } };
+          // #1479: surface the catch handler region's steps.
+          const catchSteps = await engine.runRegion(catchRegion, variables, ctxOrEmpty, {
+            parentNodeId: node.id,
+            regionKind: 'catch',
+          });
+          return {
+            success: true,
+            output: { attempts: maxRetries + 1, caught: true, error: lastError },
+            childSteps: catchSteps,
+          };
         } catch (catchErr) {
           const catchMsg = catchErr instanceof Error ? catchErr.message : String(catchErr);
           return { success: false, error: `try_catch '${node.id}': catch region failed — ${catchMsg}` };
