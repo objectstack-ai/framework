@@ -45,6 +45,13 @@ export interface NotificationDeliveryRecord {
     error?: string;
     createdAt: number;
     updatedAt: number;
+    /**
+     * P3b-2 digest grouping key (`${recipient}|${channel}|${window}`). When set,
+     * the row is batched: the normal {@link INotificationOutbox.claim} path skips
+     * it, and {@link INotificationOutbox.claimDigest} collapses all same-key rows
+     * into one rendered message at window time.
+     */
+    digestKey?: string;
 }
 
 export interface EnqueueDeliveryInput {
@@ -61,6 +68,12 @@ export interface EnqueueDeliveryInput {
      * by the ADR-0030 P3 quiet-hours scheduler; absent ⇒ immediate.
      */
     notBefore?: number;
+    /**
+     * P3b-2 digest grouping key. When set, the row partitions by this key (so a
+     * window's rows share a partition and one node collapses them) and is drained
+     * via {@link INotificationOutbox.claimDigest} rather than the normal claim.
+     */
+    digestKey?: string;
 }
 
 export interface ClaimOptions {
@@ -104,4 +117,13 @@ export interface INotificationOutbox {
     claim(opts: ClaimOptions): Promise<NotificationDeliveryRecord[]>;
     ack(id: string, result: AckResult): Promise<void>;
     list(filter?: { status?: DeliveryStatus; notificationId?: string }): Promise<NotificationDeliveryRecord[]>;
+    /**
+     * P3b-2: atomically claim **all** due batched rows (those with a `digestKey`)
+     * in scope, so the dispatcher can collapse same-key rows into one message.
+     * Like {@link claim} it flips rows to `in_flight` and respects `partition` /
+     * `nextAttemptAt`; unlike it, it returns *only* digest rows and is not
+     * `limit`-bounded per group (a window must be claimed whole). Normal `claim`
+     * MUST exclude digest rows so they are never sent individually.
+     */
+    claimDigest(opts: ClaimOptions): Promise<NotificationDeliveryRecord[]>;
 }

@@ -1,6 +1,6 @@
 # ADR-0030 — Notification Platform Convergence (single ingress, layered pipeline)
 
-**Status**: Accepted (2026-06-01) — **P0–P3b1 shipped**; P3b-2 (digest) + cross-repo objectui cut-over remain. See [§ Implementation status & remaining work](#implementation-status--remaining-work).
+**Status**: Accepted (2026-06-01) — **P0–P3b2 shipped** (P3b-2 digest collapse landed); cross-repo objectui cut-over remains. See [§ Implementation status & remaining work](#implementation-status--remaining-work).
 **Supersedes / refines**: [ADR-0012 — Notification Platform](./0012-notification-platform.md) (Draft)
 **Related**: [ADR-0019 — Approval as a Flow Node](./0019-approval-as-flow-node.md), [ADR-0022 — Connectors vs Messaging Channels](./0022-connectors-vs-messaging-channels.md)
 **Build spec**: [docs/design/notification-platform-convergence.md](../design/notification-platform-convergence.md)
@@ -82,16 +82,17 @@ The detailed cut-over runbook and per-item notes live in
 | **P2 — Subscription + preference** | `sys_notification_preference` (user×topic×channel, admin-global `*` defaults + per-user override, wildcards) + `sys_notification_subscription`; `PreferenceResolver` wired into `emit()` (most-specific-wins, mandatory bypass, fail-open). | #1444 |
 | **P3a — email channel + templates** | `createEmailChannel` (delegates transport to the `email` service per ADR-0022); `sys_notification_template` (topic×channel×locale) + declarative `{{ payload.x }}` renderer with `payload.title`/`body` fallback. | #1449 |
 | **P3b-1 — quiet-hours** | Deferred dispatch on the outbox (`EnqueueDeliveryInput.notBefore` → `nextAttemptAt`); `quietHoursDeferral()` (tz/HH:MM, overnight-aware); `critical` bypass. | #1453 |
+| **P3b-2 — digest** | `PreferenceResolver` consumes the `digest` field (`daily`/`weekly`) → `digestDeferral()` defers to the next window and tags the target; `digest_key` on `sys_notification_delivery` (partition-keyed so a window's rows co-locate); `INotificationOutbox.claimDigest()` drains batched rows whole while normal `claim()` skips them; the dispatcher's digest pass collapses each `(recipient, channel, window)` group into one `renderDigest()` message under the partition lock. `critical`/mandatory bypass. | this PR |
 | Startup | `messaging` is foundational: in `ALWAYS_ON_CAPABILITIES` (CLI) and auto-loaded when `audit` is required (cloud capability-loader). | (in #1434) |
 
 ### Remaining work (handed off to a follow-up agent)
 
-**1. P3b-2 — Digest (completes the build spec).** Build on P3b-1's deferral:
-enqueue digest items deferred to the next window, then a **collapse** step merges
-same-`(user, channel, window)` deliveries into one materialization at window time.
-Needs: a `digest_key` on `sys_notification_delivery`; a digest assembler (in/beside
-the dispatcher); a digest render template. Consumes P2's `digest` field;
-`critical`/mandatory bypass.
+**1. ~~P3b-2 — Digest~~ — done (this PR).** `PreferenceResolver` batches digest
+recipients to the next window; deliveries carry `digest_key`; the dispatcher
+collapses same-`(recipient, channel, window)` rows into one rendered message.
+Deferred sub-items not in this cut: timezone fallback to a `sys_user` field
+(digest windows currently use `quiet_hours.tz` → UTC), MJML digest emails, and a
+configurable daily send-hour (windows flush at local midnight / Monday 00:00).
 
 **2. Cross-repo objectui cut-over (the user-facing delivery — separate `objectui` repo).**
 - Repoint the Console bell (`AppHeader`/`InboxPopover`/record views) from

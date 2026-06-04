@@ -496,7 +496,7 @@ export class MessagingService {
             actionUrl: actionUrlFor(input, payload),
         };
         const deliveries: DeliveryOutcome[] = [];
-        for (const { recipient, channels, notBefore } of targets) {
+        for (const { recipient, channels, notBefore, digest } of targets) {
             for (const channel of channels) {
                 try {
                     const id = await outbox.enqueue({
@@ -506,9 +506,12 @@ export class MessagingService {
                         topic: input.topic,
                         payload: deliveryPayload,
                         organizationId: input.organizationId,
-                        // Quiet-hours deferral (P3b): the dispatcher won't claim
-                        // this row until `notBefore`. Absent ⇒ immediate.
+                        // Quiet-hours / digest deferral (P3b): the dispatcher won't
+                        // claim this row until `notBefore`. Absent ⇒ immediate.
                         notBefore,
+                        // P3b-2: tag batched deliveries so the dispatcher collapses
+                        // a `(recipient, channel, window)` group into one message.
+                        digestKey: digest ? `${recipient}|${channel}|${digest.window}` : undefined,
                     });
                     deliveries.push({ channel, recipient, ok: true, externalId: id });
                 } catch (err) {

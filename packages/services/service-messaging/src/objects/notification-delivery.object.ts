@@ -39,6 +39,14 @@ export const NotificationDelivery = ObjectSchema.create({
         channel: Field.text({ label: 'Channel', required: true }),
         topic: Field.text({ label: 'Topic', searchable: true }),
 
+        // P3b-2 digest: when the recipient's preference batches this channel
+        // (`digest: daily|weekly`), the row enqueues deferred to the next window
+        // and carries `${recipient}|${channel}|${window}` here. The dispatcher's
+        // digest pass collapses all same-key rows into ONE rendered message at
+        // window time. Null ⇒ an ordinary (immediate / quiet-hours) delivery.
+        digest_key: Field.text({ label: 'Digest Key', searchable: true,
+            description: 'recipient|channel|window grouping key for batched (digest) deliveries; null for normal sends.' }),
+
         payload: Field.json({
             label: 'Payload',
             description: 'Snapshot of the rendered notification content for dispatch.',
@@ -71,5 +79,7 @@ export const NotificationDelivery = ObjectSchema.create({
         // Stale-in_flight reaper.
         { fields: ['status', 'claimed_at'] },
         { fields: ['notification_id'] },
+        // P3b-2: the digest collapse pass — claim due batched rows by group.
+        { fields: ['digest_key', 'status', 'next_attempt_at'] },
     ],
 });

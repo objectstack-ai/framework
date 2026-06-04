@@ -45,12 +45,15 @@ export class MemoryNotificationOutbox implements INotificationOutbox {
             topic: input.topic,
             payload: input.payload ?? {},
             organizationId: input.organizationId,
-            partitionKey: hashPartition(input.notificationId, this.partitionCount),
+            // Digest rows partition by their group key so a window's rows land in
+            // one partition and a single node collapses them under its lock.
+            partitionKey: hashPartition(input.digestKey ?? input.notificationId, this.partitionCount),
             status: 'pending',
             attempts: 0,
-            // Deferred dispatch (quiet-hours, P3): claim() skips pending rows
-            // whose nextAttemptAt is still in the future.
+            // Deferred dispatch (quiet-hours / digest, P3): claim() skips pending
+            // rows whose nextAttemptAt is still in the future.
             nextAttemptAt: input.notBefore,
+            digestKey: input.digestKey,
             createdAt: now,
             updatedAt: now,
         });
@@ -72,6 +75,35 @@ export class MemoryNotificationOutbox implements INotificationOutbox {
         for (const r of this.rows.values()) {
             if (out.length >= opts.limit) break;
             if (r.status !== 'pending') continue;
+            if (r.digestKey != null) continue; // batched rows drain via claimDigest
+            if (opts.partition && r.partitionKey !== opts.partition.index) continue;
+            if (r.nextAttemptAt != null && r.nextAttemptAt > now) continue;
+            r.status = 'in_flight';
+            r.claimedBy = opts.nodeId;
+            r.claimedAt = now;
+            r.updatedAt = now;
+            out.push({ ...r });
+        }
+        return out;
+    }
+
+    async claimDigest(opts: ClaimOptions): Promise<NotificationDeliveryRecord[]> {
+        const now = opts.now ?? this.clock();
+        // Reap stale in_flight (same as claim).
+        for (const r of this.rows.values()) {
+            if (r.status === 'in_flight' && (r.claimedAt ?? 0) < now - opts.claimTtlMs) {
+                r.status = 'pending';
+                r.claimedBy = undefined;
+                r.claimedAt = undefined;
+                r.updatedAt = now;
+            }
+        }
+        // Claim every DUE batched row in the partition — a window must be taken
+        // whole, so `limit` does not truncate a group here.
+        const out: NotificationDeliveryRecord[] = [];
+        for (const r of this.rows.values()) {
+            if (r.status !== 'pending') continue;
+            if (r.digestKey == null) continue;
             if (opts.partition && r.partitionKey !== opts.partition.index) continue;
             if (r.nextAttemptAt != null && r.nextAttemptAt > now) continue;
             r.status = 'in_flight';

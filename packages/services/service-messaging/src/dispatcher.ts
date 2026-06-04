@@ -3,6 +3,7 @@
 import type { MessagingChannel, MessagingChannelContext, Notification, SendResult } from './channel.js';
 import type { INotificationOutbox, NotificationDeliveryRecord } from './outbox.js';
 import { classifyDeliveryAttempt } from './backoff.js';
+import { renderDigest } from './digest-render.js';
 
 /** Minimal channel-registry surface the dispatcher needs (MessagingService satisfies it). */
 export interface ChannelRegistry {
@@ -166,14 +167,78 @@ export class NotificationDispatcher {
                 partition: { index, count: this.opts.partitionCount },
                 claimTtlMs: this.opts.claimTtlMs,
             });
-            if (claimed.length === 0) return;
-            await handle.renew?.(this.opts.lockTtlMs);
-            for (const row of claimed) {
-                if (handle.isHeld && !handle.isHeld()) break;
-                await this.processRow(row);
+            if (claimed.length > 0) {
+                await handle.renew?.(this.opts.lockTtlMs);
+                for (const row of claimed) {
+                    if (handle.isHeld && !handle.isHeld()) break;
+                    await this.processRow(row);
+                }
+            }
+
+            // P3b-2 digest pass: collapse due batched rows by group. Runs under
+            // the same partition lock — a window's rows share a partition (keyed
+            // on digest_key), so exactly one node assembles each digest.
+            const digestRows = await this.opts.outbox.claimDigest({
+                nodeId: this.opts.nodeId,
+                limit: this.opts.batchSize,
+                partition: { index, count: this.opts.partitionCount },
+                claimTtlMs: this.opts.claimTtlMs,
+            });
+            if (digestRows.length > 0) {
+                await handle.renew?.(this.opts.lockTtlMs);
+                for (const group of groupByDigestKey(digestRows)) {
+                    if (handle.isHeld && !handle.isHeld()) break;
+                    await this.processDigestGroup(group);
+                }
             }
         } finally {
             await handle.release();
+        }
+    }
+
+    /**
+     * Send one collapsed message for a `(recipient, channel, window)` group and
+     * ack every row in it with that one outcome. On failure the whole group
+     * re-defers together (each row keeps its own backoff via its `attempts`).
+     */
+    private async processDigestGroup(rows: NotificationDeliveryRecord[]): Promise<void> {
+        const channelName = rows[0].channel;
+        const recipient = rows[0].recipientId;
+        const channel = this.opts.channels.getChannel(channelName);
+        if (!channel) {
+            for (const row of rows) {
+                await this.opts.outbox.ack(row.id, { success: false, error: `channel '${channelName}' not registered`, dead: true });
+                this.opts.onAttempt?.(row, false);
+            }
+            return;
+        }
+
+        const digest = renderDigest(rows);
+        const notification: Notification = {
+            notificationId: rows[0].notificationId, // representative event id
+            organizationId: rows[0].organizationId,
+            topic: rows[0].topic,
+            title: digest.title,
+            body: digest.body,
+            severity: 'info',
+            recipients: [recipient],
+            channels: [channelName],
+            payload: { digest: true, count: digest.count, items: digest.items },
+        };
+
+        let result: SendResult;
+        try {
+            result = await channel.send(this.opts.channelContext, { notification, channel: channelName, recipient });
+        } catch (err) {
+            result = { ok: false, error: (err as Error)?.message ?? String(err) };
+        }
+
+        const errorClass = !result.ok && channel.classifyError ? channel.classifyError(result.error) : undefined;
+        const now = this.opts.now?.() ?? Date.now();
+        for (const row of rows) {
+            const ack = classifyDeliveryAttempt(result, errorClass, row.attempts, now, this.opts.rng);
+            await this.opts.outbox.ack(row.id, ack);
+            this.opts.onAttempt?.(row, result.ok);
         }
     }
 
@@ -221,6 +286,18 @@ export class NotificationDispatcher {
         await this.opts.outbox.ack(row.id, ack);
         this.opts.onAttempt?.(row, result.ok);
     }
+}
+
+/** Group claimed digest rows by their `digestKey` (insertion order preserved). */
+function groupByDigestKey(rows: NotificationDeliveryRecord[]): NotificationDeliveryRecord[][] {
+    const groups = new Map<string, NotificationDeliveryRecord[]>();
+    for (const r of rows) {
+        const key = r.digestKey ?? r.id; // defensive — claimDigest only returns keyed rows
+        let g = groups.get(key);
+        if (!g) { g = []; groups.set(key, g); }
+        g.push(r);
+    }
+    return [...groups.values()];
 }
 
 /** Spread the starting partition per node so contention rotates fairly. */

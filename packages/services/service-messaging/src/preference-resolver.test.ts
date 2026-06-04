@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { PreferenceResolver, quietHoursDeferral } from './preference-resolver.js';
+import { PreferenceResolver, quietHoursDeferral, digestDeferral } from './preference-resolver.js';
 
 function silentLogger() {
     return { info: () => {}, warn: () => {}, error: () => {} };
@@ -197,5 +197,63 @@ describe('PreferenceResolver — quiet hours', () => {
         const r = resolver(() => data.engine);
         const out = await r.filter(['u1'], ['inbox'], { topic: 'task.assigned', now });
         expect(out[0].notBefore).toBe(Date.UTC(2026, 0, 2, 8, 0));
+    });
+});
+
+describe('digestDeferral (P3b-2)', () => {
+    // 2026-01-01 09:00 UTC is a Thursday (ISO weekday 4).
+    const now = Date.UTC(2026, 0, 1, 9, 0);
+
+    it('daily → next local midnight, window keyed by the current date', () => {
+        const out = digestDeferral('daily', now, 'UTC');
+        expect(out.notBefore).toBe(Date.UTC(2026, 0, 2, 0, 0));
+        expect(out.window).toBe('2026-01-01');
+    });
+
+    it('weekly → next Monday 00:00, window keyed by this week’s Monday', () => {
+        const out = digestDeferral('weekly', now, 'UTC');
+        expect(out.notBefore).toBe(Date.UTC(2026, 0, 5, 0, 0)); // Mon 2026-01-05
+        expect(out.window).toBe('2025-12-29'); // Mon of the current week
+    });
+
+    it('defaults to UTC when no tz is given', () => {
+        expect(digestDeferral('daily', now).window).toBe('2026-01-01');
+    });
+});
+
+describe('PreferenceResolver — digest', () => {
+    it('stamps notBefore + the digest window on the target', async () => {
+        const now = Date.UTC(2026, 0, 1, 9, 0);
+        const rows = [pref({ user_id: 'u1', topic: '*', channel: '*', enabled: true })];
+        (rows[0] as any).digest = 'daily';
+        const data = fakeData(rows);
+        const r = resolver(() => data.engine);
+        const out = await r.filter(['u1'], ['inbox', 'email'], { topic: 'task.assigned', now });
+        expect(out).toEqual([{
+            recipient: 'u1',
+            channels: ['inbox', 'email'],
+            notBefore: Date.UTC(2026, 0, 2, 0, 0),
+            digest: { window: '2026-01-01' },
+        }]);
+    });
+
+    it('takes precedence over quiet-hours when both are set', async () => {
+        const now = Date.UTC(2026, 0, 1, 9, 0);
+        const rows = [pref({ user_id: 'u1', topic: '*', channel: '*', enabled: true })];
+        (rows[0] as any).digest = 'daily';
+        (rows[0] as any).quiet_hours = { tz: 'UTC', start: '09:00', end: '17:00' };
+        const r = resolver(() => fakeData(rows).engine);
+        const out = await r.filter(['u1'], ['inbox'], { topic: 'task.assigned', now });
+        expect(out[0].digest).toEqual({ window: '2026-01-01' });
+        expect(out[0].notBefore).toBe(Date.UTC(2026, 0, 2, 0, 0)); // digest window, not the 17:00 quiet-hours end
+    });
+
+    it('a critical event bypasses digest batching', async () => {
+        const now = Date.UTC(2026, 0, 1, 9, 0);
+        const rows = [pref({ user_id: 'u1', topic: '*', channel: '*', enabled: true })];
+        (rows[0] as any).digest = 'daily';
+        const r = resolver(() => fakeData(rows).engine);
+        const out = await r.filter(['u1'], ['inbox'], { topic: 'task.assigned', now, severity: 'critical' });
+        expect(out).toEqual([{ recipient: 'u1', channels: ['inbox'] }]); // no notBefore, no digest
     });
 });

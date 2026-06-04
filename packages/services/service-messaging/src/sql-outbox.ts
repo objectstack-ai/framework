@@ -37,6 +37,7 @@ interface DeliveryRow {
     next_attempt_at?: number | null;
     last_attempted_at?: number | null;
     error?: string | null;
+    digest_key?: string | null;
     created_at: number;
     updated_at: number;
 }
@@ -78,12 +79,15 @@ export class SqlNotificationOutbox implements INotificationOutbox {
             topic: input.topic ?? null,
             payload: input.payload ?? {},
             organization_id: input.organizationId ?? null,
-            partition_key: hashPartition(input.notificationId, this.partitionCount),
+            // Digest rows partition by their group key so a window's rows land in
+            // one partition and a single node collapses them under its lock.
+            partition_key: hashPartition(input.digestKey ?? input.notificationId, this.partitionCount),
             status: 'pending',
             attempts: 0,
-            // Deferred dispatch (quiet-hours, P3): claim() skips pending rows
-            // whose next_attempt_at is in the future.
+            // Deferred dispatch (quiet-hours / digest, P3): claim() skips pending
+            // rows whose next_attempt_at is in the future.
             next_attempt_at: input.notBefore ?? null,
+            digest_key: input.digestKey ?? null,
             created_at: now,
             updated_at: now,
         };
@@ -108,11 +112,13 @@ export class SqlNotificationOutbox implements INotificationOutbox {
             { where: { status: 'in_flight', claimed_at: { $lt: now - opts.claimTtlMs } }, multi: true } as any,
         );
 
-        // 2. Candidate ids: ready pending rows in our partition.
+        // 2. Candidate ids: ready pending rows in our partition. Batched (digest)
+        //    rows are excluded — they drain via claimDigest so they collapse.
         const partitionFilter = opts.partition ? { partition_key: opts.partition.index } : {};
         const candidates = await this.engine.find(this.objectName, {
             where: {
                 status: 'pending',
+                digest_key: null,
                 ...partitionFilter,
                 $or: [{ next_attempt_at: null }, { next_attempt_at: { $lte: now } }],
             },
@@ -130,6 +136,46 @@ export class SqlNotificationOutbox implements INotificationOutbox {
         );
 
         // 4. Read back only the rows we own.
+        const claimed = (await this.engine.find(this.objectName, {
+            where: { id: { $in: ids }, claimed_by: opts.nodeId, claimed_at: now, status: 'in_flight' },
+        })) as DeliveryRow[];
+        return claimed.map((r) => this.toRecord(r));
+    }
+
+    async claimDigest(opts: ClaimOptions): Promise<NotificationDeliveryRecord[]> {
+        const now = opts.now ?? Date.now();
+
+        // 1. Reap stale in_flight (same as claim).
+        await this.engine.update(
+            this.objectName,
+            { status: 'pending', claimed_by: null, claimed_at: null, updated_at: now },
+            { where: { status: 'in_flight', claimed_at: { $lt: now - opts.claimTtlMs } }, multi: true } as any,
+        );
+
+        // 2. All DUE batched rows in our partition — a window is claimed whole, so
+        //    we don't apply `limit` (a generous cap guards a pathological backlog).
+        const partitionFilter = opts.partition ? { partition_key: opts.partition.index } : {};
+        const candidates = await this.engine.find(this.objectName, {
+            where: {
+                status: 'pending',
+                digest_key: { $ne: null },
+                ...partitionFilter,
+                $or: [{ next_attempt_at: null }, { next_attempt_at: { $lte: now } }],
+            },
+            fields: ['id'],
+            limit: 10000,
+        });
+        if (!candidates.length) return [];
+        const ids = (candidates as Array<{ id: string }>).map((c) => c.id);
+
+        // 3. Atomic claim.
+        await this.engine.update(
+            this.objectName,
+            { status: 'in_flight', claimed_by: opts.nodeId, claimed_at: now, updated_at: now },
+            { where: { id: { $in: ids }, status: 'pending' }, multi: true } as any,
+        );
+
+        // 4. Read back the rows we own.
         const claimed = (await this.engine.find(this.objectName, {
             where: { id: { $in: ids }, claimed_by: opts.nodeId, claimed_at: now, status: 'in_flight' },
         })) as DeliveryRow[];
@@ -207,6 +253,7 @@ export class SqlNotificationOutbox implements INotificationOutbox {
             nextAttemptAt: r.next_attempt_at ?? undefined,
             lastAttemptedAt: r.last_attempted_at ?? undefined,
             error: r.error ?? undefined,
+            digestKey: r.digest_key ?? undefined,
             createdAt: r.created_at,
             updatedAt: r.updated_at,
         };
