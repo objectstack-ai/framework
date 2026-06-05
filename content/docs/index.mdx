@@ -1,174 +1,37 @@
 ---
-title: ObjectStack Protocol
-description: The AI-native business backend protocol for structured, auditable agent execution.
+title: Documentation
+description: Technical documentation for ObjectStack.
 ---
 
-import { Rocket, BookOpen, FileCode, Layers, Database, Layout, Cpu, Bot, Workflow, Shield, Globe, Terminal, FolderOpen, Lightbulb, Wrench, BookMarked, Brain } from 'lucide-react';
+# ObjectStack Documentation
 
-**ObjectStack** is the **AI-native business backend** for building enterprise applications that agents can understand, operate, and audit safely.
-Define business objects, permissions, workflows, APIs, UI metadata, and agent tools once as structured Zod metadata — ObjectStack handles the runtime surface.
+ObjectStack is an AI-native business backend protocol for structured, auditable business applications.
+These docs cover the protocol, runtime, metadata model, API surface, and implementation guides.
 
-> ObjectStack is **not another low-code UI builder**. It is the **structured execution layer** for AI-native business software: agent-ready, permission-aware, versioned, and auditable.
+## Start Here
 
-> **Built for AI, not retrofitted.** A typical enterprise application is tens of thousands of lines of CRUD, forms, queries, permissions, and API glue. ObjectStack collapses the same surface into a few hundred lines of typed metadata — **roughly two orders of magnitude less code to read, write, and maintain.** The point isn't lines of code; the point is **fit in an agent's context window**, so an AI agent can reason about the whole system end-to-end and safely refactor across data, API, UI, and permissions in a single change.
-
-```bash
-npx create-objectstack my-app && cd my-app && pnpm dev
-```
-
-Open [http://localhost:3000/_studio/](http://localhost:3000/_studio/) to browse objects, test APIs, inspect metadata, and review the agent-ready tool surface.
-
----
-
-## Learn
-
-New to ObjectStack? Start here.
-
-<Cards>
-  <Card
-    icon={<Rocket />}
-    title="Quick Start"
-    href="/docs/getting-started/quick-start"
-    description="Create a project, define objects, launch the Studio — in 5 minutes."
-  />
-  <Card
-    icon={<Lightbulb />}
-    title="Core Concepts"
-    href="/docs/getting-started/core-concepts"
-    description="AI-native metadata, design principles, and naming conventions."
-  />
-  <Card
-    icon={<Layers />}
-    title="Architecture"
-    href="/docs/getting-started/architecture"
-    description="The three-layer protocol stack: ObjectQL, ObjectOS, ObjectUI."
-  />
-  <Card
-    icon={<FolderOpen />}
-    title="Example Apps"
-    href="/docs/getting-started/examples"
-    description="Run the Todo, CRM, and BI examples to learn hands-on."
-  />
-  <Card
-    icon={<BookMarked />}
-    title="Package Overview"
-    href="/docs/guides/packages"
-    description="Complete guide to all 51 packages: core, services, drivers, plugins, and adapters."
-  />
-</Cards>
+- [Quick Start](/docs/getting-started/quick-start): create an ObjectStack app and run Studio locally.
+- [What is ObjectStack?](/docs/getting-started): understand the protocol model and runtime layers.
+- [Core Concepts](/docs/getting-started/core-concepts): learn the key terms used across the docs.
+- [Architecture](/docs/getting-started/architecture): see how ObjectQL, ObjectOS, and ObjectUI fit together.
 
 ## Build
 
-Task-oriented guides for building real applications.
+- [Data Modeling](/docs/guides/data-modeling): define objects, fields, relationships, and validation rules.
+- [Business Logic](/docs/guides/business-logic): model workflows, approvals, triggers, hooks, and formulas.
+- [Security](/docs/guides/security): configure permissions, sharing rules, RBAC, RLS, and field-level access.
+- [API Reference](/docs/guides/api-reference): work with generated REST, GraphQL, realtime, and SDK surfaces.
+- [Plugin Development](/docs/guides/plugin-development): build and register runtime plugins.
 
-<Cards>
-  <Card
-    icon={<Database />}
-    title="Data Modeling"
-    href="/docs/guides/data-modeling"
-    description="Design objects, fields, relationships, and validation rules."
-  />
-  <Card
-    icon={<Workflow />}
-    title="Business Logic"
-    href="/docs/guides/business-logic"
-    description="Workflows, approval flows, triggers, and formulas."
-  />
-  <Card
-    icon={<Shield />}
-    title="Security"
-    href="/docs/guides/security"
-    description="Profiles, permissions, sharing rules, and row-level security."
-  />
-  <Card
-    icon={<Bot />}
-    title="AI Capabilities"
-    href="/docs/guides/ai-capabilities"
-    description="AI agents, generated tools, RAG pipelines, and natural language queries."
-  />
-  <Card
-    icon={<Brain />}
-    title="AI Skills System"
-    href="/docs/guides/skills"
-    description="Structured knowledge modules for intelligent code generation."
-  />
-  <Card
-    icon={<Wrench />}
-    title="Plugin Development"
-    href="/docs/guides/plugin-development"
-    description="Build, test, and publish custom plugins."
-  />
-  <Card
-    icon={<Globe />}
-    title="API & Client SDK"
-    href="/docs/guides/api-reference"
-    description="REST, GraphQL, WebSocket APIs, and frontend integration."
-  />
-</Cards>
+## Protocol
 
-## Understand
+- [ObjectQL](/docs/protocol/objectql): data schemas, queries, filters, indexes, and object contracts.
+- [ObjectOS](/docs/protocol/objectos): kernel runtime, plugins, HTTP protocol, capabilities, and configuration.
+- [ObjectUI](/docs/protocol/objectui): UI metadata for apps, views, pages, dashboards, and actions.
 
-Deep protocol specifications for implementers and architects.
+## Reference
 
-<Cards>
-  <Card
-    icon={<Database />}
-    title="ObjectQL — Data"
-    href="/docs/protocol/objectql"
-    description="Schema, state machines, query syntax, and security."
-  />
-  <Card
-    icon={<Layout />}
-    title="ObjectUI — Interface"
-    href="/docs/protocol/objectui"
-    description="Layout DSL, widget contracts, and actions."
-  />
-  <Card
-    icon={<Cpu />}
-    title="ObjectOS — System"
-    href="/docs/protocol/objectos"
-    description="Lifecycle, HTTP/realtime, plugins, and config."
-  />
-</Cards>
-
-## Look Up
-
-Auto-generated schema reference and quick-lookup cheatsheets.
-
-<Cards>
-  <Card
-    icon={<FileCode />}
-    title="Schema Reference"
-    href="/docs/references"
-    description="Auto-generated docs for every Zod schema in the protocol."
-  />
-  <Card
-    icon={<BookMarked />}
-    title="Cheatsheets"
-    href="/docs/guides/cheatsheets"
-    description="Field types, query syntax, error codes, and permissions at a glance."
-  />
-  <Card
-    icon={<Terminal />}
-    title="CLI Reference"
-    href="/docs/getting-started/cli"
-    description="All commands: init, generate, serve, studio, compile, validate."
-  />
-  <Card
-    icon={<BookOpen />}
-    title="Glossary"
-    href="/docs/getting-started/glossary"
-    description="Key terminology across all 15 protocol namespaces."
-  />
-</Cards>
-
----
-
-## Who is this for?
-
-| Audience | Use Case |
-| :--- | :--- |
-| **AI Agent Developers** | Give agents a structured, permission-aware backend for real business actions |
-| **Platform Architects** | Build internal developer platforms (IDP) that expose safe business capabilities |
-| **Protocol Implementers** | Write new Drivers for ObjectQL or Renderers for ObjectUI |
-| **Internal Tool Builders** | Ship CRUD-heavy business apps with generated APIs, UI metadata, and workflows |
+- [Schema Reference](/docs/references): generated Zod schema reference for ObjectStack metadata.
+- [Cheatsheets](/docs/guides/cheatsheets/quick-reference): quick lookup tables for common protocol decisions.
+- [CLI Reference](/docs/getting-started/cli): commands for creating, building, and validating projects.
+- [Glossary](/docs/getting-started/glossary): shared vocabulary across ObjectStack docs.

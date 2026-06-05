@@ -21,17 +21,12 @@ export function baseOptions(): BaseLayoutProps {
           ObjectStack
         </div>
       ),
-      transparentMode: 'top',
     },
     links: [
       {
         text: 'Documentation',
         url: '/docs/',
         active: 'nested-url',
-      },
-      {
-        text: 'Website',
-        url: 'https://www.objectstack.ai',
       },
     ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
