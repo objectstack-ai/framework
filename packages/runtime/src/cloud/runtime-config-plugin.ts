@@ -120,6 +120,11 @@ export class RuntimeConfigPlugin implements Plugin {
             // payload when the host doesn't map to any env (e.g. a
             // marketing root, a CLI-served single-env runtime, or
             // cloud.objectos.ai which mounts its own static handler).
+            const features = {
+                installLocal: this.installLocal,
+                marketplace: true,
+                aiStudio: this.aiStudio,
+            };
             let envRegistry: any = null;
             try { envRegistry = ctx.getService('env-registry'); } catch { /* not mounted (file/CLI mode) */ }
 
@@ -129,13 +134,6 @@ export class RuntimeConfigPlugin implements Plugin {
                 let defaultEnvironmentId: string | undefined;
                 let defaultOrgId: string | undefined;
                 let resolvedSingleEnv = this.singleEnvironment;
-                // Capability flag: paid environments unlock the Studio/AI
-                // online-development surface; free environments hide it. Starts
-                // from the static default and is overridden per-request once we
-                // know the resolved environment's billing plan. When the plan
-                // can't be resolved (file/CLI mode, legacy control plane) we
-                // keep the static default rather than locking anyone out.
-                let aiStudio = this.aiStudio;
                 // EnvironmentDriverRegistry exposes `resolveByHostname()`;
                 // older code paths used `resolveHostname()` on the client.
                 // Accept either so production runtimes (which register the
@@ -159,12 +157,6 @@ export class RuntimeConfigPlugin implements Plugin {
                             // operator's POV: surface as single-environment
                             // so the SPA hides multi-env affordances.
                             resolvedSingleEnv = true;
-                            // Gate the Studio/AI surface on the environment's
-                            // plan: free → off, any paid tier → on. Only an
-                            // explicit non-empty plan overrides the default, so
-                            // an absent/blank value leaves the static flag intact.
-                            const plan = typeof resolved.plan === 'string' ? resolved.plan.trim().toLowerCase() : '';
-                            if (plan) aiStudio = plan !== 'free';
                         }
                     } catch {
                         // Resolver failures are non-fatal — fall through
@@ -177,11 +169,7 @@ export class RuntimeConfigPlugin implements Plugin {
                     singleEnvironment: resolvedSingleEnv,
                     defaultOrgId,
                     defaultEnvironmentId,
-                    features: {
-                        installLocal: this.installLocal,
-                        marketplace: true,
-                        aiStudio,
-                    },
+                    features,
                     branding: {
                         productName: this.productName,
                         productShortName: this.productShortName,
