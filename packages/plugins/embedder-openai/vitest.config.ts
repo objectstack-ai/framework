@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@objectstack/spec/contracts': path.resolve(__dirname, '../../spec/src/contracts/index.ts'),
+      '@objectstack/spec/shared': path.resolve(__dirname, '../../spec/src/shared/index.ts'),
       '@objectstack/spec': path.resolve(__dirname, '../../spec/src/index.ts'),
     },
   },

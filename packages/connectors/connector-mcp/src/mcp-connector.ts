@@ -150,6 +150,13 @@ function normalizeResult(raw: unknown): Record<string, unknown> {
 }
 
 /**
+ * Default per-request timeout (ms) for MCP calls (P1-1). Without it, a hung or
+ * unresponsive MCP server stalls the agent turn indefinitely. The SDK aborts the
+ * request once this elapses.
+ */
+const MCP_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
  * The default {@link McpClientLike} — lazily imports the official MCP SDK so it
  * is only loaded when a real connection is made (tests inject their own client).
  */
@@ -182,11 +189,11 @@ async function defaultClientFactory(
 
     return {
         async listTools() {
-            const res = await client.listTools();
+            const res = await client.listTools(undefined, { timeout: MCP_REQUEST_TIMEOUT_MS });
             return (res.tools ?? []) as McpToolDescriptor[];
         },
         async callTool(name, args) {
-            return client.callTool({ name, arguments: args });
+            return client.callTool({ name, arguments: args }, undefined, { timeout: MCP_REQUEST_TIMEOUT_MS });
         },
         async close() {
             await client.close();

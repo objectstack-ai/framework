@@ -18,3 +18,4 @@ export * from './metadata-collection.zod';
 export * from './lazy-schema';
 export * from './expression.zod';
 export * from './protection.zod';
+export * from './resilient-fetch';

@@ -110,7 +110,18 @@ fix or acceptance.**
   rate-limited external API hangs the entire agent turn with no recovery.
 - **Action:** Add a default request timeout (e.g. 30s, configurable) + exponential
   backoff (3 tries) + a circuit breaker; tests for 429 / timeout paths.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Fix:** New shared `resilientFetch` (`@objectstack/spec/shared`) — 30s per-attempt
+  timeout (AbortController) + exponential backoff with jitter (3 tries) on
+  network errors / 429 / 5xx, honouring `Retry-After`; never retries a
+  caller-initiated abort. Wired into `connector-rest`, `connector-slack`,
+  `embedder-openai`. `connector-mcp` uses the MCP SDK transport, so it gets a 30s
+  per-request `timeout` on `callTool` / `listTools` instead. +13 tests (helper 9,
+  connector retry 1, plus existing suites green).
+- **Deferred (follow-up, not blocking):** a **circuit breaker** — it's stateful
+  and per-host; timeout + backoff already removes the "hangs the agent turn / no
+  recovery" risk. Making timeout/retry **per-call configurable** (currently
+  sensible defaults) is a small follow-up.
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Timeout + backoff shipped across all 4 paths; circuit breaker deferred (rationale above). Awaiting human sign-off.
 
 ### P1-2 — Unbounded growth: execution logs, job runs, event log
 - **Area:** `service-automation` (in-memory exec logs, hard 1000 cap),

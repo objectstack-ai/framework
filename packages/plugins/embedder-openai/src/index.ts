@@ -20,6 +20,7 @@
  */
 
 import type { IEmbedder } from '@objectstack/spec/contracts';
+import { resilientFetch } from '@objectstack/spec/shared';
 
 export interface OpenAIEmbedderOptions {
   /** Bearer token sent as `Authorization: Bearer <apiKey>`. Required. */
@@ -154,7 +155,7 @@ export class OpenAIEmbedder implements IEmbedder {
     if (texts.length === 0) return [];
     const body: Record<string, unknown> = { model: this.model, input: texts };
     if (this.requestedDims) body.dimensions = this.requestedDims;
-    const res = await this.fetchImpl(`${this.baseUrl}/embeddings`, {
+    const res = await resilientFetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -162,7 +163,7 @@ export class OpenAIEmbedder implements IEmbedder {
         ...this.extraHeaders,
       },
       body: JSON.stringify(body),
-    });
+    }, { fetchImpl: this.fetchImpl });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(

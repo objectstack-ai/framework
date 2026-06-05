@@ -48,6 +48,27 @@ describe('createRestConnector — request action', () => {
         expect(out).toEqual({ status: 200, ok: true, body: { id: 1, name: 'Ada' } });
     });
 
+    it('retries a transient 503 then returns the success (P1-1)', async () => {
+        let n = 0;
+        const calls: number[] = [];
+        const impl = (async () => {
+            calls.push(1);
+            const status = n++ === 0 ? 503 : 200;
+            return {
+                status,
+                ok: status >= 200 && status < 300,
+                headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null) },
+                json: async () => ({ ok: status === 200 }),
+                text: async () => '',
+            };
+        }) as unknown as typeof fetch;
+        const { handlers } = createRestConnector({ baseUrl: 'https://api.example.com', fetchImpl: impl });
+
+        const out = await handlers.request({ path: '/x' }, {});
+        expect(calls.length).toBe(2); // retried the 503 once
+        expect(out.status).toBe(200);
+    });
+
     it('JSON-encodes the body and sets Content-Type for non-GET', async () => {
         const { impl, calls } = stubFetch();
         const { handlers } = createRestConnector({ baseUrl: 'https://api.example.com', fetchImpl: impl });

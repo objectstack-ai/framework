@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Connector } from '@objectstack/spec/integration';
+import { resilientFetch } from '@objectstack/spec/shared';
 
 /**
  * Generic REST connector — the reference *concrete* connector (ADR-0018
@@ -97,7 +98,6 @@ function applyAuth(
 export function createRestConnector(opts: RestConnectorOptions): RestConnectorBundle {
     const name = opts.name ?? 'rest';
     const auth: RestAuth = opts.auth ?? { type: 'none' };
-    const doFetch = opts.fetchImpl ?? fetch;
 
     const def: Connector = {
         name,
@@ -154,11 +154,11 @@ export function createRestConnector(opts: RestConnectorOptions): RestConnectorBu
             headers['Content-Type'] = 'application/json';
         }
 
-        const response = await doFetch(url, {
+        const response = await resilientFetch(url, {
             method,
             headers,
             body: hasBody ? JSON.stringify(req.body) : undefined,
-        });
+        }, { fetchImpl: opts.fetchImpl });
 
         // Parse JSON when advertised; fall back to text so non-JSON endpoints
         // don't throw.

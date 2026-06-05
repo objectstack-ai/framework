@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Connector } from '@objectstack/spec/integration';
+import { resilientFetch } from '@objectstack/spec/shared';
 
 /**
  * Slack connector — a *concrete* connector (ADR-0018 §Addendum) and the second
@@ -78,7 +79,6 @@ export interface SlackConnectorBundle {
 export function createSlackConnector(opts: SlackConnectorOptions): SlackConnectorBundle {
     const name = opts.name ?? 'slack';
     const baseUrl = (opts.baseUrl ?? 'https://slack.com/api').replace(/\/+$/, '');
-    const doFetch = opts.fetchImpl ?? fetch;
 
     const def: Connector = {
         name,
@@ -151,11 +151,11 @@ export function createSlackConnector(opts: SlackConnectorOptions): SlackConnecto
             Authorization: `Bearer ${opts.token}`,
         };
 
-        const response = await doFetch(`${baseUrl}/${method}`, {
+        const response = await resilientFetch(`${baseUrl}/${method}`, {
             method: 'POST',
             headers,
             body: JSON.stringify(params),
-        });
+        }, { fetchImpl: opts.fetchImpl });
 
         // The Slack Web API always answers with JSON; `ok` is the real outcome.
         const body = (await response.json()) as Record<string, unknown>;
