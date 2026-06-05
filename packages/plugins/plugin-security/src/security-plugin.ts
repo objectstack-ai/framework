@@ -307,9 +307,22 @@ export class SecurityPlugin implements Plugin {
           permissionSets = fallback;
         }
       } catch (e) {
-        // If metadata service is misconfigured, log and continue without permission checks
-        // rather than blocking all operations
-        return next();
+        // Fail CLOSED. A permission-resolution failure must DENY the request,
+        // never bypass the checks (that would let a degraded metadata service
+        // expose every tenant's data). System/bootstrap operations already
+        // short-circuited above (`opCtx.context?.isSystem`), so reaching here
+        // means an authenticated user request whose RBAC/RLS could not be
+        // resolved — deny it and alert.
+        ctx.logger.error(
+          `[security] permission resolution failed for operation '${opCtx.operation}' on ` +
+          `object '${opCtx.object}' (user ${opCtx.context?.userId ?? 'unknown'}) — ` +
+          `denying request (fail-closed)`,
+          e instanceof Error ? e : new Error(String(e)),
+        );
+        throw new PermissionDeniedError(
+          `[Security] Access denied: permission subsystem unavailable for ` +
+          `operation '${opCtx.operation}' on object '${opCtx.object}'`,
+        );
       }
 
       // 2. CRUD permission check

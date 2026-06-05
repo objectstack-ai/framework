@@ -1143,4 +1143,39 @@ describe('AuthManager', () => {
       expect(als.getStore()).toBeUndefined();
     });
   });
+
+  describe('generateSecret – production secret guard (P0-1)', () => {
+    const ENV_KEYS = ['NODE_ENV', 'OS_AUTH_SECRET', 'AUTH_SECRET', 'BETTER_AUTH_SECRET'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+      for (const k of ['OS_AUTH_SECRET', 'AUTH_SECRET', 'BETTER_AUTH_SECRET']) delete process.env[k];
+    });
+    afterEach(() => {
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('throws (fails boot) in production when no secret is configured', () => {
+      process.env.NODE_ENV = 'production';
+      const m = new AuthManager({ baseUrl: 'http://localhost:3000' } as any);
+      expect(() => (m as any).generateSecret()).toThrow(/OS_AUTH_SECRET is required in production/);
+    });
+
+    it('falls back to an ephemeral dev secret outside production', () => {
+      process.env.NODE_ENV = 'development';
+      const m = new AuthManager({ baseUrl: 'http://localhost:3000' } as any);
+      expect((m as any).generateSecret()).toMatch(/^dev-secret-/);
+    });
+
+    it('uses OS_AUTH_SECRET when set, even in production', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.OS_AUTH_SECRET = 'a-strong-production-secret-value';
+      const m = new AuthManager({ baseUrl: 'http://localhost:3000' } as any);
+      expect((m as any).generateSecret()).toBe('a-strong-production-secret-value');
+    });
+  });
 });

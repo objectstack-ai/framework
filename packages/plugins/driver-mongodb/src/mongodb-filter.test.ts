@@ -180,4 +180,22 @@ describe('MongoDB Filter Translator', () => {
       });
     });
   });
+
+  describe('operator allowlist (P0-4)', () => {
+    it('rejects $where (server-side JS execution)', () => {
+      expect(() => translateFilter({ name: { $where: 'this.x == 1' } })).toThrow(/unsupported filter operator '\$where'/);
+    });
+
+    it('rejects $function', () => {
+      expect(() => translateFilter({ name: { $function: { body: 'fn', args: [], lang: 'js' } } })).toThrow(/unsupported filter operator/);
+    });
+
+    it('rejects unknown $-operators rather than passing them through', () => {
+      expect(() => translateFilter({ name: { $expr: 1 } })).toThrow(/unsupported filter operator '\$expr'/);
+    });
+
+    it('still accepts every allowlisted field operator', () => {
+      expect(() => translateFilter({ a: { $eq: 1 }, b: { $in: [1, 2] }, c: { $contains: 'x' }, d: { $exists: true } })).not.toThrow();
+    });
+  });
 });

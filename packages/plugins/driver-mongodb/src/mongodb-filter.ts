@@ -165,8 +165,11 @@ function translateFieldOperators(ops: Record<string, unknown>): Record<string, u
         break;
 
       default:
-        // Pass through unknown operators as-is
-        result[op] = value;
+        // Reject unknown operators instead of passing them through (P0). Keys
+        // like `$where` / `$function` / `$expr` / `$accumulator` would reach
+        // MongoDB and execute server-side JavaScript or bypass query intent.
+        // Every legitimate ObjectQL field operator is allowlisted above.
+        throw new Error(`[mongodb] unsupported filter operator '${op}'`);
     }
   }
 

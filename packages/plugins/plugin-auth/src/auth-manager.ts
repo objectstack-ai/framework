@@ -1051,23 +1051,28 @@ export class AuthManager {
    */
   private generateSecret(): string {
     const envSecret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET']);
+    if (envSecret) return envSecret;
 
-    if (!envSecret) {
-      // In production, a secret MUST be provided
-      // For development/testing, we'll use a fallback but warn about it
-      const fallbackSecret = 'dev-secret-' + Date.now();
-
-      console.warn(
-        '⚠️  WARNING: No OS_AUTH_SECRET environment variable set! ' +
-        'Using a temporary development secret. ' +
-        'This is NOT secure for production use. ' +
-        'Please set OS_AUTH_SECRET in your environment variables.'
+    // No secret configured. In production this is FATAL: a predictable
+    // `dev-secret-<timestamp>` makes session tokens forgeable (session
+    // forgery). Refuse to boot rather than run insecurely.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[auth] OS_AUTH_SECRET is required in production but is not set. ' +
+        'Refusing to boot with a temporary development secret — session tokens ' +
+        'would be forgeable. Set OS_AUTH_SECRET to a strong random value.'
       );
-
-      return fallbackSecret;
     }
 
-    return envSecret;
+    // Development / test only: fall back to an ephemeral secret, loudly.
+    const fallbackSecret = 'dev-secret-' + Date.now();
+    console.warn(
+      '⚠️  WARNING: No OS_AUTH_SECRET environment variable set! ' +
+      'Using a temporary development secret. ' +
+      'This is NOT secure for production use. ' +
+      'Please set OS_AUTH_SECRET in your environment variables.'
+    );
+    return fallbackSecret;
   }
 
   /**

@@ -55,7 +55,7 @@ fix or acceptance.**
 - **Action:** Throw (fail boot) when no secret is configured and
   `NODE_ENV === 'production'`; add a pre-boot config validation. Document
   `OS_AUTH_SECRET` as a required go-live env var.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Fixed — `generateSecret()` throws in production; +3 tests. Awaiting human sign-off.
 
 ### P0-2 — Metadata-service failure bypasses all RBAC/RLS (fail-open)
 - **Area:** `plugin-security` — `src/security-plugin.ts:309–312`
@@ -65,7 +65,7 @@ fix or acceptance.**
 - **Action:** Add a circuit-breaker + ERROR-level alerting; add an integration
   test asserting "metadata service down ⇒ request denied", not allowed. Decide
   fail-closed vs. fail-open explicitly and record the decision.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Decision = **fail-closed**. `catch` now logs ERROR + throws `PermissionDeniedError`; system ops still bypass. +2 tests. Awaiting human sign-off.
 
 ### P0-3 — Unescaped LIKE metacharacters in `contains`
 - **Area:** `driver-sql` — `src/sql-driver.ts:1565, 1656`
@@ -75,7 +75,7 @@ fix or acceptance.**
   (HIGH, data)
 - **Action:** Escape `%` and `_` (and the escape char) before building the LIKE
   pattern; add a test with a `%`/`_` payload.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Fixed — escape `%`/`_`/`\` + explicit `ESCAPE '\'` (SQLite needs it); +3 tests. Awaiting human sign-off.
 
 ### P0-4 — MongoDB filter passes arbitrary `$` operators through
 - **Area:** `driver-mongodb` — `src/mongodb-filter.ts:82–84`
@@ -85,7 +85,7 @@ fix or acceptance.**
 - **Action:** Allowlist safe operators (`$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/$and/$or/...`);
   reject unknown ones at filter-build time. If MongoDB is not a v1 driver, mark
   Roadmap instead.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Fixed — translator now rejects unknown `$`-operators (blocks `$where`/`$function`); +4 tests. Awaiting human sign-off. (Still confirm whether MongoDB is a v1 driver.)
 
 ### P0-5 — Realtime & feed are in-memory only (no cluster coordination)
 - **Area:** `service-realtime` (`in-memory-realtime-adapter.ts`), `service-feed`

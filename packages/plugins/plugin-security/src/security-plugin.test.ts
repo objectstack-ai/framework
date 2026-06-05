@@ -23,7 +23,7 @@ describe('SecurityPlugin', () => {
     const plugin = new SecurityPlugin();
     const manifestService = { register: vi.fn() };
     const ctx: any = {
-      logger: { info: vi.fn(), warn: vi.fn() },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       registerService: vi.fn(),
       getService: vi.fn().mockImplementation((name: string) => {
         if (name === 'manifest') return manifestService;
@@ -41,7 +41,7 @@ describe('SecurityPlugin', () => {
     const plugin = new SecurityPlugin();
     const manifestService = { register: vi.fn() };
     const ctx: any = {
-      logger: { info: vi.fn(), warn: vi.fn() },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       registerService: vi.fn(),
       getService: vi.fn().mockImplementation((name: string) => {
         if (name === 'manifest') return manifestService;
@@ -57,7 +57,7 @@ describe('SecurityPlugin', () => {
     const plugin = new SecurityPlugin();
     const manifestService = { register: vi.fn() };
     const ctx: any = {
-      logger: { info: vi.fn(), warn: vi.fn() },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       registerService: vi.fn(),
       getService: vi.fn().mockImplementation((name: string) => {
         if (name === 'manifest') return manifestService;
@@ -74,7 +74,7 @@ describe('SecurityPlugin', () => {
     const registerMiddleware = vi.fn();
     const manifestService = { register: vi.fn() };
     const ctx: any = {
-      logger: { info: vi.fn(), warn: vi.fn() },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       registerService: vi.fn(),
       getService: vi.fn().mockImplementation((name: string) => {
         if (name === 'manifest') return manifestService;
@@ -127,7 +127,7 @@ describe('SecurityPlugin', () => {
       services['org-scoping'] = { name: 'com.objectstack.org-scoping' };
     }
     const ctx: any = {
-      logger: { info: vi.fn(), warn: vi.fn() },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       registerService: vi.fn(),
       getService: (name: string) => {
         if (!(name in services)) throw new Error(`service not registered: ${name}`);
@@ -342,6 +342,38 @@ describe('SecurityPlugin', () => {
     await expect(harness.run(opCtx)).rejects.toMatchObject({
       details: { forbiddenFields: ['ssn'] },
     });
+  });
+
+  it('fails CLOSED when permission resolution throws — denies, never bypasses (P0-2)', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    // Simulate the permission/metadata subsystem failing mid-resolution.
+    (plugin as any).permissionEvaluator = {
+      resolvePermissionSets: async () => { throw new Error('metadata service unavailable'); },
+    };
+    const opCtx: any = {
+      object: 'task',
+      operation: 'find',
+      data: {},
+      context: { userId: 'u1', tenantId: 'org-1', roles: ['member'], permissions: [] },
+    };
+    // Resolution failed → the request must be DENIED, not waved through.
+    await expect(harness.run(opCtx)).rejects.toThrow(/permission subsystem unavailable/);
+    expect(harness.ctx.logger.error).toHaveBeenCalled();
+  });
+
+  it('a system operation still bypasses security regardless (P0-2)', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    (plugin as any).permissionEvaluator = {
+      resolvePermissionSets: async () => { throw new Error('should not be called'); },
+    };
+    const opCtx: any = { object: 'task', operation: 'find', context: { isSystem: true } };
+    await expect(harness.run(opCtx)).resolves.toBeDefined(); // bypass short-circuits before resolution
   });
 
   it('FLS write — multiple forbidden fields are all listed in the error', async () => {

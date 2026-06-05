@@ -1562,7 +1562,7 @@ export class SqlDriver implements IDataDriver {
             const methodNotIn = nextJoin === 'or' ? 'orWhereNotIn' : 'whereNotIn';
 
             if (op === 'contains') {
-              b[method](field, 'like', `%${value}%`);
+              this.applyContainsLike(b, method, field, value);
               return;
             }
 
@@ -1594,6 +1594,20 @@ export class SqlDriver implements IDataDriver {
         nextJoin = 'and';
       }
     }
+  }
+
+  /**
+   * Apply a `contains` substring match as a parameterized `LIKE '%…%'`, escaping
+   * the LIKE metacharacters `%` / `_` (and the escape char `\`) in the user value
+   * so they match literally instead of acting as wildcards — otherwise a value of
+   * `%` matches every row (a filter-bypass, P0). Binds an explicit `ESCAPE '\'`
+   * because SQLite does not honour a default escape character (MySQL/Postgres do,
+   * but the explicit clause is correct for all three).
+   */
+  private applyContainsLike(builder: any, method: string, field: string, value: unknown): void {
+    const escaped = String(value).replace(/[\\%_]/g, '\\$&');
+    const rawMethod = method.startsWith('or') ? 'orWhereRaw' : 'whereRaw';
+    builder[rawMethod]('?? LIKE ? ESCAPE ?', [field, `%${escaped}%`, '\\']);
   }
 
   protected applyFilterCondition(builder: Knex.QueryBuilder, condition: any, logicalOp: 'and' | 'or' = 'and', tableHint?: string | null) {
@@ -1653,7 +1667,7 @@ export class SqlDriver implements IDataDriver {
               break;
             }
             case '$contains':
-              (builder as any)[method](field, 'like', `%${opValue}%`);
+              this.applyContainsLike(builder, method, field, opValue);
               break;
             default:
               (builder as any)[method](field, coerced);
