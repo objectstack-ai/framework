@@ -121,14 +121,23 @@ fix or acceptance.**
   sweepers at startup; persist automation logs to a table rather than memory.
 - **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
 
-### P1-3 — No process-level graceful shutdown
-- **Area:** `runtime` (`http-server.ts`) + framework adapters
-- **Risk:** No SIGTERM/SIGINT handling → in-flight requests dropped on
-  rolling deploys (K8s SIGKILL after grace period); cluster (Redis) + kernel +
-  HTTP not drained in a coordinated order.
-- **Action:** Ship a graceful-shutdown utility (drain HTTP → stop kernel services
-  → close cluster) and wire it into app scaffolding; document a ≥60s grace floor.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+### P1-3 — Graceful shutdown (mostly a false positive; one real drain bug fixed)
+- **Area:** `core` (`kernel.ts`), `cli` (`serve.ts`), `plugin-hono-server` (`adapter.ts`)
+- **Verification finding:** The sweep's "no SIGTERM/SIGINT handling" is **wrong**.
+  `Kernel.registerShutdownSignals()` (called at start) already handles
+  SIGINT/SIGTERM/SIGQUIT → `shutdown()` → `performShutdown()` (ordered plugin
+  destroy in reverse + `kernel:shutdown` hook + `onShutdown` handlers), bounded by
+  a **default 60s** `shutdownTimeout`. `serve.ts` boots through the kernel, so the
+  production path inherits all of this. The ≥60s grace floor already exists.
+- **Real (narrower) gap — FIXED:** the standalone Hono server's `close()` called
+  `closeAllConnections()`, which **force-killed in-flight requests** instead of
+  draining them. Replaced with: `server.close()` (stop new + drain active) +
+  `closeIdleConnections()` (release idle keep-alive), and force-close only after a
+  bounded **drain window** (default 10s, < the kernel's 60s). +2 integration tests.
+- **Residual (not blocking):** embedding framework adapters (express/fastify/…)
+  intentionally leave signal handling to the host app; cluster/Redis close should
+  be registered via `kernel.onShutdown(...)` by the cluster plugin — confirm it is.
+- **Owner:** _______  ·  Verify ✅ (mostly false positive; drain bug fixed)  ·  Sign-off ☐  ·  Notes: Kernel shutdown already correct; hono drain fixed + tested. Awaiting human sign-off.
 
 ### P1-4 — Per-request hostname → environment resolution (no cache)
 - **Area:** `rest` — `src/rest-server.ts:~504–530`

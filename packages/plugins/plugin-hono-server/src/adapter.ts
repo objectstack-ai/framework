@@ -46,7 +46,13 @@ export class HonoHttpServer implements IHttpServer {
 
     constructor(
         private port: number = 3000,
-        private staticRoot?: string
+        private staticRoot?: string,
+        /**
+         * Max time (ms) to let in-flight requests drain on `close()` before
+         * force-closing the remainder. Kept well under the kernel's 60s
+         * `shutdownTimeout` so a slow request can't hang the whole shutdown.
+         */
+        private drainTimeoutMs: number = 10_000,
     ) {
         this.app = new Hono();
     }
@@ -285,12 +291,32 @@ export class HonoHttpServer implements IHttpServer {
 
     async close() {
         if (!this.server) return;
-        // Destroy all keep-alive sockets so the server stops immediately
-        if (typeof this.server.closeAllConnections === 'function') {
-            this.server.closeAllConnections();
-        }
-        await new Promise<void>((resolve, reject) => {
-            this.server.close((err: any) => (err ? reject(err) : resolve()));
+        const server = this.server;
+        // Graceful drain (P1-3): stop accepting new connections and let in-flight
+        // requests finish rather than force-killing them mid-response.
+        // `closeIdleConnections()` releases idle keep-alive sockets so the process
+        // can exit promptly; active requests keep running until they complete or
+        // the drain window elapses.
+        await new Promise<void>((resolve) => {
+            let settled = false;
+            const finish = () => { if (!settled) { settled = true; resolve(); } };
+
+            // Fires once every connection has ended (drained).
+            server.close(() => finish());
+            if (typeof server.closeIdleConnections === 'function') {
+                server.closeIdleConnections();
+            }
+
+            // Safety net: if requests outlast the drain window, force-close the
+            // remainder so shutdown can't hang past the kernel's shutdownTimeout.
+            const timer = setTimeout(() => {
+                if (typeof server.closeAllConnections === 'function') {
+                    server.closeAllConnections();
+                }
+                finish();
+            }, this.drainTimeoutMs);
+            if (typeof timer.unref === 'function') timer.unref();
         });
+        this.server = undefined;
     }
 }
