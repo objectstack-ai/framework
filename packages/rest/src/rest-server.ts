@@ -437,6 +437,15 @@ export class RestServer {
     private routeManager: RouteManager;
     private kernelManager?: RestKernelManager;
     private envRegistry?: RestEnvRegistry;
+    /**
+     * Short-TTL cache for `hostname → environmentId` (P1-4). `resolveByHostname`
+     * is a control-plane lookup (typically a DB query) that otherwise runs on
+     * *every* unscoped request; caching it — including negative results, so
+     * unknown hosts don't hammer the registry — removes that per-request cost.
+     * The TTL is short so a newly-bound hostname becomes routable quickly.
+     */
+    private readonly hostnameCache = new Map<string, { value: { environmentId: string } | null; expiresAt: number }>();
+    private readonly hostnameCacheTtlMs = 30_000;
     private defaultEnvironmentIdProvider?: () => string | undefined;
     private authServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private objectQLProvider?: (environmentId?: string) => Promise<any | undefined>;
@@ -501,13 +510,29 @@ export class RestServer {
      * (and any other client) speak a single, uniform URL family without
      * duplicating route logic for the platform surface.
      */
+    /**
+     * Cached wrapper around `envRegistry.resolveByHostname` (P1-4). Returns the
+     * cached result while fresh; on a miss it queries the registry and caches the
+     * outcome (positive *and* negative) for {@link hostnameCacheTtlMs}. Registry
+     * errors are not cached so a transient control-plane blip self-heals on the
+     * next request.
+     */
+    private async resolveHostnameCached(host: string): Promise<{ environmentId: string } | null | undefined> {
+        const now = Date.now();
+        const hit = this.hostnameCache.get(host);
+        if (hit && hit.expiresAt > now) return hit.value;
+        const result = (await this.envRegistry!.resolveByHostname(host)) ?? null;
+        this.hostnameCache.set(host, { value: result, expiresAt: now + this.hostnameCacheTtlMs });
+        return result;
+    }
+
     private async resolveProtocol(environmentId?: string, req?: any): Promise<ObjectStackProtocol> {
         if (environmentId === 'platform') return this.protocol;
         if (!environmentId && req && this.envRegistry && this.kernelManager) {
             const host = this.extractHostname(req);
             if (host) {
                 try {
-                    const result = await this.envRegistry.resolveByHostname(host);
+                    const result = await this.resolveHostnameCached(host);
                     if (result?.environmentId) environmentId = result.environmentId;
                 } catch {
                     // fall through to next strategy
@@ -567,7 +592,7 @@ export class RestServer {
             const host = this.extractHostname(req);
             if (host) {
                 try {
-                    const result = await this.envRegistry.resolveByHostname(host);
+                    const result = await this.resolveHostnameCached(host);
                     if (result?.environmentId) environmentId = result.environmentId;
                 } catch { /* fall through */ }
             }
@@ -644,7 +669,7 @@ export class RestServer {
                 const host = this.extractHostname(req);
                 if (host) {
                     try {
-                        const result = await this.envRegistry.resolveByHostname(host);
+                        const result = await this.resolveHostnameCached(host);
                         if (result?.environmentId) environmentId = result.environmentId;
                     } catch { /* fall through */ }
                 }

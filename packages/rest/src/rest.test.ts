@@ -1324,6 +1324,43 @@ describe('RestServer.resolveProtocol', () => {
     expect(f.kernelManager.getOrCreate).toHaveBeenCalledWith('proj_a');
   });
 
+  it('caches hostname→env resolution within the TTL and refreshes after it (P1-4)', async () => {
+    const projectKernel = makeKernel('proj_a');
+    const resolveByHostname = vi.fn().mockResolvedValue({ environmentId: 'proj_a' });
+    const f = makeFixture({
+      envRegistry: { resolveByHostname, resolveById: vi.fn() },
+      kernels: { proj_a: projectKernel },
+    });
+    let now = 1_000_000;
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const req = { headers: { host: 'a.example.com' } };
+      await (f.rest as any).resolveProtocol(undefined, req);
+      await (f.rest as any).resolveProtocol(undefined, req);
+      await (f.rest as any).resolveProtocol(undefined, req);
+      expect(resolveByHostname).toHaveBeenCalledTimes(1); // 2nd/3rd served from cache
+
+      now += 31_000; // past the 30s TTL
+      await (f.rest as any).resolveProtocol(undefined, req);
+      expect(resolveByHostname).toHaveBeenCalledTimes(2); // refreshed
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('caches a negative result so unknown hosts do not hammer the registry (P1-4)', async () => {
+    const resolveByHostname = vi.fn().mockResolvedValue(null);
+    const f = makeFixture({
+      envRegistry: { resolveByHostname, resolveById: vi.fn() },
+      defaultProvider: () => 'proj_local',
+      kernels: { proj_local: makeKernel('proj_local') },
+    });
+    const req = { headers: { host: 'unknown.example.com' } };
+    await (f.rest as any).resolveProtocol(undefined, req);
+    await (f.rest as any).resolveProtocol(undefined, req);
+    expect(resolveByHostname).toHaveBeenCalledTimes(1); // negative result cached
+  });
+
   it('routes via X-Environment-Id header when hostname resolution fails', async () => {
     const projectKernel = makeKernel('proj_b');
     const resolveById = vi.fn().mockResolvedValue({ /* truthy driver */ });
