@@ -702,6 +702,71 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Generate values for empty `autonumber` fields on insert. Runs BEFORE
+   * required-validation so a `required` autonumber (e.g. a record number) is
+   * never rejected for "missing" — the runtime owns the value, not the client.
+   *
+   * The next value is `max(existing) + 1`, seeded once per `object.field` from
+   * the store then incremented in memory (monotonic within the process,
+   * resilient to deletions). `autonumberFormat` is honored, e.g.
+   * `CASE-{0000}` → `CASE-0042`. NOTE: in-memory seeding is single-instance;
+   * a persistent sequence store is a follow-up for multi-instance setups.
+   */
+  private async applyAutonumbers(
+    object: string,
+    record: Record<string, unknown>,
+    execCtx?: ExecutionContext,
+  ): Promise<void> {
+    const fields = (this.getSchema(object) as any)?.fields;
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return;
+    for (const [name, def] of Object.entries(fields)) {
+      if ((def as any)?.type !== 'autonumber') continue;
+      const current = record[name];
+      if (current != null && current !== '') continue; // respect explicit value
+      const key = `${object}.${name}`;
+      let next = this.autonumberCounters.get(key);
+      if (next == null) next = await this.seedAutonumber(object, name, execCtx);
+      next += 1;
+      this.autonumberCounters.set(key, next);
+      record[name] = this.formatAutonumber((def as any).autonumberFormat, next);
+    }
+  }
+
+  /** Seed the autonumber counter from the current max numeric value in store. */
+  private async seedAutonumber(
+    object: string,
+    field: string,
+    execCtx?: ExecutionContext,
+  ): Promise<number> {
+    try {
+      const rows = await this.find(object, {
+        select: ['id', field],
+        limit: 5000,
+        context: execCtx,
+      } as any);
+      let max = 0;
+      for (const r of rows || []) {
+        const v = r?.[field];
+        if (v == null) continue;
+        const m = String(v).match(/(\d+)(?!.*\d)/); // last run of digits
+        if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+      }
+      return max;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Apply an autonumber format like `CASE-{0000}`; default to the bare number. */
+  private formatAutonumber(format: string | undefined, value: number): string {
+    if (!format) return String(value);
+    const m = format.match(/\{(0+)\}/);
+    if (!m) return format.includes('{0}') ? format.replace('{0}', String(value)) : `${format}${value}`;
+    const padded = String(value).padStart(m[1].length, '0');
+    return format.replace(m[0], padded);
+  }
+
+  /**
    * Register contribution (Manifest)
    * 
    * Installs the manifest as a Package (the unit of installation),
@@ -1431,6 +1496,10 @@ export class ObjectQL implements IDataEngine {
 
   /** Maximum depth for recursive expand to prevent infinite loops */
   private static readonly MAX_EXPAND_DEPTH = 3;
+  private static readonly MAX_CASCADE_DEPTH = 10;
+  /** In-memory next-value cache per `object.field` for autonumber generation,
+   *  lazily seeded from the current max in the store. */
+  private readonly autonumberCounters = new Map<string, number>();
 
   /**
    * Post-process expand: resolve lookup/master_detail fields by batch-loading related records.
@@ -1754,6 +1823,9 @@ export class ObjectQL implements IDataEngine {
             this.applyFieldDefaults(object, row as Record<string, unknown>, opCtx.context, nowSnap),
           );
           for (const r of rows) {
+            await this.applyAutonumbers(object, r as Record<string, unknown>, opCtx.context);
+          }
+          for (const r of rows) {
             await this.encryptSecretFields(object, r, opCtx.context, hookContext.input.options);
           }
           for (const r of rows) {
@@ -1773,6 +1845,7 @@ export class ObjectQL implements IDataEngine {
             opCtx.context,
             nowSnap,
           );
+          await this.applyAutonumbers(object, row, opCtx.context);
           await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
           validateRecord(schemaForValidation, row, 'insert');
           evaluateValidationRules(schemaForValidation as any, row, 'insert', { logger: this.logger });
@@ -1946,6 +2019,82 @@ export class ObjectQL implements IDataEngine {
      return opCtx.result;
   }
 
+  /**
+   * Apply referential delete behavior for relations pointing AT this record,
+   * before it is removed. For every registered object with a `master_detail`
+   * or `lookup` field referencing `object`, honor the field's `deleteBehavior`:
+   *   - `cascade`  → delete the dependent rows (recursively, so grandchildren
+   *                  are handled by each child's own delete),
+   *   - `set_null` → clear the foreign key,
+   *   - `restrict` → refuse the delete when dependents exist.
+   * `master_detail` defaults to `cascade` (the parent owns the child
+   * lifecycle); `lookup` defaults to `set_null`. Only runs for single-id
+   * deletes — multi/predicate deletes skip cascade (logged).
+   */
+  private async cascadeDeleteRelations(
+    object: string,
+    id: string | number,
+    context?: ExecutionContext,
+    depth = 0,
+  ): Promise<void> {
+    if (id == null || depth >= ObjectQL.MAX_CASCADE_DEPTH) return;
+    let objects: ServiceObject[];
+    try {
+      objects = this._registry.getAllObjects();
+    } catch {
+      return;
+    }
+    for (const child of objects) {
+      const childName = (child as any)?.name as string | undefined;
+      const fields = (child as any)?.fields as Record<string, any> | undefined;
+      if (!childName || !fields) continue;
+      for (const [fieldName, fdef] of Object.entries(fields)) {
+        if (!fdef || (fdef.type !== 'master_detail' && fdef.type !== 'lookup')) continue;
+        const ref = fdef.reference;
+        if (!ref) continue;
+        // Match the target object by raw or resolved name.
+        let resolvedRef: string | undefined;
+        try { resolvedRef = this.resolveObjectName(ref); } catch { resolvedRef = undefined; }
+        if (ref !== object && resolvedRef !== object) continue;
+
+        // A master-detail parent owns its children: cascade by default (the
+        // child FK is typically required, so set_null would be invalid). Only
+        // an explicit `restrict` deviates. A plain lookup honors its
+        // configured deleteBehavior (default set_null).
+        const behavior: string =
+          fdef.type === 'master_detail'
+            ? (fdef.deleteBehavior === 'restrict' ? 'restrict' : 'cascade')
+            : (fdef.deleteBehavior || 'set_null');
+
+        let dependents: any[];
+        try {
+          dependents = await this.find(childName, { where: { [fieldName]: id }, context } as any);
+        } catch {
+          continue;
+        }
+        if (!dependents || dependents.length === 0) continue;
+
+        if (behavior === 'restrict') {
+          throw new Error(
+            `Cannot delete ${object} (${id}): ${dependents.length} dependent ${childName} record(s) via ${fieldName}`,
+          );
+        }
+
+        for (const dep of dependents) {
+          const depId = dep?.id;
+          if (depId == null) continue;
+          if (behavior === 'cascade') {
+            // Recurse via the public delete so the child's own cascade,
+            // hooks and events fire.
+            await this.delete(childName, { where: { id: depId }, context } as any);
+          } else {
+            await this.update(childName, { id: depId, [fieldName]: null }, { context } as any);
+          }
+        }
+      }
+    }
+  }
+
   async delete(object: string, options?: EngineDeleteOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Delete operation starting', { object });
@@ -1981,6 +2130,9 @@ export class ObjectQL implements IDataEngine {
       try {
           let result;
           if (hookContext.input.id) {
+              // Honor referential delete behavior (cascade/set_null/restrict)
+              // for relations pointing at this record before removing it.
+              await this.cascadeDeleteRelations(object, hookContext.input.id as string | number, opCtx.context);
               result = await driver.delete(object, hookContext.input.id as string, hookContext.input.options as any);
           } else if (options?.multi && driver.deleteMany) {
                const ast: QueryAST = { object, where: options.where };
