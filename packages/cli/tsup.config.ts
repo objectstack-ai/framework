@@ -17,7 +17,7 @@ export default defineConfig([
   {
     entry: ['src/index.ts'],
     format: ['esm'],
-    dts: true,
+    dts: !process.env.OS_SKIP_DTS,
     shims: true,
   },
 ]);

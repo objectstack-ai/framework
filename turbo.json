@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["tsconfig.json", "tsup.config.ts"],
+  "globalEnv": ["OS_SKIP_DTS"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

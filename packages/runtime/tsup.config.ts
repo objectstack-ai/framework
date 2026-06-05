@@ -7,7 +7,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  dts: true,
+  dts: !process.env.OS_SKIP_DTS,
   format: ['esm', 'cjs'],
   target: 'es2020',
   // Mark driver packages as external so they are resolved at runtime, not bundled
