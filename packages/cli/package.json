@@ -9,7 +9,7 @@
     "os": "./bin/run.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "if [ -n \"$OS_SKIP_DTS\" ]; then tsc -p tsconfig.build.json --noCheck --declaration false --declarationMap false; else tsc -p tsconfig.build.json; fi",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run",
     "lint": "eslint src"

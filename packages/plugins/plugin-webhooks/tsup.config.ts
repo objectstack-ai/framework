@@ -7,7 +7,7 @@ export default defineConfig({
     splitting: true,
     sourcemap: true,
     clean: true,
-    dts: true,
+    dts: !process.env.OS_SKIP_DTS,
     format: ['esm', 'cjs'],
     target: 'es2020',
     external: ['vitest'],

@@ -17,7 +17,7 @@ export default defineConfig({
     plugin: 'src/plugin.ts',
   },
   format: ['cjs', 'esm'],
-  dts: true,
+  dts: !process.env.OS_SKIP_DTS,
   clean: true,
   sourcemap: true,
   splitting: false,

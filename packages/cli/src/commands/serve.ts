@@ -1377,7 +1377,11 @@ export default class Serve extends Command {
           trackPlugin('AIService');
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+          const code = (err as { code?: string })?.code;
+          const missing = code === 'ERR_MODULE_NOT_FOUND'
+            || msg.includes('Cannot find module')
+            || msg.includes('Cannot find package');
+          if (!missing) {
             console.error('[AI] AIServicePlugin failed to start:', msg);
           }
           // @objectstack/service-ai not installed — AI features unavailable
@@ -1401,7 +1405,11 @@ export default class Serve extends Command {
             trackPlugin('AIStudio');
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+            const code = (err as { code?: string })?.code;
+            const missing = code === 'ERR_MODULE_NOT_FOUND'
+              || msg.includes('Cannot find module')
+              || msg.includes('Cannot find package');
+            if (!missing) {
               console.error('[AI Studio] AIStudioPlugin failed to start:', msg);
             }
             // @objectstack/service-ai-studio not installed — AI authoring unavailable
