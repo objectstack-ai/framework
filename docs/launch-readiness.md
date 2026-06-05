@@ -144,7 +144,7 @@ fix or acceptance.**
 - **Risk:** `resolveByHostname()` runs on every unscoped request → control-plane
   latency spike under load; silent fallback to default project masks it.
 - **Action:** Add an in-memory TTL cache (~30s) for `hostname → environmentId`.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: Fixed — `RestServer.resolveHostnameCached()` caches hostname→env (positive **and** negative) for 30s across all 3 call sites; +3 tests. Awaiting human sign-off.
 
 ### P1-5 — Cluster pub/sub is fire-and-forget (metadata-changed)
 - **Area:** `service-cluster-redis` — `src/pubsub.ts:~75–90`
@@ -153,7 +153,14 @@ fix or acceptance.**
 - **Action:** Acceptable for non-critical events if documented; ensure schema
   mutations re-sync on error boundaries (history exists in `sys_metadata_history`).
   Record the durability contract.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Durability contract (recorded):** Redis pub/sub is **at-most-once** by design
+  (already noted in `pubsub.ts`). `metadata.changed` is a **cache-invalidation hint
+  only** — the durable source of truth is the transactional write to `sys_metadata`
+  (+ `sys_metadata_history`). A node that misses the event serves its cached schema
+  until the next reload and **loses no data** (self-heals on reload/restart against
+  the DB). Documented in `pubsub.ts publish()`. **Accept** for v1: no exactly-once
+  state may flow through this channel — durable state uses an outbox.
+- **Owner:** _______  ·  Verify ✅ (by design — contract recorded)  ·  Sign-off ☐  ·  Notes: No code fix needed; risk **accepted** with rationale + code comment. Awaiting human sign-off.
 
 ---
 

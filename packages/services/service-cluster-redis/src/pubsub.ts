@@ -75,6 +75,20 @@ export class RedisPubSub implements IPubSub {
         });
     }
 
+    /**
+     * Durability contract (P1-5): this awaits the Redis `PUBLISH` command (so the
+     * message left this node), but Redis pub/sub is **at-most-once** — there is no
+     * delivery guarantee to subscribers and no replay for a node that was down or
+     * slow at publish time. This is acceptable **only** for events that are pure
+     * cache-invalidation hints, never the source of truth.
+     *
+     * In particular `metadata.changed` is such a hint: the durable record of every
+     * metadata mutation is the transactional write to `sys_metadata`
+     * (+ `sys_metadata_history`). A subscriber that misses the event keeps serving
+     * its cached schema until its next reload and **loses no data** — it self-heals
+     * on restart / reload against the DB. Do not route any state that must be
+     * delivered exactly-once through this channel; use a durable outbox instead.
+     */
     async publish<T = unknown>(
         channel: string,
         payload: T,
