@@ -48,6 +48,7 @@ export const ShowcaseApp = App.create({
       icon: 'layout',
       children: [
         { id: 'nav_gallery', type: 'page', pageName: 'showcase_component_gallery', label: 'Component Gallery', icon: 'layout-template' },
+        { id: 'nav_project_workspace', type: 'page', pageName: 'showcase_project_workspace', label: 'New Project + Tasks', icon: 'folder-plus' },
       ],
     },
   ],

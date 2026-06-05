@@ -608,10 +608,10 @@ export const Field = {
     ...config 
   } as const),
   
-  masterDetail: (reference: string, config: FieldInput = {}) => ({ 
-    type: 'master_detail', 
-    reference, 
-    ...config 
+  masterDetail: (reference: string, config: FieldInput = {}) => ({
+    type: 'master_detail',
+    reference,
+    ...config
   } as const),
 
   // Enhanced Field Type Helpers
