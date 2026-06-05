@@ -4,7 +4,7 @@ import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
-import type { KernelManager } from './cloud/kernel-manager.js';
+import type { KernelManager } from './cloud/environment-registry.js';
 import { setPackageDisabled } from './package-state-store.js';
 
 /** Minimal local interface — full EnvironmentScopeManager was removed in Phase R. */

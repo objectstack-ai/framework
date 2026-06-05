@@ -92,8 +92,14 @@ export type { LoadArtifactBundleOptions } from './load-artifact-bundle.js';
 // artifact is fetched either from an HTTP control plane (apps/cloud or
 // the hosted ObjectStack Cloud) or from a local JSON file for single-
 // project dev workflows. See `cloud/objectos-stack.ts`.
-export { createObjectOSStack } from './cloud/objectos-stack.js';
-export type { ObjectOSStackConfig, ObjectOSStackResult } from './cloud/objectos-stack.js';
+// Cloud connectivity for the single-environment local runtime (`os serve`):
+// the runtime-config endpoint, marketplace browse/proxy, and cloud-URL
+// resolution. The MULTI-TENANT runtime — createObjectOSStack, the kernel
+// manager, artifact fetching, the auth proxy, per-environment kernel
+// construction, platform SSO — moved to the cloud distribution
+// (`@objectstack/objectos-runtime`). The framework keeps only the interface
+// contracts a host runtime needs to accept an externally-supplied
+// multi-tenant kernel router (see http-dispatcher's optional `kernelManager`).
 export { MarketplaceProxyPlugin } from './cloud/marketplace-proxy-plugin.js';
 export type { MarketplaceProxyPluginConfig } from './cloud/marketplace-proxy-plugin.js';
 export { MarketplaceInstallLocalPlugin } from './cloud/marketplace-install-local-plugin.js';
@@ -101,35 +107,7 @@ export type { MarketplaceInstallLocalPluginConfig } from './cloud/marketplace-in
 export { RuntimeConfigPlugin } from './cloud/runtime-config-plugin.js';
 export type { RuntimeConfigPluginConfig } from './cloud/runtime-config-plugin.js';
 export { DEFAULT_CLOUD_URL, resolveCloudUrl } from './cloud/cloud-url.js';
-export { ArtifactApiClient } from './cloud/artifact-api-client.js';
-export type {
-    ArtifactApiClientConfig,
-    EnvironmentArtifactResponse,
-    EnvironmentRuntimeConfig,
-    ResolvedHostname,
-} from './cloud/artifact-api-client.js';
-export { FileArtifactApiClient } from './cloud/file-artifact-api-client.js';
-export type { FileArtifactApiClientConfig } from './cloud/file-artifact-api-client.js';
-export { ArtifactEnvironmentRegistry } from './cloud/artifact-environment-registry.js';
-export type { ArtifactEnvironmentRegistryConfig } from './cloud/artifact-environment-registry.js';
-export { ArtifactKernelFactory } from './cloud/artifact-kernel-factory.js';
-export type { ArtifactKernelFactoryConfig } from './cloud/artifact-kernel-factory.js';
-export { AuthProxyPlugin } from './cloud/auth-proxy-plugin.js';
-export { KernelManager } from './cloud/kernel-manager.js';
-export type { EnvironmentKernelFactory, KernelManagerConfig } from './cloud/kernel-manager.js';
-export type { EnvironmentDriverRegistry } from './cloud/environment-registry.js';
-export {
-  PLATFORM_SSO_PROVIDER_ID,
-  derivePlatformSsoClientId,
-  derivePlatformSsoClientSecret,
-  buildPlatformSsoRedirectUri,
-  seedPlatformSsoClient,
-  backfillPlatformSsoClients,
-} from './cloud/platform-sso.js';
-export type {
-  SeedPlatformSsoClientOptions,
-  BackfillPlatformSsoClientsOptions,
-} from './cloud/platform-sso.js';
+export type { EnvironmentDriverRegistry, KernelManager } from './cloud/environment-registry.js';
 
 // Export Sandbox (script body runner) — engine choice is quickjs-emscripten.
 // See packages/runtime/src/sandbox/script-runner.ts for the decision rationale.
