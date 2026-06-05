@@ -257,7 +257,14 @@ export class AuthProxyPlugin implements Plugin {
                             const expiresAt = new Date(Date.now() + ttlSec * 1000);
                             await internal.createVerificationValue({
                                 identifier: `sso-handoff:${handoff}`,
-                                value: JSON.stringify({ email, name, by, envId: envIdInBody ?? environmentId }),
+                                // `sys_verification.value` carries a UNIQUE index (it is the
+                                // OTP/token column for email-verification flows). The handoff
+                                // puts its unique token in `identifier`, so the value payload
+                                // must ALSO embed the token (`t`) — otherwise two handoffs for
+                                // the same owner+env produce identical value JSON and the second
+                                // one fails with `UNIQUE constraint failed: sys_verification.value`
+                                // (i.e. opening the same environment twice 500s).
+                                value: JSON.stringify({ email, name, by, envId: envIdInBody ?? environmentId, t: handoff }),
                                 expiresAt,
                             });
                             return c.json({
