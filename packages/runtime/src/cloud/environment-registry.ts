@@ -16,8 +16,24 @@
  */
 
 import type * as Contracts from '@objectstack/spec/contracts';
+import type { ObjectKernel } from '@objectstack/core';
 
 type IDataDriver = Contracts.IDataDriver;
+
+/**
+ * Multi-tenant kernel router contract.
+ *
+ * The HTTP dispatcher uses this optional seam to resolve a per-environment
+ * kernel when serving a multi-tenant runtime. The framework only depends on
+ * the *interface* — the concrete LRU/TTL implementation (and everything else
+ * multi-tenant: hostname resolution, artifact fetching, per-env kernel
+ * construction) lives in the cloud distribution
+ * (`@objectstack/objectos-runtime`), not here.
+ */
+export interface KernelManager {
+    /** Resolve (building + caching on first use) the kernel for an environment. */
+    getOrCreate(environmentId: string): Promise<ObjectKernel>;
+}
 
 export interface EnvironmentDriverRegistry {
     /** Resolve a project by hostname. Returns `null` when unknown. */
