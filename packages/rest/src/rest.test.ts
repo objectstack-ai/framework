@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RouteManager, RouteGroupBuilder } from './route-manager';
-import { RestServer } from './rest-server';
+import { RestServer, mapDataError } from './rest-server';
 import { createRestApiPlugin } from './rest-api-plugin';
 import type { RestApiPluginConfig } from './rest-api-plugin';
 
@@ -1461,5 +1461,94 @@ describe('RestServer.resolveProtocol', () => {
     });
     expect(result).toBe(f.controlProtocol);
     expect(f.kernelManager.getOrCreate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mapDataError — schema-mismatch & required-field violations must surface as
+// structured 4xx, never a leaked 500 DATABASE_ERROR (repro: B7 POST
+// /data/sys_team with a body whose fields don't match the table).
+// ---------------------------------------------------------------------------
+describe('mapDataError — schema/constraint envelopes', () => {
+  const sqliteError = (message: string, code = 'SQLITE_ERROR') =>
+    Object.assign(new Error(message), { code });
+
+  it('maps SQLite "has no column named" → 400 INVALID_FIELD with the field', () => {
+    const r = mapDataError(
+      sqliteError(
+        "insert into `sys_team` (`id`, `label`, `name`) values (?, ?, ?) returning * - table sys_team has no column named label",
+      ),
+      'sys_team',
+    );
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('INVALID_FIELD');
+    expect(r.body.field).toBe('label');
+    expect(r.body.object).toBe('sys_team');
+    expect(String(r.body.error)).not.toMatch(/insert into|sqlite/i);
+  });
+
+  it('maps SQLite "no such column" → 400 INVALID_FIELD', () => {
+    const r = mapDataError(sqliteError('no such column: bogus'), 'widget');
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('INVALID_FIELD');
+    expect(r.body.field).toBe('bogus');
+  });
+
+  it('maps MySQL "Unknown column" → 400 INVALID_FIELD', () => {
+    const r = mapDataError(sqliteError("Unknown column 'label' in 'field list'", 'ER_BAD_FIELD_ERROR'), 'sys_team');
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('INVALID_FIELD');
+    expect(r.body.field).toBe('label');
+  });
+
+  it('maps Postgres "column ... of relation ... does not exist" → 400 INVALID_FIELD (not 404 object_not_found)', () => {
+    const r = mapDataError(
+      sqliteError('column "label" of relation "sys_team" does not exist', '42703'),
+      'sys_team',
+    );
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('INVALID_FIELD');
+    expect(r.body.field).toBe('label');
+  });
+
+  it('maps SQLite NOT NULL constraint → 400 VALIDATION_FAILED with required field', () => {
+    const r = mapDataError(
+      sqliteError(
+        "insert into `sys_team` ... - NOT NULL constraint failed: sys_team.organization_id",
+        'SQLITE_CONSTRAINT_NOTNULL',
+      ),
+      'sys_team',
+    );
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('VALIDATION_FAILED');
+    expect(r.body.fields).toEqual([
+      { field: 'organization_id', code: 'required', message: 'organization_id is required' },
+    ]);
+  });
+
+  it('maps Postgres not-null violation → 400 VALIDATION_FAILED', () => {
+    const r = mapDataError(
+      sqliteError('null value in column "organization_id" of relation "sys_team" violates not-null constraint', '23502'),
+      'sys_team',
+    );
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('VALIDATION_FAILED');
+    expect((r.body.fields as any[])[0].field).toBe('organization_id');
+  });
+
+  it('still hides genuine SQL leaks (unrecognized driver dump) behind a generic 500', () => {
+    const r = mapDataError(sqliteError('SQLITE_IOERR: disk I/O error', 'SQLITE_IOERR'), 'sys_team');
+    expect(r.status).toBe(500);
+    expect(r.body.code).toBe('DATABASE_ERROR');
+    expect(String(r.body.error)).not.toMatch(/disk i\/o/i);
+  });
+
+  it('still maps unique-constraint violations to 409 (unchanged)', () => {
+    const r = mapDataError(
+      sqliteError('UNIQUE constraint failed: sys_team.name, sys_team.organization_id', 'SQLITE_CONSTRAINT_UNIQUE'),
+      'sys_team',
+    );
+    expect(r.status).toBe(409);
+    expect(r.body.code).toBe('UNIQUE_VIOLATION');
   });
 });
