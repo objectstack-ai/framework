@@ -29,7 +29,7 @@ const TRANSLATABLE_META_TYPES = new Set(['view', 'action', 'object', 'app', 'das
  * not permitted …" — trips the `'<obj>' … not` substring check and
  * returns a misleading 404.
  */
-function mapDataError(error: any, object?: string): { status: number; body: Record<string, unknown> } {
+export function mapDataError(error: any, object?: string): { status: number; body: Record<string, unknown> } {
     // Optimistic-Concurrency-Control mismatch → 409 with current state.
     // Surfaced FIRST so the structured fields (`currentVersion`,
     // `currentRecord`) are preserved instead of being squashed into the
@@ -117,6 +117,59 @@ function mapDataError(error: any, object?: string): { status: number; body: Reco
             body: {
                 error: raw,
                 code: 'RECORD_NOT_FOUND',
+                ...(object ? { object } : {}),
+            },
+        };
+    }
+
+    // Schema-mismatch & required-field violations are CLIENT errors (a bad
+    // payload the caller can fix), not server faults — so map them to a
+    // structured 4xx BEFORE the unknown-object / SQL-leak branches, which
+    // would otherwise bury them in a generic 404 or 500. Driver phrasing
+    // varies by dialect; cover SQLite / Postgres / MySQL:
+    //   unknown column → SQLite "table X has no column named c" /
+    //                     "no such column: c"; Postgres 'column "c" of
+    //                     relation "X" does not exist'; MySQL "Unknown
+    //                     column 'c' in 'field list'".
+    //   not-null       → SQLite "NOT NULL constraint failed: X.c";
+    //                     Postgres 'null value in column "c" ... violates
+    //                     not-null constraint'; MySQL "Column 'c' cannot
+    //                     be null".
+    // NOTE: this is a last-resort safety net — the validation layer should
+    // ideally reject these before they reach the driver (see follow-ups on
+    // unknown-field rejection + provenance-aware required checks).
+    const unknownColumn =
+        /has no column named\s+["'`]?([a-z0-9_]+)/i.exec(raw) ||
+        /no such column:\s*["'`]?([a-z0-9_.]+)/i.exec(raw) ||
+        /unknown column\s+["'`]([a-z0-9_]+)["'`]/i.exec(raw) ||
+        /column\s+["'`]([a-z0-9_]+)["'`]\s+of relation\s+\S+\s+does not exist/i.exec(raw);
+    if (unknownColumn) {
+        const field = unknownColumn[1]?.split('.').pop();
+        return {
+            status: 400,
+            body: {
+                error: field
+                    ? `Unknown field '${field}'${object ? ` on object '${object}'` : ''}`
+                    : 'Request references a field that does not exist',
+                code: 'INVALID_FIELD',
+                ...(field ? { field } : {}),
+                ...(object ? { object } : {}),
+            },
+        };
+    }
+
+    const notNull =
+        /not null constraint failed:\s*\S*?\.([a-z0-9_]+)/i.exec(raw) ||
+        /null value in column\s+["'`]([a-z0-9_]+)["'`]/i.exec(raw) ||
+        /column\s+["'`]([a-z0-9_]+)["'`]\s+cannot be null/i.exec(raw);
+    if (notNull) {
+        const field = notNull[1];
+        return {
+            status: 400,
+            body: {
+                error: `${field} is required`,
+                code: 'VALIDATION_FAILED',
+                fields: [{ field, code: 'required', message: `${field} is required` }],
                 ...(object ? { object } : {}),
             },
         };
