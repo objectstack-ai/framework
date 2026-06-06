@@ -679,6 +679,27 @@ export const FormViewSchema = lazySchema(() => z.object({
   sections: z.array(FormSectionSchema).optional(), // For simple layout
   groups: z.array(FormSectionSchema).optional(), // Legacy support -> alias to sections
 
+  /**
+   * Inline child collections (master-detail). When present, the standard
+   * create/edit form for this object renders as a master-detail form — the
+   * object's own fields on top, an editable grid per child collection below,
+   * persisted together in ONE atomic transaction — with no bespoke page. Each
+   * entry needs only `childObject`; the relationship FK and grid columns are
+   * derived from the child object's metadata (override via
+   * `relationshipField` / `columns`).
+   */
+  subforms: z.array(z.object({
+    childObject: z.string().describe('Child object whose records are entered inline'),
+    relationshipField: z.string().optional().describe('FK on the child pointing back to the parent (auto-detected when omitted)'),
+    columns: z.array(z.any()).optional().describe('Editable grid columns (derived from the child object when omitted)'),
+    amountField: z.string().optional().describe('Numeric child column summed for the running total'),
+    totalField: z.string().optional().describe('Parent field to receive the rolled-up sum'),
+    title: z.string().optional().describe('Section title'),
+    addLabel: z.string().optional().describe('Add-row button label'),
+    minRows: z.number().optional(),
+    maxRows: z.number().optional(),
+  })).optional().describe('Inline master-detail child collections'),
+
   /** Default Sort for Related Lists (e.g., sort child records by date) */
   defaultSort: z.array(z.object({
     field: z.string().describe('Field name to sort by'),
