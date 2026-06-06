@@ -44,6 +44,10 @@ export const ProjectViews = defineView({
         { label: 'Project', columns: 2, fields: ['name', 'account', 'status', 'health', 'owner'] },
         { label: 'Budget & Schedule', columns: 2, fields: ['budget', 'spent', 'start_date', 'end_date'] },
       ],
+      // Config-driven master-detail (Tier 0): the standard New/Edit Project form
+      // renders its Tasks inline (FK + columns derived from showcase_task),
+      // saved as one atomic transaction — no bespoke page.
+      subforms: [{ childObject: 'showcase_task', title: 'Tasks', addLabel: 'Add task' }],
     },
   },
 });
