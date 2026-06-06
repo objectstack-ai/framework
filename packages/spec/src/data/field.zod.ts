@@ -403,6 +403,23 @@ export const FieldSchema = lazySchema(() => z.object({
   referenceFilters: z.array(z.string()).optional().describe('Filters applied to lookup dialogs (e.g. "active = true")'),
   writeRequiresMasterRead: z.boolean().optional().describe('If true, user needs read access to master record to edit this field'),
   deleteBehavior: z.enum(['set_null', 'cascade', 'restrict']).optional().default('set_null').describe('What happens if referenced record is deleted'),
+  /**
+   * Master-detail INLINE EDITING. On a child's `master_detail`/`lookup` field
+   * (whose `reference` is the parent object), set `inlineEdit: true` to declare
+   * "this child is entered/edited inline within the parent's form". The
+   * parent's standard create/edit form then renders an editable grid for these
+   * children and saves parent + children in ONE atomic transaction — no form
+   * view config and no bespoke page. The intent lives here in the data model;
+   * forms derive the UI. Use for true line-item/composition children (invoice
+   * lines, order items); leave off for associations (comments, attachments).
+   */
+  inlineEdit: z.boolean().optional().describe('Edit these child records inline within the parent object\'s form (atomic master-detail).'),
+  /** Optional section title for the inline grid (defaults to the child object label). */
+  inlineTitle: z.string().optional().describe('Title for the inline master-detail grid'),
+  /** Optional explicit grid columns for the inline editor (derived from the child object when omitted). */
+  inlineColumns: z.array(z.any()).optional().describe('Explicit columns for the inline grid (derived from the child object when omitted)'),
+  /** Optional numeric child field summed for the inline grid running total. */
+  inlineAmountField: z.string().optional().describe('Numeric child field summed for the inline grid total'),
 
   /** Calculation — CEL formula. Plain string accepted for back-compat; build emits canonical envelope. */
   expression: ExpressionInputSchema.optional().describe('Formula expression (CEL). e.g. F`record.amount * 0.1`'),

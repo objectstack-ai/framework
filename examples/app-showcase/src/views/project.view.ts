@@ -44,10 +44,10 @@ export const ProjectViews = defineView({
         { label: 'Project', columns: 2, fields: ['name', 'account', 'status', 'health', 'owner'] },
         { label: 'Budget & Schedule', columns: 2, fields: ['budget', 'spent', 'start_date', 'end_date'] },
       ],
-      // Config-driven master-detail (Tier 0): the standard New/Edit Project form
-      // renders its Tasks inline (FK + columns derived from showcase_task),
-      // saved as one atomic transaction — no bespoke page.
-      subforms: [{ childObject: 'showcase_task', title: 'Tasks', addLabel: 'Add task' }],
+      // No subforms here: the Tasks subtable is derived from the data model —
+      // showcase_task.project declares `inlineEdit: true`, so every standard
+      // Project form auto-renders it. (A view could still add `subforms` to
+      // override the derived columns/order.)
     },
   },
 });
