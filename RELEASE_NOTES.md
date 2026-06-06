@@ -22,7 +22,7 @@ Prepare all 42 packages under `@objectstack/*` for formal public release on npm 
 | Client / DX | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | Adapters | 7 | `express`, `fastify`, `hono`, `nestjs`, `nextjs`, `nuxt`, `sveltekit` |
 | Drivers | 3 | `driver-memory`, `driver-sql`, `driver-turso` |
-| Plugins | 8 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev`, `plugin-setup` |
+| Plugins | 8 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-hono-server`, `mcp`, `plugin-msw`, `plugin-dev`, `plugin-setup` |
 | Services | 12 | `service-ai`, `service-analytics`, `service-automation`, `service-cache`, `service-feed`, `service-i18n`, `service-job`, `service-package`, `service-queue`, `service-realtime`, `service-storage`, `service-tenant` |
 
 ### ✅ Release readiness checklist

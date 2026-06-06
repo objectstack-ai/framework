@@ -96,7 +96,7 @@ describe('MCPServerPlugin', () => {
   describe('metadata', () => {
     it('should have correct plugin metadata', () => {
       const plugin = new MCPServerPlugin();
-      expect(plugin.name).toBe('com.objectstack.plugin-mcp-server');
+      expect(plugin.name).toBe('com.objectstack.mcp');
       expect(plugin.version).toBe('1.0.0');
       expect(plugin.type).toBe('standard');
     });

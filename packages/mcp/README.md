@@ -1,4 +1,4 @@
-# @objectstack/plugin-mcp-server
+# @objectstack/mcp
 
 MCP Runtime Server Plugin for ObjectStack — exposes AI tools, data resources, and agent prompts via the Model Context Protocol.
 
@@ -26,18 +26,18 @@ Read more: [MCP Specification](https://modelcontextprotocol.io/)
 ## Installation
 
 ```bash
-pnpm add @objectstack/plugin-mcp-server
+pnpm add @objectstack/mcp
 ```
 
 ## Basic Usage
 
 ```typescript
 import { defineStack } from '@objectstack/spec';
-import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+import { MCPServerPlugin } from '@objectstack/mcp';
 
 const stack = defineStack({
   plugins: [
-    PluginMCPServer.configure({
+    MCPServerPlugin.configure({
       serverName: 'objectstack-server',
       version: '1.0.0',
       autoRegisterTools: true,
@@ -296,7 +296,7 @@ Configure in Cline settings:
 ```typescript
 // server.ts
 import { defineStack } from '@objectstack/spec';
-import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+import { MCPServerPlugin } from '@objectstack/mcp';
 import { DriverSql } from '@objectstack/driver-sql';
 
 const stack = defineStack({
@@ -305,7 +305,7 @@ const stack = defineStack({
     connection: { filename: process.env.DATABASE_URL ?? './data/app.db' },
   }),
   plugins: [
-    PluginMCPServer.configure({
+    MCPServerPlugin.configure({
       serverName: 'my-crm',
       transport: 'stdio', // Claude Desktop, Cursor, Cline
     }),
@@ -321,7 +321,7 @@ await stack.boot();
 const stack = defineStack({
   driver: DriverSql.configure({ /* ... */ }),
   plugins: [
-    PluginMCPServer.configure({
+    MCPServerPlugin.configure({
       serverName: 'my-crm',
       transport: 'http',
       port: 3100,
@@ -457,7 +457,7 @@ The MCP server exposes these capabilities:
 Enable debug logging:
 
 ```typescript
-PluginMCPServer.configure({
+MCPServerPlugin.configure({
   serverName: 'my-crm',
   debug: true, // Log all MCP messages
 });
@@ -472,12 +472,12 @@ View MCP messages in client:
 
 ```typescript
 import { defineStack, defineTool } from '@objectstack/spec';
-import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+import { MCPServerPlugin } from '@objectstack/mcp';
 
 const stack = defineStack({
   driver: /* ... */,
   plugins: [
-    PluginMCPServer.configure({
+    MCPServerPlugin.configure({
       serverName: 'crm-assistant',
       autoRegisterTools: true,
     }),
@@ -518,7 +518,7 @@ mcp.registerPrompt({
 
 ## License
 
-Apache-2.0. See [LICENSING.md](../../../LICENSING.md).
+Apache-2.0. See [LICENSING.md](../../LICENSING.md).
 
 ## See Also
 

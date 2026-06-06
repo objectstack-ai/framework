@@ -1505,9 +1505,9 @@ export default class Serve extends Command {
           nameMatch: ['service-feed', 'FeedServicePlugin'],
         },
         mcp: {
-          pkg: '@objectstack/plugin-mcp-server',
+          pkg: '@objectstack/mcp',
           export: 'MCPServerPlugin',
-          nameMatch: ['mcp-server', 'MCPServerPlugin'],
+          nameMatch: ['mcp-server', 'MCPServerPlugin', 'mcp'],
         },
         marketplace: {
           pkg: '@objectstack/service-package',

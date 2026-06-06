@@ -35,7 +35,7 @@
       "@objectstack/plugin-dev",
       "@objectstack/plugin-email",
       "@objectstack/plugin-hono-server",
-      "@objectstack/plugin-mcp-server",
+      "@objectstack/mcp",
       "@objectstack/plugin-msw",
       "@objectstack/plugin-org-scoping",
       "@objectstack/plugin-reports",

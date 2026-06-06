@@ -1,12 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * @objectstack/plugin-mcp-server
+ * @objectstack/mcp
  *
- * MCP Runtime Server Plugin for ObjectStack.
- * Exposes all registered AI tools, data resources, and agent prompts
- * via the Model Context Protocol (MCP) for use by external AI clients
- * (Claude Desktop, Cursor, VS Code Copilot, etc.).
+ * ObjectStack as an MCP server. Exposes your app's objects (and registered AI
+ * tools, data resources, agent prompts) over the Model Context Protocol — via
+ * stdio (local) and Streamable HTTP (remote agents: Claude, Cursor, Codex,
+ * Gemini, Copilot, …). The inbound sibling (consuming external MCP servers) is
+ * `@objectstack/connector-mcp`.
  */
 
 export { MCPServerPlugin } from './plugin.js';

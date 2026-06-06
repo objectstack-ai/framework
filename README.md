@@ -186,7 +186,7 @@ Cloud, package registry, and environment management subcommands (`os publish`, `
 | Package | Description |
 | :--- | :--- |
 | [`@objectstack/plugin-hono-server`](packages/plugins/plugin-hono-server) | Hono-based HTTP server plugin |
-| [`@objectstack/plugin-mcp-server`](packages/plugins/plugin-mcp-server) | Model Context Protocol server — exposes ObjectStack to AI agents |
+| [`@objectstack/mcp`](packages/mcp) | Model Context Protocol server — exposes ObjectStack to AI agents |
 | [`@objectstack/plugin-auth`](packages/plugins/plugin-auth) | Authentication plugin (better-auth) |
 | [`@objectstack/plugin-security`](packages/plugins/plugin-security) | RBAC, Row-Level Security, Field-Level Security |
 | [`@objectstack/plugin-sharing`](packages/plugins/plugin-sharing) | Record-level sharing — `sys_record_share` + enforcement middleware |

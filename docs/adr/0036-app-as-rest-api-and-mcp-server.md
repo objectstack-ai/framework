@@ -3,7 +3,7 @@
 **Status**: Proposed (2026-06-06)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0011](./0011-actions-as-ai-tools.md) (actions/objects as AI tools), [ADR-0024](./0024-mcp-connectors.md) (MCP as connectors — the *inbound* sibling: ObjectStack **consuming** external MCP servers; this ADR is the *outbound* direction), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (AI builds the metadata; publishing makes it live)
-**Consumers**: `@objectstack/rest` (REST CRUD + `/api/v1/discovery`), new HTTP transport in `@objectstack/plugin-mcp-server`, `@objectstack/platform-objects` (`sys_api_key`), `../objectui` (Developer Hub → new Integrations page; publish surface), `../cloud` (per-env public hostname = the API/MCP base)
+**Consumers**: `@objectstack/rest` (REST CRUD + `/api/v1/discovery`), new HTTP transport in `@objectstack/mcp`, `@objectstack/platform-objects` (`sys_api_key`), `../objectui` (Developer Hub → new Integrations page; publish surface), `../cloud` (per-env public hostname = the API/MCP base)
 
 **Premise**: pre-launch, no back-compat debt — specify the target end-state directly.
 
@@ -11,15 +11,27 @@
 
 ---
 
+## Amendment (2026-06-07) — naming, granularity, and distribution
+
+After Phase 1a/2 landed, three decisions refine (and in one case supersede) the sections below. They take precedence where they conflict.
+
+**A. Package name → `@objectstack/mcp`.** The outbound MCP-server package was renamed from `@objectstack/plugin-mcp-server` (legacy `plugin-` prefix) to **`@objectstack/mcp`** at the top level (`packages/mcp`), parallel to `@objectstack/rest`. Both are "your app exposed over a protocol", so `rest` (old surface) + `mcp` (new surface) sit as peers; inbound MCP (consuming external servers) stays `@objectstack/connector-mcp`. The old name is removed (pre-launch clean break; only internal `@objectstack/cli` depended on it).
+
+**B. Granularity is the *environment*, not the app.** One MCP server per env (`<env-host>/api/v1/mcp`) covers **all** of that env's apps — apps are metadata groupings of objects, and the data surface is objects. A customer with dozens of apps in one env has **one** MCP connection, not dozens. Dynamic apps are a non-issue: tool discovery is **live** (`list_objects` / `describe_object`), so a newly built app shows up on the next call with **zero reinstall**. Narrowing an agent to a subset of objects/apps is done via **`sys_api_key.scopes`** (per-key), never by standing up separate servers.
+
+**C. Distribution = "skills + MCP", not vendor config snippets** (supersedes §3/§4's "generate `claude_desktop_config.json` / Cursor snippet" as the *primary* artifact). Verified 2026-06: **Agent Skills (`SKILL.md`) is now an open, cross-platform standard** (Claude Code, OpenAI Codex CLI, Gemini CLI, GitHub Copilot, Cursor, Cline, Windsurf, …; MCP under the Linux Foundation). Skills and MCP are **complementary**: MCP = the live, authenticated, RLS-governed access layer (the moat — a static skill can never be the live data gateway to a specific tenant env); a Skill = the portable "how to use it" layer on top. So the primary cross-agent distributable is **one generic ObjectStack Skill** (install once; teaches the tool conventions, query/RLS idioms, workflows — it does **not** enumerate schema, which is discovered live), plus the env's remote-MCP URL + a **show-once `sys_api_key`**. A one-click "Add to Claude/Cursor" deeplink (or a `.claude-plugin` bundle that registers the MCP server) is a convenience on top, not the core artifact — we do not hand-maintain N vendor snippets.
+
+---
+
 ## TL;DR
 
-A metadata-driven ObjectStack app **already** auto-generates a full REST CRUD API (`/api/v1/data/{object}`) discoverable at `/api/v1/discovery`, and the `plugin-mcp-server` **already** maps every object's CRUD (and the registered AI tools) to MCP tools. Two things are missing to turn that latent capability into a product: (1) the MCP server only speaks **stdio**, so a remote agent (Claude Desktop / Cursor) can't connect to a cloud env; (2) none of it is **surfaced** — a user who just built an app has no idea it's an API, no self-serve key, no connect button.
+A metadata-driven ObjectStack app **already** auto-generates a full REST CRUD API (`/api/v1/data/{object}`) discoverable at `/api/v1/discovery`, and the `@objectstack/mcp` **already** maps every object's CRUD (and the registered AI tools) to MCP tools. Two things are missing to turn that latent capability into a product: (1) the MCP server only speaks **stdio**, so a remote agent (Claude Desktop / Cursor) can't connect to a cloud env; (2) none of it is **surfaced** — a user who just built an app has no idea it's an API, no self-serve key, no connect button.
 
 **Decision.** Treat "expose this app as an API + MCP server" as a first-class, open framework capability and surface it right after build:
 
 1. **REST**: keep the auto-generated CRUD + discovery (no change); **surface** it (base URL, per-object endpoints, sample code, the existing API Console).
 2. **Auth**: per-env, self-serve **API keys** (`sys_api_key`, modelled but **not yet enforced** — wiring the key Bearer into the auth path is Phase 1a) — Bearer tokens that resolve to a principal and run under the key's existing permissions + RLS; a show-once generation UX.
-3. **MCP**: add an **HTTP transport** to `plugin-mcp-server` (a stable `/api/v1/mcp` endpoint, authed by the same Bearer), and **generate the Claude/Cursor connection config** for the env.
+3. **MCP**: add an **HTTP transport** to `@objectstack/mcp` (a stable `/api/v1/mcp` endpoint, authed by the same Bearer), and **generate the Claude/Cursor connection config** for the env.
 4. **Surface**: a Developer-Hub **Integrations & APIs** page + a "View API / Connect an agent" affordance on publish success.
 
 **Open-core boundary**: the REST serve path, the MCP HTTP transport, discovery, and `sys_api_key` are the **open mechanism** (framework); the AI/intelligence that *authored* the app stays closed; the surfacing UI lives in objectui.
@@ -35,7 +47,7 @@ A metadata-driven ObjectStack app **already** auto-generates a full REST CRUD AP
 | REST CRUD per object (`/api/v1/data/{object}` + OData query) | `@objectstack/rest` `registerCrudEndpoints()` | ✅ auto-generated on publish |
 | API discovery (`/api/v1/discovery`) | `@objectstack/rest` | ✅ |
 | API Console (interactive REST debugger) | objectui `apps/console/.../developer/ApiConsolePage` | ✅ shipped |
-| MCP server: object CRUD + AI tools → MCP tools | `@objectstack/plugin-mcp-server` | ✅ but **stdio only**, default off |
+| MCP server: object CRUD + AI tools → MCP tools | `@objectstack/mcp` | ✅ but **stdio only**, default off |
 | Per-user/env API keys (create/revoke, key returned once) | `platform-objects/.../sys-api-key.object.ts` | ⚠️ **model only — NOT enforced for auth** (no key-verification path; the data API accepts only the better-auth session); no UI |
 | Per-env public hostname (`<env>.objectos.app`) = API/MCP base | cloud env registry | ✅ |
 
@@ -91,7 +103,7 @@ small, well-tested key-verification step.
 > bundled into unrelated work.
 
 ### 3. MCP — add HTTP transport (Phase 2)
-- Extend `plugin-mcp-server` with a **streamable-http** (with SSE fallback) transport mounted at a stable route (`/api/v1/mcp`), gated by `OS_MCP_SERVER_ENABLED` per env (explicit opt-in — exposing tools is a deliberate act).
+- Extend `@objectstack/mcp` with a **streamable-http** (with SSE fallback) transport mounted at a stable route (`/api/v1/mcp`), gated by `OS_MCP_SERVER_ENABLED` per env (explicit opt-in — exposing tools is a deliberate act).
 - Auth: the same `sys_api_key` Bearer; the advertised `tools` are the env's object CRUD + any AI tools the key is scoped for.
 - The Integrations page **generates the connection config** (Claude Desktop `claude_desktop_config.json` / Cursor snippet) with the env's MCP URL + a generated key, and a one-click copy/download.
 
@@ -125,4 +137,7 @@ small, well-tested key-verification step.
 - **Security**: every external entry runs as a scoped `sys_api_key` principal under existing object permissions + RLS; MCP is opt-in per env; keys are revocable.
 
 ## Status / next
-Phase 1 (Integrations page + API-key UX + publish-success link) is implementable now against shipped endpoints. Phase 2 (MCP HTTP transport) follows as a framework change with its own tests.
+- **Phase 1a (framework auth) — shipped** (#1624): `sys_api_key` Bearer/header verified on the runtime auth path → principal under existing permissions + RLS.
+- **Phase 1b (objectui surfacing)** — Integrations page + show-once key + publish "View API" link.
+- **Phase 2 (framework MCP HTTP transport) — shipped** (#1626; package since renamed to `@objectstack/mcp`): Streamable HTTP at `/api/v1/mcp`, opt-in `OS_MCP_SERVER_ENABLED`, fail-closed auth, principal-bound object-CRUD tools.
+- **Phase 2b (surfacing, per Amendment C)** — env-level remote-MCP connect (URL + show-once key + one-click deeplink) and a single generic ObjectStack **Skill**; *not* per-app, *not* hand-maintained vendor snippets.

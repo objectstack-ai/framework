@@ -15,7 +15,7 @@ ObjectStack is organized into **70 package manifests** across multiple categorie
 | **Client / DX** | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | **Framework adapters** | 7 | `express`, `fastify`, `hono`, `nestjs`, `nextjs`, `nuxt`, `sveltekit` |
 | **Drivers** | 4 | `driver-memory`, `driver-sql`, `driver-sqlite-wasm`, `driver-mongodb` |
-| **Plugins** | 22 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev`, trigger plugins, and knowledge/embedder plugins |
+| **Plugins** | 22 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `mcp`, `plugin-msw`, `plugin-dev`, trigger plugins, and knowledge/embedder plugins |
 | **Platform services** | 17 | `service-ai`, `service-analytics`, `service-automation`, `service-cache`, `service-cluster`, `service-cluster-redis`, `service-datasource`, `service-feed`, `service-i18n`, `service-job`, `service-knowledge`, `service-messaging`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-storage` |
 
 
@@ -330,13 +330,13 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **When to use**: SOC 2, HIPAA, GDPR compliance, security monitoring
 - **README**: [View README](/packages/plugins/plugin-audit/README.md)
 
-### @objectstack/plugin-mcp-server
+### @objectstack/mcp
 
 **MCP Server Plugin** — Expose ObjectStack via Model Context Protocol.
 
 - **Features**: AI tools, data resources, prompt templates for Claude, Cursor, Cline
 - **When to use**: AI agent integration, MCP-compatible tools
-- **README**: [View README](/packages/plugins/plugin-mcp-server/README.md)
+- **README**: [View README](/packages/mcp/README.md)
 
 ### @objectstack/plugin-hono-server
 

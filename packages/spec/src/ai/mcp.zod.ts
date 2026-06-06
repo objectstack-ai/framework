@@ -9,7 +9,7 @@ import { lazySchema } from '../shared/lazy-schema';
  * MCP itself is an external protocol defined by Anthropic
  * (https://modelcontextprotocol.io). The platform does NOT re-define
  * MCP's wire format, transport, or message shapes — that is the job
- * of the `@modelcontextprotocol/sdk` consumed by `plugin-mcp-server`.
+ * of the `@modelcontextprotocol/sdk` consumed by `@objectstack/mcp`.
  *
  * This file defines only the two things the *platform* needs:
  *

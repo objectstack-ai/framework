@@ -1,5 +1,5 @@
 ---
-'@objectstack/plugin-mcp-server': minor
+'@objectstack/mcp': minor
 '@objectstack/runtime': minor
 ---
 
@@ -10,7 +10,7 @@ Cursor) could not connect to a hosted env. This adds the **Streamable HTTP**
 transport and wires it into the runtime's request path, building on the Phase 1a
 `sys_api_key` auth foundation.
 
-- **`@objectstack/plugin-mcp-server`**
+- **`@objectstack/mcp`** (renamed from `@objectstack/plugin-mcp-server` — see the rename changeset)
   - `MCPServerRuntime.handleHttpRequest(request, { bridge, parsedBody })` —
     serves one MCP request over the Web-standard `WebStandardStreamableHTTPServerTransport`
     (runs on Node 18+, Workers, Deno, Bun). **Stateless**: a fresh, isolated

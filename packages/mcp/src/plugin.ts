@@ -42,7 +42,7 @@ export interface MCPServerPluginOptions {
  * @example
  * ```ts
  * import { LiteKernel } from '@objectstack/core';
- * import { MCPServerPlugin } from '@objectstack/plugin-mcp-server';
+ * import { MCPServerPlugin } from '@objectstack/mcp';
  *
  * const kernel = new LiteKernel();
  * kernel.use(new MCPServerPlugin({ autoStart: true }));
@@ -50,7 +50,7 @@ export interface MCPServerPluginOptions {
  * ```
  */
 export class MCPServerPlugin implements Plugin {
-  name = 'com.objectstack.plugin-mcp-server';
+  name = 'com.objectstack.mcp';
   version = '1.0.0';
   type = 'standard' as const;
   dependencies: string[] = [];

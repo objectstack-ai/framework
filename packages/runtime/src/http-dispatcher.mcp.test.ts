@@ -7,7 +7,7 @@ import { HttpDispatcher } from './http-dispatcher.js';
 /**
  * These tests drive `handleMcp` directly to verify the gate + auth + bridge
  * wiring without standing up a full kernel. The MCP transport itself is tested
- * in @objectstack/plugin-mcp-server; here we assert:
+ * in @objectstack/mcp; here we assert:
  *  - opt-in gate (OS_MCP_SERVER_ENABLED)
  *  - fail-closed auth (anonymous → 401)
  *  - the injected bridge runs through callData bound to the request's
