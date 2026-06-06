@@ -24,7 +24,7 @@ import { z } from 'zod';
  * ├── assets/                ← Static resources
  * │   ├── icon.svg
  * │   └── screenshots/
- * ├── data/                  ← Seed data (DatasetSchema serialized)
+ * ├── data/                  ← Seed data (SeedSchema serialized)
  * ├── locales/               ← i18n translation files
  * ├── checksums.json         ← SHA256 checksum per file
  * └── signature.sig          ← RSA-SHA256 package signature

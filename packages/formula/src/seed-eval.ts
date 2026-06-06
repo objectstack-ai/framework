@@ -1,7 +1,7 @@
 /**
  * Seed-value resolver.
  *
- * `Dataset.records` accepts {@link SeedValue} = primitive | Expression | array
+ * `Seed.records` accepts {@link SeedValue} = primitive | Expression | array
  * | object — install-time resolution walks the tree and replaces any
  * Expression node with its evaluated result. This is what makes
  * `close_date: cel\`now() + duration("P30D")\`` resolve to *the customer's*

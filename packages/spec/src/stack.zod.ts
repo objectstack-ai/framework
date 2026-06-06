@@ -11,7 +11,7 @@ import { normalizeStackInput, type MetadataCollectionInput, type MapSupportedFie
 
 // Data Protocol
 import { ObjectSchema, ObjectExtensionSchema } from './data/object.zod';
-import { DatasetSchema } from './data/dataset.zod';
+import { SeedSchema } from './data/seed.zod';
 
 // UI Protocol
 import { AppSchema } from './ui/app.zod';
@@ -296,7 +296,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * Each entry targets a specific object and provides records to load
    * using the specified conflict resolution strategy.
    * 
-   * Uses the standard DatasetSchema which supports:
+   * Uses the standard SeedSchema which supports:
    * - `externalId`: Idempotency key for upsert matching (default: 'name')
    * - `mode`: Conflict resolution (upsert, insert, ignore, replace)
    * - `env`: Environment scoping (prod, dev, test)
@@ -315,7 +315,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * ]
    * ```
    */
-  data: z.array(DatasetSchema).optional().describe('Seed Data / Fixtures for bootstrapping'),
+  data: z.array(SeedSchema).optional().describe('Seed Data / Fixtures for bootstrapping'),
 
   /**
    * Plugins: External Capabilities

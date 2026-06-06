@@ -104,7 +104,7 @@ export const BlueprintAppSchema = lazySchema(() => z.object({
 export type BlueprintApp = z.infer<typeof BlueprintAppSchema>;
 
 /**
- * Seed data the agent suggests. Mirrors {@link DatasetSchema.records}. NOTE:
+ * Seed data the agent suggests. Mirrors {@link SeedSchema.records}. NOTE:
  * `apply_blueprint` (Phase C) still only REPORTS this as "proposed, not
  * applied" — it does not stage seed rows itself. Initialization data is now a
  * first-class, runtime-draftable `seed` metadata type (SeedSchema) whose rows

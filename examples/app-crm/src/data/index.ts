@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { defineDataset } from '@objectstack/spec/data';
+import { defineSeed } from '@objectstack/spec/data';
 import { cel } from '@objectstack/spec';
 import { Account } from '../objects/account.object.js';
 import { Contact } from '../objects/contact.object.js';
@@ -8,7 +8,7 @@ import { Opportunity } from '../objects/opportunity.object.js';
 import { Lead } from '../objects/lead.object.js';
 import { Activity } from '../objects/activity.object.js';
 
-const accounts = defineDataset(Account, {
+const accounts = defineSeed(Account, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -18,7 +18,7 @@ const accounts = defineDataset(Account, {
   ],
 });
 
-const contacts = defineDataset(Contact, {
+const contacts = defineSeed(Contact, {
   mode: 'upsert',
   externalId: 'email',
   records: [
@@ -28,7 +28,7 @@ const contacts = defineDataset(Contact, {
   ],
 });
 
-const opportunities = defineDataset(Opportunity, {
+const opportunities = defineSeed(Opportunity, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -56,7 +56,7 @@ const opportunities = defineDataset(Opportunity, {
   ],
 });
 
-const leads = defineDataset(Lead, {
+const leads = defineSeed(Lead, {
   mode: 'upsert',
   externalId: 'email',
   records: [
@@ -101,7 +101,7 @@ const leads = defineDataset(Lead, {
   ],
 });
 
-const activities = defineDataset(Activity, {
+const activities = defineSeed(Activity, {
   mode: 'upsert',
   externalId: 'subject',
   records: [

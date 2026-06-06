@@ -1,25 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { DatasetSchema, DatasetMode, type Dataset } from './dataset.zod';
+import { SeedSchema, SeedMode, type Seed } from './seed.zod';
 
-describe('DatasetMode', () => {
+describe('SeedMode', () => {
   it('should accept valid dataset modes', () => {
     const validModes = ['insert', 'update', 'upsert', 'replace', 'ignore'];
     
     validModes.forEach(mode => {
-      expect(() => DatasetMode.parse(mode)).not.toThrow();
+      expect(() => SeedMode.parse(mode)).not.toThrow();
     });
   });
 
   it('should reject invalid modes', () => {
-    expect(() => DatasetMode.parse('merge')).toThrow();
-    expect(() => DatasetMode.parse('delete')).toThrow();
-    expect(() => DatasetMode.parse('')).toThrow();
+    expect(() => SeedMode.parse('merge')).toThrow();
+    expect(() => SeedMode.parse('delete')).toThrow();
+    expect(() => SeedMode.parse('')).toThrow();
   });
 });
 
-describe('DatasetSchema', () => {
+describe('SeedSchema', () => {
   it('should accept valid minimal dataset', () => {
-    const validDataset: Dataset = {
+    const validDataset: Seed = {
       object: 'user',
       records: [
         { name: 'John', email: 'john@example.com' },
@@ -27,11 +27,11 @@ describe('DatasetSchema', () => {
       ]
     };
 
-    expect(() => DatasetSchema.parse(validDataset)).not.toThrow();
+    expect(() => SeedSchema.parse(validDataset)).not.toThrow();
   });
 
   it('should accept dataset with all fields', () => {
-    const fullDataset: Dataset = {
+    const fullDataset: Seed = {
       object: 'account',
       externalId: 'code',
       mode: 'upsert',
@@ -42,11 +42,11 @@ describe('DatasetSchema', () => {
       ]
     };
 
-    expect(() => DatasetSchema.parse(fullDataset)).not.toThrow();
+    expect(() => SeedSchema.parse(fullDataset)).not.toThrow();
   });
 
   it('should apply default values', () => {
-    const dataset = DatasetSchema.parse({
+    const dataset = SeedSchema.parse({
       object: 'product',
       records: [{ name: 'Widget' }]
     });
@@ -57,27 +57,27 @@ describe('DatasetSchema', () => {
   });
 
   it('should validate object name format (snake_case)', () => {
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'valid_object_name',
       records: []
     })).not.toThrow();
 
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'InvalidObject',
       records: []
     })).toThrow();
 
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'invalid-object',
       records: []
     })).toThrow();
   });
 
   it('should accept different modes', () => {
-    const modes: Array<Dataset['mode']> = ['insert', 'update', 'upsert', 'replace', 'ignore'];
+    const modes: Array<Seed['mode']> = ['insert', 'update', 'upsert', 'replace', 'ignore'];
     
     modes.forEach(mode => {
-      const dataset = DatasetSchema.parse({
+      const dataset = SeedSchema.parse({
         object: 'test_object',
         mode,
         records: []
@@ -87,14 +87,14 @@ describe('DatasetSchema', () => {
   });
 
   it('should accept environment scopes', () => {
-    const dataset1 = DatasetSchema.parse({
+    const dataset1 = SeedSchema.parse({
       object: 'test_object',
       env: ['dev'],
       records: []
     });
     expect(dataset1.env).toEqual(['dev']);
 
-    const dataset2 = DatasetSchema.parse({
+    const dataset2 = SeedSchema.parse({
       object: 'test_object',
       env: ['prod', 'test'],
       records: []
@@ -103,13 +103,13 @@ describe('DatasetSchema', () => {
   });
 
   it('should reject invalid environment values', () => {
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'test_object',
       env: ['production'],
       records: []
     })).toThrow();
 
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'test_object',
       env: ['staging'],
       records: []
@@ -117,7 +117,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should accept empty records array', () => {
-    const dataset = DatasetSchema.parse({
+    const dataset = SeedSchema.parse({
       object: 'empty_table',
       records: []
     });
@@ -126,7 +126,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should accept records with various data types', () => {
-    const dataset = DatasetSchema.parse({
+    const dataset = SeedSchema.parse({
       object: 'mixed_data',
       records: [
         {
@@ -149,7 +149,7 @@ describe('DatasetSchema', () => {
     const validExternalIds = ['name', 'code', 'external_id', 'username', 'slug'];
     
     validExternalIds.forEach(externalId => {
-      expect(() => DatasetSchema.parse({
+      expect(() => SeedSchema.parse({
         object: 'test_object',
         externalId,
         records: []
@@ -158,7 +158,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should handle seed data use case', () => {
-    const seedData = DatasetSchema.parse({
+    const seedData = SeedSchema.parse({
       object: 'country',
       externalId: 'code',
       mode: 'upsert',
@@ -175,7 +175,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should handle demo data use case', () => {
-    const demoData = DatasetSchema.parse({
+    const demoData = SeedSchema.parse({
       object: 'project',
       externalId: 'name',
       mode: 'replace',
@@ -191,7 +191,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should handle test data use case', () => {
-    const testData = DatasetSchema.parse({
+    const testData = SeedSchema.parse({
       object: 'test_user',
       mode: 'ignore',
       env: ['test'],
@@ -205,17 +205,17 @@ describe('DatasetSchema', () => {
   });
 
   it('should reject dataset without required fields', () => {
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       records: []
     })).toThrow();
 
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'test_object'
     })).toThrow();
   });
 
   it('should reject invalid mode value', () => {
-    expect(() => DatasetSchema.parse({
+    expect(() => SeedSchema.parse({
       object: 'test_object',
       mode: 'invalid_mode',
       records: []
@@ -223,7 +223,7 @@ describe('DatasetSchema', () => {
   });
 
   it('should handle large datasets', () => {
-    const largeDataset = DatasetSchema.parse({
+    const largeDataset = SeedSchema.parse({
       object: 'bulk_data',
       records: Array.from({ length: 1000 }, (_, i) => ({
         id: i,

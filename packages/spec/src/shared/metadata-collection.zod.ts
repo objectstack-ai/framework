@@ -64,7 +64,7 @@ export type MetadataCollectionInput<T> =
  * Excluded fields:
  * - `views` — ViewSchema has no `name` field (it's a container with `list`/`form`)
  * - `objectExtensions` — uses `extend` as its identifier, not `name`
- * - `data` — DatasetSchema uses `object` as its identifier
+ * - `data` — SeedSchema uses `object` as its identifier
  * - `translations` — TranslationBundleSchema is a record, not a named object
  * - `plugins` / `devPlugins` — not named metadata schemas
  */

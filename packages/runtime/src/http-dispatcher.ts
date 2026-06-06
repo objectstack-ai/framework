@@ -1780,7 +1780,7 @@ export class HttpDispatcher {
         const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
         const loader = new SeedLoaderService(ql, metadata, (this as any).logger ?? console);
         const request = SeedLoaderRequestSchema.parse({
-            datasets,
+            seeds: datasets,
             config: {
                 defaultMode: 'upsert',
                 multiPass: true,
