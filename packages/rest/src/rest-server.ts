@@ -4187,6 +4187,76 @@ export class RestServer {
 
         const operations = batch.operations;
 
+        // POST /batch — cross-object transactional batch (issue #1604).
+        // Runs heterogeneous create/update/delete across objects in ONE engine
+        // transaction (commit all or roll back all). Intra-batch references:
+        // a field value of `{ $ref: <earlier op index> }` resolves to that op's
+        // created id, so a child can reference its parent (master-detail).
+        this.routeManager.register({
+            method: 'POST',
+            path: `${basePath}/batch`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const ql = this.objectQLProvider ? await this.objectQLProvider(environmentId) : undefined;
+                    if (!ql || typeof ql.transaction !== 'function') {
+                        res.status(501).json({ error: 'Transactional batch not supported by this runtime' });
+                        return;
+                    }
+                    const ops: any[] = Array.isArray(req.body?.operations) ? req.body.operations : [];
+                    const max = batch.maxBatchSize ?? 200;
+                    if (ops.length === 0) { res.json({ results: [] }); return; }
+                    if (ops.length > max) { res.status(400).json({ error: `Batch too large (max ${max})` }); return; }
+
+                    const resolveRefs = (data: any, out: any[]): any => {
+                        if (!data || typeof data !== 'object') return data;
+                        const result: any = Array.isArray(data) ? [] : {};
+                        for (const [k, v] of Object.entries(data)) {
+                            if (v && typeof v === 'object' && '$ref' in (v as any)) {
+                                const ref = out[(v as any).$ref];
+                                result[k] = (ref && (ref.id ?? ref._id)) ?? null;
+                            } else {
+                                result[k] = v;
+                            }
+                        }
+                        return result;
+                    };
+
+                    const results = await ql.transaction(async (trxCtx: any) => {
+                        const out: any[] = [];
+                        for (const op of ops) {
+                            const action = String(op?.action || 'create');
+                            const object = String(op?.object || '');
+                            if (!object) throw new Error('Each operation requires an `object`');
+                            const data = resolveRefs(op.data, out);
+                            if (action === 'create') {
+                                out.push(await ql.insert(object, data, { context: trxCtx }));
+                            } else if (action === 'update') {
+                                const id = op.id ?? data?.id;
+                                out.push(await ql.update(object, { ...data, id }, { context: trxCtx }));
+                            } else if (action === 'delete') {
+                                out.push(await ql.delete(object, { where: { id: op.id }, context: trxCtx }));
+                            } else {
+                                throw new Error(`Unknown batch action: ${action}`);
+                            }
+                        }
+                        return out;
+                    }, context);
+
+                    res.json({ results });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error);
+                }
+            },
+            metadata: {
+                summary: 'Cross-object transactional batch (atomic create/update/delete across objects)',
+                tags: ['data', 'batch'],
+            },
+        });
+
         // POST /data/:object/batch - Generic batch endpoint
         if (batch.enableBatchEndpoint && this.protocol.batchData) {
             this.routeManager.register({
