@@ -227,6 +227,22 @@ export const DriverCapabilitiesSchema = lazySchema(() => z.object({
    */
   vectorSearch: z.boolean().default(false).describe('Supports vector embeddings and similarity search'),
 
+  /**
+   * Whether the driver natively generates persistent autonumber / sequence
+   * values inside `create()` / `bulkCreate()` / `upsert()` (e.g. a DB-backed
+   * `_objectstack_sequences` table that survives restarts and is atomic across
+   * concurrent writers / instances).
+   *
+   * When true, the ObjectQL engine MUST NOT pre-fill `autonumber` fields with
+   * its own in-memory counter — the driver owns generation as the single,
+   * persistent source of truth, and required-validation exempts the field
+   * because the value is assigned after validation. When false/absent (memory,
+   * mongodb), the engine falls back to its in-memory generator.
+   *
+   * Optional so existing driver capability objects need not be updated.
+   */
+  autonumber: z.boolean().optional().describe('Driver natively generates persistent autonumber/sequence values'),
+
   // ============================================================================
   // Schema Management
   // ============================================================================

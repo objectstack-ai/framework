@@ -130,6 +130,10 @@ export class SqlDriver implements IDataDriver {
       jsonFields: true,
       arrayFields: true,
       vectorSearch: false,
+      // Persistent, atomic autonumber sequences via `_objectstack_sequences`
+      // (see fillAutoNumberFields / getNextSequenceValue). The engine defers
+      // autonumber generation to this driver — it is the single source of truth.
+      autonumber: true,
 
       // Schema Management
       schemaSync: true,
@@ -702,7 +706,12 @@ export class SqlDriver implements IDataDriver {
   async bulkCreate(object: string, data: any[], options?: DriverOptions): Promise<any> {
     this.auditMissingTenant(object, 'bulkCreate', options);
     for (const row of data) {
-      if (row && typeof row === 'object') this.injectTenantOnInsert(object, row, options);
+      if (row && typeof row === 'object') {
+        this.injectTenantOnInsert(object, row, options);
+        // Reserve a persistent sequence value for each row's autonumber
+        // field(s) — the engine no longer pre-fills these (see #1603).
+        await this.fillAutoNumberFields(object, row, options);
+      }
     }
     const builder = this.getBuilder(object, options);
     return await builder.insert(data).returning('*');
@@ -1068,9 +1077,12 @@ export class SqlDriver implements IDataDriver {
             (this.datetimeFields[tableName] ??= new Set()).add(name);
           }
           if (type === 'auto_number' || type === 'autonumber') {
-            const fmt = typeof field.format === 'string' && field.format
-              ? field.format
-              : '{0000}';
+            // Honor either the spec-canonical `autonumberFormat` or the
+            // shorthand `format` (both appear in metadata) — see #1603.
+            const rawFmt = (typeof field.autonumberFormat === 'string' && field.autonumberFormat)
+              ? field.autonumberFormat
+              : (typeof field.format === 'string' && field.format ? field.format : '');
+            const fmt = rawFmt || '{0000}';
             const m = fmt.match(/\{(0+)\}/);
             const padWidth = m ? m[1].length : 4;
             const prefix = m ? fmt.slice(0, m.index ?? 0) : fmt;

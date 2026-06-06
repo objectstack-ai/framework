@@ -719,21 +719,27 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Generate values for empty `autonumber` fields on insert. Runs BEFORE
-   * required-validation so a `required` autonumber (e.g. a record number) is
-   * never rejected for "missing" — the runtime owns the value, not the client.
+   * Generate values for empty `autonumber` fields on insert — ONLY for drivers
+   * that do not generate them natively (memory, mongodb). For SQL-backed objects
+   * the driver owns a persistent, atomic `_objectstack_sequences` table and
+   * advertises `supports.autonumber === true`; the engine then defers entirely
+   * and never pre-fills (so the persistent sequence is the single source of
+   * truth — see #1603). Required-validation exempts `autonumber` either way, so
+   * a `required` record number is never rejected for "missing" — the runtime
+   * owns the value, not the client.
    *
-   * The next value is `max(existing) + 1`, seeded once per `object.field` from
-   * the store then incremented in memory (monotonic within the process,
-   * resilient to deletions). `autonumberFormat` is honored, e.g.
-   * `CASE-{0000}` → `CASE-0042`. NOTE: in-memory seeding is single-instance;
-   * a persistent sequence store is a follow-up for multi-instance setups.
+   * In the fallback path the next value is `max(existing) + 1`, seeded once per
+   * `object.field` from the store then incremented in memory (monotonic within
+   * the process, resilient to deletions). `autonumberFormat` is honored, e.g.
+   * `CASE-{0000}` → `CASE-0042`. NOTE: this in-memory seeding is single-instance.
    */
   private async applyAutonumbers(
     object: string,
     record: Record<string, unknown>,
     execCtx?: ExecutionContext,
+    driverOwnsAutonumber?: boolean,
   ): Promise<void> {
+    if (driverOwnsAutonumber) return; // driver generates persistently in create()
     const fields = (this.getSchema(object) as any)?.fields;
     if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return;
     for (const [name, def] of Object.entries(fields)) {
@@ -745,7 +751,10 @@ export class ObjectQL implements IDataEngine {
       if (next == null) next = await this.seedAutonumber(object, name, execCtx);
       next += 1;
       this.autonumberCounters.set(key, next);
-      record[name] = this.formatAutonumber((def as any).autonumberFormat, next);
+      // Honor either the spec-canonical `autonumberFormat` or the shorthand
+      // `format` (both appear in metadata; the driver reads both too) — #1603.
+      const fmt = (def as any).autonumberFormat ?? (def as any).format;
+      record[name] = this.formatAutonumber(fmt, next);
     }
   }
 
@@ -1834,13 +1843,16 @@ export class ObjectQL implements IDataEngine {
         let result;
         const nowSnap = new Date();
         const schemaForValidation = this._registry.getObject(object);
+        // When the driver generates autonumbers natively (persistent SQL
+        // sequence), the engine defers to it — see #1603.
+        const driverOwnsAutonumber = (driver as any)?.supports?.autonumber === true;
         if (Array.isArray(hookContext.input.data)) {
           // Bulk Create — apply defaults per row
           const rows = (hookContext.input.data as any[]).map((row) =>
             this.applyFieldDefaults(object, row as Record<string, unknown>, opCtx.context, nowSnap),
           );
           for (const r of rows) {
-            await this.applyAutonumbers(object, r as Record<string, unknown>, opCtx.context);
+            await this.applyAutonumbers(object, r as Record<string, unknown>, opCtx.context, driverOwnsAutonumber);
           }
           for (const r of rows) {
             await this.encryptSecretFields(object, r, opCtx.context, hookContext.input.options);
@@ -1862,7 +1874,7 @@ export class ObjectQL implements IDataEngine {
             opCtx.context,
             nowSnap,
           );
-          await this.applyAutonumbers(object, row, opCtx.context);
+          await this.applyAutonumbers(object, row, opCtx.context, driverOwnsAutonumber);
           await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
           validateRecord(schemaForValidation, row, 'insert');
           evaluateValidationRules(schemaForValidation as any, row, 'insert', { logger: this.logger });

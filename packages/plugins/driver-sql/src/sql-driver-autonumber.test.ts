@@ -170,6 +170,53 @@ describe('SqlDriver auto_number sequence', () => {
     expect(r.case_number).toBe('CASE-001');
   });
 
+  it('fills autonumber fields on bulkCreate (engine defers to the driver — #1603)', async () => {
+    await driver.initObjects([
+      {
+        name: 'contract',
+        fields: {
+          organization_id: { type: 'string' },
+          contract_number: { type: 'autonumber', format: 'CTR-{0000}' },
+          name: { type: 'string' },
+        },
+      },
+    ]);
+
+    const rows = await driver.bulkCreate('contract', [
+      { organization_id: 'org_bulk', name: 'B1' },
+      { organization_id: 'org_bulk', name: 'B2' },
+      { organization_id: 'org_bulk', name: 'B3' },
+    ]);
+
+    const numbers = (rows as any[]).map((r) => r.contract_number).sort();
+    expect(numbers).toEqual(['CTR-0001', 'CTR-0002', 'CTR-0003']);
+
+    // A subsequent single create continues the same persistent sequence.
+    const next = await driver.create('contract', { organization_id: 'org_bulk', name: 'B4' });
+    expect(next.contract_number).toBe('CTR-0004');
+  });
+
+  it('advertises native autonumber support so the engine defers to it', () => {
+    expect(driver.supports.autonumber).toBe(true);
+  });
+
+  it('honors the spec-canonical `autonumberFormat` key as well as `format`', async () => {
+    await driver.initObjects([
+      {
+        name: 'ticket',
+        fields: {
+          // spec-canonical key (field.zod.ts) rather than the `format` shorthand
+          ticket_no: { type: 'autonumber', autonumberFormat: 'TK-{00000}' },
+        },
+      },
+    ]);
+
+    const r1 = await driver.create('ticket', {});
+    const r2 = await driver.create('ticket', {});
+    expect(r1.ticket_no).toBe('TK-00001');
+    expect(r2.ticket_no).toBe('TK-00002');
+  });
+
   it('falls back to options.tenantId when the row has no tenant field value', async () => {
     await driver.initObjects([
       {
