@@ -140,4 +140,6 @@ small, well-tested key-verification step.
 - **Phase 1a (framework auth) — shipped** (#1624): `sys_api_key` Bearer/header verified on the runtime auth path → principal under existing permissions + RLS.
 - **Phase 1b (objectui surfacing)** — Integrations page + show-once key + publish "View API" link.
 - **Phase 2 (framework MCP HTTP transport) — shipped** (#1626; package since renamed to `@objectstack/mcp`): Streamable HTTP at `/api/v1/mcp`, opt-in `OS_MCP_SERVER_ENABLED`, fail-closed auth, principal-bound object-CRUD tools.
-- **Phase 2b (surfacing, per Amendment C)** — env-level remote-MCP connect (URL + show-once key + one-click deeplink) and a single generic ObjectStack **Skill**; *not* per-app, *not* hand-maintained vendor snippets.
+- **Key generation (framework) — shipped**: `POST /api/v1/keys` mints a `sys_api_key` and returns the raw secret **once** (only the hash is stored; `user_id` pinned to the caller; fail-closed auth). The backend for the show-once key UX.
+- **Generic ObjectStack Skill — shipped** (#1628): `renderSkillMarkdown({ mcpUrl })` produces the portable, cross-agent `SKILL.md`.
+- **Phase 2b (objectui surfacing, per Amendment C)** — env-level remote-MCP connect page wiring `discovery.mcp` + `POST /keys` (show-once) + skill download; *not* per-app, *not* hand-maintained vendor snippets.
