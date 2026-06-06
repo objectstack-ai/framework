@@ -23,11 +23,37 @@ export const ProjectDetailPage: Page = {
   isDefault: true,
   regions: [],
   slots: {
+    // Explicit highlights strip — exercises the page editor's field-list picker
+    // (objectFrom:'page' resolves showcase_project's fields).
+    highlights: {
+      type: 'record:highlights',
+      properties: {
+        fields: ['account', 'status', 'health', 'budget', 'end_date'],
+      },
+    },
     tabs: {
       type: 'page:tabs',
       properties: {
         type: 'line',
         items: [
+          {
+            // Explicit details sections — each section's `fields` is a
+            // field-list bound to showcase_project in the page editor.
+            key: 'details',
+            label: 'Details',
+            children: [
+              {
+                type: 'record:details',
+                properties: {
+                  sections: [
+                    { label: 'Overview', columns: 2, fields: ['name', 'account', 'owner', 'status'] },
+                    { label: 'Financials', columns: 2, fields: ['budget', 'spent'] },
+                    { label: 'Timeline', columns: 2, fields: ['start_date', 'end_date'] },
+                  ],
+                },
+              },
+            ],
+          },
           {
             key: 'tasks',
             label: 'Tasks',
