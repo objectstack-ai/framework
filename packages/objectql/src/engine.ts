@@ -1,5 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { QueryAST, HookContext, ServiceObject } from '@objectstack/spec/data';
 import {
   EngineQueryOptions,
@@ -192,6 +193,16 @@ function resolveMetadataItemName(key: string, item: any): string | undefined {
  * - CoreServiceName.metadata (Schema Registry)
  */
 export class ObjectQL implements IDataEngine {
+  /**
+   * Ambient transaction store (ADR-0034). While a `transaction()` callback
+   * runs, the active transaction handle lives here so that EVERY data
+   * operation — including internal reads done during a write (reference
+   * checks, hooks, expand) — automatically binds to the same connection
+   * instead of asking the pool for another one and deadlocking on the
+   * single-connection SQLite pool.
+   */
+  private readonly txStore = new AsyncLocalStorage<{ transaction: unknown }>();
+
   private drivers = new Map<string, DriverInterface>();
   private defaultDriver: string | null = null;
   private logger: Logger;
@@ -617,13 +628,19 @@ export class ObjectQL implements IDataEngine {
    * mask the system path.
    */
   private buildDriverOptions(execCtx?: ExecutionContext, base?: any): any {
-    const hasTx = execCtx?.transaction !== undefined;
+    // The open transaction may arrive explicitly via the context, or ambiently
+    // via txStore when an internal query runs during a transactional write
+    // (ADR-0034). Explicit wins; ambient is the safety net.
+    const tx = execCtx?.transaction !== undefined
+      ? execCtx.transaction
+      : this.txStore.getStore()?.transaction;
+    const hasTx = tx !== undefined;
     const hasTenant = execCtx?.tenantId !== undefined;
     const isSystem = execCtx?.isSystem === true;
     if (!hasTx && !hasTenant && !isSystem) return base;
     const opts: any = base && typeof base === 'object' ? { ...base } : {};
     if (hasTx && opts.transaction === undefined) {
-      opts.transaction = execCtx!.transaction;
+      opts.transaction = tx;
     }
     if (hasTenant && opts.tenantId === undefined) {
       opts.tenantId = execCtx!.tenantId;
@@ -2343,7 +2360,9 @@ export class ObjectQL implements IDataEngine {
     const trx = await drv.beginTransaction();
     const trxCtx = { ...(baseContext ?? {}), transaction: trx };
     try {
-      const result = await callback(trxCtx);
+      // Run the callback inside the ambient transaction store so internal
+      // queries during writes reuse this transaction's connection (ADR-0034).
+      const result = await this.txStore.run({ transaction: trx }, () => callback(trxCtx));
       if (drv.commit) await drv.commit(trx);
       else if (drv.commitTransaction) await drv.commitTransaction(trx);
       return result;
@@ -2803,9 +2822,16 @@ export class ScopedContext {
       { ...this.executionContext, transaction: trx },
       this.engine
     );
+    // Share the engine's ambient transaction store so internal queries during
+    // writes reuse this transaction's connection (ADR-0034).
+    const txStore = (this.engine as any)?.txStore as
+      | { run<R>(s: { transaction: unknown }, fn: () => R): R }
+      | undefined;
+    const runIn = <R>(fn: () => Promise<R>): Promise<R> =>
+      txStore ? txStore.run({ transaction: trx }, fn) : fn();
 
     try {
-      const result = await callback(trxCtx);
+      const result = await runIn(() => callback(trxCtx));
       if (driver.commit) await driver.commit(trx);
       else if (driver.commitTransaction) await driver.commitTransaction(trx);
       return result;
