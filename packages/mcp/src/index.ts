@@ -20,3 +20,9 @@ export type {
   McpObjectSummary,
   RegisterObjectToolsOptions,
 } from './mcp-http-tools.js';
+export {
+  renderSkillMarkdown,
+  OBJECTSTACK_SKILL_NAME,
+  OBJECTSTACK_SKILL_DESCRIPTION,
+} from './skill.js';
+export type { RenderSkillOptions } from './skill.js';
