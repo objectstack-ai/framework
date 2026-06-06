@@ -192,6 +192,17 @@ function resolveMetadataItemName(key: string, item: any): string | undefined {
  * - CoreServiceName.data (CRUD)
  * - CoreServiceName.metadata (Schema Registry)
  */
+/** A roll-up `summary` field on a parent object that aggregates a child. */
+interface SummaryDescriptor {
+  parentObject: string;
+  summaryField: string;
+  /** FK field on the child pointing back to the parent. */
+  fkField: string;
+  fn: 'count' | 'sum' | 'min' | 'max' | 'avg';
+  /** Child field aggregated (unused for count). */
+  sourceField: string;
+}
+
 export class ObjectQL implements IDataEngine {
   /**
    * Ambient transaction store (ADR-0034). While a `transaction()` callback
@@ -805,6 +816,7 @@ export class ObjectQL implements IDataEngine {
   registerApp(manifest: any) {
       const id = manifest.id || manifest.name;
       const namespace = manifest.namespace as string | undefined;
+      this.invalidateSummaryIndex(); // new objects may add/change summary fields
       this.logger.debug('Registering package manifest', { id, namespace });
       console.warn(`[ObjectQL:registerApp] id=${id} flows=${Array.isArray(manifest.flows) ? manifest.flows.length : typeof manifest.flows} keys=${Object.keys(manifest).join(',')}`);
 
@@ -1527,6 +1539,103 @@ export class ObjectQL implements IDataEngine {
    *  lazily seeded from the current max in the store. */
   private readonly autonumberCounters = new Map<string, number>();
 
+  /** Lazily-built index: child object name → roll-up summary descriptors on
+   *  parent objects that aggregate it. Invalidated when packages register. */
+  private summaryIndex: Map<string, SummaryDescriptor[]> | null = null;
+
+  /** Invalidate the cached roll-up summary index (call when metadata changes). */
+  private invalidateSummaryIndex(): void {
+    this.summaryIndex = null;
+  }
+
+  /** Scan all registered objects for `summary` fields and index them by the
+   *  child object they aggregate, resolving the child→parent FK field. */
+  private buildSummaryIndex(): Map<string, SummaryDescriptor[]> {
+    const index = new Map<string, SummaryDescriptor[]>();
+    let objects: any[] = [];
+    try { objects = (this._registry as any).getAllObjects?.() ?? []; } catch { objects = []; }
+    for (const parent of objects) {
+      const fields = parent?.fields;
+      if (!fields || typeof fields !== 'object' || Array.isArray(fields)) continue;
+      for (const [summaryField, def] of Object.entries(fields)) {
+        const d: any = def;
+        if (d?.type !== 'summary' || !d.summaryOperations) continue;
+        const so = d.summaryOperations;
+        const childObject = so.object;
+        const fn = so.function;
+        if (!childObject || !fn) continue;
+        // Resolve the FK on the child pointing back to this parent.
+        let fkField: string | undefined = so.relationshipField;
+        if (!fkField) {
+          const child = this._registry.getObject(childObject) as any;
+          const cfields = child?.fields || {};
+          for (const [cfName, cdef] of Object.entries(cfields)) {
+            const cd: any = cdef;
+            if ((cd?.type === 'master_detail' || cd?.type === 'lookup') && cd?.reference === parent.name) {
+              fkField = cfName;
+              break;
+            }
+          }
+        }
+        if (!fkField) continue; // can't resolve the relationship — skip
+        const list = index.get(childObject) ?? [];
+        list.push({ parentObject: parent.name, summaryField, fkField, fn, sourceField: so.field });
+        index.set(childObject, list);
+      }
+    }
+    return index;
+  }
+
+  private getSummaryDescriptors(childObject: string): SummaryDescriptor[] {
+    if (!this.summaryIndex) this.summaryIndex = this.buildSummaryIndex();
+    return this.summaryIndex.get(childObject) ?? [];
+  }
+
+  /**
+   * Recompute roll-up `summary` fields on parent records after a child write.
+   * For each affected parent (the FK value on the changed/old child record), it
+   * aggregates the child collection and writes the result onto the parent's
+   * summary field. Runs in the caller's execution context so it joins the same
+   * transaction (e.g. the cross-object batch) when one is open.
+   */
+  private async recomputeSummaries(
+    childObject: string,
+    records: any,
+    previous: any,
+    execCtx?: ExecutionContext,
+  ): Promise<void> {
+    const descriptors = this.getSummaryDescriptors(childObject);
+    if (descriptors.length === 0) return;
+    const recs = Array.isArray(records) ? records : records ? [records] : [];
+    const prevs = Array.isArray(previous) ? previous : previous ? [previous] : [];
+    for (const desc of descriptors) {
+      const ids = new Set<string>();
+      for (const r of recs) { const v = r?.[desc.fkField]; if (v != null && v !== '') ids.add(String(v)); }
+      for (const p of prevs) { const v = p?.[desc.fkField]; if (v != null && v !== '') ids.add(String(v)); }
+      for (const parentId of ids) {
+        try {
+          const rows = await this.aggregate(childObject, {
+            where: { [desc.fkField]: parentId },
+            aggregations: [{
+              function: desc.fn,
+              ...(desc.fn === 'count' ? {} : { field: desc.sourceField }),
+              alias: 'value',
+            }],
+            context: execCtx,
+          } as any);
+          let value = rows?.[0]?.value;
+          if (value == null) value = (desc.fn === 'count' || desc.fn === 'sum') ? 0 : null;
+          await this.update(desc.parentObject, { id: parentId, [desc.summaryField]: value }, { context: execCtx } as any);
+        } catch (err) {
+          this.logger.warn('Roll-up summary recompute failed', {
+            childObject, parentObject: desc.parentObject, parentId, field: desc.summaryField,
+            error: (err as any)?.message,
+          });
+        }
+      }
+    }
+  }
+
   /**
    * Post-process expand: resolve lookup/master_detail fields by batch-loading related records.
    * 
@@ -1885,6 +1994,9 @@ export class ObjectQL implements IDataEngine {
         hookContext.result = result;
         await this.triggerHooks('afterInsert', hookContext);
 
+        // Roll-up: recompute parent summary fields that aggregate this object.
+        await this.recomputeSummaries(object, result, null, opCtx.context);
+
         // Publish data.record.created event to realtime service
         if (this.realtimeService) {
           try {
@@ -2015,6 +2127,10 @@ export class ObjectQL implements IDataEngine {
            hookContext.result = result;
            if (priorRecord) hookContext.previous = priorRecord;
            await this.triggerHooks('afterUpdate', hookContext);
+
+           // Roll-up: recompute parent summaries; pass priorRecord too so a child
+           // that moved to a different parent updates BOTH old and new parent.
+           await this.recomputeSummaries(object, result, priorRecord, opCtx.context);
 
            // Publish data.record.updated event to realtime service
            if (this.realtimeService) {
@@ -2158,6 +2274,15 @@ export class ObjectQL implements IDataEngine {
 
       try {
           let result;
+          // Capture the row's FK values BEFORE deletion so roll-up summaries can
+          // recompute the (now-orphaned) parent. Only when a summary aggregates
+          // this object — avoids an extra read on every delete.
+          let summaryPrev: any = null;
+          if (hookContext.input.id && this.getSummaryDescriptors(object).length > 0) {
+            try {
+              summaryPrev = await this.findOne(object, { where: { id: hookContext.input.id }, context: opCtx.context } as any);
+            } catch { /* best-effort */ }
+          }
           if (hookContext.input.id) {
               // Honor referential delete behavior (cascade/set_null/restrict)
               // for relations pointing at this record before removing it.
@@ -2173,6 +2298,9 @@ export class ObjectQL implements IDataEngine {
           hookContext.event = 'afterDelete';
           hookContext.result = result;
           await this.triggerHooks('afterDelete', hookContext);
+
+          // Roll-up: recompute the parent summary now that the child is gone.
+          if (summaryPrev) await this.recomputeSummaries(object, null, summaryPrev, opCtx.context);
 
           // Publish data.record.deleted event to realtime service
           if (this.realtimeService) {

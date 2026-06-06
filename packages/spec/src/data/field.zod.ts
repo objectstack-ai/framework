@@ -408,9 +408,10 @@ export const FieldSchema = lazySchema(() => z.object({
   expression: ExpressionInputSchema.optional().describe('Formula expression (CEL). e.g. F`record.amount * 0.1`'),
   summaryOperations: z.object({
     object: z.string().describe('Source child object name for roll-up'),
-    field: z.string().describe('Field on child object to aggregate'),
+    field: z.string().describe('Field on child object to aggregate (ignored for count)'),
     function: z.enum(['count', 'sum', 'min', 'max', 'avg']).describe('Aggregation function to apply'),
-  }).optional().describe('Roll-up summary definition'),
+    relationshipField: z.string().optional().describe('FK field on the child pointing back to this parent. Auto-detected from the child\'s lookup/master_detail field referencing this object when omitted; set explicitly only when the child has more than one such reference.'),
+  }).optional().describe('Roll-up summary definition. The engine recomputes the value when child records are inserted/updated/deleted.'),
 
   /** Enhanced Field Type Configurations */
   // Code field config
