@@ -19,6 +19,24 @@ export const NOTIFICATION_EVENT_OBJECT = 'sys_notification';
 const READ_RECEIPT_STATES = new Set(['read', 'clicked', 'dismissed']);
 
 /**
+ * Whether a driver error is a unique/primary-key constraint violation. Spans the
+ * SQL drivers we ship: SQLite (`UNIQUE constraint failed`), Postgres (`23505` /
+ * `duplicate key`), and MySQL (`ER_DUP_ENTRY` / `Duplicate entry`). Used to turn
+ * a lost check-then-act race on a unique index into a fallback update.
+ */
+function isUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string | number; message?: string } | undefined;
+    if (!e) return false;
+    if (e.code === '23505' || e.code === 'ER_DUP_ENTRY' || e.code === 'SQLITE_CONSTRAINT_UNIQUE') return true;
+    const msg = String(e.message ?? '').toLowerCase();
+    return (
+        msg.includes('unique constraint failed') ||
+        msg.includes('duplicate key') ||
+        msg.includes('duplicate entry')
+    );
+}
+
+/**
  * One row of the inbox list REST response — the `Notification` shape in the API
  * spec (`NotificationSchema`). `id` is the notification's event id
  * (`notification_id`), which keys its read-state receipt, falling back to the
@@ -358,13 +376,22 @@ export class MessagingService {
         notificationId: string,
         at: string,
     ): Promise<number> {
-        const existing = await data.findOne(RECEIPT_OBJECT, {
-            where: { notification_id: notificationId, user_id: userId, channel: 'inbox' },
-            fields: ['id'],
-        });
-        if (existing?.id) {
+        const where = { notification_id: notificationId, user_id: userId, channel: 'inbox' };
+        const flipToRead = async (): Promise<boolean> => {
+            const existing = await data.findOne(RECEIPT_OBJECT, { where, fields: ['id'] });
+            if (!existing?.id) return false;
             await data.update(RECEIPT_OBJECT, { state: 'read', at }, { where: { id: existing.id } } as never);
-        } else {
+            return true;
+        };
+
+        if (await flipToRead()) return 1;
+
+        // No receipt yet — insert one. findOne→insert is check-then-act, so a
+        // concurrent mark-read (or the best-effort `delivered` write still in
+        // flight) can win the (notification_id, user_id, channel) unique index
+        // between our read and write. Treat that collision as "someone else
+        // created it" and flip the now-present row to `read` instead of failing.
+        try {
             await data.insert(RECEIPT_OBJECT, {
                 notification_id: notificationId,
                 delivery_id: null,
@@ -374,8 +401,11 @@ export class MessagingService {
                 at,
                 created_at: at,
             });
+            return 1;
+        } catch (err) {
+            if (isUniqueViolation(err) && (await flipToRead())) return 1;
+            throw err;
         }
-        return 1;
     }
 
     /**
