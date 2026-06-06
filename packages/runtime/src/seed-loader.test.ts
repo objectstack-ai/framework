@@ -277,7 +277,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme Corp' }, { name: 'Globex' }] },
         ],
         config: {
@@ -298,7 +298,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [],
+        seeds: [],
         config: {
           dryRun: false, haltOnError: false, multiPass: true,
           defaultMode: 'upsert', batchSize: 1000, transaction: false,
@@ -318,7 +318,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'demo_data', externalId: 'name', mode: 'upsert', env: ['dev'], records: [{ name: 'Demo' }] },
         ],
@@ -356,7 +356,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme Corp' }] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'Acme Corp' }] },
         ],
@@ -393,7 +393,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: null }] },
         ],
@@ -422,7 +422,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme Corp' }] },
           // The previously-masked bug: a `{ externalId: 'X' }` wrapper instead of
           // the plain natural-key string. Must be rejected, never handed to the driver.
@@ -465,7 +465,7 @@ describe('SeedLoaderService', () => {
 
       const uuid = '550e8400-e29b-41d4-a716-446655440000';
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: uuid }] },
         ],
         config: {
@@ -500,7 +500,7 @@ describe('SeedLoaderService', () => {
 
       // Only load contacts (accounts already exist)
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'Acme Corp' }] },
         ],
         config: {
@@ -532,7 +532,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'NonExistent' }] },
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [] },
         ],
@@ -576,7 +576,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'department', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Engineering', head_id: 'Alice' }] },
           { object: 'employee', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Alice', department_id: 'Engineering' }] },
         ],
@@ -608,7 +608,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'account', externalId: 'name', mode: 'upsert',
             env: ['prod', 'dev', 'test'],
@@ -634,7 +634,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'account', externalId: 'name', mode: 'upsert',
             env: ['prod', 'dev', 'test'],
@@ -661,7 +661,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'account', externalId: 'name', mode: 'ignore',
             env: ['prod', 'dev', 'test'],
@@ -688,7 +688,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'account', externalId: 'name', mode: 'update',
             env: ['prod', 'dev', 'test'],
@@ -723,7 +723,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
         config: {
@@ -752,7 +752,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'NonExistent' }] },
         ],
@@ -782,7 +782,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'Acme' }] },
         ],
@@ -815,7 +815,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John' }] },
         ],
@@ -859,7 +859,7 @@ describe('SeedLoaderService', () => {
 
       // Deliberately put contact before account
       await loader.load({
-        datasets: [
+        seeds: [
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'Acme' }] },
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
@@ -894,7 +894,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: 'MissingAccount' }] },
         ],
@@ -932,7 +932,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [] },
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [
             { name: 'John', account_id: 'Missing1' },
@@ -986,7 +986,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
         config: {
@@ -1008,7 +1008,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'A' }, { name: 'B' }] },
         ],
         config: {
@@ -1039,7 +1039,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
         config: {
@@ -1079,7 +1079,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'note',
             externalId: 'name',
@@ -1110,7 +1110,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'note',
             externalId: 'name',
@@ -1139,7 +1139,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'note',
             externalId: 'name',
@@ -1170,7 +1170,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           {
             object: 'account',
             externalId: 'name',
@@ -1198,7 +1198,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'code', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
         config: {
@@ -1220,7 +1220,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
         ],
         config: {
@@ -1250,7 +1250,7 @@ describe('SeedLoaderService', () => {
       const loader = new SeedLoaderService(engine, metadata, logger);
 
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
           { object: 'user', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Admin' }] },
           { object: 'opportunity', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Deal', account_id: 'Acme', owner_id: 'Admin' }] },
@@ -1281,7 +1281,7 @@ describe('SeedLoaderService', () => {
 
       const objectId = '507f1f77bcf86cd799439011';
       const result = await loader.load({
-        datasets: [
+        seeds: [
           { object: 'contact', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'John', account_id: objectId }] },
         ],
         config: {

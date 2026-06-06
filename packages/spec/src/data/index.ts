@@ -14,7 +14,7 @@ export * from './driver.zod';
 export * from './driver-sql.zod';
 export * from './driver-nosql.zod';
 
-export * from './dataset.zod';
+export * from './seed.zod';
 
 // Form Layouts
 export { objectForm } from './object.form';

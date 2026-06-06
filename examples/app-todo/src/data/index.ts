@@ -1,10 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { defineDataset } from '@objectstack/spec/data';
+import { defineSeed } from '@objectstack/spec/data';
 import { cel } from '@objectstack/spec';
 import { Task } from '../objects/task.object';
 
-const tasks = defineDataset(Task, {
+const tasks = defineSeed(Task, {
   mode: 'upsert',
   externalId: 'subject',
   records: [

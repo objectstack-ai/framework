@@ -104,7 +104,7 @@ export const BlueprintAppSchema = lazySchema(() => z.object({
 export type BlueprintApp = z.infer<typeof BlueprintAppSchema>;
 
 /**
- * Seed data the agent suggests. Mirrors {@link DatasetSchema.records}. NOTE:
+ * Seed data the agent suggests. Mirrors {@link SeedSchema.records}. NOTE:
  * Phase C does NOT auto-apply seed data — there is no runtime-draftable
  * `dataset` metadata type (seed = code-loaded `*.seed.ts`). `apply_blueprint`
  * reports it as "proposed, not applied" so a human can wire it deliberately.

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { defineDataset } from '@objectstack/spec/data';
+import { defineSeed } from '@objectstack/spec/data';
 import { cel } from '@objectstack/spec';
 import { Account } from '../objects/account.object.js';
 import { Project } from '../objects/project.object.js';
@@ -14,7 +14,7 @@ import { Team, ProjectMembership } from '../objects/team.object.js';
  * work location (map), and projects span every status and health.
  */
 
-const accounts = defineDataset(Account, {
+const accounts = defineSeed(Account, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -27,7 +27,7 @@ const accounts = defineDataset(Account, {
   ],
 });
 
-const projects = defineDataset(Project, {
+const projects = defineSeed(Project, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -40,7 +40,7 @@ const projects = defineDataset(Project, {
 });
 
 // Tasks across all five board columns, with dates + locations to drive every view.
-const tasks = defineDataset(Task, {
+const tasks = defineSeed(Task, {
   mode: 'upsert',
   externalId: 'title',
   records: [
@@ -57,7 +57,7 @@ const tasks = defineDataset(Task, {
   ],
 });
 
-const categories = defineDataset(Category, {
+const categories = defineSeed(Category, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -68,7 +68,7 @@ const categories = defineDataset(Category, {
   ],
 });
 
-const teams = defineDataset(Team, {
+const teams = defineSeed(Team, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -77,7 +77,7 @@ const teams = defineDataset(Team, {
   ],
 });
 
-const memberships = defineDataset(ProjectMembership, {
+const memberships = defineSeed(ProjectMembership, {
   mode: 'insert',
   records: [
     { team: 'Experience', project: 'Website Relaunch', role: 'owner', allocation_percent: 80 },

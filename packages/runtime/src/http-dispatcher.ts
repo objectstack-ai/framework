@@ -1799,9 +1799,6 @@ export class HttpDispatcher {
         const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
         const loader = new SeedLoaderService(ql, metadata, (this as any).logger ?? console);
         const request = SeedLoaderRequestSchema.parse({
-            // ADR field is `seeds` (renamed from `datasets`); this constructor
-            // was added in the same PR and the rename missed it — passing
-            // `datasets` left `seeds` undefined and the loader saw nothing.
             seeds: datasets,
             config: {
                 defaultMode: 'upsert',

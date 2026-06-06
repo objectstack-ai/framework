@@ -3,11 +3,11 @@
 import { z } from 'zod';
 
 /**
- * Data Import Strategy
- * Defines how the engine handles existing records.
+ * Seed Import Strategy
+ * Defines how the engine handles existing records when a seed is applied.
  */
 import { lazySchema } from '../shared/lazy-schema';
-export const DatasetMode = z.enum([
+export const SeedMode = z.enum([
   'insert',    // Try to insert, fail on duplicate
   'update',    // Only update found records, ignore new
   'upsert',    // Create new or Update existing (Standard)
@@ -16,22 +16,26 @@ export const DatasetMode = z.enum([
 ]);
 
 /**
- * Dataset Schema (Seed Data / Fixtures)
- * 
- * Standardized format for transporting data.
- * Used for:
+ * Seed Schema (Seed Data / Fixtures)
+ *
+ * Standardized format for transporting initialization data. Used for:
  * 1. System Bootstrapping (Admin accounts, Standard Roles)
  * 2. Reference Data (Countries, Currencies)
- * 3. Demo/Test Data
+ * 3. Demo / sample data (incl. AI-authored, applied on publish)
+ *
+ * This is the shape of the runtime-draftable `seed` metadata type: an author
+ * (or the AI metadata assistant) stages a `seed` draft against this schema and
+ * its rows load when the draft is published. Named `Seed` (not `Dataset`) so
+ * the `dataset` name stays reserved for the ADR-0021 analytics semantic layer.
  */
-export const DatasetSchema = lazySchema(() => z.object({
-  /** 
-   * Target Object 
+export const SeedSchema = lazySchema(() => z.object({
+  /**
+   * Target Object
    * The machine name of the object to populate.
    */
   object: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Target Object Name'),
 
-  /** 
+  /**
    * Idempotency Key (The "Upsert" Key)
    * The field used to check if a record already exists.
    * Best Practice: Use a natural key like 'code', 'slug', 'username' or 'external_id'.
@@ -39,10 +43,10 @@ export const DatasetSchema = lazySchema(() => z.object({
    */
   externalId: z.string().default('name').describe('Field match for uniqueness check'),
 
-  /** 
+  /**
    * Import Strategy
    */
-  mode: DatasetMode.default('upsert').describe('Conflict resolution strategy'),
+  mode: SeedMode.default('upsert').describe('Conflict resolution strategy'),
 
   /**
    * Environment Scope
@@ -52,37 +56,20 @@ export const DatasetSchema = lazySchema(() => z.object({
    */
   env: z.array(z.enum(['prod', 'dev', 'test'])).default(['prod', 'dev', 'test']).describe('Applicable environments'),
 
-  /** 
+  /**
    * The Payload
    * Array of raw JSON objects matching the Object Schema.
    */
   records: z.array(z.record(z.string(), z.unknown())).describe('Data records'),
 }));
 
-/**
- * Seed metadata-type schema — the runtime-draftable, publishable form of
- * fixture / initialization data (the `seed` metadata type).
- *
- * It shares the {@link DatasetSchema} shape today (object + externalId + mode +
- * env + records), but is exported under its own name so the `seed` metadata
- * type can evolve independently of the `dataset` name, which ADR reserves for a
- * future data-analysis capability. Authoring tools (incl. the AI metadata
- * assistant) stage `type: 'seed'` drafts against this schema; publishing the
- * draft is what applies the rows (runtime SeedLoaderService).
- */
-export const SeedSchema = DatasetSchema;
-
-/** A seed metadata item (same shape as {@link Dataset}). */
-export type Seed = z.infer<typeof SeedSchema>;
-export type SeedInput = z.input<typeof SeedSchema>;
-
 /** Parsed/output type — all defaults are applied (env, mode, externalId always present) */
-export type Dataset = z.infer<typeof DatasetSchema>;
+export type Seed = z.infer<typeof SeedSchema>;
 
 /** Input type — fields with defaults (env, mode, externalId) are optional */
-export type DatasetInput = z.input<typeof DatasetSchema>;
+export type SeedInput = z.input<typeof SeedSchema>;
 
-export type DatasetImportMode = z.infer<typeof DatasetMode>;
+export type SeedImportMode = z.infer<typeof SeedMode>;
 
 /**
  * Per-field value type for a seed record.
@@ -106,7 +93,7 @@ type SeedRecord<TFields> = {
 };
 
 /**
- * Type-safe factory for creating seed dataset definitions.
+ * Type-safe factory for creating seed definitions.
  * Infers valid field keys from the object definition passed in,
  * so typos in record field names are caught at compile time. Reference
  * fields (lookup/master_detail) are additionally constrained to the
@@ -114,7 +101,7 @@ type SeedRecord<TFields> = {
  *
  * @example
  * ```ts
- * export const leadSeed = defineDataset(Lead, {
+ * export const leadSeed = defineSeed(Lead, {
  *   externalId: 'email',
  *   records: [
  *     { first_name: 'Alice', lead_source: 'web' },   // ✅ type-checked
@@ -125,13 +112,13 @@ type SeedRecord<TFields> = {
  * });
  * ```
  */
-export function defineDataset<
+export function defineSeed<
   const TObj extends { name: string; fields: Record<string, unknown> }
 >(
   objectDef: TObj,
-  config: Omit<DatasetInput, 'object' | 'records'> & {
+  config: Omit<SeedInput, 'object' | 'records'> & {
     records: Array<SeedRecord<TObj['fields']>>;
   }
-): Dataset {
-  return DatasetSchema.parse({ ...config, object: objectDef.name });
+): Seed {
+  return SeedSchema.parse({ ...config, object: objectDef.name });
 }

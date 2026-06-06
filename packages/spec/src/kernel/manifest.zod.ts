@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PluginCapabilityManifestSchema } from './plugin-capability.zod';
 import { PluginLoadingConfigSchema } from './plugin-loading.zod';
 import { CORE_PLUGIN_TYPES } from './plugin.zod';
-import { DatasetSchema } from '../data/dataset.zod';
+import { SeedSchema } from '../data/seed.zod';
 import { NavigationContributionSchema } from '../ui/app.zod';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ export const ManifestSchema = z.object({
    * Initial data seeding configuration.
    * Defines default records to be inserted when the package is installed.
    * 
-   * Uses the standard DatasetSchema which supports idempotent upsert via
+   * Uses the standard SeedSchema which supports idempotent upsert via
    * `externalId`, environment scoping via `env`, and multiple conflict
    * resolution modes.
    * 
@@ -474,7 +474,7 @@ export const ManifestSchema = z.object({
    * (defineStack({ data: [...] })) for better visibility and metadata registration.
    * This field is retained for backward compatibility with manifest-only packages.
    */
-  data: z.array(DatasetSchema).optional().describe('Initial seed data (prefer top-level data field)'),
+  data: z.array(SeedSchema).optional().describe('Initial seed data (prefer top-level data field)'),
 
   /**
    * Plugin Capability Manifest.

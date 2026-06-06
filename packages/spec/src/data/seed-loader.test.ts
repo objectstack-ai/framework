@@ -5,7 +5,7 @@ import {
   ObjectDependencyGraphSchema,
   ReferenceResolutionErrorSchema,
   SeedLoaderConfigSchema,
-  DatasetLoadResultSchema,
+  SeedLoadResultSchema,
   SeedLoaderResultSchema,
   SeedLoaderRequestSchema,
 } from './seed-loader.zod';
@@ -269,12 +269,12 @@ describe('SeedLoaderConfigSchema', () => {
 });
 
 // ==========================================================================
-// DatasetLoadResultSchema
+// SeedLoadResultSchema
 // ==========================================================================
 
-describe('DatasetLoadResultSchema', () => {
+describe('SeedLoadResultSchema', () => {
   it('should accept a successful load result', () => {
-    const result = DatasetLoadResultSchema.parse({
+    const result = SeedLoadResultSchema.parse({
       object: 'account',
       mode: 'upsert',
       inserted: 5,
@@ -291,7 +291,7 @@ describe('DatasetLoadResultSchema', () => {
   });
 
   it('should accept a result with errors', () => {
-    const result = DatasetLoadResultSchema.parse({
+    const result = SeedLoadResultSchema.parse({
       object: 'contact',
       mode: 'upsert',
       inserted: 3,
@@ -318,7 +318,7 @@ describe('DatasetLoadResultSchema', () => {
   });
 
   it('should accept a result with deferred references', () => {
-    const result = DatasetLoadResultSchema.parse({
+    const result = SeedLoadResultSchema.parse({
       object: 'task',
       mode: 'insert',
       inserted: 10,
@@ -333,7 +333,7 @@ describe('DatasetLoadResultSchema', () => {
   });
 
   it('should default errors to empty array', () => {
-    const result = DatasetLoadResultSchema.parse({
+    const result = SeedLoadResultSchema.parse({
       object: 'product',
       mode: 'insert',
       inserted: 1,
@@ -348,7 +348,7 @@ describe('DatasetLoadResultSchema', () => {
   });
 
   it('should reject negative counts', () => {
-    expect(() => DatasetLoadResultSchema.parse({
+    expect(() => SeedLoadResultSchema.parse({
       object: 'test',
       mode: 'upsert',
       inserted: -1,
@@ -576,18 +576,18 @@ describe('SeedLoaderResultSchema', () => {
 describe('SeedLoaderRequestSchema', () => {
   it('should accept a minimal request with defaults', () => {
     const request = SeedLoaderRequestSchema.parse({
-      datasets: [
+      seeds: [
         { object: 'country', records: [{ name: 'United States', code: 'US' }] },
       ],
     });
-    expect(request.datasets).toHaveLength(1);
+    expect(request.seeds).toHaveLength(1);
     expect(request.config.dryRun).toBe(false);
     expect(request.config.defaultMode).toBe('upsert');
   });
 
   it('should accept a request with full configuration', () => {
     const request = SeedLoaderRequestSchema.parse({
-      datasets: [
+      seeds: [
         {
           object: 'account',
           externalId: 'code',
@@ -607,14 +607,14 @@ describe('SeedLoaderRequestSchema', () => {
         env: 'dev',
       },
     });
-    expect(request.datasets).toHaveLength(2);
+    expect(request.seeds).toHaveLength(2);
     expect(request.config.dryRun).toBe(true);
     expect(request.config.env).toBe('dev');
   });
 
   it('should reject empty datasets', () => {
     expect(() => SeedLoaderRequestSchema.parse({
-      datasets: [],
+      seeds: [],
     })).toThrow();
   });
 
@@ -624,7 +624,7 @@ describe('SeedLoaderRequestSchema', () => {
 
   it('should handle CRM seed data scenario', () => {
     const request = SeedLoaderRequestSchema.parse({
-      datasets: [
+      seeds: [
         {
           object: 'industry',
           externalId: 'code',
@@ -658,8 +658,8 @@ describe('SeedLoaderRequestSchema', () => {
         defaultMode: 'upsert',
       },
     });
-    expect(request.datasets).toHaveLength(3);
-    expect(request.datasets[0].externalId).toBe('code');
-    expect(request.datasets[2].externalId).toBe('email');
+    expect(request.seeds).toHaveLength(3);
+    expect(request.seeds[0].externalId).toBe('code');
+    expect(request.seeds[2].externalId).toBe('email');
   });
 });

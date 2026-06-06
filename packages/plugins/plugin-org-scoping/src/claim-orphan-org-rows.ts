@@ -3,7 +3,7 @@
 /**
  * claimOrphanOrgRows — assign seed-loaded records to the first organization.
  *
- * Seeds (`defineDataset`) are inserted by `SeedLoaderService` using
+ * Seeds (`defineSeed`) are inserted by `SeedLoaderService` using
  * `{ context: { isSystem: true } }`, which intentionally bypasses
  * SecurityPlugin's `organization_id` auto-fill. As a result, in
  * multi-tenant mode every seed row lands with `organization_id = NULL`.

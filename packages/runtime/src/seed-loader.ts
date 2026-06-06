@@ -10,8 +10,8 @@ import type {
   ObjectDependencyNode,
   ReferenceResolution,
   ReferenceResolutionError,
-  DatasetLoadResult,
-  Dataset,
+  SeedLoadResult,
+  Seed,
 } from '@objectstack/spec/data';
 import { SeedLoaderConfigSchema } from '@objectstack/spec/data';
 import { resolveSeedRecord } from '@objectstack/formula';
@@ -34,7 +34,7 @@ const DEFAULT_EXTERNAL_ID_FIELD = 'name';
  * - Topological dependency ordering (parents before children)
  * - Multi-pass loading for circular references
  * - Dry-run validation mode
- * - Upsert support honoring DatasetSchema mode
+ * - Upsert support honoring SeedSchema mode
  * - Actionable error reporting
  */
 export class SeedLoaderService implements ISeedLoaderService {
@@ -56,10 +56,10 @@ export class SeedLoaderService implements ISeedLoaderService {
     const startTime = Date.now();
     const config = request.config;
     const allErrors: ReferenceResolutionError[] = [];
-    const allResults: DatasetLoadResult[] = [];
+    const allResults: SeedLoadResult[] = [];
 
     // 1. Filter datasets by environment
-    const datasets = this.filterByEnv(request.datasets, config.env);
+    const datasets = this.filterByEnv(request.seeds, config.env);
 
     if (datasets.length === 0) {
       return this.buildEmptyResult(config, Date.now() - startTime);
@@ -153,23 +153,23 @@ export class SeedLoaderService implements ISeedLoaderService {
     return { nodes, insertOrder, circularDependencies };
   }
 
-  async validate(datasets: Dataset[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult> {
+  async validate(datasets: Seed[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult> {
     const parsedConfig = SeedLoaderConfigSchema.parse({ ...config, dryRun: true });
-    return this.load({ datasets, config: parsedConfig });
+    return this.load({ seeds: datasets, config: parsedConfig });
   }
 
   // ==========================================================================
-  // Internal: Dataset Loading
+  // Internal: Seed Loading
   // ==========================================================================
 
   private async loadDataset(
-    dataset: Dataset,
+    dataset: Seed,
     config: SeedLoaderConfig,
     refMap: Map<string, ReferenceResolution[]>,
     insertedRecords: Map<string, Map<string, string>>,
     deferredUpdates: DeferredUpdate[],
     allErrors: ReferenceResolutionError[],
-  ): Promise<DatasetLoadResult> {
+  ): Promise<SeedLoadResult> {
     const objectName = dataset.object;
     const mode = dataset.mode || config.defaultMode;
     const externalId = dataset.externalId || 'name';
@@ -457,7 +457,7 @@ export class SeedLoaderService implements ISeedLoaderService {
   private async resolveDeferredUpdates(
     deferredUpdates: DeferredUpdate[],
     insertedRecords: Map<string, Map<string, string>>,
-    allResults: DatasetLoadResult[],
+    allResults: SeedLoadResult[],
     allErrors: ReferenceResolutionError[],
     organizationId?: string,
   ): Promise<void> {
@@ -709,12 +709,12 @@ export class SeedLoaderService implements ISeedLoaderService {
   // Internal: Helpers
   // ==========================================================================
 
-  private filterByEnv(datasets: Dataset[], env?: string): Dataset[] {
+  private filterByEnv(datasets: Seed[], env?: string): Seed[] {
     if (!env) return datasets;
     return datasets.filter(d => (d.env as string[]).includes(env));
   }
 
-  private orderDatasets(datasets: Dataset[], insertOrder: string[]): Dataset[] {
+  private orderDatasets(datasets: Seed[], insertOrder: string[]): Seed[] {
     const orderMap = new Map(insertOrder.map((name, i) => [name, i]));
     return [...datasets].sort((a, b) => {
       const orderA = orderMap.get(a.object) ?? Number.MAX_SAFE_INTEGER;
@@ -803,7 +803,7 @@ export class SeedLoaderService implements ISeedLoaderService {
   private buildResult(
     config: SeedLoaderConfig,
     graph: ObjectDependencyGraph,
-    results: DatasetLoadResult[],
+    results: SeedLoadResult[],
     errors: ReferenceResolutionError[],
     durationMs: number,
   ): SeedLoaderResult {

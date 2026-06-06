@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ISeedLoaderService } from './seed-loader-service';
 import type { SeedLoaderRequest, SeedLoaderResult, ObjectDependencyGraph } from '../data/seed-loader.zod';
-import type { Dataset } from '../data/dataset.zod';
+import type { Seed } from '../data/seed.zod';
 
 describe('Seed Loader Service Contract', () => {
   it('should allow a minimal implementation with required methods', () => {
@@ -32,7 +32,7 @@ describe('Seed Loader Service Contract', () => {
       buildDependencyGraph: async (_objectNames: string[]): Promise<ObjectDependencyGraph> => {
         return { nodes: [], insertOrder: [], circularDependencies: [] };
       },
-      validate: async (_datasets: Dataset[]): Promise<SeedLoaderResult> => {
+      validate: async (_datasets: Seed[]): Promise<SeedLoaderResult> => {
         return {
           success: true,
           dryRun: true,
@@ -69,8 +69,8 @@ describe('Seed Loader Service Contract', () => {
         results: [],
         errors: [],
         summary: {
-          objectsProcessed: request.datasets.length,
-          totalRecords: request.datasets.reduce((sum, d) => sum + d.records.length, 0),
+          objectsProcessed: request.seeds.length,
+          totalRecords: request.seeds.reduce((sum, d) => sum + d.records.length, 0),
           totalInserted: 0,
           totalUpdated: 0,
           totalSkipped: 0,
@@ -97,7 +97,7 @@ describe('Seed Loader Service Contract', () => {
     };
 
     const result = await service.load({
-      datasets: [
+      seeds: [
         { object: 'account', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Acme' }] },
       ],
       config: {

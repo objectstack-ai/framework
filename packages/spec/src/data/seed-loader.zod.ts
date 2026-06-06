@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { z } from 'zod';
-import { DatasetSchema, DatasetMode } from './dataset.zod';
+import { SeedSchema, SeedMode } from './seed.zod';
 
 /**
  * # Seed Loader Protocol
@@ -227,7 +227,7 @@ export const SeedLoaderConfigSchema = lazySchema(() => z.object({
    * Default dataset mode when not specified per-dataset.
    * @default 'upsert'
    */
-  defaultMode: DatasetMode.default('upsert')
+  defaultMode: SeedMode.default('upsert')
     .describe('Default conflict resolution strategy'),
 
   /**
@@ -299,12 +299,12 @@ export type SeedLoaderConfigInput = z.input<typeof SeedLoaderConfigSchema>;
 /**
  * Result of loading a single object's dataset.
  */
-export const DatasetLoadResultSchema = lazySchema(() => z.object({
+export const SeedLoadResultSchema = lazySchema(() => z.object({
   /** Target object name */
   object: z.string().describe('Object that was loaded'),
 
   /** Import mode used */
-  mode: DatasetMode.describe('Import mode used'),
+  mode: SeedMode.describe('Import mode used'),
 
   /** Number of records successfully inserted */
   inserted: z.number().int().min(0).describe('Records inserted'),
@@ -332,7 +332,7 @@ export const DatasetLoadResultSchema = lazySchema(() => z.object({
     .describe('Reference resolution errors'),
 }).describe('Result of loading a single dataset'));
 
-export type DatasetLoadResult = z.infer<typeof DatasetLoadResultSchema>;
+export type SeedLoadResult = z.infer<typeof SeedLoadResultSchema>;
 
 // ==========================================================================
 // 7. Seed Loader Result
@@ -353,7 +353,7 @@ export const SeedLoaderResultSchema = lazySchema(() => z.object({
   dependencyGraph: ObjectDependencyGraphSchema.describe('Object dependency graph'),
 
   /** Per-object load results, in the order they were processed */
-  results: z.array(DatasetLoadResultSchema).describe('Per-object load results'),
+  results: z.array(SeedLoadResultSchema).describe('Per-object load results'),
 
   /** All reference resolution errors across all objects */
   errors: z.array(ReferenceResolutionErrorSchema).describe('All reference resolution errors'),
@@ -403,8 +403,8 @@ export type SeedLoaderResult = z.infer<typeof SeedLoaderResultSchema>;
  * Combines datasets with loader configuration.
  */
 export const SeedLoaderRequestSchema = lazySchema(() => z.object({
-  /** Datasets to load */
-  datasets: z.array(DatasetSchema).min(1).describe('Datasets to load'),
+  /** Seeds to load */
+  seeds: z.array(SeedSchema).min(1).describe('Seeds to load'),
 
   /** Loader configuration */
   config: SeedLoaderConfigSchema.default(() => SeedLoaderConfigSchema.parse({})).describe('Loader configuration'),

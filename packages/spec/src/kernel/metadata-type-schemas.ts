@@ -32,7 +32,7 @@ import { ObjectSchema } from '../data/object.zod';
 import { HookSchema } from '../data/hook.zod';
 import { ValidationRuleSchema } from '../data/validation.zod';
 import { DatasourceSchema } from '../data/datasource.zod';
-import { SeedSchema } from '../data/dataset.zod';
+import { SeedSchema } from '../data/seed.zod';
 
 import { ViewSchema } from '../ui/view.zod';
 import { PageSchema } from '../ui/page.zod';

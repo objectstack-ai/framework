@@ -982,6 +982,46 @@ describe('HttpDispatcher', () => {
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(501);
         });
+
+        // Integration: publishing a `seed` draft must LOAD its rows. This
+        // exercises applyPublishedSeeds end-to-end against the REAL
+        // SeedLoaderService (only the engine/metadata are mocked), so it pins
+        // the read-back shape (protocol.getMetaItem returns a WRAPPER whose body
+        // is under `.item`), the renamed `seeds` request field, and the loader
+        // invocation — the exact chain that silently loaded 0 rows on staging.
+        it('POST /packages/:id/publish-drafts applies published `seed` rows', async () => {
+            const records = [
+                { name: 'Apollo', status: 'active', budget_amount: 120000 },
+                { name: 'Gemini', status: 'planned', budget_amount: 45000 },
+            ];
+            const publishPackageDrafts = vi.fn().mockResolvedValue({
+                success: true, publishedCount: 1, failedCount: 0,
+                published: [{ type: 'seed', name: 'project_seed', version: 'h' }], failed: [],
+            });
+            // protocol.getMetaItem returns the WRAPPER shape (body under `.item`).
+            const getMetaItem = vi.fn().mockResolvedValue({
+                type: 'seed', name: 'project_seed', lock: null, editable: true,
+                item: { object: 'project', externalId: 'name', mode: 'upsert', records },
+            });
+            const insert = vi.fn().mockImplementation(async (_obj: string, rec: any) => ({ id: `id_${rec.name}` }));
+            const find = vi.fn().mockResolvedValue([]); // no existing rows → all insert
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ publishPackageDrafts, getMetaItem });
+                if (name === 'objectql') return Promise.resolve({ insert, find, update: vi.fn(), registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                if (name === 'metadata') return Promise.resolve({ getObject: vi.fn().mockResolvedValue({ name: 'project', fields: { name: { type: 'text' }, status: { type: 'select' }, budget_amount: { type: 'currency' } } }) });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/com.workspace/publish-drafts', 'POST', {}, {}, { request: {} });
+
+            expect(result.response?.status).toBe(200);
+            const seedApplied = (result.response as any)?.body?.data?.seedApplied;
+            expect(seedApplied?.success).toBe(true);
+            expect(seedApplied?.inserted).toBe(2);
+            // rows actually went to the engine
+            expect(insert).toHaveBeenCalledTimes(2);
+            expect(insert).toHaveBeenCalledWith('project', expect.objectContaining({ name: 'Apollo' }), expect.anything());
+        });
     });
 
     // ═══════════════════════════════════════════════════════════════

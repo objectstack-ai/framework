@@ -7,7 +7,7 @@ import type {
   ObjectDependencyGraph,
 } from '../data/seed-loader.zod.js';
 
-import type { Dataset } from '../data/dataset.zod.js';
+import type { Seed } from '../data/seed.zod.js';
 
 /**
  * ISeedLoaderService — Metadata-driven Seed Data Loader Contract
@@ -54,9 +54,9 @@ export interface ISeedLoaderService {
    * Validate datasets without writing any data (equivalent to config.dryRun = true).
    * Checks reference integrity and reports all broken references.
    *
-   * @param datasets - Datasets to validate
+   * @param datasets - Seeds to validate
    * @param config - Optional loader config overrides
    * @returns Structured result with validation errors (no data written)
    */
-  validate(datasets: Dataset[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult>;
+  validate(datasets: Seed[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult>;
 }

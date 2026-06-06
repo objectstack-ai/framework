@@ -520,7 +520,7 @@ export class AppPlugin implements Plugin {
                      const seedLoader = new SeedLoaderService(ql, md, loggerRef);
                      const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
                      const request = SeedLoaderRequestSchema.parse({
-                         datasets: datasetsNow,
+                         seeds: datasetsNow,
                          config: {
                              defaultMode: 'upsert',
                              multiPass: true,
@@ -540,7 +540,7 @@ export class AppPlugin implements Plugin {
                      };
                  };
                  registerSvc('seed-replayer', replayer);
-                 ctx.logger.info(`[Seeder] Registered ${normalizedDatasets.length} datasets + replayer on kernel (total datasets: ${merged.length})`);
+                 ctx.logger.info(`[Seeder] Registered ${normalizedDatasets.length} datasets + replayer on kernel (total seeds: ${merged.length})`);
              } catch (e: any) {
                  ctx.logger.warn('[Seeder] Failed to register seed-datasets/seed-replayer service', { error: e?.message });
              }
@@ -571,7 +571,7 @@ export class AppPlugin implements Plugin {
                       const seedLoader = new SeedLoaderService(ql, metadata, ctx.logger);
                       const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
                       const request = SeedLoaderRequestSchema.parse({
-                          datasets: normalizedDatasets,
+                          seeds: normalizedDatasets,
                           config: { defaultMode: 'upsert', multiPass: true, identity: seedIdentity },
                       });
                       const result = await seedLoader.load(request);
