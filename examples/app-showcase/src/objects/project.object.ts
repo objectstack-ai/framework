@@ -46,7 +46,16 @@ export const Project = ObjectSchema.create({
     start_date: Field.date({ label: 'Start Date' }),
     end_date: Field.date({ label: 'Target End Date' }),
     owner: Field.text({ label: 'Owner', maxLength: 200 }),
-    summary: Field.summary({ label: 'Open Tasks' }),
+    // Roll-up summaries — recomputed server-side whenever a child task is
+    // inserted / updated / deleted (FK auto-detected: showcase_task.project).
+    task_count: Field.summary({
+      label: 'Tasks',
+      summaryOperations: { object: 'showcase_task', field: 'estimate_hours', function: 'count' },
+    }),
+    total_estimate: Field.summary({
+      label: 'Total Estimate (h)',
+      summaryOperations: { object: 'showcase_task', field: 'estimate_hours', function: 'sum' },
+    }),
   },
 
   validations: [
