@@ -34,8 +34,8 @@ batch-draft. This is the safety valve for low-specificity input.
 ## TypeScript Usage
 
 ```typescript
-import { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint } from '@objectstack/spec/ai';
-import type { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint } from '@objectstack/spec/ai';
+import { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
+import type { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
 
 // Validate data
 const result = BlueprintApp.parse(data);
@@ -137,6 +137,7 @@ const result = BlueprintApp.parse(data);
 | **label** | `string` | optional | Human-readable view label |
 | **type** | `Enum<'list' \| 'form' \| 'kanban' \| 'calendar'>` | ✅ | View kind |
 | **columns** | `string[]` | optional | Field names shown as columns (in order) |
+| **groupBy** | `string` | optional | REQUIRED for kanban views: the select/status field whose options become the board columns (e.g. "stage", "status"). Without it a kanban renders as a plain list. |
 
 
 ---
@@ -155,6 +156,23 @@ const result = BlueprintApp.parse(data);
 | **dashboards** | `Object[]` | optional | Dashboards to create |
 | **app** | `Object` | optional | The navigation shell (app) that surfaces the created objects/dashboards to end users |
 | **seedData** | `Object[]` | optional | Suggested seed data (reported, not auto-applied in Phase C) |
+
+
+---
+
+## SolutionBlueprintStrict
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **summary** | `string` | ✅ | One-line description of the proposed solution |
+| **assumptions** | `string[]` | ✅ | Design assumptions made from the underspecified goal |
+| **questions** | `string[] \| null` | ✅ | At most 1-2 structure-deciding questions to confirm before building, or null |
+| **objects** | `Object[]` | ✅ | Objects (tables) to create |
+| **views** | `Object[] \| null` | ✅ | Views to create, or null |
+| **dashboards** | `Object[] \| null` | ✅ | Dashboards to create, or null |
+| **app** | `Object \| null` | ✅ | The navigation shell (app) that surfaces the created objects/dashboards, or null |
 
 
 ---

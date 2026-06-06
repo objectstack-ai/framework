@@ -1,332 +1,112 @@
 ---
 title: Publish, Versioning & Preview
-description: End-to-end pipeline — `objectstack compile` → `objectstack publish` → cloud control plane stores immutable revisions in object storage → ObjectOS runtime pulls via artifact-api. Includes rollback and pinned-commit preview.
+description: Compile metadata, publish it to a Cloud environment, and activate or roll back revisions.
 ---
 
 # Publish, Versioning & Preview
 
-The cloud control plane keeps **every** publish as an immutable revision in
-object storage and lets runtime nodes boot off any historical commit.
-This page walks through the full loop:
+ObjectStack treats compiled metadata as an immutable environment artifact. The
+local loop is:
 
+```text
+objectstack.config.ts -> os compile -> dist/objectstack.json -> os publish -> Cloud environment revision
 ```
-┌───────────┐   compile    ┌──────────────────┐   publish   ┌────────────────────┐   pull (artifact-api)   ┌──────────────┐
-│ source    │ ───────────▶ │ dist/object-     │ ──────────▶ │ Cloud control      │ ──────────────────────▶ │ ObjectOS     │
-│ tree      │              │ stack.json       │             │ plane (revisions)  │                         │ runtime node │
-└───────────┘              └──────────────────┘             └────────────────────┘                         └──────────────┘
-                                                                      │
-                                                                      ├── object storage
-                                                                      │   (file-storage / S3)
-                                                                      └── sys_project_revision
-                                                                          (commitId, checksum,
-                                                                           is_current, …)
-```
+
+The framework CLI owns compile/publish/rollback commands. The Cloud control
+plane that stores revisions and serves them to runtime nodes lives outside this
+framework repo.
 
 ---
 
 ## 1. Compile
 
 ```bash
-objectstack compile
-# → dist/objectstack.json   (envelope: { schemaVersion, commitId, metadata, … })
+os compile
+# -> dist/objectstack.json
 ```
 
-The artifact is **content-addressable**: `commitId` is a sha256 prefix of the
-canonicalised metadata. Identical content always produces the same `commitId`,
-so re-publishing is a no-op upload.
+The artifact contains metadata, manifest requirements, and packaged function
+code. Deployment config stays outside the artifact: database URLs, secrets,
+runtime credentials, and environment identity are host inputs.
 
 ---
 
 ## 2. Publish
 
 ```bash
-objectstack publish dist/objectstack.json \
-  --project proj_crm \
-  --server  http://localhost:4000
+OS_CLOUD_URL=https://cloud.example.com \
+OS_ENVIRONMENT_ID=env_prod \
+os publish
 ```
 
-Common flags:
+Common inputs:
 
-| Flag                | Env var               | Default                  | Notes |
-|---------------------|-----------------------|--------------------------|-------|
-| `--server`, `-s`    | `OS_CLOUD_URL`        | `http://localhost:4000`  | Control-plane URL |
-| `--project`, `-p`   | `OS_PROJECT_ID`       | — (required)             | Target project id |
-| `--token`,   `-t`   | `OS_CLOUD_API_KEY`    | —                        | Bearer token (when auth is enabled) |
-| `--note`,    `-n`   | —                     | —                        | Optional human-readable note attached to the revision (shown in Studio) |
-| `--timeout`         | `OS_CLOUD_TIMEOUT_MS` | `60000` (60 s)           | Set higher for slow networks; `0` disables |
+| Input | Env var | Purpose |
+|:---|:---|:---|
+| `--server`, `-s` | `OS_CLOUD_URL` | Cloud control-plane URL |
+| `--environment`, `-e` | `OS_ENVIRONMENT_ID` | Target environment id |
+| `--token`, `-t` | `OS_CLOUD_API_KEY` | Bearer token when required |
+| `--timeout` | `OS_CLOUD_TIMEOUT_MS` | Request timeout |
 
-`publish` POSTs to `/api/v1/cloud/projects/:id/metadata`. The control plane:
+The CLI posts the compiled JSON to:
 
-1. Computes / verifies `commitId`.
-2. **Uploads** to object storage at
-   `artifacts/orgs/${organizationId}/projects/${projectId}/${commitId}.json`
-   (no-op if the key already exists — content-addressable). Org-first prefixing
-   makes per-tenant IAM policies, billing attribution, exports and GC trivial.
-   Projects without an `organization_id` (rare, single-tenant installs) fall
-   back to the legacy `artifacts/${projectId}/${commitId}.json` shape.
-   Existing rows keep their original key in `sys_project_revision.storage_key`,
-   so historical artifacts always remain readable regardless of layout changes.
-3. **Inserts** a `sys_project_revision` row, flips the previous current row to
-   `is_current = false`, and marks the new one `is_current = true`.
-4. Updates `sys_project.metadata.current_commit_id`.
+```text
+POST /api/v1/cloud/environments/:environment/metadata
+```
+
+The response includes the environment id, commit id, and checksum for the newly
+published revision.
 
 ---
 
-## 3. Storage backend
+## 3. Activate or roll back
 
-The plugin resolves storage in this order:
-
-1. Explicit `options.storage.service` (passed by host code)
-2. Kernel-registered `file-storage` service (`@objectstack/service-storage`)
-3. Local filesystem fallback (warns at boot)
-
-`createCloudStack()` in `@objectstack/service-cloud` automatically wires
-`StorageServicePlugin` based on **environment variables** — no code changes
-needed when switching backends.
-
-### Env-driven configuration
-
-| Env var                  | Required when           | Description |
-|--------------------------|-------------------------|-------------|
-| `OS_STORAGE_ADAPTER`     | always (default `local`)| `local` \| `s3` \| `none` (`none` skips registering, falls back to plugin's local-FS write — useful for tests) |
-| `OS_STORAGE_LOCAL_DIR`   | `local` adapter         | Root dir for local files (default `./storage`) |
-| `OS_S3_BUCKET`           | `s3` adapter (required) | Bucket name |
-| `OS_S3_REGION`           | `s3` adapter (required) | AWS region (e.g. `us-east-1`, `auto` for R2) |
-| `OS_S3_ENDPOINT`         | S3-compatible only      | Custom endpoint (Cloudflare R2, MinIO, B2, etc.) |
-| `OS_S3_ACCESS_KEY_ID`    | when not using SDK chain | Access key |
-| `OS_S3_SECRET_ACCESS_KEY`| when not using SDK chain | Secret key |
-| `OS_S3_FORCE_PATH_STYLE` | MinIO / self-hosted     | `1` / `true` to force path-style URLs |
-
-### Example: native AWS S3
+To activate a previous commit:
 
 ```bash
-OS_STORAGE_ADAPTER=s3
-OS_S3_BUCKET=objectstack-artifacts
-OS_S3_REGION=us-east-1
-OS_S3_ACCESS_KEY_ID=AKIA…
-OS_S3_SECRET_ACCESS_KEY=…
+OS_CLOUD_URL=https://cloud.example.com \
+OS_ENVIRONMENT_ID=env_prod \
+os rollback --commit 9ce1bd48dd7022b8
 ```
 
-### Example: Cloudflare R2
+The CLI calls:
 
-```bash
-OS_STORAGE_ADAPTER=s3
-OS_S3_BUCKET=objectstack-artifacts
-OS_S3_REGION=auto
-OS_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-OS_S3_ACCESS_KEY_ID=…
-OS_S3_SECRET_ACCESS_KEY=…
+```text
+POST /api/v1/cloud/environments/:environment/revisions/:commit/activate
 ```
 
-### Example: MinIO (local development against S3 protocol)
-
-```bash
-OS_STORAGE_ADAPTER=s3
-OS_S3_BUCKET=artifacts
-OS_S3_REGION=us-east-1
-OS_S3_ENDPOINT=http://localhost:9000
-OS_S3_ACCESS_KEY_ID=minioadmin
-OS_S3_SECRET_ACCESS_KEY=minioadmin
-OS_S3_FORCE_PATH_STYLE=1
-```
-
-> **Vercel (and other serverless hosts):** the local-FS fallback **does not
-> work** — Vercel functions get a read-only filesystem (only `/tmp` is
-> writable, and it is not shared across invocations). You **must** set
-> `OS_STORAGE_ADAPTER=s3` plus `OS_S3_*` in your project settings.
-> Pair it with `OS_CONTROL_DATABASE_URL` pointing at Turso / libSQL for the
-> control DB.
+Runtime hosts can then refresh the environment kernel using the active
+commit/checksum.
 
 ---
 
-## 4. Cloud HTTP API
+## 4. Package publish
 
-All endpoints live under `/api/v1/cloud/projects/:id/`.
+Packages are separate from environment revisions:
 
-| Method & Path                                | Purpose |
-|----------------------------------------------|---------|
-| `POST /metadata`                             | Publish a new revision (called by CLI) |
-| `GET  /artifact`                             | Get the **current** artifact (envelope) |
-| `GET  /artifact?commit=<sha>`                | Get a **pinned** revision |
-| `GET  /revisions?limit=&cursor=`             | List revisions (most-recent first) |
-| `POST /revisions/:commit/activate`           | Roll back / forward — flip `is_current` |
-| `GET  /resolve-hostname?host=<host>`         | Tenant routing helper used by ObjectOS |
+```bash
+os package publish --env env_prod
+```
 
-Errors follow the standard `{ success: false, error: '…' }` shape. Unknown
-commits return **404** with a descriptive message.
+Package publish targets the Cloud package registry endpoints, while
+`os publish` targets an environment revision.
 
 ---
 
-## 5. Runtime — `artifact-api` source
+## 5. Preview patterns
 
-ObjectOS runtime nodes can boot off any cloud revision without ever touching
-the source tree:
+Use one of these shapes:
 
-```ts
-import { MetadataPlugin } from '@objectstack/metadata';
-
-new MetadataPlugin({
-  bootstrap: 'artifact-only',           // skip filesystem watcher
-  artifactSource: {
-    mode: 'artifact-api',
-    url:  'https://cloud.example.com',
-    projectId: 'proj_crm',
-    commitId: '9707264f0450e8ba',        // optional — omit for latest
-    token: process.env.OS_CLOUD_API_KEY, // optional
-    fetchTimeoutMs: 60_000,              // optional, default 60 s
-  },
-});
-```
-
-The plugin merges the cloud envelope’s `metadata` block, dynamically imports
-`@objectstack/spec/cloud` for Zod validation, and registers every metadata
-item before the kernel marks itself ready.
-
-> **Tip — slow networks:** override the timeout per-plugin
-> (`fetchTimeoutMs`) or globally via `OS_ARTIFACT_FETCH_TIMEOUT_MS`.
+| Pattern | Command |
+|:---|:---|
+| Local artifact preview | `os serve --artifact ./dist/objectstack.json --dev --ui` |
+| Production artifact host | `OS_ARTIFACT_PATH=./dist/objectstack.json os start` |
+| Cloud environment preview | Publish to a preview environment id, then route clients to that environment via `/api/v1/environments/:environmentId/...` or `X-Environment-Id`. |
 
 ---
 
-## 6. Rollback
+## Related
 
-Every publish is preserved. The fastest way to roll back is the CLI:
-
-```bash
-# Accepts either the full 16-char commitId or any unambiguous prefix (≥ 8 chars).
-OS_CLOUD_URL=http://localhost:4000 OS_PROJECT_ID=proj_crm \
-  objectstack rollback --commit 9ce1bd48
-```
-
-Equivalent raw HTTP:
-
-```bash
-curl -X POST http://localhost:4000/api/v1/cloud/projects/proj_crm/revisions/9ce1bd48dd7022b8/activate
-```
-
-The next `GET /artifact` (no `?commit`) — and any runtime node restarted
-without a pinned `commitId` — will pick up the older revision. Roll forward
-the same way.
-
-### Pruning old revisions
-
-History grows with every publish. Use the prune endpoint to enforce a
-retention policy. The current revision is **always** preserved.
-
-```bash
-curl -X POST http://localhost:4000/api/v1/cloud/projects/proj_crm/revisions/prune \
-  -H 'Content-Type: application/json' \
-  -d '{"keepN": 50, "keepDays": 30}'
-```
-
-Defaults are `keepN = 50` and `keepDays = 30`. Any row outside both windows
-is deleted from the table **and** the underlying object-storage key is
-removed (best-effort — orphaned keys won't block the row deletion).
-
----
-
-## 7. Local end-to-end smoke test
-
-```bash
-# Terminal 1 — cloud control plane
-cd apps/cloud
-OS_MODE=cloud PORT=4000 \
-  AUTH_SECRET=local-dev-secret-must-be-at-least-32-chars-long \
-  pnpm dev
-
-# Terminal 2 — compile + publish twice
-cd hotcrm                                  # https://github.com/objectstack-ai/hotcrm
-objectstack compile
-OS_PROJECT_ID=proj_crm objectstack publish
-
-# tweak any object label, recompile, publish again
-
-# Terminal 3 — list revisions
-curl http://localhost:4000/api/v1/cloud/projects/proj_crm/revisions | jq
-```
-
-You should see two `sys_project_revision` rows — the second one
-`isCurrent: true` — and the artifact body for either one accessible via
-`GET /artifact?commit=<id>`.
-
----
-
-## 7. Public artifact API (visibility)
-
-By default every project is **private** — only the authenticated `/cloud/*`
-routes can read it. To support marketplace listings, OSS templates, share
-links, or live documentation demos, switch a project to **public** or
-**unlisted**.
-
-```ts
-// sys_project.visibility — defined in packages/platform-objects/src/tenant/sys-project.object.ts
-visibility: 'private' | 'unlisted' | 'public'   // default: 'private'
-```
-
-| Mode       | `/pub/v1/.../artifact` (no commit) | `/pub/v1/.../artifact?commit=<id>` | `/pub/v1/.../revisions` | `/pub/v1/.../manifest.json` |
-|------------|:-----------------------------------:|:------------------------------------:|:------------------------:|:----------------------------:|
-| `private`  | 404                                 | 404                                  | 404                      | 404                          |
-| `unlisted` | 404                                 | ✅ 200                               | 404                      | 404                          |
-| `public`   | ✅ 200 (current)                    | ✅ 200                               | ✅ 200                   | ✅ 200                       |
-
-`unlisted` requires the caller to know the exact `commit` — it is meant for
-share-preview links you mail to colleagues, not for crawling.
-
-### Public endpoints
-
-- `GET /api/v1/pub/v1/projects/:id/artifact[?commit=<id>][&redirect=1]`
-  Returns the same envelope as the private route. **No auth header required.**
-  Sets `Cache-Control: public, max-age=31536000, immutable` and
-  `ETag: "<commitId>"` so a CDN (Cloudflare, CloudFront, …) in front of the
-  control plane serves it from the edge for free.
-  When the storage adapter is S3 / R2 (or anything that implements
-  `getSignedUrl`), passing `?redirect=1` makes the control plane respond
-  with a `302` to a short-lived (5 min) signed URL — bandwidth then comes
-  straight from the bucket and the control plane is no longer the chokepoint.
-- `GET /api/v1/pub/v1/projects/:id/revisions?limit=N` — public history.
-- `GET /api/v1/pub/v1/projects/:id/manifest.json` — lightweight project info
-  (`projectId`, `displayName`, `currentCommitId`, `currentChecksum`, `builtAt`).
-
-### Flipping visibility
-
-```bash
-# Via the platform REST (control plane)
-curl -X PATCH https://cloud.example.com/api/v1/data/sys_project/proj_crm \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"visibility":"public"}'
-```
-
-Or via SQL on the control DB:
-
-```sql
-UPDATE sys_project SET visibility='public' WHERE id='proj_crm';
-```
-
-> ⚠️ **Before going public, audit the artifact** — it includes every field
-> name, view config, AI prompt, and formula. Treat it like committing to a
-> public Git repo: never embed credentials or PII in metadata.
-
-### Pulling a public artifact from another runtime
-
-```ts
-import { MetadataPlugin } from '@objectstack/metadata';
-
-new MetadataPlugin({
-    artifactSource: {
-        mode: 'artifact-api',
-        url: 'https://cloud.objectstack.dev',
-        // No token needed for /pub routes
-        // Use the public path explicitly:
-        // url: 'https://cloud.objectstack.dev/api/v1/pub/v1/projects/proj_crm'
-    },
-    bootstrap: 'artifact-only',
-});
-```
-
----
-
-## See also
-
-- [`packages/services/service-cloud`](https://github.com/objectstack-ai/framework/tree/main/packages/services/service-cloud) — control-plane plugin source
-- [`packages/metadata`](https://github.com/objectstack-ai/framework/tree/main/packages/metadata) — `MetadataPlugin` and the `artifact-api` loader
-- [Cloud Deployment](./cloud-deployment) — running cloud / standalone modes
+- [Deployment Modes](./cloud-deployment)
+- [Environment-Scoped Routing](./project-scoping)
+- [Cloud Environment Artifact API](../concepts/cloud-artifact-api)

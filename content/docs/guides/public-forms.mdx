@@ -145,9 +145,9 @@ export default leadGuestDefaults;
 
 ## 4. The REST contract
 
-Both routes are mounted under the active project's API base. For the
-default standalone project that is `/api/v1`; for multi-project deployments
-it is `/api/v1/p/:projectId`.
+Both routes are mounted under the active environment's API base. For a
+standalone environment that is `/api/v1`; for scoped deployments it is
+`/api/v1/environments/:environmentId`.
 
 ### `GET /api/v1/forms/:slug`
 

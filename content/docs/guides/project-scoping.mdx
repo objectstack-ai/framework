@@ -1,156 +1,115 @@
 ---
-title: Project-Scoped Routing
-description: Enable multi-project isolation at the URL level — /api/v1/projects/:projectId/... — with REST, Client SDK, and dispatcher support.
+title: Environment-Scoped Routing
+description: Route REST, metadata, automation, AI, and package calls through /api/v1/environments/:environmentId/....
 ---
 
-# Project-Scoped Routing
+# Environment-Scoped Routing
 
-ObjectStack's project-scoping feature puts each project (the "workspace" or "base" in Airtable / "environment" in traditional stacks) into its own URL segment. When enabled, every data, metadata, automation, and AI request runs through `/api/v1/projects/:projectId/...` instead of relying on hostname / header / session resolution alone.
+Environment-scoped routing makes the target runtime explicit in the URL:
 
-This gives you:
+```text
+/api/v1/environments/:environmentId/data/:object
+/api/v1/environments/:environmentId/meta
+/api/v1/environments/:environmentId/automation/...
+/api/v1/environments/:environmentId/ai/...
+```
 
-- **Explicit tenancy in URLs** — no more guessing what project a request targets.
-- **Safer client code** — `client.project(id).data.find(...)` cannot be confused with the default project.
-- **Future foundation for RBAC** — the project is in the URL, so middleware can enforce access before any handler runs.
-- **Incremental rollout** — the `'auto'` resolution strategy mounts both scoped and unscoped routes, so you can migrate clients on your own schedule.
+The scoped URL wins over hostname, header, session, and default-environment
+resolution. Use it when a caller must address a specific environment without
+depending on request context.
+
+---
 
 ## Server configuration
 
-Enable scoping in your `objectstack.config.ts`:
+Enable scoped route registration in `objectstack.config.ts`:
 
 ```typescript
 import { defineStack } from '@objectstack/spec';
 
 export default defineStack({
-  // ... rest of your stack
   api: {
     enableProjectScoping: true,
-    projectResolution: 'auto', // 'required' | 'optional' | 'auto'
+    projectResolution: 'auto',
   },
 });
 ```
 
-### Resolution strategies
+The option names are historical for compatibility with existing config files;
+the route, header, env var, and request context all use `environment`.
 
-| Strategy     | Behavior                                                                                   | When to use                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `'auto'`     | Registers **both** `/api/v1/data/:object` and `/api/v1/projects/:projectId/data/:object`.  | Default. Zero risk during migration — old and new clients both work.        |
-| `'optional'` | Same as `auto` today; reserved so a future release can require one of URL / header / session to be present. | Same as `auto`.                                                             |
-| `'required'` | Only scoped routes are registered. Unscoped requests return 404.                           | Production hardening after all clients have migrated.                       |
+| Strategy | Behavior | When to use |
+|:---|:---|:---|
+| `auto` | Registers both unscoped `/api/v1/...` and scoped `/api/v1/environments/:environmentId/...` routes. | Default migration mode. |
+| `optional` | Same route surface as `auto`; resolution may come from URL, hostname, header, session, or default. | Multi-environment hosts that still accept unscoped callers. |
+| `required` | Registers only environment-scoped routes for data/meta/AI/automation/package handlers. | Hardened clients that always pass an environment id. |
 
-The setting also propagates to:
-
-- **Dispatcher plugin** — AI (`/ai/*`) and automation (`/automation/*`) routes gain scoped variants.
-- **Package management** — `/api/v1/projects/:projectId/packages` mirrors `/api/v1/packages`.
-- **Discovery** — the `/api/v1/discovery` response includes a `scoping` block so clients can detect the mode.
+---
 
 ## Client SDK
 
-The client exposes a `project(id)` factory that returns a sub-client wired to the scoped URL prefix:
+The client keeps the legacy factory name `project(id)`, but the value is an
+environment id and the generated URLs are environment-scoped:
 
 ```typescript
 import { ObjectStackClient } from '@objectstack/client';
 
-const client = new ObjectStackClient({ baseUrl: 'https://api.example.com' });
+const client = new ObjectStackClient({
+  baseUrl: 'https://api.example.com',
+});
 
-const scoped = client.project('00000000-0000-0000-0000-000000000001');
+const env = client.project('env_prod');
 
-// All calls hit /api/v1/projects/:projectId/...
-const tasks = await scoped.data.find('task', { top: 20 });
-const objects = await scoped.meta.getItems('object');
-const pkg = await scoped.packages.get('my-package');
+await env.data.find('customer', { top: 20 });
+await env.meta.getItems('object');
+await env.packages.list();
 ```
 
-The top-level `client.data.*`, `client.meta.*`, `client.packages.*` namespaces continue to work unchanged — they hit the unscoped routes, falling back to hostname / `X-Project-Id` header / session resolution exactly as before.
-
-You can switch between projects without rebuilding the client:
+The top-level client can also set a default environment header:
 
 ```typescript
-const projectA = client.project('proj-a');
-const projectB = client.project('proj-b');
-
-await Promise.all([
-  projectA.data.find('task'),
-  projectB.data.find('task'),
-]);
+const client = new ObjectStackClient({
+  baseUrl: 'https://api.example.com',
+  environmentId: 'env_prod',
+});
 ```
 
-## Request resolution order
+That sends `X-Environment-Id: env_prod` on unscoped requests.
 
-When `enableProjectScoping: true`, `HttpDispatcher.resolveEnvironmentContext` resolves the project in this order:
+---
 
-1. **URL path parameter** — `/api/v1/projects/:projectId/...`. Highest priority.
-2. **Hostname** — `acme-dev.objectstack.app`.
-3. **`X-Project-Id` header** — the client SDK sets this automatically if you pass `projectId` in `ClientConfig`.
-4. **Session** — `session.activeProjectId` (or legacy `activeEnvironmentId`).
-5. **Default project for active organization** — falls back to the org's default.
+## Resolution order
 
-Under `'required'` mode, the URL path is the only supported source; the other fallbacks are bypassed for data/meta/AI/automation routes.
+`HttpDispatcher.resolveEnvironmentContext` resolves the environment in this
+order:
 
-## System project
+1. `:environmentId` from `/api/v1/environments/:environmentId/...`
+2. Hostname through the configured environment registry
+3. `X-Environment-Id`
+4. `session.activeEnvironmentId`
+5. A configured default environment
+6. A single available environment, when the registry can prove the choice is unambiguous
 
-Every deployment has a built-in system project at the well-known UUID `00000000-0000-0000-0000-000000000001`. It's used for platform infrastructure (system packages, platform-level flows, etc.) and is created automatically on first startup if you register the plugin:
+Control-plane endpoints remain unscoped. Requests such as
+`/api/v1/cloud/environments/:id` manage environments rather than running inside
+one, so they are intentionally excluded from data-plane resolution.
 
-```typescript
-import { createSystemProjectPlugin } from '@objectstack/runtime';
-
-kernel.use(tenantPlugin);
-kernel.use(createSystemProjectPlugin());
-```
-
-The plugin is idempotent — it's safe to call `provisionSystemProject()` on every boot. Subsequent calls return the existing row.
-
-## Control-plane routes remain unscoped
-
-Control-plane endpoints always live under their unscoped paths:
-
-- `/api/v1/auth/*`
-- `/api/v1/cloud/projects` (CRUD on the project list itself)
-- `/api/v1/cloud/organizations`
-- `/api/v1/health`
-- `/api/v1/discovery`
-- `/.well-known/objectstack`
-
-These are not affected by `enableProjectScoping` because they operate on the control plane, not a specific project's data plane.
-
-## Binding compiled artifacts to projects
-
-Third-party apps can now bind a locally compiled bundle to a multi-project
-server without raw `curl`.
-
-```bash
-os compile
-os projects create --org <org-id> --name CRM --artifact ./dist/objectstack.json
-os projects bind <project-id> --artifact ./dist/objectstack.json --build
-```
-
-Both commands validate that the artifact file exists and resolve relative paths
-to absolute paths before calling the control plane. The path is stored in
-`sys_project.metadata.artifact_path`; if a project already exists, `bind` updates
-that metadata with `PATCH /api/v1/cloud/projects/:id`.
-
-When a per-project kernel boots, `AppBundleResolver` reads
-`metadata.artifact_path` (or `metadata.artifact_paths[]`) and hydrates the
-project from the bundle: schemas are registered, views and apps are available,
-and seed data in `data` arrays is loaded through the same pipeline used by
-built-in templates.
-
-For local development and demos, `OS_PROJECT_ARTIFACTS` can override
-project bindings with a comma-separated `projectId:path` list, and
-`OS_PROJECT_ARTIFACT_ROOT` resolves relative artifact paths.
+---
 
 ## Migration checklist
 
-1. ✅ Upgrade to `@objectstack/core@≥4.x` with the Phase 2 runtime.
-2. ✅ Add `enableProjectScoping: true, projectResolution: 'auto'` to your stack config.
-3. ✅ Register `createSystemProjectPlugin()` in your kernel wiring.
-4. ⏳ Update callers that hard-code `/api/v1/data/...` to use `client.project(id)` or keep them as-is under `auto` mode.
-5. ⏳ Once all callers have migrated, flip `projectResolution` to `'required'` and remove the unscoped code paths.
+1. Replace `/api/v1/projects/:projectId/...` with
+   `/api/v1/environments/:environmentId/...`.
+2. Replace `X-Project-Id` with `X-Environment-Id`.
+3. Replace `OS_PROJECT_ID` with `OS_ENVIRONMENT_ID`.
+4. Store runtime rows under `environment_id`.
+5. Keep the SDK `client.project(id)` call only as a compatibility method name;
+   pass an environment id to it.
 
-Steps 4 and 5 are intentionally separate — you can ship Step 3 today and migrate clients over weeks or months.
+---
 
-## Related reading
+## Related
 
-- [ADR-0002 — Project-per-database isolation](/docs/adr/0002-environment-database-isolation)
-- [Client SDK](/docs/guides/client-sdk)
-- [Authentication](/docs/guides/authentication)
+- [Single-Environment Mode](./single-project-mode)
+- [Deployment Modes](./cloud-deployment)
+- [Client SDK](./client-sdk)

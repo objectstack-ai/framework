@@ -16,19 +16,19 @@ Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScr
 - **Business objects** are Zod schemas with typed fields, relations, validation, and permissions.
 - **Business actions** are generated from metadata as REST APIs, SDK calls, and MCP tools.
 - **Business logic** is represented as analyzable metadata: flows, conditions, policies, and artifacts.
-- **Business runtime** is a microkernel that loads plugins, drivers, services, and compiled project artifacts.
+- **Business runtime** is a microkernel that loads plugins, drivers, services, and compiled environment artifacts.
 
 The goal is not to be another low-code UI builder. ObjectStack is the structured execution layer for AI-native business software: agent-ready, permission-aware, versioned, and auditable.
 
 ObjectStack is built around three protocol layers:
 
 - **ObjectQL** (Data Layer) — Objects, fields, queries, relations, validation, and data access.
-- **ObjectOS** (Control Layer) — Runtime, permissions, automation, plugins, tenants, and artifact loading.
+- **ObjectOS** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
 - **ObjectUI** (View Layer) — Apps, views, dashboards, actions, and presentation metadata.
 
 All core definitions start with **Zod schemas** (1,600+ exported schemas across 200 schema files). TypeScript types, JSON Schemas, REST routes, UI metadata, and agent tools are derived from the same source of truth.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation, and [content/docs/concepts/north-star.mdx](./content/docs/concepts/north-star.mdx) for the product north star (Studio · Org/Project/Branch · per-project ObjectOS · compiled app artifacts).
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation, and [content/docs/concepts/north-star.mdx](./content/docs/concepts/north-star.mdx) for the product north star (metadata protocols · environment-aware runtime · compiled app artifacts).
 
 ## Key Features
 
@@ -45,8 +45,8 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer arch
 - **RBAC / RLS / FLS security** — Role-based, row-level, and field-level access control.
 - **Automation engine** — DAG-based flows, triggers, and workflow management.
 - **AI service** — Agent, Tool, and Skill protocol built on the Vercel AI SDK.
-- **Studio IDE** — Web-based metadata explorer, schema inspector, API console, and AI assistant.
-- **CLI toolchain** — `os init`, `os dev`, `os studio`, `os serve`, `os validate`, and more.
+- **Console UI** — Published ObjectUI console bundle for metadata exploration, schema inspection, API testing, and administration.
+- **CLI toolchain** — `os init`, `os dev`, `os start`, `os serve`, `os validate`, and more.
 
 ## Why AI-native?
 
@@ -63,7 +63,7 @@ The point isn't lines of code. The point is **fit in an agent's context window.*
 | Business model | Implicit in pages, queries, and scripts | Explicit Zod `ObjectSchema` metadata |
 | Code footprint | Thousands of lines of queries, JS, and UI state per app | **~100× less** — declarative metadata replaces CRUD, forms, validation, and API glue |
 | Business logic | JavaScript snippets and query glue | Flows, policies, conditions, and typed metadata |
-| External contract | App-specific UI state | Self-describing JSON Project Artifact |
+| External contract | App-specific UI state | Self-describing JSON Environment Artifact |
 | Agent tools | Manually defined one by one | Generated from metadata and permissions |
 | Agent reasoning | Calls predefined queries | Reads the full schema, composes safe actions, respects boundaries |
 | AI maintainability | Agents must crawl sprawling app code | Whole app fits in an agent's context window |
@@ -80,10 +80,10 @@ This makes ObjectStack a backend substrate for AI-native business applications: 
 npx create-objectstack my-app
 cd my-app
 
-# Start dev server (REST API + Studio IDE)
+# Start dev server (REST API + console UI)
 pnpm dev
 # → API:    http://localhost:3000/api/v1/
-# → Studio: http://localhost:3000/_studio/
+# → Console: http://localhost:3000/_console/
 ```
 
 Alternatively, with the CLI installed: `os init my-app && cd my-app && os dev`.
@@ -116,7 +116,7 @@ pnpm docs:dev
 | `pnpm dev:showcase` | Same as `pnpm dev` (explicit alias) |
 | `pnpm dev:crm` | Run the minimal CRM example (`@objectstack/example-crm`) |
 | `pnpm dev:todo` | Run the Todo example (`@example/app-todo`) |
-| `pnpm studio:start` | Start the prebuilt Studio IDE |
+| `pnpm objectui:refresh` | Pull the sibling `../objectui` build into `packages/console/` |
 | `pnpm test` | Run all tests (Turborepo) |
 | `pnpm setup` | Install dependencies and build the spec package |
 | `pnpm docs:dev` | Start the documentation site locally |
@@ -129,11 +129,10 @@ The CLI binary ships as both `os` and `objectstack`.
 ```bash
 os init [name]    # Scaffold a new project
 os create         # Interactive project / object scaffolder
-os dev            # Start dev server with hot-reload (REST + Studio)
-os studio         # Open the Studio IDE
+os dev            # Start dev server with hot-reload (REST + console)
 os start          # Start the production server
 os serve          # Serve a compiled artifact
-os compile        # Build a deployable JSON Project Artifact
+os compile        # Build a deployable JSON Environment Artifact
 os validate       # Validate metadata against the protocol
 os lint           # Lint metadata for best-practice violations
 os info           # Display project metadata summary
@@ -142,7 +141,7 @@ os doctor         # Check environment health
 os explain        # Explain protocol concepts on the command line
 ```
 
-Cloud, package registry, and project management subcommands (`os projects`, `os publish`, `os login`, `os whoami`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
+Cloud, package registry, and environment management subcommands (`os publish`, `os rollback`, `os package`, `os login`, `os whoami`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
 
 ## Package Directory
 
@@ -154,7 +153,7 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 | [`@objectstack/core`](packages/core) | Microkernel runtime — Plugin system, DI container, EventBus, Logger |
 | [`@objectstack/types`](packages/types) | Shared TypeScript type utilities |
 | [`@objectstack/formula`](packages/formula) | Canonical expression engine — CEL (cel-js) + ObjectStack stdlib for formula fields, predicates, conditions, dynamic defaults |
-| [`@objectstack/platform-objects`](packages/platform-objects) | Built-in platform object schemas — identity, security, audit, tenant |
+| [`@objectstack/platform-objects`](packages/platform-objects) | Built-in platform object schemas — identity, security, audit, notification, package, and environment |
 
 ### Engine
 
@@ -205,7 +204,7 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 | :--- | :--- |
 | [`@objectstack/service-ai`](packages/services/service-ai) | AI service — Agent, Tool, Skill, Vercel AI SDK integration |
 | [`@objectstack/service-analytics`](packages/services/service-analytics) | Analytics — aggregations, time series, funnels, dashboards |
-| [`@objectstack/service-automation`](packages/services/service-automation) | Automation engine — flows, triggers, DAG-based workflows |
+| [`@objectstack/service-automation`](packages/services/service-automation) | Automation engine — flows, triggers, and workflow state machines |
 | [`@objectstack/service-cache`](packages/services/service-cache) | Cache — in-memory, Redis, multi-tier |
 | [`@objectstack/service-feed`](packages/services/service-feed) | Activity feed / chatter |
 | [`@objectstack/service-i18n`](packages/services/service-i18n) | Internationalization service |
@@ -215,7 +214,6 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 | [`@objectstack/service-realtime`](packages/services/service-realtime) | Real-time events and subscriptions |
 | [`@objectstack/service-settings`](packages/services/service-settings) | Settings — manifest registry + K/V resolver (Env > Tenant > User) |
 | [`@objectstack/service-storage`](packages/services/service-storage) | File storage (local, S3, R2, GCS) |
-| [`@objectstack/service-tenant`](packages/services/service-tenant) | Multi-tenant context and routing |
 
 ### Framework Adapters
 
@@ -233,10 +231,9 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 
 | Package / App | Description |
 | :--- | :--- |
-| [`@objectstack/cli`](packages/cli) | CLI binary (`os` / `objectstack`) — `init`, `dev`, `serve`, `studio`, `compile`, `validate`, `generate`, `lint`, `doctor` |
+| [`@objectstack/cli`](packages/cli) | CLI binary (`os` / `objectstack`) — `init`, `dev`, `start`, `serve`, `compile`, `publish`, `validate`, `generate`, `lint`, `doctor` |
 | [`create-objectstack`](packages/create-objectstack) | Project scaffolder (`npx create-objectstack`) |
 | [`objectstack-vscode`](packages/vscode-objectstack) | VS Code extension — autocomplete, validation, diagnostics |
-| [`@objectstack/studio`](apps/studio) | Studio IDE — metadata explorer, schema inspector, AI assistant |
 | [`@object-ui/console`](https://github.com/objectstack-ai/objectui/tree/main/apps/console) | Fork-ready runtime console SPA (lives in objectstack-ai/objectui, served via `@object-ui/console` on npm) |
 | [`@objectstack/account`](apps/account) | Account & identity portal — sign in, organizations, connected apps |
 | [`@objectstack/docs`](apps/docs) | Documentation site (Fumadocs + Next.js) |
@@ -254,9 +251,9 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 | Metric | Value |
 | :--- | :--- |
 | Source packages | 51 |
-| Apps | 6 (objectos, cloud, studio, console, account, docs) |
+| Apps | 2 (account, docs) |
 | Framework adapters | 7 (Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit) |
-| Database drivers | 4 (Memory, SQL, SQLite-WASM, MongoDB) |
+| Database drivers | 3 (Memory, SQL, MongoDB) |
 | Zod schema files | 200 |
 | Exported schemas | 1,600+ |
 | `.describe()` annotations | 8,750+ |
@@ -300,9 +297,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete design documentation i
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for the planned phases covering runtime hardening, framework adapter completion, developer experience improvements, performance optimization, and security hardening.
-
-Studio-specific roadmap: [apps/studio/ROADMAP.md](./apps/studio/ROADMAP.md)
+See [ROADMAP.md](./ROADMAP.md) for the current documentation and architecture cleanup priorities.
 
 ## Contributing
 

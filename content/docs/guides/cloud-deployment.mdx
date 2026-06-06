@@ -1,253 +1,135 @@
 ---
-title: Deployment Modes (Standalone & Cloud)
-description: Run a single ObjectStack Server process in standalone (single-project) or cloud (multi-project) mode. Covers control-plane DB URLs, hostname routing, and Fly.io / Docker deployment.
+title: Deployment Modes
+description: Choose between local standalone runtime and Cloud-managed environment deployment.
 ---
 
-# Deployment Modes (Standalone & Cloud)
+# Deployment Modes
 
-The same `apps/objectos` binary boots into one of two modes. Which one you get
-depends only on the `OS_MODE` environment variable — the code and
-Docker image are identical.
+This repository ships the framework runtime, examples, adapters, CLI, docs, and
+the published console bundle. Local development is a single-environment runtime.
+Cloud deployment uses a separate ObjectStack Cloud control plane plus the
+environment-aware runtime seams exported from `@objectstack/runtime`.
 
-| Mode               | `OS_MODE` | Control plane              | Projects | Hostname routing | Typical use                                     |
-| ------------------ | ------------------ | -------------------------- | -------- | ---------------- | ----------------------------------------------- |
-| **standalone**     | unset / `standalone` | — (single kernel)        | 1        | ❌               | OSS single-app install, laptop dev              |
-| **cloud**          | `cloud`            | `OS_DATABASE_URL` | 1 – N    | ✅               | Studio dev, self-hosted multi-project, SaaS    |
-
-> **Legacy alias:** `OS_MULTI_PROJECT=true` is still honoured as a
-> deprecated alias for `OS_MODE=cloud`. The server prints a
-> deprecation warning at boot and the variable will be removed in the next
-> major release.
-
-Both modes reuse:
-
-- `KernelManager` + `DefaultProjectKernelFactory` for per-project kernels
-- `DefaultEnvironmentDriverRegistry` for hostname → project resolution
-- `createControlPlanePlugins()` (cloud only) to install
-  tenant / auth / security / audit / package plugins onto the control DB.
+| Mode | Runs from this repo | Environment selection | Typical use |
+|:---|:---:|:---|:---|
+| Local example | Yes | One active `OS_ENVIRONMENT_ID` | Framework development and smoke tests |
+| Standalone app | Yes | One compiled artifact or stack config | Self-hosted app backend |
+| Cloud-managed environment | Runtime seams only | Cloud control plane, hostname, scoped URL, header, or session | SaaS and multi-environment deployments |
 
 ---
 
-## Mode 1 — standalone
+## Local runtime
+
+Use the repo scripts for framework development:
 
 ```bash
-pnpm --filter @objectstack/objectos dev
-# → http://localhost:3000
+PORT=3000 pnpm dev
+pnpm dev:crm -- --fresh -p 38421
+pnpm docs:dev
 ```
 
-One `ObjectKernel`, every plugin from `apps/objectos/objectstack.config.ts`, no
-per-project isolation. This is what you want on a laptop or for an OSS
-single-app install.
+`pnpm dev` starts the showcase kitchen-sink example. It is the best local
+exercise path for objects, views, flows, AI metadata, security, and the console
+bundle.
 
-Leave `OS_MODE` unset (or set it to `standalone`) to use this mode.
-
-### Mode 1b — standalone from a pre-built artifact (no host config)
-
-Since `@objectstack/runtime@4.x` the standalone path is built into the
-framework: any directory containing a compiled `dist/objectstack.json` (or
-reachable via `OS_ARTIFACT_PATH`, including an `https://` URL) can be booted
-with the **stock CLI** — no `objectstack.config.ts` required.
+For a generated app:
 
 ```bash
-# Local artifact in cwd
-cd hotcrm                                  # https://github.com/objectstack-ai/hotcrm
-objectstack start                          # auto-detects ./dist/objectstack.json
-
-# Explicit artifact path
-OS_ARTIFACT_PATH=/srv/apps/crm/objectstack.json objectstack start
-
-# Remote artifact over HTTPS
-OS_ARTIFACT_PATH=https://example.com/crm/objectstack.json objectstack start
+os dev
+os start
+os serve --artifact ./dist/objectstack.json
 ```
 
-Internally the CLI calls `createDefaultHostConfig()` from
-`@objectstack/runtime`, which wraps `createStandaloneStack()` and exposes the
-artifact's `requires` / `objects` / `manifest`. This path is **standalone-only**
-— it has no dependency on `@objectstack/service-cloud` and is the recommended
-shape for shipping an app as a single JSON deployable.
-
-For the multi-project / control-plane variant, keep using `apps/objectos`'s
-`objectstack.config.ts` (Mode 2 below) which composes cloud plugins on top.
+The active environment is selected with `OS_ENVIRONMENT_ID`.
 
 ---
 
-## Mode 2 — cloud
+## Standalone artifact runtime
+
+Any directory with a compiled `dist/objectstack.json` can boot through the CLI
+or `@objectstack/runtime` helpers:
 
 ```bash
-OS_MODE=cloud \
-OS_DATABASE_URL=file:./.objectstack/data/control.db \
-AUTH_SECRET=$(openssl rand -hex 32) \
-pnpm --filter @objectstack/objectos dev
+os compile
+OS_ENVIRONMENT_ID=env_prod os serve --artifact ./dist/objectstack.json
 ```
 
-- Control-plane tables (`sys_project`, `sys_project_credential`, …) live in
-  the database configured by `OS_DATABASE_URL`. Use `file:...` for a
-  local SQLite control plane, or `libsql://...` / `https://...` for a remote
-  Turso/libSQL control plane.
-- Projects are created through Studio / `POST /api/v1/cloud/projects`. Each
-  project binds its own driver (sqlite / libsql / turso / postgres).
-- Incoming requests are routed to per-project kernels by the `Host` header
-  (matched against `sys_project.hostname`), or by `X-Project-Id`, or by the
-  authenticated session's `activeProjectId`.
+Deployment config stays outside the artifact. Database URLs, auth secrets,
+runtime credentials, and environment identity are injected through process env
+or the host's deployment config.
 
-### Configuring a project driver
+---
 
-When calling `POST /api/v1/cloud/projects`, pass `driver` as one of the
-registered drivers: `memory`, `sqlite`, `turso` / `libsql`, or `postgres`.
-The factory switch lives in
-`packages/runtime/src/project-kernel-factory.ts::createDriver`.
+## Cloud-managed deployment
 
-For a remote shared control plane, only the URL changes:
+When targeting Cloud, publish metadata to an environment:
 
 ```bash
-OS_MODE=cloud \
-OS_DATABASE_URL=libsql://control.turso.io \
-OS_DATABASE_AUTH_TOKEN=... \
-AUTH_SECRET=$(openssl rand -hex 32) \
-pnpm --filter @objectstack/objectos dev
+OS_CLOUD_URL=https://cloud.example.com \
+OS_ENVIRONMENT_ID=env_prod \
+os publish
 ```
 
-Multiple Server replicas can share the same remote `sys_*` schema;
-`DefaultEnvironmentDriverRegistry`'s per-replica cache is coherent within its
-TTL (5 min default), and credential rotation fires
-`envRegistry.invalidate(projectId)` so stale entries drop out within one TTL.
+The CLI posts compiled metadata to:
 
----
+```text
+POST /api/v1/cloud/environments/:environment/metadata
+```
 
-## Hostname routing precedence
+Rollback activates an earlier revision:
 
-`HttpDispatcher.resolveEnvironmentContext` tries these signals in order and
-stops at the first match:
+```text
+POST /api/v1/cloud/environments/:environment/revisions/:commit/activate
+```
 
-1. `/projects/:projectId/...` URL segment.
-2. `Host` header → `sys_project.hostname` (via `envRegistry.resolveByHostname`).
-3. `X-Project-Id` header.
-4. Session `activeProjectId`.
-5. Session `activeOrganizationId` → that org's default project.
-
-Control-plane routes (`/auth`, `/cloud`, `/discovery`, `/health`) skip
-resolution and always hit the control-plane kernel.
-
----
-
-## Cross-subdomain session cookies
-
-Host-based routing means Studio (say `studio.example.com`) and a project
-subdomain (`acme.example.com`) are separate origins. Set
-`OS_COOKIE_DOMAIN=.example.com` to opt in to better-auth's
-cross-subdomain cookie mode. In production the session cookie is also scoped
-`secure` automatically.
-
----
-
-## Deploying to Fly.io
-
-ObjectStack ships a single Dockerfile (`apps/objectos/Dockerfile`) that works
-for both Fly.io and bare Docker. The repo also ships a ready-to-use
-`apps/objectos/fly.toml`.
+Package publishing uses the package registry endpoints:
 
 ```bash
-# From the repo root
-fly launch --copy-config --name objectstack-server \
-           --dockerfile apps/objectos/Dockerfile \
-           --no-deploy
-
-# Persistent volume for the local-SQLite control DB
-fly volumes create objectstack_data --size 3 --region iad
-
-# Secrets (never commit!)
-fly secrets set \
-  AUTH_SECRET=$(openssl rand -hex 32) \
-  OS_COOKIE_DOMAIN=.objectstack.app \
-  TURSO_ORG_NAME=... \
-  TURSO_API_TOKEN=...
-
-fly deploy
-
-# Wildcard cert for per-project subdomains
-fly certs add "*.objectstack.app"
-# Follow the DNS instructions Fly prints (_acme-challenge TXT + A/AAAA)
+os package publish --env env_prod
 ```
 
-### Fly tuning
-
-`OS_KERNEL_CACHE_SIZE` and `OS_KERNEL_TTL_MS` control the
-per-project kernel LRU. The defaults in `fly.toml` (50 kernels, 30 min TTL)
-fit a `shared-cpu-2x / 1GB` machine comfortably. Bump both proportionally if
-you upgrade the VM.
+Cloud control-plane hosts, database provisioning, billing, and public SaaS
+deployment are outside this framework repository. The framework runtime exposes
+the environment registry, marketplace proxy, and runtime-config seams consumed
+by that distribution.
 
 ---
 
-## Deploying with Docker (self-hosted)
+## Routing precedence
 
-```bash
-docker build -f apps/objectos/Dockerfile -t objectstack/server:local .
+Environment-aware hosts resolve requests in this order:
 
-docker run --rm -p 3000:3000 \
-  -v $(pwd)/data:/data \
-  -e OS_MODE=cloud \
-  -e OS_DATABASE_URL=file:/data/control.db \
-  -e AUTH_SECRET=$(openssl rand -hex 32) \
-  objectstack/server:local
+1. `/api/v1/environments/:environmentId/...`
+2. Hostname through the environment registry
+3. `X-Environment-Id`
+4. `session.activeEnvironmentId`
+5. Configured default environment
+6. Single unambiguous environment
 
-curl http://localhost:3000/api/v1/health
-```
-
-Put a reverse proxy (Caddy / Traefik / Nginx) in front for wildcard TLS and
-point a wildcard DNS (`*.example.com`) at it. The container does the rest.
+Control-plane paths under `/api/v1/cloud/environments/...` are not data-plane
+requests and do not run through a target environment kernel.
 
 ---
 
-## Environment variable reference
+## Environment variables
 
-| Variable                          | Mode(s)                   | Purpose                                                                          |
-| --------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `OS_MODE`                | all                       | `standalone` (default) or `cloud`. Selects whether a control plane is mounted. |
-| `OS_MULTI_PROJECT`       | all (deprecated)          | Legacy alias: `=true` is treated as `OS_MODE=cloud`. Removed in next major. |
-| `OS_DATABASE_URL`        | all                       | In `standalone`, the project business DB URL. In `cloud`, the control-plane DB URL (`file:`, `libsql://`, or `https://`). |
-| `OS_DATABASE_AUTH_TOKEN` | all                       | Auth token for `OS_DATABASE_URL` when using libSQL/Turso.               |
-| `TURSO_ORG_NAME` + `TURSO_API_TOKEN` | cloud                  | Used by `TursoProjectDatabaseAdapter` to provision per-project databases.        |
-| `OS_KERNEL_CACHE_SIZE`   | cloud                     | LRU size for per-project kernels (default 32, fly.toml defaults to 50).          |
-| `OS_KERNEL_TTL_MS`       | cloud                     | Idle eviction TTL in ms (default 900000, fly.toml defaults to 1800000).          |
-| `OS_ENV_CACHE_TTL_MS`    | cloud                     | TTL for the envRegistry's hostname/id cache (default 300000).                    |
-| `OS_COOKIE_DOMAIN`       | cloud                     | Shared cookie domain for cross-subdomain sessions (e.g. `.objectstack.app`).     |
-| `AUTH_SECRET`                     | all                       | Better-Auth session secret (≥ 32 chars).                                         |
-| `PORT` / `HOST`                   | all (node-entry)          | HTTP bind. Defaults to `3000` / `0.0.0.0`. In production a busy port is a hard error (no auto-shift) — pin it and match `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`. |
+| Variable | Purpose |
+|:---|:---|
+| `OS_ENVIRONMENT_ID` | Active local or publish target environment. |
+| `OS_CLOUD_URL` | Cloud control-plane base URL used by publish/package commands. |
+| `OS_ARTIFACT_PATH` | Artifact path for `os serve` and standalone hosts. |
+| `OS_DATABASE_URL` | Local runtime business database URL. |
+| `OS_DATABASE_DRIVER` | Local runtime driver id. |
+| `AUTH_SECRET` | Better Auth session secret for hosted runtimes. |
+| `PORT` / `HOST` | HTTP bind settings. |
 
----
-
-## Smoke test (cloud mode)
-
-```bash
-# 1. Create a project
-curl -X POST http://localhost:3000/api/v1/cloud/projects \
-  -H 'Content-Type: application/json' \
-  -d '{ "organization_id": "<org-id>", "display_name": "Demo", "driver": "sqlite" }'
-# → { id: "<pid>", status: "provisioning", hostname: "<org-slug>-<short>.objectstack.app", ... }
-
-# 2. Wait for status=active (Studio also polls this)
-curl http://localhost:3000/api/v1/cloud/projects/<pid>
-
-# 3. Call the project-scoped API via Host header
-curl -H "Host: <hostname>" http://localhost:3000/api/v1/meta/objects
-# → returns objects registered in the project's own sys_metadata, not the control plane
-```
-
-If step 3 returns control-plane objects instead of the project's own, the
-host-based routing did not kick in — check that `envRegistry` is wired (see
-`apps/objectos/server/bootstrap.ts`) and that `sys_project.hostname` was
-populated.
+Third-party provider variables such as `OPENAI_API_KEY`, `TURSO_*`,
+`SMTP_*`, `RESEND_API_KEY`, and OAuth client secrets keep their provider names.
 
 ---
 
-## Artifact publishing & versioning
+## Related
 
-Once a project exists, deploy metadata changes by **compiling and publishing**
-artifacts rather than mutating tables directly. Each `objectstack publish`
-creates an immutable revision in object storage; runtime nodes pull the
-current (or pinned) commit via the `artifact-api` source.
-
-See [Publish, Versioning & Preview](./publish-and-preview) for the full loop —
-storage backends (`StorageServicePlugin` local / S3), the
-`/api/v1/cloud/projects/:id/{revisions,artifact,activate}` endpoints, and the
-`MetadataPlugin` `artifactSource: { mode: 'artifact-api' }` runtime config.
+- [Single-Environment Mode](./single-project-mode)
+- [Environment-Scoped Routing](./project-scoping)
+- [Publish, Versioning & Preview](./publish-and-preview)

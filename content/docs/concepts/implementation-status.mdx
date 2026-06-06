@@ -89,7 +89,7 @@ This matrix is generated from actual codebase analysis and represents the curren
 | **Encryption** | ❌ | 📋 | Planned |
 | **Compliance** | ❌ | 📋 | Planned |
 | **Masking** | ❌ | 📋 | Planned |
-| **Notification** | ❌ | 📋 | Planned |
+| **Notification** | ✅ | 🟡 | Framework pipeline shipped; objectui bell cut-over remains |
 | **Change Management** | ❌ | 📋 | Planned |
 | **Collaboration** | ❌ | 📋 | Planned |
 
@@ -120,8 +120,8 @@ This matrix is generated from actual codebase analysis and represents the curren
 | date, datetime, time | ✅ | Full support |
 | select, multiselect | ✅ | Full support |
 | lookup, master_detail | ✅ | Full support in spec, partial in memory driver |
-| formula | 📋 | Protocol defined, not implemented |
-| rollup_summary | 📋 | Protocol defined, not implemented |
+| formula | ✅ | CEL-backed formula fields are implemented |
+| summary | ✅ | Server-side rollups for count/sum/min/max/avg on child records |
 | json, array | ✅ | Full support |
 | file, image | 📋 | Protocol defined, not implemented |
 
@@ -380,10 +380,9 @@ The `auth` service in `CoreServiceName` covers both **authentication** (identity
 - [ ] Dashboard Renderer
 - [ ] Theme Engine
 
-### Phase 8: Automation (Plugin) 📋 **PLANNED**
-- [ ] Workflow Engine Plugin
-- [ ] Flow Builder Plugin
-- [ ] Approval Process Plugin
+### Phase 8: Automation (Plugin) 🟡 **IN PROGRESS**
+- [x] Flow Engine Plugin
+- [x] Approval Node Plugin
 - [ ] ETL Pipeline Plugin
 - [ ] Trigger Registry Plugin
 

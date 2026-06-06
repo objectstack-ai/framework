@@ -156,6 +156,15 @@ project: Field.masterDetail('project', {
   label: 'Project',
   required: true,
 }),
+
+// Inline line items on the parent form
+order: Field.masterDetail('order', {
+  label: 'Order',
+  required: true,
+  inlineEdit: true,
+  inlineTitle: 'Lines',
+  inlineAmountField: 'line_total',
+}),
 ```
 
 | Property | Type | Description |
@@ -163,6 +172,9 @@ project: Field.masterDetail('project', {
 | `reference` (1st arg) | `string` | Target object name |
 | `referenceFilters` | `string[]` | Filter conditions for the lookup |
 | `deleteBehavior` | `enum` | `'set_null'`, `'cascade'`, `'restrict'` |
+| `inlineEdit` | `boolean` | Render child records inline on the parent create/edit form |
+| `inlineColumns` | `array` | Optional explicit columns for the inline grid |
+| `inlineAmountField` | `string` | Optional numeric child field for the inline running total |
 
 ### File & Media Types
 
@@ -202,6 +214,7 @@ total_amount: Field.summary({
     object: 'order_item',
     field: 'amount',
     function: 'sum',
+    relationshipField: 'order',
   },
 }),
 
@@ -211,6 +224,11 @@ case_number: Field.autonumber({
   autonumberFormat: 'CASE-{0000}',
 }),
 ```
+
+Summary fields are server-owned. The engine recomputes them when child records
+are inserted, updated, or deleted. `relationshipField` is optional when the child
+has only one `lookup`/`master_detail` field pointing back to the parent; set it
+when multiple relationships target the same parent object.
 
 ### Specialized Types
 

@@ -224,7 +224,7 @@ View CRUD, layout engine, action registry, permission filtering.
 
 ### 6. workflow Service — 5 methods
 `getWorkflowConfig`, `getWorkflowState`, `workflowTransition`, `workflowApprove`, `workflowReject`  
-State machine engine, approval processes, audit trail.
+State machine transitions and approval-node decision helpers.
 
 ### 7. automation Service — 1 method
 `triggerAutomation`  
@@ -343,7 +343,7 @@ AppPlugin will:
 
 | Plugin | Description |
 |:-------|:------------|
-| **plugin-workflow** | State machine + approval process |
+| **service-automation** | Flow orchestration, state-machine adjacent execution, approval-node pauses |
 | **plugin-automation** | Triggers + flow orchestration |
 | **plugin-i18n** | Internationalization |
 | **plugin-storage** | File storage (local + S3) |

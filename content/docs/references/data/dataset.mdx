@@ -16,8 +16,8 @@ Defines how the engine handles existing records.
 ## TypeScript Usage
 
 ```typescript
-import { Dataset, DatasetMode } from '@objectstack/spec/data';
-import type { Dataset, DatasetMode } from '@objectstack/spec/data';
+import { Dataset, DatasetMode, Seed } from '@objectstack/spec/data';
+import type { Dataset, DatasetMode, Seed } from '@objectstack/spec/data';
 
 // Validate data
 const result = Dataset.parse(data);
@@ -49,6 +49,21 @@ const result = Dataset.parse(data);
 * `upsert`
 * `replace`
 * `ignore`
+
+
+---
+
+## Seed
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | ✅ | Target Object Name |
+| **externalId** | `string` | ✅ | Field match for uniqueness check |
+| **mode** | `Enum<'insert' \| 'update' \| 'upsert' \| 'replace' \| 'ignore'>` | ✅ | Conflict resolution strategy |
+| **env** | `Enum<'prod' \| 'dev' \| 'test'>[]` | ✅ | Applicable environments |
+| **records** | `Record<string, any>[]` | ✅ | Data records |
 
 
 ---

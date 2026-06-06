@@ -1,185 +1,104 @@
 ---
-title: Cloud Artifact API
-description: HTTP contract between the cloud control plane and runtime ObjectOS nodes
+title: Cloud Environment Artifact API
+description: HTTP contract for publishing and resolving ObjectStack environment artifacts.
 ---
 
-# Cloud Artifact API
+# Cloud Environment Artifact API
 
-The **Cloud Artifact API** is the HTTP contract between an ObjectStack
-**control plane** (a deployment of `apps/cloud` running
-`@objectstack/service-cloud`) and a **runtime node** (any ObjectOS process
-running in `OS_MODE=runtime`). Runtime nodes contain no project metadata
-of their own — every request is resolved through this API.
+The Cloud Environment Artifact API is the control-plane contract used to publish
+compiled metadata and activate immutable environment revisions. The framework
+runtime consumes the resulting artifact plus deployment config to boot the
+target environment.
 
-The API is served by `createCloudArtifactApiPlugin` and is wired into
-`createCloudStack()` automatically. It is also re-served by
-`apps/cloud/objectstack.config.ts` as part of the cloud preset.
-
-> **Spec anchor.** The artifact envelope itself is defined by
-> `ProjectArtifactSchema` in `packages/spec/src/system/project-artifact.zod.ts`
-> (M1 in the [ROADMAP](https://github.com/objectstack-ai/framework/blob/main/ROADMAP.md)).
-> This page documents the *transport*; the envelope shape is normative.
+The artifact envelope is defined by `EnvironmentArtifactSchema` in
+`packages/spec/src/system/environment-artifact.zod.ts`.
 
 ---
 
-## Authentication
+## Publish endpoint
 
-If `OS_CLOUD_API_KEY` is set on the cloud side, every endpoint requires
-the same value as a bearer token:
-
-```
-Authorization: Bearer <OS_CLOUD_API_KEY>
+```text
+POST /api/v1/cloud/environments/:environment/metadata
 ```
 
-When unset, endpoints are open to any caller (intended for
-loopback / docker-internal calls only — **do not** expose an unauthenticated
-control plane on the public internet).
-
-Runtime nodes pass the matching token via `OS_CLOUD_API_KEY`
-(consumed by `ArtifactApiClient`).
-
----
-
-## Endpoints
-
-All endpoints live under the configured prefix — default `/api/v1`.
-
-### `GET /api/v1/cloud/resolve-hostname`
-
-Resolve a public hostname to its owning project. Used by
-`ArtifactEnvironmentRegistry` to map the inbound `Host:` header before
-fetching the artifact.
-
-**Query parameters**
-
-| Name       | Required | Notes |
-|:-----------|:--------:|:------|
-| `host`     | ✅ | The hostname to resolve. `hostname` is accepted as an alias. |
-
-**Response** — `200 OK`
+The body is the compiled JSON produced by `os compile` or `objectstack
+compile`. The control plane validates the object payload, stores it as a new
+revision, computes a checksum, and returns the commit metadata used by runtime
+caches.
 
 ```jsonc
 {
   "success": true,
   "data": {
-    "projectId": "proj_01h…",
-    "organizationId": "org_01h…",
-    "runtime": {
-      "datasource": {
-        "driver": "turso",
-        "url":    "libsql://example.turso.io",
-        "authToken": "…"
-      }
-    }
+    "environmentId": "env_prod",
+    "commitId": "9ce1bd48dd7022b8",
+    "checksum": { "algorithm": "sha256", "value": "..." }
   }
 }
 ```
 
-**Lookup rules**
+The CLI command is:
 
-1. Exact match against `sys_project.hostname`.
-2. The wildcard marker `*` matches any host (used by the system project
-   when one project is intentionally global).
-3. `404` if neither matches.
-
-The `runtime` block is assembled from `sys_project_credential` (preferred)
-or from `sys_project.database_*` columns (fallback). It is the same
-structure consumed by `DriverPlugin` on the runtime node.
-
----
-
-### `GET /api/v1/cloud/projects/:id/artifact`
-
-Returns the **v0 ProjectArtifact envelope** for a project, ready to hand
-off to `ArtifactKernelFactory`.
-
-**Path parameters**
-
-| Name | Required | Notes |
-|:-----|:--------:|:------|
-| `id` | ✅ | The `sys_project.id` value. |
-
-**Response** — `200 OK`
-
-```jsonc
-{
-  "success": true,
-  "data": {
-    "schemaVersion": "0.1",
-    "projectId":     "proj_01h…",
-    "commitId":      "a1b2c3d4e5f6g7h8",
-    "checksum":      { "algorithm": "sha256", "value": "…" },
-    "metadata":      { "objects": [...], "apps": [...], "flows": [...], … },
-    "functions":     [{ "name": "calc_total", "language": "ts", "code": "…" }],
-    "manifest":      { "plugins": [...], "drivers": [...], "engines": {} },
-    "builtAt":       "2026-04-12T08:00:00.000Z",
-    "builtWith":     "objectstack-cli@2.x",
-    "runtime":       { "datasource": { "driver": "turso", "url": "…" } }
-  }
-}
+```bash
+OS_CLOUD_URL=https://cloud.example.com \
+OS_ENVIRONMENT_ID=env_prod \
+os publish
 ```
 
-**Assembly rules**
+---
 
-1. Read `sys_project.metadata.artifact_path` (or `artifact_paths[]` for
-   multi-bundle projects). Relative paths are resolved against
-   `artifactRoot` (defaults to `process.cwd()`; override via plugin
-   options).
-2. For each path, load the JSON file. Both shapes are accepted:
-   - **v0 nested** — `{ metadata: { objects: [...] }, functions, manifest, … }`
-   - **`objectstack compile` flat** — top-level `objects`, `apps`,
-     `dashboards`, …
-3. Merge each bundle's `metadata.*` arrays into one envelope; `functions`
-   from every bundle are concatenated.
-4. `commitId` / `checksum` / `builtAt` / `builtWith` / `manifest` are
-   carried forward from the **first** bundle. If the first bundle does
-   not provide them, a deterministic synthetic `commitId` (16-char
-   `sha256` prefix of the merged content) and `checksum` are minted so
-   downstream caches still rev correctly.
-5. The `runtime` block is appended exactly as in `resolve-hostname`.
+## Activate revision endpoint
 
-`404` if the project does not exist; `503` if the control-plane DB is
-unavailable.
+```text
+POST /api/v1/cloud/environments/:environment/revisions/:commit/activate
+```
+
+Activating a revision changes the environment's current artifact pointer.
+Runtime nodes can then reload or refresh their environment kernel based on the
+new commit/checksum.
+
+```bash
+OS_CLOUD_URL=https://cloud.example.com \
+OS_ENVIRONMENT_ID=env_prod \
+os rollback --commit 9ce1bd48dd7022b8
+```
 
 ---
 
-### `POST /api/v1/cloud/projects/:id/metadata`
+## Artifact envelope
 
-Receives a compiled artifact (the JSON output of `os compile` /
-`objectstack compile`) and persists it so subsequent
-`GET .../artifact` calls return it.
+`EnvironmentArtifactSchema` contains the immutable, cacheable portion of a
+deployment:
 
-**Body** — the raw artifact JSON (a JSON object — arrays are rejected).
+- `schemaVersion`
+- `environmentId`
+- `commitId`
+- `checksum`
+- `metadata`
+- `functions`
+- `manifest`
+- optional `builtAt`, `builtWith`, and `payloadRef`
 
-**Behaviour**
-
-1. Validates that the body is a plain JSON object.
-2. Writes the artifact to `<artifactRoot>/<projectId>/artifact.json`.
-3. Updates `sys_project.metadata.artifact_path` to that file so the GET
-   endpoint can serve it on the next request.
-4. Returns `{ success: true, data: { projectId, commitId, checksum, ... } }`
-   echoing the same fields the GET endpoint would assemble.
-
-This is the endpoint that **M5 — Project publish endpoint**
-(see `ROADMAP.md`) will eventually graduate `os publish` onto. Until then
-it accepts any compiled JSON.
+Deployment config does not belong in the artifact. Database coordinates,
+secrets, runtime credentials, and hostname bindings are mutable operational
+inputs provided by the host or Cloud control plane.
 
 ---
 
-## Caching contract
+## Runtime resolution
 
-`ArtifactApiClient` (the runtime client used by `ArtifactKernelFactory`)
-caches responses with a TTL keyed by the response content. Servers
-should:
+Environment-aware runtime hosts resolve the target environment before serving a
+data-plane request:
 
-- Keep `commitId` stable across rebuilds when the underlying metadata is
-  unchanged. If you rebuild without metadata changes, reuse the previous
-  `commitId` so kernels can short-circuit.
-- Use the synthetic `sha256` derivation if you do not have a real CI
-  commit id — it is deterministic over the merged metadata content.
-- Treat the `runtime` block as **mutable** independently of `commitId` —
-  the client is allowed to invalidate the runtime block separately when
-  `resolve-hostname` returns a different `runtime`.
+1. `/api/v1/environments/:environmentId/...`
+2. Hostname through the environment registry
+3. `X-Environment-Id`
+4. `session.activeEnvironmentId`
+5. Configured default environment
+6. Single unambiguous environment
+
+Control-plane routes under `/api/v1/cloud/environments/...` are management
+calls, not data-plane calls.
 
 ---
 
@@ -187,14 +106,16 @@ should:
 
 | File | Purpose |
 |:---|:---|
-| `packages/services/service-cloud/src/cloud-artifact-api-plugin.ts` | Server: registers all three endpoints, performs DB reads, assembles envelopes |
-| `packages/services/service-cloud/src/artifact-api-client.ts` | Client: TTL-cached HTTP wrapper used by runtime nodes |
-| `packages/services/service-cloud/src/artifact-environment-registry.ts` | Maps `Host:` header → `projectId` via `resolve-hostname` |
-| `packages/services/service-cloud/src/artifact-kernel-factory.ts` | Boots a kernel from a returned artifact (no `ControlPlaneProxyDriver`) |
-| `packages/spec/src/system/project-artifact.zod.ts` | Normative envelope schema |
+| `packages/cli/src/commands/publish.ts` | CLI publish command and endpoint construction. |
+| `packages/cli/src/commands/rollback.ts` | CLI revision activation command. |
+| `packages/runtime/src/cloud/environment-registry.ts` | Runtime seam for id/hostname environment resolution. |
+| `packages/runtime/src/cloud/runtime-config-plugin.ts` | Console runtime-config for active/default environment state. |
+| `packages/spec/src/system/environment-artifact.zod.ts` | Normative artifact envelope schema. |
+
+---
 
 ## Related
 
-- [North Star — §6.3 Runtime Inputs](./north-star)
-- [Cloud Deployment](../guides/cloud-deployment) — `OS_MODE=runtime` setup
-- [Single-Project Mode](../guides/single-project-mode) — alternative for local / one-tenant workloads
+- [Deployment Modes](../guides/cloud-deployment)
+- [Environment-Scoped Routing](../guides/project-scoping)
+- [North Star](./north-star)

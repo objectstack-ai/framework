@@ -151,6 +151,9 @@ const result = Checkpoint.parse(data);
 | **output** | `Record<string, any>` | optional | Output data produced by the node |
 | **error** | `Object` | optional | Error details if step failed |
 | **retryAttempt** | `integer` | optional | Retry attempt number (0 = first try) |
+| **parentNodeId** | `string` | optional | Enclosing structured-region container node ID (loop/parallel/try_catch) |
+| **iteration** | `integer` | optional | Zero-based loop iteration or parallel branch index of the enclosing region |
+| **regionKind** | `string` | optional | Region kind the step ran in: loop-body | parallel-branch | try | catch |
 
 
 ---

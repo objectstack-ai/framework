@@ -88,7 +88,16 @@ Create a parent-child relationship where child records are cascaded on delete.
       fields: {
         order_number: { label: 'Order #', type: 'autonumber', autonumberFormat: 'ORD-{0000}' },
         customer: { label: 'Customer', type: 'lookup', reference: 'contact' },
-        total: { label: 'Total', type: 'summary', summaryOperations: ['sum'] },
+        total: {
+          label: 'Total',
+          type: 'summary',
+          summaryOperations: {
+            object: 'order_line',
+            field: 'line_total',
+            function: 'sum',
+            relationshipField: 'order',
+          },
+        },
         status: { label: 'Status', type: 'select', options: [
           { label: 'Draft', value: 'draft', default: true },
           { label: 'Submitted', value: 'submitted' },
@@ -100,7 +109,13 @@ Create a parent-child relationship where child records are cascaded on delete.
       name: 'order_line',
       label: 'Order Line',
       fields: {
-        order: { label: 'Order', type: 'master_detail', reference: 'order' },
+        order: {
+          label: 'Order',
+          type: 'master_detail',
+          reference: 'order',
+          inlineEdit: true,
+          inlineAmountField: 'line_total',
+        },
         product: { label: 'Product', type: 'lookup', reference: 'product' },
         quantity: { label: 'Qty', type: 'number', min: 1, required: true },
         unit_price: { label: 'Unit Price', type: 'currency' },
@@ -248,9 +263,9 @@ export const assignmentNotification = defineFlow({
 
 ---
 
-## 7. Approval Workflow
+## 7. Approval Flow
 
-Define a multi-step approval process for records.
+Define a multi-step approval flow for records.
 
 ```typescript
 {

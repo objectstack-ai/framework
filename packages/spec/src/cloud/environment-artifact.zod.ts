@@ -5,7 +5,7 @@ import { lazySchema } from '../shared/lazy-schema';
 import { ObjectStackDefinitionSchema } from '../stack.zod';
 
 /**
- * # Project Artifact Envelope (M1)
+ * # Environment Artifact Envelope (M1)
  *
  * Describes the response shape of `GET /api/v1/cloud/environments/:environmentId/artifact`
  * — the assembled artifact ObjectOS pulls from the control plane.
@@ -29,7 +29,7 @@ export const EnvironmentArtifactSchema = lazySchema(() => z.object({
   /** Envelope format version. Increment on breaking changes. */
   schemaVersion: z.literal('0.1').default('0.1'),
 
-  /** Control-plane project ID this artifact belongs to. */
+  /** Control-plane environment ID this artifact belongs to. */
   environmentId: z.string(),
 
   /** Metadata revision assigned by the control plane on publish. */

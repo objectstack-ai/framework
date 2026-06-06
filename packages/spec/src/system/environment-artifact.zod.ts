@@ -3,20 +3,20 @@
 import { z } from 'zod';
 
 /**
- * # Project Artifact Format Protocol (v0)
+ * # Environment Artifact Format Protocol (v0)
  *
  * Defines the immutable envelope produced by `objectstack compile` and consumed
  * by ObjectOS at boot. The artifact carries everything an ObjectOS instance
- * needs to hydrate a project kernel without reading control-plane DB rows
+ * needs to hydrate an environment kernel without reading control-plane DB rows
  * directly.
  *
  * ## Boundary
  *
- * - **Artifact (this schema):** project metadata + inlined function code +
+ * - **Artifact (this schema):** environment metadata + inlined function code +
  *   plugin/driver requirements. Immutable, content-addressable via `commitId`
  *   and `checksum`.
  * - **Deployment Config (NOT in this schema):** business DB coordinates,
- *   credentials, project identity, secrets. Injected at runtime.
+ *   credentials, environment identity, secrets. Injected at runtime.
  *
  * See {@link content/docs/concepts/north-star.mdx} §6.3 for the runtime-inputs
  * boundary, and {@link ROADMAP.md} M1 for the milestone definition.
@@ -127,7 +127,7 @@ export type EnvironmentArtifactFunction = z.infer<typeof EnvironmentArtifactFunc
 
 /**
  * Plugin/driver requirement entry. ObjectOS uses these to verify that the
- * runtime has every plugin the project depends on before hydrating the kernel.
+ * runtime has every plugin the environment depends on before hydrating the kernel.
  * Configuration values live in **Deployment Config**, not in the artifact.
  */
 export const EnvironmentArtifactRequirementSchema = z
@@ -135,24 +135,24 @@ export const EnvironmentArtifactRequirementSchema = z
     /** Package id (reverse-domain or short id). */
     id: z.string().describe('Plugin/driver package id'),
 
-    /** SemVer range required by the project. */
-    version: z.string().optional().describe('SemVer range required by the project'),
+    /** SemVer range required by the environment. */
+    version: z.string().optional().describe('SemVer range required by the environment'),
   })
   .describe('A plugin or driver dependency declaration');
 
 export type EnvironmentArtifactRequirement = z.infer<typeof EnvironmentArtifactRequirementSchema>;
 
 /**
- * Project-level manifest captured inside the artifact. Mirrors the parts of
+ * Environment-level manifest captured inside the artifact. Mirrors the parts of
  * the package manifest the runtime needs to bootstrap; user-facing manifest
  * fields (description, icon, marketplace metadata) are excluded.
  */
 export const EnvironmentArtifactManifestSchema = z
   .object({
-    /** Plugins required to run this project's metadata. */
+    /** Plugins required to run this environment's metadata. */
     plugins: z.array(EnvironmentArtifactRequirementSchema).optional(),
 
-    /** Drivers required to run this project's metadata. */
+    /** Drivers required to run this environment's metadata. */
     drivers: z.array(EnvironmentArtifactRequirementSchema).optional(),
 
     /** Minimum platform version (mirrors `Manifest.engine`). */
@@ -209,7 +209,7 @@ export const EnvironmentArtifactMetadataSchema = z
     apis: z.array(z.unknown()).optional(),
   })
   .passthrough()
-  .describe('Compiled project metadata grouped by category');
+  .describe('Compiled environment metadata grouped by category');
 
 export type EnvironmentArtifactMetadata = z.infer<typeof EnvironmentArtifactMetadataSchema>;
 
@@ -240,15 +240,15 @@ export type EnvironmentArtifactPayloadRef = z.infer<typeof EnvironmentArtifactPa
 // ==========================================
 
 /**
- * Project Artifact envelope.
+ * Environment Artifact envelope.
  *
- * Produced by `objectstack compile`, served by the Project Artifact API
+ * Produced by `objectstack compile`, served by the Environment Artifact API
  * (`GET /api/v1/cloud/environments/:environmentId/artifact`), and consumed by the
- * ObjectOS metadata loader to hydrate a project kernel.
+ * ObjectOS metadata loader to hydrate an environment kernel.
  *
  * Required fields (v0):
  * - `schemaVersion`: tracks the envelope itself.
- * - `environmentId`: which project this artifact belongs to.
+ * - `environmentId`: which environment this artifact belongs to.
  * - `commitId`: monotonic, content-addressable identifier; cache key.
  * - `checksum`: integrity check over the artifact body.
  * - `metadata`: compiled metadata grouped by category.
@@ -264,10 +264,10 @@ export const EnvironmentArtifactSchema = z
     /** Envelope schema version. Currently always `'0.1'`. */
     schemaVersion: z
       .literal(ENVIRONMENT_ARTIFACT_SCHEMA_VERSION)
-      .describe('Project artifact envelope schema version'),
+      .describe('Environment artifact envelope schema version'),
 
-    /** Stable project identifier from the control plane. */
-    environmentId: z.string().min(1).describe('Project identifier (control-plane scoped)'),
+    /** Stable environment identifier from the control plane. */
+    environmentId: z.string().min(1).describe('Environment identifier (control-plane scoped)'),
 
     /**
      * Monotonic, content-addressable revision id assigned by the control plane
@@ -289,10 +289,10 @@ export const EnvironmentArtifactSchema = z
     /** Build tool identifier (e.g. `"objectstack-cli@3.4.0"`). */
     builtWith: z.string().optional().describe('Build tool identifier'),
 
-    /** Compiled project metadata grouped by category. */
+    /** Compiled environment metadata grouped by category. */
     metadata: EnvironmentArtifactMetadataSchema,
 
-    /** Inlined function code. Empty array if the project has no functions. */
+    /** Inlined function code. Empty array if the environment has no functions. */
     functions: z
       .array(EnvironmentArtifactFunctionSchema)
       .default([])
@@ -304,7 +304,7 @@ export const EnvironmentArtifactSchema = z
     /** Out-of-band payload reference (reserved). */
     payloadRef: EnvironmentArtifactPayloadRefSchema.optional(),
   })
-  .describe('ObjectStack Project Artifact envelope (v0)');
+  .describe('ObjectStack Environment Artifact envelope (v0)');
 
 export type EnvironmentArtifact = z.infer<typeof EnvironmentArtifactSchema>;
 export type EnvironmentArtifactInput = z.input<typeof EnvironmentArtifactSchema>;

@@ -11,7 +11,7 @@ Complete guide to leveraging AI agents, RAG pipelines, and intelligent automatio
 
 1. [AI Architecture](#ai-architecture)
 2. [AI Agents](#ai-agents)
-3. [Actions as Tools (auto-exposed)](#actions-as-tools-auto-exposed)
+3. [Actions as Tools (explicit opt-in)](#actions-as-tools-explicit-opt-in)
    - [Human-In-The-Loop approval](#human-in-the-loop-approval)
 4. [RAG Pipelines](#rag-pipelines)
 5. [Natural Language Queries](#natural-language-queries)
@@ -358,13 +358,38 @@ Use statistical analysis and ML.`,
 
 ---
 
-## Actions as Tools (auto-exposed)
+## Actions as Tools (explicit opt-in)
 
-Every declarative `Action` you attach to an object is **automatically exposed as an AI tool**, named `action_<actionName>`. When the LLM picks one, the AI runtime dispatches to the same handler Studio's row toolbar would invoke — your business logic stays in one place.
+Declarative `Action` metadata can be exposed as AI-callable tools, named
+`action_<actionName>`, but exposure is **explicit opt-in**. Add an `ai:` block
+with `exposed: true` and an LLM-facing `description`; otherwise the action stays
+human/UI-only.
+
+```typescript
+export const triageCaseAction = {
+  name: 'triage_case',
+  label: 'Triage Case',
+  objectName: 'case',
+  type: 'flow',
+  target: 'case_triage',
+  ai: {
+    exposed: true,
+    description: 'Triage a support case, suggest priority, and assign the next support queue.',
+    category: 'action',
+    requiresConfirmation: false,
+  },
+};
+```
+
+When the LLM picks an exposed action, the AI runtime dispatches to the same
+handler the Console row toolbar would invoke, so your business logic stays in
+one place.
 
 ### What gets exposed
 
-The AI runtime walks every registered object's `actions[]` and exposes the ones that pass safety + wiring checks. Three action types are supported:
+The AI runtime walks every registered object's `actions[]` and registers only
+actions with `ai.exposed === true` that also pass safety and wiring checks.
+Three action types are supported:
 
 | `action.type` | Dispatch path | Wiring needed |
 |:---|:---|:---|
@@ -372,7 +397,12 @@ The AI runtime walks every registered object's `actions[]` and exposes the ones 
 | `api` | HTTP call to `action.target` via `ApiActionClient` (default: `fetch`) | `apiBaseUrl` (or a custom `apiClient`) |
 | `flow` | `IAutomationService.execute(target, { triggerData })` | `automation` service registered |
 
-Studio-only types (`url`, `modal`, `form`) are always skipped. Dangerous actions — those with `confirmText`, `mode: 'delete'`, or `variant: 'danger'` — are skipped **by default**, but can be opted into the [HITL approval queue](#human-in-the-loop-approval) so an operator authorises every call. Owners can also opt out per action with `aiExposed: false`.
+Console-only types (`url`, `modal`, `form`) are always skipped. Dangerous
+actions — those with `confirmText`, `mode: 'delete'`, `variant: 'danger'`, or
+`ai.requiresConfirmation: true` — are skipped unless the
+[HITL approval queue](#human-in-the-loop-approval) is wired. To assert that a
+destructive-looking action is safe for autonomous execution, set
+`ai.requiresConfirmation: false`.
 
 ### Wiring it up
 
@@ -404,7 +434,11 @@ For api actions, the request body is built from three sources (last wins):
 
 ### Diagnostics
 
-`registerActionsAsTools()` returns `{ registered, skipped }`. Studio surfaces the skipped list with reasons (e.g. `"no apiClient or apiBaseUrl configured"`, `"mode='delete' — destructive"`) so action authors can see at a glance whether their action will be LLM-callable.
+`registerActionsAsTools()` returns `{ registered, skipped, warnings }`. The
+diagnostics include reasons such as `"not AI-exposed"`,
+`"no apiClient or apiBaseUrl configured"`, or
+`"requires confirmation ... wire HITL approval"` so action authors can see
+whether their action will be LLM-callable.
 
 ### Human-In-The-Loop approval
 

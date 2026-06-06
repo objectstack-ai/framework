@@ -10,9 +10,9 @@ Complete guide to implementing business rules, validations, and automated proces
 ## Table of Contents
 
 1. [Validation Rules](#validation-rules)
-2. [Workflow Rules](#workflow-rules)
+2. [Flows](#flows)
 3. [Triggers](#triggers)
-4. [Approval Processes](#approval-processes)
+4. [Approval Nodes](#approval-nodes)
 5. [Formula Logic](#formula-logic)
 6. [Best Practices](#best-practices)
 
@@ -106,119 +106,101 @@ Field.text({
 
 ---
 
-## Workflow Rules
+## Flows
 
-Workflow rules automate standard internal procedures and processes to save time.
+Flows automate business processes as explicit node graphs. Use them for field
+updates, notifications, record creation, HTTP calls, decisions, waits, screens,
+subflows, and approval pauses. The old standalone Workflow Rule authoring model
+is retired; model the same logic as a Flow.
 
-### Field Update Workflow
-
-Automatically update fields when conditions are met:
-
-```typescript
-workflows: [
-  {
-    name: 'update_last_activity',
-    objectName: 'account',
-    triggerType: 'on_update',
-    criteria: 'ISCHANGED(owner) OR ISCHANGED(type)',
-    actions: [
-      {
-        name: 'set_activity_date',
-        type: 'field_update',
-        field: 'last_activity_date',
-        value: 'TODAY()',
-      }
-    ],
-    active: true,
-  }
-]
-```
-
-### Email Alert Workflow
-
-Send emails when conditions are met:
+### Record-change flow
 
 ```typescript
-{
-  name: 'notify_high_value_opportunity',
-  objectName: 'opportunity',
-  triggerType: 'on_create',
-  criteria: 'amount > 100000',
-  actions: [
+import type { Flow } from '@objectstack/spec/automation';
+
+export const hotLeadFollowUp: Flow = {
+  name: 'hot_lead_follow_up',
+  label: 'Hot Lead Follow Up',
+  type: 'record_change',
+  status: 'active',
+  trigger: {
+    objectName: 'lead',
+    operations: ['create'],
+    condition: "record.rating == 'hot'",
+  },
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
     {
-      name: 'notify_manager',
-      type: 'email_alert',
-      template: 'high_value_opportunity',
-      recipients: ['{owner.manager}'],
-    }
-  ],
-  active: true,
-}
-```
-
-### Task Creation Workflow
-
-Automatically create tasks:
-
-```typescript
-{
-  name: 'create_follow_up_task',
-  objectName: 'lead',
-  triggerType: 'on_create',
-  criteria: 'rating = "hot"',
-  actions: [
-    {
-      name: 'create_task',
-      type: 'task_create',
-      subject: 'Follow up on hot lead: {name}',
-      relatedTo: '{id}',
-      assignedTo: '{owner}',
-      dueDate: '{TODAY() + 1}',
-      priority: 'high',
-    }
-  ],
-  active: true,
-}
-```
-
-### Scheduled Workflow
-
-Run workflows on a schedule:
-
-```typescript
-{
-  name: 'contract_expiration_check',
-  objectName: 'contract',
-  triggerType: 'scheduled',
-  schedule: '0 0 * * *', // Daily at midnight
-  criteria: 'end_date <= TODAY() AND status = "activated"',
-  actions: [
-    {
-      name: 'mark_expired',
-      type: 'field_update',
-      field: 'status',
-      value: '"expired"',
+      id: 'create_task',
+      type: 'create_record',
+      label: 'Create Follow-up Task',
+      config: {
+        object: 'task',
+        data: {
+          subject: 'Follow up on hot lead',
+          related_to: '${record.id}',
+          priority: 'high',
+        },
+      },
     },
     {
-      name: 'notify_owner',
-      type: 'email_alert',
-      template: 'contract_expired',
-      recipients: ['{owner}'],
-    }
+      id: 'notify_owner',
+      type: 'notify',
+      label: 'Notify Owner',
+      config: {
+        channel: 'in_app',
+        template: 'hot_lead_created',
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
   ],
-  active: true,
-}
+  edges: [
+    { id: 'e1', source: 'start', target: 'create_task' },
+    { id: 'e2', source: 'create_task', target: 'notify_owner' },
+    { id: 'e3', source: 'notify_owner', target: 'end' },
+  ],
+};
 ```
 
-### Trigger Types
+### Scheduled flow
 
-| Type | When It Fires | Use Case |
-|------|---------------|----------|
-| `on_create` | Record created | Welcome emails, initial tasks |
-| `on_update` | Record updated | Status changes, notifications |
-| `on_delete` | Record deleted | Cleanup, archival |
-| `on_read` | Record viewed | Lazy updates, calculations |
-| `scheduled` | Cron schedule | Batch processing, cleanup |
+```typescript
+export const contractExpirationCheck: Flow = {
+  name: 'contract_expiration_check',
+  label: 'Contract Expiration Check',
+  type: 'scheduled',
+  status: 'active',
+  schedule: {
+    type: 'cron',
+    expression: '0 0 * * *',
+    timezone: 'UTC',
+  },
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    { id: 'find_expiring', type: 'get_record', label: 'Find Expiring Contracts' },
+    { id: 'notify_owners', type: 'notify', label: 'Notify Owners' },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'find_expiring' },
+    { id: 'e2', source: 'find_expiring', target: 'notify_owners' },
+    { id: 'e3', source: 'notify_owners', target: 'end' },
+  ],
+};
+```
+
+### Built-in node types
+
+| Node | Use case |
+|------|----------|
+| `decision` | Branch based on CEL predicates |
+| `assignment` | Set variables |
+| `create_record`, `update_record`, `delete_record`, `get_record` | CRUD |
+| `http` | Outbound HTTP call |
+| `notify` | In-app/email-style notification dispatch |
+| `wait`, `screen`, `approval` | Durable pauses |
+| `subflow` | Invoke another flow |
+| `parallel_gateway`, `join_gateway`, `boundary_event` | BPMN-style orchestration |
 
 ---
 
@@ -319,130 +301,54 @@ context = {
 
 ---
 
-## Approval Processes
+## Approval Nodes
 
-Multi-step approval workflows for business processes.
-
-### Simple Approval
-
-Single-step approval:
+Approvals are authored as Flow nodes with `type: 'approval'`. The
+`@objectstack/plugin-approvals` package owns the durable approval state
+(`sys_approval_request` and `sys_approval_action`), record locking, approver
+resolution, and resume-on-decision behavior.
 
 ```typescript
-{
+export const opportunityApproval: Flow = {
   name: 'opportunity_approval',
-  objectName: 'opportunity',
-  triggerType: 'manual',
-  entryConditions: 'amount > 50000',
-  
-  steps: [
+  label: 'Opportunity Approval',
+  type: 'record_change',
+  status: 'active',
+  trigger: {
+    objectName: 'opportunity',
+    operations: ['update'],
+    condition: "record.amount >= 50000 && record.stage == 'proposal'",
+  },
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
     {
-      name: 'manager_approval',
-      approver: '{owner.manager}',
-      approverType: 'user',
-      emailTemplate: 'approval_request',
-      requiresComments: true,
-      
-      approvalActions: [
-        {
-          type: 'field_update',
-          field: 'approval_status',
-          value: '"approved"',
-        }
-      ],
-      
-      rejectionActions: [
-        {
-          type: 'field_update',
-          field: 'approval_status',
-          value: '"rejected"',
-        },
-        {
-          type: 'email_alert',
-          template: 'approval_rejected',
-          recipients: ['{owner}'],
-        }
-      ],
-    }
+      id: 'manager_approval',
+      type: 'approval',
+      label: 'Manager Approval',
+      config: {
+        approvers: [{ type: 'user', value: '${record.owner_manager_id}' }],
+        behavior: 'all',
+        approvalStatusField: 'approval_status',
+        lockRecord: true,
+      },
+    },
+    { id: 'mark_approved', type: 'update_record', label: 'Mark Approved' },
+    { id: 'mark_rejected', type: 'update_record', label: 'Mark Rejected' },
+    { id: 'end', type: 'end', label: 'End' },
   ],
-  
-  finalApprovalActions: [
-    {
-      type: 'field_update',
-      field: 'stage',
-      value: '"proposal"',
-    }
+  edges: [
+    { id: 'e1', source: 'start', target: 'manager_approval' },
+    { id: 'approved', source: 'manager_approval', target: 'mark_approved', condition: "approval.status == 'approved'" },
+    { id: 'rejected', source: 'manager_approval', target: 'mark_rejected', condition: "approval.status == 'rejected'" },
+    { id: 'e4', source: 'mark_approved', target: 'end' },
+    { id: 'e5', source: 'mark_rejected', target: 'end' },
   ],
-  
-  finalRejectionActions: [
-    {
-      type: 'field_update',
-      field: 'stage',
-      value: '"qualification"',
-    }
-  ],
-}
+};
 ```
 
-### Multi-Step Approval
-
-Sequential approval with multiple approvers:
-
-```typescript
-{
-  name: 'contract_approval',
-  objectName: 'contract',
-  triggerType: 'manual',
-  
-  steps: [
-    // Step 1: Sales Manager
-    {
-      name: 'sales_manager',
-      approver: '{owner.manager}',
-      emailTemplate: 'contract_approval_manager',
-    },
-    
-    // Step 2: Legal Review
-    {
-      name: 'legal_review',
-      approver: '{legal_team}',
-      approverType: 'queue',
-      emailTemplate: 'contract_approval_legal',
-      requiresComments: true,
-    },
-    
-    // Step 3: Finance Approval
-    {
-      name: 'finance_approval',
-      approver: '{finance_director}',
-      condition: 'contract_value > 100000',
-      emailTemplate: 'contract_approval_finance',
-    },
-  ],
-}
-```
-
-### Parallel Approval
-
-Multiple approvers must approve:
-
-```typescript
-{
-  name: 'discount_approval',
-  objectName: 'quote',
-  
-  steps: [
-    {
-      name: 'dual_approval',
-      approverType: 'all',
-      approvers: [
-        '{sales_manager}',
-        '{pricing_manager}',
-      ],
-      emailTemplate: 'discount_approval_request',
-    }
-  ],
-}
-```
+For multi-step approvals, chain multiple `approval` nodes. For parallel
+approvals, combine `parallel_gateway`, multiple `approval` nodes, and
+`join_gateway`.
 
 ---
 
@@ -574,19 +480,19 @@ Field.formula({
 - Block legitimate edge cases
 - Use triggers for simple validations
 
-### 2. Workflow Rules
+### 2. Flows
 
 ✅ **DO:**
-- Keep workflows simple and focused
+- Keep flows simple and focused
 - Document the business logic
-- Test workflow recursion
-- Use scheduled workflows for batch updates
+- Test recursion and retry behavior
+- Use scheduled flows for batch updates
 
 ❌ **DON'T:**
-- Create workflow loops
-- Update too many fields in one workflow
-- Use workflows for complex logic (use triggers)
-- Mix concerns in one workflow
+- Create uncontrolled loops
+- Update too many fields in one node
+- Use triggers when a declarative flow is enough
+- Mix unrelated concerns in one flow
 
 ### 3. Triggers
 
@@ -603,7 +509,7 @@ Field.formula({
 - Perform complex calculations in triggers
 - Ignore governor limits
 
-### 4. Approval Processes
+### 4. Approval Nodes
 
 ✅ **DO:**
 - Define clear entry criteria
@@ -650,23 +556,28 @@ validations: [
   },
 ],
 
-// Workflow: Auto-assign hot leads
-workflows: [
+// Flow: Auto-assign hot leads
+flows: [
   {
     name: 'assign_hot_leads',
-    triggerType: 'on_create',
-    criteria: 'rating = "hot" AND lead_source = "web"',
-    actions: [
-      {
-        type: 'field_update',
-        field: 'owner',
-        value: 'GET_ROUND_ROBIN_USER("sales_team")',
-      },
-      {
-        type: 'task_create',
-        subject: 'Contact hot lead: {name}',
-        dueDate: '{NOW() + 2 hours}',
-      },
+    label: 'Assign Hot Leads',
+    type: 'record_change',
+    status: 'active',
+    trigger: {
+      objectName: 'lead',
+      operations: ['create'],
+      condition: "record.rating == 'hot' && record.lead_source == 'web'",
+    },
+    nodes: [
+      { id: 'start', type: 'start', label: 'Start' },
+      { id: 'assign_owner', type: 'assignment', label: 'Assign Owner' },
+      { id: 'create_task', type: 'create_record', label: 'Create Follow-up Task' },
+      { id: 'end', type: 'end', label: 'End' },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'assign_owner' },
+      { id: 'e2', source: 'assign_owner', target: 'create_task' },
+      { id: 'e3', source: 'create_task', target: 'end' },
     ],
   },
 ],
@@ -704,24 +615,32 @@ validations: [
   },
 ],
 
-// Workflow: Update probability
-workflows: [
+// Flow: Update probability
+flows: [
   {
     name: 'update_probability',
-    triggerType: 'on_update',
-    criteria: 'ISCHANGED(stage)',
-    actions: [
-      {
-        type: 'field_update',
-        field: 'probability',
-        value: 'GET_STAGE_PROBABILITY(stage)',
-      },
+    label: 'Update Probability',
+    type: 'record_change',
+    status: 'active',
+    trigger: {
+      objectName: 'opportunity',
+      operations: ['update'],
+      condition: 'record.stage != previous.stage',
+    },
+    nodes: [
+      { id: 'start', type: 'start', label: 'Start' },
+      { id: 'update_probability', type: 'update_record', label: 'Update Probability' },
+      { id: 'end', type: 'end', label: 'End' },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'update_probability' },
+      { id: 'e2', source: 'update_probability', target: 'end' },
     ],
   },
 ],
 
 // Approval: Large deals
-// (See Approval Processes section above)
+// (See Approval Nodes section above)
 ```
 
 ---

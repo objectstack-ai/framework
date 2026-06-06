@@ -393,13 +393,11 @@ The plugin is a **soft dependency** on `metadata` — it tolerates running
 without `MetadataPlugin` and it logs (not throws) on per-flow registration
 failures so one broken flow does not abort startup.
 
-## Studio Flow Viewer & Test Runner
+## Console Flow Viewer & Test Runner
 
-Every flow surfaces in Studio's metadata browser
-(`/_studio/apps/setup/_metadata/flow/<flow-name>`). The
-`flow-viewer-plugin` (registered in
-`apps/studio/src/plugins/built-in/index.ts`) replaces the default JSON
-inspector with three rich tabs:
+Every flow can surface in the Console metadata browser under `/_console/`.
+ObjectUI's flow viewer replaces the default JSON inspector with rich tabs when
+the flow viewer plugin is installed:
 
 | Tab | Component | Purpose |
 |:---|:---|:---|

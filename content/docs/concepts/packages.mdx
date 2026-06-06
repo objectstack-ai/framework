@@ -5,7 +5,7 @@ description: Complete reference of all ObjectStack packages in the monorepo
 
 # Package Reference
 
-ObjectStack is distributed as a monorepo containing **51 publishable packages** organized into core runtime, client SDKs, framework adapters, drivers, plugins, and platform services. Counts are kept in sync with the `packages/` directory in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
+ObjectStack is distributed as a monorepo containing **70 package manifests** organized into core runtime, client SDKs, framework adapters, drivers, plugins, and platform services.
 
 > **Note for AI Agents**: Each package's `README.md` contains a specific architectural role and usage rules section.
 
@@ -16,11 +16,11 @@ ObjectStack is distributed as a monorepo containing **51 publishable packages** 
 | Core runtime | 9 | `spec`, `core`, `runtime`, `types`, `metadata`, `objectql`, `rest`, `formula`, `platform-objects` |
 | Client / DX | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | Framework adapters | 7 | Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit |
-| Drivers | 4 | `driver-memory`, `driver-sql`, `driver-turso`, `driver-mongodb` |
-| Plugins | 12 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev` |
-| Platform services | 14 | AI, Analytics, Automation, Cache, Cloud, Feed, I18n, Job, Package, Queue, Realtime, Settings, Storage, Tenant |
+| Drivers | 4 | `driver-memory`, `driver-sql`, `driver-sqlite-wasm`, `driver-mongodb` |
+| Plugins | 22 | Auth, security, audit, approvals, sharing, email, webhooks, reports, Hono/MCP servers, MSW/dev, triggers, knowledge, and embedders |
+| Platform services | 17 | AI, Analytics, Automation, Cache, Cluster, Datasource, Feed, I18n, Job, Knowledge, Messaging, Package, Queue, Realtime, Settings, Storage |
 
-**Total: 51 packages**
+**Total: 70 package manifests**
 
 ---
 
@@ -643,15 +643,15 @@ Framework adapters that bridge ObjectStack's unified `HttpDispatcher` to specifi
 
 ---
 
-### @objectstack/service-cloud
+### @objectstack/service-messaging
 
-**Description:** Cloud control-plane bridge service.
+**Description:** Notification and messaging pipeline service.
 
-**Purpose:** Connects an ObjectOS runtime to the hosted (or self-hosted) ObjectStack control plane: artifact fetching, project version selection, telemetry hooks.
+**Purpose:** Provides the single notification ingress, delivery outbox, in-app materialization, preferences, templates, quiet-hours, and digest collapse.
 
-**Use Cases:** Cloud deployments, multi-environment artifact promotion.
+**Use Cases:** Flow `notify` nodes, collaboration mentions, assignment notifications, inbox messages, email delivery, and future channel plugins.
 
-**Implementation Status:** ⚠️ **EVOLVING**
+**Implementation Status:** ✅ **IMPLEMENTED**
 
 ---
 

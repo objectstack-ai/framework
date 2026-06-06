@@ -69,7 +69,7 @@ Canonical cross-paradigm action/node descriptor (ADR-0018)
 | **description** | `string` | optional | Action description |
 | **icon** | `string` | optional | Icon id resolved by the designer |
 | **category** | `Enum<'logic' \| 'data' \| 'io' \| 'human' \| 'control' \| 'custom'>` | ✅ | Palette category |
-| **paradigms** | `Enum<'flow' \| 'workflow_rule' \| 'approval'>[]` | ✅ | Authoring surfaces that may offer this action |
+| **paradigms** | `Enum<'flow' \| 'approval'>[]` | ✅ | Authoring surfaces that may offer this action |
 | **configSchema** | `any` | optional | JSON Schema for the node config (drives form + parse validation) |
 | **supportsPause** | `boolean` | ✅ | Supports async pause/resume |
 | **supportsCancellation** | `boolean` | ✅ | Supports cancellation |
@@ -90,7 +90,6 @@ Authoring paradigm that may offer this action
 ### Allowed Values
 
 * `flow`
-* `workflow_rule`
 * `approval`
 
 

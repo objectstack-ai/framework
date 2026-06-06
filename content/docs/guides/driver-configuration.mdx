@@ -184,32 +184,29 @@ new InMemoryDriver();
 Use the memory driver for unit tests. It requires no setup and runs instantly.
 </Callout>
 
-## `apps/objectos` and Single-Project Local Mode
+## Local Environment Runtime
 
-When running `apps/objectos` (or any boot stack with `runtime: { cloudUrl: 'local' }`),
-two databases are involved:
-
-| DB           | Purpose                                                   | Env var                         |
-|--------------|-----------------------------------------------------------|---------------------------------|
-| Project DB   | Your business data (the records served at `/api/v1/data/*`) | `OS_DATABASE_URL` / `OS_DATABASE_DRIVER` |
-| Control DB   | Framework bookkeeping (`sys_organization`, `sys_project`, …) | `OS_CONTROL_DATABASE_URL`       |
-
-Both honor the same URL-scheme inference described above. If
-`OS_CONTROL_DATABASE_URL` is unset, the control DB defaults to a local
-SQLite file (`<dataDir>/control.db`); for backward compatibility
-`OS_DATABASE_URL` is also accepted as a fallback for the control DB
-when no explicit `OS_CONTROL_DATABASE_URL` is provided **and** no project DB
-URL has consumed it.
+Local framework commands run one active environment. The business records served
+at `/api/v1/data/*` use the driver selected by `OS_DATABASE_URL` and
+`OS_DATABASE_DRIVER`.
 
 ```bash
-# Run apps/objectos with MongoDB as the project DB (control DB stays sqlite):
-OS_DATABASE_URL=mongodb://localhost:27017/objectos pnpm dev
+# Run the showcase with MongoDB as the local environment DB:
+OS_ENVIRONMENT_ID=env_local \
+OS_DATABASE_URL=mongodb://localhost:27017/objectstack \
+pnpm dev
 
-# Pin both DBs explicitly:
-OS_DATABASE_URL=mongodb://localhost:27017/objectos \
-OS_CONTROL_DATABASE_URL=postgres://user:pass@host/control \
+# Pin the driver explicitly when the URL is ambiguous:
+OS_DATABASE_URL=file:./.objectstack/data/app.db \
+OS_DATABASE_DRIVER=sqlite \
 pnpm dev
 ```
+
+Cloud control-plane databases and environment provisioning live in the Cloud
+distribution outside this framework repo. When this runtime is pointed at Cloud,
+the environment id still flows through `OS_ENVIRONMENT_ID`, scoped URLs, or
+`X-Environment-Id`; mutable deployment config does not live in the compiled
+artifact.
 
 ## Multi-Datasource
 
