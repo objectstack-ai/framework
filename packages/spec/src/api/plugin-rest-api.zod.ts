@@ -1129,7 +1129,7 @@ export const DEFAULT_WORKFLOW_ROUTES: RestApiRouteRegistration = {
       category: 'workflow',
       public: false,
       summary: 'Get workflow configuration',
-      description: 'Returns workflow rules and state machine configuration for an object',
+      description: 'Returns flow, approval-node, and state machine configuration for an object',
       tags: ['Workflow'],
       responseSchema: 'GetWorkflowConfigResponseSchema',
       cacheable: true,

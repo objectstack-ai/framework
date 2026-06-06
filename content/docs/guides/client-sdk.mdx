@@ -121,7 +121,7 @@ The `@objectstack/client` SDK aims to implement the ObjectStack API protocol spe
 | **automation** | ✅ | 1 | Automation triggers |
 | **storage** | ✅ | 2 | File upload & download |
 | **i18n** | ✅ | 3 | Internationalization |
-| **notifications** | ✅ | 7 | Push notifications |
+| **notifications** | 🟡 | 7 | Legacy notification helpers; receipt/inbox cut-over pending |
 | **realtime** | ✅ | 6 | WebSocket subscriptions |
 | **ai** | ✅ | 4 | AI services (NLQ, chat, insights) |
 
@@ -273,7 +273,7 @@ await client.realtime.setPresence('account', { status: 'online' });
 await client.realtime.getPresence('account');
 await client.realtime.disconnect();
 
-// Notifications — Push notification management
+// Notifications — legacy helper surface
 await client.notifications.registerDevice({ token: 'device-token', platform: 'ios' });
 await client.notifications.unregisterDevice('device-id');
 await client.notifications.getPreferences();
@@ -282,9 +282,13 @@ await client.notifications.list({ read: false });
 await client.notifications.markRead(['notif-1', 'notif-2']);
 await client.notifications.markAllRead();
 
+// ADR-0030 note: the framework pipeline now materializes in-app messages
+// through sys_inbox_message and tracks read-state in sys_notification_receipt.
+// These helpers will be repointed during the objectui bell cut-over.
+
 // AI — AI-powered features
 await client.ai.nlq({ query: 'Show me all active accounts' });
-await client.ai.chat({ message: 'Summarize this project', context: projectId });
+await client.ai.chat({ message: 'Summarize this environment', context: environmentId });
 await client.ai.suggest({ object: 'account', field: 'industry' });
 await client.ai.insights({ object: 'sales', recordId: dealId });
 

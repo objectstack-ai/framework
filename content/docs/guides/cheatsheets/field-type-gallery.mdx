@@ -311,9 +311,19 @@ Parent-child relationship (cascading delete by default).
 | `referenceFilters` | `object` | — | Filters to restrict available options |
 | `writeRequiresMasterRead` | `boolean` | — | Require read access on master to write detail |
 | `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'cascade'` | Behavior when parent is deleted |
+| `inlineEdit` | `boolean` | `false` | Render child records inline on the parent create/edit form |
+| `inlineColumns` | `array` | — | Optional explicit inline grid columns |
+| `inlineAmountField` | `string` | — | Numeric child field used for the inline running total |
 
 ```typescript
-{ name: 'project', label: 'Project', type: 'master_detail', reference: 'project' }
+{
+  name: 'order',
+  label: 'Order',
+  type: 'master_detail',
+  reference: 'order',
+  inlineEdit: true,
+  inlineAmountField: 'line_total',
+}
 ```
 
 ### `tree`
@@ -418,11 +428,23 @@ Roll-up summary from child records.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `summaryOperations` | `string[]` | — | Aggregation operations (count, sum, avg, min, max) |
-| `expression` | `string` | — | Summary expression |
+| `summaryOperations.object` | `string` | **required** | Child object to aggregate |
+| `summaryOperations.field` | `string` | **required** | Child field to aggregate; ignored for `count` |
+| `summaryOperations.function` | `enum` | **required** | `count`, `sum`, `avg`, `min`, or `max` |
+| `summaryOperations.relationshipField` | `string` | auto | Child FK back to the parent when it cannot be inferred |
 
 ```typescript
-{ name: 'task_count', label: 'Task Count', type: 'summary', summaryOperations: ['count'] }
+{
+  name: 'task_count',
+  label: 'Task Count',
+  type: 'summary',
+  summaryOperations: {
+    object: 'task',
+    field: 'id',
+    function: 'count',
+    relationshipField: 'project',
+  },
+}
 ```
 
 ### `autonumber`

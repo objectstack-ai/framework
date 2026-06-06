@@ -671,14 +671,16 @@ When no auth service handler is registered and the legacy broker login is unavai
 
 This ensures that registration and sign-in flows do not return 404 errors in MSW/browser-only environments.
 
-> **Note:** In server mode with AuthPlugin loaded, the auth service handler takes priority and the mock fallback is never reached. The mock fallback only activates when AuthPlugin is not loaded (e.g. browser-only Studio builds where `better-auth` is unavailable).
+> **Note:** In server mode with AuthPlugin loaded, the auth service handler takes priority and the mock fallback is never reached. The mock fallback only activates when AuthPlugin is not loaded (e.g. browser-only Console/MSW builds where `better-auth` is unavailable).
 
-### Studio Kernel Factory
+### Browser Kernel Factory
 
-The Studio app runs in the browser, where the Node-only `better-auth` library cannot be bundled. Instead of loading `AuthPlugin` directly, Studio relies on `HttpDispatcher`'s built-in mock fallback to handle auth endpoints in MSW mode:
+Browser-only Console builds cannot bundle the Node-only `better-auth` library.
+Instead of loading `AuthPlugin` directly, MSW mode can rely on
+`HttpDispatcher`'s built-in mock fallback to handle auth endpoints:
 
 ```typescript
-// apps/studio/src/mocks/createKernel.ts
+// browser test/mock kernel
 // No AuthPlugin needed — HttpDispatcher provides mock auth endpoints automatically
 const kernel = new ObjectKernel();
 await kernel.use(new ObjectQLPlugin());

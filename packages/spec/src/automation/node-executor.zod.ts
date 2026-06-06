@@ -189,8 +189,8 @@ export type ActionCategory = z.infer<typeof ActionCategorySchema>;
  */
 export const ActionParadigmSchema = lazySchema(() => z.enum([
   'flow',           // visual Flow canvas
-  'approval',       // Approval Process steps
-  // 'workflow_rule' retired (ADR-0018 M5 dropped; see ADR-0019): Workflow Rules
+  'approval',       // Approval flow-node steps
+  // 'workflow_rule' retired (ADR-0018 M5 dropped; see ADR-0019): workflow rules
   // were removed in #1398 and `workflow` was reclaimed for state machines, so
   // there is no declarative rule authoring view to compile to Flow.
 ]).describe('Authoring paradigm that may offer this action'));
@@ -204,7 +204,7 @@ export type ActionParadigm = z.infer<typeof ActionParadigmSchema>;
  * shape a plugin publishes when it registers an executor. It supersedes the
  * closed enums (`FlowNodeAction`, `WorkflowAction`), which become *seed*
  * descriptor sets registered at boot. (ADR-0019 removed the third such enum,
- * `ApprovalActionType`, along with the standalone approval process type.)
+ * `ApprovalActionType`, along with the standalone approval authoring type.)
  *
  * The runtime registry (`AutomationEngine.getActionDescriptors()`) aggregates
  * these and backs both:

@@ -2,7 +2,9 @@
 
 **ADR**: [0030 — Notification Platform Convergence](../adr/0030-notification-platform-convergence.md)
 **Build spec**: [notification-platform-convergence.md](../design/notification-platform-convergence.md)
-**Status of this handoff**: P0 **framework side** shipped. The **objectui** (Console bell) cut-over and phases P1–P3 remain. Date: 2026-06-01.
+**Status of this handoff**: Framework P0–P3b2 shipped. The **objectui**
+(Console bell) cut-over, mark-read write path, incremental channels, topic
+catalog, and hardening remain. Date: 2026-06-01.
 
 ---
 
@@ -172,12 +174,11 @@ flipped — the inbox is being populated the whole time.)
     (`quietHoursDeferral`, HH:MM in tz, overnight-aware). critical bypasses.
     (tz currently from `quiet_hours.tz` → UTC; `sys_user` tz fallback is a
     follow-up.)
-  - **P3b-2 — digest**: pending. Builds on the same deferral: enqueue digest
-    items to the next window, then a **collapse** step merges same-`(user,
-    channel, window)` rows into one materialization at window time (needs a
-    `digest_key` on the delivery row + a digest assembler in/beside the
-    dispatcher + a digest render template). critical/mandatory bypass. Consumes
-    P2's `digest` field.
+  - **P3b-2 — digest**: ✅ shipped. `PreferenceResolver` defers digest items to
+    the next window, deliveries carry `digest_key`, normal claims skip digest
+    rows, and the dispatcher collapses same-`(recipient, channel, window)` rows
+    into one rendered message under the partition lock. critical/mandatory
+    bypass.
   - **Deferred (same seam, incremental)**: **Slack** stays a *connector*
     (`connector-slack` ships the raw API path today); a Slack notification
     *channel* needs identity mapping (`sys_channel_user_link`) + OAuth and is

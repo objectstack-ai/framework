@@ -36,13 +36,13 @@ os generate action approve     # Add an action
 os generate flow onboarding    # Add an automation flow
 ```
 
-### Launch the Studio
+### Launch the dev server
 
 ```bash
-os studio
+os dev --ui
 ```
 
-Open [http://localhost:3000/_studio/](http://localhost:3000/_studio/) — you'll see the Console UI with a data browser, metadata explorer, and API documentation.
+Open [http://localhost:3000/_console/](http://localhost:3000/_console/) — you'll see the Console UI with a data browser, metadata explorer, and API documentation.
 
 ### Validate & Build
 
@@ -54,7 +54,7 @@ os compile           # Build production artifact → dist/objectstack.json
 </Steps>
 
 <Callout type="tip">
-`os studio` = `os serve --dev --ui`. It starts a dev server with the Console UI, auto-loads ObjectQL, InMemory driver, and Hono HTTP server — zero config needed.
+`os dev --ui` starts a dev server with the bundled Console UI, auto-loads ObjectQL, an in-memory driver when appropriate, and the Hono HTTP server.
 </Callout>
 
 ## Commands
@@ -66,7 +66,6 @@ os compile           # Build production artifact → dist/objectstack.json
 | `os init [name]` | | Initialize a new ObjectStack project in the current directory |
 | `os dev [package]` | | Start development mode with hot reload |
 | `os serve [config]` | | Start the ObjectStack server with plugin auto-detection |
-| `os studio [config]` | | Launch dev server with Console UI at `/_studio/` |
 
 ### Production
 
@@ -108,7 +107,7 @@ Starts development mode. Three usage shapes:
 ```bash
 os dev                     # Auto-compile cwd config, then start
 os dev my-package          # Workspace package (monorepo orchestration mode)
-os dev --ui -v             # Dev server with Studio UI + verbose
+os dev --ui -v             # Dev server with Console UI + verbose
 
 # Boot a remote artifact in dev mode (no local config needed)
 os dev --artifact https://raw.githubusercontent.com/<org>/<repo>/main/dist/objectstack.json
@@ -126,7 +125,7 @@ os dev --database file:./data/test.db --auth-secret $(openssl rand -hex 32)
 | `--database-driver <kind>` | `OS_DATABASE_DRIVER` | Force `sqlite` \| `turso` \| `postgres` \| `mongodb` \| `memory` |
 | `--database-auth-token <t>` | `OS_DATABASE_AUTH_TOKEN` | libsql/Turso token |
 | `--auth-secret <s>` | `AUTH_SECRET` | Override the dev-fallback secret |
-| `--project-id <id>` | `OS_PROJECT_ID` | Project identifier (default `proj_local`) |
+| `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
 | `-p, --port <n>` | `PORT` / `OS_PORT` | Listen port (default `3000`). In dev a busy port auto-hops to the next free one; the banner shows the actual port. |
 | `--ui` | — | Force Studio UI on (already on by default in dev) |
 | `--no-compile` | — | Skip the auto-compile step (errors if no artifact present) |
@@ -157,7 +156,7 @@ os serve --preset minimal  # Skip auto-loaded auth/i18n/ui plugins
 **Options:**
 - `-p, --port <port>` — Server port (default: env `PORT` or `3000`)
 - `--dev` — Development mode (loads devPlugins, pretty logging)
-- `--ui / --no-ui` — Toggle Console UI at `/_studio/` (default `on`)
+- `--ui / --no-ui` — Toggle Console UI at `/_console/` (default `on`)
 - `--server / --no-server` — Toggle HTTP server plugin
 - `--prebuilt` — Skip esbuild / `bundle-require` and load the config as
   native ESM (use this in production builds where the config is already
@@ -193,36 +192,34 @@ export default defineStack({
 });
 ```
 
-#### `os studio`
+#### Console UI
 
-Launches the development server with the Console UI in one command. Equivalent to `os serve --dev --ui`.
-
-The Console UI is a metadata-driven admin interface that provides:
-- **Object Explorer** — Browse objects, view/edit data, inspect schemas
-- **Package Manager** — View installed plugins and applications
-- **Developer Overview** — Dashboard with runtime metadata summary
+Launch the development server with the Console UI:
 
 ```bash
-os studio                  # Default: port 3000
-os studio -p 4000          # Custom port
+os dev --ui                # Default: port 3000
+os serve --dev --ui -p 4000
 ```
+
+The Console UI is a metadata-driven admin interface that provides object
+exploration, package management, and runtime metadata diagnostics.
 
 **Architecture:**
 
 ```
 ┌─────────────────────────────────────────┐
-│           os studio (:3000)             │
+│          os dev --ui (:3000)            │
 ├─────────────────────────────────────────┤
 │  Hono Server                            │
 │  ├─ /api/v1/*     → ObjectStack API     │
-│  ├─ /_studio/*    → Console SPA         │
+│  ├─ /_console/*   → Console SPA         │
 │  └─ /*            → custom routes       │
 └─────────────────────────────────────────┘
 ```
 
-In development mode, `/_studio/*` requests are proxied to a Vite dev server
-(spawned automatically on an internal port) with full HMR support. In
-production, pre-built static files are served directly.
+In this framework repo the prebuilt console bundle is served at `/_console/`.
+For source-level Console UI work, run the sibling `../objectui` Vite server and
+point it at a backend on port 3000.
 
 ### Production
 
@@ -268,9 +265,9 @@ os start
 | `--database-driver <kind>` | `OS_DATABASE_DRIVER` | Force `sqlite` \| `turso` \| `postgres` \| `mongodb` \| `memory` when the URL is ambiguous |
 | `--database-auth-token <token>` | `OS_DATABASE_AUTH_TOKEN` | Auth token for libsql/Turso |
 | `--auth-secret <secret>` | `AUTH_SECRET` | Secret for `@objectstack/plugin-auth`; without it `/api/v1/auth/*` is skipped (server still runs) |
-| `--project-id <id>` | `OS_PROJECT_ID` | Project identifier (default `proj_local`) |
+| `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
 | `-p, --port <port>` | `PORT` / `OS_PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
-| `--ui` | — | **Opt-in.** Mount Studio / Account / Console portals at `/_studio/`, `/_account/`, `/_console/`. Off by default in `os start` (Studio is a dev/admin surface). `os dev` mounts them by default. |
+| `--ui` | — | Mount the Console portal at `/_console/`. `os dev` mounts it by default; `os start` can mount it for production administration when explicitly enabled. |
 
 > **Port conflicts: production never auto-shifts.** Unlike `os dev` (which
 > hops to the next free port for local convenience), `os start` exits with an
@@ -287,7 +284,7 @@ os start
 - Reads the artifact's `manifest`, `objects`, `views`, `flows`, …
 - Auto-registers the platform services declared in `requires: [...]` (e.g. `ai`, `automation`, `analytics`, `auth`, `ui`)
 - Auto-detects the driver from the database URL scheme (`memory://` → in-memory, `libsql://`/`https://` → Turso, `postgres[ql]://`/`pg://` → pg, `mongodb[+srv]://` → MongoDB, otherwise sqlite)
-- Runs `standalone` boot mode (no control plane). For single-/multi-project mode use a host config (`apps/objectos`-style).
+- Runs standalone boot mode with one active environment.
 
 **Authentication:**
 The `auth` capability is auto-loaded only when both (1) the artifact declares `requires: [..., 'auth']` **and** (2) a secret is provided via `--auth-secret` or `AUTH_SECRET`. Without a secret, `AuthPlugin` is **silently skipped with a warning** — the server still boots and serves data/REST routes, only `/api/v1/auth/*` (login/register) is omitted. This is intentional: `os start` is happy to run an unauthenticated, internal-network deployment.
@@ -537,35 +534,35 @@ the server-side session is revoked as well.
 os auth logout
 ```
 
-### Cloud Projects
+### Cloud Environments
 
 | Command | Description |
 |---------|-------------|
-| `os projects list` | List projects visible to the current session |
-| `os projects show <id>` | Show one project |
-| `os projects create` | Provision a new project |
-| `os projects switch <id>` | Set the active project for later CLI calls |
-| `os projects bind <id>` | Bind a compiled local artifact to an existing project |
+| `os environments list` | List environments visible to the current session |
+| `os environments show <id>` | Show one environment |
+| `os environments create` | Provision a new environment |
+| `os environments switch <id>` | Set the active environment for later CLI calls |
+| `os environments bind <id>` | Bind a compiled local artifact to an existing environment |
 
-#### Create a project from a local artifact
+#### Create an environment from a local artifact
 
-Compile first, then create a project and bind the generated
+Compile first, then create an environment and bind the generated
 `dist/objectstack.json` in one call:
 
 ```bash
 os compile
-os projects create --org <org-id> --name CRM --artifact ./dist/objectstack.json
+os environments create --org <org-id> --name CRM --artifact ./dist/objectstack.json
 ```
 
-The server stores the absolute path in `sys_project.metadata.artifact_path`.
-On project-kernel boot, ObjectOS loads the JSON bundle, registers schemas, and
+The server stores the absolute artifact path in environment metadata.
+On environment-kernel boot, ObjectStack loads the JSON bundle, registers schemas, and
 seeds records from the bundle's `data` arrays.
 
-#### Bind an existing project
+#### Bind an existing environment
 
 ```bash
-os projects bind <project-id> --artifact ./dist/objectstack.json
-os projects bind <project-id> --artifact ./dist/objectstack.json --build
+os environments bind <environment-id> --artifact ./dist/objectstack.json
+os environments bind <environment-id> --artifact ./dist/objectstack.json --build
 ```
 
 `--build` runs `objectstack compile` before updating the project. `--reseed`
@@ -628,7 +625,7 @@ os g agent sales-assistant
 os validate
 
 # 5. Start development with Console UI
-os studio
+os dev --ui
 
 # 6. Build for production
 os compile

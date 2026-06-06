@@ -156,13 +156,13 @@ REST/GraphQL endpoints, real-time subscriptions, and discovery.
 
 ## Automation Protocol (8 schemas)
 
-Workflows, flows, and integrations.
+Flows, state machines, approvals, and integrations.
 
 | Protocol | Source File | Key Schemas | Purpose |
 |:---------|:-----------|:------------|:--------|
 | **[Flow](./automation/flow)** | `flow.zod.ts` | Flow, FlowNode | Visual workflow builder |
-| **[Workflow](./automation/workflow)** | `workflow.zod.ts` | WorkflowRule | Record-triggered automation |
-| **[Approval](./automation/approval)** | `approval.zod.ts` | ApprovalProcess | Multi-step approval flows |
+| **[Workflow](./automation/workflow)** | `state-machine.zod.ts` | StateMachine | Historical route; current workflow semantics are state machines plus Flow |
+| **[Approval](./automation/approval)** | `approval.zod.ts` | ApprovalNodeConfig | Flow approval-node config |
 | **[State Machine](./automation/state-machine)** | `state-machine.zod.ts` | StateMachine | State machine definitions |
 | **[Webhook](./automation/webhook)** | `webhook.zod.ts` | Webhook, WebhookEvent | Outbound webhooks |
 | **[ETL](./automation/etl)** | `etl.zod.ts` | ETLPipeline | Data transformation pipelines |

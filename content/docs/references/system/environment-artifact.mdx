@@ -5,19 +5,19 @@ description: Environment Artifact protocol schemas
 
 {/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
 
-# Project Artifact Format Protocol (v0)
+# Environment Artifact Format Protocol (v0)
 
 Defines the immutable envelope produced by `objectstack compile` and consumed
 
 by ObjectOS at boot. The artifact carries everything an ObjectOS instance
 
-needs to hydrate a project kernel without reading control-plane DB rows
+needs to hydrate an environment kernel without reading control-plane DB rows
 
 directly.
 
 ## Boundary
 
-- **Artifact (this schema):** project metadata + inlined function code +
+- **Artifact (this schema):** environment metadata + inlined function code +
 
 plugin/driver requirements. Immutable, content-addressable via `commitId`
 
@@ -25,7 +25,7 @@ and `checksum`.
 
 - **Deployment Config (NOT in this schema):** business DB coordinates,
 
-credentials, project identity, secrets. Injected at runtime.
+credentials, environment identity, secrets. Injected at runtime.
 
 See [content/docs/concepts/north-star.mdx](content/docs/concepts/north-star.mdx) §6.3 for the runtime-inputs
 
@@ -59,19 +59,19 @@ const result = EnvironmentArtifact.parse(data);
 
 ## EnvironmentArtifact
 
-ObjectStack Project Artifact envelope (v0)
+ObjectStack Environment Artifact envelope (v0)
 
 ### Properties
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **schemaVersion** | `string` | ✅ | Project artifact envelope schema version |
-| **environmentId** | `string` | ✅ | Project identifier (control-plane scoped) |
+| **schemaVersion** | `string` | ✅ | Environment artifact envelope schema version |
+| **environmentId** | `string` | ✅ | Environment identifier (control-plane scoped) |
 | **commitId** | `string` | ✅ | Content-addressable revision id |
 | **checksum** | `Object` | ✅ | Artifact integrity checksum |
 | **builtAt** | `string` | optional | ISO-8601 timestamp of when the artifact was built |
 | **builtWith** | `string` | optional | Build tool identifier |
-| **metadata** | `Record<string, any>` | ✅ | Compiled project metadata grouped by category |
+| **metadata** | `Record<string, any>` | ✅ | Compiled environment metadata grouped by category |
 | **functions** | `Object[]` | ✅ | Inlined function code packaged with the artifact |
 | **manifest** | `Object` | ✅ | Plugin/driver requirements baked into the artifact |
 | **payloadRef** | `Object` | optional | Out-of-band payload reference (reserved for future use) |
@@ -152,7 +152,7 @@ Plugin/driver requirements baked into the artifact
 
 ## EnvironmentArtifactMetadata
 
-Compiled project metadata grouped by category
+Compiled environment metadata grouped by category
 
 ### Properties
 
@@ -208,7 +208,7 @@ A plugin or driver dependency declaration
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Plugin/driver package id |
-| **version** | `string` | optional | SemVer range required by the project |
+| **version** | `string` | optional | SemVer range required by the environment |
 
 
 ---

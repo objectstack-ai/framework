@@ -356,15 +356,16 @@ Configure these in Vercel Project Settings → Environment Variables:
 | `VITE_RUNTIME_MODE` | `msw` (in-browser) or `server` (real backend) |
 | `VITE_SERVER_URL` | Backend API URL (empty for same-origin) |
 
-### ObjectStack Cloud control plane (when deploying `apps/cloud`)
+### Cloud control plane
 
-Vercel functions have an **ephemeral, read-only filesystem** — local SQLite
-and local-FS storage will not persist between invocations. Use Turso/libSQL
-for the control DB and S3-compatible object storage for artifacts.
+The Cloud control-plane distribution lives outside this framework repo. If you
+deploy a Cloud host on Vercel, remember that Vercel functions have an
+**ephemeral, read-only filesystem** — local SQLite and local-FS storage will not
+persist between invocations. Use a durable database and S3-compatible object
+storage for artifacts.
 
 | Variable | Required | Description |
 | :--- | :--- | :--- |
-| `OS_MODE` | yes | `cloud` |
 | `AUTH_SECRET` | yes | ≥ 32 chars |
 | `OS_CONTROL_DATABASE_URL` | yes | `libsql://…` (Turso) — control plane DB |
 | `OS_CONTROL_DATABASE_AUTH_TOKEN` | yes | Turso token (or `TURSO_AUTH_TOKEN`) |

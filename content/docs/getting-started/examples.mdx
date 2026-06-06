@@ -29,7 +29,9 @@ The monorepo includes 2 ready-to-run examples that progressively demonstrate Obj
 </Cards>
 
 <Callout type="info">
-  **Looking for the production server example?** It has been moved to [`apps/objectos/`](../../apps/objectos/) — see the [Server documentation](../../apps/objectos/README.md) for multi-app orchestration and deployment.
+  **Looking for a production server shape?** Build an artifact with `os compile`,
+  then run it with `os start` or `os serve --artifact`. The framework repo no
+  longer contains a separate `apps/objectos` production host.
 </Callout>
 
 ---
@@ -276,16 +278,13 @@ new AppPlugin(BiPlugin)  // Load into host
 
 ---
 
-## Multi-App Composition Pattern
+## Composition Pattern
 
-The production server at [`apps/objectos/`](../../apps/objectos/) demonstrates the **Platform Server** pattern: one host loading multiple apps and plugins. This is how you'd run ObjectStack in production with multiple teams' apps.
+Compose apps and plugins in `objectstack.config.ts`, compile them into one
+artifact, then boot that artifact with the CLI.
 
 ```typescript
-// apps/objectos/objectstack.config.ts
 import { defineStack } from '@objectstack/spec';
-import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
-import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
 import CrmApp from 'hotcrm/objectstack.config';  // from https://github.com/objectstack-ai/hotcrm
 import TodoApp from '../examples/app-todo/objectstack.config';
 import BiPlugin from '../examples/plugin-bi/objectstack.config';
@@ -296,12 +295,10 @@ export default defineStack({
     version: '1.0.0',
     type: 'app',
   },
-  plugins: [
-    new ObjectQLPlugin(),
-    new DriverPlugin(new InMemoryDriver()),
-    new AppPlugin(CrmApp),      // CRM app contributes objects under namespace 'crm'
-    new AppPlugin(TodoApp),     // Todo app contributes objects under namespace 'todo'
-    new AppPlugin(BiPlugin),    // BI plugin contributes objects under namespace 'bi'
+  imports: [
+    CrmApp,
+    TodoApp,
+    BiPlugin,
   ],
 });
 ```
@@ -321,8 +318,8 @@ If two packages contribute objects with the same short name, the registry logs a
 ### Run It
 
 ```bash
-cd apps/objectos
-pnpm dev        # Loads all 3 apps on one server
+os compile
+OS_ARTIFACT_PATH=./dist/objectstack.json os start
 ```
 
 ---

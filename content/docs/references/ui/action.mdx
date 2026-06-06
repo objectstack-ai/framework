@@ -48,12 +48,28 @@ to the field name and is used as the request-body key).
 ## TypeScript Usage
 
 ```typescript
-import { ActionLocation, ActionParam, ActionType } from '@objectstack/spec/ui';
-import type { ActionLocation, ActionParam, ActionType } from '@objectstack/spec/ui';
+import { ActionAi, ActionLocation, ActionParam, ActionType } from '@objectstack/spec/ui';
+import type { ActionAi, ActionLocation, ActionParam, ActionType } from '@objectstack/spec/ui';
 
 // Validate data
-const result = ActionLocation.parse(data);
+const result = ActionAi.parse(data);
 ```
+
+---
+
+## ActionAi
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **exposed** | `boolean` | ✅ | Expose this action to AI agents. Requires `description` when true. |
+| **description** | `string` | optional | LLM-facing description (≥40 chars). Required when exposed. |
+| **category** | `Enum<'data' \| 'action' \| 'flow' \| 'integration' \| 'vector_search' \| 'analytics' \| 'utility'>` | optional | Tool category override (defaults to "action"). |
+| **paramHints** | `Record<string, Object>` | optional | Per-parameter AI hints keyed by param name. |
+| **outputSchema** | `Record<string, any>` | optional | JSON Schema for the action return value. |
+| **requiresConfirmation** | `boolean` | optional | Override HITL confirmation for AI invocations. |
+
 
 ---
 

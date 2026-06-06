@@ -1,329 +1,135 @@
 ---
 title: Workflow Metadata
-description: Define event-triggered automation rules — field updates, email alerts, HTTP calls, and scheduled actions
+description: Use Flow for automation and state machines for strict lifecycle transitions.
 ---
 
 # Workflow Metadata
 
-A **Workflow Rule** is a declarative automation triggered by data events. When a record is created, updated, or deleted, workflow rules evaluate conditions and execute actions like field updates, email alerts, HTTP calls, and task creation.
+ObjectStack no longer has a standalone Salesforce-style Workflow Rule authoring
+type. Use:
 
-## Basic Structure
+- **Flow** for event-triggered or scheduled automation.
+- **State machine metadata** for strict lifecycle transitions.
+- **Approval nodes** inside Flow for human approval pauses.
+
+This page keeps the historical route but documents the current split.
+
+---
+
+## Flow for automation
+
+Use Flow when something should happen after a record event, schedule, button, or
+subflow call:
 
 ```typescript
-const dealClosedWorkflow = {
+import type { Flow } from '@objectstack/spec/automation';
+
+export const dealClosedWon: Flow = {
   name: 'deal_closed_won',
-  objectName: 'opportunity',
-  triggerType: 'on_update',
-  criteria: "status = 'closed_won' AND ISCHANGED(status)",
-  active: true,
-  executionOrder: 10,
-
-  actions: [
-    {
-      type: 'field_update',
-      field: 'closed_date',
-      value: 'TODAY()',
-    },
-    {
-      type: 'email_alert',
-      template: 'deal_won_notification',
-      recipients: ['{record.owner.email}', 'sales-team@company.com'],
-    },
-    {
-      type: 'task_creation',
-      taskObject: 'task',
-      subject: 'Onboard new customer: {record.name}',
-      assignedTo: '{record.owner}',
-      dueDate: 'TODAY() + 3',
-    },
+  label: 'Deal Closed Won',
+  type: 'record_change',
+  status: 'active',
+  trigger: {
+    objectName: 'opportunity',
+    operations: ['update'],
+    condition: "record.stage == 'closed_won' && previous.stage != 'closed_won'",
+  },
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    { id: 'set_closed_date', type: 'update_record', label: 'Set Closed Date' },
+    { id: 'notify_sales', type: 'notify', label: 'Notify Sales' },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'set_closed_date' },
+    { id: 'e2', source: 'set_closed_date', target: 'notify_sales' },
+    { id: 'e3', source: 'notify_sales', target: 'end' },
   ],
 };
 ```
 
-## Workflow Properties
+Flow node types are open-ended: the schema accepts built-in node ids and
+plugin-registered node ids. The live automation engine validates executors at
+registration/runtime.
 
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `name` | `string` | ✅ | Machine name (`snake_case`) |
-| `objectName` | `string` | ✅ | Target object name |
-| `triggerType` | `TriggerType` | ✅ | When to evaluate (see below) |
-| `criteria` | `string` | optional | Formula condition — workflow fires only when `TRUE` |
-| `actions` | `Action[]` | optional | Immediate actions to execute |
-| `timeTriggers` | `TimeTrigger[]` | optional | Scheduled/delayed actions |
-| `active` | `boolean` | ✅ | Is workflow active |
-| `executionOrder` | `number` | optional | Execution priority (lower = first) |
-| `reevaluateOnChange` | `boolean` | optional | Re-evaluate if field updates change criteria |
+---
 
-### Trigger Types
+## State machines for lifecycle constraints
 
-| Type | Description |
-| :--- | :--- |
-| `on_create` | Fires when a record is created |
-| `on_update` | Fires when a record is updated |
-| `on_create_or_update` | Fires on both create and update |
-| `on_delete` | Fires when a record is deleted |
-| `schedule` | Fires on a time-based schedule |
-
-## Action Types
-
-### Field Update
-
-Update a field value on the triggering record:
+Use `StateMachineSchema` when the core requirement is "this object can only move
+through these states by these events."
 
 ```typescript
-{
-  type: 'field_update',
-  field: 'status',
-  value: 'approved',
-}
-```
+import type { StateMachineConfig } from '@objectstack/spec/automation';
 
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `field` | `string` | Field to update |
-| `value` | `string` | New value (supports formulas and field references) |
-
-### Email Alert
-
-Send an email notification:
-
-```typescript
-{
-  type: 'email_alert',
-  template: 'order_confirmation',
-  recipients: ['{record.customer_email}', 'support@company.com'],
-}
-```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `template` | `string` | Email template name |
-| `recipients` | `string[]` | Email addresses (supports field references) |
-
-### HTTP Call
-
-Call an external API:
-
-```typescript
-{
-  type: 'http_call',
-  url: 'https://api.example.com/webhooks',
-  method: 'POST',
-  headers: { 'Authorization': 'Bearer {$credential.api_key}' },
-  body: {
-    event: 'record_updated',
-    record_id: '{record.id}',
-    data: '{record}',
-  },
-}
-```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `url` | `string` | Target URL |
-| `method` | `string` | HTTP method (`GET`, `POST`, `PUT`, `DELETE`) |
-| `headers` | `object` | Request headers |
-| `body` | `object` | Request body |
-
-### Task Creation
-
-Create a follow-up task:
-
-```typescript
-{
-  type: 'task_creation',
-  taskObject: 'task',
-  subject: 'Review account: {record.name}',
-  assignedTo: '{record.owner}',
-  dueDate: 'TODAY() + 7',
-}
-```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `taskObject` | `string` | Task object name |
-| `subject` | `string` | Task subject (supports field references) |
-| `assignedTo` | `string` | Assigned user (field reference) |
-| `dueDate` | `string` | Due date expression |
-
-### Connector Action
-
-Execute a pre-configured connector action:
-
-```typescript
-{
-  type: 'connector_action',
-  connectorId: 'slack',
-  actionId: 'send_message',
-  input: {
-    channel: '#sales',
-    text: 'Deal closed: {record.name} - {record.amount}',
-  },
-}
-```
-
-### Push Notification
-
-Send a mobile/web push notification:
-
-```typescript
-{
-  type: 'push_notification',
-  title: 'New Assignment',
-  body: 'You have been assigned to {record.name}',
-  recipients: ['{record.assignee}'],
-}
-```
-
-### Custom Script
-
-Execute custom business logic:
-
-```typescript
-{
-  type: 'custom_script',
-  language: 'javascript',
-  code: `
-    const discount = record.amount > 10000 ? 0.15 : 0.05;
-    await updateRecord('opportunity', record.id, {
-      discount_rate: discount,
-    });
-  `,
-  timeout: 30000,
-}
-```
-
-## Time Triggers
-
-Schedule actions to run at a specified time relative to a trigger event or date field:
-
-```typescript
-timeTriggers: [
-  {
-    timeLength: 3,
-    timeUnit: 'days',
-    offsetDirection: 'before',
-    offsetFrom: 'date_field',
-    dateField: 'due_date',
-    actions: [
-      {
-        type: 'email_alert',
-        template: 'reminder_due_soon',
-        recipients: ['{record.owner.email}'],
+export const caseLifecycle: StateMachineConfig = {
+  id: 'case_lifecycle',
+  initial: 'new',
+  states: {
+    new: {
+      on: {
+        ASSIGN: { target: 'assigned' },
       },
-    ],
-  },
-  {
-    timeLength: 1,
-    timeUnit: 'hours',
-    offsetDirection: 'after',
-    offsetFrom: 'trigger_date',
-    actions: [
-      {
-        type: 'field_update',
-        field: 'follow_up_sent',
-        value: 'true',
+    },
+    assigned: {
+      on: {
+        RESOLVE: { target: 'resolved', cond: 'has_resolution' },
+        ESCALATE: { target: 'escalated' },
       },
-    ],
+    },
+    escalated: {
+      on: {
+        RESOLVE: { target: 'resolved', cond: 'has_resolution' },
+      },
+    },
+    resolved: {
+      type: 'final',
+    },
   },
-]
-```
-
-### Time Trigger Properties
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `timeLength` | `number` | Duration value |
-| `timeUnit` | `enum` | `'minutes'`, `'hours'`, `'days'` |
-| `offsetDirection` | `enum` | `'before'` or `'after'` the reference time |
-| `offsetFrom` | `enum` | `'trigger_date'` (when workflow fires) or `'date_field'` |
-| `dateField` | `string` | Date field name (required when `offsetFrom` is `'date_field'`) |
-| `actions` | `Action[]` | Actions to execute at the scheduled time |
-
-## Execution Order
-
-When multiple workflows match the same event, `executionOrder` determines the sequence:
-
-```typescript
-// Runs first (lower number = higher priority)
-{ name: 'validate_amount', executionOrder: 10, ... }
-
-// Runs second
-{ name: 'update_status', executionOrder: 20, ... }
-
-// Runs third
-{ name: 'send_notification', executionOrder: 30, ... }
-```
-
-## Complete Example
-
-```typescript
-const leadConversion = {
-  name: 'lead_qualified',
-  objectName: 'lead',
-  triggerType: 'on_update',
-  criteria: "status = 'qualified' AND ISCHANGED(status)",
-  active: true,
-  executionOrder: 10,
-
-  actions: [
-    {
-      type: 'field_update',
-      field: 'qualified_date',
-      value: 'TODAY()',
-    },
-    {
-      type: 'email_alert',
-      template: 'lead_qualified_alert',
-      recipients: ['{record.owner.email}'],
-    },
-    {
-      type: 'http_call',
-      url: 'https://api.company.com/crm/convert',
-      method: 'POST',
-      body: { lead_id: '{record.id}' },
-    },
-    {
-      type: 'task_creation',
-      taskObject: 'task',
-      subject: 'Schedule demo for {record.company}',
-      assignedTo: '{record.owner}',
-      dueDate: 'TODAY() + 2',
-    },
-  ],
-
-  timeTriggers: [
-    {
-      timeLength: 7,
-      timeUnit: 'days',
-      offsetDirection: 'after',
-      offsetFrom: 'trigger_date',
-      actions: [
-        {
-          type: 'email_alert',
-          template: 'follow_up_reminder',
-          recipients: ['{record.owner.email}'],
-        },
-      ],
-    },
-  ],
 };
 ```
 
-## Flow vs. Workflow
+State machines describe valid transitions and guards. Use Flow nodes for side
+effects around those transitions when you need notifications, record updates, or
+external calls.
 
-| Aspect | Workflow Rule | Flow |
-| :--- | :--- | :--- |
-| **Trigger** | Data events (create/update/delete) | Manual, API, schedule, or data events |
-| **Logic** | Linear actions | Visual branching with decision trees |
-| **User Interaction** | No | Supports screen nodes |
-| **Complexity** | Simple rules | Complex orchestration |
-| **Use Case** | Field updates, notifications | Approval processes, multi-step logic |
+---
 
-**Rule of thumb:** Use **Workflow Rules** for simple "when X happens, do Y" automation. Use **Flows** for complex multi-step logic with branching.
+## Approvals
 
-## Related
+Approvals are Flow nodes:
 
-- [Flow Metadata](./flow) — Visual automation with branching logic
-- [Object Metadata](./object) — Objects that trigger workflows
-- [Validation Metadata](./validation) — Data validation rules
+```typescript
+{
+  id: 'manager_approval',
+  type: 'approval',
+  label: 'Manager Approval',
+  config: {
+    approvers: [{ type: 'user', value: '${record.owner_manager_id}' }],
+    behavior: 'all',
+    approvalStatusField: 'approval_status',
+    lockRecord: true,
+  },
+}
+```
+
+The approvals plugin persists `sys_approval_request` and
+`sys_approval_action`, enforces record locks, mirrors the optional status field,
+and resumes the paused Flow after approve/reject.
+
+---
+
+## Migration
+
+| Old concept | Current equivalent |
+|:---|:---|
+| Workflow Rule | Flow |
+| Time trigger | Scheduled Flow |
+| Field update action | `update_record` node |
+| Email alert | `notify` node |
+| HTTP call | `http` node |
+| Approval Process | Flow with one or more `approval` nodes |
+
+If the old rule was "when X happens, do Y", model it as a small Flow. If the old
+rule was "this record must move through controlled states", model the lifecycle
+as a state machine and use Flow for side effects.
