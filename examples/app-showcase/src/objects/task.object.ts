@@ -27,8 +27,17 @@ export const Task = ObjectSchema.create({
     // `inlineEdit` declares (in the data model) that tasks are entered inline
     // within their project's form — so the standard New/Edit Project form
     // auto-renders an atomic Tasks subtable, with no form view config and no
-    // bespoke page.
-    project: Field.masterDetail('showcase_project', { label: 'Project', required: true, inlineEdit: true, inlineTitle: 'Tasks' }),
+    // bespoke page. `relatedList*` is the read-side mirror: the Project's
+    // record DETAIL page auto-renders a Tasks related list, with a focused
+    // column set — again, derived from the relationship, no page config.
+    project: Field.masterDetail('showcase_project', {
+      label: 'Project',
+      required: true,
+      inlineEdit: true,
+      inlineTitle: 'Tasks',
+      relatedListTitle: 'Tasks',
+      relatedListColumns: ['title', 'status', 'priority', 'assignee', 'due_date'],
+    }),
     assignee: Field.text({ label: 'Assignee', maxLength: 200 }),
     status: Field.select({
       label: 'Status',

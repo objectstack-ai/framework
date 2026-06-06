@@ -74,6 +74,34 @@ through the transactional batch.
   `master_detail` (cascade delete) but are associations, not line items, and
   must stay out of the parent's create form (surface as related lists).
 
+### Read-side mirror: detail-page related lists
+
+Inline editing is the **write** side — the child pulled *into* the parent's
+entry form. Its read-side counterpart is the **related list** on the parent's
+record detail page. Both intents live on the same relationship:
+
+| Side | Flag (on the child's FK field) | Effect |
+|---|---|---|
+| Write | `inlineEdit: true` | child rendered as an editable grid inside the parent's create/edit form (atomic save) |
+| Read | `relatedList` (+ `relatedListTitle` / `relatedListColumns`) | child rendered as a related list on the parent's detail page |
+
+Related lists are **shown by default** for every child relationship
+(`master_detail` and `lookup`) — owned (`master_detail`) children are ordered
+first. The flag is opt-*out*: set `relatedList: false` to suppress a noisy
+association/audit link from the detail page. `relatedListTitle` /
+`relatedListColumns` override the derived title / columns. Audit FKs
+(`created_by` / `updated_by` / `owner_id`) are skipped and children deduped to
+one related list each (first eligible FK wins).
+
+The derivation is a pure function — `deriveRelatedLists(objectDef, objects)` in
+`@object-ui/app-shell` (`utils/deriveRelatedLists.ts`) — the read-side analogue
+of `attachInlineSubforms`. `RecordDetailView` feeds its output into the
+synthesized page's `record:related_list` renderers (and the legacy
+`DetailView.related`), so both render paths surface the same relationship-derived
+lists with no page config. Per-object coarse switches
+(`detail.showReferenceRail` / `hideReferenceRail` / `hideRelatedTab`) still
+apply on top.
+
 ### Runtime backbone (relied upon, not re-litigated here)
 
 - **Atomic write**: parent + children in one `POST /api/v1/batch`; intra-batch
@@ -105,8 +133,10 @@ inside their envelope and suppress their own footer (the form owns its Save).
 - **Safe by default**: opt-in per relationship avoids inlining associations.
 - **Escape hatches preserved**: `subforms` (view) overrides; a page block handles
   bespoke layouts; explicit `relationshipField`/`columns` override derivation.
-- **Read/view mode** is unaffected — inline editing applies to create/edit forms;
-  detail pages use related lists.
+- **Read/view mode mirrors the write side** — inline editing applies to
+  create/edit forms; the parent's detail page auto-derives related lists from the
+  same relationships (`relatedList` opt-out + `relatedListTitle`/`relatedListColumns`
+  overrides). No detail-page config for the common case.
 
 ## Status of implementation
 
@@ -117,3 +147,8 @@ RecordFormPage/ObjectView; `attachInlineSubforms`; server-side `summary` rollup;
 atomic `/api/v1/batch` with `$ref`. Covered by unit tests and live browser e2e
 (`e2e/live/master-detail.spec.ts`, `form-view-subforms.spec.ts`,
 `summary-rollup.spec.ts`).
+
+Read-side mirror shipped: spec `field.relatedList` (+ `relatedListTitle`/
+`relatedListColumns`); `deriveRelatedLists` pure helper (unit-tested) wired into
+`RecordDetailView` for both the synthesized and legacy detail paths; showcase
+demonstrates a zero-config Projects related list on the Account detail page.

@@ -99,6 +99,15 @@ The relationship FK and grid columns are derived from the child object's
 metadata in every case; select options and lookups carry through. A parent
 `summary` field rolls child values up server-side (see objectstack-data).
 
+**Read side — detail-page related lists.** The mirror of `inlineEdit` is the
+related list on the parent's record DETAIL page. You don't author it: every
+child relationship is shown as a related list by default (owned `master_detail`
+children first). Refine on the relationship — `relatedList: false` to suppress a
+noisy child, `relatedListTitle` / `relatedListColumns` to override title /
+columns (see objectstack-data → Relationships → Detail-page related lists).
+Authored record pages can still place an explicit `record:related_list` (or
+inline-editable `record:line_items`) when they need bespoke placement.
+
 ---
 
 ## Configuring a List View

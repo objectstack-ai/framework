@@ -230,6 +230,38 @@ A form view may still set `subforms` to override the derived columns/order, but
 the relationship `inlineEdit` is the primary, zero-config path. See the
 objectstack-ui skill (Master-Detail Forms) for the rendering side.
 
+### Detail-page related lists (the read-side mirror)
+
+Where `inlineEdit` is the **write** side (child pulled into the parent's entry
+form), the **related list** on the parent's record detail page is the **read**
+side. You usually don't declare it: every child relationship
+(`master_detail` and `lookup`) is shown as a related list on the parent's detail
+page **by default** — owned (`master_detail`) children first. The relationship
+flags exist to *refine* that:
+
+```typescript
+// On the CHILD object's FK field:
+project: {
+  type: 'master_detail',
+  reference: 'project',
+  inlineEdit: true,                 // write side: edit inline in the Project form
+  relatedListTitle: 'Tasks',        // read side: title of the detail-page list
+  relatedListColumns: ['title', 'status', 'priority', 'due_date'],
+},
+
+// Suppress a noisy association from the detail page entirely:
+audit_ref: { type: 'master_detail', reference: 'invoice', relatedList: false },
+```
+
+- `relatedList: false` — suppress this child from the parent's detail page
+  (use for chatty association/log children you don't want surfaced).
+- `relatedListTitle` / `relatedListColumns` — override the derived title /
+  columns (columns are otherwise auto-derived from the child object's fields).
+
+Audit FKs (`created_by`/`updated_by`/`owner_id`) never become related lists, and
+each child object yields at most one related list. See the objectstack-ui skill
+for the rendering side.
+
 ## Incorrect vs Correct
 
 ### ❌ Incorrect — Using lookup When master_detail is Needed

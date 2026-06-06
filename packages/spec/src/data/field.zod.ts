@@ -421,6 +421,24 @@ export const FieldSchema = lazySchema(() => z.object({
   /** Optional numeric child field summed for the inline grid running total. */
   inlineAmountField: z.string().optional().describe('Numeric child field summed for the inline grid total'),
 
+  /**
+   * Detail-page RELATED LIST — the read-side mirror of `inlineEdit`. On a
+   * child's `master_detail`/`lookup` field (whose `reference` is the parent),
+   * this governs whether/how the child collection appears as a related list on
+   * the parent's record DETAIL page. Owned children (`master_detail`) and
+   * `lookup` children are shown by default (derived from the relationship);
+   * set `relatedList: false` to suppress a child from the detail page (e.g.
+   * noisy audit/association links you don't want surfaced). Where `inlineEdit`
+   * pulls a child INTO the parent's entry form (write side), `relatedList`
+   * controls its appearance on the parent's detail page (read side). The intent
+   * lives here in the data model; the detail page derives the UI.
+   */
+  relatedList: z.boolean().optional().describe('Show this child collection as a related list on the parent\'s detail page (read-side mirror of inlineEdit). Defaults to shown for master_detail/lookup; set false to suppress.'),
+  /** Optional section title for the detail-page related list (defaults to the child object label). */
+  relatedListTitle: z.string().optional().describe('Title for the detail-page related list'),
+  /** Optional explicit columns for the detail-page related list (derived from the child object when omitted). */
+  relatedListColumns: z.array(z.any()).optional().describe('Explicit columns for the detail-page related list (derived from the child object when omitted)'),
+
   /** Calculation — CEL formula. Plain string accepted for back-compat; build emits canonical envelope. */
   expression: ExpressionInputSchema.optional().describe('Formula expression (CEL). e.g. F`record.amount * 0.1`'),
   summaryOperations: z.object({

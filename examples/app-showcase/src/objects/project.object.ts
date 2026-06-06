@@ -17,7 +17,17 @@ export const Project = ObjectSchema.create({
 
   fields: {
     name: Field.text({ label: 'Project Name', required: true, searchable: true, maxLength: 200 }),
-    account: Field.lookup('showcase_account', { label: 'Account', required: true }),
+    // `relatedList*` is the read-side mirror of inline editing: the Account's
+    // record DETAIL page auto-renders a "Projects" related list — derived from
+    // this lookup relationship, with no page config. Title and columns are
+    // declared here on the relationship (where AI authors the model), not in a
+    // hand-built page.
+    account: Field.lookup('showcase_account', {
+      label: 'Account',
+      required: true,
+      relatedListTitle: 'Projects',
+      relatedListColumns: ['name', 'status', 'health', 'budget', 'end_date'],
+    }),
     status: Field.select({
       label: 'Status',
       required: true,
