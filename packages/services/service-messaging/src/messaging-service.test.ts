@@ -538,6 +538,36 @@ describe('MessagingService — inbox read API (ADR-0030)', () => {
         expect(receipts[0]).toMatchObject({ notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'read' });
     });
 
+    it('markRead survives a unique-index race on the receipt insert', async () => {
+        // No receipt seeded, so the fast-path findOne misses. The insert then
+        // hits the UNIQUE(notification_id, user_id, channel) index because a
+        // concurrent mark-read (or the best-effort `delivered` write) created
+        // the row first. We must catch it and converge to the existing row.
+        const engine = inboxEngine({
+            inbox: [{ id: 'm1', user_id: 'u1', notification_id: 'n1', title: 'A', created_at: '1' }],
+        });
+        const realInsert = engine.insert.bind(engine);
+        let raced = false;
+        engine.insert = async (object: string, row: any) => {
+            if (object === 'sys_notification_receipt' && !raced) {
+                raced = true;
+                // A concurrent writer wins the index, then our insert collides.
+                engine.store.sys_notification_receipt.push({
+                    id: 'r_concurrent', notification_id: 'n1', user_id: 'u1', channel: 'inbox', state: 'delivered',
+                });
+                throw new Error('UNIQUE constraint failed: sys_notification_receipt.notification_id, sys_notification_receipt.user_id, sys_notification_receipt.channel');
+            }
+            return realInsert(object, row);
+        };
+        const svc = new MessagingService({ logger, getData: () => engine });
+
+        const res = await svc.markRead('u1', ['n1']);
+        expect(res).toEqual({ success: true, readCount: 1 });
+        const receipts = engine.store.sys_notification_receipt;
+        expect(receipts).toHaveLength(1); // converged, not duplicated
+        expect(receipts[0]).toMatchObject({ id: 'r_concurrent', state: 'read' });
+    });
+
     it('markAllRead flips every unread message and leaves already-read ones', async () => {
         const engine = inboxEngine({
             inbox: [
