@@ -18,7 +18,7 @@ A metadata-driven ObjectStack app **already** auto-generates a full REST CRUD AP
 **Decision.** Treat "expose this app as an API + MCP server" as a first-class, open framework capability and surface it right after build:
 
 1. **REST**: keep the auto-generated CRUD + discovery (no change); **surface** it (base URL, per-object endpoints, sample code, the existing API Console).
-2. **Auth**: per-env, self-serve **API keys** (`sys_api_key`, already modelled) — Bearer tokens scoped by the key's permissions; a show-once generation UX.
+2. **Auth**: per-env, self-serve **API keys** (`sys_api_key`, modelled but **not yet enforced** — wiring the key Bearer into the auth path is Phase 1a) — Bearer tokens that resolve to a principal and run under the key's existing permissions + RLS; a show-once generation UX.
 3. **MCP**: add an **HTTP transport** to `plugin-mcp-server` (a stable `/api/v1/mcp` endpoint, authed by the same Bearer), and **generate the Claude/Cursor connection config** for the env.
 4. **Surface**: a Developer-Hub **Integrations & APIs** page + a "View API / Connect an agent" affordance on publish success.
 
@@ -36,7 +36,7 @@ A metadata-driven ObjectStack app **already** auto-generates a full REST CRUD AP
 | API discovery (`/api/v1/discovery`) | `@objectstack/rest` | ✅ |
 | API Console (interactive REST debugger) | objectui `apps/console/.../developer/ApiConsolePage` | ✅ shipped |
 | MCP server: object CRUD + AI tools → MCP tools | `@objectstack/plugin-mcp-server` | ✅ but **stdio only**, default off |
-| Per-user/env API keys (create/revoke, key returned once) | `platform-objects/.../sys-api-key.object.ts` | ✅ model; no UI |
+| Per-user/env API keys (create/revoke, key returned once) | `platform-objects/.../sys-api-key.object.ts` | ⚠️ **model only — NOT enforced for auth** (no key-verification path; the data API accepts only the better-auth session); no UI |
 | Per-env public hostname (`<env>.objectos.app`) = API/MCP base | cloud env registry | ✅ |
 
 ### What is missing
@@ -71,8 +71,12 @@ No runtime change. A new **Integrations & APIs** page reads `/api/v1/discovery` 
 - **Publish success**: the Publish & Open flow (ADR-0033 / the chat publish CTA) gains a secondary "View API · Connect an agent" link, so the API/MCP surface is discovered at the moment of "it works".
 
 ### 5. Phasing
-- **Phase 1 (this cut, objectui-only, uses existing endpoints)**: Integrations page (base URL + endpoints + API Console link + **API-key generation** + samples) + publish-success link. High value, low risk, fully local-testable.
-- **Phase 2 (framework)**: MCP HTTP transport + per-env enable + connection-config generator + the "Connect to Claude" button.
+
+> **Correction (verified 2026-06-06).** `sys_api_key` is **modelled but NOT enforced for auth** — the REST/data API today accepts only the better-auth session (cookie, or "Bearer = session token"); there is no key-verification path. The API Console "works" only because it runs inside the logged-in console (session cookie). So external programmatic access — the whole point — does **not** work yet. Wiring `sys_api_key` Bearer into the auth layer is therefore the **foundation of Phase 1**, not a pre-existing capability. Phase 1 is *not* objectui-only.
+
+- **Phase 1a (framework — the foundation)**: authenticate `Authorization: Bearer <sys_api_key>` on the runtime auth path — verify the key (hash match, not revoked, not expired), resolve it to its principal, and run the request **as that principal under the existing permissions + RLS** (reuse the auth/permission layer; never a parallel one, never an escalation). This is what makes "your app is an external API" actually true. Unit-tested locally.
+- **Phase 1b (objectui — surfacing)**: Integrations & APIs page (base URL + per-object endpoints + API Console link + **self-serve API-key generation, show-once** + cURL/JS samples) + Developer-Hub card + publish-success "View API" link. Locally testable against the keyed auth path.
+- **Phase 2 (framework + objectui)**: MCP **Streamable HTTP** transport (single `/api/v1/mcp`, same Bearer auth), per-env opt-in (`OS_MCP_SERVER_ENABLED`), + connection-config generator and "Connect to Claude/Cursor" button. (Streamable HTTP, not the deprecated HTTP+SSE — single endpoint fits the Worker→container path; confirm streaming pass-through.)
 
 ---
 
