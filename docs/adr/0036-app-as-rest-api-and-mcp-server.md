@@ -56,10 +56,37 @@ Lovable/Airtable/Power Apps produce a UI bound to their runtime. ObjectStack pro
 ### 1. REST — surface, don't rebuild
 No runtime change. A new **Integrations & APIs** page reads `/api/v1/discovery` + `/api/v1/meta/object`, shows the env **Base URL** (`window.location.origin`), lists each published object's endpoints (`GET/POST /data/{object}`, `GET/PATCH/DELETE /data/{object}/:id`), links to the existing API Console, and renders copy-paste **cURL / JS / Python** samples using the user's key.
 
-### 2. Auth — self-serve API keys (`sys_api_key`)
-- A "Generate API key" form (name, optional expiry, optional scopes) → `POST /api/v1/data/sys_api_key`; the raw key is returned **once** and shown in a copy-once panel, then only the prefix is ever displayed again.
-- REST + MCP accept `Authorization: Bearer <key>`; the request runs **as that key's principal** — object permissions and RLS are unchanged (external access is never a privilege escalation).
-- Keys are **per environment**; revoke/restore already exist on the object.
+### 2. Auth — self-serve API keys, via better-auth's `apiKey` plugin
+**Mechanism (decided):** do NOT hand-roll key hashing/verification. Enable
+better-auth's mature **`apiKey` plugin** (flag-gated, the same `plugins.push(...)`
++ `build<Plugin>PluginSchema()` pattern auth-manager already uses for
+org/twoFactor/admin/jwt). It hashes keys, verifies an incoming key header, and
+**resolves it to the user's session** — so the request runs as that principal
+under the existing permissions + RLS (no parallel auth, no escalation).
+
+**Schema reconciliation (the real work):** better-auth's `apikey` model needs
+fields `sys_api_key` lacks (`requestCount`, `remaining`, `refill*`,
+`rateLimit*`, `metadata`, `start`) and uses `enabled` where `sys_api_key` has the
+inverted `revoked`. Two options:
+- **(A) Plugin owns its table** — let the plugin create/manage `apikey` with its
+  full schema; keep `sys_api_key` as a read model or deprecate it. Lowest risk,
+  fastest to correct auth; cost: a second key table to reconcile.
+- **(B) Map onto `sys_api_key`** — a `buildApiKeyPluginSchema()` remaps
+  modelName/fields to `sys_api_key` columns, adding the missing fields and
+  resolving `enabled`↔`revoked`. Unifies on the existing object; more schema work + migration risk.
+
+**Recommendation: (A) first** for correct, battle-tested auth quickly; fold
+`sys_api_key` into it (B) as a follow-up if a single table is wanted.
+
+- UI "Generate API key" calls the plugin's create endpoint; the raw key is
+  returned **once**, shown in a copy-once panel, prefix-only thereafter.
+- Keys are **per environment**; the plugin provides revoke + expiry.
+
+> **Security note**: this is a deliberate, security-sensitive change — it opens
+> the tenant data backend to non-browser callers. It must be implemented as a
+> focused, well-tested piece (key-create → keyed request → resolves to principal
+> → object permissions + RLS enforced → revoked/expired key rejected), not
+> bundled into unrelated work.
 
 ### 3. MCP — add HTTP transport (Phase 2)
 - Extend `plugin-mcp-server` with a **streamable-http** (with SSE fallback) transport mounted at a stable route (`/api/v1/mcp`), gated by `OS_MCP_SERVER_ENABLED` per env (explicit opt-in — exposing tools is a deliberate act).
