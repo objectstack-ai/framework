@@ -2,9 +2,14 @@
 
 import { Args, Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
+import { bundleRequire } from 'bundle-require';
 import { normalizeStackInput } from '@objectstack/spec';
-import { loadConfig } from '../utils/config.js';
+import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
+import { lintDataModel } from '../lint/data-model-rules.js';
+import { scoreMetadata } from '../lint/score.js';
+import { runMetadataEval } from '../lint/metadata-eval.js';
+import { DEFAULT_METADATA_EVAL_CORPUS } from '../lint/corpus.js';
 import {
   printHeader,
   printSuccess,
@@ -209,6 +214,11 @@ export function lintConfig(config: any): LintIssue[] {
     }
   }
 
+  // ── Data-model best practices (relationships / master-detail / roll-ups) ──
+  // Cross-object rules that encode the conventions in ADR-0035 and the
+  // objectstack-data/-ui skills. These double as the eval rubric (see score.ts).
+  issues.push(...lintDataModel(objects));
+
   return issues;
 }
 
@@ -224,6 +234,19 @@ export default class Lint extends Command {
   static override flags = {
     json: Flags.boolean({ description: 'Output as JSON' }),
     fix: Flags.boolean({ description: 'Show what would be fixed (dry-run)' }),
+    score: Flags.boolean({
+      description: 'Print a 0–100 metadata-quality score (the lint rubric) for this project',
+    }),
+    eval: Flags.boolean({
+      description: 'Run the metadata-generation eval over the bundled golden corpus and report scores',
+    }),
+    generator: Flags.string({
+      description: 'Path to a module that default-exports (prompt, id) => stack; enables live eval (scores generated output instead of fixtures). Requires --eval.',
+    }),
+    'eval-min': Flags.integer({
+      description: 'Minimum passing score per eval case',
+      default: 75,
+    }),
     'skip-i18n': Flags.boolean({ description: 'Skip translation coverage checks' }),
     'i18n-strict': Flags.boolean({
       description: 'Treat missing translations in non-default locales as errors',
@@ -238,6 +261,14 @@ export default class Lint extends Command {
     const { args, flags } = await this.parse(Lint);
     const configPath = args.config;
     const timer = createTimer();
+
+    // ── Eval mode — score generated metadata against the convention rubric ──
+    // Short-circuits the project lint: this evaluates a generation corpus, not
+    // the current config.
+    if (flags.eval) {
+      await this.runEval(flags, timer);
+      return;
+    }
 
     if (!flags.json) {
       printHeader('Lint');
@@ -270,6 +301,9 @@ export default class Lint extends Command {
         }
       }
 
+      // Metadata-quality score (the lint rubric expressed as 0–100).
+      const score = flags.score ? scoreMetadata(normalized) : null;
+
       // ── JSON output ──
       if (flags.json) {
         const errors = issues.filter((i) => i.severity === 'error');
@@ -281,6 +315,7 @@ export default class Lint extends Command {
           errors: errors.length,
           warnings: warnings.length,
           suggestions: suggestions.length,
+          ...(score ? { score: score.score, grade: score.grade } : {}),
           issues,
           duration: timer.elapsed(),
         }, null, 2));
@@ -292,6 +327,7 @@ export default class Lint extends Command {
 
       if (issues.length === 0) {
         printSuccess(`All checks passed ${chalk.dim(`(${timer.display()})`)}`);
+        if (score) this.printScore(score);
         console.log('');
         return;
       }
@@ -343,6 +379,8 @@ export default class Lint extends Command {
       if (suggestions.length > 0) parts.push(chalk.blue(`${suggestions.length} suggestion(s)`));
       console.log(`  ${parts.join(', ')} ${chalk.dim(`(${timer.display()})`)}`);
 
+      if (score) this.printScore(score);
+
       if (flags.fix) {
         console.log('');
         printInfo('Dry-run mode: no files were modified.');
@@ -361,5 +399,88 @@ export default class Lint extends Command {
       printError(error.message || String(error));
       process.exit(1);
     }
+  }
+
+  private printScore(score: ReturnType<typeof scoreMetadata>): void {
+    const gColor =
+      score.grade === 'A' ? chalk.green :
+      score.grade === 'B' ? chalk.cyan :
+      score.grade === 'C' ? chalk.yellow :
+      chalk.red;
+    console.log('');
+    console.log(`  ${chalk.bold('Metadata quality:')} ${gColor(`${score.score}/100  (${score.grade})`)}`);
+    const c = score.counts;
+    console.log(
+      chalk.dim(
+        `    ${c.schemaErrors} schema · ${c.errors} error(s) · ${c.warnings} warning(s) · ${c.suggestions} suggestion(s)`,
+      ),
+    );
+  }
+
+  /**
+   * Eval mode (`--eval`): run the metadata-generation rubric over the bundled
+   * golden corpus (offline), or — when `--generator <module>` is supplied —
+   * over the stacks that module produces for each prompt (live).
+   */
+  private async runEval(flags: any, timer: ReturnType<typeof createTimer>): Promise<void> {
+    let generate: ((prompt: string, id: string) => unknown | Promise<unknown>) | undefined;
+
+    if (flags.generator) {
+      try {
+        const { mod } = await bundleRequire({
+          filepath: flags.generator,
+          external: BUNDLE_REQUIRE_EXTERNALS,
+        });
+        const fn = (mod as any).default ?? (mod as any).generate;
+        if (typeof fn !== 'function') {
+          throw new Error('module must default-export a function (prompt, id) => stack');
+        }
+        generate = fn;
+      } catch (error: any) {
+        const msg = `Failed to load generator "${flags.generator}": ${error?.message || error}`;
+        if (flags.json) console.log(JSON.stringify({ error: msg }));
+        else printError(msg);
+        process.exit(1);
+      }
+    }
+
+    const report = await runMetadataEval(DEFAULT_METADATA_EVAL_CORPUS, {
+      ...(generate ? { generate } : {}),
+      minScore: flags['eval-min'],
+    });
+
+    if (flags.json) {
+      console.log(JSON.stringify({ ...report, duration: timer.elapsed() }, null, 2));
+      if (!report.ok) process.exit(1);
+      return;
+    }
+
+    printHeader('Metadata Generation Eval');
+    printInfo(`Mode: ${chalk.white(report.mode)}  ·  cases: ${report.total}  ·  pass bar: ${flags['eval-min']}`);
+    console.log('');
+
+    for (const r of report.results) {
+      const ok = r.passed;
+      const color = ok ? chalk.green : chalk.red;
+      const icon = ok ? '✓' : '✗';
+      console.log(`  ${color(icon)} ${chalk.bold(r.id)}  ${color(`${r.score.score}/100 (${r.score.grade})`)}`);
+      if (r.generationError) {
+        console.log(chalk.red(`    generation error: ${r.generationError}`));
+      } else if (!ok) {
+        const c = r.score.counts;
+        console.log(chalk.dim(`    ${c.schemaErrors} schema · ${c.errors} error(s) · ${c.warnings} warning(s)`));
+        const firstReal = r.score.issues.find((i) => i.severity !== 'suggestion') || r.score.issues[0];
+        if (firstReal) console.log(chalk.dim(`    e.g. ${firstReal.rule}: ${firstReal.message}`));
+      }
+    }
+
+    console.log('');
+    const summaryColor = report.ok ? chalk.green : chalk.red;
+    console.log(
+      `  ${summaryColor(`${report.passed}/${report.total} passed`)} · mean ${report.meanScore}/100 ${chalk.dim(`(${timer.display()})`)}`,
+    );
+    console.log('');
+
+    if (!report.ok) process.exit(1);
   }
 }
