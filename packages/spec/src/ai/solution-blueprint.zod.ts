@@ -105,9 +105,11 @@ export type BlueprintApp = z.infer<typeof BlueprintAppSchema>;
 
 /**
  * Seed data the agent suggests. Mirrors {@link DatasetSchema.records}. NOTE:
- * Phase C does NOT auto-apply seed data — there is no runtime-draftable
- * `dataset` metadata type (seed = code-loaded `*.seed.ts`). `apply_blueprint`
- * reports it as "proposed, not applied" so a human can wire it deliberately.
+ * `apply_blueprint` (Phase C) still only REPORTS this as "proposed, not
+ * applied" — it does not stage seed rows itself. Initialization data is now a
+ * first-class, runtime-draftable `seed` metadata type (SeedSchema) whose rows
+ * load when the draft is published; an author/agent stages it deliberately via
+ * a separate `create_seed` step, keeping the blueprint a pure structural plan.
  */
 export const BlueprintSeedSchema = lazySchema(() => z.object({
   object: z.string().regex(SNAKE_CASE).describe('Target object name (snake_case)'),

@@ -9,6 +9,8 @@
 
 **Design center**: **the long-term author of metadata is an AI; the human confirms and makes simple edits.** This is the same assumption as ADR-0032 carried into the *authoring loop itself*. It reorders the design: the question is not "what buttons does each designer need" but "**how does an AI propose a change to any metadata type, and how does a human safely confirm it before it goes live.**"
 
+> **Amendment (2026-06-06) — `seed` joins the type-agnostic apply.** Initialization / fixture data is now a first-class, runtime-draftable metadata type (`seed`, `SeedSchema`), authored through the exact same draft → review → publish loop as object/view/flow (TL;DR 2–3). One nuance for the otherwise pure-metadata "apply": publishing a `seed` draft has a **data side effect** — the runtime loads its rows into the target object (via `SeedLoaderService`, best-effort + idempotent upsert) so the draft *is* the review gate for seeded data too. The AI that *generates* seed rows stays in the closed studio package (`create_seed`); the type + apply path are open (the framework). This keeps `dataset` free for the ADR-0021 analytics semantic layer.
+
 ---
 
 ## TL;DR
