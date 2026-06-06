@@ -265,6 +265,135 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handle an MCP request over the Streamable HTTP transport (`/mcp`).
+     *
+     * Gating + auth (fail-closed):
+     *  - **opt-in**: only served when `OS_MCP_SERVER_ENABLED=true` (single-env
+     *    runtime). Multi-tenant cloud overrides this gate per env. When off we
+     *    return 404 so the surface isn't advertised.
+     *  - **auth**: requires a principal already resolved by
+     *    `resolveExecutionContext` (the `sys_api_key` Bearer/header path or a
+     *    session). Anonymous → 401.
+     *
+     * Execution: the MCP runtime builds a stateless per-request server whose
+     * object-CRUD tools run through {@link callData} bound to THIS request's
+     * ExecutionContext — i.e. the exact permission + RLS path the REST API
+     * uses. An external agent can never exceed the key's authority.
+     */
+    async handleMcp(body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        if (!HttpDispatcher.isMcpEnabled()) {
+            return { handled: true, response: this.error('MCP server is not enabled for this environment', 404) };
+        }
+
+        const mcp: any = await this.resolveService('mcp', context.environmentId);
+        if (!mcp || typeof mcp.handleHttpRequest !== 'function') {
+            return { handled: true, response: this.error('MCP server is not available', 501) };
+        }
+
+        const ec = context.executionContext;
+        if (!ec || (!ec.userId && !ec.isSystem)) {
+            return { handled: true, response: this.error('Unauthorized: a valid API key is required', 401) };
+        }
+
+        const request = context.request;
+        if (!request || typeof (request as any).headers?.get !== 'function') {
+            // The MCP transport needs a Web-standard Request (headers/method/url).
+            return { handled: true, response: this.error('MCP transport requires a standard HTTP request', 400) };
+        }
+
+        const bridge = this.buildMcpBridge(context);
+        let webRes: Response;
+        try {
+            webRes = await mcp.handleHttpRequest(request, { bridge, parsedBody: body });
+        } catch (err: any) {
+            return { handled: true, response: this.error(err?.message ?? 'MCP request failed', 500) };
+        }
+
+        // Convert the transport's buffered Web Response into the dispatcher's
+        // `{ status, headers, body }` shape (JSON-response mode → fully buffered).
+        const headers: Record<string, string> = {};
+        try { webRes.headers.forEach((v, k) => { headers[k] = v; }); } catch { /* no headers */ }
+        const text = await webRes.text().catch(() => '');
+        let responseBody: any = null;
+        if (text) {
+            const ct = headers['content-type'] ?? '';
+            if (ct.includes('application/json')) {
+                try { responseBody = JSON.parse(text); } catch { responseBody = text; }
+            } else {
+                responseBody = text;
+            }
+        }
+        return { handled: true, response: { status: webRes.status, headers, body: responseBody } };
+    }
+
+    /** Whether the MCP HTTP surface is opted in for this single-env runtime. */
+    private static isMcpEnabled(): boolean {
+        return typeof process !== 'undefined' && process.env?.OS_MCP_SERVER_ENABLED === 'true';
+    }
+
+    /**
+     * Build a principal-bound {@link McpDataBridge}: every method runs AS the
+     * request's ExecutionContext through {@link callData} (RLS/permissions) and
+     * the per-env metadata service. Keeps the MCP tool layer free of any direct
+     * engine access.
+     */
+    private buildMcpBridge(context: HttpProtocolContext): any {
+        const ec = context.executionContext;
+        const envId = context.environmentId;
+        const driver = (context as any).dataDriver;
+        const callData = this.callData.bind(this);
+        const getMeta = () => this.resolveService('metadata', envId);
+
+        return {
+            listObjects: async () => {
+                const meta: any = await getMeta();
+                const objs: any[] = (await meta?.listObjects?.()) ?? [];
+                return objs.map((o) => ({
+                    name: o.name,
+                    label: o.label ?? o.name,
+                    fieldCount: o.fields ? Object.keys(o.fields).length : undefined,
+                }));
+            },
+            describeObject: async (name: string) => {
+                const meta: any = await getMeta();
+                const def: any = await meta?.getObject?.(name);
+                if (!def) return null;
+                const fields = def.fields ?? {};
+                return {
+                    name: def.name,
+                    label: def.label ?? def.name,
+                    fields: Object.entries(fields).map(([k, f]: [string, any]) => ({
+                        name: k,
+                        type: f?.type,
+                        label: f?.label ?? k,
+                        required: f?.required ?? false,
+                    })),
+                    enableFeatures: def.enable ?? {},
+                };
+            },
+            query: async (object: string, o: any) => {
+                const query: any = {};
+                if (o?.where) query.where = o.where;
+                if (o?.fields) query.fields = o.fields;
+                if (typeof o?.limit === 'number') query.limit = o.limit;
+                if (typeof o?.offset === 'number') query.offset = o.offset;
+                if (o?.orderBy) query.orderBy = o.orderBy;
+                return await callData('query', { object, query }, driver, envId, ec);
+            },
+            get: async (object: string, id: string) => {
+                const res: any = await callData('get', { object, id }, driver, envId, ec);
+                return res?.record ?? res ?? null;
+            },
+            create: async (object: string, data: any) =>
+                await callData('create', { object, data }, driver, envId, ec),
+            update: async (object: string, id: string, data: any) =>
+                await callData('update', { object, id, data }, driver, envId, ec),
+            remove: async (object: string, id: string) =>
+                await callData('delete', { object, id }, driver, envId, ec),
+        };
+    }
+
+    /**
      * Parse a project UUID out of a scoped URL path such as
      * `/api/v1/environments/abc-123/data/task` or `/projects/abc-123/meta`.
      * Returns `undefined` when the path does not match the scoped pattern.
@@ -609,6 +738,10 @@ export class HttpDispatcher {
                 notifications: hasNotification ? `${prefix}/notifications` : undefined,
                 ai:            hasAi ? `${prefix}/ai` : undefined,
                 i18n:          hasI18n ? `${prefix}/i18n` : undefined,
+                // MCP (Streamable HTTP) is opt-in per env — only advertised
+                // when OS_MCP_SERVER_ENABLED=true so the surface isn't exposed
+                // by default. The objectui Integrations page reads this.
+                mcp:           HttpDispatcher.isMcpEnabled() ? `${prefix}/mcp` : undefined,
         };
 
         // Build per-service status map
@@ -2599,7 +2732,11 @@ export class HttpDispatcher {
         if (cleanPath.startsWith('/data')) {
             return this.handleData(cleanPath.substring(5), method, body, query, context);
         }
-        
+
+        if (cleanPath === '/mcp' || cleanPath.startsWith('/mcp/') || cleanPath.startsWith('/mcp?')) {
+            return this.handleMcp(body, context);
+        }
+
         if (cleanPath.startsWith('/graphql')) {
              if (method === 'POST') return this.handleGraphQL(body, context);
              // GraphQL usually GET for Playground is handled by middleware but we can return 405 or handle it

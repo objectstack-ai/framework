@@ -13,3 +13,9 @@ export { MCPServerPlugin } from './plugin.js';
 export type { MCPServerPluginOptions } from './plugin.js';
 export { MCPServerRuntime } from './mcp-server-runtime.js';
 export type { MCPServerRuntimeConfig } from './mcp-server-runtime.js';
+export { registerObjectTools } from './mcp-http-tools.js';
+export type {
+  McpDataBridge,
+  McpObjectSummary,
+  RegisterObjectToolsOptions,
+} from './mcp-http-tools.js';

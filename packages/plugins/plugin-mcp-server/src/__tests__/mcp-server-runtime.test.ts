@@ -257,7 +257,7 @@ describe('MCPServerRuntime', () => {
       expect(runtime.isStarted).toBe(false);
     });
 
-    it('should warn when HTTP transport is requested', async () => {
+    it('start() is a no-op for HTTP transport (served per-request via dispatcher)', async () => {
       const httpRuntime = new MCPServerRuntime({
         transport: 'http',
         logger: mockLogger as any,
@@ -265,9 +265,15 @@ describe('MCPServerRuntime', () => {
 
       await httpRuntime.start();
 
+      // HTTP is served per-request through handleHttpRequest(), not a
+      // long-lived connect() — so start() does not mark the server started
+      // and must not warn that HTTP is unsupported.
       expect(httpRuntime.isStarted).toBe(false);
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(mockLogger.warn).not.toHaveBeenCalledWith(
         '[MCP] HTTP transport is not yet supported. Use stdio transport.',
+      );
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        '[MCP] HTTP transport ready (served per-request at /api/v1/mcp).',
       );
     });
 

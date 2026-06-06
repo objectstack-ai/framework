@@ -2,9 +2,12 @@
 
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { Logger, IMetadataService, IDataEngine, AIToolDefinition } from '@objectstack/spec/contracts';
 import type { Agent } from '@objectstack/spec/ai';
 import type { ToolRegistry, ToolExecutionResult } from './types.js';
+import { registerObjectTools } from './mcp-http-tools.js';
+import type { McpDataBridge, RegisterObjectToolsOptions } from './mcp-http-tools.js';
 import { z } from 'zod';
 
 /**
@@ -476,8 +479,10 @@ export class MCPServerRuntime {
       this.started = true;
       logger?.info(`[MCP] Server started (transport: stdio, name: ${this.config.name})`);
     } else {
-      // HTTP transport support will be added in a future version
-      logger?.warn('[MCP] HTTP transport is not yet supported. Use stdio transport.');
+      // HTTP is served per-request via `handleHttpRequest()` (mounted by the
+      // runtime dispatcher at `/api/v1/mcp`), not through a long-lived
+      // `connect()` like stdio — so there is nothing to start here.
+      logger?.info('[MCP] HTTP transport ready (served per-request at /api/v1/mcp).');
     }
   }
 
@@ -491,5 +496,73 @@ export class MCPServerRuntime {
     this.transport = undefined;
     this.started = false;
     this.config.logger?.info('[MCP] Server stopped');
+  }
+
+  // ── HTTP (Streamable HTTP) transport ───────────────────────────
+
+  /**
+   * Handle one MCP request over the **Streamable HTTP** transport (Web Standard
+   * `Request`/`Response`), the network-reachable surface for external agents.
+   *
+   * Stateless by design: a fresh {@link McpServer} + transport is built per
+   * request (the SDK-recommended pattern for stateless HTTP — it avoids any
+   * cross-request session/request-id collision and keeps each call isolated).
+   * The tool set is the object-CRUD bridge, bound to the **caller's principal**
+   * via `bridge`; the runtime wires that bridge to the existing permission +
+   * RLS path, so an external agent can never exceed the key's authority.
+   *
+   * Only the object-CRUD tools are exposed here — the internal AI/authoring
+   * toolRegistry (which can mutate metadata) is deliberately NOT bridged onto
+   * the external surface.
+   *
+   * @param request    The inbound Web `Request` (headers/method/url).
+   * @param opts.bridge       Principal-bound data accessor (required to expose tools).
+   * @param opts.parsedBody   Pre-parsed JSON-RPC body (the dispatcher already read it).
+   * @param opts.authInfo     Optional auth info forwarded to message handlers.
+   * @param opts.toolOptions  Object-tool exposure options (system objects, limits).
+   */
+  async handleHttpRequest(
+    request: Request,
+    opts: {
+      bridge?: McpDataBridge;
+      parsedBody?: unknown;
+      authInfo?: unknown;
+      toolOptions?: RegisterObjectToolsOptions;
+    } = {},
+  ): Promise<Response> {
+    // Fresh, isolated server per request (stateless).
+    const server = new McpServer(
+      { name: this.config.name, version: this.config.version },
+      {
+        capabilities: { tools: {} },
+        instructions:
+          this.config.instructions ??
+          'ObjectStack MCP Server — query and modify your app\'s data objects as tools.',
+      },
+    );
+
+    if (opts.bridge) {
+      registerObjectTools(server, opts.bridge, opts.toolOptions);
+    }
+
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      // Stateless: no session id, single request/response.
+      sessionIdGenerator: undefined,
+      // Return a buffered JSON response (no long-lived SSE) — fits the
+      // Worker→container hop without streaming pass-through concerns.
+      enableJsonResponse: true,
+    });
+
+    await server.connect(transport);
+    try {
+      // JSON-response mode fully materialises the Response before resolving,
+      // so it is safe to close the per-request server in `finally`.
+      return await transport.handleRequest(request, {
+        parsedBody: opts.parsedBody,
+        authInfo: opts.authInfo as any,
+      });
+    } finally {
+      await server.close().catch(() => {});
+    }
   }
 }
