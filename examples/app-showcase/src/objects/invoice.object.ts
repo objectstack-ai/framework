@@ -61,6 +61,18 @@ export const InvoiceLine = ObjectSchema.create({
     product: Field.text({ label: 'Product', required: true, maxLength: 200 }),
     quantity: Field.number({ label: 'Qty', required: true, min: 0, defaultValue: 1 }),
     unit_price: Field.currency({ label: 'Unit Price', scale: 2, min: 0 }),
-    amount: Field.currency({ label: 'Amount', scale: 2, min: 0 }),
+    // Amount = Qty × Unit Price. Kept as a *stored* currency column (so the
+    // parent Invoice.total summary can roll it up — summary aggregation reads
+    // stored columns, not on-read formula fields), but the `expression` makes
+    // the line-item grid render it READ-ONLY and recompute it live client-side
+    // as quantity/unit_price change, then persist the computed value. The
+    // server does not treat a non-`formula` field's expression as computed, so
+    // the client-sent value is stored as-is.
+    amount: Field.currency({
+      label: 'Amount',
+      scale: 2,
+      min: 0,
+      expression: 'record.quantity * record.unit_price',
+    }),
   },
 });
