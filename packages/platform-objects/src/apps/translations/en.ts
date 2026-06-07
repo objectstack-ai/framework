@@ -118,6 +118,7 @@ export const en: TranslationData = {
         nav_pages: { label: 'Pages' },
         nav_dashboards: { label: 'Dashboards' },
         nav_reports: { label: 'Reports' },
+        nav_datasets: { label: 'Datasets' },
         group_logic: { label: 'Logic' },
         nav_actions: { label: 'Actions' },
         nav_hooks: { label: 'Hooks' },

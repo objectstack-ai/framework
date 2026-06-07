@@ -95,6 +95,7 @@ export const jaJP: TranslationData = {
         nav_pages: { label: 'ページ' },
         nav_dashboards: { label: 'ダッシュボード' },
         nav_reports: { label: 'レポート' },
+        nav_datasets: { label: 'データセット' },
         group_logic: { label: 'ロジック' },
         nav_actions: { label: 'アクション' },
         nav_hooks: { label: 'フック' },

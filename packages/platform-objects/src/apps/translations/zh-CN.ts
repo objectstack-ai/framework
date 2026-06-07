@@ -95,6 +95,7 @@ export const zhCN: TranslationData = {
         nav_pages: { label: '页面' },
         nav_dashboards: { label: '仪表盘' },
         nav_reports: { label: '报表' },
+        nav_datasets: { label: '数据集' },
         group_logic: { label: '逻辑' },
         nav_actions: { label: '动作' },
         nav_hooks: { label: '钩子' },

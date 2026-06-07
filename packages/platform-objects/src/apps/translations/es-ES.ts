@@ -95,6 +95,7 @@ export const esES: TranslationData = {
         nav_pages: { label: 'Páginas' },
         nav_dashboards: { label: 'Paneles' },
         nav_reports: { label: 'Informes' },
+        nav_datasets: { label: 'Conjuntos de datos' },
         group_logic: { label: 'Lógica' },
         nav_actions: { label: 'Acciones' },
         nav_hooks: { label: 'Hooks' },

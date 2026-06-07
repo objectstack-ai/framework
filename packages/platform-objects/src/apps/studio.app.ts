@@ -165,6 +165,15 @@ export const STUDIO_APP: App = {
           params: { type: 'report', package: '{active_package}' },
           icon: 'bar-chart-3',
         },
+        {
+          // ADR-0021 — the analytics semantic layer reports/dashboards bind to.
+          id: 'nav_datasets',
+          type: 'component',
+          label: 'Datasets',
+          componentRef: 'metadata:resource',
+          params: { type: 'dataset', package: '{active_package}' },
+          icon: 'database',
+        },
       ],
     },
     {
