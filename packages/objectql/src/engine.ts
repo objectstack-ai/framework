@@ -29,7 +29,7 @@ import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
 import { validateRecord } from './validation/record-validator.js';
-import { evaluateValidationRules, needsPriorRecord } from './validation/rule-validator.js';
+import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
 interface FormulaPlanEntry { name: string; expression: Expression; }
@@ -2106,6 +2106,10 @@ export class ObjectQL implements IDataEngine {
                    const priorAst: QueryAST = { object, where: { id: hookContext.input.id }, limit: 1 };
                    priorRecord = await driver.findOne(object, priorAst, hookContext.input.options as any);
                }
+               // B2: drop writes to fields locked by a TRUE `readonlyWhen` — the
+               // field is read-only for this record's state, so the incoming
+               // change is ignored (the persisted value is kept).
+               hookContext.input.data = stripReadonlyWhenFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, priorRecord, this.logger) as any;
                evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous: priorRecord, logger: this.logger });
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {

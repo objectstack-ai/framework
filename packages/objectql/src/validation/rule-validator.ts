@@ -149,11 +149,47 @@ export interface EvaluateRulesOptions {
  * extra fetch on the update path is worth it).
  */
 export function needsPriorRecord(
-  objectSchema: { validations?: unknown[] } | undefined | null,
+  objectSchema: { validations?: unknown[]; fields?: Record<string, ConditionalFieldDef> } | undefined | null,
 ): boolean {
   const rules = objectSchema?.validations;
-  if (!Array.isArray(rules)) return false;
-  return rules.some((r) => ruleNeedsPrior(r));
+  const ruleNeeds = Array.isArray(rules) && rules.some((r) => ruleNeedsPrior(r));
+  return !!(ruleNeeds || fieldsNeedPrior(objectSchema?.fields));
+}
+
+/**
+ * Strip fields whose `readonlyWhen` CEL predicate is TRUE for the (merged)
+ * record from an UPDATE payload — the field is locked, so an incoming change is
+ * ignored (the persisted value is kept) rather than rejected. Returns the same
+ * object when nothing is locked, else a shallow copy with the locked keys
+ * removed. A broken predicate is fail-open (the change is allowed through).
+ */
+export function stripReadonlyWhenFields(
+  objectSchema: { fields?: Record<string, ConditionalFieldDef> } | undefined | null,
+  data: Record<string, unknown> | undefined | null,
+  previous: Record<string, unknown> | undefined | null,
+  logger?: EvaluateRulesOptions['logger'],
+): Record<string, unknown> | undefined | null {
+  const fields = objectSchema?.fields;
+  if (!fields || !data) return data;
+  const merged = { ...(previous ?? {}), ...data };
+  let result = data;
+  for (const [name, def] of Object.entries(fields)) {
+    if (!def?.readonlyWhen || !(name in data)) continue;
+    const res = ExpressionEngine.evaluate<boolean>(toExpression(def.readonlyWhen), {
+      record: merged,
+      previous: previous ?? undefined,
+    });
+    if (!res.ok) {
+      logger?.warn?.(`readonlyWhen for '${name}' failed to evaluate — change allowed through`);
+      continue;
+    }
+    if (res.value === true) {
+      if (result === data) result = { ...data };
+      delete (result as Record<string, unknown>)[name];
+      logger?.warn?.(`Field '${name}' is read-only (readonlyWhen) — ignoring incoming change`);
+    }
+  }
+  return result;
 }
 
 /**
@@ -177,6 +213,27 @@ function ruleNeedsPrior(r: unknown): boolean {
   return false;
 }
 
+/** Field-level conditional rules (B2): a field is required / read-only when its
+ *  CEL predicate is TRUE over the record. */
+interface ConditionalFieldDef {
+  requiredWhen?: string | Expression;
+  conditionalRequired?: string | Expression; // back-compat alias of requiredWhen
+  readonlyWhen?: string | Expression;
+}
+
+function isMissing(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/** True when any field declares a conditional rule that needs the merged/prior
+ *  record to evaluate (so the engine fetches `previous` on update). */
+function fieldsNeedPrior(fields: Record<string, ConditionalFieldDef> | undefined): boolean {
+  if (!fields) return false;
+  return Object.values(fields).some(
+    (f) => f && (f.requiredWhen || f.conditionalRequired || f.readonlyWhen),
+  );
+}
+
 /** Normalize an author-time ExpressionInput into the canonical envelope. */
 function toExpression(cond: string | Expression): Expression {
   return typeof cond === 'string' ? { dialect: 'cel', source: cond } : cond;
@@ -190,13 +247,17 @@ function toExpression(cond: string | Expression): Expression {
  * rules are violated. Returns void otherwise.
  */
 export function evaluateValidationRules(
-  objectSchema: { validations?: unknown[] } | undefined | null,
+  objectSchema: { validations?: unknown[]; fields?: Record<string, ConditionalFieldDef> } | undefined | null,
   data: Record<string, unknown> | undefined | null,
   mode: Mode,
   opts: EvaluateRulesOptions = {},
 ): void {
+  if (!data) return;
   const rules = objectSchema?.validations;
-  if (!Array.isArray(rules) || rules.length === 0 || !data) return;
+  const hasRules = Array.isArray(rules) && rules.length > 0;
+  const fields = objectSchema?.fields;
+  const hasFieldRules = fieldsNeedPrior(fields);
+  if (!hasRules && !hasFieldRules) return;
 
   const previous = opts.previous ?? undefined;
   // Merged view used by predicate rules: prior state overlaid with the PATCH,
@@ -206,7 +267,27 @@ export function evaluateValidationRules(
 
   const errors: FieldValidationError[] = [];
 
-  const ordered = rules
+  // Field-level conditional rules (B2): a field whose `requiredWhen`
+  // (or its `conditionalRequired` alias) predicate is TRUE over the merged
+  // record must have a value — enforced server-side so the rule can't be
+  // bypassed. (`readonlyWhen` is handled by stripReadonlyWhenFields on the
+  // write path, not here.) A broken predicate is fail-open (logged, skipped).
+  if (hasFieldRules && fields) {
+    for (const [name, def] of Object.entries(fields)) {
+      const pred = def?.requiredWhen ?? def?.conditionalRequired;
+      if (!pred) continue;
+      const res = ExpressionEngine.evaluate<boolean>(toExpression(pred), { record: merged, previous });
+      if (!res.ok) {
+        opts.logger?.warn?.(`requiredWhen for '${name}' failed to evaluate — skipped`);
+        continue;
+      }
+      if (res.value === true && isMissing(merged[name])) {
+        errors.push({ field: name, code: 'required', message: `${name} is required` });
+      }
+    }
+  }
+
+  const ordered = (hasRules ? rules! : [])
     .filter((r): r is BaseRule => r != null && typeof r === 'object')
     .filter((r) => r.active !== false)
     .filter((r) => {

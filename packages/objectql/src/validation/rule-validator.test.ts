@@ -5,8 +5,62 @@ import {
   evaluateValidationRules,
   needsPriorRecord,
   legalNextStates,
+  stripReadonlyWhenFields,
 } from './rule-validator.js';
 import { ValidationError } from './record-validator.js';
+
+// B2 — field-level conditional rules (CEL over `record`).
+const invoiceFields = {
+  fields: {
+    status: { type: 'select' },
+    // amount is required once the invoice is sent, and locked once it's paid.
+    amount: {
+      type: 'currency',
+      requiredWhen: "record.status == 'sent'",
+      readonlyWhen: "record.status == 'paid'",
+    },
+  },
+};
+
+describe('field requiredWhen enforcement (B2)', () => {
+  it('rejects a missing required-when field (insert, predicate TRUE)', () => {
+    expect(() => evaluateValidationRules(invoiceFields, { status: 'sent' }, 'insert')).toThrow(ValidationError);
+  });
+  it('passes when the required-when field has a value', () => {
+    expect(() => evaluateValidationRules(invoiceFields, { status: 'sent', amount: 10 }, 'insert')).not.toThrow();
+  });
+  it('passes when the predicate is FALSE', () => {
+    expect(() => evaluateValidationRules(invoiceFields, { status: 'draft' }, 'insert')).not.toThrow();
+  });
+  it('evaluates over the merged record on update (prior status=sent, amount absent → required)', () => {
+    expect(() => evaluateValidationRules(invoiceFields, { note: 'x' } as any, 'update', { previous: { status: 'sent' } })).toThrow(ValidationError);
+  });
+  it('honors the conditionalRequired alias', () => {
+    const f = { fields: { amount: { type: 'currency', conditionalRequired: "record.status == 'sent'" } } };
+    expect(() => evaluateValidationRules(f, { status: 'sent' }, 'insert')).toThrow(ValidationError);
+  });
+});
+
+describe('stripReadonlyWhenFields (B2)', () => {
+  it('drops a field locked by a TRUE readonlyWhen (keeps the persisted value)', () => {
+    const out = stripReadonlyWhenFields(invoiceFields, { amount: 999 }, { status: 'paid', amount: 100 });
+    expect(out).toEqual({});
+  });
+  it('keeps the field when readonlyWhen is FALSE', () => {
+    const out = stripReadonlyWhenFields(invoiceFields, { amount: 999 }, { status: 'draft', amount: 100 });
+    expect(out).toEqual({ amount: 999 });
+  });
+  it('returns the same object when no readonlyWhen fields are touched', () => {
+    const d = { x: 1 };
+    expect(stripReadonlyWhenFields({ fields: { x: { type: 'number' } } }, d, null)).toBe(d);
+  });
+});
+
+describe('needsPriorRecord — field conditional rules (B2)', () => {
+  it('is true when a field declares requiredWhen / readonlyWhen', () => {
+    expect(needsPriorRecord(invoiceFields as any)).toBe(true);
+  });
+});
 
 // Mirrors the showcase Account lifecycle: a re-entrant FSM where a churned
 // account can be reactivated but cannot jump straight back to prospect.

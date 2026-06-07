@@ -1,7 +1,8 @@
 ---
 "@objectstack/spec": minor
+"@objectstack/objectql": minor
 ---
 
-Field-level conditional rules (CEL): `visibleWhen` / `readonlyWhen` / `requiredWhen`.
+Field-level conditional rules (CEL): `visibleWhen` / `readonlyWhen` / `requiredWhen`, enforced server-side.
 
-Add three CEL-predicate field props evaluated on both sides — the client form toggles a field's visibility / read-only / required state live as the record changes, and the server enforces them (can't be bypassed). `requiredWhen` is the canonical name; the existing `conditionalRequired` is kept as a back-compat alias.
+Add three CEL-predicate field props (over `record`) evaluated on both sides. **Spec**: `visibleWhen` / `readonlyWhen` / `requiredWhen` (`requiredWhen` canonical; `conditionalRequired` kept as a back-compat alias). **Server (objectql)**: the validator now enforces `requiredWhen`/`conditionalRequired` over the merged record (so the rule can't be bypassed by a direct API write), and the update path ignores writes to a field whose `readonlyWhen` is TRUE (keeps the persisted value). `needsPriorRecord` accounts for conditional fields so the prior record is fetched on update.
