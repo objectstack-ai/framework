@@ -1,5 +1,0 @@
----
-"@objectstack/mcp": minor
----
-
-ai

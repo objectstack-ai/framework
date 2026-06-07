@@ -1,5 +1,12 @@
 # @objectstack/service-cluster
 
+## 8.1.0
+
+### Patch Changes
+
+- @objectstack/spec@8.1.0
+- @objectstack/core@8.1.0
+
 ## 8.0.0
 
 ### Patch Changes

@@ -1,5 +1,53 @@
 # @objectstack/cli
 
+## 8.1.0
+
+### Patch Changes
+
+- Updated dependencies [d8c5374]
+  - @objectstack/mcp@8.1.0
+  - @objectstack/spec@8.1.0
+  - @objectstack/console@8.1.0
+  - @objectstack/core@8.1.0
+  - @objectstack/client@8.1.0
+  - @objectstack/types@8.1.0
+  - @objectstack/objectql@8.1.0
+  - @objectstack/observability@8.1.0
+  - @objectstack/formula@8.1.0
+  - @objectstack/platform-objects@8.1.0
+  - @objectstack/runtime@8.1.0
+  - @objectstack/rest@8.1.0
+  - @objectstack/driver-memory@8.1.0
+  - @objectstack/driver-sql@8.1.0
+  - @objectstack/driver-mongodb@8.1.0
+  - @objectstack/driver-sqlite-wasm@8.1.0
+  - @objectstack/plugin-approvals@8.1.0
+  - @objectstack/plugin-audit@8.1.0
+  - @objectstack/plugin-auth@8.1.0
+  - @objectstack/plugin-email@8.1.0
+  - @objectstack/plugin-hono-server@8.1.0
+  - @objectstack/plugin-org-scoping@8.1.0
+  - @objectstack/plugin-reports@8.1.0
+  - @objectstack/plugin-security@8.1.0
+  - @objectstack/plugin-sharing@8.1.0
+  - @objectstack/plugin-webhooks@8.1.0
+  - @objectstack/plugin-trigger-record-change@8.1.0
+  - @objectstack/plugin-trigger-schedule@8.1.0
+  - @objectstack/service-ai@8.1.0
+  - @objectstack/service-analytics@8.1.0
+  - @objectstack/service-automation@8.1.0
+  - @objectstack/service-cache@8.1.0
+  - @objectstack/service-datasource@8.1.0
+  - @objectstack/service-feed@8.1.0
+  - @objectstack/service-job@8.1.0
+  - @objectstack/service-messaging@8.1.0
+  - @objectstack/service-package@8.1.0
+  - @objectstack/service-queue@8.1.0
+  - @objectstack/service-realtime@8.1.0
+  - @objectstack/service-settings@8.1.0
+  - @objectstack/service-storage@8.1.0
+  - @objectstack/account@8.1.0
+
 ## 8.0.0
 
 ### Patch Changes
