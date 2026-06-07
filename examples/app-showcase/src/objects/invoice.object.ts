@@ -55,10 +55,14 @@ export const Invoice = ObjectSchema.create({
       ],
     }),
     issued_on: Field.date({ label: 'Issued On' }),
+    // Header tax rate (percent). The line-item entry form reads it live to show
+    // a Subtotal / Tax / Total stack under the grid as lines are entered.
+    tax_rate: Field.number({ label: 'Tax Rate (%)', min: 0, max: 100, defaultValue: 0 }),
     // Roll-up: recomputed server-side as line items are inserted/updated/deleted
-    // (child FK auto-detected: showcase_invoice_line.invoice).
+    // (child FK auto-detected: showcase_invoice_line.invoice). This is the line
+    // subtotal; the tax-inclusive grand total is shown live during entry.
     total: Field.summary({
-      label: 'Total',
+      label: 'Subtotal',
       summaryOperations: { object: 'showcase_invoice_line', field: 'amount', function: 'sum' },
     }),
   },
