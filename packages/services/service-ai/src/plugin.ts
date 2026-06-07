@@ -57,6 +57,16 @@ export interface AIServicePluginOptions {
    */
   gatewayModel?: string;
   /**
+   * Whether to mount this plugin's HTTP routes (fire the `ai:routes` hook).
+   * Defaults to `true`. Set `false` for an AIService on a host/routing-shell
+   * kernel in a multi-tenant runtime: the host should NOT serve concrete AI
+   * routes (they would shadow the dispatcher's `/ai/*` wildcard, which resolves
+   * the request's environment and dispatches to the per-environment kernel's
+   * AIService). Route definitions are still cached on the kernel (`__aiRoutes`)
+   * so the dispatcher can match them per-env. Single-env runtimes leave this on.
+   */
+  registerRoutes?: boolean;
+  /**
    * Explicit trace recorder override. When set, auto-detection
    * of {@link ObjectQLTraceRecorder} is skipped.
    *
@@ -906,13 +916,22 @@ export class AIServicePlugin implements Plugin {
       ctx.logger.debug('[AI] Metadata service not available, skipping agent and assistant routes');
     }
 
-    // Trigger hook so HTTP server plugins can mount these routes
-    await ctx.trigger('ai:routes', routes);
-
-    // Cache routes on the kernel so HttpDispatcher can find them
+    // Cache routes on the kernel so HttpDispatcher can find them (always — the
+    // per-env dispatch path reads `__aiRoutes` to match routes for this kernel).
     const kernel = ctx.getKernel();
     if (kernel) {
       (kernel as any).__aiRoutes = routes;
+    }
+
+    // Trigger hook so HTTP server plugins can MOUNT these routes on the shared
+    // server. Skipped when `registerRoutes === false` (a host/routing-shell
+    // AIService in multi-tenant mode): mounting concrete routes there would
+    // shadow the dispatcher's `/ai/*` wildcard and serve every tenant's chat
+    // from the host instead of its own per-environment kernel.
+    if (this.options.registerRoutes !== false) {
+      await ctx.trigger('ai:routes', routes);
+    } else {
+      ctx.logger.info('[AI] registerRoutes=false — not mounting AI routes on this kernel (multi-tenant host)');
     }
 
     ctx.logger.info(
