@@ -49,6 +49,11 @@ export const ProjectWorkspacePage: Page = {
             // columns are auto-derived from the child object's metadata — no
             // hand-authored columns block. Add `columns`/`relationshipField`
             // here only to override the derived defaults.
+            // `showcase_task` has rich fields (notes/location/cover), so the
+            // relationship's smart default resolves to the per-row `form`
+            // factor: a read-only Tasks list with an "Add task" button that
+            // opens the child's full form inline. (Thin children like invoice
+            // lines get the editable `grid` instead — see invoice.object.ts.)
             details: [
               { title: 'Tasks', childObject: 'showcase_task', addLabel: 'Add task' },
             ],
