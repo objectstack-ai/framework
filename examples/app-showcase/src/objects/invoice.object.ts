@@ -87,6 +87,9 @@ export const InvoiceLine = ObjectSchema.create({
     }),
     // Catalog lookup. Picking a product auto-fills `description` + `unit_price`
     // (the grid copies same-named fields from the selected product record).
+    // Line sort position — stamped by the grid on drag-reorder so the order
+    // persists. Excluded from the editable columns (it's not hand-entered).
+    position: Field.number({ label: 'Position', defaultValue: 0 }),
     product: Field.lookup('showcase_product', { label: 'Product', required: true }),
     description: Field.text({ label: 'Description', maxLength: 200 }),
     quantity: Field.number({ label: 'Qty', required: true, min: 0, defaultValue: 1 }),
