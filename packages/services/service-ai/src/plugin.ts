@@ -49,6 +49,14 @@ export interface AIServicePluginOptions {
   /** Default model id (must appear in `models`). */
   defaultModelId?: string;
   /**
+   * Vercel AI Gateway model id (e.g. `anthropic/claude-haiku-4-5`) for this
+   * plugin instance. Takes precedence over the `AI_GATEWAY_MODEL` env var so a
+   * host can select the model per kernel — e.g. a multi-tenant runtime routing
+   * by plan. When omitted, falls back to `AI_GATEWAY_MODEL` (unchanged
+   * behavior). Pairs with the gateway adapter only; ignored by other providers.
+   */
+  gatewayModel?: string;
+  /**
    * Explicit trace recorder override. When set, auto-detection
    * of {@link ObjectQLTraceRecorder} is skipped.
    *
@@ -388,8 +396,10 @@ export class AIServicePlugin implements Plugin {
    * Returns the adapter and a description for logging.
    */
   private async detectAdapter(ctx: PluginContext): Promise<{ adapter: LLMAdapter; description: string }> {
-    // 1. Vercel AI Gateway — works with any provider via gateway('provider/model')
-    const gatewayModel = process.env.AI_GATEWAY_MODEL;
+    // 1. Vercel AI Gateway — works with any provider via gateway('provider/model').
+    //    A per-instance `gatewayModel` option wins over the process-wide env var
+    //    so a multi-tenant host can route the model per kernel (e.g. by plan).
+    const gatewayModel = this.options.gatewayModel ?? process.env.AI_GATEWAY_MODEL;
     if (gatewayModel) {
       try {
         const gatewayPkg = '@ai-sdk/gateway';
@@ -398,7 +408,7 @@ export class AIServicePlugin implements Plugin {
         return { adapter, description: `Vercel AI Gateway (model: ${gatewayModel})` };
       } catch (err) {
         ctx.logger.warn(
-          `[AI] Failed to load @ai-sdk/gateway for AI_GATEWAY_MODEL=${gatewayModel}, trying next provider`,
+          `[AI] Failed to load @ai-sdk/gateway for model=${gatewayModel}, trying next provider`,
           err instanceof Error ? { error: err.message } : undefined
         );
       }

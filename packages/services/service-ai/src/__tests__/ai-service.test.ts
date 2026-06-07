@@ -1045,6 +1045,61 @@ describe('AIServicePlugin', () => {
     }
   });
 
+  it('should prefer the gatewayModel option over the AI_GATEWAY_MODEL env var', async () => {
+    // Mock the gateway SDK to fail so detection falls through deterministically;
+    // the warn message echoes the CHOSEN model, letting us assert precedence.
+    vi.doMock('@ai-sdk/gateway', () => { throw new Error("Cannot find module '@ai-sdk/gateway'"); });
+    const { AIServicePlugin: FreshPlugin } = await import('../plugin.js');
+    const plugin = new FreshPlugin({ gatewayModel: 'anthropic/claude-haiku-4-5' });
+    const ctx = createMockContext();
+
+    const oldEnv = { ...process.env };
+    process.env.AI_GATEWAY_MODEL = 'openai/gpt-5.5';
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+    try {
+      await plugin.init(ctx);
+      // The option's model must be the one attempted, not the env var's.
+      expect(silentLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('anthropic/claude-haiku-4-5'),
+        expect.anything(),
+      );
+      expect(silentLogger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('openai/gpt-5.5'),
+        expect.anything(),
+      );
+    } finally {
+      process.env = oldEnv;
+      vi.doUnmock('@ai-sdk/gateway');
+    }
+  });
+
+  it('should fall back to AI_GATEWAY_MODEL env when no gatewayModel option is set', async () => {
+    vi.doMock('@ai-sdk/gateway', () => { throw new Error("Cannot find module '@ai-sdk/gateway'"); });
+    const { AIServicePlugin: FreshPlugin } = await import('../plugin.js');
+    const plugin = new FreshPlugin();
+    const ctx = createMockContext();
+
+    const oldEnv = { ...process.env };
+    process.env.AI_GATEWAY_MODEL = 'anthropic/claude-sonnet-4-5';
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+    try {
+      await plugin.init(ctx);
+      expect(silentLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('anthropic/claude-sonnet-4-5'),
+        expect.anything(),
+      );
+    } finally {
+      process.env = oldEnv;
+      vi.doUnmock('@ai-sdk/gateway');
+    }
+  });
+
   it('should prefer explicit adapter over auto-detection', async () => {
     const customAdapter: LLMAdapter = {
       name: 'custom-explicit',
