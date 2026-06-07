@@ -54,10 +54,36 @@ export const Invoice = ObjectSchema.create({
         { label: 'Void', value: 'void', color: '#EF4444' },
       ],
     }),
-    issued_on: Field.date({ label: 'Issued On' }),
+    // Conditional rule (B2): an invoice must carry an issue date once it leaves
+    // Draft. Authored as a CEL `requiredWhen`; the client makes the field show a
+    // required marker + blocks submit, and the server's rule-validator enforces
+    // the same predicate over the merged record — one rule, both ends agree.
+    issued_on: Field.date({
+      label: 'Issued On',
+      requiredWhen: "record.status in ['sent', 'paid']",
+    }),
+    // Conditional rule (B2): once an invoice is Paid, its tax rate is locked.
+    // `readonlyWhen` makes the client render the field read-only, and the
+    // server's `stripReadonlyWhenFields` drops any incoming change to it (the
+    // persisted value is kept) rather than rejecting the write.
     // Header tax rate (percent). The line-item entry form reads it live to show
     // a Subtotal / Tax / Total stack under the grid as lines are entered.
-    tax_rate: Field.number({ label: 'Tax Rate (%)', min: 0, max: 100, defaultValue: 0 }),
+    tax_rate: Field.number({
+      label: 'Tax Rate (%)',
+      min: 0,
+      max: 100,
+      defaultValue: 0,
+      readonlyWhen: "record.status == 'paid'",
+    }),
+    // Conditional rule (B2): "Paid On" is only meaningful — and only shown —
+    // once the invoice is Paid, and then it is required. `visibleWhen` is a
+    // pure client UX concern (the server has no visibility notion); the
+    // `requiredWhen` half is enforced on both ends.
+    paid_on: Field.date({
+      label: 'Paid On',
+      visibleWhen: "record.status == 'paid'",
+      requiredWhen: "record.status == 'paid'",
+    }),
     // Roll-up: recomputed server-side as line items are inserted/updated/deleted
     // (child FK auto-detected: showcase_invoice_line.invoice). This is the line
     // subtotal; the tax-inclusive grand total is shown live during entry.
