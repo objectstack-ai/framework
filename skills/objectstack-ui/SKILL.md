@@ -71,8 +71,12 @@ custom page or form config. Prefer, in order:
    DATA MODEL — set `inlineEdit: true` on the child's `master_detail` field that
    references the parent (see the objectstack-data skill → Relationships →
    Inline Editing). Every standard New/Edit form for the parent (modal, drawer,
-   full-page) then auto-renders an editable child grid and saves parent +
-   children in one atomic `/api/v1/batch`. **No view metadata needed.**
+   full-page) then auto-renders the children and saves parent + children in one
+   atomic `/api/v1/batch`. **No view metadata needed.** The value picks the
+   form factor: `'grid'` (editable line-item grid — thin children), `'form'`
+   (read-only list whose Add / per-row edit opens the child's FULL form — fat
+   children with rich types), or `true` (smart default: `form` when the child
+   has rich/form-only fields or >~8 fields, else `grid`).
 
 2. **Form view `subforms` (override / tuning).** Add to a form view only when you
    need to override the derived columns/order, or expose a child the

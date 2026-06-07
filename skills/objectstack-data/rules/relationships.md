@@ -230,6 +230,25 @@ A form view may still set `subforms` to override the derived columns/order, but
 the relationship `inlineEdit` is the primary, zero-config path. See the
 objectstack-ui skill (Master-Detail Forms) for the rendering side.
 
+#### Inline-edit form factor (`grid` vs `form`)
+
+`inlineEdit` also picks how the children are entered:
+
+```typescript
+inlineEdit: true       // auto — pick grid/form from the child's shape (default)
+inlineEdit: 'grid'     // editable line-item grid (fast bulk entry; thin children)
+inlineEdit: 'form'     // read-only list; "Add" / per-row edit opens the FULL form
+```
+
+- **`'grid'`** — spreadsheet-like editable grid. Best for *thin* line items
+  (invoice/order lines): few columns, high volume, keyboard-fast.
+- **`'form'`** — compact read-only list; Add / per-row edit opens the child's
+  complete form. Best for *fat* children (long text, attachments, many fields)
+  that don't fit a narrow grid cell.
+- **`true`** / omitted — **smart default**: picks `form` when the child has
+  rich/form-only fields (textarea, file, image, json, location…) or more than ~8
+  editable fields, else `grid`. Set the string to override.
+
 ### Detail-page related lists (the read-side mirror)
 
 Where `inlineEdit` is the **write** side (child pulled into the parent's entry

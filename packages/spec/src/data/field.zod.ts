@@ -405,15 +405,24 @@ export const FieldSchema = lazySchema(() => z.object({
   deleteBehavior: z.enum(['set_null', 'cascade', 'restrict']).optional().default('set_null').describe('What happens if referenced record is deleted'),
   /**
    * Master-detail INLINE EDITING. On a child's `master_detail`/`lookup` field
-   * (whose `reference` is the parent object), set `inlineEdit: true` to declare
-   * "this child is entered/edited inline within the parent's form". The
-   * parent's standard create/edit form then renders an editable grid for these
-   * children and saves parent + children in ONE atomic transaction — no form
-   * view config and no bespoke page. The intent lives here in the data model;
-   * forms derive the UI. Use for true line-item/composition children (invoice
-   * lines, order items); leave off for associations (comments, attachments).
+   * (whose `reference` is the parent object), declare that "this child is
+   * entered/edited inline within the parent's form". The parent's standard
+   * create/edit form then renders the children and saves parent + children in
+   * ONE atomic transaction — no form view config and no bespoke page. The intent
+   * lives here in the data model; forms derive the UI.
+   *
+   * The value also selects the EDITING FORM FACTOR:
+   *   - `true`   → auto: the UI picks `grid` or `form` from the child's shape
+   *                (rich types / many fields → `form`, else `grid`).
+   *   - `'grid'` → an editable line-item grid (fast bulk entry; thin children
+   *                like invoice lines / order items).
+   *   - `'form'` → a compact read-only list; "Add" / per-row edit opens the
+   *                child's FULL form (fat children with rich types, e.g. long
+   *                text, attachments, many fields).
+   * Use for true line-item/composition children; leave off for associations
+   * (comments, attachments) — surface those as detail-page related lists.
    */
-  inlineEdit: z.boolean().optional().describe('Edit these child records inline within the parent object\'s form (atomic master-detail).'),
+  inlineEdit: z.union([z.boolean(), z.enum(['grid', 'form'])]).optional().describe('Edit these child records inline within the parent\'s form (atomic master-detail). true = auto-pick grid/form by child shape; \'grid\' = editable line-item grid; \'form\' = list + per-row full form.'),
   /** Optional section title for the inline grid (defaults to the child object label). */
   inlineTitle: z.string().optional().describe('Title for the inline master-detail grid'),
   /** Optional explicit grid columns for the inline editor (derived from the child object when omitted). */

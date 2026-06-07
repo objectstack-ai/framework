@@ -33,7 +33,11 @@ export const Task = ObjectSchema.create({
     project: Field.masterDetail('showcase_project', {
       label: 'Project',
       required: true,
-      inlineEdit: true,
+      // Pin the editable-grid form factor (fast bulk line-item entry, with the
+      // column chooser + per-row expand). Left at `true`, the smart default
+      // would pick `form` for this fat child — the right call for many apps;
+      // here we keep the grid demo. Use `'form'` to force the per-row form.
+      inlineEdit: 'grid',
       inlineTitle: 'Tasks',
       relatedListTitle: 'Tasks',
       relatedListColumns: ['title', 'status', 'priority', 'assignee', 'due_date'],
