@@ -24,21 +24,15 @@ export const Task = ObjectSchema.create({
 
   fields: {
     title: Field.text({ label: 'Title', required: true, searchable: true, maxLength: 200 }),
-    // `inlineEdit` declares (in the data model) that tasks are entered inline
-    // within their project's form — so the standard New/Edit Project form
-    // auto-renders an atomic Tasks subtable, with no form view config and no
-    // bespoke page. `relatedList*` is the read-side mirror: the Project's
-    // record DETAIL page auto-renders a Tasks related list, with a focused
-    // column set — again, derived from the relationship, no page config.
+    // NOTE: no `inlineEdit` here. A task is added to a project over time, not
+    // entered together with it — so "New Project" must NOT force a Tasks
+    // subtable (that felt heavy/odd). Tasks are added later from the Project
+    // DETAIL page's Tasks related list (`relatedList*` below — the read side).
+    // Inline master-detail entry is reserved for true header+line shapes like
+    // Invoice + Invoice Line (see invoice.object.ts).
     project: Field.masterDetail('showcase_project', {
       label: 'Project',
       required: true,
-      // Pin the editable-grid form factor (fast bulk line-item entry, with the
-      // column chooser + per-row expand). Left at `true`, the smart default
-      // would pick `form` for this fat child — the right call for many apps;
-      // here we keep the grid demo. Use `'form'` to force the per-row form.
-      inlineEdit: 'grid',
-      inlineTitle: 'Tasks',
       relatedListTitle: 'Tasks',
       relatedListColumns: ['title', 'status', 'priority', 'assignee', 'due_date'],
     }),
