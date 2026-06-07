@@ -117,7 +117,17 @@ export const InvoiceLine = ObjectSchema.create({
     // persists. Excluded from the editable columns (it's not hand-entered).
     position: Field.number({ label: 'Position', defaultValue: 0 }),
     product: Field.lookup('showcase_product', { label: 'Product', required: true }),
-    description: Field.text({ label: 'Description', maxLength: 200 }),
+    // Conditional rule (B2 in grids): a bulk line (large quantity) must carry a
+    // description note. `requiredWhen` here is ROW-scoped — it references the
+    // line's own `record`, so the inline grid flags this cell required per row
+    // as the quantity crosses the threshold. (Row-scoped rules need no header
+    // context; a header-driven lock like "paid invoice → lock lines" is a
+    // separate, deferred capability — see ADR-0036.)
+    description: Field.text({
+      label: 'Description',
+      maxLength: 200,
+      requiredWhen: 'record.quantity >= 100',
+    }),
     quantity: Field.number({ label: 'Qty', required: true, min: 0, defaultValue: 1 }),
     unit_price: Field.currency({ label: 'Unit Price', scale: 2, min: 0 }),
     // Amount = Qty × Unit Price. Kept as a *stored* currency column (so the
