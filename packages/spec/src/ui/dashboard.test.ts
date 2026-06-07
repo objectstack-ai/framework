@@ -1821,3 +1821,28 @@ describe('WidgetActionTypeSchema - unified action types', () => {
     })).not.toThrow();
   });
 });
+
+describe('DashboardWidgetSchema — dataset binding (ADR-0021 dual-form)', () => {
+  it('accepts a dataset-bound widget (dataset + dimensions + values)', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'revenue_by_region', type: 'bar', dataset: 'sales',
+      dimensions: ['region'], values: ['revenue'],
+      layout: { x: 0, y: 0, w: 6, h: 4 },
+    })).not.toThrow();
+  });
+
+  it('rejects a dataset-bound widget with no values', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'bad', type: 'bar', dataset: 'sales', dimensions: ['region'],
+      layout: { x: 0, y: 0, w: 6, h: 4 },
+    })).toThrowError(/needs `values`/);
+  });
+
+  it('still accepts a legacy inline widget (object + valueField + aggregate)', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'legacy', type: 'metric', object: 'crm_opportunity',
+      valueField: 'amount', aggregate: 'sum',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+  });
+});

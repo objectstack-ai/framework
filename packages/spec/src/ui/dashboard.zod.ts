@@ -197,8 +197,22 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
   
   /** Multi-measure definitions for pivot/matrix widgets */
   measures: z.array(WidgetMeasureSchema).optional().describe('Multiple measures for pivot/matrix analysis'),
-  
-  /** 
+
+  /**
+   * ADR-0021 — bind this widget to a semantic-layer `dataset` (governed,
+   * consistent metrics) instead of the inline `object` + `categoryField` +
+   * `valueField` + `aggregate` query. A dataset-bound widget selects
+   * dimensions/measures BY NAME from the dataset; numbers stay consistent with
+   * every other surface that uses the same dataset. Additive / dual-form:
+   * inline widgets are unchanged.
+   */
+  dataset: SnakeCaseIdentifierSchema.optional().describe('Dataset name to bind (ADR-0021)'),
+  /** Dimension names (from the dataset) for X / group / split. Dataset-bound only. */
+  dimensions: z.array(z.string()).optional().describe('Dimension names — X/group/split (dataset-bound)'),
+  /** Measure names (from the dataset) for the value axis. Dataset-bound only. */
+  values: z.array(z.string()).optional().describe('Measure names — Y (dataset-bound)'),
+
+  /**
    * Layout Position (React-Grid-Layout style)
    * x: column (0-11)
    * y: row
@@ -220,6 +234,15 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+}).superRefine((w, ctx) => {
+  // ADR-0021 dual-form: a dataset-bound widget needs at least one measure name.
+  if (w.dataset && (!w.values || w.values.length === 0)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'a dataset-bound widget needs `values` (measure names from the dataset).',
+      path: ['values'],
+    });
+  }
 }));
 
 /**
