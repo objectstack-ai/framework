@@ -47,8 +47,10 @@ function makeKernel(opts: { withMcp?: boolean; recordedContexts?: any[] } = {}) 
   // The fake MCP service exercises the bridge so we can assert principal binding.
   const mcpService: any = {
     lastOpts: undefined,
+    lastReq: undefined,
     handleHttpRequest: async (_req: Request, o: any) => {
       mcpService.lastOpts = o;
+      mcpService.lastReq = _req;
       const created = await o.bridge.create('task', { title: 'x' });
       return new Response(JSON.stringify({ ok: true, created }), {
         status: 200,
@@ -90,6 +92,42 @@ describe('HttpDispatcher.handleMcp', () => {
       const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
       const res = await d.handleMcp({}, makeContext());
       expect(res.response.status).toBe(501);
+    });
+
+    it('normalises a node/Hono-style req into a Web Request for the transport', async () => {
+      // Regression: production hands the dispatcher a node/Hono req (plain
+      // headers object, path-only url) — NOT a Web Request. handleMcp must
+      // reconstruct one so the transport's headers.get()/new URL(url) work.
+      const { kernel, mcpService } = makeKernel({ withMcp: true });
+      const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+      const nodeReq = {
+        method: 'POST',
+        url: '/api/v1/mcp',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          host: 'env.objectos.app',
+          'x-api-key': 'osk_demo',
+        },
+      };
+      const res = await d.handleMcp({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, makeContext({ request: nodeReq }));
+      expect(res.response.status).toBe(200);
+      const req = mcpService.lastReq as Request;
+      expect(typeof req.headers.get).toBe('function');
+      expect(req.method).toBe('POST');
+      expect(req.url).toBe('https://env.objectos.app/api/v1/mcp');
+      expect(req.headers.get('x-api-key')).toBe('osk_demo');
+      expect(req.headers.get('accept')).toContain('text/event-stream');
+    });
+
+    it('normalises a GET node req without a body', async () => {
+      const { kernel, mcpService } = makeKernel({ withMcp: true });
+      const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+      const nodeReq = { method: 'GET', url: '/api/v1/mcp', headers: { host: 'env.objectos.app', accept: 'text/event-stream' } };
+      await d.handleMcp(undefined, makeContext({ request: nodeReq }));
+      const req = mcpService.lastReq as Request;
+      expect(req.method).toBe('GET');
+      expect(req.url).toBe('https://env.objectos.app/api/v1/mcp');
     });
 
     it('returns 401 for an anonymous request (fail-closed auth)', async () => {

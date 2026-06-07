@@ -296,16 +296,18 @@ export class HttpDispatcher {
             return { handled: true, response: this.error('Unauthorized: a valid API key is required', 401) };
         }
 
-        const request = context.request;
-        if (!request || typeof (request as any).headers?.get !== 'function') {
-            // The MCP transport needs a Web-standard Request (headers/method/url).
+        // The MCP transport needs a Web-standard Request. The runtime HTTP
+        // adapter may hand us a node/Hono-style req (plain `headers` object,
+        // path-only `url`), so normalise it.
+        const webRequest = this.toMcpWebRequest(context.request, body);
+        if (!webRequest) {
             return { handled: true, response: this.error('MCP transport requires a standard HTTP request', 400) };
         }
 
         const bridge = this.buildMcpBridge(context);
         let webRes: Response;
         try {
-            webRes = await mcp.handleHttpRequest(request, { bridge, parsedBody: body });
+            webRes = await mcp.handleHttpRequest(webRequest, { bridge, parsedBody: body });
         } catch (err: any) {
             return { handled: true, response: this.error(err?.message ?? 'MCP request failed', 500) };
         }
@@ -330,6 +332,56 @@ export class HttpDispatcher {
     /** Whether the MCP HTTP surface is opted in for this single-env runtime. */
     private static isMcpEnabled(): boolean {
         return typeof process !== 'undefined' && process.env?.OS_MCP_SERVER_ENABLED === 'true';
+    }
+
+    /**
+     * Normalise the inbound request into a Web-standard `Request` for the MCP
+     * transport. Accepts an already-Web `Request`, or a node/Hono-style req
+     * (plain `headers` object, path-only `url`). Returns undefined only if the
+     * shape is unusable. The body is carried separately via `parsedBody`, so a
+     * GET/DELETE (no body) and a POST (JSON-RPC) both normalise cleanly.
+     */
+    private toMcpWebRequest(raw: any, parsedBody: any): Request | undefined {
+        if (!raw) return undefined;
+        // Already a Web Request.
+        if (typeof raw.headers?.get === 'function' && typeof raw.url === 'string' && typeof raw.method === 'string') {
+            return raw as Request;
+        }
+        try {
+            const method = String(raw.method ?? 'POST').toUpperCase();
+
+            // Normalise headers (plain object or Headers-like).
+            const headers = new Headers();
+            const h = raw.headers;
+            if (h) {
+                if (typeof h.forEach === 'function') {
+                    h.forEach((v: any, k: any) => { if (v != null) headers.set(String(k), String(v)); });
+                } else {
+                    for (const k of Object.keys(h)) {
+                        const v = (h as any)[k];
+                        if (v != null) headers.set(k, Array.isArray(v) ? v.join(',') : String(v));
+                    }
+                }
+            }
+
+            // Build an absolute URL (node req.url is path-only).
+            let url: string;
+            try {
+                url = new URL(String(raw.url)).toString();
+            } catch {
+                const host = headers.get('host') || 'mcp.local';
+                const path = typeof raw.url === 'string' && raw.url ? raw.url : '/api/v1/mcp';
+                url = `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
+            }
+
+            const init: { method: string; headers: Headers; body?: string } = { method, headers };
+            if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE') {
+                init.body = typeof parsedBody === 'string' ? parsedBody : JSON.stringify(parsedBody ?? {});
+            }
+            return new Request(url, init);
+        } catch {
+            return undefined;
+        }
     }
 
     /**
