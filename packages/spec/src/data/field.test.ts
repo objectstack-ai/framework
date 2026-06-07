@@ -1434,6 +1434,37 @@ describe('FieldSchema - conditionalRequired property', () => {
   });
 });
 
+describe('FieldSchema - conditional field rules (visibleWhen / readonlyWhen / requiredWhen)', () => {
+  it('accepts CEL predicates and normalizes them to the { dialect, source } envelope', () => {
+    const result = FieldSchema.parse({
+      type: 'currency',
+      visibleWhen: "record.type == 'invoice'",
+      readonlyWhen: "record.status == 'paid'",
+      requiredWhen: "record.status == 'sent'",
+    });
+    expect(result.visibleWhen).toEqual({ dialect: 'cel', source: "record.type == 'invoice'" });
+    expect(result.readonlyWhen).toEqual({ dialect: 'cel', source: "record.status == 'paid'" });
+    expect(result.requiredWhen).toEqual({ dialect: 'cel', source: "record.status == 'sent'" });
+  });
+
+  it('all three are optional', () => {
+    const result = FieldSchema.parse({ type: 'text' });
+    expect(result.visibleWhen).toBeUndefined();
+    expect(result.readonlyWhen).toBeUndefined();
+    expect(result.requiredWhen).toBeUndefined();
+  });
+
+  it('requiredWhen and its alias conditionalRequired can coexist', () => {
+    const result = FieldSchema.parse({
+      type: 'text',
+      requiredWhen: "record.status == 'sent'",
+      conditionalRequired: "record.status == 'closed_won'",
+    });
+    expect(result.requiredWhen).toEqual({ dialect: 'cel', source: "record.status == 'sent'" });
+    expect(result.conditionalRequired).toEqual({ dialect: 'cel', source: "record.status == 'closed_won'" });
+  });
+});
+
 // ============================================================================
 // columnName — Storage Layer Mapping
 // ============================================================================

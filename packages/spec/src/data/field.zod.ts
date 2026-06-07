@@ -526,8 +526,20 @@ export const FieldSchema = lazySchema(() => z.object({
   /** Layout & Grouping */
   group: z.string().optional().describe('Field group name for organizing fields in forms and layouts (e.g., "contact_info", "billing", "system")'),
 
-  /** Conditional Requirements */
-  conditionalRequired: ExpressionInputSchema.optional().describe('Predicate (CEL) — field is required when TRUE. e.g. P`record.status == \'closed_won\'`'),
+  /**
+   * Conditional field rules (CEL predicates over `record`). Evaluated on BOTH
+   * sides: the client form toggles the field's visibility / read-only / required
+   * state live as the record changes (UX), and the server enforces
+   * `requiredWhen` and ignores writes to a field whose `readonlyWhen` is TRUE
+   * (so the rule can't be bypassed). e.g. `P\`record.status == 'paid'\``.
+   */
+  visibleWhen: ExpressionInputSchema.optional().describe("Predicate (CEL) — field is shown only when TRUE (else hidden). e.g. P`record.type == 'invoice'`"),
+  readonlyWhen: ExpressionInputSchema.optional().describe("Predicate (CEL) — field is read-only when TRUE. e.g. P`record.status == 'paid'`"),
+  requiredWhen: ExpressionInputSchema.optional().describe("Predicate (CEL) — field is required when TRUE. Canonical name for `conditionalRequired`."),
+
+  /** Conditional Requirements
+   *  @deprecated Alias of `requiredWhen` — kept for back-compat. */
+  conditionalRequired: ExpressionInputSchema.optional().describe('Predicate (CEL) — field is required when TRUE. Alias of `requiredWhen`.'),
 
   /** Security & Visibility */
   hidden: z.boolean().default(false).describe('Hidden from default UI'),
