@@ -1,5 +1,7 @@
 # objectstack-vscode
 
+## 8.0.1
+
 ## 8.0.0
 
 ## 7.9.0

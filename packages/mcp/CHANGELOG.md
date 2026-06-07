@@ -1,5 +1,14 @@
 # @objectstack/plugin-mcp-server
 
+## 8.0.1
+
+### Patch Changes
+
+- d8c5374: ai
+  - @objectstack/spec@8.0.1
+  - @objectstack/core@8.0.1
+  - @objectstack/types@8.0.1
+
 ## 8.0.0
 
 ### Major Changes

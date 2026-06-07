@@ -1,5 +1,15 @@
 # @objectstack/plugin-approvals
 
+## 8.0.1
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/core@8.0.1
+- @objectstack/metadata-core@8.0.1
+- @objectstack/formula@8.0.1
+- @objectstack/platform-objects@8.0.1
+
 ## 8.0.0
 
 ### Patch Changes

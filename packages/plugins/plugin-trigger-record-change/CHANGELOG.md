@@ -1,5 +1,12 @@
 # @objectstack/plugin-trigger-record-change
 
+## 8.0.1
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/core@8.0.1
+
 ## 8.0.0
 
 ### Patch Changes

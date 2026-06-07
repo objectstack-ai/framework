@@ -1,5 +1,26 @@
 # @objectstack/runtime
 
+## 8.0.1
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/core@8.0.1
+- @objectstack/types@8.0.1
+- @objectstack/metadata@8.0.1
+- @objectstack/objectql@8.0.1
+- @objectstack/observability@8.0.1
+- @objectstack/formula@8.0.1
+- @objectstack/rest@8.0.1
+- @objectstack/driver-memory@8.0.1
+- @objectstack/driver-sql@8.0.1
+- @objectstack/driver-sqlite-wasm@8.0.1
+- @objectstack/plugin-auth@8.0.1
+- @objectstack/plugin-org-scoping@8.0.1
+- @objectstack/plugin-security@8.0.1
+- @objectstack/service-cluster@8.0.1
+- @objectstack/service-i18n@8.0.1
+
 ## 8.0.0
 
 ### Minor Changes

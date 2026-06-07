@@ -1,5 +1,13 @@
 # @objectstack/service-storage
 
+## 8.0.1
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/core@8.0.1
+- @objectstack/observability@8.0.1
+
 ## 8.0.0
 
 ### Patch Changes

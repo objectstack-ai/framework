@@ -1,5 +1,22 @@
 # @objectstack/plugin-dev
 
+## 8.0.1
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/core@8.0.1
+- @objectstack/types@8.0.1
+- @objectstack/objectql@8.0.1
+- @objectstack/runtime@8.0.1
+- @objectstack/rest@8.0.1
+- @objectstack/driver-memory@8.0.1
+- @objectstack/plugin-auth@8.0.1
+- @objectstack/plugin-hono-server@8.0.1
+- @objectstack/plugin-org-scoping@8.0.1
+- @objectstack/plugin-security@8.0.1
+- @objectstack/service-i18n@8.0.1
+
 ## 8.0.0
 
 ### Patch Changes

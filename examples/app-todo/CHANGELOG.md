@@ -1,5 +1,19 @@
 # @objectstack/example-todo
 
+## 4.0.39
+
+### Patch Changes
+
+- @objectstack/spec@8.0.1
+- @objectstack/client@8.0.1
+- @objectstack/metadata@8.0.1
+- @objectstack/objectql@8.0.1
+- @objectstack/runtime@8.0.1
+- @objectstack/driver-sqlite-wasm@8.0.1
+- @objectstack/service-ai@8.0.1
+- @objectstack/service-knowledge@8.0.1
+- @objectstack/knowledge-memory@8.0.1
+
 ## 4.0.38
 
 ### Patch Changes
