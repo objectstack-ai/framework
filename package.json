@@ -9,6 +9,7 @@
     "dev:showcase": "pnpm --filter @objectstack/example-showcase dev",
     "dev:crm": "pnpm --filter @objectstack/example-crm dev",
     "dev:todo": "pnpm --filter @example/app-todo dev",
+    "spec:rebuild": "turbo run build --filter=...@objectstack/spec",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean && rm -rf dist",
