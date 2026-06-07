@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { IHttpServer } from '@objectstack/core';
+import { IHttpServer, resolveApiKeyPrincipal } from '@objectstack/core';
 import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
 import { ObjectStackProtocol } from '@objectstack/spec/api';
@@ -788,13 +788,35 @@ export class RestServer {
                 return undefined;
             }
 
-            const session = await api.getSession({ headers });
-            if (!session?.user?.id) return undefined;
-            const userId = session.user.id;
-            const tenantId = session.session?.activeOrganizationId ?? undefined;
             const permissions: string[] = [];
             const systemPermissions: string[] = [];
             const roles: string[] = [];
+
+            // Resolve the data engine once — needed by the API-key verifier and
+            // reused by the role/permission lookups below.
+            let identityQl: any;
+            if (kernel) identityQl = await kernel.getServiceAsync('objectql').catch(() => undefined);
+            if (!identityQl && this.objectQLProvider) {
+                identityQl = await this.objectQLProvider(environmentId).catch(() => undefined);
+            }
+
+            // ── Identity: API key (sys_api_key) takes precedence, then session.
+            //    Verified by the SAME `resolveApiKeyPrincipal` (@objectstack/core)
+            //    the dispatcher/MCP path uses, so REST + MCP never drift on how a
+            //    key authenticates. Anonymous (neither) → undefined → 401.
+            let userId: string;
+            let tenantId: string | undefined;
+            const keyPrincipal = await resolveApiKeyPrincipal(identityQl, headers).catch(() => undefined);
+            if (keyPrincipal) {
+                userId = keyPrincipal.userId;
+                tenantId = keyPrincipal.tenantId;
+                for (const s of keyPrincipal.scopes) if (!permissions.includes(s)) permissions.push(s);
+            } else {
+                const session = await api.getSession({ headers });
+                if (!session?.user?.id) return undefined;
+                userId = session.user.id;
+                tenantId = session.session?.activeOrganizationId ?? undefined;
+            }
             // Look up the link tables to surface roles + permission set names.
             // Skipping this lookup would silently ignore admin/role grants —
             // including the platform-admin promotion seeded by

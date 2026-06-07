@@ -19,5 +19,7 @@ export {
   extractApiKey,
   parseScopes,
   isExpired,
+  resolveApiKeyPrincipal,
   type GeneratedApiKey,
+  type ApiKeyPrincipal,
 } from './api-key.js';

@@ -21,7 +21,7 @@
 
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 
-import { extractApiKey, hashApiKey, isExpired, parseScopes } from './api-key.js';
+import { resolveApiKeyPrincipal } from './api-key.js';
 
 interface ResolveOptions {
   /** Function returning a service from the active kernel (or undefined). */
@@ -94,22 +94,15 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   //    at-rest hash, and reject revoked or expired keys. The raw key is never
   //    stored or logged. Once resolved, the principal flows through the exact
   //    same role/permission/RLS resolution as the session path below.
-  const apiKey = extractApiKey(headers);
-  if (apiKey) {
-    const ql = await opts.getQl();
-    const keyHash = hashApiKey(apiKey);
-    // Match by the indexed hash only — never query by the raw key.
-    const rows = await tryFind(ql, 'sys_api_key', { key: keyHash, revoked: false }, 1);
-    const row = rows[0];
-    if (row && row.revoked !== true) {
-      const expiresAt = row.expires_at ?? row.expiresAt;
-      if (!isExpired(expiresAt, Date.now())) {
-        userId = row.user_id ?? row.userId;
-        tenantId = row.organization_id ?? row.organizationId;
-        for (const scope of parseScopes(row.scopes)) {
-          if (!ctx.permissions!.includes(scope)) ctx.permissions!.push(scope);
-        }
-      }
+  //    Verification is delegated to the shared `resolveApiKeyPrincipal`
+  //    (@objectstack/core), the SAME verifier the REST data API uses, so the
+  //    two surfaces never drift.
+  const keyPrincipal = await resolveApiKeyPrincipal(await opts.getQl(), headers);
+  if (keyPrincipal) {
+    userId = keyPrincipal.userId;
+    tenantId = keyPrincipal.tenantId;
+    for (const scope of keyPrincipal.scopes) {
+      if (!ctx.permissions!.includes(scope)) ctx.permissions!.push(scope);
     }
   }
 

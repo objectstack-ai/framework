@@ -67,3 +67,15 @@ export {
   type ScanTarget,
   type SecurityIssue,
 } from './security-scanner.js';
+
+export {
+  API_KEY_PREFIX,
+  hashApiKey,
+  generateApiKey,
+  extractApiKey,
+  parseScopes,
+  isExpired,
+  resolveApiKeyPrincipal,
+  type GeneratedApiKey,
+  type ApiKeyPrincipal,
+} from './api-key.js';
