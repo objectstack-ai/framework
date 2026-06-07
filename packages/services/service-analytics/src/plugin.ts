@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { Cube } from '@objectstack/spec/data';
+import type { Cube, FilterCondition } from '@objectstack/spec/data';
+import type { ExecutionContext } from '@objectstack/spec/kernel';
 import type { IAnalyticsService } from '@objectstack/spec/contracts';
 import { AnalyticsService } from './analytics-service.js';
 import type { AnalyticsServiceConfig } from './analytics-service.js';
@@ -21,6 +22,8 @@ interface DataEngineLike {
     aggregations?: Array<{ function: string; field: string; alias: string }>;
   }): Promise<unknown[]>;
   execute?(command: unknown, options?: Record<string, unknown>): Promise<unknown>;
+  /** Return the registered object schema (for relationship → target resolution). */
+  getObject?(name: string): { fields?: Record<string, { type?: string; reference?: string }> } | undefined;
 }
 
 /**
@@ -46,6 +49,20 @@ export interface AnalyticsServicePluginOptions {
     aggregations?: Array<{ field: string; method: string; alias: string }>;
     filter?: Record<string, unknown>;
   }) => Promise<Record<string, unknown>[]>;
+  /**
+   * ADR-0021 D-C — context-aware per-object read scope (tenant + RLS). The
+   * runtime supplies this from its sharing middleware so the analytics raw-SQL
+   * path cannot bypass tenant isolation. Receives the request's ExecutionContext
+   * and returns the RLS `FilterCondition` for the object (what `RLSCompiler`
+   * emits). When omitted, the plugin auto-bridges to a registered `'security'`
+   * service exposing `getReadFilter(object, context)` if one is present.
+   */
+  getReadScope?: (objectName: string, context?: ExecutionContext) => FilterCondition | null | undefined;
+  /**
+   * ADR-0021 D-C — join allowlist per cube (the dataset's declared `include`).
+   * Typically wired from the dataset registry's compiled `allowedRelationships`.
+   */
+  getAllowedRelationships?: (cubeName: string) => Set<string> | undefined;
   /** Enable debug logging. */
   debug?: boolean;
 }
@@ -199,6 +216,55 @@ export class AnalyticsServicePlugin implements Plugin {
         inMemory: false,
       }));
 
+    // ADR-0021 D-C — wire the read-scope provider. Prefer an explicit option;
+    // otherwise auto-bridge to a registered `'security'` service that exposes
+    // `getReadFilter(object, context)` (resolved at call time so plugin-init
+    // order does not matter). This keeps analytics decoupled from security.
+    interface SecurityReadFilter {
+      getReadFilter(object: string, context?: ExecutionContext): FilterCondition | null | undefined;
+    }
+    let getReadScope = this.options.getReadScope;
+    let autoBridgedReadScope = false;
+    if (!getReadScope) {
+      const trySecurity = (): SecurityReadFilter | undefined => {
+        try {
+          const svc = ctx.getService<SecurityReadFilter>('security');
+          return svc && typeof svc.getReadFilter === 'function' ? svc : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      if (trySecurity()) {
+        getReadScope = (object, context) => trySecurity()?.getReadFilter(object, context);
+        autoBridgedReadScope = true;
+      }
+    }
+
+    // ADR-0021 — relationship → target-object resolver. A dataset's `include`
+    // names lookup/master_detail FIELDS on the base object; the joined TABLE is
+    // each field's `reference` target (which can differ from the field name,
+    // e.g. lookup `account` → object `crm_account`). Resolve from the 'data'
+    // engine's object schema at compile time so cross-object joins target the
+    // right table. Resolved lazily so plugin-init order doesn't matter.
+    const relationshipResolver = (baseObject: string, relationshipName: string): string | undefined => {
+      const engine = (() => {
+        try {
+          const svc = ctx.getService<DataEngineLike>('data');
+          return svc && typeof svc.getObject === 'function' ? svc : undefined;
+        } catch { return undefined; }
+      })();
+      const obj = engine?.getObject?.(baseObject);
+      const field = obj?.fields?.[relationshipName];
+      if (field && (field.type === 'lookup' || field.type === 'master_detail') && field.reference) {
+        return field.reference;
+      }
+      // Unknown to the schema — fall back to the relationship name as the table
+      // (legacy same-name convention). Returning undefined would make the
+      // compiler reject the dataset; the name-as-table fallback is safer for
+      // engines that don't expose getObject.
+      return engine ? undefined : relationshipName;
+    };
+
     const config: AnalyticsServiceConfig = {
       cubes: this.options.cubes,
       logger: ctx.logger,
@@ -206,7 +272,20 @@ export class AnalyticsServicePlugin implements Plugin {
       executeRawSql,
       executeAggregate,
       fallbackService,
+      getReadScope,
+      getAllowedRelationships: this.options.getAllowedRelationships,
+      relationshipResolver,
     };
+
+    if (autoBridgedReadScope) {
+      ctx.logger.info('[Analytics] Auto-bridged getReadScope → "security" service (getReadFilter)');
+    } else if (!getReadScope) {
+      ctx.logger.warn(
+        '[Analytics] No getReadScope configured and no "security" service with getReadFilter found — ' +
+        'the raw-SQL analytics path will NOT enforce tenant/RLS scoping on joined objects (ADR-0021 D-C). ' +
+        'Supply getReadScope or register a security service in multi-tenant deployments.',
+      );
+    }
 
     if (autoBridged) {
       ctx.logger.info('[Analytics] Auto-bridged executeAggregate → "data" service (IDataEngine)');

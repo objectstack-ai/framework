@@ -85,6 +85,7 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
   'app',         // Application shell (AppSchema)
   'action',      // UI/Server actions (ActionSchema)
   'report',      // Report definitions (ReportSchema)
+  'dataset',     // Analytics semantic layer — dimensions/measures (DatasetSchema, ADR-0021)
 
   // Automation Protocol
   'flow',        // Visual logic flows (FlowSchema)
@@ -615,6 +616,9 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   { type: 'app', label: 'Application', filePatterns: ['**/*.app.ts', '**/*.app.yml', '**/*.app.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 70, domain: 'ui' },
   { type: 'action', label: 'Action', filePatterns: ['**/*.action.ts', '**/*.action.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 50, domain: 'ui' },
   { type: 'report', label: 'Report', filePatterns: ['**/*.report.ts', '**/*.report.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 60, domain: 'ui' },
+  // ADR-0021: dataset is the analytics semantic layer that report/dashboard bind to.
+  // loadOrder 55 < report/dashboard (60) so datasets register before their consumers.
+  { type: 'dataset', label: 'Dataset', description: 'Analytics semantic layer — dimensions & measures', filePatterns: ['**/*.dataset.ts', '**/*.dataset.yml', '**/*.dataset.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 55, domain: 'ui' },
 
   // Automation Protocol — flow is executionPinned (ADR-0009).
   // ADR-0019: there is no `approval` metadata type — approvals are Approval

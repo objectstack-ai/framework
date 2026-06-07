@@ -5,14 +5,19 @@ import type {
   AnalyticsQuery,
   AnalyticsResult,
   CubeMeta,
+  DatasetSelection,
 } from '@objectstack/spec/contracts';
-import type { Cube } from '@objectstack/spec/data';
+import type { Cube, FilterCondition } from '@objectstack/spec/data';
+import type { ExecutionContext } from '@objectstack/spec/kernel';
+import type { Dataset } from '@objectstack/spec/ui';
 import type { Logger } from '@objectstack/spec/contracts';
 import { createLogger } from '@objectstack/core';
 import { CubeRegistry } from './cube-registry.js';
 import type { AnalyticsStrategy, DriverCapabilities, StrategyContext } from './strategies/types.js';
 import { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
 import { ObjectQLStrategy } from './strategies/objectql-strategy.js';
+import { compileDataset, type CompiledDataset, type RelationshipResolver } from './dataset-compiler.js';
+import { DatasetExecutor } from './dataset-executor.js';
 
 /**
  * Configuration for AnalyticsService.
@@ -51,6 +56,30 @@ export interface AnalyticsServiceConfig {
    * They are merged with the built-in strategies and sorted by priority.
    */
   strategies?: AnalyticsStrategy[];
+  /**
+   * ADR-0021 D-C — context-aware per-object read scope (tenant + RLS). Supplied
+   * by the runtime that owns the sharing middleware; receives the current
+   * request's ExecutionContext and returns the RLS `FilterCondition` for the
+   * object (exactly what `RLSCompiler` emits). The service binds the active
+   * context per query and the strategy compiles the filter into alias-qualified
+   * SQL injected into every base and joined table.
+   */
+  getReadScope?: (objectName: string, context?: ExecutionContext) => FilterCondition | null | undefined;
+  /**
+   * ADR-0021 D-C — join allowlist per cube (the dataset's declared `include`).
+   * Joins outside this set are rejected by the strategy. Compiled datasets
+   * (via `queryDataset`/`registerDataset`) supply this automatically; this
+   * config hook is a fallback for legacy hand-authored cubes.
+   */
+  getAllowedRelationships?: (cubeName: string) => Set<string> | undefined;
+  /**
+   * ADR-0021 — optional object-graph resolver used when compiling datasets:
+   * `(baseObject, relationshipName) => relatedObjectName | undefined`. When
+   * provided, `queryDataset` validates that every declared `include` exists.
+   */
+  relationshipResolver?: RelationshipResolver;
+  /** Pre-defined datasets to compile + register at construction (ADR-0021). */
+  datasets?: Dataset[];
 }
 
 /**
@@ -82,7 +111,14 @@ const DEFAULT_CAPABILITIES: DriverCapabilities = {
  */
 export class AnalyticsService implements IAnalyticsService {
   private readonly strategies: AnalyticsStrategy[];
-  private readonly strategyCtx: StrategyContext;
+  /** Context-independent part of the StrategyContext (no per-request scope). */
+  private readonly baseCtx: StrategyContext;
+  /** Context-aware read-scope provider (bound to the request's context per call). */
+  private readonly readScopeProvider?: AnalyticsServiceConfig['getReadScope'];
+  /** Compiled datasets by name — feeds the join allowlist (D-C) and queryDataset. */
+  private readonly datasetRegistry = new Map<string, CompiledDataset>();
+  /** Optional object-graph resolver used when compiling datasets. */
+  private readonly relationshipResolver?: RelationshipResolver;
   readonly cubeRegistry: CubeRegistry;
   private readonly logger: Logger;
 
@@ -95,13 +131,33 @@ export class AnalyticsService implements IAnalyticsService {
       this.cubeRegistry.registerAll(config.cubes);
     }
 
-    // Build strategy context
-    this.strategyCtx = {
+    this.readScopeProvider = config.getReadScope;
+    this.relationshipResolver = config.relationshipResolver;
+
+    // Compile + register pre-defined datasets (ADR-0021).
+    if (config.datasets) {
+      for (const ds of config.datasets) {
+        try {
+          this.registerDataset(ds);
+        } catch (e) {
+          this.logger?.warn?.(`[Analytics] Failed to register dataset "${ds?.name}": ${String((e as Error)?.message ?? e)}`);
+        }
+      }
+    }
+
+    // Build the context-independent strategy context. `getReadScope` is bound
+    // per query in `callCtx(context)` so it can resolve the active tenant.
+    this.baseCtx = {
       getCube: (name) => this.cubeRegistry.get(name),
       queryCapabilities: config.queryCapabilities || (() => DEFAULT_CAPABILITIES),
       executeRawSql: config.executeRawSql,
       executeAggregate: config.executeAggregate,
       fallbackService: config.fallbackService,
+      // Prefer a compiled dataset's declared relationships (D-C join allowlist);
+      // fall back to any explicitly-configured provider for legacy cubes.
+      getAllowedRelationships: (cubeName: string) =>
+        this.datasetRegistry.get(cubeName)?.allowedRelationships
+        ?? config.getAllowedRelationships?.(cubeName),
     };
 
     // Build strategy chain (built-in + custom, sorted by priority)
@@ -128,18 +184,60 @@ export class AnalyticsService implements IAnalyticsService {
   }
 
   /**
+   * Build a per-call StrategyContext that binds the read-scope provider to the
+   * current request's ExecutionContext (ADR-0021 D-C). The strategy then sees a
+   * `getReadScope(objectName)` that already knows the active tenant.
+   */
+  private callCtx(context?: ExecutionContext): StrategyContext {
+    if (!this.readScopeProvider) return this.baseCtx;
+    return {
+      ...this.baseCtx,
+      getReadScope: (objectName: string) => this.readScopeProvider!(objectName, context),
+    };
+  }
+
+  /**
    * Execute an analytical query by delegating to the first capable strategy.
    */
-  async query(query: AnalyticsQuery): Promise<AnalyticsResult> {
+  async query(query: AnalyticsQuery, context?: ExecutionContext): Promise<AnalyticsResult> {
     if (!query.cube) {
       throw new Error('Cube name is required in analytics query');
     }
 
     this.ensureCube(query);
-    const strategy = this.resolveStrategy(query);
+    const ctx = this.callCtx(context);
+    const strategy = this.resolveStrategy(query, ctx);
     this.logger.debug(`[Analytics] Query on cube "${query.cube}" → ${strategy.name}`);
 
-    return strategy.execute(query, this.strategyCtx);
+    return strategy.execute(query, ctx);
+  }
+
+  /**
+   * Compile a `dataset` (ADR-0021) and register its Cube + join allowlist so it
+   * can be queried by name. Idempotent (re-registering overwrites). Returns the
+   * compiled dataset.
+   */
+  registerDataset(dataset: Dataset): CompiledDataset {
+    const compiled = compileDataset(dataset, this.relationshipResolver);
+    this.cubeRegistry.register(compiled.cube);
+    this.datasetRegistry.set(dataset.name, compiled);
+    return compiled;
+  }
+
+  /**
+   * Execute a semantic-layer dataset (ADR-0021). Compiles the dataset (saved or
+   * inline draft — Studio preview), registers its Cube + join allowlist, then
+   * runs the selection through the `DatasetExecutor` with the request context so
+   * tenant/RLS scoping (D-C) is applied. See {@link IAnalyticsService.queryDataset}.
+   */
+  async queryDataset(
+    dataset: Dataset,
+    selection: DatasetSelection,
+    context?: ExecutionContext,
+  ): Promise<AnalyticsResult> {
+    const compiled = this.registerDataset(dataset);
+    this.logger.debug(`[Analytics] queryDataset "${dataset.name}" (object=${dataset.object}, include=${(dataset.include ?? []).join(',') || '—'})`);
+    return new DatasetExecutor(this).execute(compiled, selection, context);
   }
 
   /**
@@ -170,16 +268,17 @@ export class AnalyticsService implements IAnalyticsService {
   /**
    * Generate SQL for a query without executing it (dry-run).
    */
-  async generateSql(query: AnalyticsQuery): Promise<{ sql: string; params: unknown[] }> {
+  async generateSql(query: AnalyticsQuery, context?: ExecutionContext): Promise<{ sql: string; params: unknown[] }> {
     if (!query.cube) {
       throw new Error('Cube name is required for SQL generation');
     }
 
     this.ensureCube(query);
-    const strategy = this.resolveStrategy(query);
+    const ctx = this.callCtx(context);
+    const strategy = this.resolveStrategy(query, ctx);
     this.logger.debug(`[Analytics] generateSql on cube "${query.cube}" → ${strategy.name}`);
 
-    return strategy.generateSql(query, this.strategyCtx);
+    return strategy.generateSql(query, ctx);
   }
 
   // ── Internal ─────────────────────────────────────────────────────
@@ -292,9 +391,9 @@ export class AnalyticsService implements IAnalyticsService {
   /**
    * Walk the strategy chain and return the first strategy that can handle the query.
    */
-  private resolveStrategy(query: AnalyticsQuery): AnalyticsStrategy {
+  private resolveStrategy(query: AnalyticsQuery, ctx: StrategyContext): AnalyticsStrategy {
     for (const strategy of this.strategies) {
-      if (strategy.canHandle(query, this.strategyCtx)) {
+      if (strategy.canHandle(query, ctx)) {
         return strategy;
       }
     }

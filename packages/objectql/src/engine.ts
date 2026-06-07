@@ -922,7 +922,7 @@ export class ObjectQL implements IDataEngine {
       // 5. Register all other metadata types generically
       const metadataArrayKeys = [
         // UI Protocol
-        'actions', 'views', 'pages', 'dashboards', 'reports', 'themes',
+        'actions', 'views', 'pages', 'dashboards', 'reports', 'datasets', 'themes',
         // Automation Protocol
         'flows', 'workflows', 'approvals', 'webhooks',
         'jobs',
@@ -1076,7 +1076,7 @@ export class ObjectQL implements IDataEngine {
 
       // Register metadata arrays (actions, views, triggers, etc.)
       const metadataArrayKeys = [
-          'actions', 'views', 'pages', 'dashboards', 'reports', 'themes',
+          'actions', 'views', 'pages', 'dashboards', 'reports', 'datasets', 'themes',
           'flows', 'workflows', 'approvals', 'webhooks',
           'roles', 'permissions', 'profiles', 'sharingRules', 'policies',
           'agents', 'ragPipelines', 'apis',

@@ -4,6 +4,7 @@ import type { AnalyticsQuery, AnalyticsResult } from '@objectstack/spec/contract
 import type { Cube } from '@objectstack/spec/data';
 import type { AnalyticsStrategy, StrategyContext } from './types.js';
 import { normalizeAnalyticsFilters, coerceFilterValueForSql } from './filter-normalizer.js';
+import { compileScopedFilterToSql } from '../read-scope-sql.js';
 
 /**
  * NativeSQLStrategy — Priority 1
@@ -91,6 +92,30 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
       }
     }
 
+    // ── ADR-0021 D-C — enforce the join allowlist + inject per-object RLS ──
+    // 1. Reject any join not backed by a relationship the dataset declared.
+    const allowed = ctx.getAllowedRelationships?.(query.cube!);
+    if (allowed) {
+      for (const alias of joins.keys()) {
+        if (!allowed.has(alias)) {
+          throw new Error(
+            `[NativeSQLStrategy] join "${alias}" is not backed by a declared relationship on ` +
+            `cube "${query.cube}". v1 only joins along relationships listed in the dataset's \`include\`.`,
+          );
+        }
+      }
+    }
+    // 2. Inject the tenant/RLS read scope for the base table AND every joined
+    //    object — this is the predicate the raw-SQL path would otherwise skip.
+    this.applyReadScope(this.extractObjectName(cube), tableName, ctx, whereClauses, params);
+    for (const alias of joins.keys()) {
+      // The joined OBJECT (for the RLS lookup) is the target table from the
+      // cube's join map; the ALIAS is how it's referenced in SQL. These differ
+      // for namespaced objects (alias `account` → object `crm_account`).
+      const joinedObject = cube.joins?.[alias]?.name ?? alias;
+      this.applyReadScope(joinedObject, alias, ctx, whereClauses, params);
+    }
+
     let sql = `SELECT ${selectClauses.join(', ')} FROM "${tableName}"`;
     if (joins.size > 0) {
       sql += ' ' + Array.from(joins.values()).join(' ');
@@ -118,6 +143,35 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
   // ── Helpers ──────────────────────────────────────────────────────
 
   /**
+   * ADR-0021 D-C — inject an object's read scope (tenant + RLS predicate) into
+   * the WHERE clause. The scope is a canonical `FilterCondition` (what the
+   * RLSCompiler emits); `compileScopedFilterToSql` turns it into alias-qualified,
+   * parameterized SQL (fail-closed — it throws rather than drop a predicate).
+   * The `?` placeholders are then renumbered into the strategy's `$N` scheme.
+   * No-op when the runtime provides no scope hook (the caller is then
+   * responsible for isolation — see contract note).
+   */
+  private applyReadScope(
+    objectName: string,
+    alias: string,
+    ctx: StrategyContext,
+    whereClauses: string[],
+    params: unknown[],
+  ): void {
+    if (typeof ctx.getReadScope !== 'function') return;
+    const filter = ctx.getReadScope(objectName);
+    if (filter === undefined || filter === null) return;
+    const { sql, params: scopeParams } = compileScopedFilterToSql(filter, alias);
+    if (!sql) return;
+    let i = 0;
+    const rendered = sql.replace(/\?/g, () => {
+      params.push(scopeParams[i++]);
+      return `$${params.length}`;
+    });
+    whereClauses.push(`(${rendered})`);
+  }
+
+  /**
    * Resolve a dimension/measure/filter SQL expression that may reference a
    * related table via dot notation (e.g. `account.industry`).
    *
@@ -139,6 +193,7 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     rawSql: string,
     parentTable: string,
     joins: Map<string, string>,
+    cube?: Cube,
   ): string {
     if (!rawSql.includes('.')) return rawSql;
     // Only the first dotted hop is supported (single-level relation).
@@ -146,9 +201,18 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     if (!alias || rest.length === 0) return rawSql;
     const column = rest.join('.');
     if (!joins.has(alias)) {
+      // The relationship name is the join ALIAS; the joined TABLE is the
+      // related object. For datasets these differ when objects are namespaced
+      // (lookup `account` → table `crm_account`), so resolve the table from the
+      // Cube's `joins` map (emitted by the dataset compiler). Fall back to the
+      // alias as the table for legacy/same-name cubes.
+      const joinTable = cube?.joins?.[alias]?.name ?? alias;
+      // Only emit an explicit alias when the table differs from it; when they
+      // match, `LEFT JOIN "account" ON …` is cleaner (and back-compat).
+      const tableRef = joinTable === alias ? `"${alias}"` : `"${joinTable}" "${alias}"`;
       joins.set(
         alias,
-        `LEFT JOIN "${alias}" ON "${parentTable}"."${alias}" = "${alias}"."id"`,
+        `LEFT JOIN ${tableRef} ON "${parentTable}"."${alias}" = "${alias}"."id"`,
       );
     }
     return `"${alias}"."${column}"`;
@@ -203,7 +267,7 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
   ): string {
     const dim = this.lookupMember(cube, member, 'dimension');
     const raw = dim ? dim.sql : (member.includes('.') ? member.split('.')[1] : member);
-    return this.qualifyAndRegisterJoin(raw, parentTable, joins);
+    return this.qualifyAndRegisterJoin(raw, parentTable, joins, cube);
   }
 
   private resolveMeasureSql(
@@ -219,7 +283,7 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
 
     const col = measure.sql === '*'
       ? '*'
-      : this.qualifyAndRegisterJoin(measure.sql, parentTable, joins);
+      : this.qualifyAndRegisterJoin(measure.sql, parentTable, joins, cube);
     switch (measure.type) {
       case 'count': return 'COUNT(*)';
       case 'sum': return `SUM(${col})`;
@@ -238,9 +302,9 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     joins: Map<string, string>,
   ): string {
     const dim = this.lookupMember(cube, member, 'dimension');
-    if (dim) return this.qualifyAndRegisterJoin(dim.sql, parentTable, joins);
+    if (dim) return this.qualifyAndRegisterJoin(dim.sql, parentTable, joins, cube);
     const measure = this.lookupMember(cube, member, 'measure');
-    if (measure) return this.qualifyAndRegisterJoin(measure.sql, parentTable, joins);
+    if (measure) return this.qualifyAndRegisterJoin(measure.sql, parentTable, joins, cube);
     const fieldName = member.includes('.') ? member.split('.')[1] : member;
     return fieldName;
   }

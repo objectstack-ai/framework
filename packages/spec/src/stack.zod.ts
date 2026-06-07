@@ -20,6 +20,7 @@ import { ViewSchema } from './ui/view.zod';
 import { PageSchema } from './ui/page.zod';
 import { DashboardSchema } from './ui/dashboard.zod';
 import { ReportSchema } from './ui/report.zod';
+import { DatasetSchema } from './ui/dataset.zod';
 import { ActionSchema } from './ui/action.zod';
 import { ThemeSchema } from './ui/theme.zod';
 
@@ -207,6 +208,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
   pages: z.array(PageSchema).optional().describe('Custom Pages'),
   dashboards: z.array(DashboardSchema).optional().describe('Dashboards'),
   reports: z.array(ReportSchema).optional().describe('Analytics Reports'),
+  datasets: z.array(DatasetSchema).optional().describe('Analytics semantic-layer datasets (ADR-0021)'),
   actions: z.array(ActionSchema).optional().describe('Global and Object Actions'),
   themes: z.array(ThemeSchema).optional().describe('UI Themes'),
 

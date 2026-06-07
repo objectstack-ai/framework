@@ -186,6 +186,12 @@ export default class Serve extends Command {
    */
   static readonly ALWAYS_ON_CAPABILITIES: readonly string[] = Object.freeze([
     'queue', 'job', 'cache', 'settings', 'email', 'storage', 'sharing', 'messaging',
+    // `analytics` is foundational post-ADR-0021: the AnalyticsService backs the
+    // dataset/cube query endpoints (`/api/v1/analytics/*`). It must exist even
+    // when an app declares no `analyticsCubes`, because a `dataset` can be
+    // authored/previewed inline (Studio) and compiled on the fly. Without it the
+    // dataset preview + dashboard/report analytics widgets silently no-op.
+    'analytics',
   ]);
 
   /**

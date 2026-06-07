@@ -1,6 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Cube } from '../data/analytics.zod.js';
+import type { FilterCondition } from '../data/filter.zod.js';
+import type { ExecutionContext } from '../kernel/execution-context.zod.js';
+import type { Dataset } from '../ui/dataset.zod.js';
 
 /**
  * IAnalyticsService - Analytics / BI Service Contract
@@ -84,13 +87,50 @@ export interface CubeMeta {
     dimensions: Array<{ name: string; type: string; title?: string }>;
 }
 
+/**
+ * Compare-to directive (ADR-0021): runs a time-shifted second query and
+ * attaches `<measure>__compare` columns to each row.
+ */
+export interface DatasetCompareTo {
+    /** previousPeriod = equal-length window immediately before; previousYear = same window −1y. */
+    kind: 'previousPeriod' | 'previousYear';
+    /** The time dimension (by name) whose dateRange is shifted. */
+    dimension: string;
+}
+
+/**
+ * A presentation's selection against a dataset (ADR-0021). Report/dashboard
+ * widgets bind to a dataset and pick dimensions/measures BY NAME; this is the
+ * wire shape a preview/query endpoint posts.
+ */
+export interface DatasetSelection {
+    /** Dimension names from the dataset. */
+    dimensions?: string[];
+    /** Measure names from the dataset (may include derived measures). */
+    measures: string[];
+    /** Presentation-scope filter, ANDed with the dataset's intrinsic filter at render. */
+    runtimeFilter?: FilterCondition;
+    /** Optional time-dimension windows passed through to the runtime. */
+    timeDimensions?: AnalyticsQuery['timeDimensions'];
+    order?: Record<string, 'asc' | 'desc'>;
+    limit?: number;
+    offset?: number;
+    /** Compare-to directive — runs a shifted query and attaches `<measure>__compare`. */
+    compareTo?: DatasetCompareTo;
+    timezone?: string;
+}
+
 export interface IAnalyticsService {
     /**
      * Execute an analytical query
      * @param query - The analytics query definition
+     * @param context - The caller's ExecutionContext (tenant, user, roles). Used
+     *   to compute the per-request tenant/RLS read scope for the raw-SQL path
+     *   (ADR-0021 D-C). Optional for backward-compat and in-memory/dev use, but
+     *   REQUIRED for multi-tenant isolation on cross-object queries.
      * @returns Query results with rows and field metadata
      */
-    query(query: AnalyticsQuery): Promise<AnalyticsResult>;
+    query(query: AnalyticsQuery, context?: ExecutionContext): Promise<AnalyticsResult>;
 
     /**
      * Get available cube metadata for discovery
@@ -102,9 +142,29 @@ export interface IAnalyticsService {
     /**
      * Generate SQL for a query without executing it (dry-run)
      * @param query - The analytics query definition
+     * @param context - The caller's ExecutionContext (see {@link query}).
      * @returns Generated SQL string and parameters
      */
-    generateSql?(query: AnalyticsQuery): Promise<{ sql: string; params: unknown[] }>;
+    generateSql?(query: AnalyticsQuery, context?: ExecutionContext): Promise<{ sql: string; params: unknown[] }>;
+
+    /**
+     * Execute a semantic-layer `dataset` (ADR-0021): compile it to the Cube
+     * runtime, then run the presentation's `selection` (dimensions/measures by
+     * name, runtime filter, compareTo) — returning chart-ready rows. The
+     * `dataset` may be a saved definition or an inline draft (Studio preview).
+     *
+     * Optional: implementations that only support raw cube queries may omit it;
+     * callers should feature-detect (`typeof svc.queryDataset === 'function'`).
+     *
+     * @param dataset - The dataset definition (saved or inline draft).
+     * @param selection - Dimensions/measures to project + runtime directives.
+     * @param context - The request's ExecutionContext (tenant/RLS, see {@link query}).
+     */
+    queryDataset?(
+        dataset: Dataset,
+        selection: DatasetSelection,
+        context?: ExecutionContext,
+    ): Promise<AnalyticsResult>;
 }
 
 // ==========================================
@@ -156,6 +216,40 @@ export interface StrategyContext {
         getMeta(cubeName?: string): Promise<CubeMeta[]>;
         generateSql?(query: AnalyticsQuery): Promise<{ sql: string; params: unknown[] }>;
     };
+
+    /**
+     * ADR-0021 D-C — per-object read scope (RLS + tenant isolation).
+     *
+     * Returns the security predicate that MUST be ANDed into the query for the
+     * given object, as a canonical Mongo-style `FilterCondition` (exactly what
+     * the `RLSCompiler` emits). The strategy compiles it to alias-qualified,
+     * parameterized SQL and injects it for the base table AND every joined
+     * object, closing the raw-SQL bypass at `engine.ts` (`execute()` does not
+     * thread tenant scope on its own).
+     *
+     * This hook is bound to the current request's `ExecutionContext` by the
+     * `IAnalyticsService` implementation (see `query(query, context)`), so the
+     * provider already knows the active tenant when it is called.
+     *
+     * @example
+     * ```ts
+     * getReadScope: (obj) => ({ organization_id: tenantId })
+     * ```
+     *
+     * Returning `undefined`/`null` means "no scope for this object" (e.g. a
+     * global control-plane table). When this hook is absent entirely the
+     * strategy runs unscoped — callers that require isolation MUST provide it.
+     */
+    getReadScope?(objectName: string): FilterCondition | null | undefined;
+
+    /**
+     * ADR-0021 D-C — join allowlist. Returns the set of relationship aliases the
+     * dataset behind `cubeName` explicitly declared via `include`. The strategy
+     * REJECTS any join whose alias is not in this set (v1 only joins along
+     * declared relationships). Returning `undefined` disables the check (legacy
+     * Cube definitions that pre-date datasets).
+     */
+    getAllowedRelationships?(cubeName: string): Set<string> | undefined;
 }
 
 /**

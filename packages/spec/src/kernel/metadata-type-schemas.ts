@@ -41,6 +41,7 @@ import { AppSchema } from '../ui/app.zod';
 import { ActionSchema } from '../ui/action.zod';
 import type { Action } from '../ui/action.zod';
 import { ReportSchema } from '../ui/report.zod';
+import { DatasetSchema } from '../ui/dataset.zod';
 
 import { FlowSchema } from '../automation/flow.zod';
 
@@ -80,6 +81,7 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   app: AppSchema,
   action: ActionSchema,
   report: ReportSchema,
+  dataset: DatasetSchema, // ADR-0021: analytics semantic layer
 
   // Automation Protocol
   flow: FlowSchema,

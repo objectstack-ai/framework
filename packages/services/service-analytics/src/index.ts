@@ -11,6 +11,19 @@ export type { AnalyticsServicePluginOptions } from './plugin.js';
 // Cube registry
 export { CubeRegistry } from './cube-registry.js';
 
+// Dataset semantic layer (ADR-0021)
+export { compileDataset } from './dataset-compiler.js';
+export type { CompiledDataset, DerivedMeasureSpec, RelationshipResolver } from './dataset-compiler.js';
+export {
+  DatasetExecutor,
+  evaluateDerivedMeasures,
+  combineFilters,
+  shiftRange,
+  mergeByDimensions,
+} from './dataset-executor.js';
+export type { DatasetSelection, CompareTo } from './dataset-executor.js';
+export { compileScopedFilterToSql } from './read-scope-sql.js';
+
 // Strategies
 export { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
 export { ObjectQLStrategy } from './strategies/objectql-strategy.js';

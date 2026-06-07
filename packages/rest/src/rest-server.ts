@@ -508,6 +508,7 @@ export class RestServer {
     private approvalsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -524,6 +525,7 @@ export class RestServer {
         approvalsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -539,6 +541,7 @@ export class RestServer {
         this.approvalsServiceProvider = approvalsServiceProvider;
         this.sharingRulesServiceProvider = sharingRulesServiceProvider;
         this.i18nServiceProvider = i18nServiceProvider;
+        this.analyticsServiceProvider = analyticsServiceProvider;
     }
 
     /**
@@ -1268,6 +1271,7 @@ export class RestServer {
             this.registerSharingRuleEndpoints(bp);
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
+            this.registerAnalyticsEndpoints(bp);
             if (this.config.api.enableCrud) {
                 this.registerCrudEndpoints(bp);
             }
@@ -3531,6 +3535,99 @@ export class RestServer {
      * when no sharing service is configured so a deployment without the
      * `@objectstack/plugin-sharing` plugin fails cleanly.
      */
+    /**
+     * ADR-0021 — analytics dataset preview/query endpoint.
+     *
+     *   POST {basePath}/analytics/dataset/query
+     *   body: { dataset?: <inline Dataset>, datasetName?: string, selection: DatasetSelection }
+     *
+     * Compiles the dataset (an inline draft for Studio preview, or a saved one
+     * by name) and runs the selection through the analytics service's
+     * `queryDataset`, threading the request ExecutionContext so tenant/RLS
+     * scoping (ADR-0021 D-C) applies. Returns 501 when no analytics service
+     * (or one without `queryDataset`) is configured, so a deployment without
+     * `@objectstack/service-analytics` fails cleanly.
+     */
+    private registerAnalyticsEndpoints(basePath: string): void {
+        const isScoped = basePath.includes('/environments/:environmentId');
+        const resolveService = async (environmentId?: string) => {
+            if (!this.analyticsServiceProvider) return undefined;
+            try { return await this.analyticsServiceProvider(environmentId); }
+            catch { return undefined; }
+        };
+
+        this.routeManager.register({
+            method: 'POST',
+            path: `${basePath}/analytics/dataset/query`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+
+                    const svc = await resolveService(environmentId);
+                    if (!svc || typeof svc.queryDataset !== 'function') {
+                        return res.status(501).json({
+                            code: 'NOT_IMPLEMENTED',
+                            message: 'Analytics dataset query is not available on this deployment (no analytics service with queryDataset).',
+                        });
+                    }
+
+                    const body = req.body ?? {};
+                    const selection = body.selection;
+                    if (!selection || !Array.isArray(selection.measures) || selection.measures.length === 0) {
+                        return res.status(400).json({
+                            code: 'VALIDATION_FAILED',
+                            message: 'body.selection.measures must be a non-empty array of measure names.',
+                        });
+                    }
+
+                    // Resolve the dataset definition: inline draft (Studio
+                    // preview) or a saved dataset by name.
+                    let dataset = body.dataset;
+                    if (!dataset && body.datasetName) {
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const items = await (p as any).getMetaItems?.({ type: 'dataset' }).catch(() => null);
+                        const list = Array.isArray(items?.items) ? items.items : (Array.isArray(items) ? items : []);
+                        dataset = list.find((d: any) => d?.name === body.datasetName);
+                        if (!dataset) {
+                            return res.status(404).json({ code: 'NOT_FOUND', message: `Dataset "${body.datasetName}" not found.` });
+                        }
+                    }
+                    if (!dataset) {
+                        return res.status(400).json({ code: 'VALIDATION_FAILED', message: 'Provide body.dataset (inline) or body.datasetName.' });
+                    }
+
+                    // Validate against the spec schema so a malformed draft
+                    // yields a clean 400 instead of a runtime throw.
+                    try {
+                        const { DatasetSchema } = await import('@objectstack/spec/ui');
+                        dataset = (DatasetSchema as any).parse(dataset);
+                    } catch (verr: any) {
+                        return res.status(400).json({
+                            code: 'VALIDATION_FAILED',
+                            message: 'Invalid dataset definition.',
+                            detail: String(verr?.message ?? verr).slice(0, 1000),
+                        });
+                    }
+
+                    const result = await svc.queryDataset(dataset, selection, context ?? undefined);
+                    res.json(result);
+                } catch (error: any) {
+                    const msg = String(error?.message ?? error ?? '');
+                    // Dataset-compiler D-C / unsupported-aggregate / read-scope
+                    // errors are client-side mistakes — surface as 400.
+                    if (/not declared in the dataset|not backed by a declared relationship|not supported by the v1 dataset runtime|read-scope-sql/.test(msg)) {
+                        return res.status(400).json({ code: 'DATASET_INVALID', message: msg.slice(0, 1000) });
+                    }
+                    logError('[REST] Analytics dataset query error:', error);
+                    res.status(500).json({ code: 'ANALYTICS_QUERY_FAILED', error: msg.slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Run a semantic-layer dataset (preview/query)', tags: ['analytics'] },
+        });
+    }
+
     private registerSharingEndpoints(basePath: string): void {
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
