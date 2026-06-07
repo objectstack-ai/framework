@@ -249,6 +249,44 @@ inlineEdit: 'form'     // read-only list; "Add" / per-row edit opens the FULL fo
   rich/form-only fields (textarea, file, image, json, location…) or more than ~8
   editable fields, else `grid`. Set the string to override.
 
+**Modeling a `'grid'` line item for the full editor.** The grid lights up extra
+behaviors purely from how you model the child + parent (no UI config — details
+in the objectstack-ui skill → Master-Detail Forms):
+
+```typescript
+// Parent
+Invoice = {
+  fields: {
+    tax_rate: Field.number({ label: 'Tax Rate (%)' }),          // → live Subtotal/Tax/Total stack
+    total: Field.summary({ summaryOperations: {                  // server roll-up of the line subtotal
+      object: 'invoice_line', field: 'amount', function: 'sum' } }),
+  },
+}
+// Child line
+InvoiceLine = {
+  fields: {
+    invoice:  Field.masterDetail('invoice', { inlineEdit: 'grid' }),
+    position: Field.number({ defaultValue: 0 }),                 // → drag-reorder, persisted (auto-hidden col)
+    product:  Field.lookup('product', { required: true }),       // → catalog typeahead
+    description: Field.text(),                                    // ← auto-filled from product.description
+    quantity: Field.number({ required: true, defaultValue: 1 }),
+    unit_price: Field.currency(),                                // ← auto-filled from product.unit_price
+    amount:   Field.currency({ expression: 'record.quantity * record.unit_price' }), // computed, read-only, live
+  },
+}
+```
+
+- **Computed column** — a *stored* `currency`/`number` field with an `expression`
+  renders read-only and recomputes live in the grid, then persists. Keep it
+  stored (NOT a `formula` field) so the parent `summary` can roll it up; the
+  server only treats `type: 'formula'` as computed, so on a stored field the
+  `expression` is a client compute hint and the sent value is stored verbatim.
+- **Catalog auto-fill** — a `lookup` line field + sibling columns whose names
+  match fields on the referenced record (e.g. `unit_price`, `description`) →
+  picking a record fills those cells.
+- **Sort field** — a numeric `position` / `sort_order` / `sequence` field is
+  auto-detected, hidden from the grid, and stamped on drag-reorder.
+
 ### Detail-page related lists (the read-side mirror)
 
 Where `inlineEdit` is the **write** side (child pulled into the parent's entry

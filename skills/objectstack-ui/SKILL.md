@@ -103,6 +103,39 @@ The relationship FK and grid columns are derived from the child object's
 metadata in every case; select options and lookups carry through. A parent
 `summary` field rolls child values up server-side (see objectstack-data).
 
+**Line-item grid behaviors (`grid` mode).** The editable grid is a real
+spreadsheet-style line editor (the QuickBooks / Stripe / NetSuite pattern). All
+of the following come from the DATA MODEL — no UI config — so they apply to any
+inline grid, not just invoices:
+
+- **Computed columns.** A child field with an arithmetic `expression`
+  (e.g. `amount: Field.currency({ expression: 'record.quantity * record.unit_price' })`)
+  renders **read-only** and is recomputed **live** client-side as its inputs
+  change, then persisted. Keep it a *stored* field (`currency`/`number`), NOT a
+  `formula` field, so a parent `summary` can still roll it up — the server only
+  treats `type: 'formula'` as computed, so a stored field's `expression` is a
+  client-side display/compute hint and the sent value is stored as-is. The
+  evaluator supports `+ - * / %`, parens and `record.<field>` refs only.
+- **Trailing "ghost" row.** The grid always shows one empty line at the bottom;
+  typing in it materialises a real row and a fresh ghost appears — users never
+  click "Add line", and an untouched ghost is never persisted.
+- **Item typeahead auto-fill.** When a `lookup` cell's record is picked, the grid
+  copies the chosen record's fields into any **same-named** sibling columns
+  (e.g. a product's `unit_price` / `description` drop into the line). Model it by
+  giving the line a `lookup` to the catalog plus columns whose names match the
+  catalog fields. Opt out per column with `autofill: false`.
+- **Persisted drag-reorder.** Add a numeric sort field to the child named
+  `position` (or `sort_order` / `sequence` / `line_no`). The grid auto-detects
+  it, hides it from the editable columns, and stamps `row[position] = index` on
+  reorder so line order survives a reload.
+- **Totals stack.** Give the PARENT a tax-rate field named `tax_rate` (percent
+  number). The master-detail form then renders a live **Subtotal → Tax → Total**
+  block under the lines (override the field name with the form's `taxRateField`).
+  The parent `summary` persists the line subtotal; the tax-inclusive grand total
+  is a live entry-time aid.
+- Per-cell **inline validation** (required-empty cells flag red in place) and a
+  hover **duplicate** action come for free.
+
 **Read side — detail-page related lists.** The mirror of `inlineEdit` is the
 related list on the parent's record DETAIL page. You don't author it: every
 child relationship is shown as a related list by default (owned `master_detail`
