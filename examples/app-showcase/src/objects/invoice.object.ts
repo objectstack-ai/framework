@@ -3,6 +3,29 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
+ * Product — a small price-book / catalog. The invoice line's `product` lookup
+ * points here; selecting a product auto-fills the line's `description` and
+ * `unit_price` (the line-item grid copies matching field names from the chosen
+ * record — the catalog typeahead every invoicing tool has: QuickBooks
+ * "Product/Service", Stripe price catalog, NetSuite item column).
+ */
+export const Product = ObjectSchema.create({
+  name: 'showcase_product',
+  label: 'Product',
+  pluralLabel: 'Products',
+  icon: 'package',
+  description: 'A sellable product with a catalog price.',
+
+  fields: {
+    name: Field.text({ label: 'Name', required: true, searchable: true, maxLength: 120 }),
+    sku: Field.text({ label: 'SKU', searchable: true, maxLength: 40 }),
+    description: Field.text({ label: 'Description', maxLength: 200 }),
+    unit_price: Field.currency({ label: 'Unit Price', scale: 2, min: 0 }),
+    active: Field.boolean({ label: 'Active', defaultValue: true }),
+  },
+});
+
+/**
  * Invoice + Invoice Line — the canonical master-detail "header + line items"
  * shape. Unlike project↔task (a task is added to a project over time), an
  * invoice is meaningless without its lines: you enter the header AND its lines
@@ -58,7 +81,10 @@ export const InvoiceLine = ObjectSchema.create({
       inlineEdit: 'grid',
       inlineTitle: 'Line Items',
     }),
-    product: Field.text({ label: 'Product', required: true, maxLength: 200 }),
+    // Catalog lookup. Picking a product auto-fills `description` + `unit_price`
+    // (the grid copies same-named fields from the selected product record).
+    product: Field.lookup('showcase_product', { label: 'Product', required: true }),
+    description: Field.text({ label: 'Description', maxLength: 200 }),
     quantity: Field.number({ label: 'Qty', required: true, min: 0, defaultValue: 1 }),
     unit_price: Field.currency({ label: 'Unit Price', scale: 2, min: 0 }),
     // Amount = Qty × Unit Price. Kept as a *stored* currency column (so the

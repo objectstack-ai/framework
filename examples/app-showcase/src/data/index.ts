@@ -7,6 +7,7 @@ import { Project } from '../objects/project.object.js';
 import { Task } from '../objects/task.object.js';
 import { Category } from '../objects/category.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
+import { Product } from '../objects/invoice.object.js';
 
 /**
  * Seed data sized to "feed every view": every Kanban column is populated,
@@ -77,6 +78,19 @@ const teams = defineSeed(Team, {
   ],
 });
 
+// Catalog products the invoice line's `product` lookup picks from. Selecting
+// one auto-fills the line's description + unit_price (matching field names).
+const products = defineSeed(Product, {
+  mode: 'upsert',
+  externalId: 'sku',
+  records: [
+    { sku: 'WIDGET-A', name: 'Widget A', description: 'Standard widget', unit_price: 29.99, active: true },
+    { sku: 'WIDGET-B', name: 'Widget B', description: 'Deluxe widget', unit_price: 49.99, active: true },
+    { sku: 'GADGET-X', name: 'Gadget X', description: 'Premium gadget', unit_price: 99.0, active: true },
+    { sku: 'SERVICE-HR', name: 'Consulting Hour', description: 'Professional services, per hour', unit_price: 150.0, active: true },
+  ],
+});
+
 const memberships = defineSeed(ProjectMembership, {
   mode: 'insert',
   records: [
@@ -86,4 +100,4 @@ const memberships = defineSeed(ProjectMembership, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, projects, tasks, categories, teams, memberships];
+export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships];
