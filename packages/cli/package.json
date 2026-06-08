@@ -39,7 +39,7 @@
     "topicSeparator": " "
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^3.0.121",
+    "@ai-sdk/gateway": "^3.0.125",
     "@objectstack/account": "workspace:*",
     "@objectstack/client": "workspace:*",
     "@objectstack/console": "workspace:*",
