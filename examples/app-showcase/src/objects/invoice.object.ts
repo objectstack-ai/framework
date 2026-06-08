@@ -116,20 +116,39 @@ export const InvoiceLine = ObjectSchema.create({
     // Line sort position — stamped by the grid on drag-reorder so the order
     // persists. Excluded from the editable columns (it's not hand-entered).
     position: Field.number({ label: 'Position', defaultValue: 0 }),
-    product: Field.lookup('showcase_product', { label: 'Product', required: true }),
+    // Conditional rule (B2 in grids, PARENT-scoped): once the header invoice is
+    // Paid, its lines are frozen. `readonlyWhen` here references the header as
+    // `parent`, so the inline grid evaluates it per row against the live invoice
+    // record and locks the cell — the "paid invoice → lock lines" case (#1581).
+    product: Field.lookup('showcase_product', {
+      label: 'Product',
+      required: true,
+      readonlyWhen: "parent.status == 'paid'",
+    }),
     // Conditional rule (B2 in grids): a bulk line (large quantity) must carry a
     // description note. `requiredWhen` here is ROW-scoped — it references the
     // line's own `record`, so the inline grid flags this cell required per row
-    // as the quantity crosses the threshold. (Row-scoped rules need no header
-    // context; a header-driven lock like "paid invoice → lock lines" is a
-    // separate, deferred capability — see ADR-0036.)
+    // as the quantity crosses the threshold. (A header-driven lock referencing
+    // `parent` — see `product`/`quantity`/`unit_price` — is the parent-scoped
+    // counterpart; both are evaluated by the inline grid. See ADR-0036 / #1581.)
     description: Field.text({
       label: 'Description',
       maxLength: 200,
       requiredWhen: 'record.quantity >= 100',
     }),
-    quantity: Field.number({ label: 'Qty', required: true, min: 0, defaultValue: 1 }),
-    unit_price: Field.currency({ label: 'Unit Price', scale: 2, min: 0 }),
+    quantity: Field.number({
+      label: 'Qty',
+      required: true,
+      min: 0,
+      defaultValue: 1,
+      readonlyWhen: "parent.status == 'paid'",
+    }),
+    unit_price: Field.currency({
+      label: 'Unit Price',
+      scale: 2,
+      min: 0,
+      readonlyWhen: "parent.status == 'paid'",
+    }),
     // Amount = Qty × Unit Price. Kept as a *stored* currency column (so the
     // parent Invoice.total summary can roll it up — summary aggregation reads
     // stored columns, not on-read formula fields), but the `expression` makes
