@@ -449,9 +449,18 @@ importers:
 
   packages/cli:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.0
+        version: 3.0.79(zod@4.4.3)
       '@ai-sdk/gateway':
         specifier: ^3.0.121
         version: 3.0.121(zod@4.4.3)
+      '@ai-sdk/google':
+        specifier: ^3.0.0
+        version: 3.0.79(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: ^3.0.0
+        version: 3.0.65(zod@4.4.3)
       '@objectstack/account':
         specifier: workspace:*
         version: link:../../apps/account
