@@ -50,6 +50,7 @@ export const en: TranslationData = {
         group_access_control: { label: 'Access Control' },
         group_approvals: { label: 'Approvals' },
         group_configuration: { label: 'Configuration' },
+        group_integrations: { label: 'Integrations' },
         group_diagnostics: { label: 'Diagnostics' },
         group_advanced: { label: 'Advanced' },
 
@@ -88,6 +89,10 @@ export const en: TranslationData = {
         nav_settings_ai: { label: 'AI & Embedder' },
         nav_settings_knowledge: { label: 'Knowledge' },
         nav_settings_feature_flags: { label: 'Feature Flags' },
+        // Notifications (contributed by @objectstack/service-messaging)
+        nav_notification_preferences: { label: 'Notification Preferences' },
+        nav_notification_subscriptions: { label: 'Notification Subscriptions' },
+        nav_notification_templates: { label: 'Notification Templates' },
 
         // Diagnostics
         nav_sessions: { label: 'Sessions' },

@@ -38,6 +38,7 @@ export const esES: TranslationData = {
         group_access_control: { label: 'Control de Acceso' },
         group_approvals: { label: 'Aprobaciones' },
         group_configuration: { label: 'Configuración' },
+        group_integrations: { label: 'Integraciones' },
         group_diagnostics: { label: 'Diagnóstico' },
         group_advanced: { label: 'Avanzado' },
 
@@ -67,6 +68,9 @@ export const esES: TranslationData = {
         nav_settings_ai: { label: 'IA y Embedder' },
         nav_settings_knowledge: { label: 'Conocimiento' },
         nav_settings_feature_flags: { label: 'Indicadores de Funcionalidad' },
+        nav_notification_preferences: { label: 'Preferencias de Notificación' },
+        nav_notification_subscriptions: { label: 'Suscripciones de Notificación' },
+        nav_notification_templates: { label: 'Plantillas de Notificación' },
 
         nav_sessions: { label: 'Sesiones' },
         nav_audit_logs: { label: 'Registros de Auditoría' },

@@ -38,6 +38,7 @@ export const zhCN: TranslationData = {
         group_access_control: { label: '访问控制' },
         group_approvals: { label: '审批' },
         group_configuration: { label: '配置' },
+        group_integrations: { label: '集成' },
         group_diagnostics: { label: '诊断' },
         group_advanced: { label: '高级' },
 
@@ -67,6 +68,9 @@ export const zhCN: TranslationData = {
         nav_settings_ai: { label: 'AI 与 Embedder' },
         nav_settings_knowledge: { label: '知识库' },
         nav_settings_feature_flags: { label: '功能开关' },
+        nav_notification_preferences: { label: '通知偏好' },
+        nav_notification_subscriptions: { label: '通知订阅' },
+        nav_notification_templates: { label: '通知模板' },
 
         nav_sessions: { label: '会话' },
         nav_audit_logs: { label: '审计日志' },
