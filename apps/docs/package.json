@@ -14,12 +14,12 @@
   },
   "dependencies": {
     "fumadocs-core": "16.9.3",
-    "fumadocs-mdx": "15.0.10",
+    "fumadocs-mdx": "15.0.11",
     "fumadocs-ui": "16.9.3",
     "lucide-react": "^1.17.0",
-    "next": "16.2.6",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
+    "next": "16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
@@ -28,7 +28,7 @@
     "@types/mdx": "^2.0.14",
     "@types/negotiator": "^0.6.4",
     "@types/node": "^25.9.2",
-    "@types/react": "^19.2.15",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "negotiator": "^1.0.0",
     "postcss": "^8.5.15",
