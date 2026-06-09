@@ -24,7 +24,7 @@
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "^19.2.15",
+    "@types/react": "^19.2.17",
     "typescript": "^6.0.3"
   },
   "keywords": [

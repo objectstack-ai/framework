@@ -23,7 +23,7 @@
     "@objectstack/formula": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
-    "ai": "^6.0.193",
+    "ai": "^6.0.198",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
