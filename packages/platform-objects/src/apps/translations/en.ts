@@ -84,6 +84,9 @@ export const en: TranslationData = {
         nav_settings_mail: { label: 'Email' },
         nav_settings_branding: { label: 'Branding' },
         nav_settings_auth: { label: 'Authentication' },
+        nav_settings_storage: { label: 'File Storage' },
+        nav_settings_ai: { label: 'AI & Embedder' },
+        nav_settings_knowledge: { label: 'Knowledge' },
         nav_settings_feature_flags: { label: 'Feature Flags' },
 
         // Diagnostics

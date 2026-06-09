@@ -68,6 +68,39 @@ export const esES: TranslationData = {
       },
     },
 
+    auth: {
+      title: 'Autenticación',
+      description: 'Inicio de sesión, registro y controles de las funciones de autenticación integradas.',
+      groups: {
+        email_password: {
+          title: 'Correo y contraseña',
+          description: 'Controla el inicio de sesión local con correo/contraseña y el registro de autoservicio.',
+        },
+        social: {
+          title: 'Inicio de sesión social',
+          description:
+            'Configura el proveedor de inicio de sesión de Google integrado. Las variables de entorno del despliegue siguen teniendo prioridad.',
+        },
+      },
+      keys: {
+        email_password_enabled: { label: 'Habilitar inicio de sesión con correo/contraseña' },
+        signup_enabled: { label: 'Permitir registro de autoservicio' },
+        require_email_verification: { label: 'Requerir verificación de correo' },
+        google_enabled: {
+          label: 'Habilitar inicio de sesión con Google',
+          help: 'Requiere un ID de cliente y un secreto de OAuth de Google desde Google Cloud Console.',
+        },
+        google_client_id: {
+          label: 'ID de cliente de Google',
+          help: 'ID de cliente de OAuth desde Google Cloud Console. También se puede definir GOOGLE_CLIENT_ID en el servidor.',
+        },
+        google_client_secret: {
+          label: 'Secreto de cliente de Google',
+          help: 'Se almacena cifrado en reposo. También se puede definir GOOGLE_CLIENT_SECRET en el servidor.',
+        },
+      },
+    },
+
     feature_flags: {
       title: 'Indicadores de función',
       description: 'Activa funciones experimentales y en beta para este espacio de trabajo.',

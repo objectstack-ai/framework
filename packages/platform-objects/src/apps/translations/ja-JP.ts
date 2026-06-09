@@ -62,6 +62,10 @@ export const jaJP: TranslationData = {
         nav_settings_hub: { label: 'すべての設定' },
         nav_settings_mail: { label: 'メール' },
         nav_settings_branding: { label: 'ブランディング' },
+        nav_settings_auth: { label: '認証' },
+        nav_settings_storage: { label: 'ファイルストレージ' },
+        nav_settings_ai: { label: 'AI と Embedder' },
+        nav_settings_knowledge: { label: 'ナレッジ' },
         nav_settings_feature_flags: { label: '機能フラグ' },
 
         nav_sessions: { label: 'セッション' },

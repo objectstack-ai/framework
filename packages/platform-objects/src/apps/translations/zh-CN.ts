@@ -62,6 +62,10 @@ export const zhCN: TranslationData = {
         nav_settings_hub: { label: '全部设置' },
         nav_settings_mail: { label: '邮件' },
         nav_settings_branding: { label: '品牌' },
+        nav_settings_auth: { label: '认证' },
+        nav_settings_storage: { label: '文件存储' },
+        nav_settings_ai: { label: 'AI 与 Embedder' },
+        nav_settings_knowledge: { label: '知识库' },
         nav_settings_feature_flags: { label: '功能开关' },
 
         nav_sessions: { label: '会话' },

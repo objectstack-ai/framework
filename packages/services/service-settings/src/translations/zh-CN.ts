@@ -68,6 +68,38 @@ export const zhCN: TranslationData = {
       },
     },
 
+    auth: {
+      title: '认证',
+      description: '登录、注册以及内置认证功能的控制项。',
+      groups: {
+        email_password: {
+          title: '邮箱与密码',
+          description: '控制本地邮箱/密码登录与自助注册。',
+        },
+        social: {
+          title: '社交登录',
+          description: '配置内置的 Google 登录提供商。部署环境变量仍优先生效。',
+        },
+      },
+      keys: {
+        email_password_enabled: { label: '启用邮箱/密码登录' },
+        signup_enabled: { label: '允许自助注册' },
+        require_email_verification: { label: '要求邮箱验证' },
+        google_enabled: {
+          label: '启用 Google 登录',
+          help: '需要在 Google Cloud Console 中创建的 Google OAuth 客户端 ID 与密钥。',
+        },
+        google_client_id: {
+          label: 'Google 客户端 ID',
+          help: '来自 Google Cloud Console 的 OAuth 客户端 ID。也可在服务器上设置 GOOGLE_CLIENT_ID。',
+        },
+        google_client_secret: {
+          label: 'Google 客户端密钥',
+          help: '加密存储。也可在服务器上设置 GOOGLE_CLIENT_SECRET。',
+        },
+      },
+    },
+
     feature_flags: {
       title: '功能开关',
       description: '为当前工作区开启实验性与测试功能。',

@@ -62,6 +62,10 @@ export const esES: TranslationData = {
         nav_settings_hub: { label: 'Todos los Ajustes' },
         nav_settings_mail: { label: 'Correo' },
         nav_settings_branding: { label: 'Marca' },
+        nav_settings_auth: { label: 'Autenticación' },
+        nav_settings_storage: { label: 'Almacenamiento de Archivos' },
+        nav_settings_ai: { label: 'IA y Embedder' },
+        nav_settings_knowledge: { label: 'Conocimiento' },
         nav_settings_feature_flags: { label: 'Indicadores de Funcionalidad' },
 
         nav_sessions: { label: 'Sesiones' },
