@@ -38,6 +38,7 @@ export const jaJP: TranslationData = {
         group_access_control: { label: 'アクセス制御' },
         group_approvals: { label: '承認' },
         group_configuration: { label: '構成' },
+        group_integrations: { label: '統合' },
         group_diagnostics: { label: '診断' },
         group_advanced: { label: '詳細' },
 
@@ -62,7 +63,14 @@ export const jaJP: TranslationData = {
         nav_settings_hub: { label: 'すべての設定' },
         nav_settings_mail: { label: 'メール' },
         nav_settings_branding: { label: 'ブランディング' },
+        nav_settings_auth: { label: '認証' },
+        nav_settings_storage: { label: 'ファイルストレージ' },
+        nav_settings_ai: { label: 'AI と Embedder' },
+        nav_settings_knowledge: { label: 'ナレッジ' },
         nav_settings_feature_flags: { label: '機能フラグ' },
+        nav_notification_preferences: { label: '通知設定' },
+        nav_notification_subscriptions: { label: '通知購読' },
+        nav_notification_templates: { label: '通知テンプレート' },
 
         nav_sessions: { label: 'セッション' },
         nav_audit_logs: { label: '監査ログ' },
