@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { TEMPLATES, getCliVersion, detectPackageManager, sanitizeNamespace } from '../src/commands/init';
+import { TEMPLATES, getCliVersion, detectPackageManager, sanitizeNamespace, SCAFFOLD_BUILT_DEPENDENCIES, renderPnpmWorkspaceYaml } from '../src/commands/init';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -48,6 +48,40 @@ describe('init command — published scaffold', () => {
         expect(allDeps['@objectstack/cli']).toBeDefined();
       }
     });
+  });
+});
+
+describe('native build allowlist (pnpm-workspace.yaml)', () => {
+  // pnpm 10+ blocks dependency build scripts by default. Without an allowlist,
+  // the scaffold installs but `serve` crashes with "Could not locate the
+  // bindings file" because `better-sqlite3` shipped uncompiled. Current pnpm
+  // reads the allowlist from pnpm-workspace.yaml, not the package.json `pnpm`
+  // field (which it now ignores).
+  it('includes the native deps the standalone store needs', () => {
+    expect(SCAFFOLD_BUILT_DEPENDENCIES).toContain('better-sqlite3');
+  });
+
+  it('does NOT put the allowlist in package.json (current pnpm ignores it)', () => {
+    const t = TEMPLATES.app;
+    // Mirror init.ts's package.json construction.
+    const pkgJson: Record<string, unknown> = {
+      name: 'my-app',
+      version: '0.1.0',
+      private: true,
+      type: 'module',
+      scripts: t.scripts,
+      dependencies: t.dependencies,
+      devDependencies: t.devDependencies,
+    };
+    expect(pkgJson.pnpm).toBeUndefined();
+  });
+
+  it('renders a pnpm-workspace.yaml that allowlists better-sqlite3', () => {
+    const yaml = renderPnpmWorkspaceYaml();
+    expect(yaml).toMatch(/^onlyBuiltDependencies:/m);
+    expect(yaml).toMatch(/^ {2}- better-sqlite3$/m);
+    // No `packages:` key — this is a settings file, not a workspace declaration.
+    expect(yaml).not.toMatch(/^packages:/m);
   });
 });
 

@@ -61,6 +61,36 @@ export function sanitizeNamespace(name: string): string {
   return s;
 }
 
+/**
+ * Native dependencies the scaffold pulls in (transitively) that need their
+ * build scripts to run at install time. pnpm 10+ blocks dependency build
+ * scripts by default; without this allowlist `better-sqlite3` (used by the
+ * default standalone SQLite store, via knex) ships uncompiled and `serve`
+ * fails with "Could not locate the bindings file".
+ *
+ * Current pnpm reads this from `pnpm-workspace.yaml`, NOT the `pnpm` field in
+ * package.json (that field is now ignored and emits a deprecation warning).
+ * npm/yarn/bun build native modules by default and ignore this file.
+ */
+export const SCAFFOLD_BUILT_DEPENDENCIES = ['better-sqlite3', 'esbuild'];
+
+/**
+ * Render the `pnpm-workspace.yaml` that allowlists native build scripts.
+ * Kept minimal (no `packages:` key) so it acts purely as a settings file for
+ * the single-package scaffold rather than declaring a workspace.
+ */
+export function renderPnpmWorkspaceYaml(builtDeps: string[] = SCAFFOLD_BUILT_DEPENDENCIES): string {
+  return [
+    '# Allowlist native dependency build scripts so `pnpm install` compiles',
+    '# them (pnpm 10+ blocks build scripts by default). Without this,',
+    '# better-sqlite3 ships uncompiled and `objectstack serve` fails with',
+    '# "Could not locate the bindings file".',
+    'onlyBuiltDependencies:',
+    ...builtDeps.map((d) => `  - ${d}`),
+    '',
+  ].join('\n');
+}
+
 export const TEMPLATES: Record<string, {
   description: string;
   dependencies: Record<string, string>;
@@ -88,7 +118,10 @@ export const TEMPLATES: Record<string, {
     },
     scripts: {
       dev: 'objectstack dev',
-      start: 'objectstack serve',
+      // `serve` is production mode and boots from the compiled artifact
+      // (dist/objectstack.json). Compile first so `pnpm start` works straight
+      // after `pnpm install` without a separate build step.
+      start: 'objectstack compile && objectstack serve',
       build: 'objectstack compile',
       validate: 'objectstack validate',
       typecheck: 'tsc --noEmit',
@@ -402,6 +435,15 @@ export default class Init extends Command {
         createdFiles.push('package.json');
       } else {
         printInfo('package.json already exists, skipping');
+      }
+
+      // 1b. Create pnpm-workspace.yaml so pnpm compiles the native deps the
+      // standalone store needs (see SCAFFOLD_BUILT_DEPENDENCIES). Harmless for
+      // npm/yarn/bun, which ignore this file and build native modules anyway.
+      const pnpmWorkspacePath = path.join(targetDir, 'pnpm-workspace.yaml');
+      if (!fs.existsSync(pnpmWorkspacePath)) {
+        fs.writeFileSync(pnpmWorkspacePath, renderPnpmWorkspaceYaml());
+        createdFiles.push('pnpm-workspace.yaml');
       }
 
       // 2. Create objectstack.config.ts
