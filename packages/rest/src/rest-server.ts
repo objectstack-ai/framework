@@ -16,6 +16,24 @@ const logError = (...args: unknown[]) => (globalThis as any).console?.error(...a
 const TRANSLATABLE_META_TYPES = new Set(['view', 'action', 'object', 'app', 'dashboard']);
 
 /**
+ * Detect the `getMetaItem` response envelope (`{ type, name, item, lock, … }`)
+ * whose translatable metadata document is nested at `.item`. The cached read
+ * path and `getMetaItems` element shape hand back the already-unwrapped
+ * document instead, so translation helpers must distinguish the two: an
+ * envelope carries a nested `item` object alongside its own `type`/`name`,
+ * which a bare metadata document never does.
+ */
+function isMetaEnvelope(value: any): boolean {
+    return !!value
+        && typeof value === 'object'
+        && typeof value.type === 'string'
+        && typeof value.name === 'string'
+        && value.item != null
+        && typeof value.item === 'object'
+        && !Array.isArray(value.item);
+}
+
+/**
  * Map a data-layer error to a clean HTTP response. Unknown-object errors
  * (SQLite "no such table", PG "relation does not exist", protocol
  * "object not found", etc.) are surfaced as a 404 with `code: 'object_not_found'`
@@ -1037,6 +1055,15 @@ export class RestServer {
         const locale = this.extractLocale(req, i18n);
         if (!locale) return item;
         const { translateMetadataDocument } = await import('@objectstack/spec/system');
+        // `getMetaItem` returns an envelope `{ type, name, item, lock, ... }`
+        // whose translatable document is nested at `.item`; the cached read
+        // path hands us the already-unwrapped document. Translate whichever
+        // shape we received — nav/field labels live on the inner doc, so
+        // translating the envelope's top level (which has no `navigation`)
+        // would leave the menu untranslated.
+        if (isMetaEnvelope(item)) {
+            return { ...item, item: translateMetadataDocument(type, item.item, bundle, { locale }) };
+        }
         return translateMetadataDocument(type, item, bundle, { locale });
     }
 
@@ -1044,15 +1071,27 @@ export class RestServer {
      * Translate a list of metadata documents using `translateMetaItem`.
      */
     private async translateMetaItems(req: any, type: string, environmentId: string | undefined, items: any): Promise<any> {
-        if (!Array.isArray(items)) return items;
         if (!TRANSLATABLE_META_TYPES.has(type)) return items;
+        // `getMetaItems` may hand back a bare array or an `{ items: [...] }`
+        // envelope. Unwrap so list responses are localized the same way the
+        // single-item route is; a non-array, non-envelope value is returned
+        // untouched.
+        const arr: any[] | null = Array.isArray(items)
+            ? items
+            : (items && typeof items === 'object' && Array.isArray(items.items) ? items.items : null);
+        if (!arr) return items;
         const i18n = await this.resolveI18nService(environmentId, req);
         const bundle = this.buildTranslationBundle(i18n);
         if (!bundle) return items;
         const locale = this.extractLocale(req, i18n);
         if (!locale) return items;
         const { translateMetadataDocument } = await import('@objectstack/spec/system');
-        return items.map((item) => translateMetadataDocument(type, item, bundle, { locale }));
+        const translated = arr.map((item) =>
+            isMetaEnvelope(item)
+                ? { ...item, item: translateMetadataDocument(type, item.item, bundle, { locale }) }
+                : translateMetadataDocument(type, item, bundle, { locale }),
+        );
+        return Array.isArray(items) ? translated : { ...items, items: translated };
     }
 
     /**
