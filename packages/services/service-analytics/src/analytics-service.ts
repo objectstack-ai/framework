@@ -284,6 +284,14 @@ export class AnalyticsService implements IAnalyticsService {
 
   /**
    * Execute an analytical query by delegating to the first capable strategy.
+   *
+   * A strategy can discover only AT EXECUTION TIME that the underlying driver
+   * cannot serve it — the canonical case is NativeSQLStrategy on an in-memory
+   * driver, whose `execute()` returns null for raw SQL (the auto-bridge throws
+   * `RAW_SQL_UNSUPPORTED`). That is a capability miss, not a query error: fall
+   * back to the next capable strategy (e.g. ObjectQLStrategy over the
+   * aggregate bridge) instead of failing — or worse, fabricating empty rows.
+   * Any other error propagates untouched.
    */
   async query(query: AnalyticsQuery, context?: ExecutionContext): Promise<AnalyticsResult> {
     if (!query.cube) {
@@ -292,10 +300,23 @@ export class AnalyticsService implements IAnalyticsService {
 
     this.ensureCube(query);
     const ctx = await this.callCtx(query, context);
-    const strategy = this.resolveStrategy(query, ctx);
-    this.logger.debug(`[Analytics] Query on cube "${query.cube}" → ${strategy.name}`);
-
-    return strategy.execute(query, ctx);
+    let skip: Set<AnalyticsStrategy> | undefined;
+    for (;;) {
+      const strategy = this.resolveStrategy(query, ctx, skip);
+      this.logger.debug(`[Analytics] Query on cube "${query.cube}" → ${strategy.name}`);
+      try {
+        return await strategy.execute(query, ctx);
+      } catch (e) {
+        if ((e as { code?: string })?.code === 'RAW_SQL_UNSUPPORTED') {
+          this.logger.warn(
+            `[Analytics] ${strategy.name} cannot run on this driver (raw SQL unsupported) — falling back to the next strategy.`,
+          );
+          (skip ??= new Set()).add(strategy);
+          continue;
+        }
+        throw e;
+      }
+    }
   }
 
   /**
@@ -508,17 +529,24 @@ export class AnalyticsService implements IAnalyticsService {
   }
 
   /**
-   * Walk the strategy chain and return the first strategy that can handle the query.
+   * Walk the strategy chain and return the first strategy that can handle the
+   * query. `skip` excludes strategies that already proved incapable at
+   * execution time (see {@link query}'s RAW_SQL_UNSUPPORTED fallback).
    */
-  private resolveStrategy(query: AnalyticsQuery, ctx: StrategyContext): AnalyticsStrategy {
+  private resolveStrategy(
+    query: AnalyticsQuery,
+    ctx: StrategyContext,
+    skip?: Set<AnalyticsStrategy>,
+  ): AnalyticsStrategy {
     for (const strategy of this.strategies) {
+      if (skip?.has(strategy)) continue;
       if (strategy.canHandle(query, ctx)) {
         return strategy;
       }
     }
     throw new Error(
       `[Analytics] No strategy can handle query for cube "${query.cube}". ` +
-      `Checked: ${this.strategies.map(s => s.name).join(', ')}. ` +
+      `Checked: ${this.strategies.map(s => s.name).join(', ')}${skip?.size ? ` (skipped at runtime: ${[...skip].map((s) => s.name).join(', ')})` : ''}. ` +
       'Ensure a compatible driver is configured or a fallback service is registered.',
     );
   }

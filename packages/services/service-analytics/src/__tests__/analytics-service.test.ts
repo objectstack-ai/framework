@@ -641,3 +641,66 @@ describe('AnalyticsService', () => {
     expect(JSON.stringify(filterObj)).toContain('open');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Runtime strategy fallback — RAW_SQL_UNSUPPORTED (in-memory driver)
+// ─────────────────────────────────────────────────────────────────
+//
+// A driver that cannot run SQL (the in-memory driver) returns null from
+// execute(); the plugin's raw-SQL bridge surfaces that as a typed
+// RAW_SQL_UNSUPPORTED error. The orchestrator must fall back to the next
+// capable strategy (aggregate bridge) instead of failing — and must NEVER
+// fabricate an empty result (the "every dashboard reads No rows" bug).
+
+describe('AnalyticsService — RAW_SQL_UNSUPPORTED fallback', () => {
+  const rawUnsupported = () =>
+    Object.assign(new Error('driver returned null for raw SQL'), { code: 'RAW_SQL_UNSUPPORTED' });
+
+  it('falls back from NativeSQL to the aggregate strategy and returns its rows', async () => {
+    const executeRawSql = vi.fn().mockRejectedValue(rawUnsupported());
+    const executeAggregate = vi.fn().mockResolvedValue([
+      { status: 'completed', count: 5 },
+    ]);
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      executeRawSql,
+      executeAggregate,
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: true, inMemory: false }),
+    });
+
+    const result = await service.query({ cube: 'orders', measures: ['count'], dimensions: ['status'] });
+
+    expect(executeRawSql).toHaveBeenCalledTimes(1);
+    expect(executeAggregate).toHaveBeenCalledTimes(1);
+    expect(Array.isArray(result.rows)).toBe(true);
+    expect(result.rows.length).toBeGreaterThan(0);
+  });
+
+  it('propagates any OTHER raw-SQL error untouched (no fallback masking)', async () => {
+    const executeRawSql = vi.fn().mockRejectedValue(new Error('no such column: bogus'));
+    const executeAggregate = vi.fn();
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      executeRawSql,
+      executeAggregate,
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: true, inMemory: false }),
+    });
+
+    await expect(service.query({ cube: 'orders', measures: ['count'] })).rejects.toThrow('no such column');
+    expect(executeAggregate).not.toHaveBeenCalled();
+  });
+
+  it('reports a clear error (never silent empty rows) when no fallback strategy exists', async () => {
+    const executeRawSql = vi.fn().mockRejectedValue(rawUnsupported());
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      executeRawSql,
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+    });
+
+    await expect(service.query({ cube: 'orders', measures: ['count'] })).rejects.toThrow('No strategy can handle');
+  });
+});

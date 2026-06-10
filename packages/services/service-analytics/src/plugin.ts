@@ -211,8 +211,23 @@ export class AnalyticsServicePlugin implements Plugin {
         // driver-sql) speaks `?` placeholders, so translate.
         const knexSql = sql.replace(/\$(\d+)/g, '?');
         const result = await engine.execute(knexSql, { args: params });
+        // A driver that cannot run SQL (e.g. the in-memory driver) returns
+        // null from execute(). Silently mapping that to [] made EVERY dataset
+        // query on such environments report "No rows" while looking healthy
+        // (HTTP 200, compiled SQL attached). Throw a TYPED error instead so
+        // the orchestrator can fall back to an aggregate-based strategy —
+        // never fabricate an empty result.
+        if (result === null || result === undefined) {
+          const err = new Error(
+            '[Analytics] The "data" engine\'s driver returned null for raw SQL — ' +
+            'this driver does not support SQL execution. The query will fall back ' +
+            'to an aggregate-based strategy when one is available.',
+          ) as Error & { code: string };
+          err.code = 'RAW_SQL_UNSUPPORTED';
+          throw err;
+        }
         if (Array.isArray(result)) return result as Record<string, unknown>[];
-        if (result && typeof result === 'object' && 'rows' in (result as Record<string, unknown>)) {
+        if (typeof result === 'object' && 'rows' in (result as Record<string, unknown>)) {
           return (result as { rows: Record<string, unknown>[] }).rows;
         }
         return [];
