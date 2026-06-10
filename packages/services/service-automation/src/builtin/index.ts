@@ -51,7 +51,7 @@ export { registerScreenNodes } from './screen-nodes.js';
 export { registerHttpNodes } from './http-nodes.js';
 export { registerConnectorNodes } from './connector-nodes.js';
 export { registerNotifyNode } from './notify-node.js';
-export { registerWaitNode, parseIsoDuration } from './wait-node.js';
+export { registerWaitNode, parseIsoDuration, rearmSuspendedWaitTimers } from './wait-node.js';
 export { registerSubflowNode } from './subflow-node.js';
 
 /**

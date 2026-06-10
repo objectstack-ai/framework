@@ -3,7 +3,7 @@
 import type { PluginContext } from '@objectstack/core';
 import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { IJobService } from '@objectstack/spec/contracts';
-import type { AutomationEngine } from '../engine.js';
+import type { AutomationEngine, SuspendedRunStore } from '../engine.js';
 
 /**
  * `wait` built-in node — a durable pause (ADR-0019 suspend/resume), the timer /
@@ -62,10 +62,16 @@ export function registerWaitNode(engine: AutomationEngine, ctx: PluginContext): 
           (typeof wec.timeoutMs === 'number' ? wec.timeoutMs : undefined) ??
           (typeof loose.timeoutMs === 'number' ? (loose.timeoutMs as number) : undefined);
 
+        // Persist the wake deadline as node output: the engine writes output
+        // to variables (`<nodeId>.waitUntil`) *before* snapshotting the
+        // suspended run, so a cold-booted kernel can re-arm the timer from the
+        // durable store ({@link rearmSuspendedWaitTimers}).
+        const at = durationMs && durationMs > 0 ? new Date(Date.now() + durationMs).toISOString() : undefined;
+        const output = at ? { waitUntil: at } : undefined;
+
         const job = getJobService();
-        if (job && runId != null && durationMs && durationMs > 0) {
+        if (job && runId != null && at) {
           const jobName = `flow-wait:${String(runId)}:${node.id}`;
-          const at = new Date(Date.now() + durationMs).toISOString();
           try {
             await job.schedule(jobName, { type: 'once', at }, async () => {
               try {
@@ -79,7 +85,7 @@ export function registerWaitNode(engine: AutomationEngine, ctx: PluginContext): 
                 }
               }
             });
-            return { success: true, suspend: true, correlation: jobName };
+            return { success: true, suspend: true, correlation: jobName, output };
           } catch (err) {
             ctx.logger.warn(
               `[wait] node '${node.id}': failed to schedule timer resume (${(err as Error)?.message ?? err}); ` +
@@ -92,8 +98,9 @@ export function registerWaitNode(engine: AutomationEngine, ctx: PluginContext): 
               `(resume it via resume(runId), or install the job service for durable timers)`,
           );
         }
-        // Degrade: still suspend; resumption comes from an external resume().
-        return { success: true, suspend: true, correlation: `timer:${node.id}` };
+        // Degrade: still suspend; resumption comes from an external resume()
+        // (or a later boot's re-arm pass, when the deadline was persisted).
+        return { success: true, suspend: true, correlation: `timer:${node.id}`, output };
       }
 
       // signal / webhook / manual / condition — suspend; an external producer
@@ -104,6 +111,93 @@ export function registerWaitNode(engine: AutomationEngine, ctx: PluginContext): 
   });
 
   ctx.logger.info('[Wait Node] 1 built-in node executor registered');
+}
+
+/** Minimal logger surface for {@link rearmSuspendedWaitTimers}. */
+interface RearmLogger {
+  info(msg: string, ...args: unknown[]): void;
+  warn(msg: string, ...args: unknown[]): void;
+}
+
+/**
+ * Re-arm auto-resume timers for suspended timer-`wait` runs after a cold boot
+ * (ADR-0019 follow-up). The one-shot job a `wait` node schedules lives in the
+ * job service's process memory unless that service is itself durable — so a
+ * restart loses the wake-up while the suspended run survives in
+ * `sys_automation_run`. This pass walks the durable store and:
+ *
+ *  - **overdue** deadlines (`<nodeId>.waitUntil` in the past) → `resume()` now;
+ *  - **future** deadlines → re-schedule the same `flow-wait:<runId>:<nodeId>`
+ *    one-shot job (no job service → warn and leave it for an external resume);
+ *  - runs without a persisted `waitUntil` (approval / screen / signal pauses,
+ *    or pre-deadline-persistence rows) → skipped untouched.
+ *
+ * Double-fire safe: if the original job *did* survive (durable job store), the
+ * second `resume(runId)` finds no suspended run — the engine's resume
+ * idempotency absorbs it. Returns how many runs were resumed or re-armed.
+ *
+ * Called by `AutomationServicePlugin.start()` *after* the flow pull, because
+ * `resume()` needs the flow definitions registered.
+ */
+export async function rearmSuspendedWaitTimers(
+  engine: Pick<AutomationEngine, 'resume'>,
+  store: SuspendedRunStore,
+  job: IJobService | undefined,
+  logger: RearmLogger,
+): Promise<number> {
+  let runs;
+  try {
+    runs = await store.list();
+  } catch (err) {
+    logger.warn(`[wait] timer re-arm: failed to list suspended runs: ${(err as Error)?.message ?? err}`);
+    return 0;
+  }
+
+  let rearmed = 0;
+  for (const run of runs) {
+    const wakeAt = run.variables?.[`${run.nodeId}.waitUntil`];
+    if (typeof wakeAt !== 'string' || !wakeAt) continue; // not a timer wait
+    const atMs = Date.parse(wakeAt);
+    if (Number.isNaN(atMs)) continue;
+
+    if (atMs <= Date.now()) {
+      // Deadline elapsed while the process was down — resume immediately.
+      try {
+        await engine.resume(run.runId);
+        rearmed++;
+      } catch (err) {
+        logger.warn(`[wait] timer re-arm: resume of overdue run '${run.runId}' failed: ${(err as Error)?.message ?? err}`);
+      }
+      continue;
+    }
+
+    if (!job) {
+      logger.warn(
+        `[wait] timer re-arm: run '${run.runId}' waits until ${wakeAt} but no job service is registered — ` +
+          `resume it externally via resume(runId)`,
+      );
+      continue;
+    }
+
+    const jobName = `flow-wait:${run.runId}:${run.nodeId}`;
+    try {
+      await job.schedule(jobName, { type: 'once', at: wakeAt }, async () => {
+        try {
+          await engine.resume(run.runId);
+        } finally {
+          try {
+            await job.cancel?.(jobName);
+          } catch {
+            /* best-effort */
+          }
+        }
+      });
+      rearmed++;
+    } catch (err) {
+      logger.warn(`[wait] timer re-arm: failed to re-schedule run '${run.runId}': ${(err as Error)?.message ?? err}`);
+    }
+  }
+  return rearmed;
 }
 
 /**

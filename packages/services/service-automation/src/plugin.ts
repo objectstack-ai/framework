@@ -1,8 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import type { IJobService } from '@objectstack/spec/contracts';
 import { AutomationEngine } from './engine.js';
-import { installBuiltinNodes } from './builtin/index.js';
+import { installBuiltinNodes, rearmSuspendedWaitTimers } from './builtin/index.js';
 import { SysAutomationRun } from './sys-automation-run.object.js';
 import { ObjectStoreSuspendedRunStore, type SuspendedRunStoreEngine } from './suspended-run-store.js';
 
@@ -112,9 +113,8 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async start(ctx: PluginContext): Promise<void> {
-        console.warn('[Automation:start] entering start()');
         if (!this.engine) {
-            console.warn('[Automation:start] engine missing, bailing');
+            ctx.logger.warn('[Automation] start() called before init() — engine missing, skipping');
             return;
         }
 
@@ -131,12 +131,14 @@ export class AutomationServicePlugin implements Plugin {
         // services were wired, so we attach the DB-backed store here. Without an
         // engine (or with `suspendedRunStore: 'memory'`) the in-memory default
         // stands — suspended runs simply don't survive a restart.
+        let durableStore: ObjectStoreSuspendedRunStore | null = null;
         if ((this.options.suspendedRunStore ?? 'auto') !== 'memory') {
             let dataEngine: SuspendedRunStoreEngine | null = null;
             try { dataEngine = ctx.getService<SuspendedRunStoreEngine>('objectql'); }
             catch { try { dataEngine = ctx.getService<SuspendedRunStoreEngine>('data'); } catch { /* none */ } }
             if (dataEngine && typeof dataEngine.find === 'function' && typeof dataEngine.insert === 'function') {
-                this.engine.setSuspendedRunStore(new ObjectStoreSuspendedRunStore(dataEngine, ctx.logger));
+                durableStore = new ObjectStoreSuspendedRunStore(dataEngine, ctx.logger);
+                this.engine.setSuspendedRunStore(durableStore);
                 ctx.logger.info('[Automation] Suspended-run persistence enabled (sys_automation_run)');
             } else {
                 ctx.logger.info('[Automation] No ObjectQL engine — suspended runs kept in-memory only');
@@ -152,14 +154,14 @@ export class AutomationServicePlugin implements Plugin {
                 registry?: { listItems?: (type: string) => unknown[] };
             }>('objectql');
             if (!ql) {
-                console.warn('[Automation] objectql service not found at start()');
+                ctx.logger.debug('[Automation] objectql service not found at start()');
             } else if (!ql.registry) {
-                console.warn('[Automation] objectql.registry is undefined at start()');
+                ctx.logger.debug('[Automation] objectql.registry is undefined at start()');
             } else if (typeof ql.registry.listItems !== 'function') {
-                console.warn('[Automation] objectql.registry.listItems is not a function');
+                ctx.logger.debug('[Automation] objectql.registry.listItems is not a function');
             }
             const flows = ql?.registry?.listItems?.('flow') ?? [];
-            console.warn(`[Automation] flow pull: registry returned ${flows.length} flow(s)`);
+            ctx.logger.debug(`[Automation] flow pull: registry returned ${flows.length} flow(s)`);
             let registered = 0;
             for (const f of flows) {
                 const def = f as { name?: string };
@@ -178,6 +180,25 @@ export class AutomationServicePlugin implements Plugin {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             ctx.logger.warn(`[Automation] flow pull from ObjectQL registry failed: ${msg}`);
+        }
+
+        // ADR-0019 follow-up: re-arm auto-resume timers for runs that were
+        // suspended at a timer-`wait` node when the process went down. Must run
+        // *after* the flow pull above — resume() needs the flow definitions
+        // registered. Overdue deadlines resume immediately; future ones get
+        // their one-shot job re-scheduled. Best-effort: a failure here only
+        // means those runs wait for an external resume(runId).
+        if (durableStore) {
+            let job: IJobService | undefined;
+            try { job = ctx.getService<IJobService>('job'); } catch { /* none */ }
+            try {
+                const rearmed = await rearmSuspendedWaitTimers(this.engine, durableStore, job, ctx.logger);
+                if (rearmed > 0) {
+                    ctx.logger.info(`[Automation] Re-armed ${rearmed} suspended wait timer(s) after restart`);
+                }
+            } catch (err) {
+                ctx.logger.warn(`[Automation] wait-timer re-arm failed: ${(err as Error).message}`);
+            }
         }
     }
 
