@@ -17,11 +17,23 @@ const MAX_SUBFLOW_DEPTH = 16;
  * the parent — under `${nodeId}.output`, and under `config.outputVariable` as a
  * bare variable when given.
  *
- * Scope (v1): **synchronous** subflows that run to completion. If the child
- * *suspends* (a nested `approval` / `screen` / `wait`), the node fails with a
- * clear message rather than silently dropping the run — nested durable pause is
- * a deliberate follow-up. A depth guard ({@link MAX_SUBFLOW_DEPTH}) turns an
- * accidental recursive cycle into a clean error instead of a stack overflow.
+ * **Nested durable pause (linked-runs model).** If the child *suspends* (a
+ * nested `approval` / `screen` / `wait`), the child's continuation is already
+ * persisted by the engine as its own run; this node then suspends the PARENT
+ * run at this node with `correlation: 'subflow:<childRunId>'`, so both rows
+ * survive a restart and stay linked. The engine's resume boundary completes
+ * the chain in both directions:
+ *
+ *  - resuming the CHILD directly (approval service / wait timer hold the child
+ *    `$runId`) bubbles UP on completion — the engine auto-resumes the parent
+ *    with the child's output, mapped exactly like the synchronous path;
+ *  - resuming the PARENT (a UI holds the parent run id from the original
+ *    `execute()` response) delegates DOWN to the suspended child.
+ *
+ * The linkage rides on the child's context (`$parentRunId` / `$parentNodeId` /
+ * `$parentOutputVariable`), which the engine persists with the child run — no
+ * schema change. A depth guard ({@link MAX_SUBFLOW_DEPTH}) turns an accidental
+ * recursive cycle into a clean error instead of a stack overflow.
  */
 export function registerSubflowNode(engine: AutomationEngine, ctx: PluginContext): void {
   engine.registerNodeExecutor({
@@ -34,6 +46,9 @@ export function registerSubflowNode(engine: AutomationEngine, ctx: PluginContext
       icon: 'workflow',
       category: 'logic',
       source: 'builtin',
+      // A child that suspends (approval/screen/wait) suspends this node too —
+      // the parent run pauses here and resumes when the child completes.
+      supportsPause: true,
     }),
     async execute(node, variables, context) {
       const cfg = (node.config ?? {}) as Record<string, unknown>;
@@ -56,20 +71,42 @@ export function registerSubflowNode(engine: AutomationEngine, ctx: PluginContext
       const rawInput = (cfg.input && typeof cfg.input === 'object' ? cfg.input : {}) as Record<string, unknown>;
       const params = interpolate(rawInput, variables, context ?? ({} as AutomationContext)) as Record<string, unknown>;
 
+      const outVar = typeof cfg.outputVariable === 'string' && cfg.outputVariable ? cfg.outputVariable : undefined;
+
+      // Parent linkage for nested durable pause: should the child suspend, the
+      // engine persists these with the child run and uses them to bubble the
+      // child's eventual completion back into THIS run (resume at this node).
+      // `$runId` is injected by the engine at run start (ADR-0019).
+      const parentRunId = variables.get('$runId');
       const childContext = {
         ...(context ?? {}),
         $subflowDepth: depth + 1,
         params,
+        ...(parentRunId != null
+          ? {
+              $parentRunId: String(parentRunId),
+              $parentNodeId: node.id,
+              ...(outVar ? { $parentOutputVariable: outVar } : {}),
+            }
+          : {}),
       } as AutomationContext;
 
       const child = await engine.execute(flowName, childContext);
 
       if (child.status === 'paused') {
+        // Nested durable pause: the child's continuation is persisted under its
+        // own run id; suspend the parent here, linked via the correlation key.
+        // A nested screen surfaces on the parent's paused result so a UI runner
+        // can render it against the parent run id (the engine delegates the
+        // parent's resume down to the child).
+        if (!child.runId) {
+          return { success: false, error: `subflow '${flowName}' paused without a run id — cannot link the runs` };
+        }
         return {
-          success: false,
-          error:
-            `subflow '${flowName}' suspended at a pausing node — a nested approval/screen/wait ` +
-            `pause from a subflow is not yet supported`,
+          success: true,
+          suspend: true,
+          correlation: `subflow:${child.runId}`,
+          screen: child.screen,
         };
       }
       if (!child.success) {
@@ -78,7 +115,6 @@ export function registerSubflowNode(engine: AutomationEngine, ctx: PluginContext
 
       // Bare output variable (like the assignment node, the executor may write
       // directly to the parent variable map).
-      const outVar = typeof cfg.outputVariable === 'string' && cfg.outputVariable ? cfg.outputVariable : undefined;
       if (outVar) variables.set(outVar, child.output ?? null);
 
       return { success: true, output: { output: child.output ?? null } };

@@ -1015,8 +1015,25 @@ export class AutomationEngine implements IAutomationService {
      * restricted to the edge labelled `signal.branchLabel` (e.g. the approval
      * decision). The continuation may itself suspend again, in which case this
      * returns `{ status: 'paused', runId }` afresh.
+     *
+     * **Subflow chains (nested pause, linked-runs model).** A run paused at a
+     * `subflow` node (correlation `subflow:<childRunId>`) DELEGATES the signal
+     * down to the suspended child; a run that completes and carries
+     * `$parentRunId` in its context BUBBLES its output up by auto-resuming the
+     * parent. Both directions compose recursively, so arbitrarily nested
+     * subflow pauses resolve from either end (UI holds the parent run id;
+     * approval/wait infrastructure holds the child's).
      */
     async resume(runId: string, signal?: ResumeSignal): Promise<AutomationResult> {
+        return this.resumeInternal(runId, signal, false);
+    }
+
+    /**
+     * @param skipBubble - Set when the caller is the subflow DELEGATION path,
+     *   which continues the parent itself after the child completes — the
+     *   child's own up-bubble must stay off so the parent isn't resumed twice.
+     */
+    private async resumeInternal(runId: string, signal: ResumeSignal | undefined, skipBubble: boolean): Promise<AutomationResult> {
         // Idempotency guard (set synchronously, before any await): reject a
         // concurrent duplicate resume of the same run so side effects can't run
         // twice. A duplicate that arrives *after* this one finishes finds no
@@ -1049,6 +1066,55 @@ export class AutomationEngine implements IAutomationService {
             if (!node) {
                 return { success: false, error: `Suspended node '${run.nodeId}' no longer exists in flow '${run.flowName}'` };
             }
+
+            // ── Subflow delegation (nested pause): this run is paused at a
+            // `subflow` node whose child run itself suspended. The caller's
+            // signal is meant for the node the CHILD paused on (its screen /
+            // approval / wait), so forward it down. The child resumes with
+            // bubbling off — when it completes, *this* invocation continues the
+            // parent from the subflow node with the child's output, using the
+            // same mapping as the synchronous path.
+            if (typeof run.correlation === 'string' && run.correlation.startsWith('subflow:')) {
+                const childRunId = run.correlation.slice('subflow:'.length);
+                // Capture the child's row BEFORE resuming consumes it — the
+                // output-variable mapping rides on the child's context.
+                const childRun =
+                    this.suspendedRuns.get(childRunId) ??
+                    (this.store ? await this.store.load(childRunId).catch(() => null) : null);
+                if (childRun) {
+                    const childRes = await this.resumeInternal(childRunId, signal, true);
+                    if (childRes.status === 'paused') {
+                        // Child paused again (e.g. the next screen of a wizard).
+                        // This run stays suspended; refresh its surfaced screen
+                        // so a re-fetch (getSuspendedScreen) shows the new one.
+                        if (childRes.screen && childRes.screen !== run.screen) {
+                            await this.persistSuspendedRun({ ...run, screen: childRes.screen });
+                        }
+                        return {
+                            success: true,
+                            status: 'paused',
+                            runId,
+                            durationMs: Date.now() - run.startTime,
+                            screen: childRes.screen,
+                        };
+                    }
+                    if (!childRes.success) {
+                        const error = `subflow run '${childRunId}' (${childRun.flowName}) failed: ${childRes.error ?? 'unknown error'}`;
+                        await this.failSuspendedRun(run, error);
+                        return { success: false, error, durationMs: Date.now() - run.startTime };
+                    }
+                    // Child completed — continue below with its output as the
+                    // resume signal (replaces the caller's signal, which the
+                    // child already consumed).
+                    signal = this.buildSubflowResumeSignal(childRun.context, childRes.output);
+                } else {
+                    this.logger.warn(
+                        `[automation] run '${runId}' is paused at subflow node '${run.nodeId}' but child run '${childRunId}' ` +
+                            `is gone — continuing without child output`,
+                    );
+                }
+            }
+
             // Consume the suspension *before* running downstream work — a run
             // resumes exactly once per pause, and a duplicate resume after a
             // partial restart must not double-run side effects.
@@ -1101,6 +1167,17 @@ export class AutomationEngine implements IAutomationService {
                     steps,
                     output,
                 });
+
+                // ── Subflow up-bubble (nested pause): this run was a subflow
+                // child whose parent suspended awaiting it. Auto-resume the
+                // parent with our output, mapped like the synchronous path.
+                // Skipped when the DELEGATION path drives the chain (it
+                // continues the parent itself). Best-effort: the child's own
+                // completion stands even if the parent continuation fails.
+                if (!skipBubble) {
+                    await this.bubbleToParent(run, output);
+                }
+
                 return { success: true, output, durationMs };
             } catch (err: unknown) {
                 // Re-suspended at a downstream node: persist a fresh continuation.
@@ -1149,10 +1226,101 @@ export class AutomationEngine implements IAutomationService {
                     steps,
                     error: errorMessage,
                 });
+                // Subflow chain: a child failing terminally fails every
+                // ancestor awaiting it — they can never be resumed otherwise.
+                // The delegation path handles its own level (skipBubble).
+                if (!skipBubble) {
+                    await this.failAncestors(run.context, errorMessage);
+                }
                 return { success: false, error: errorMessage, durationMs };
             }
         } finally {
             this.resuming.delete(runId);
+        }
+    }
+
+    /**
+     * Build the resume signal that maps a completed subflow child's output
+     * into its parent — mirroring the synchronous path exactly: the engine's
+     * standard `signal.output` merge lands it under `${subflowNodeId}.output`,
+     * and `signal.variables` writes the bare `config.outputVariable` when the
+     * child's context carries one (`$parentOutputVariable`).
+     */
+    private buildSubflowResumeSignal(childContext: AutomationContext | undefined, childOutput: unknown): ResumeSignal {
+        const outVar = (childContext as Record<string, unknown> | undefined)?.$parentOutputVariable;
+        return {
+            output: { output: childOutput ?? null },
+            ...(typeof outVar === 'string' && outVar
+                ? { variables: { [outVar]: childOutput ?? null } }
+                : {}),
+        };
+    }
+
+    /**
+     * Up-bubble for the subflow chain: when a completed run carries
+     * `$parentRunId`, resume that parent with this run's output. Recursion via
+     * the parent's own completion bubbles multi-level chains. Best-effort —
+     * a failed parent continuation is logged, never thrown back at the
+     * caller who resumed the child.
+     */
+    private async bubbleToParent(run: SuspendedRun, output: Record<string, unknown>): Promise<void> {
+        const parentRunId = (run.context as Record<string, unknown> | undefined)?.$parentRunId;
+        if (typeof parentRunId !== 'string' || !parentRunId) return;
+        try {
+            const sig = this.buildSubflowResumeSignal(run.context, output);
+            const parentRes = await this.resumeInternal(parentRunId, sig, false);
+            if (!parentRes.success) {
+                this.logger.warn(
+                    `[automation] subflow run '${run.runId}' completed but resuming parent '${parentRunId}' failed: ${parentRes.error}`,
+                );
+            }
+        } catch (err) {
+            this.logger.warn(
+                `[automation] subflow run '${run.runId}' completed but resuming parent '${parentRunId}' threw: ${(err as Error).message}`,
+            );
+        }
+    }
+
+    /**
+     * Terminally fail a suspended run: consume its continuation and record a
+     * `failed` log so it stops surfacing as resumable. Used when a subflow
+     * descendant fails — the ancestor awaiting it can never be resumed.
+     */
+    private async failSuspendedRun(run: SuspendedRun, error: string): Promise<void> {
+        await this.forgetSuspendedRun(run.runId);
+        this.recordLog({
+            id: run.runId,
+            flowName: run.flowName,
+            flowVersion: run.flowVersion,
+            status: 'failed',
+            startedAt: run.startedAt,
+            completedAt: new Date().toISOString(),
+            durationMs: Date.now() - run.startTime,
+            trigger: {
+                type: run.context?.event ?? 'manual',
+                userId: run.context?.userId,
+                object: run.context?.object,
+            },
+            steps: run.steps,
+            error,
+        });
+    }
+
+    /**
+     * Walk a failed run's `$parentRunId` chain and fail each suspended
+     * ancestor (see {@link failSuspendedRun}). Bounded so a corrupt context
+     * can't loop forever.
+     */
+    private async failAncestors(context: AutomationContext | undefined, error: string): Promise<void> {
+        let parentId = (context as Record<string, unknown> | undefined)?.$parentRunId;
+        let hops = 0;
+        while (typeof parentId === 'string' && parentId && hops++ < 32) {
+            const parent =
+                this.suspendedRuns.get(parentId) ??
+                (this.store ? await this.store.load(parentId).catch(() => null) : null);
+            if (!parent) return;
+            await this.failSuspendedRun(parent, `subflow descendant failed: ${error}`);
+            parentId = (parent.context as Record<string, unknown> | undefined)?.$parentRunId;
         }
     }
 

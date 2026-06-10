@@ -170,3 +170,28 @@ removal (A4/A5) can be reviewed and sequenced on its own once consumers move ove
 
 The open-source / enterprise split is **not** an architectural concern and is **out of scope for this ADR** — the open registry (ADR-0018) plus the node-config shape make the tier line a *packaging* decision (which approver types / orchestration features ship in which package), not an engine boundary. The split is maintained privately in `cloud/docs/design/approval-tiering.md`. This ADR keeps the engine and the node contract tier-neutral.
 
+
+## Addendum (2026-06-10) — Nested durable pause: subflow chains (linked-runs model)
+
+A pausing node inside a **subflow** now suspends the whole chain instead of failing the parent.
+Model: **linked runs** (the inter-flow half of the long-term execution-state architecture —
+cf. Step Functions nested executions / Temporal child workflows; the intra-flow half, a
+token/scope tree replacing the single-program-counter continuation, is a separate future ADR).
+
+- The child's continuation persists under its **own run id** (run identity keeps per-flow version
+  pinning, run logs, and `$runId`-based approval/wait correlation intact). The parent suspends at
+  the `subflow` node with `correlation: 'subflow:<childRunId>'`; linkage metadata
+  (`$parentRunId` / `$parentNodeId` / `$parentOutputVariable`) rides on the child's persisted
+  `context` — **no schema change** to `sys_automation_run`.
+- `resume()` completes the chain in both directions, recursively: resuming the **child** directly
+  (approval service, wait timer) **bubbles up** — the parent auto-resumes with the child's output,
+  mapped exactly like the synchronous path (`${nodeId}.output` + bare `outputVariable`); resuming
+  the **parent** (a UI holding the original run id, incl. multi-screen wizards) **delegates down**
+  to the suspended child. A child failing terminally after the pause **fails every waiting
+  ancestor** (bounded walk), so no run is stranded as resumable-forever.
+
+**v1 boundaries (deliberate):** the subflow node's `fault` out-edges / enclosing `try_catch` do
+not catch a *post-pause* child failure (the parent run fails terminally instead); `timeoutMs`
+does not count across a suspension; a crash exactly between child completion and the parent
+bubble leaves the parent paused — an operator can compensate with a manual
+`resume(parentRunId, { output })` (outbox-grade exactly-once chaining is future work).
