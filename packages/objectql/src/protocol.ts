@@ -3785,11 +3785,30 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         organizationId?: string;
         actor?: string;
         message?: string;
+        /**
+         * INTERNAL — `publishPackageDrafts` publishes many drafts and batch-applies
+         * every seed body in ONE loader pass afterwards (cross-seed references need
+         * multi-pass over the whole set), so it suppresses the per-item apply here.
+         */
+        _skipSeedApply?: boolean;
     }): Promise<{
         success: boolean;
         version: string;
         seq: number;
         message?: string;
+        /**
+         * Present when a `seed` draft was published: the result of materializing
+         * its rows. Publishing the metadata ALWAYS succeeds independently — a
+         * seed-load problem is surfaced here, never thrown, so callers (and UIs)
+         * must check `seedApplied.success` instead of assuming data went live.
+         */
+        seedApplied?: {
+            success: boolean;
+            inserted: number;
+            updated: number;
+            error?: string;
+            errors?: unknown[];
+        };
     }> {
         const singularType = PLURAL_TO_SINGULAR[request.type] ?? request.type;
         if (!ObjectStackProtocolImplementation.isOverlayAllowed(singularType)
@@ -3840,12 +3859,27 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             });
             // Create the object's table now so it's CRUD-able without a restart.
             await this.ensureObjectStorage(request.type, request.name);
-            return {
+            const response: {
+                success: boolean;
+                version: string;
+                seq: number;
+                message?: string;
+                seedApplied?: { success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] };
+            } = {
                 success: true,
                 version: result.version,
                 seq: result.seq,
                 message: `Published draft — type=${request.type}, name=${request.name} [seq=${result.seq}]`,
             };
+            // Publishing a `seed` is what makes its rows live — materialize them
+            // NOW (best-effort, never fails the publish) so every publish path
+            // (per-ref REST publish, the home banner, package publish-drafts)
+            // lands data, not just metadata. The body is already in hand from
+            // the promote — no read-back, so no org-scope resolution pitfalls.
+            if (singularType === 'seed' && !request._skipSeedApply) {
+                response.seedApplied = await this.applySeedBodies([result.item.body], orgId);
+            }
+            return response;
         } catch (err: any) {
             if (err instanceof ConflictError) {
                 const conflict: any = new Error(
@@ -3859,6 +3893,65 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 throw conflict;
             }
             throw err;
+        }
+    }
+
+    /**
+     * Materialize published `seed` bodies into data rows via the SeedLoaderService
+     * (externalId-keyed upsert, multi-pass for cross-seed references). Passing ALL
+     * of a publish's seed bodies in ONE call lets a child seed reference a parent
+     * seed's rows regardless of publish order. Best-effort: any failure is
+     * returned, never thrown — publishing metadata must not be blocked by a data
+     * problem, but the caller surfaces `seedApplied` so the failure is LOUD.
+     */
+    private async applySeedBodies(
+        bodies: unknown[],
+        organizationId: string | null,
+    ): Promise<{ success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] }> {
+        try {
+            const seeds = bodies.filter(
+                (b: any) => b && typeof b.object === 'string' && Array.isArray(b.records),
+            );
+            if (seeds.length === 0) {
+                return { success: false, inserted: 0, updated: 0, error: 'seed apply: no readable seed bodies' };
+            }
+            const { SeedLoaderService } = await import('./seed-loader.js');
+            const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
+            // The loader only needs `getObject` from IMetadataService (dependency
+            // graph + field introspection); satisfy it from the protocol's own
+            // metadata reads so no kernel service lookup is required.
+            const metadataAdapter = {
+                getObject: async (name: string) => {
+                    const wrapper: any = await (this as any).getMetaItem({
+                        type: 'object',
+                        name,
+                        ...(organizationId ? { organizationId } : {}),
+                    });
+                    return wrapper?.item ?? wrapper ?? null;
+                },
+            };
+            const loader = new SeedLoaderService(
+                this.engine as any,
+                metadataAdapter as any,
+                console as any,
+            );
+            const request = SeedLoaderRequestSchema.parse({
+                seeds,
+                config: {
+                    defaultMode: 'upsert',
+                    multiPass: true,
+                    ...(organizationId ? { organizationId } : {}),
+                },
+            });
+            const r = await loader.load(request);
+            return {
+                success: r.success,
+                inserted: r.summary.totalInserted,
+                updated: r.summary.totalUpdated,
+                ...(r.errors?.length ? { errors: r.errors } : {}),
+            };
+        } catch (e: any) {
+            return { success: false, inserted: 0, updated: 0, error: e?.message ?? 'seed apply failed' };
         }
     }
 
@@ -3911,6 +4004,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         failedCount: number;
         published: Array<{ type: string; name: string; version: string }>;
         failed: Array<{ type: string; name: string; error: string; code?: string }>;
+        /** Aggregate result of materializing every published `seed` (absent when no seeds). */
+        seedApplied?: { success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] };
     }> {
         await this.ensureOverlayIndex();
         const orgId = request.organizationId ?? null;
@@ -3920,14 +4015,33 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const published: Array<{ type: string; name: string; version: string }> = [];
         const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
 
-        for (const d of drafts) {
+        // Structure first, seeds LAST — a seed's rows can only land after its
+        // object's table exists (publishMetaItem creates it). Within the seeds we
+        // batch-apply every body in ONE loader pass below (multi-pass reference
+        // resolution across the whole set), so per-item apply is suppressed.
+        const ordered = [
+            ...drafts.filter((d) => d.type !== 'seed'),
+            ...drafts.filter((d) => d.type === 'seed'),
+        ];
+        const seedBodies: unknown[] = [];
+
+        for (const d of ordered) {
             try {
+                if (d.type === 'seed') {
+                    // Capture the body BEFORE promote (the draft row is deleted by
+                    // the promote, and a post-publish read-back has org-scope
+                    // resolution pitfalls — reading the draft is unambiguous).
+                    const ref = { type: d.type, name: d.name, org: orgId ?? 'env' } as unknown as Parameters<typeof repo.get>[0];
+                    const draft = await repo.get(ref, { state: 'draft' });
+                    if (draft?.body) seedBodies.push(draft.body);
+                }
                 const r = await this.publishMetaItem({
                     type: d.type,
                     name: d.name,
                     ...(request.organizationId ? { organizationId: request.organizationId } : {}),
                     ...(request.actor ? { actor: request.actor } : {}),
                     message: `publish app package '${request.packageId}'`,
+                    _skipSeedApply: true,
                 });
                 published.push({ type: d.type, name: d.name, version: r.version });
             } catch (e: any) {
@@ -3946,6 +4060,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             failedCount: failed.length,
             published,
             failed,
+            ...(seedBodies.length > 0
+                ? { seedApplied: await this.applySeedBodies(seedBodies, orgId) }
+                : {}),
         };
     }
 

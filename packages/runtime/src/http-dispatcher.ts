@@ -1771,23 +1771,28 @@ export class HttpDispatcher {
                             ...(body?.actor ? { actor: body.actor } : {}),
                         });
                         // Publishing a `seed` draft is what actually loads its
-                        // rows. Best-effort + idempotent (upsert): apply every
-                        // just-published seed now so the data is live the moment
-                        // the user clicks publish. A seed-load failure NEVER
-                        // fails the publish — it is surfaced under `seedApplied`.
-                        try {
-                            const seedNames = ((result as any)?.published ?? [])
-                                .filter((p: any) => p?.type === 'seed')
-                                .map((p: any) => p.name as string);
-                            if (seedNames.length > 0) {
-                                (result as any).seedApplied = await this.applyPublishedSeeds(
-                                    seedNames,
-                                    organizationId,
-                                    _context,
-                                );
+                        // rows. The objectql protocol now batch-applies seeds
+                        // inside `publishPackageDrafts` itself (so EVERY publish
+                        // path — incl. the per-ref REST publish — materializes
+                        // data) and reports under `seedApplied`. Only fall back
+                        // to the route-level apply for custom protocols that
+                        // don't self-apply — never run both, or an externalId-less
+                        // seed would double-insert.
+                        if ((result as any)?.seedApplied === undefined) {
+                            try {
+                                const seedNames = ((result as any)?.published ?? [])
+                                    .filter((p: any) => p?.type === 'seed')
+                                    .map((p: any) => p.name as string);
+                                if (seedNames.length > 0) {
+                                    (result as any).seedApplied = await this.applyPublishedSeeds(
+                                        seedNames,
+                                        organizationId,
+                                        _context,
+                                    );
+                                }
+                            } catch (e: any) {
+                                (result as any).seedApplied = { success: false, error: e?.message ?? 'seed apply failed' };
                             }
-                        } catch (e: any) {
-                            (result as any).seedApplied = { success: false, error: e?.message ?? 'seed apply failed' };
                         }
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {

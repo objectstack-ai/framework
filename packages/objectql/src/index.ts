@@ -80,3 +80,7 @@ export type {
   IntrospectedTable,
   IntrospectedSchema,
 } from './util.js';
+
+// Seed loader — materializes `seed` metadata into rows (used by publishMetaItem
+// and the runtime dispatcher/app plugins).
+export { SeedLoaderService } from './seed-loader.js';
