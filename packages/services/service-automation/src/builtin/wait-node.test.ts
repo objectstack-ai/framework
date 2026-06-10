@@ -3,7 +3,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AutomationEngine } from '../engine.js';
 import type { NodeExecutor } from '../engine.js';
-import { registerWaitNode, parseIsoDuration } from './wait-node.js';
+import { InMemorySuspendedRunStore } from '../suspended-run-store.js';
+import { registerWaitNode, parseIsoDuration, rearmSuspendedWaitTimers } from './wait-node.js';
 import type { IJobService, JobHandler, JobSchedule } from '@objectstack/spec/contracts';
 
 function silentLogger() {
@@ -136,5 +137,95 @@ describe('wait node executor', () => {
     const resumed = await engine.resume(paused.runId!);
     expect(resumed.success).toBe(true);
     expect(ran).toEqual(['after']);
+  });
+});
+
+describe('rearmSuspendedWaitTimers (cold-boot timer re-arm)', () => {
+  /** Boot a fresh engine wired to `store` with the wait flow registered — one "process". */
+  function bootEngine(store: InMemorySuspendedRunStore, ctx: any, waitConfig: Record<string, unknown>) {
+    const engine = new AutomationEngine(silentLogger());
+    const ran: string[] = [];
+    engine.registerNodeExecutor(markerExecutor(ran));
+    registerWaitNode(engine, ctx);
+    engine.setSuspendedRunStore(store);
+    engine.registerFlow('wait_flow', waitFlow(waitConfig));
+    return { engine, ran };
+  }
+
+  it('re-schedules a future timer on a new engine and resumes when it fires', async () => {
+    const store = new InMemorySuspendedRunStore();
+    const config = { eventType: 'timer', timerDuration: 'PT2H' };
+
+    // Process 1: suspend at the wait, then "die" (engine discarded).
+    const boot1 = fakeJobCtx();
+    const a = bootEngine(store, boot1.ctx, config);
+    const paused = await a.engine.execute('wait_flow');
+    expect(paused.status).toBe('paused');
+    const storedAt = boot1.scheduled[0]?.schedule.at;
+    expect(storedAt).toBeTruthy();
+
+    // Process 2: cold boot — fresh engine + fresh (empty) job service.
+    const boot2 = fakeJobCtx();
+    const b = bootEngine(store, boot2.ctx, config);
+    const job = boot2.ctx.getService('job') as IJobService;
+    const rearmed = await rearmSuspendedWaitTimers(b.engine, store, job, silentLogger());
+    expect(rearmed).toBe(1);
+
+    // Same one-shot job name + the persisted deadline (not a fresh now+2h).
+    expect(boot2.scheduled).toHaveLength(1);
+    expect(boot2.scheduled[0].name).toBe(`flow-wait:${paused.runId}:pause`);
+    expect(boot2.scheduled[0].schedule).toMatchObject({ type: 'once', at: storedAt });
+
+    // Firing the re-armed job resumes the run on the new engine.
+    await boot2.scheduled[0].handler({ jobId: boot2.scheduled[0].name });
+    expect(b.ran).toEqual(['after']);
+    expect(await store.list()).toHaveLength(0); // consumed
+  });
+
+  it('resumes an overdue timer immediately (deadline elapsed while down)', async () => {
+    const store = new InMemorySuspendedRunStore();
+    const config = { eventType: 'timer', timeoutMs: 1 };
+
+    const a = bootEngine(store, ctxNoJob(), config); // degraded: no job service
+    const paused = await a.engine.execute('wait_flow');
+    expect(paused.status).toBe('paused');
+    await new Promise((r) => setTimeout(r, 10)); // let the 1ms deadline lapse
+
+    const boot2 = fakeJobCtx();
+    const b = bootEngine(store, boot2.ctx, config);
+    const rearmed = await rearmSuspendedWaitTimers(b.engine, store, undefined, silentLogger());
+    expect(rearmed).toBe(1);
+    expect(b.ran).toEqual(['after']); // resumed inline, no job needed
+    expect(boot2.scheduled).toHaveLength(0);
+  });
+
+  it('skips non-timer pauses (signal waits have no persisted deadline)', async () => {
+    const store = new InMemorySuspendedRunStore();
+    const config = { eventType: 'signal', signalName: 'contract.renewed' };
+
+    const a = bootEngine(store, ctxNoJob(), config);
+    await a.engine.execute('wait_flow');
+
+    const boot2 = fakeJobCtx();
+    const b = bootEngine(store, boot2.ctx, config);
+    const job = boot2.ctx.getService('job') as IJobService;
+    const rearmed = await rearmSuspendedWaitTimers(b.engine, store, job, silentLogger());
+    expect(rearmed).toBe(0);
+    expect(boot2.scheduled).toHaveLength(0);
+    expect(await store.list()).toHaveLength(1); // still suspended, untouched
+  });
+
+  it('leaves a future timer suspended (with a warning) when no job service exists', async () => {
+    const store = new InMemorySuspendedRunStore();
+    const config = { eventType: 'timer', timerDuration: 'PT2H' };
+
+    const a = bootEngine(store, ctxNoJob(), config);
+    await a.engine.execute('wait_flow');
+
+    const b = bootEngine(store, ctxNoJob(), config);
+    const rearmed = await rearmSuspendedWaitTimers(b.engine, store, undefined, silentLogger());
+    expect(rearmed).toBe(0);
+    expect(b.ran).toEqual([]);
+    expect(await store.list()).toHaveLength(1); // resumable externally later
   });
 });
