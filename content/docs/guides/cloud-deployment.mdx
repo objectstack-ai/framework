@@ -62,31 +62,33 @@ or the host's deployment config.
 
 ## Cloud-managed deployment
 
-When targeting Cloud, publish metadata to an environment:
+The unified path publishes a **versioned package** and installs it into a cloud
+environment in one step:
 
 ```bash
-OS_CLOUD_URL=https://cloud.example.com \
-OS_ENVIRONMENT_ID=env_prod \
-os publish
+os cloud login                                # once: stores a cloud token
+os package publish --env env_prod --install   # publish a version + install it
 ```
 
-The CLI posts compiled metadata to:
+This registers a `sys_package` plus an immutable, checksummed
+`sys_package_version`, then records the install against the target environment
+(see the cloud [package](/docs/references/cloud/package) and
+[package-version](/docs/references/cloud/package-version) references). The
+environment kernel is evicted on install, so the new metadata and any sample
+data are live on the next request — no restart.
 
-```text
-POST /api/v1/cloud/environments/:environment/metadata
-```
-
-Rollback activates an earlier revision:
-
-```text
-POST /api/v1/cloud/environments/:environment/revisions/:commit/activate
-```
-
-Package publishing uses the package registry endpoints:
-
-```bash
-os package publish --env env_prod
-```
+> **Legacy env-revision path.** `os publish` posts compiled metadata straight to
+> an environment as a revision, rather than as a versioned package:
+>
+> ```bash
+> OS_CLOUD_URL=https://cloud.example.com OS_ENVIRONMENT_ID=env_prod os publish
+> # POST /api/v1/cloud/environments/:environment/metadata
+> # rollback: POST /api/v1/cloud/environments/:environment/revisions/:commit/activate
+> ```
+>
+> It still works, but the package flow above is the direction of travel
+> (ADR-0006 v4): `sys_environment_revision` is retired once all publishes go
+> through the package endpoints.
 
 Cloud control-plane hosts, database provisioning, billing, and public SaaS
 deployment are outside this framework repository. The framework runtime exposes
