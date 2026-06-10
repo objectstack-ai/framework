@@ -1,6 +1,6 @@
 # ADR-0021: Analytics — one semantic `dataset` layer, `report` / `dashboard` become pure presentation
 
-**Status**: Proposed — **revised 2026-05-31**: implementation scan folded in, and the gating decisions **D-A / D-B / D-C resolved** + open questions Q1–Q3 closed, optimised for the AI-authors / human-reviews design center (see "Decision" and "Resolved decisions")
+**Status**: **Accepted & shipped — Phase 2 closed 2026-06-10.** The author-surface convergence is live: the single semantic `dataset` form is the only analytics form, and the three legacy inline-query shapes are **removed** as of `@objectstack/spec` **9.0.0** (PRs [#1676](https://github.com/objectstack-ai/framework/pull/1676) cutover + [#1677](https://github.com/objectstack-ai/framework/pull/1677) major changeset, both merged). See **"Implementation status"** at the end for the per-workstream close-out and what was deferred. _(Prior: revised 2026-05-31 — implementation scan folded in, gating decisions **D-A / D-B / D-C resolved** + open questions Q1–Q3 closed, optimised for the AI-authors / human-reviews design center.)_
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-app-as-consumer-unit.md) + [ADR-0020](./0020-state-machine-converge-and-enforce.md) (the "one engine, fold the parasitic concept into its host" principle — applied here to analytics), [ADR-0017](./0017-object-has-many-view.md) (object-bound ListView is the row-level lens), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring is the design center)
 **Consumers**: `@objectstack/spec` (`ui/report.zod.ts`, `ui/dashboard.zod.ts`, `ui/view.zod.ts`, `data/query.zod.ts`, `kernel/metadata-type-schemas.ts`), `@objectstack/objectql` (query engine), `@objectstack/analytics-service`, all `examples/*`
@@ -414,3 +414,33 @@ Closed 2026-05-31 on the AI-author / human-review criterion — the throughline 
 1. **Calculated/derived measures — RESOLVED: first-class now, but closed.** AI authoring will demand ratios/derived metrics immediately; with no slot it would fake fields or mis-author formulas. So `MeasureSchema.derived` ships in v1 (see §D1), constrained to **reference other measures by name only** — no raw fields, no raw SQL — keeping it enumerable and reviewable. Runtime lands with WS2.
 2. **Dataset parameters — RESOLVED: deferred; `runtimeFilter` only in v1.** Parameters (`:region` templating) are an imperative concept and another hallucination surface; `runtimeFilter` covers global-filter/report-scope declaratively. Fewer writable concepts wins. Revisit only if a real need can't be expressed as a filter.
 3. **Cross-dataset dashboard filters — RESOLVED: deferred; conformed dimensions later.** A global filter spanning widgets on *different* datasets should not rely on fragile dimension-`name` string matching. The long-term answer is **conformed dimensions** that resolve to the same underlying `object.field`, with the filter binding to that semantic key. v1 supports single-dataset dashboards; conformed dimensions are a follow-up ADR.
+
+---
+
+## Implementation status — ACCEPTED & SHIPPED (Phase 2 closed 2026-06-10)
+
+The rollout was executed as a **dual-form → reconcile → single-form cutover**, not the literal one-shot big-bang the migration posture above described. The dual-form (inline **and** dataset coexisting, additive) phase let a **read-only reconciliation harness** prove `old == new` numbers on every analytics surface *before* the inline form was deleted — the safer path to the same destination. The cut-over (deleting the inline form) is the final, breaking step and is now merged.
+
+**Delivery shape:** Phase 1 = additive dual-form + reconciliation; **Phase 2 = single-form cutover** (this close-out). Tracked in issue #1658.
+
+### Workstream close-out
+
+| WS | Scope | Status |
+|---|---|---|
+| **WS0** | Design close-out (D-A/D-B/D-C, Q1–Q3) | ✅ done (2026-05-31) |
+| **WS1** | Spec / schema — `ui/dataset.zod.ts` added; `report`/`dashboard`/`view` reshaped; inline-query fields + `ListChartConfig` query fields + `WidgetMeasure` **removed**; seed `Dataset`→`Seed`/`defineSeed` rename | ✅ done — inline removal merged in [#1676](https://github.com/objectstack-ai/framework/pull/1676); spec **9.0.0** major declared in [#1677](https://github.com/objectstack-ai/framework/pull/1677) |
+| **WS2** | Runtime — dataset → Cube/analytics lowering; `compareTo` time-shift; date-bucketing. Two runtime bugs the reconciliation gate caught were fixed (`objectql-strategy`: same-field `$gte/$lte` range overwrite; ignored `timeDimensions`) | ✅ done for the **shipped surface** (single-object datasets + date dimensions, reconciled 0-mismatch). ⚠️ **Deferred:** the cross-object join path + per-joined-object RLS hardening (D-C) — no shipped dataset exercises a relationship join yet; the headline `revenue by account.region` use case is the first follow-up |
+| **WS3** | Frontend (`objectui`) — DatasetWidget binds dataset+values, forwards `runtimeFilter` (date-macro resolved), drops legacy string `compareTo`; console re-bumped | ✅ done (objectui #1612; console re-bump framework #1675) |
+| **WS4** | Migration + tests — examples (todo/crm/showcase) + platform-objects + objectql write-path fixtures migrated; focused dataset-form test suites; record-list reports reclassified as ListViews | ✅ done (merged in #1676) |
+| **WS5** | Docs / skills — `guides/analytics-datasets.mdx` + `skills/objectstack-ui`; regenerated `references/ui/*` | ✅ done (#1673 + regen in #1676) |
+
+### Downstream
+
+- **In-repo** consumers (all `examples/*`, `platform-objects`) migrated and green: `turbo build` 72/72, `turbo test` 123/123, `@objectstack/spec` 6526/6526.
+- **Sibling apps** `hotcrm` + `templates` (10 packages) were dual-form-migrated on their own `main`s; their built `dist/objectstack.json` analytics surfaces (**36/36 dashboards+reports**) validate clean against the 9.0.0 schemas — 0 inline-only widgets, 0 chart-type list-views. `hotcrm` pins `^8.0.1` (caret won't auto-jump to 9.0.0), so no silent break; a deliberate `^9.0.0` bump once 9.0.0 publishes is proven safe.
+
+### Open follow-ups (not blocking closure)
+
+1. **Cross-object joins + D-C RLS hardening** (WS2 deferred slice) — needed before `dataset.include` relationship dimensions/measures are usable in production.
+2. Conformed dimensions for cross-dataset dashboard filters (Q3).
+3. Publish 9.0.0, then bump the sibling apps to `^9.0.0`.
