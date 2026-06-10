@@ -1,5 +1,66 @@
 # @objectstack/cli
 
+## 9.0.0
+
+### Patch Changes
+
+- c66f770: Bundle the `@ai-sdk/openai`, `@ai-sdk/anthropic`, and `@ai-sdk/google` provider
+  SDKs as direct CLI dependencies. These were previously only declared as optional
+  peer dependencies on `@objectstack/service-ai`, so a globally-installed CLI could
+  not resolve them at runtime. Configuring an OpenAI-compatible provider (DeepSeek,
+  DashScope, SiliconFlow, OpenRouter, Cloudflare) — all of which normalise to
+  `provider=openai` and dynamically import `@ai-sdk/openai` — failed with
+  "Could not build adapter for provider=…". The CLI now ships these providers so
+  they work out of the box.
+- Updated dependencies [4c3f693]
+- Updated dependencies [4a0736b]
+- Updated dependencies [2c6864f]
+- Updated dependencies [0bf39f1]
+- Updated dependencies [f533f42]
+- Updated dependencies [1c83ee8]
+  - @objectstack/spec@9.0.0
+  - @objectstack/service-analytics@9.0.0
+  - @objectstack/service-settings@9.0.0
+  - @objectstack/plugin-auth@9.0.0
+  - @objectstack/service-ai@9.0.0
+  - @objectstack/account@9.0.0
+  - @objectstack/client@9.0.0
+  - @objectstack/core@9.0.0
+  - @objectstack/formula@9.0.0
+  - @objectstack/mcp@9.0.0
+  - @objectstack/objectql@9.0.0
+  - @objectstack/observability@9.0.0
+  - @objectstack/platform-objects@9.0.0
+  - @objectstack/driver-memory@9.0.0
+  - @objectstack/driver-mongodb@9.0.0
+  - @objectstack/driver-sql@9.0.0
+  - @objectstack/driver-sqlite-wasm@9.0.0
+  - @objectstack/plugin-approvals@9.0.0
+  - @objectstack/plugin-audit@9.0.0
+  - @objectstack/plugin-email@9.0.0
+  - @objectstack/plugin-hono-server@9.0.0
+  - @objectstack/plugin-org-scoping@9.0.0
+  - @objectstack/plugin-reports@9.0.0
+  - @objectstack/plugin-security@9.0.0
+  - @objectstack/plugin-sharing@9.0.0
+  - @objectstack/plugin-trigger-record-change@9.0.0
+  - @objectstack/plugin-trigger-schedule@9.0.0
+  - @objectstack/plugin-webhooks@9.0.0
+  - @objectstack/rest@9.0.0
+  - @objectstack/runtime@9.0.0
+  - @objectstack/service-automation@9.0.0
+  - @objectstack/service-cache@9.0.0
+  - @objectstack/service-datasource@9.0.0
+  - @objectstack/service-feed@9.0.0
+  - @objectstack/service-job@9.0.0
+  - @objectstack/service-messaging@9.0.0
+  - @objectstack/service-package@9.0.0
+  - @objectstack/service-queue@9.0.0
+  - @objectstack/service-realtime@9.0.0
+  - @objectstack/service-storage@9.0.0
+  - @objectstack/types@9.0.0
+  - @objectstack/console@9.0.0
+
 ## 8.0.1
 
 ### Patch Changes
