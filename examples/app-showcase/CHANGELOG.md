@@ -1,5 +1,26 @@
 # @objectstack/example-showcase
 
+## 0.1.10
+
+### Patch Changes
+
+- 4b0fdba: The showcase Chart Gallery now shows one widget per chart family the renderer
+  draws DISTINCTLY (27 → 17 widgets). Families that fell back to a near-relative
+  (grouped/stacked/bi-polar bars, stacked-area, step-line, spline, pyramid,
+  bubble) and the dial-less performance variants (kpi/gauge/solid-gauge/bullet,
+  identical to `metric`) were removed — advertising a type that renders as
+  something else is misleading. Bundles the objectui console build that routes
+  each widget to its true chart renderer (pie/donut/funnel/line/area/scatter/
+  radar/treemap/sankey/table/pivot).
+- Updated dependencies [4c3f693]
+- Updated dependencies [0bf39f1]
+- Updated dependencies [f533f42]
+- Updated dependencies [1c83ee8]
+  - @objectstack/spec@9.0.0
+  - @objectstack/connector-rest@9.0.0
+  - @objectstack/connector-slack@9.0.0
+  - @objectstack/runtime@9.0.0
+
 ## 0.1.9
 
 ### Patch Changes

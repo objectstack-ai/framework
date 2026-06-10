@@ -1,5 +1,34 @@
 # @objectstack/service-settings
 
+## 9.0.0
+
+### Major Changes
+
+- f533f42: Settings namespace environment overrides now use the canonical ObjectStack
+  `OS_<NAMESPACE>_<KEY>` form, with no unprefixed aliases. For example,
+  `ai.openai_base_url` is now `OS_AI_OPENAI_BASE_URL`, and
+  `feature_flags.ai_enabled` is now `OS_FEATURE_FLAGS_AI_ENABLED`.
+
+  The AI service now treats a stored or env-locked `provider=memory` setting as
+  an explicit override, while the manifest default still leaves boot-time
+  provider auto-detection intact.
+
+  The auth plugin now binds the `auth` settings namespace to better-auth runtime
+  configuration, exposes an extension hook for provider packages, and includes a
+  basic Google sign-in implementation configured either in Setup → Authentication
+  or by deployment-level `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+### Patch Changes
+
+- Updated dependencies [4c3f693]
+- Updated dependencies [0bf39f1]
+- Updated dependencies [f533f42]
+- Updated dependencies [1c83ee8]
+  - @objectstack/spec@9.0.0
+  - @objectstack/core@9.0.0
+  - @objectstack/platform-objects@9.0.0
+  - @objectstack/types@9.0.0
+
 ## 8.0.1
 
 ### Patch Changes

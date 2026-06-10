@@ -1,5 +1,78 @@
 # @objectstack/spec
 
+## 9.0.0
+
+### Major Changes
+
+- 4c3f693: ADR-0021 single-form cutover (BREAKING): the inline analytics author surface is
+  removed — every dashboard widget, report, and list-chart must now bind a
+  semantic `dataset` and select dimensions/measures **by name**.
+
+  Removed from the spec:
+
+  - **DashboardWidget** — `object`, `categoryField`, `categoryGranularity`,
+    `valueField`, `aggregate`, `measures` (and the `WidgetMeasure` schema/type).
+    `dataset` + `values` are now required; `filter` is the presentation-scope
+    runtimeFilter; `dimensions` / `compareTo` are retained.
+  - **Report** — top-level (and joined-block) `objectName`, `columns`,
+    `groupingsDown`, `groupingsAcross`, `filter`. A non-joined report now requires
+    `dataset` + `values`; `rows` are the dimensions.
+  - **ListChart** — `xAxisField`, `yAxisFields`, `aggregation`, `groupByField`.
+    `dataset` + `values` are now required.
+
+  Migration: replace the inline query with a `defineDataset(...)` and reference it
+  by name. A flat record listing (the former `tabular` report / inline list) is an
+  object-bound ListView (ADR-0017), not an analytics dataset. See
+  `docs/adr/0021-analytics-dataset-semantic-layer.md` and the
+  `content/docs/guides/analytics-datasets.mdx` guide.
+
+- 1c83ee8: BREAKING: `ChartTypeSchema` drops 8 variant types that only rendered as their
+  base chart, so the taxonomy now advertises only families the renderer draws
+  distinctly.
+
+  Removed: `grouped-bar`, `stacked-bar`, `bi-polar-bar` (→ bar — no multi-series
+  grouping/stacking), `stacked-area` (→ area), `step-line`, `spline` (→ line),
+  `pyramid` (→ funnel), `bubble` (→ scatter — no size encoding).
+
+  Kept: bar / horizontal-bar / column, line / area, pie / donut / funnel, scatter,
+  treemap / sankey, radar, table / pivot, and the single-value performance family
+  (metric / kpi / gauge / solid-gauge / bullet — these render an honest value
+  today and gain a dial when a gauge renderer lands).
+
+  Migration: a widget/series using a removed type should switch to its base
+  (`stacked-bar`→`bar`, `spline`→`line`, `pyramid`→`funnel`, `bubble`→`scatter`,
+  etc.). These can return via an opt-in renderer once a real renderer + data model
+  backs them.
+
+### Minor Changes
+
+- 0bf39f1: `queryDataset` now carries each measure's display `label` and `format` on the
+  result `fields`, so presentations can show "Tasks" / "$616,000" instead of the
+  raw measure name "task_count" / "616000".
+
+  - `AnalyticsResult.fields[]` gains optional `label?` and `format?`.
+  - The dataset executor enriches measure columns from the dataset's measure
+    definitions (matching `<name>` and `<name>__compare`).
+
+  The format can't be baked into the numeric row value (charts need the raw
+  number), so the renderer applies it at display time.
+
+### Patch Changes
+
+- f533f42: Settings namespace environment overrides now use the canonical ObjectStack
+  `OS_<NAMESPACE>_<KEY>` form, with no unprefixed aliases. For example,
+  `ai.openai_base_url` is now `OS_AI_OPENAI_BASE_URL`, and
+  `feature_flags.ai_enabled` is now `OS_FEATURE_FLAGS_AI_ENABLED`.
+
+  The AI service now treats a stored or env-locked `provider=memory` setting as
+  an explicit override, while the manifest default still leaves boot-time
+  provider auto-detection intact.
+
+  The auth plugin now binds the `auth` settings namespace to better-auth runtime
+  configuration, exposes an extension hook for provider packages, and includes a
+  basic Google sign-in implementation configured either in Setup → Authentication
+  or by deployment-level `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
 ## 8.0.1
 
 ## 8.0.0

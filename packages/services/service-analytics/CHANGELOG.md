@@ -1,5 +1,49 @@
 # Changelog — @objectstack/service-analytics
 
+## 9.0.0
+
+### Minor Changes
+
+- 4a0736b: Analytics now renders date dimensions as human bucket labels instead of raw
+  epoch millis, and buckets them by their declared granularity.
+
+  - A date dimension with an explicit `dateGranularity` is now grouped by that
+    bucket (the executor promotes it to a time dimension), so a "monthly" trend
+    chart shows one point per month rather than one per raw timestamp.
+  - Grouped date values are formatted to a sort-stable label per granularity
+    (`year` → `2026`, `quarter` → `2026-Q2`, `month` → `2026-04`, `day`/`week`
+    → `2026-04-15`), so charts no longer show `1777632968596`.
+
+  Pairs with the dimension display-label resolution (select option labels / lookup
+  names) shipped previously.
+
+- 2c6864f: Analytics dimensions now render human display labels instead of raw stored
+  values. A `select` dimension shows its option `label` (e.g. `Backlog` rather than
+  `backlog`), and a `lookup`/`master_detail` dimension shows the related record's
+  display name (e.g. an account's name rather than its FK id). `queryDataset`
+  resolves these server-side, so every dashboard/report chart benefits with no
+  frontend change. Date/number/string dimensions are unaffected, and unresolved
+  values are left as-is.
+- 0bf39f1: `queryDataset` now carries each measure's display `label` and `format` on the
+  result `fields`, so presentations can show "Tasks" / "$616,000" instead of the
+  raw measure name "task_count" / "616000".
+
+  - `AnalyticsResult.fields[]` gains optional `label?` and `format?`.
+  - The dataset executor enriches measure columns from the dataset's measure
+    definitions (matching `<name>` and `<name>__compare`).
+
+  The format can't be baked into the numeric row value (charts need the raw
+  number), so the renderer applies it at display time.
+
+### Patch Changes
+
+- Updated dependencies [4c3f693]
+- Updated dependencies [0bf39f1]
+- Updated dependencies [f533f42]
+- Updated dependencies [1c83ee8]
+  - @objectstack/spec@9.0.0
+  - @objectstack/core@9.0.0
+
 ## 8.0.1
 
 ### Patch Changes
