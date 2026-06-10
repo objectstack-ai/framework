@@ -61,9 +61,41 @@ os compile
 
 Available generate types: `object`, `view`, `action`, `flow`, `agent`, `dashboard`, `app`
 
+### Cloud — publish & install
+
+Push a locally-built package to ObjectStack Cloud and (optionally) install it
+into one of your environments in a single command. Credentials and server URL
+come from `os cloud login` (stored in `~/.objectstack/cloud.json`) or the
+`--token` / `OS_CLOUD_API_KEY` and `--server` / `OS_CLOUD_URL` flags.
+
+| Command | Description |
+|---------|-------------|
+| `os cloud login` | Authenticate to ObjectStack Cloud (browser or `--email/--password`); writes `~/.objectstack/cloud.json` |
+| `os cloud whoami` / `os cloud logout` | Inspect / clear the stored cloud session |
+| `os environments create --org <id> --name <n>` | Provision a new environment (alias: `os projects create`) |
+| `os environments list` / `show <id>` | List / inspect your environments |
+| `os package publish [artifact]` | Publish `dist/objectstack.json` as a versioned package in your org |
+
+Typical flow (build → publish → install into an environment, seeding sample data):
+
+```bash
+os compile                                 # → dist/objectstack.json
+os cloud login                             # one-time, stores the cloud session
+os environments create --org "$ORG" --name "Dev" --activate
+os package publish --env <env-id> --install --seed-sample-data
+```
+
+`os package publish` registers a `sys_package` (keyed by a reverse-domain
+`--manifest-id`, derived from the artifact when omitted), snapshots the
+artifact as a new `--version`, and — with `--env <id> --install` — installs
+that version into the environment. Useful flags: `--visibility private|org|
+marketplace`, `--note`, and for marketplace listings `--submit` (request
+review) or `--auto-approve` (platform admins only). Set `OS_CLOUD_URL` (or
+`--server`) to target a non-default control plane, e.g. a staging cloud.
+
 ### Plugin Management
 
-Runtime plugins (declared in `objectstack.config.ts` `plugins`) are loaded automatically by `os serve` / `os dev`. There is no `os plugin` command group in v1; project-level dependency management and marketplace distribution will arrive with the Cloud Projects model. To distribute a build today, use `os build` (or `os compile`) and bind the artifact via `os projects bind <id> --artifact dist/objectstack.json`.
+Runtime plugins (declared in `objectstack.config.ts` `plugins`) are loaded automatically by `os serve` / `os dev`. There is no `os plugin` command group in v1; runtime plugins are bundled into the build artifact. To distribute a build, publish it as a package with `os package publish` (see [Cloud — publish & install](#cloud--publish--install)); the legacy `os projects bind <id> --artifact dist/objectstack.json` path still binds an artifact directly into an environment without going through the package registry.
 
 ### Quality
 
