@@ -28,6 +28,13 @@ export interface AgentChatContext extends SkillContext {
   recordId?: string;
   /** Current view name */
   viewName?: string;
+  /**
+   * Whether this environment auto-publishes whole-app builds. When the client
+   * passes `true`, the agent is told a finished build is live immediately, so
+   * its narration matches reality ("your app is live") instead of defaulting to
+   * "publish it to make it live". Absent/false keeps the conservative framing.
+   */
+  autoPublishAiBuilds?: boolean;
 }
 
 /**
@@ -129,6 +136,21 @@ export class AgentRuntime {
       if (context.viewName) ctx.push(`Current view: ${context.viewName}`);
       if (ctx.length > 0) {
         parts.push('\n--- Current Context ---\n' + ctx.join('\n'));
+      }
+      // Environment publishing posture. When auto-publish is on, a finished
+      // whole-app build is already live, so the agent should say so rather than
+      // ask the user to publish. Authoring skills stay neutral by default (they
+      // can't see this runtime setting); this is what makes the narration match
+      // the UI's published state instead of hedging.
+      if (context.autoPublishAiBuilds === true) {
+        parts.push(
+          '\n--- Publishing in this environment ---\n' +
+            'Whole-app builds publish AUTOMATICALLY here: the moment you finish building an app, ' +
+            'it is live and ready to use — there is no manual publish step for the build. Tell the ' +
+            'user their app is built and live (e.g. "your app is ready — open it from the launcher"). ' +
+            'Do NOT tell them to "publish it to make it live" for a whole-app build. Smaller ' +
+            'incremental edits are still staged for review — the chat panel shows each change\'s status.',
+        );
       }
     }
 

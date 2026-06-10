@@ -606,6 +606,19 @@ describe('AgentRuntime', () => {
       const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, {});
       expect(messages[0].content).not.toContain('Current Context');
     });
+
+    it('tells the agent builds are live when the environment auto-publishes', () => {
+      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, { autoPublishAiBuilds: true });
+      expect(messages[0].content).toContain('publish AUTOMATICALLY');
+      expect(messages[0].content).toContain('is live');
+    });
+
+    it('stays silent on publishing when auto-publish is off/absent', () => {
+      for (const ctx of [{}, { autoPublishAiBuilds: false }]) {
+        const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, ctx);
+        expect(messages[0].content).not.toContain('publish AUTOMATICALLY');
+      }
+    });
   });
 
   describe('buildRequestOptions', () => {
