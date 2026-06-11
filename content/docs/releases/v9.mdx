@@ -1,0 +1,168 @@
+---
+title: v9.0.0
+description: Analytics single-form cutover (ADR-0021), honest chart taxonomy, canonical OS_* settings env vars, Google sign-in, and a smarter AI build experience in Console.
+---
+
+**Released June 10, 2026.** All `@objectstack/*` packages are published at 9.0.0. This is a major
+release: the analytics authoring surface completes its cutover to the dataset
+semantic layer, the chart taxonomy is trimmed to what actually renders, and
+settings environment variables move to their canonical `OS_*` form.
+
+**TL;DR for upgraders:** if your app defines dashboards, reports, or list
+charts with inline queries (`object` + `aggregate` + field names), you must
+migrate them to named datasets. If you configure settings via environment
+variables, rename them to `OS_<NAMESPACE>_<KEY>`. Everything else is additive.
+
+## Breaking changes
+
+### 1. Analytics single-form cutover — datasets are now required (ADR-0021)
+
+The inline analytics author surface is removed from `@objectstack/spec`. Every
+dashboard widget, report, and list chart must now bind a semantic **dataset**
+and select dimensions/measures **by name**. Define a metric once, reference it
+everywhere.
+
+Removed from the spec:
+
+| Schema | Removed properties | Now required |
+|:---|:---|:---|
+| `DashboardWidget` | `object`, `categoryField`, `categoryGranularity`, `valueField`, `aggregate`, `measures` (and the `WidgetMeasure` type) | `dataset` + `values` |
+| `Report` | top-level and joined-block `objectName`, `columns`, `groupingsDown`, `groupingsAcross`, `filter` | `dataset` + `values` (`rows` are the dimensions) |
+| `ListChart` | `xAxisField`, `yAxisFields`, `aggregation`, `groupByField` | `dataset` + `values` |
+
+**Migration:**
+
+1. For each inline query, create a dataset with `defineDataset(...)` declaring
+   its dimensions and measures. See the
+   [Analytics Datasets guide](/docs/guides/analytics-datasets).
+2. Point the widget/report/chart at it: `dataset: "<name>"`, pick `values`
+   (measure names) and `dimensions`/`rows` (dimension names).
+3. Presentation-scope filtering goes through the widget's `filter`, which is
+   applied as the dataset's `runtimeFilter`.
+4. A flat record listing (the former `tabular` report or inline list) is not an
+   analytics dataset — model it as an object-bound **ListView** (ADR-0017).
+
+> Rationale: [ADR-0021 — Analytics: one semantic dataset layer](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0021-analytics-dataset-semantic-layer.md)
+
+### 2. `ChartTypeSchema` trimmed to distinctly-renderable families
+
+Eight chart types that only ever rendered as their base chart are removed, so
+the taxonomy no longer advertises variants the renderer doesn't draw. Update
+any widget or series using a removed type to its base:
+
+| Removed type | Use instead |
+|:---|:---|
+| `grouped-bar`, `stacked-bar`, `bi-polar-bar` | `bar` |
+| `stacked-area` | `area` |
+| `step-line`, `spline` | `line` |
+| `pyramid` | `funnel` |
+| `bubble` | `scatter` |
+
+Kept: `bar` / `horizontal-bar` / `column`, `line` / `area`, `pie` / `donut` /
+`funnel`, `scatter`, `treemap` / `sankey`, `radar`, `table` / `pivot`, and the
+single-value performance family (`metric` / `kpi` / `gauge` / `solid-gauge` /
+`bullet`). Removed variants can return behind an opt-in renderer once a real
+renderer and data model back them.
+
+### 3. Settings env overrides: canonical `OS_<NAMESPACE>_<KEY>` only
+
+`@objectstack/service-settings` no longer accepts unprefixed aliases for
+settings-namespace environment overrides. Rename your deployment variables:
+
+| Before | After |
+|:---|:---|
+| `AI_OPENAI_BASE_URL` (or `ai.openai_base_url`) | `OS_AI_OPENAI_BASE_URL` |
+| `FEATURE_FLAGS_AI_ENABLED` | `OS_FEATURE_FLAGS_AI_ENABLED` |
+
+The general rule: `OS_` + namespace + key, upper-snake-cased. See the
+[Environment Variables guide](/docs/guides/environment-variables).
+
+### 4. `@object-ui/plugin-workflow` removed
+
+The package authored BPMN-style workflow shapes the ObjectStack automation
+engine does not execute (ADR-0020, ADR-0031). If you imported it in a custom
+UI, the replacements ship already: flow authoring is the metadata-admin
+`FlowCanvas` (engine-registry-driven palette) in `@object-ui/app-shell`, run
+history is `FlowRunsPanel`, and approval UI comes from the framework's
+`@objectstack/plugin-approvals`.
+
+## New in the framework
+
+### Analytics results are now presentation-ready
+
+Three `@objectstack/service-analytics` improvements make charts and reports
+human-readable with no frontend work:
+
+- **Dimension display labels.** A `select` dimension shows its option label
+  (`Backlog`, not `backlog`); a `lookup`/`master_detail` dimension shows the
+  related record's display name instead of its foreign-key id. Resolution
+  happens server-side in `queryDataset`.
+- **Date dimensions bucket and format by granularity.** A monthly trend chart
+  now yields one point per month with sort-stable labels (`2026`, `2026-Q2`,
+  `2026-04`) — no more raw epoch milliseconds on the axis.
+- **Measure label and format travel with the result.** `AnalyticsResult.fields[]`
+  gains optional `label` and `format`, so a chart can display "Tasks" and
+  "$616,000" while keeping raw numbers for plotting.
+
+### Auth: Google sign-in and an extension hook
+
+`@objectstack/plugin-auth` binds the `auth` settings namespace to better-auth
+runtime configuration and exposes an extension hook for provider packages.
+Google sign-in works out of the box — configure it in **Setup →
+Authentication** or via deployment-level `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET`. See [Auth & SSO](/docs/guides/auth-sso).
+
+### CLI: AI provider SDKs bundled
+
+The CLI now ships `@ai-sdk/openai`, `@ai-sdk/anthropic`, and `@ai-sdk/google`
+as direct dependencies. A globally-installed CLI can configure any
+OpenAI-compatible provider (DeepSeek, DashScope, SiliconFlow, OpenRouter,
+Cloudflare) without the previous "Could not build adapter for provider=…"
+failure.
+
+## New in Console (Studio)
+
+The Console build frozen into `@objectstack/console` 9.0.0 picks up the
+dataset cutover end-to-end, plus a round of AI-builder and designer
+improvements:
+
+- **Dataset widgets render as their true chart type** — pie, donut, funnel,
+  line, area, scatter, radar, treemap, sankey, table, and pivot all route to
+  their real renderer, and metric cards display the measure's label and format.
+- **Reports render the dataset form** (ADR-0021), including matrix and joined
+  variants; widget filters apply as dataset runtime filters.
+- **Flow designer aligned with the engine vocabulary**, with a runs panel for
+  inspecting executions; toolbar flow/script actions now resolve the selected
+  record correctly.
+- **Build-with-AI**: a live build tree streams progress while the agent
+  scaffolds an app, finished apps can auto-publish in chat, seed-data results
+  are surfaced, and the consumer panel no longer dumps raw tool JSON.
+- **Marketplace**: when cloud-bound, the Installed view reads the
+  control-plane's install list (ADR-0007).
+- **Forms**: conditional rules in inline grids can now reference parent-record
+  fields (`parent.<field>` scope).
+- **Pages**: `PageView` gains a console action runtime, so page-embedded
+  actions behave like their grid/detail counterparts.
+- **Charts**: crowded bar-chart x-axis labels angle and truncate instead of
+  overlapping.
+
+## Notable fixes
+
+- Publishing pending drafts by ref so package-less drafts can't get stuck in
+  the metadata-admin publish queue.
+- `FlowRunner` closes cleanly when a terminal resume fails instead of leaving
+  a dead dialog.
+- The AI service treats a stored or env-locked `provider=memory` as an explicit
+  override, while manifest defaults keep boot-time provider auto-detection
+  intact.
+
+## Upgrade checklist
+
+1. Update all `@objectstack/*` dependencies to `^9.0.0` (they are
+   version-locked — upgrade them together).
+2. Migrate inline dashboard widgets, reports, and list charts to named
+   datasets ([guide](/docs/guides/analytics-datasets)).
+3. Replace removed chart types with their base family (table above).
+4. Rename settings env vars to the `OS_<NAMESPACE>_<KEY>` form.
+5. Re-run your app's spec validation (`os validate`) — it will flag any
+   metadata still using removed properties.

@@ -1,0 +1,39 @@
+---
+title: Overview
+description: Release notes for the ObjectStack platform — framework packages and the Console UI, summarized per version for app and plugin developers.
+---
+
+ObjectStack ships as a single release train: all `@objectstack/*` packages are
+version-locked, so one version number describes the whole platform. The
+Console UI (built from the [objectui](https://github.com/objectstack-ai/objectui)
+repository) is frozen into `@objectstack/console` at release time, so each
+release note here also covers what changed in Studio/Console.
+
+Each release page is written for **third-party developers** building apps,
+plugins, or clients on ObjectStack. It leads with breaking changes and
+migration steps, then covers new capabilities and notable fixes.
+
+## Versions
+
+- [v9.0.0](/docs/releases/v9) — Analytics single-form cutover (ADR-0021), honest chart taxonomy, canonical `OS_*` settings env vars, Google sign-in, AI build experience.
+
+## Where the fine-grained changelogs live
+
+These pages are curated summaries. For exhaustive, per-package detail:
+
+- **Framework packages** — every package ships a `CHANGELOG.md` generated from
+  [changesets](https://github.com/changesets/changesets), visible on npm and in
+  the [framework repository](https://github.com/objectstack-ai/framework).
+- **Console UI** — the [objectui CHANGELOG](https://github.com/objectstack-ai/objectui/blob/main/CHANGELOG.md)
+  follows Keep a Changelog.
+- **Design decisions** — breaking changes reference their
+  [ADRs](https://github.com/objectstack-ai/framework/tree/main/docs/adr), which
+  record the rationale.
+
+## Versioning policy
+
+ObjectStack follows [Semantic Versioning](https://semver.org). A **major**
+release may remove or change schemas in `@objectstack/spec`, public APIs, CLI
+flags, or environment variables — always with a migration path documented in
+the release notes. **Minor** releases add capabilities without breaking
+existing metadata or code. **Patch** releases fix bugs.
