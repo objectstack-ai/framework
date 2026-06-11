@@ -1,5 +1,11 @@
 # @objectstack/fastify
 
+## 9.1.0
+
+### Patch Changes
+
+- @objectstack/runtime@9.1.0
+
 ## 9.0.1
 
 ### Patch Changes

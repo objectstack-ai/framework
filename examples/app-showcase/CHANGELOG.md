@@ -1,5 +1,15 @@
 # @objectstack/example-showcase
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [b9062c9]
+  - @objectstack/spec@9.1.0
+  - @objectstack/connector-rest@9.1.0
+  - @objectstack/connector-slack@9.1.0
+  - @objectstack/runtime@9.1.0
+
 ## 0.1.11
 
 ### Patch Changes

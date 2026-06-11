@@ -1,5 +1,23 @@
 # @objectstack/plugin-dev
 
+## 9.1.0
+
+### Patch Changes
+
+- Updated dependencies [b9062c9]
+  - @objectstack/spec@9.1.0
+  - @objectstack/core@9.1.0
+  - @objectstack/objectql@9.1.0
+  - @objectstack/driver-memory@9.1.0
+  - @objectstack/plugin-auth@9.1.0
+  - @objectstack/plugin-hono-server@9.1.0
+  - @objectstack/plugin-org-scoping@9.1.0
+  - @objectstack/plugin-security@9.1.0
+  - @objectstack/rest@9.1.0
+  - @objectstack/runtime@9.1.0
+  - @objectstack/service-i18n@9.1.0
+  - @objectstack/types@9.1.0
+
 ## 9.0.1
 
 ### Patch Changes

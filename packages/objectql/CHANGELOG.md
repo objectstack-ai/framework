@@ -1,5 +1,16 @@
 # @objectstack/objectql
 
+## 9.1.0
+
+### Patch Changes
+
+- Updated dependencies [b9062c9]
+  - @objectstack/spec@9.1.0
+  - @objectstack/core@9.1.0
+  - @objectstack/formula@9.1.0
+  - @objectstack/metadata-core@9.1.0
+  - @objectstack/types@9.1.0
+
 ## 9.0.1
 
 ### Patch Changes
