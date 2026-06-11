@@ -11,6 +11,12 @@ const data = { provider: 'object' as const, object: 'todo_task' };
  * (no grouping / aggregation), which is a ListView concern, not analytics. It
  * is converted here to an `overdue` grid view filtered to incomplete, overdue
  * tasks — replacing the report entirely.
+ *
+ * Issue #1719: the dashboard's `overdue_tasks_table` / `due_today` widgets
+ * were count-only `table` widgets on the `task_metrics` dataset — a single
+ * summary row, not the record listing they intended. They are re-modelled
+ * here as the `overdue` / `due_today` views, surfaced via app navigation;
+ * the dashboard keeps the counts on its `metric` widgets.
  */
 export const TaskViews = defineView({
   list: {
@@ -45,6 +51,25 @@ export const TaskViews = defineView({
         { field: 'is_completed', operator: 'equals', value: false },
       ],
       sort: [{ field: 'due_date', order: 'asc' }],
+    },
+
+    // Replaces the dashboard's count-only `due_today` table widget (#1719).
+    due_today: {
+      label: 'Due Today',
+      type: 'grid',
+      data,
+      columns: [
+        { field: 'subject' },
+        { field: 'priority' },
+        { field: 'status' },
+        { field: 'owner' },
+        { field: 'category' },
+      ],
+      filter: [
+        { field: 'due_date', operator: 'equals', value: '{today}' },
+        { field: 'is_completed', operator: 'equals', value: false },
+      ],
+      sort: [{ field: 'priority', order: 'desc' }],
     },
   },
 });
