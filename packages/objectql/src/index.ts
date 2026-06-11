@@ -84,3 +84,8 @@ export type {
 // Seed loader — materializes `seed` metadata into rows (used by publishMetaItem
 // and the runtime dispatcher/app plugins).
 export { SeedLoaderService } from './seed-loader.js';
+
+// ADR-0038 L3 — post-publish runtime probes (one real read per published
+// artifact); findings are BuildIssue-shaped with layer 'runtime'.
+export { runBuildProbes } from './build-probes.js';
+export type { RuntimeBuildIssue, BuildProbeReport, RunBuildProbesOptions } from './build-probes.js';
