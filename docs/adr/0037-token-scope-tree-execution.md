@@ -25,13 +25,16 @@ A code review (below) shows the cost is much larger than the data-structure
 change implies.
 
 **Decision: two tracks.** Ship **Track A — multi-instance / aggregating nodes**
-first: model the actual demand (parallel approvals, batch approvals) as *single
-nodes* that wait for N decisions, the way Camunda multi-instance and AWS Step
-Functions `Map` do. This needs **no change to the engine's execution model** —
-the node owns the fan-out and the aggregation, the run still has one program
-counter. Defer **Track B — the general token/scope tree** until demand exceeds
-what multi-instance covers; this ADR records its design so Track A is built
-toward it, not away from it.
+first: model the demand as *single nodes* that wait for N decisions, the way
+Camunda multi-instance and AWS Step Functions `Map` do. Track A splits into a
+**free** tier and a **bounded** tier — a distinction worth stating up front:
+**A1 (parallel approval — one `approval` node aggregating N decisions) needs no
+engine change and is shipped (#1708)**; **A2 (a `map` / multi-instance node for
+batch approval) is NOT free** — because each item can pause, it needs a bounded
+extension of the engine's resume path (N:1 aggregation or node re-entry), so it
+is a separately-justified increment, not a free rider on A1. Defer **Track B —
+the general token/scope tree** until demand exceeds what multi-instance covers;
+this ADR records its design so Track A is built toward it, not away from it.
 
 ## Context — current state (verified 2026-06-11, against the code)
 
@@ -107,24 +110,41 @@ execution model," not "add a tree to `SuspendedRun`."
 Model the concrete demand as **single nodes** that internally fan out and
 aggregate, leaving the engine's one-program-counter model intact:
 
-- **`approval` gains multi-approver aggregation** (it largely has this already —
-  `behavior: 'unanimous' | 'first_response'`): one `approval` node opens N
-  approval requests and **stays suspended at that one node** until the
-  aggregation rule is met, then resumes down `approve` / `reject`. "Finance AND
-  legal" is `unanimous` over two approver groups — **one node, one program
-  counter, already paused once**. No engine-core change.
-- **A `map` / multi-instance node** for "do X for each item, then continue":
-  one node owns the collection, opens a child unit per item (e.g. an approval or
-  a subflow per row), and suspends at that single node until all units settle.
-  The aggregation (all / any / threshold) is node config. This is the Step
-  Functions `Map` shape and Camunda's multi-instance activity.
-- These compose with ADR-0019 durable pause exactly as today: the node suspends
-  once, at one position; resume targets the run, not a token. `sys_automation_run`
-  is unchanged. The node executor tracks its own per-unit state (it already may,
-  via the approvals service's `sys_approval_request` rows).
+Track A has **two tiers of cost** — a distinction the first revision of this ADR
+got wrong by lumping them together. They are not equal.
 
-Track A covers parallel approvals and batch approvals — the demand that
-motivated this ADR — at a fraction of Track B's cost and risk.
+**A1 — aggregating `approval` node (truly free; shipped #1708).** One `approval`
+node with `behavior: 'unanimous'` over N approver groups opens **one**
+`sys_approval_request` whose `pending_approvers` lists all groups (notified in
+parallel) and stays suspended until every group approves, then resumes down
+`approve` / `reject`. "Finance AND legal" is exactly this — **one node, one
+program counter, paused once**. This needed **no engine change**: the
+unanimous-over-N aggregation already exists in the approvals service and is
+unit-tested; A1 added a showcase (`showcase_invoice_signoff`) and docs, browser-
+verified. The aggregation state lives in the plugin's own `sys_approval_request`
+row, not the engine.
+
+**A2 — `map` / multi-instance node (NOT free — engine-adjacent).** A correction:
+a `map` node that serves **batch approval** (each item can pause) **cannot** be
+"no engine change," contrary to this ADR's first revision. Examined against the
+code, every flavor needs a bounded extension of the engine's resume/bubble path:
+  - *concurrent* map (N items pause at once) needs **durable N:1 aggregation +
+    per-parent serialization + completion-ordering handling** — i.e. part of
+    Track B's hard concurrency, just confined to one node;
+  - *sequential* map (one item at a time) needs **resume-into-the-node** (process
+    the next item) instead of the engine's resume-past-the-node default — the DAG
+    has no back-edge to loop the node;
+  - only a *synchronous, non-pausing* map is engine-free, and that does not serve
+    batch approval (which pauses).
+  The map node reuses ADR-0019's linked-runs (#1693) for the 1:1 bubble but
+  extends it to N:1 / re-entry. It is a real, bounded engine task — smaller than
+  the full Track B scheduler, but **not** the zero-cost item A1 was. It should be
+  built only against concrete batch-approval demand, with the aggregation /
+  re-entry semantics designed first.
+
+So Track A as shipped (**A1**) covers *parallel* approvals at zero engine cost.
+*Batch* approvals (**A2**) are a deliberate, separately-justified increment, not
+a free rider on A1.
 
 ### Track B (deferred) — the general token / scope tree
 
@@ -192,15 +212,22 @@ model:
 
 ## Sequencing
 
-1. **A1 — specify the aggregating `approval` contract** (formalize
-   `unanimous` / `first_response` / threshold over approver *groups*; today's
-   `unanimous` already tallies — make N-group explicit and tested).
-2. **A2 — `map` / multi-instance node**: collection in, per-item child unit
-   (approval or subflow), aggregation policy, single suspend/resume at the node.
-   Showcase example: per-line-item approval over an invoice's lines.
+1. **A1 — aggregating `approval` node. ✅ Shipped (#1708).** The
+   `unanimous`-over-N-approver-groups aggregation already existed and was
+   unit-tested; #1708 added the `showcase_invoice_signoff` worked example
+   (finance AND legal, browser-verified) and docs. No engine change. Threshold /
+   quorum (M-of-N) stays enterprise-tier per `approval.zod.ts`.
+2. **A2 — `map` / multi-instance node (design-first; not started).** Collection
+   in, per-item child unit, aggregation, single suspend at the node. **Cost
+   correction**: because items can pause, this needs a bounded engine resume-path
+   extension (durable N:1 aggregation for concurrent, or resume-into-node for
+   sequential) — it is *not* the zero-engine-change item A1 was, so it is gated on
+   concrete batch-approval demand and a design note that nails the aggregation /
+   re-entry + serialization semantics first.
 3. **B-gate** — only if a concrete flow needs arbitrary-position concurrent
-   pause: open a follow-up ADR to start Track B at §1's scheduler, with the
-   one-token refactor as the first, behavior-preserving step.
+   pause that a multi-instance node cannot express: open a follow-up ADR to start
+   Track B at the scheduler, with the one-token refactor as the first,
+   behavior-preserving step.
 
 ## Non-goals / deferred
 
