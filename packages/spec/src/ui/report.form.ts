@@ -5,6 +5,12 @@
  * `@object-ui/plugin-form` renderer resolves field metadata from the
  * Zod-derived JSON Schema served by `/api/v1/meta` and applies the
  * widget/visibility hints declared here.
+ *
+ * ADR-0021 single-form: a report is dataset-bound — it binds a semantic-layer
+ * `dataset` and selects its `values` (measure names) grouped by `rows`
+ * (dimension names). The legacy inline `objectName` + `columns` + `groupings`
+ * query form was removed from {@link ReportSchema} in the 9.0 cutover, so this
+ * form no longer declares those fields.
  */
 
 import { defineForm } from './view.zod';
@@ -15,47 +21,41 @@ export const reportForm = defineForm({
   sections: [
     {
       label: 'Basics',
-      description: 'Identity and data source.',
+      description: 'Identity and report type.',
       columns: 2,
       fields: [
         { field: 'name', type: 'text', colSpan: 1, required: true, helpText: 'snake_case unique identifier' },
         { field: 'label', type: 'text', colSpan: 1, required: true },
         { field: 'description', type: 'textarea', colSpan: 2 },
-        { field: 'objectName', widget: 'ref:object', colSpan: 1, helpText: 'Data source object' },
-        { field: 'type', colSpan: 1, helpText: 'Report type: tabular/summary/matrix/joined' },
+        { field: 'type', colSpan: 2, helpText: 'Report type: tabular/summary/matrix/joined' },
       ],
     },
     {
-      label: 'Columns',
-      description: 'Columns shown in the report output.',
+      label: 'Dataset binding',
+      description: 'The semantic-layer dataset this report renders. Values are the dataset’s measures; rows are its dimensions.',
+      // A `joined` report carries its data on `blocks` instead.
+      visibleOn: "data.type != 'joined'",
       fields: [
-        { field: 'columns', type: 'repeater', helpText: 'Columns to display in the report' },
-      ],
-    },
-    {
-      label: 'Groupings',
-      description: 'How rows (and columns, for matrix reports) are grouped.',
-      fields: [
-        { field: 'groupingsDown', type: 'repeater', helpText: 'Row grouping levels' },
-        // CEL visibility — only Matrix reports use column groupings.
-        { field: 'groupingsAcross', type: 'repeater', visibleOn: "data.type == 'matrix'", helpText: 'Column grouping levels (matrix only)' },
+        { field: 'dataset', widget: 'ref:dataset', helpText: 'Dataset to bind (measures/dimensions come from its semantic layer)' },
+        { field: 'values', widget: 'string-tags', helpText: 'Measure names (from the dataset) to display' },
+        { field: 'rows', widget: 'string-tags', helpText: 'Dimension names (from the dataset) to group rows by' },
       ],
     },
     {
       label: 'Joined blocks',
-      description: 'Additional blocks joined into a single report (joined reports only).',
+      description: 'Additional dataset-bound blocks stacked into a single report (joined reports only).',
       visibleOn: "data.type == 'joined'",
       fields: [
-        { field: 'blocks', type: 'repeater', helpText: 'Join multiple objects (joined report only)' },
+        { field: 'blocks', type: 'repeater', helpText: 'Dataset-bound sub-reports (joined report only)' },
       ],
     },
     {
       label: 'Filter & chart',
-      description: 'Report-level filters and chart presentation.',
+      description: 'Render-time scope filter and chart presentation.',
       collapsible: true,
       collapsed: true,
       fields: [
-        { field: 'filter', type: 'repeater', helpText: 'Report-level filters' },
+        { field: 'runtimeFilter', widget: 'json', helpText: 'Render-time scope filter, ANDed at query time' },
         { field: 'chart', type: 'composite', helpText: 'Chart config (type, legend, colors)' },
       ],
     },
