@@ -220,13 +220,16 @@ export function lintConfig(config: any): LintIssue[] {
   // objectstack-data/-ui skills. These double as the eval rubric (see score.ts).
   issues.push(...lintDataModel(objects));
 
-  // ── Dashboard widget bindings (ADR-0021, issue #1719) ──
-  // e.g. a table/pivot widget whose binding resolves to count-only measures
-  // with no dimensions — almost always a record listing that belongs in an
-  // object-bound ListView (ADR-0017), not an analytics dataset.
+  // ── Dashboard widget bindings (ADR-0021, issues #1719/#1721) ──
+  // Reference integrity (errors): widget `dataset`/`dimensions`/`values` and
+  // chartConfig axis/series fields must resolve against the declared
+  // datasets. Advisory shapes (warnings): e.g. a table/pivot widget whose
+  // binding resolves to count-only measures with no dimensions — almost
+  // always a record listing that belongs in an object-bound ListView
+  // (ADR-0017), not an analytics dataset.
   for (const w of validateWidgetBindings(config)) {
     issues.push({
-      severity: 'warning',
+      severity: w.severity,
       rule: w.rule,
       message: `${w.where}: ${w.message}`,
       path: w.path,

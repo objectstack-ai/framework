@@ -1,32 +1,61 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Build-time dashboard widget binding diagnostics (issue #1719).
+ * Build-time dashboard widget binding diagnostics (issues #1719, #1721).
  *
- * Runs at `objectstack compile`/`build` AFTER the stack has been schema-parsed,
- * so every widget's `dataset` reference can be linked to its `defineDataset`
- * and each entry in `values` resolved to a concrete measure with a known
- * `aggregate`. This is the semantic/cross-reference phase — the rules here
- * cannot run during plain Zod parsing of the raw widget literal.
+ * Runs at `objectstack validate`/`compile`/`build` AFTER the stack has been
+ * schema-parsed, so every widget's `dataset` reference can be linked to its
+ * `defineDataset` and each entry in `dimensions`/`values` resolved to a
+ * declared dimension/measure. This is the semantic/cross-reference phase —
+ * the rules here cannot run during plain Zod parsing of the raw widget
+ * literal (the dataset may even live in another package of the stack).
  *
- * Rule `table-count-only`: a `table` / `pivot` widget whose selected measures
- * are ALL `aggregate: 'count'` and which declares no `dimensions` asks the
- * analytics service for a single summary row. That is the shape a `metric`
- * widget wants — for a table it almost always means the author wanted a
- * per-record listing, which is not an analytics dataset at all (model it as an
- * object-bound ListView, ADR-0017). The signal is evaluated on the WIDGET's
- * binding, not the dataset: a dataset may well carry other measures and
- * dimensions the widget simply doesn't select.
+ * Reference-integrity rules (#1721) — severity `error`, the page is broken:
  *
- * Warnings are non-fatal by design — `objectstack build` stays green — and a
- * deliberate single-row table can opt out per widget via
- * `suppressWarnings: ['table-count-only']`.
+ * - `widget-dataset-unknown` — `dataset` does not resolve to a declared
+ *   `Dataset`.
+ * - `widget-dimension-unknown` — a `dimensions[]` entry is not a dimension
+ *   name on the bound dataset.
+ * - `widget-measure-unknown` — a `values[]` entry is not a measure name on
+ *   the bound dataset.
+ * - `chart-field-unknown` — a `chartConfig` binding names a field the query
+ *   result will not contain: `xAxis.field` must be one of the widget's
+ *   dimensions (or a dataset dimension), and each `yAxis[].field` /
+ *   `series[].name` must be one of the widget's selected measures
+ *   (`values`). Post-cutover (ADR-0021) the result rows are keyed by
+ *   measure NAME (e.g. `sum_amount`), not the base column (`amount`) — a
+ *   stale base-column reference renders the axis but an empty series.
+ *
+ * Advisory rules — severity `warning`, build stays green:
+ *
+ * - `chart-config-missing` — a chart-type widget (bar/line/pie/…) has no
+ *   `chartConfig`, so the renderer cannot tell which measure to plot.
+ * - `table-count-only` (#1719) — a `table`/`pivot` widget whose selected
+ *   measures are ALL `aggregate: 'count'` and which declares no
+ *   `dimensions` asks the analytics service for a single summary row. That
+ *   is the shape a `metric` widget wants — for a table it almost always
+ *   means the author wanted a per-record listing, which is not an
+ *   analytics dataset at all (model it as an object-bound ListView,
+ *   ADR-0017). Evaluated on the WIDGET's binding, not the dataset.
+ *
+ * Warnings can be deliberately suppressed per widget via
+ * `suppressWarnings: ['<rule-id>']`; errors cannot — they describe a
+ * binding the analytics service cannot satisfy.
  */
 
+export const WIDGET_DATASET_UNKNOWN = 'widget-dataset-unknown';
+export const WIDGET_DIMENSION_UNKNOWN = 'widget-dimension-unknown';
+export const WIDGET_MEASURE_UNKNOWN = 'widget-measure-unknown';
+export const CHART_FIELD_UNKNOWN = 'chart-field-unknown';
+export const CHART_CONFIG_MISSING = 'chart-config-missing';
 export const TABLE_COUNT_ONLY = 'table-count-only';
 
-export interface WidgetBindingWarning {
-  /** Diagnostic rule id (registry entry), e.g. `table-count-only`. */
+export type WidgetBindingSeverity = 'error' | 'warning';
+
+export interface WidgetBindingFinding {
+  /** `error` = unresolvable binding (broken page); `warning` = advisory. */
+  severity: WidgetBindingSeverity;
+  /** Diagnostic rule id (registry entry), e.g. `widget-measure-unknown`. */
   rule: string;
   /** Human-readable location, e.g. `dashboard "x" › widget "y"`. */
   where: string;
@@ -49,13 +78,81 @@ function asArray(v: unknown): AnyRec[] {
   return [];
 }
 
+function asStrings(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+}
+
+/**
+ * Chart families whose renderer needs a `chartConfig` measure mapping.
+ * Single-value types (metric/kpi/gauge/…) plot their lone value and tabular
+ * types (table/pivot) render every column, so they are exempt.
+ */
+const CHART_TYPES = new Set([
+  'bar', 'horizontal-bar', 'column',
+  'line', 'area',
+  'pie', 'donut', 'funnel',
+  'scatter', 'treemap', 'sankey', 'radar',
+]);
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+/**
+ * Nearest declared name for a typo'd/stale reference, or undefined when
+ * nothing is close. Containment is checked first because the cutover's
+ * canonical drift is base column → prefixed measure name (`amount` →
+ * `sum_amount`), which is far in edit distance but obvious to a human.
+ */
+function didYouMean(input: string, candidates: Iterable<string>): string | undefined {
+  let best: string | undefined;
+  let bestScore = Infinity;
+  for (const c of candidates) {
+    let score: number;
+    if (input.length >= 3 && (c.includes(input) || input.includes(c))) {
+      score = Math.abs(c.length - input.length);
+    } else {
+      const d = levenshtein(input, c);
+      if (d > Math.max(2, Math.floor(input.length / 3))) continue;
+      score = 100 + d;
+    }
+    if (score < bestScore) { bestScore = score; best = c; }
+  }
+  return best;
+}
+
+function suggest(input: string, candidates: Iterable<string>): string {
+  const s = didYouMean(input, candidates);
+  return s ? ` Did you mean "${s}"?` : '';
+}
+
+function list(names: Iterable<string>): string {
+  const arr = [...names];
+  return arr.length > 0 ? arr.join(', ') : '(none)';
+}
+
 /**
  * Validate every dashboard widget's dataset binding. Returns the list of
- * warnings (empty = clean). Caller decides how to surface them — these are
- * advisory and must never fail the build on their own.
+ * findings (empty = clean). Caller decides how to surface them: `error`
+ * findings describe bindings the analytics service cannot satisfy and
+ * should fail validate/build; `warning` findings are advisory and must
+ * never fail the build on their own.
  */
-export function validateWidgetBindings(stack: AnyRec): WidgetBindingWarning[] {
-  const warnings: WidgetBindingWarning[] = [];
+export function validateWidgetBindings(stack: AnyRec): WidgetBindingFinding[] {
+  const findings: WidgetBindingFinding[] = [];
 
   const datasets = new Map<string, AnyRec>();
   for (const ds of asArray(stack.datasets)) {
@@ -70,28 +167,152 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingWarning[] {
 
     for (let j = 0; j < widgets.length; j++) {
       const w = widgets[j];
-      if (w.type !== 'table' && w.type !== 'pivot') continue;
-      // Grouped by at least one dimension → genuinely aggregated rows.
-      if (Array.isArray(w.dimensions) && w.dimensions.length > 0) continue;
-      // Author opted out — a single-row summary table is intentional here.
-      if (Array.isArray(w.suppressWarnings) && w.suppressWarnings.includes(TABLE_COUNT_ONLY)) continue;
+      const widgetId = typeof w.id === 'string' ? w.id : `(widget ${j})`;
+      const where = `dashboard "${dashName}" › widget "${widgetId}"`;
+      const path = `dashboards[${i}].widgets[${j}]`;
+      const suppressed = (rule: string): boolean =>
+        Array.isArray(w.suppressWarnings) && w.suppressWarnings.includes(rule);
+      const push = (f: Omit<WidgetBindingFinding, 'where' | 'path'>): void => {
+        if (f.severity === 'warning' && suppressed(f.rule)) return;
+        findings.push({ ...f, where, path });
+      };
 
+      // ── (a) dataset reference resolves ──
       const dsName = typeof w.dataset === 'string' ? w.dataset : undefined;
       const dataset = dsName ? datasets.get(dsName) : undefined;
-      // A dangling dataset reference is a cross-reference finding, not this rule.
+      if (dsName && !dataset) {
+        push({
+          severity: 'error',
+          rule: WIDGET_DATASET_UNKNOWN,
+          message: `dataset "${dsName}" does not resolve to a declared dataset.`,
+          hint:
+            `Declared datasets: ${list(datasets.keys())}.${suggest(dsName, datasets.keys())} ` +
+            `Define the dataset with defineDataset() or fix the reference (ADR-0021).`,
+        });
+      }
+      // Without a resolved dataset there is nothing to check names against.
       if (!dataset) continue;
 
+      const dimensionNames = new Set<string>();
+      for (const d of asArray(dataset.dimensions)) {
+        if (typeof d.name === 'string') dimensionNames.add(d.name);
+      }
       const measures = new Map<string, AnyRec>();
       for (const m of asArray(dataset.measures)) {
         if (typeof m.name === 'string') measures.set(m.name, m);
       }
 
-      const values = Array.isArray(w.values)
-        ? (w.values as unknown[]).filter((v): v is string => typeof v === 'string')
-        : [];
+      // ── (b) every dimensions[] entry is a dataset dimension ──
+      const dims = asStrings(w.dimensions);
+      for (let k = 0; k < dims.length; k++) {
+        if (dimensionNames.has(dims[k])) continue;
+        push({
+          severity: 'error',
+          rule: WIDGET_DIMENSION_UNKNOWN,
+          message:
+            `dimensions[${k}] "${dims[k]}" is not a dimension of dataset ` +
+            `"${dsName}" (declared dimensions: ${list(dimensionNames)}).`,
+          hint:
+            `Widgets select dataset dimensions BY NAME.${suggest(dims[k], dimensionNames)} ` +
+            `Add the dimension to the dataset or fix the reference.`,
+        });
+      }
+
+      // ── (c) every values[] entry is a dataset measure ──
+      const values = asStrings(w.values);
+      for (let k = 0; k < values.length; k++) {
+        if (measures.has(values[k])) continue;
+        push({
+          severity: 'error',
+          rule: WIDGET_MEASURE_UNKNOWN,
+          message:
+            `values[${k}] "${values[k]}" is not a measure of dataset ` +
+            `"${dsName}" (declared measures: ${list(measures.keys())}).`,
+          hint:
+            `Widgets select dataset measures BY NAME, not by base column.` +
+            `${suggest(values[k], measures.keys())} ` +
+            `Add the measure to the dataset or fix the reference.`,
+        });
+      }
+
+      // ── (d) chartConfig bindings resolve against the widget's selection ──
+      const chartConfig = (w.chartConfig && typeof w.chartConfig === 'object')
+        ? (w.chartConfig as AnyRec)
+        : undefined;
+      const isChartType = typeof w.type === 'string' && CHART_TYPES.has(w.type);
+
+      if (chartConfig) {
+        // The query result carries the widget's selected dimensions and
+        // measures; resolve every chartConfig field against that shape.
+        const selectedValues = new Set(values.filter((v) => measures.has(v)));
+
+        const xAxis = (chartConfig.xAxis && typeof chartConfig.xAxis === 'object')
+          ? (chartConfig.xAxis as AnyRec)
+          : undefined;
+        // A field naming an entry of the widget's own (already-validated)
+        // selection is not re-reported here — rules (b)/(c) own that error.
+        if (xAxis && typeof xAxis.field === 'string'
+            && !dimensionNames.has(xAxis.field) && !dims.includes(xAxis.field)) {
+          push({
+            severity: 'error',
+            rule: CHART_FIELD_UNKNOWN,
+            message:
+              `chartConfig.xAxis.field "${xAxis.field}" does not resolve to a ` +
+              `dimension of dataset "${dsName}" (declared dimensions: ${list(dimensionNames)}).`,
+            hint: `Point xAxis.field at a dataset dimension name.${suggest(xAxis.field, dimensionNames)}`,
+          });
+        }
+
+        const measureField = (label: string, field: string): void => {
+          if (values.includes(field)) return; // resolvable, or already errored via rule (c)
+          const declaredButUnselected = measures.has(field);
+          push({
+            severity: 'error',
+            rule: CHART_FIELD_UNKNOWN,
+            message: declaredButUnselected
+              ? `chartConfig.${label} "${field}" is a measure of dataset "${dsName}" ` +
+                `but is not selected in the widget's values (${list(values)}), so the ` +
+                `query result will not contain it.`
+              : `chartConfig.${label} "${field}" does not resolve to a measure of ` +
+                `dataset "${dsName}" (declared measures: ${list(measures.keys())}).`,
+            hint: declaredButUnselected
+              ? `Add "${field}" to the widget's values, or bind the chart to a selected measure.`
+              : `Post-cutover data is keyed by the dataset's measure NAME, not the ` +
+                `base column.${suggest(field, selectedValues.size > 0 ? selectedValues : measures.keys())}`,
+          });
+        };
+
+        const yAxes = Array.isArray(chartConfig.yAxis) ? (chartConfig.yAxis as AnyRec[]) : [];
+        for (let k = 0; k < yAxes.length; k++) {
+          const field = yAxes[k]?.field;
+          if (typeof field === 'string') measureField(`yAxis[${k}].field`, field);
+        }
+        const series = Array.isArray(chartConfig.series) ? (chartConfig.series as AnyRec[]) : [];
+        for (let k = 0; k < series.length; k++) {
+          const name = series[k]?.name;
+          if (typeof name === 'string') measureField(`series[${k}].name`, name);
+        }
+      } else if (isChartType) {
+        push({
+          severity: 'warning',
+          rule: CHART_CONFIG_MISSING,
+          message:
+            `chart-type widget ('${w.type}') has no chartConfig — the renderer ` +
+            `cannot determine which measure to plot, so the series renders empty.`,
+          hint:
+            `Add chartConfig with xAxis.field set to a dimension (${list(dims)}) and ` +
+            `yAxis[].field set to a measure name (${list(values)}). If the default ` +
+            `rendering is intentional, suppress with: suppressWarnings: ['${CHART_CONFIG_MISSING}']`,
+        });
+      }
+
+      // ── (e) table/pivot bound to a count-only, dimensionless selection ──
+      if (w.type !== 'table' && w.type !== 'pivot') continue;
+      // Grouped by at least one dimension → genuinely aggregated rows.
+      if (dims.length > 0) continue;
       if (values.length === 0) continue;
       const resolved = values.map((v) => measures.get(v));
-      // An unresolvable measure name is a different diagnostic — don't guess.
+      // An unresolvable measure name already errored above — don't guess here.
       if (resolved.some((m) => !m)) continue;
 
       // Derived measures combine other measures; treat them as non-count even
@@ -99,11 +320,9 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingWarning[] {
       const countOnly = resolved.every((m) => m!.aggregate === 'count' && !m!.derived);
       if (!countOnly) continue;
 
-      const widgetId = typeof w.id === 'string' ? w.id : `(widget ${j})`;
-      warnings.push({
+      push({
+        severity: 'warning',
         rule: TABLE_COUNT_ONLY,
-        where: `dashboard "${dashName}" › widget "${widgetId}"`,
-        path: `dashboards[${i}].widgets[${j}]`,
         message:
           `a '${w.type}' widget bound to dataset "${dsName}" selects only count ` +
           `measure(s) (${values.join(', ')}) and no dimensions, so it renders a ` +
@@ -118,5 +337,5 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingWarning[] {
     }
   }
 
-  return warnings;
+  return findings;
 }

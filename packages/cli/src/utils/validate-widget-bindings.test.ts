@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { validateWidgetBindings, TABLE_COUNT_ONLY } from './validate-widget-bindings.js';
+import {
+  validateWidgetBindings,
+  TABLE_COUNT_ONLY,
+  WIDGET_DATASET_UNKNOWN,
+  WIDGET_DIMENSION_UNKNOWN,
+  WIDGET_MEASURE_UNKNOWN,
+  CHART_FIELD_UNKNOWN,
+  CHART_CONFIG_MISSING,
+} from './validate-widget-bindings.js';
 
 /** The downstream repro from issue #1719 — dataset with a count AND a sum
  *  measure plus a dimension; the widget selects only the count, no dims. */
@@ -31,10 +39,195 @@ function reproStack(widgetOverrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The minimal repro from issue #1721 — dataset measure is `sum_amount`, but
+ *  the chart's yAxis still names the old base column `amount`. */
+function chartStack(widgetOverrides: Record<string, unknown> = {}) {
+  return {
+    datasets: [{
+      name: 'expense_line_metrics',
+      label: 'Expense line metrics',
+      object: 'expense_line',
+      dimensions: [{ name: 'category', field: 'category' }],
+      measures: [
+        { name: 'sum_amount', label: 'sum_amount', aggregate: 'sum', field: 'amount', certified: true },
+        { name: 'ticket_count', label: 'ticket_count', aggregate: 'count' },
+      ],
+    }],
+    dashboards: [{
+      name: 'spend_dashboard',
+      label: 'Spend',
+      widgets: [{
+        id: 'spend_by_category',
+        type: 'bar',
+        dataset: 'expense_line_metrics',
+        dimensions: ['category'],
+        values: ['sum_amount'],
+        chartConfig: {
+          type: 'bar',
+          xAxis: { field: 'category' },
+          yAxis: [{ field: 'sum_amount' }],
+        },
+        layout: { x: 0, y: 0, w: 6, h: 4 },
+        ...widgetOverrides,
+      }],
+    }],
+  };
+}
+
+describe('validateWidgetBindings (reference integrity, issue #1721)', () => {
+  it('a fully resolved chart widget is clean', () => {
+    expect(validateWidgetBindings(chartStack())).toHaveLength(0);
+  });
+
+  it('(a) errors on a dataset reference that does not resolve', () => {
+    const findings = validateWidgetBindings(chartStack({ dataset: 'expense_line_metric' }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(WIDGET_DATASET_UNKNOWN);
+    expect(findings[0].message).toContain('expense_line_metric');
+    expect(findings[0].hint).toContain('Did you mean "expense_line_metrics"?');
+  });
+
+  it('(b) errors on a dimension name the dataset does not declare', () => {
+    const findings = validateWidgetBindings(chartStack({ dimensions: ['categry'] }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(WIDGET_DIMENSION_UNKNOWN);
+    expect(findings[0].message).toContain('"categry"');
+    expect(findings[0].message).toContain('declared dimensions: category');
+    expect(findings[0].hint).toContain('Did you mean "category"?');
+  });
+
+  it('(c) errors on a measure name the dataset does not declare', () => {
+    const findings = validateWidgetBindings(chartStack({
+      type: 'metric',
+      values: ['amount'],
+      chartConfig: undefined,
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(WIDGET_MEASURE_UNKNOWN);
+    expect(findings[0].message).toContain('declared measures: sum_amount, ticket_count');
+    expect(findings[0].hint).toContain('Did you mean "sum_amount"?');
+  });
+
+  it('(d) errors on the issue repro: yAxis.field naming the stale base column', () => {
+    const findings = validateWidgetBindings(chartStack({
+      chartConfig: {
+        type: 'bar',
+        xAxis: { field: 'category' },
+        yAxis: [{ field: 'amount' }],
+      },
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(CHART_FIELD_UNKNOWN);
+    expect(findings[0].where).toContain('spend_by_category');
+    expect(findings[0].message).toContain('chartConfig.yAxis[0].field "amount"');
+    expect(findings[0].message).toContain('declared measures: sum_amount, ticket_count');
+    expect(findings[0].hint).toContain('Did you mean "sum_amount"?');
+  });
+
+  it('(d) errors on xAxis.field that is not a dataset dimension', () => {
+    const findings = validateWidgetBindings(chartStack({
+      chartConfig: {
+        type: 'bar',
+        xAxis: { field: 'categories' },
+        yAxis: [{ field: 'sum_amount' }],
+      },
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(CHART_FIELD_UNKNOWN);
+    expect(findings[0].message).toContain('chartConfig.xAxis.field "categories"');
+    expect(findings[0].hint).toContain('Did you mean "category"?');
+  });
+
+  it('(d) errors on series[].name that resolves to no selected measure', () => {
+    const findings = validateWidgetBindings(chartStack({
+      chartConfig: {
+        type: 'bar',
+        series: [{ name: 'value' }],
+      },
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(CHART_FIELD_UNKNOWN);
+    expect(findings[0].message).toContain('chartConfig.series[0].name "value"');
+  });
+
+  it('(d) a declared-but-unselected measure gets the targeted message', () => {
+    const findings = validateWidgetBindings(chartStack({
+      chartConfig: {
+        type: 'bar',
+        xAxis: { field: 'category' },
+        yAxis: [{ field: 'ticket_count' }],
+      },
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(CHART_FIELD_UNKNOWN);
+    expect(findings[0].message).toContain('not selected in the widget\'s values');
+    expect(findings[0].hint).toContain('Add "ticket_count" to the widget\'s values');
+  });
+
+  it('(d) warns when a chart-type widget has no chartConfig at all', () => {
+    const findings = validateWidgetBindings(chartStack({ chartConfig: undefined }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('warning');
+    expect(findings[0].rule).toBe(CHART_CONFIG_MISSING);
+    expect(findings[0].message).toContain("'bar'");
+    expect(findings[0].hint).toContain(`suppressWarnings: ['${CHART_CONFIG_MISSING}']`);
+  });
+
+  it('(d) missing chartConfig is suppressible per widget', () => {
+    expect(validateWidgetBindings(chartStack({
+      chartConfig: undefined,
+      suppressWarnings: [CHART_CONFIG_MISSING],
+    }))).toHaveLength(0);
+  });
+
+  it('(d) non-chart types do not warn on missing chartConfig', () => {
+    for (const type of ['metric', 'kpi', 'gauge', 'table']) {
+      expect(validateWidgetBindings(chartStack({ type, chartConfig: undefined }))).toHaveLength(0);
+    }
+  });
+
+  it('errors are NOT suppressible via suppressWarnings', () => {
+    const findings = validateWidgetBindings(chartStack({
+      dataset: 'no_such_dataset',
+      suppressWarnings: [WIDGET_DATASET_UNKNOWN],
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+  });
+
+  it('does not double-report a chartConfig field that names an already-errored selection entry', () => {
+    const findings = validateWidgetBindings(chartStack({
+      values: ['amount'],
+      chartConfig: {
+        type: 'bar',
+        xAxis: { field: 'category' },
+        yAxis: [{ field: 'amount' }],
+      },
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(WIDGET_MEASURE_UNKNOWN);
+  });
+
+  it('a dangling dataset reports once and skips the name checks', () => {
+    const findings = validateWidgetBindings(chartStack({
+      dataset: 'nope',
+      dimensions: ['whatever'],
+      values: ['also_whatever'],
+    }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(WIDGET_DATASET_UNKNOWN);
+  });
+});
+
 describe('validateWidgetBindings (table-count-only, issue #1719)', () => {
   it('warns on the issue repro: count-only table widget without dimensions', () => {
     const warnings = validateWidgetBindings(reproStack());
     expect(warnings).toHaveLength(1);
+    expect(warnings[0].severity).toBe('warning');
     expect(warnings[0].rule).toBe(TABLE_COUNT_ONLY);
     expect(warnings[0].where).toContain('expenses_overview_dashboard');
     expect(warnings[0].where).toContain('pending_reports_table');
@@ -75,12 +268,18 @@ describe('validateWidgetBindings (table-count-only, issue #1719)', () => {
     expect(validateWidgetBindings(reproStack({ suppressWarnings: ['some-other-rule'] }))).toHaveLength(1);
   });
 
-  it('skips dangling dataset references (cross-reference finding, not this rule)', () => {
-    expect(validateWidgetBindings(reproStack({ dataset: 'no_such_dataset' }))).toHaveLength(0);
+  it('a dangling dataset reference is the cross-reference error, not this rule', () => {
+    const findings = validateWidgetBindings(reproStack({ dataset: 'no_such_dataset' }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(WIDGET_DATASET_UNKNOWN);
   });
 
-  it('skips unresolvable measure names (a different diagnostic)', () => {
-    expect(validateWidgetBindings(reproStack({ values: ['no_such_measure'] }))).toHaveLength(0);
+  it('an unresolvable measure name is the cross-reference error, not this rule', () => {
+    const findings = validateWidgetBindings(reproStack({ values: ['no_such_measure'] }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].rule).toBe(WIDGET_MEASURE_UNKNOWN);
   });
 
   it('treats derived measures as non-count even when aggregate says count', () => {

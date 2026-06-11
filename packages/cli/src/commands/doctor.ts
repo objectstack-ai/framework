@@ -8,6 +8,7 @@ import path from 'path';
 import { normalizeStackInput } from '@objectstack/spec';
 import { printHeader, printSuccess, printWarning, printError, printStep, printInfo } from '../utils/format.js';
 import { loadConfig, configExists } from '../utils/config.js';
+import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
 
 interface HealthCheckResult {
   name: string;
@@ -523,6 +524,31 @@ export default class Doctor extends Command {
             }
           } else {
             printSuccess('View integrity        All views reference valid objects');
+          }
+        }
+
+        // Dashboard widget integrity (issue #1721) — the widget-side analogue
+        // of the orphan-view pass: every widget's `dataset`, `dimensions`,
+        // `values`, and chartConfig axis/series fields must resolve against
+        // the declared datasets (ADR-0021).
+        if (Array.isArray(config.dashboards) && config.dashboards.length > 0) {
+          printStep('Checking dashboard widget integrity...');
+          const widgetFindings = validateWidgetBindings(config);
+          if (widgetFindings.length > 0) {
+            for (const f of widgetFindings) {
+              if (f.severity === 'error') {
+                hasErrors = true;
+                printError(`${f.where}: ${f.message}`);
+              } else {
+                hasWarnings = true;
+                printWarning(`${f.where}: ${f.message}`);
+              }
+              if (flags.verbose) {
+                console.log(chalk.dim(`      → ${f.hint}`));
+              }
+            }
+          } else {
+            printSuccess('Dashboard integrity   All widgets resolve datasets, dimensions, and measures');
           }
         }
       } catch {

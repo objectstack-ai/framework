@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { ZodError } from 'zod';
 import { ObjectStackDefinitionSchema, normalizeStackInput } from '@objectstack/spec';
 import { loadConfig } from '../utils/config.js';
+import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
 import {
   printHeader,
   printKV,
@@ -69,7 +70,37 @@ export default class Validate extends Command {
         this.exit(1);
       }
 
-      // 3. Collect and display stats
+      // 3. Dashboard widget reference integrity (issue #1721) — a semantic
+      //    cross-reference pass the protocol schema cannot express: every
+      //    widget's `dataset`/`dimensions`/`values` and chartConfig
+      //    axis/series fields must resolve against the declared datasets
+      //    (ADR-0021). Errors fail validation; warnings are advisory.
+      if (!flags.json) printStep('Checking dashboard widget bindings (ADR-0021)...');
+      const widgetFindings = validateWidgetBindings(result.data as Record<string, unknown>);
+      const widgetErrors = widgetFindings.filter((f) => f.severity === 'error');
+      const widgetWarnings = widgetFindings.filter((f) => f.severity === 'warning');
+
+      if (widgetErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: widgetErrors,
+            warnings: widgetWarnings,
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Dashboard widget integrity failed (${widgetErrors.length} issue${widgetErrors.length > 1 ? 's' : ''})`);
+        for (const f of widgetErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+
+      // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
       if (flags.json) {
@@ -77,14 +108,18 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
+          warnings: widgetWarnings,
           duration: timer.elapsed(),
         }, null, 2));
         return;
       }
 
-      // 4. Warnings (non-blocking)
+      // 5. Warnings (non-blocking)
       const warnings: string[] = [];
-      
+
+      for (const f of widgetWarnings) {
+        warnings.push(`${f.where}: ${f.message}`);
+      }
       if (stats.objects === 0) {
         warnings.push('No objects defined — this stack has no data model');
       }
@@ -98,7 +133,7 @@ export default class Validate extends Command {
         warnings.push('Missing manifest.namespace — required for multi-app hosting');
       }
 
-      // 5. Display results
+      // 6. Display results
       console.log('');
       printSuccess(`Validation passed ${chalk.dim(`(${timer.display()})`)}`);
       console.log('');
