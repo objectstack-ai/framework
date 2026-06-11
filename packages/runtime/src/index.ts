@@ -34,6 +34,9 @@ export type { SystemEnvironmentPluginConfig } from './system-environment-plugin.
 export { HttpServer } from './http-server.js';
 export { HttpDispatcher } from './http-dispatcher.js';
 export type { HttpProtocolContext, HttpDispatcherResult } from './http-dispatcher.js';
+// ADR-0006 generic kernel-resolution seam (retained framework contract; the
+// multi-tenant implementation lives in cloud `@objectstack/objectos-runtime`).
+export type { KernelResolver } from './http-dispatcher.js';
 export { MiddlewareManager } from './middleware.js';
 
 // ── Security primitives ───────────────────────────────────────────────

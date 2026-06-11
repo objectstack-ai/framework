@@ -53,12 +53,44 @@ export interface HttpDispatcherResult {
 }
 
 /**
+ * ADR-0006 generic kernel-resolution seam.
+ *
+ * A host (e.g. ObjectStack Cloud) injects a resolver to own per-request
+ * kernel selection. The framework ships NO multi-tenant implementation — all
+ * hostname→env strategy, the per-env kernel cache, and the control plane live
+ * in the host distribution (`@objectstack/objectos-runtime`). When no resolver
+ * is injected the dispatcher serves every request from its single
+ * `defaultKernel` (single-environment mode).
+ *
+ * Returning `undefined` routes the request to `defaultKernel` — resolvers use
+ * this for control-plane / unscoped / single-environment requests. This is the
+ * generic contract that, in ADR-0006 Phase 5, fully replaces the dispatcher's
+ * built-in `kernelManager` + hostname resolution; in Phase 2 it coexists with
+ * them (it merely takes precedence for primary request routing).
+ */
+export interface KernelResolver {
+    resolveKernel(
+        context: HttpProtocolContext,
+        defaultKernel: ObjectKernel,
+    ): Promise<ObjectKernel | undefined> | ObjectKernel | undefined;
+}
+
+/**
  * Optional configuration passed to the dispatcher constructor. Supports the
  * legacy `enforceProjectMembership` toggle plus the new multi-kernel
  * scheduling hook required by ADR-0003's cloud runtime mode.
  */
 export interface HttpDispatcherOptions {
     enforceProjectMembership?: boolean;
+    /**
+     * Optional generic kernel-resolution seam (ADR-0006). When present it
+     * TAKES PRECEDENCE over `kernelManager` for primary request routing: after
+     * the dispatcher resolves `context.environmentId`, it delegates per-request
+     * kernel selection to the resolver. Coexists with `kernelManager` (still
+     * used by action-route service resolution) until ADR-0006 Phase 5 retires
+     * the in-dispatcher resolution. Falls back to `resolveService('kernel-resolver')`.
+     */
+    kernelResolver?: KernelResolver;
     /**
      * Optional {@link KernelManager}. When present, the dispatcher resolves
      * `context.environmentId` first and then routes the request against the
@@ -88,6 +120,7 @@ export class HttpDispatcher {
     private envRegistry?: any; // EnvironmentDriverRegistry
     private defaultProject?: { environmentId: string; orgId?: string };
     private kernelManager?: KernelManager;
+    private kernelResolver?: KernelResolver;
     private scopeManager?: EnvironmentScopeManager;
     /**
      * When `true`, scoped data-plane routes enforce a
@@ -119,6 +152,10 @@ export class HttpDispatcher {
         this.envRegistry = envRegistry ?? resolveService('env-registry');
         this.enforceMembership = options?.enforceProjectMembership ?? true;
         this.kernelManager = options?.kernelManager ?? resolveService('kernel-manager');
+        // ADR-0006 Phase 2 seam — host-injected kernel resolver (preferred over
+        // kernelManager for primary routing when present). Optional service so
+        // single-environment / legacy hosts that register neither are unchanged.
+        this.kernelResolver = options?.kernelResolver ?? resolveService('kernel-resolver');
         this.scopeManager = options?.scopeManager ?? resolveService('scope-manager');
         // Single-project default is resolved lazily on first request — the
         // plugin that registers it (`createSingleEnvironmentPlugin`) may run
@@ -2806,7 +2843,14 @@ export class HttpDispatcher {
         // Reserved virtual id 'platform' addresses the control plane through
         // the regular project URL family — never spin up a per-project kernel
         // for it (there is no projects row to look up).
-        if (this.kernelManager && context.environmentId && context.environmentId !== 'platform') {
+        if (this.kernelResolver) {
+            // ADR-0006 Phase 2 seam: the host owns kernel selection. The
+            // resolver returns `defaultKernel` (or undefined) for platform /
+            // unscoped / single-env requests, so this branch is
+            // behavior-equivalent to the kernelManager path below for the
+            // cloud resolver (which delegates to the same KernelManager).
+            this.kernel = (await this.kernelResolver.resolveKernel(context, this.defaultKernel)) ?? this.defaultKernel;
+        } else if (this.kernelManager && context.environmentId && context.environmentId !== 'platform') {
             this.kernel = await this.kernelManager.getOrCreate(context.environmentId);
         } else {
             this.kernel = this.defaultKernel;
