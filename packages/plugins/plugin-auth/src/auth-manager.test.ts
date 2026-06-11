@@ -25,6 +25,10 @@ vi.mock('better-auth/plugins/magic-link', () => ({
   magicLink: vi.fn((_opts?: any) => ({ id: 'magic-link' })),
 }));
 
+vi.mock('better-auth/plugins/custom-session', () => ({
+  customSession: vi.fn((fn: any) => ({ id: 'custom-session', _fn: fn })),
+}));
+
 import { betterAuth } from 'better-auth';
 
 describe('AuthManager', () => {
@@ -1177,6 +1181,98 @@ describe('AuthManager', () => {
       process.env.OS_AUTH_SECRET = 'a-strong-production-secret-value';
       const m = new AuthManager({ baseUrl: 'http://localhost:3000' } as any);
       expect((m as any).generateSecret()).toBe('a-strong-production-secret-value');
+    });
+  });
+
+  describe('customSession – derived role and roles array', () => {
+    // dataEngine stub: `adminLinks` controls whether the user resolves as a
+    // platform admin (a sys_user_permission_set row pointing at the
+    // admin_full_access permission set with no organization scope).
+    const makeDataEngine = (opts: { platformAdmin: boolean }) => ({
+      find: vi.fn(async (object: string) => {
+        if (object === 'sys_user_permission_set') {
+          return opts.platformAdmin
+            ? [{ user_id: 'u-1', permission_set_id: 'ps-admin', organization_id: null }]
+            : [];
+        }
+        if (object === 'sys_permission_set') {
+          return [{ id: 'ps-admin', name: 'admin_full_access' }];
+        }
+        return [];
+      }),
+      findOne: vi.fn(),
+    });
+
+    const getSessionCallback = async (dataEngine: any) => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        dataEngine,
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      const plugin = capturedConfig.plugins.find((p: any) => p.id === 'custom-session');
+      expect(plugin).toBeDefined();
+      return plugin._fn as (input: { user: any; session: any }) => Promise<any>;
+    };
+
+    it('returns roles=[] for a regular user with no stored role', async () => {
+      const callback = await getSessionCallback(makeDataEngine({ platformAdmin: false }));
+      const result = await callback({
+        user: { id: 'u-1', email: 'a@b.com' },
+        session: {},
+      });
+      expect(result.user.role).toBeUndefined();
+      expect(result.user.roles).toEqual([]);
+    });
+
+    it('splits a stored role string into roles for a non-admin user', async () => {
+      const callback = await getSessionCallback(makeDataEngine({ platformAdmin: false }));
+      const result = await callback({
+        user: { id: 'u-1', email: 'a@b.com', role: 'manager' },
+        session: {},
+      });
+      // No promotion: `role` keeps its stored value.
+      expect(result.user.role).toBe('manager');
+      expect(result.user.roles).toEqual(['manager']);
+    });
+
+    it('keeps stored business roles in roles[] when promoting a platform admin', async () => {
+      const callback = await getSessionCallback(makeDataEngine({ platformAdmin: true }));
+      const result = await callback({
+        user: { id: 'u-1', email: 'a@b.com', role: 'manager' },
+        session: {},
+      });
+      // Promotion replaces `role` (existing semantics) but the stored
+      // business role survives in the array.
+      expect(result.user.role).toBe('admin');
+      expect(result.user.roles).toEqual(['manager', 'admin']);
+    });
+
+    it('does not duplicate admin in roles[] when the stored role already includes it', async () => {
+      const callback = await getSessionCallback(makeDataEngine({ platformAdmin: true }));
+      const result = await callback({
+        user: { id: 'u-1', email: 'a@b.com', role: 'admin,manager' },
+        session: {},
+      });
+      expect(result.user.role).toBe('admin');
+      expect(result.user.roles).toEqual(['admin', 'manager']);
+    });
+
+    it('returns the payload untouched when the user has no id', async () => {
+      const callback = await getSessionCallback(makeDataEngine({ platformAdmin: false }));
+      const user = { email: 'anon@b.com' };
+      const result = await callback({ user, session: {} });
+      expect(result.user).toBe(user);
+      expect(result.user.roles).toBeUndefined();
     });
   });
 });

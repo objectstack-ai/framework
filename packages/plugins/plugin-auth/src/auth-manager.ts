@@ -947,6 +947,15 @@ export class AuthManager {
     // field so frontend gating (e.g. AppShell's `isAdmin = user.role === 'admin'`)
     // works without each consumer having to re-query permission sets.
     //
+    // It also returns a `roles: string[]` array: the stored `user.role`
+    // string split on commas (the admin plugin stores multi-role users as
+    // e.g. `"admin,manager"`), with `'admin'` appended (deduplicated) when
+    // the user is promoted below. Consumers that match on individual role
+    // names (e.g. the Console approvals inbox resolving `role:<name>`
+    // approvers) must read `roles` — `user.role` is *replaced* by the
+    // literal `'admin'` on promotion, so business roles such as `manager`
+    // only survive in the array.
+    //
     // Better-auth's `sys_user` table doesn't carry a `role` column. We derive
     // it from two sources:
     //
@@ -1013,8 +1022,14 @@ export class AuthManager {
         };
 
         const promote = (await isPlatformAdmin()) || (await isActiveOrgAdmin());
-        if (!promote) return { user, session };
-        return { user: { ...user, role: 'admin' }, session };
+        const storedRole = typeof (user as any).role === 'string' ? (user as any).role : '';
+        const roles = storedRole
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        if (promote && !roles.includes('admin')) roles.push('admin');
+        if (!promote) return { user: { ...user, roles }, session };
+        return { user: { ...user, role: 'admin', roles }, session };
       }));
     }
 
