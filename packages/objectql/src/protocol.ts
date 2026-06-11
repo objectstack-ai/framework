@@ -4006,6 +4006,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         failed: Array<{ type: string; name: string; error: string; code?: string }>;
         /** Aggregate result of materializing every published `seed` (absent when no seeds). */
         seedApplied?: { success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] };
+        /**
+         * ADR-0038 L3 — post-publish runtime probe report (absent when nothing
+         * was publishable). One real read per published artifact: seeded
+         * objects must have rows, views must be readable, dashboard widgets'
+         * dataset selections must execute and return data. `issues` carries
+         * BuildIssue-shaped findings (layer 'runtime') for the agent / chat
+         * health surfaces; probes never fail the publish itself.
+         */
+        probes?: import('./build-probes.js').BuildProbeReport;
     }> {
         await this.ensureOverlayIndex();
         const orgId = request.organizationId ?? null;
@@ -4054,15 +4063,45 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
 
+        const seedApplied = seedBodies.length > 0 ? await this.applySeedBodies(seedBodies, orgId) : undefined;
+
+        // ADR-0038 L3: exercise what was just published — one real read per
+        // artifact — so "Published!" can never again mean "and silently
+        // broken". Best-effort by design: a probe crash is swallowed (the
+        // publish already happened and must report as such), and findings ride
+        // the response for the agent / chat health card to act on.
+        let probes: import('./build-probes.js').BuildProbeReport | undefined;
+        if (published.length > 0) {
+            try {
+                const { runBuildProbes } = await import('./build-probes.js');
+                const analytics = this.getServicesRegistry?.().get('analytics');
+                probes = await runBuildProbes({
+                    engine: this.engine as any,
+                    getItem: async (type, name) => {
+                        const wrapper: any = await (this as any).getMetaItem({
+                            type,
+                            name,
+                            ...(orgId ? { organizationId: orgId } : {}),
+                        });
+                        return wrapper?.item ?? wrapper ?? undefined;
+                    },
+                    published,
+                    ...(analytics && typeof analytics.queryDataset === 'function' ? { analytics } : {}),
+                    organizationId: orgId,
+                });
+            } catch {
+                probes = undefined;
+            }
+        }
+
         return {
             success: failed.length === 0 && published.length > 0,
             publishedCount: published.length,
             failedCount: failed.length,
             published,
             failed,
-            ...(seedBodies.length > 0
-                ? { seedApplied: await this.applySeedBodies(seedBodies, orgId) }
-                : {}),
+            ...(seedApplied ? { seedApplied } : {}),
+            ...(probes ? { probes } : {}),
         };
     }
 
