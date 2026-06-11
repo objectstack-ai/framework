@@ -168,8 +168,8 @@ improvements:
 - **Build-with-AI**: a live build tree streams progress while the agent
   scaffolds an app, finished apps can auto-publish in chat, seed-data results
   are surfaced, and the consumer panel no longer dumps raw tool JSON.
-- **Marketplace**: when cloud-bound, the Installed view reads the
-  control-plane's install list (ADR-0007).
+- **Marketplace**: when cloud-bound, the Installed view shows what Cloud has
+  installed into the environment (see the Cloud section below).
 - **Forms**: conditional rules in inline grids can now reference parent-record
   fields (`parent.<field>` scope).
 - **Pages**: `PageView` gains a console action runtime, so page-embedded
@@ -177,24 +177,23 @@ improvements:
 - **Charts**: crowded bar-chart x-axis labels angle and truncate instead of
   overlapping.
 
-## ObjectStack Cloud
+## ObjectStack Cloud: package publish & install
 
-ObjectStack Cloud (the hosted control plane) versions independently of this
-release train and deploys continuously; changes that affect how you ship apps
-are summarized here when a framework release lands.
+ObjectStack Cloud versions independently of this release train and deploys
+continuously; developer-facing changes are summarized here when a framework
+release lands.
 
-- **Package install via reconciliation (ADR-0007 ①).** Installing a published
-  package into an environment is now a control-plane operation: the
-  environment's **Installed** view in Console reads the control-plane install
-  list when cloud-bound, and publish → install is the documented deployment
-  path (install from the environment Marketplace, not a publish flag).
-- **Authorization hardening across the environment API surface** — environment
-  reads are org-scoped, and destructive environment/organization operations
-  require an owner/admin role.
+The deployment story for cloud-bound apps is now **publish, then install**:
+`os package publish` puts a package version in the cloud catalog, and you
+install it into an environment from that environment's **Marketplace** in
+Console — installing is an explicit step, no longer a side effect of a publish
+flag. The environment's **Installed** view reflects what Cloud has installed,
+so packages installed via the CLI show up there too.
 
-The second phase of ADR-0007 — org-scoped private package catalogs with
-`os package publish` defaulting to organization visibility — ships in the next
-framework release.
+Coming in the next framework release: published packages default to
+**organization visibility**, so they appear in your own environments'
+Marketplace immediately, with private visibility reserved for targeted
+distribution.
 
 ## Notable fixes
 
