@@ -27,10 +27,10 @@ export const StatusPriorityMatrixReport: Report = {
   label: 'Status × Priority (Matrix)',
   description: 'Task counts cross-tabulated by status and priority.',
   type: 'matrix',
-  // ADR-0021 Phase 2 — dataset binding (dual-form). Matrix flattens rows+across
-  // into `rows` for now (cell values identical); across-dimension is a follow-up.
+  // ADR-0021 D2 — true pivot: `rows` down × `columns` across, measures in cells.
   dataset: 'showcase_task_metrics',
-  rows: ['status', 'priority'],
+  rows: ['status'],
+  columns: ['priority'],
   values: ['est_hours'],
 };
 

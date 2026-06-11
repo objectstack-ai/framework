@@ -91,6 +91,8 @@ export const JoinedReportBlockSchema: z.ZodTypeAny = lazySchema(() => z.object({
   dataset: SnakeCaseIdentifierSchema.optional().describe('Dataset name to bind (ADR-0021)'),
   /** Dimension names (from the dataset) to group rows by. Dataset-bound only. */
   rows: z.array(z.string()).optional().describe('Dimension names down (dataset-bound)'),
+  /** Dimension names across — matrix blocks pivot rows × columns (ADR-0021 D2). */
+  columns: z.array(z.string()).optional().describe('Dimension names across (matrix, dataset-bound)'),
   /** Measure names (from the dataset) to display. Dataset-bound only. */
   values: z.array(z.string()).optional().describe('Measure names to show (dataset-bound)'),
   /** Render-time scope filter, ANDed at query time. Dataset-bound only. */
@@ -121,10 +123,21 @@ export const ReportSchema = lazySchema(() => z.object({
   dataset: SnakeCaseIdentifierSchema.optional().describe('Dataset name to bind (ADR-0021)'),
   /** Dimension names (from the dataset) to group rows by (down axis). */
   rows: z.array(z.string()).optional().describe('Dimension names down'),
+  /**
+   * Dimension names across (ADR-0021 D2) — a `matrix` report pivots
+   * `rows` × `columns` with `values` in the cells. Ignored for other types.
+   */
+  columns: z.array(z.string()).optional().describe('Dimension names across (matrix)'),
   /** Measure names (from the dataset) to display. */
   values: z.array(z.string()).optional().describe('Measure names to show'),
   /** Render-time scope filter, ANDed at query time. */
   runtimeFilter: FilterConditionSchema.optional().describe('Render-time scope filter'),
+  /**
+   * ADR-0021 D2 — click an aggregated row/cell to open the underlying
+   * records (dataset-backed; the host resolves the dataset's object and
+   * dimension→field mapping). Default on; set `false` to disable.
+   */
+  drilldown: z.boolean().default(true).describe('Click-through to underlying records'),
 
   /** Visualization */
   chart: ReportChartSchema.optional().describe('Embedded chart configuration'),
