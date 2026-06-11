@@ -115,24 +115,11 @@ export const TaskDashboard: Dashboard = {
       options: { showLegend: true }
     },
 
-    // Row 4: Tables
-    {
-      id: 'overdue_tasks_table',
-      title: 'Overdue Tasks',
-      type: 'table',
-      filter: { is_overdue: true, is_completed: false },
-      dataset: 'task_metrics',
-      values: ['task_count'],
-      layout: { x: 0, y: 10, w: 6, h: 4 },
-    },
-    {
-      id: 'due_today',
-      title: 'Due Today',
-      type: 'table',
-      filter: { due_date: '{today}', is_completed: false },
-      dataset: 'task_metrics',
-      values: ['task_count'],
-      layout: { x: 6, y: 10, w: 6, h: 4 },
-    },
+    // The former Row 4 count-only `table` widgets (`overdue_tasks_table`,
+    // `due_today`) rendered a single summary row, not the record listing
+    // they intended (#1719). Those listings live as ListViews on
+    // `todo_task` (`overdue`, `due_today` — ADR-0017), reachable from the
+    // app navigation; the `overdue_tasks` / `completed_today` metric
+    // widgets above keep the counts.
   ],
 };
