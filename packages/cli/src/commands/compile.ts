@@ -9,6 +9,7 @@ import { ObjectStackDefinitionSchema, normalizeStackInput } from '@objectstack/s
 import { loadConfig } from '../utils/config.js';
 import { lowerCallables } from '../utils/lower-callables.js';
 import { validateStackExpressions } from '../utils/validate-expressions.js';
+import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
   printHeader,
@@ -16,6 +17,7 @@ import {
   printSuccess,
   printError,
   printStep,
+  printWarning,
   createTimer,
   formatZodErrors,
   collectMetadataStats,
@@ -145,6 +147,22 @@ export default class Compile extends Command {
         this.exit(1);
       }
 
+      // 3c. Widget-binding diagnostics (issue #1719) — semantic checks that
+      //     need the widget's `dataset` reference resolved to its dataset and
+      //     `values` resolved to measures with known aggregates. Advisory
+      //     only: warnings are printed (and included in --json output) but
+      //     never fail the build. Suppress per widget via
+      //     `suppressWarnings: ['<rule-id>']`.
+      const widgetWarnings = validateWidgetBindings(result.data as Record<string, unknown>);
+      if (widgetWarnings.length > 0 && !flags.json) {
+        console.log('');
+        for (const w of widgetWarnings) {
+          printWarning(`${w.where}: ${w.message}`);
+          console.log(chalk.dim(`    ${w.hint}`));
+          console.log(chalk.dim(`    rule: ${w.rule}  at ${w.path}`));
+        }
+      }
+
       // 4. Generate Artifact
       if (!flags.json) printStep('Writing artifact...');
       const output = flags.output!;
@@ -227,6 +245,7 @@ export default class Compile extends Command {
           handlersBundled: lowering.count,
           runtimeModule: runtimeBundle?.outputFileName ?? null,
           runtimeModuleSize: runtimeBundle?.size ?? 0,
+          warnings: widgetWarnings,
           stats,
           duration: timer.elapsed(),
         }));
@@ -236,6 +255,9 @@ export default class Compile extends Command {
       // 5. Summary
       console.log('');
       printSuccess(`Build complete ${chalk.dim(`(${timer.display()})`)}`);
+      if (widgetWarnings.length > 0) {
+        printWarning(`${widgetWarnings.length} widget-binding warning(s) — see above`);
+      }
       console.log('');
       printMetadataStats(stats);
       console.log('');

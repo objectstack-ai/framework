@@ -7,6 +7,7 @@ import { normalizeStackInput } from '@objectstack/spec';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
+import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
 import { DEFAULT_METADATA_EVAL_CORPUS } from '../lint/corpus.js';
@@ -218,6 +219,20 @@ export function lintConfig(config: any): LintIssue[] {
   // Cross-object rules that encode the conventions in ADR-0035 and the
   // objectstack-data/-ui skills. These double as the eval rubric (see score.ts).
   issues.push(...lintDataModel(objects));
+
+  // ── Dashboard widget bindings (ADR-0021, issue #1719) ──
+  // e.g. a table/pivot widget whose binding resolves to count-only measures
+  // with no dimensions — almost always a record listing that belongs in an
+  // object-bound ListView (ADR-0017), not an analytics dataset.
+  for (const w of validateWidgetBindings(config)) {
+    issues.push({
+      severity: 'warning',
+      rule: w.rule,
+      message: `${w.where}: ${w.message}`,
+      path: w.path,
+      fix: w.hint,
+    });
+  }
 
   return issues;
 }
