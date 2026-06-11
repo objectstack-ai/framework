@@ -47,7 +47,29 @@ export interface ApprovalClock { now(): Date }
  */
 export interface ApprovalResumeSurface {
   resume?(runId: string, signal?: { output?: Record<string, unknown>; branchLabel?: string }): Promise<unknown>;
+  /** Flow definition lookup, used to derive step-progress display data. */
+  getFlow?(name: string): Promise<any | null>;
 }
+
+/**
+ * Optional messaging surface (ADR-0012 `messaging` service). When attached,
+ * thread interactions (reassign / remind / request-info / comment) notify the
+ * affected users; without it they degrade to audit-only.
+ */
+export interface ApprovalMessagingSurface {
+  emit(input: {
+    topic: string;
+    audience: string[];
+    payload?: Record<string, unknown>;
+    severity?: string;
+    dedupKey?: string;
+    source?: { object: string; id: string };
+    actorId?: string;
+  }): Promise<unknown>;
+}
+
+/** Minimum time between submitter reminders on one request. */
+export const REMIND_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
@@ -114,7 +136,17 @@ function rowFromRequest(row: any): ApprovalRequestRow {
     submitted_at: row.created_at ?? undefined,
     process_label: cfg?.__flowLabel ?? prettifyMachineName(row.process_name),
     step_label: cfg?.__nodeLabel ?? prettifyMachineName(row.current_step),
+    sla_due_at: slaDueAt(row.created_at, cfg),
   } as any;
+}
+
+/** `created_at + escalation.timeoutHours`, when the node declares an SLA. */
+function slaDueAt(createdAt: unknown, cfg: any): string | undefined {
+  const hours = cfg?.escalation?.timeoutHours;
+  if (typeof hours !== 'number' || hours <= 0 || !createdAt) return undefined;
+  const t = Date.parse(String(createdAt));
+  if (Number.isNaN(t)) return undefined;
+  return new Date(t + hours * 3600_000).toISOString();
 }
 
 function rowFromAction(row: any): ApprovalActionRow {
@@ -141,6 +173,8 @@ export interface ApprovalServiceOptions {
    * available.
    */
   automation?: ApprovalResumeSurface;
+  /** Optional messaging service for thread notifications. */
+  messaging?: ApprovalMessagingSurface;
 }
 
 export class ApprovalService implements IApprovalService {
@@ -148,17 +182,58 @@ export class ApprovalService implements IApprovalService {
   private readonly clock: ApprovalClock;
   private readonly logger?: ApprovalServiceOptions['logger'];
   private automation?: ApprovalResumeSurface;
+  private messaging?: ApprovalMessagingSurface;
 
   constructor(opts: ApprovalServiceOptions) {
     this.engine = opts.engine;
     this.clock = opts.clock ?? { now: () => new Date() };
     this.logger = opts.logger;
     this.automation = opts.automation;
+    this.messaging = opts.messaging;
   }
 
   /** Attach (or replace) the automation surface used to resume flow runs. */
   attachAutomation(automation: ApprovalResumeSurface): void {
     this.automation = automation;
+  }
+
+  /** Attach (or replace) the messaging surface used for thread notifications. */
+  attachMessaging(messaging: ApprovalMessagingSurface): void {
+    this.messaging = messaging;
+  }
+
+  /** Best-effort notification fan-out — failures only log. */
+  private async notify(input: {
+    topic: string;
+    audience: string[];
+    payload?: Record<string, unknown>;
+    dedupKey?: string;
+    source?: { object: string; id: string };
+    actorId?: string;
+  }): Promise<number> {
+    const audience = input.audience.filter(a => a && !a.includes(':'));
+    if (!this.messaging || !audience.length) return 0;
+    try {
+      await this.messaging.emit({ severity: 'info', ...input, audience });
+      return audience.length;
+    } catch (err: any) {
+      this.logger?.warn?.('[approvals] notification failed', {
+        topic: input.topic, error: err?.message ?? String(err),
+      });
+      return 0;
+    }
+  }
+
+  /** Load a request row and assert it is still pending. */
+  private async loadPendingRow(requestId: string): Promise<any> {
+    if (!requestId) throw new Error('VALIDATION_FAILED: requestId is required');
+    const rows = await this.engine.find('sys_approval_request', {
+      where: { id: requestId }, limit: 1, context: SYSTEM_CTX,
+    });
+    const raw: any = Array.isArray(rows) ? rows[0] : null;
+    if (!raw) throw new Error(`REQUEST_NOT_FOUND: ${requestId}`);
+    if (raw.status !== 'pending') throw new Error(`INVALID_STATE: request is ${raw.status}`);
+    return raw;
   }
 
   /**
@@ -561,6 +636,197 @@ export class ApprovalService implements IApprovalService {
     return { request: fresh!, runId, resumed };
   }
 
+  // ── Thread interactions (no flow movement) ───────────────────
+
+  /**
+   * Hand a pending-approver slot to someone else. `from` defaults to the
+   * actor itself; the actor must hold the slot being handed over (or be a
+   * system caller). Audits `reassign` and notifies the new approver.
+   */
+  async reassign(
+    requestId: string,
+    input: { actorId: string; to: string; from?: string; comment?: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }> {
+    if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
+    const to = String(input?.to ?? '').trim();
+    if (!to) throw new Error('VALIDATION_FAILED: `to` (new approver) is required');
+    const raw = await this.loadPendingRow(requestId);
+
+    const pending = csvSplit(raw.pending_approvers);
+    const from = String(input.from ?? input.actorId).trim();
+    if (!pending.includes(from)) {
+      throw new Error(`FORBIDDEN: '${from}' is not a pending approver on this request`);
+    }
+    if (!context.isSystem && input.actorId !== from && !pending.includes(input.actorId)) {
+      throw new Error(`FORBIDDEN: actor '${input.actorId}' is not a pending approver`);
+    }
+    if (pending.includes(to)) {
+      throw new Error(`VALIDATION_FAILED: '${to}' is already a pending approver`);
+    }
+
+    const next = pending.map(a => (a === from ? to : a));
+    const now = this.clock.now().toISOString();
+    // Audit first, then mutate — mirrors decideNode(), so a failed audit
+    // write can never leave a moved slot without a trail.
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: requestId, organization_id: raw.organization_id ?? null,
+      step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'reassign',
+      actor_id: input.actorId, comment: input.comment ?? `${from} → ${to}`, created_at: now,
+    }, { context: SYSTEM_CTX });
+    await this.engine.update('sys_approval_request', {
+      id: requestId, pending_approvers: next.join(','), updated_at: now,
+    }, { context: SYSTEM_CTX });
+
+    await this.notify({
+      topic: 'approval.reassigned',
+      audience: [to],
+      actorId: input.actorId,
+      source: { object: 'sys_approval_request', id: requestId },
+      dedupKey: `approval-reassign-${requestId}-${to}`,
+      payload: {
+        title: 'Approval handed to you',
+        message: `You are now an approver on ${raw.object_name}/${raw.record_id}.`,
+        actionUrl: '/system/approvals',
+      },
+    });
+
+    const fresh = await this.getRequest(requestId, context);
+    return { request: fresh! };
+  }
+
+  /**
+   * Submitter nudge — notify every pending approver. Throttled to one
+   * reminder per {@link REMIND_COOLDOWN_MS} per request.
+   */
+  async remind(
+    requestId: string,
+    input: { actorId: string; comment?: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow; notified: number }> {
+    if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
+    const raw = await this.loadPendingRow(requestId);
+    if (!context.isSystem && raw.submitter_id && String(raw.submitter_id) !== String(input.actorId)) {
+      throw new Error('FORBIDDEN: only the submitter may send reminders');
+    }
+
+    const acts = await this.engine.find('sys_approval_action', {
+      where: { request_id: requestId, action: 'remind' },
+      orderBy: [{ field: 'created_at', direction: 'desc' }], limit: 1, context: SYSTEM_CTX,
+    });
+    const last: any = Array.isArray(acts) ? acts[0] : null;
+    const now = this.clock.now();
+    if (last?.created_at && now.getTime() - Date.parse(last.created_at) < REMIND_COOLDOWN_MS) {
+      throw new Error('THROTTLED: a reminder was already sent recently');
+    }
+
+    const pending = csvSplit(raw.pending_approvers);
+    const nowIso = now.toISOString();
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: requestId, organization_id: raw.organization_id ?? null,
+      step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'remind',
+      actor_id: input.actorId, comment: input.comment ?? null, created_at: nowIso,
+    }, { context: SYSTEM_CTX });
+
+    const notified = await this.notify({
+      topic: 'approval.reminder',
+      audience: pending,
+      actorId: input.actorId,
+      source: { object: 'sys_approval_request', id: requestId },
+      dedupKey: `approval-remind-${requestId}-${nowIso}`,
+      payload: {
+        title: 'Approval reminder',
+        message: `A decision on ${raw.object_name}/${raw.record_id} is still waiting on you.`,
+        actionUrl: '/system/approvals',
+      },
+    });
+
+    const fresh = await this.getRequest(requestId, context);
+    return { request: fresh!, notified };
+  }
+
+  /**
+   * Approver asks the submitter for more information. The request stays
+   * pending — a thread interaction, not a flow decision.
+   */
+  async requestInfo(
+    requestId: string,
+    input: { actorId: string; comment: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }> {
+    if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
+    if (!input?.comment?.trim()) throw new Error('VALIDATION_FAILED: comment is required');
+    const raw = await this.loadPendingRow(requestId);
+    const pending = csvSplit(raw.pending_approvers);
+    if (!context.isSystem && !pending.includes(input.actorId)) {
+      throw new Error(`FORBIDDEN: actor '${input.actorId}' is not a pending approver`);
+    }
+
+    const now = this.clock.now().toISOString();
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: requestId, organization_id: raw.organization_id ?? null,
+      step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'request_info',
+      actor_id: input.actorId, comment: input.comment.trim(), created_at: now,
+    }, { context: SYSTEM_CTX });
+
+    if (raw.submitter_id) {
+      await this.notify({
+        topic: 'approval.request_info',
+        audience: [String(raw.submitter_id)],
+        actorId: input.actorId,
+        source: { object: 'sys_approval_request', id: requestId },
+        payload: {
+          title: 'More information requested',
+          message: input.comment.trim(),
+          actionUrl: '/system/approvals',
+        },
+      });
+    }
+
+    const fresh = await this.getRequest(requestId, context);
+    return { request: fresh! };
+  }
+
+  /** Free-form reply on the thread (submitter or any pending approver). */
+  async comment(
+    requestId: string,
+    input: { actorId: string; comment: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }> {
+    if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
+    if (!input?.comment?.trim()) throw new Error('VALIDATION_FAILED: comment is required');
+    const raw = await this.loadPendingRow(requestId);
+    const pending = csvSplit(raw.pending_approvers);
+    const isSubmitter = raw.submitter_id && String(raw.submitter_id) === String(input.actorId);
+    if (!context.isSystem && !isSubmitter && !pending.includes(input.actorId)) {
+      throw new Error(`FORBIDDEN: actor '${input.actorId}' is not on this request`);
+    }
+
+    const now = this.clock.now().toISOString();
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: requestId, organization_id: raw.organization_id ?? null,
+      step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'comment',
+      actor_id: input.actorId, comment: input.comment.trim(), created_at: now,
+    }, { context: SYSTEM_CTX });
+
+    // Notify the other side of the thread.
+    const audience = isSubmitter ? pending : [String(raw.submitter_id ?? '')].filter(Boolean);
+    await this.notify({
+      topic: 'approval.comment',
+      audience,
+      actorId: input.actorId,
+      source: { object: 'sys_approval_request', id: requestId },
+      payload: {
+        title: 'New comment on an approval',
+        message: input.comment.trim(),
+        actionUrl: '/system/approvals',
+      },
+    });
+
+    const fresh = await this.getRequest(requestId, context);
+    return { request: fresh! };
+  }
+
   // ── Display enrichment ───────────────────────────────────────
 
   /**
@@ -820,7 +1086,48 @@ export class ApprovalService implements IApprovalService {
     if (!Array.isArray(rows) || !rows[0]) return null;
     const row = rowFromRequest(rows[0]);
     await this.enrichRows([row]);
+    await this.attachFlowSteps(row);
     return row;
+  }
+
+  /**
+   * Derive approval-step progress from the owning flow's graph (single-read
+   * enrichment only — list reads skip it). Walks from the start node
+   * preferring `approve`/`true` edges, so the result is the flow's main
+   * approval trunk; conditional side-steps show as part of the potential
+   * path. Display-only and best-effort.
+   */
+  private async attachFlowSteps(row: ApprovalRequestRow): Promise<void> {
+    try {
+      const flowName = row.process_name?.startsWith('flow:') ? row.process_name.slice(5) : undefined;
+      if (!flowName || typeof this.automation?.getFlow !== 'function') return;
+      const flow: any = await this.automation.getFlow(flowName);
+      if (!flow?.nodes?.length) return;
+      const nodesById = new Map<string, any>(flow.nodes.map((n: any) => [n.id, n]));
+      const steps: Array<{ id: string; label: string }> = [];
+      const seen = new Set<string>();
+      let cur: any = flow.nodes.find((n: any) => n.type === 'start');
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        if (cur.type === 'approval') steps.push({ id: cur.id, label: cur.label || cur.id });
+        const out = (flow.edges ?? []).filter((e: any) => e.source === cur.id);
+        if (!out.length) break;
+        const pick = out.find((e: any) => e.label === 'approve')
+          ?? out.find((e: any) => e.label === 'true')
+          ?? out[0];
+        cur = nodesById.get(pick.target);
+      }
+      if (steps.length === 0) return;
+      const currentId = row.flow_node_id ?? row.current_step;
+      const currentIdx = steps.findIndex(s => s.id === currentId);
+      (row as any).flow_steps = steps.map((s, i) => ({
+        ...s,
+        state: currentIdx < 0 ? 'upcoming'
+          : i < currentIdx ? 'done'
+          : i === currentIdx ? (row.status === 'approved' ? 'done' : 'current')
+          : 'upcoming',
+      }));
+    } catch { /* display-only — never fail the read */ }
   }
 
   async listActions(requestId: string, context: SharingExecutionContext): Promise<ApprovalActionRow[]> {

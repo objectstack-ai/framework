@@ -88,7 +88,9 @@ export const SysApprovalAction = ObjectSchema.create({
     }),
 
     action: Field.select(
-      ['submit', 'approve', 'reject', 'recall', 'escalate'],
+      // Keep in sync with `ApprovalActionKind` (spec/contracts). The last four
+      // are thread interactions — they never move the flow.
+      ['submit', 'approve', 'reject', 'recall', 'escalate', 'reassign', 'remind', 'request_info', 'comment'],
       {
         label: 'Action',
         required: true,

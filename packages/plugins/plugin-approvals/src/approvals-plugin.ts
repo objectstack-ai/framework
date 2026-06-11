@@ -113,6 +113,16 @@ export class ApprovalsServicePlugin implements Plugin {
     ctx.registerService('approvals', this.service);
     ctx.logger.info('ApprovalsServicePlugin: service registered');
 
+    // Optional messaging service (ADR-0012): thread interactions (reassign /
+    // remind / request-info / comment) notify users when present; without it
+    // they degrade to audit-only.
+    try {
+      const messaging = ctx.getService<any>('messaging');
+      if (messaging && typeof messaging.emit === 'function') {
+        this.service.attachMessaging(messaging);
+      }
+    } catch { /* messaging not installed */ }
+
     // ADR-0019: contribute the `approval` node to the flow engine when one is
     // present. The node lets a flow suspend on an approval and resume on
     // decision; the service is wired to the same engine so `decide()` can
