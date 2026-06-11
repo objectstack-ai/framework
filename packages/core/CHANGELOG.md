@@ -1,5 +1,12 @@
 # @objectstack/core
 
+## 9.1.0
+
+### Patch Changes
+
+- Updated dependencies [b9062c9]
+  - @objectstack/spec@9.1.0
+
 ## 9.0.1
 
 ### Patch Changes
