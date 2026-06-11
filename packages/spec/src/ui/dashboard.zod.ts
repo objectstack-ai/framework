@@ -176,6 +176,13 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
   /** Widget specific options (colors, legend, etc.) */
   options: z.unknown().optional().describe('Widget specific configuration'),
 
+  /**
+   * Rule ids of build diagnostics intentionally suppressed on this widget
+   * (e.g. `'table-count-only'` when a single-row summary table is deliberate).
+   * Consumed by `objectstack build` / `objectstack lint`; no runtime effect.
+   */
+  suppressWarnings: z.array(z.string()).optional().describe('Build diagnostic rule ids suppressed on this widget'),
+
   /** Responsive layout overrides per breakpoint */
   responsive: ResponsiveConfigSchema.optional().describe('Responsive layout configuration'),
 
