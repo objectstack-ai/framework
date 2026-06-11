@@ -65,6 +65,15 @@ export interface RuntimeConfigPluginConfig {
     productShortName?: string;
 }
 
+/**
+ * @deprecated ADR-0006 — framework's DUPLICATE copy. Canonical implementation
+ * lives in cloud `@objectstack/objectos-runtime`
+ * (`packages/objectos-runtime/src/runtime-config-plugin.ts`), which
+ * `apps/objectos` already uses. **Still load-bearing**: the framework CLI
+ * `serve.ts` dynamically imports this for cloud-dev serve mode — DO NOT DELETE
+ * until ADR-0006 Phase 4 decouples the CLI (= ADR-0007 ⑤). Phase 1 is a
+ * declaration only: no behavior change.
+ */
 export class RuntimeConfigPlugin implements Plugin {
     readonly name = 'com.objectstack.runtime.runtime-config';
     readonly version = '1.0.0';

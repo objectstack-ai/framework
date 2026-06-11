@@ -8,6 +8,13 @@
  * Until we have a competing public hosted cloud, this points at the
  * ObjectStack-operated control plane so a vanilla `objectstack dev` can
  * browse the marketplace out of the box.
+ *
+ * @deprecated ADR-0006 — framework's DUPLICATE copy. Canonical implementation
+ * lives in cloud `@objectstack/objectos-runtime`
+ * (`packages/objectos-runtime/src/cloud-url.ts`), which `apps/objectos` already
+ * uses. **Still load-bearing**: the framework CLI `serve.ts` dynamically
+ * imports `resolveCloudUrl` for cloud-dev serve mode — DO NOT DELETE until
+ * ADR-0006 Phase 4 decouples the CLI (= ADR-0007 ⑤). Phase 1 declaration only.
  */
 export const DEFAULT_CLOUD_URL = 'https://cloud.objectos.ai';
 

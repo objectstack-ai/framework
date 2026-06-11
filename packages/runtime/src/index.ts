@@ -100,12 +100,25 @@ export type { LoadArtifactBundleOptions } from './load-artifact-bundle.js';
 // (`@objectstack/objectos-runtime`). The framework keeps only the interface
 // contracts a host runtime needs to accept an externally-supplied
 // multi-tenant kernel router (see http-dispatcher's optional `kernelManager`).
+//
+// ADR-0006 Phase 1: the three plugins + cloud-url below are DUPLICATES of the
+// canonical copies in cloud `@objectstack/objectos-runtime`. They stay exported
+// and load-bearing (framework CLI cloud-dev serve) until ADR-0006 Phase 4
+// removes them (= ADR-0007 ⑤). `EnvironmentDriverRegistry` / `KernelManager`
+// are RETAINED contracts (D3) — not deprecated.
+/** @deprecated ADR-0006 — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export { MarketplaceProxyPlugin } from './cloud/marketplace-proxy-plugin.js';
+/** @deprecated ADR-0006 — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export type { MarketplaceProxyPluginConfig } from './cloud/marketplace-proxy-plugin.js';
+/** @deprecated ADR-0006 / ADR-0007 ⑤ — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export { MarketplaceInstallLocalPlugin } from './cloud/marketplace-install-local-plugin.js';
+/** @deprecated ADR-0006 / ADR-0007 ⑤ — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export type { MarketplaceInstallLocalPluginConfig } from './cloud/marketplace-install-local-plugin.js';
+/** @deprecated ADR-0006 — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export { RuntimeConfigPlugin } from './cloud/runtime-config-plugin.js';
+/** @deprecated ADR-0006 — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export type { RuntimeConfigPluginConfig } from './cloud/runtime-config-plugin.js';
+/** @deprecated ADR-0006 — use cloud `@objectstack/objectos-runtime`. Removed in Phase 4. */
 export { DEFAULT_CLOUD_URL, resolveCloudUrl } from './cloud/cloud-url.js';
 export type { EnvironmentDriverRegistry, KernelManager } from './cloud/environment-registry.js';
 

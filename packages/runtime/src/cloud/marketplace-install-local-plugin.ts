@@ -80,6 +80,16 @@ function safeFilename(manifestId: string): string {
     return manifestId.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
 }
 
+/**
+ * @deprecated ADR-0006 / ADR-0007 ⑤ — framework's DUPLICATE copy. Canonical
+ * implementation lives in cloud `@objectstack/objectos-runtime`
+ * (`packages/objectos-runtime/src/marketplace-install-local-plugin.ts`), which
+ * `apps/objectos` already uses and which is AHEAD of this copy (e.g. the
+ * ADR-0036 `seeds:` rename). **Still load-bearing**: the framework CLI
+ * `serve.ts` dynamically imports this for cloud-dev serve mode — DO NOT DELETE
+ * until ADR-0006 Phase 4 decouples the CLI. Phase 1 is a declaration only:
+ * no behavior change.
+ */
 export class MarketplaceInstallLocalPlugin implements Plugin {
     readonly name = 'com.objectstack.runtime.marketplace-install-local';
     readonly version = '1.0.0';
