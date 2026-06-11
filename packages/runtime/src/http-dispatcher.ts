@@ -4,7 +4,6 @@ import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
-import type { KernelManager } from './cloud/environment-registry.js';
 import { setPackageDisabled } from './package-state-store.js';
 
 /** Minimal local interface — full EnvironmentScopeManager was removed in Phase R. */
@@ -32,8 +31,23 @@ function randomUUID(): string {
 export interface HttpProtocolContext {
     request: any;
     response?: any;
-    environmentId?: string;   // Resolved environment ID
-    dataDriver?: any; // IDataDriver - Resolved environment-scoped driver
+    environmentId?: string;   // Resolved environment ID (set by the host's KernelResolver)
+    dataDriver?: any; // IDataDriver - Resolved environment-scoped driver (set by the host's KernelResolver)
+    /**
+     * Dispatcher-provided hint for the host's {@link KernelResolver}: the
+     * cleaned route path (API prefix stripped). Lets the resolver apply its
+     * own path policy (e.g. skip env resolution for control-plane routes)
+     * without re-deriving the dispatcher's URL handling.
+     */
+    routePath?: string;
+    /**
+     * Dispatcher-provided hint for the host's {@link KernelResolver}: the
+     * UNVALIDATED environment-id candidate parsed from the scoped URL form
+     * (`/environments/:id/...`) or the router's `params.environmentId`.
+     * URL parsing is the dispatcher's routing convention, so it stays here;
+     * validation (registry lookup) is the resolver's job.
+     */
+    urlEnvironmentId?: string;
     /**
      * Identity envelope resolved by `resolveExecutionContext` and threaded
      * into every ObjectQL call so the SecurityPlugin middleware can apply
@@ -63,10 +77,16 @@ export interface HttpDispatcherResult {
  * `defaultKernel` (single-environment mode).
  *
  * Returning `undefined` routes the request to `defaultKernel` — resolvers use
- * this for control-plane / unscoped / single-environment requests. This is the
- * generic contract that, in ADR-0006 Phase 5, fully replaces the dispatcher's
- * built-in `kernelManager` + hostname resolution; in Phase 2 it coexists with
- * them (it merely takes precedence for primary request routing).
+ * this for control-plane / unscoped / single-environment requests.
+ *
+ * As of ADR-0006 Phase 5 the resolver owns the ENTIRE per-request environment
+ * resolution, not just kernel selection: the dispatcher no longer performs any
+ * hostname / header / session → environment lookup of its own. The dispatcher
+ * provides parsing hints on the context (`routePath`, `urlEnvironmentId`) and
+ * expects the resolver to SET `context.environmentId` (and optionally
+ * `context.dataDriver`) for scoped requests — downstream dispatcher stages
+ * (project-membership enforcement, scope TTL touch, scoped service resolution)
+ * key off `context.environmentId`.
  */
 export interface KernelResolver {
     resolveKernel(
@@ -83,22 +103,16 @@ export interface KernelResolver {
 export interface HttpDispatcherOptions {
     enforceProjectMembership?: boolean;
     /**
-     * Optional generic kernel-resolution seam (ADR-0006). When present it
-     * TAKES PRECEDENCE over `kernelManager` for primary request routing: after
-     * the dispatcher resolves `context.environmentId`, it delegates per-request
-     * kernel selection to the resolver. Coexists with `kernelManager` (still
-     * used by action-route service resolution) until ADR-0006 Phase 5 retires
-     * the in-dispatcher resolution. Falls back to `resolveService('kernel-resolver')`.
+     * Optional generic kernel-resolution seam (ADR-0006). The SOLE
+     * multi-tenant hook: the host's resolver owns env resolution + kernel
+     * selection per request (see {@link KernelResolver}). Falls back to
+     * `resolveService('kernel-resolver')`. Hosts that register none run
+     * single-environment on `defaultKernel`. (The legacy `kernelManager`
+     * option and the dispatcher's built-in hostname/header/session
+     * resolution were removed in ADR-0006 Phase 5 — that strategy lives in
+     * the cloud distribution's resolver now.)
      */
     kernelResolver?: KernelResolver;
-    /**
-     * Optional {@link KernelManager}. When present, the dispatcher resolves
-     * `context.environmentId` first and then routes the request against the
-     * project's dedicated kernel via `kernelManager.getOrCreate(environmentId)`.
-     * Requests that fail to resolve a environmentId fall through to the
-     * constructor-supplied kernel (self-hosted / legacy behavior).
-     */
-    kernelManager?: KernelManager;
     /**
      * Optional {@link EnvironmentScopeManager}. When present, `touch(environmentId)` is
      * called on every scoped request so idle projects are evicted after TTL.
@@ -117,9 +131,7 @@ export interface HttpDispatcherOptions {
 export class HttpDispatcher {
     private kernel: any; // Casting to any to access dynamic props like services, graphql
     private defaultKernel: ObjectKernel;
-    private envRegistry?: any; // EnvironmentDriverRegistry
     private defaultProject?: { environmentId: string; orgId?: string };
-    private kernelManager?: KernelManager;
     private kernelResolver?: KernelResolver;
     private scopeManager?: EnvironmentScopeManager;
     /**
@@ -143,18 +155,22 @@ export class HttpDispatcher {
     /** Well-known platform org id — members bypass project membership. */
     private static readonly PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
-    constructor(kernel: ObjectKernel, envRegistry?: any, options?: HttpDispatcherOptions) {
+    /**
+     * @param _envRegistryIgnored — RETIRED (ADR-0006 Phase 5). Environment
+     * resolution moved behind the host's {@link KernelResolver}; the
+     * positional parameter is kept so existing 3-arg callers keep compiling,
+     * but its value is ignored.
+     */
+    constructor(kernel: ObjectKernel, _envRegistryIgnored?: unknown, options?: HttpDispatcherOptions) {
         this.kernel = kernel;
         this.defaultKernel = kernel;
         const resolveService = (name: string): any => {
             try { return (kernel as any).getService?.(name); } catch { return undefined; }
         };
-        this.envRegistry = envRegistry ?? resolveService('env-registry');
         this.enforceMembership = options?.enforceProjectMembership ?? true;
-        this.kernelManager = options?.kernelManager ?? resolveService('kernel-manager');
-        // ADR-0006 Phase 2 seam — host-injected kernel resolver (preferred over
-        // kernelManager for primary routing when present). Optional service so
-        // single-environment / legacy hosts that register neither are unchanged.
+        // ADR-0006 kernel-resolution seam — the host's resolver owns env
+        // resolution + kernel selection. Optional service so single-environment
+        // hosts that register none are unchanged.
         this.kernelResolver = options?.kernelResolver ?? resolveService('kernel-resolver');
         this.scopeManager = options?.scopeManager ?? resolveService('scope-manager');
         // Single-project default is resolved lazily on first request — the
@@ -603,165 +619,21 @@ export class HttpDispatcher {
     }
 
     /**
-     * Resolve environment context for incoming request.
+     * Attach the dispatcher's parsing hints for the host's
+     * {@link KernelResolver} (ADR-0006 Phase 5).
      *
-     * Precedence:
-     * 0. URL path matches `/environments/:environmentId/...` OR request.params.environmentId set by router
-     *    → envRegistry.resolveById(id)
-     * 1. request.headers.host → envRegistry.resolveByHostname(host)
-     * 2. request.headers['x-environment-id'] → envRegistry.resolveById(id)
-     * 3. session.activeEnvironmentId → envRegistry.resolveById(id)
-     * 4. session.activeOrganizationId → find default project → envRegistry.resolveById(id)
-     * 5. single-environment default (registered by `createSingleEnvironmentPlugin`)
-     *    → envRegistry.resolveById(defaultProject.environmentId). Lets bare
-     *    `/api/v1/data/...` URLs resolve to the lone project in
-     *    `cloudUrl: 'local'` deployments.
-     *
-     * Skip for paths: /auth, /cloud, /health, /discovery (NOT /meta when scoped,
-     * so project-scoped meta routes can resolve their project).
+     * Environment RESOLUTION (hostname / x-environment-id / session /
+     * org-default / single-env-default → environment + driver) is owned by
+     * the host's resolver — the dispatcher no longer touches an environment
+     * registry. What stays here is pure URL parsing (the dispatcher's own
+     * routing convention): the scoped-path environment-id candidate and the
+     * cleaned route path, both UNVALIDATED.
      */
-    private async resolveEnvironmentContext(context: HttpProtocolContext, path: string): Promise<void> {
-        // Skip environment resolution for control-plane routes only.
-        // NOTE: /meta is intentionally not in this list — a scoped
-        // /projects/:id/meta path still needs the project resolved so the
-        // protocol can scope its answer.
-        // NOTE: /auth was removed — per-project AuthPlugin needs the
-        // hostname-resolved environmentId so the dispatcher kernel-swap routes
-        // to the project's auth manager (not the host's).
-        const skipPaths = ['/cloud', '/health', '/discovery'];
-        if (skipPaths.some(p => path.startsWith(p))) {
-            return;
-        }
-
-        // If no environment registry, skip
-        if (!this.envRegistry) {
-            return;
-        }
-
-        // Headers may arrive as a Fetch API `Headers` instance (Hono's
-        // `c.req.raw`) — where `.host` / `['x-environment-id']` both return
-        // undefined — or as a plain object (Vercel's incoming message
-        // shape). Normalise to a single `.get(name)` accessor so both
-        // layouts resolve correctly.
-        const headers = context.request?.headers;
-        const getHeader = (name: string): string | undefined => {
-            if (!headers) return undefined;
-            const h: any = headers;
-            if (typeof h.get === 'function') {
-                const v = h.get(name);
-                return v == null ? undefined : String(v);
-            }
-            const lower = name.toLowerCase();
-            for (const k of Object.keys(h)) {
-                if (k.toLowerCase() === lower) {
-                    const v = h[k];
-                    return Array.isArray(v) ? v[0] : (v == null ? undefined : String(v));
-                }
-            }
-            return undefined;
-        };
-
-        try {
-            // 0. Try URL-param / path-embedded environmentId (highest precedence).
-            const urlEnvironmentId = this.extractEnvironmentIdFromPath(path)
-                ?? context.request?.params?.environmentId;
-            if (urlEnvironmentId) {
-                const driver = await this.envRegistry.resolveById(urlEnvironmentId);
-                if (driver) {
-                    context.environmentId = urlEnvironmentId;
-                    context.dataDriver = driver;
-                    return;
-                }
-            }
-
-            // 1. Try hostname resolution
-            const host = getHeader('host');
-            if (host) {
-                // Strip port if present (e.g., "localhost:3000" → "localhost")
-                const hostname = host.split(':')[0];
-                const result = await this.envRegistry.resolveByHostname(hostname);
-                if (result) {
-                    context.environmentId = result.environmentId;
-                    context.dataDriver = result.driver;
-                    return;
-                }
-            }
-
-            // 2. Try X-Environment-Id header
-            const envIdHeader = getHeader('x-environment-id');
-            if (envIdHeader) {
-                const driver = await this.envRegistry.resolveById(envIdHeader);
-                if (driver) {
-                    context.environmentId = envIdHeader;
-                    context.dataDriver = driver;
-                    return;
-                }
-            }
-
-            // 3. Try session.activeEnvironmentId
-            try {
-                const authService: any = await this.getService(CoreServiceName.enum.auth);
-                const sessionData = await authService?.api?.getSession?.({
-                    headers: context.request?.headers,
-                });
-
-                const activeEnvironmentId = sessionData?.session?.activeEnvironmentId ?? sessionData?.session?.activeEnvironmentId;
-                if (activeEnvironmentId) {
-                    const driver = await this.envRegistry.resolveById(activeEnvironmentId);
-                    if (driver) {
-                        context.environmentId = activeEnvironmentId;
-                        context.dataDriver = driver;
-                        return;
-                    }
-                }
-
-                // 4. Try default environment for organization
-                const activeOrganizationId = sessionData?.session?.activeOrganizationId;
-                if (activeOrganizationId) {
-                    // Query control plane for default environment
-                    const qlService = await this.getObjectQLService();
-                    const ql = qlService ?? await this.resolveService('objectql');
-                    if (ql) {
-                        let rows = await ql.find('sys_environment', {
-                            where: {
-                                organization_id: activeOrganizationId,
-                                is_default: true
-                            },
-                            limit: 1
-                        } as any);
-                        if (rows && (rows as any).value) rows = (rows as any).value;
-                        if (Array.isArray(rows) && rows[0]) {
-                            const defaultEnv = rows[0];
-                            const driver = await this.envRegistry.resolveById(defaultEnv.id);
-                            if (driver) {
-                                context.environmentId = defaultEnv.id;
-                                context.dataDriver = driver;
-                                return;
-                            }
-                        }
-                    }
-                }
-            } catch (sessionError) {
-                // Session resolution failed, continue without environment context
-                console.debug('[HttpDispatcher] Session resolution failed:', sessionError);
-            }
-
-            // 5. Single-project default fallback. Registered by
-            //    `createSingleEnvironmentPlugin()` in `cloudUrl: 'local'` boot
-            //    shapes (apps/objectos default). Lets bare URLs like
-            //    `/api/v1/data/account` resolve to the lone project.
-            if (this.defaultProject?.environmentId || this.resolveDefaultProject()) {
-                const def = this.defaultProject!;
-                const driver = await this.envRegistry.resolveById(def.environmentId);
-                if (driver) {
-                    context.environmentId = def.environmentId;
-                    context.dataDriver = driver;
-                    return;
-                }
-            }
-        } catch (error) {
-            console.error('[HttpDispatcher] Environment resolution failed:', error);
-        }
+    private prepareResolverHints(context: HttpProtocolContext, path: string): void {
+        context.routePath = path;
+        const urlEnvironmentId = this.extractEnvironmentIdFromPath(path)
+            ?? context.request?.params?.environmentId;
+        if (urlEnvironmentId) context.urlEnvironmentId = String(urlEnvironmentId);
     }
 
     /**
@@ -1418,8 +1290,12 @@ export class HttpDispatcher {
             return { handled: true, response: this.error('Object name required', 400) };
         }
 
-        // Check if environment is resolved for data-plane requests
-        if (!_context.dataDriver && this.envRegistry) {
+        // Check if environment is resolved for data-plane requests. A
+        // registered KernelResolver marks this host as multi-tenant (ADR-0006
+        // Phase 5 — previously signalled by the env-registry service): a
+        // data-plane request that the resolver did not attach to an
+        // environment must not silently fall through to the host kernel.
+        if (!_context.dataDriver && this.kernelResolver) {
             return {
                 handled: true,
                 response: this.error('Project not resolved. Please specify X-Environment-Id header or ensure hostname maps to a project.', 428)
@@ -2602,11 +2478,12 @@ export class HttpDispatcher {
         // data/meta/automation routes. Action routes are registered on the
         // raw HTTP server and skip the `handle()` chain, so without this
         // swap `getObjectQLService` would resolve the control-plane kernel
-        // (where the CRM bundle's actions are NOT registered).
+        // (where the CRM bundle's actions are NOT registered). Routed via the
+        // host's KernelResolver (ADR-0006 Phase 5) — same seam as handle().
         let projectQl: any = null;
-        if (this.kernelManager && _context.environmentId && _context.environmentId !== 'platform') {
+        if (this.kernelResolver && _context.environmentId && _context.environmentId !== 'platform') {
             try {
-                const projectKernel: any = await this.kernelManager.getOrCreate(_context.environmentId);
+                const projectKernel: any = await this.kernelResolver.resolveKernel(_context, this.defaultKernel);
                 if (projectKernel) {
                     this.kernel = projectKernel;
                     // Resolve the project kernel's own ObjectQL DIRECTLY so we
@@ -2832,26 +2709,17 @@ export class HttpDispatcher {
     async dispatch(method: string, path: string, body: any, query: any, context: HttpProtocolContext, prefix?: string): Promise<HttpDispatcherResult> {
         let cleanPath = path.replace(/\/$/, ''); // Remove trailing slash if present, but strict on clean paths
 
-        // ── Environment Resolution ──
-        // Resolve environment context for data-plane requests before routing
-        await this.resolveEnvironmentContext(context, cleanPath);
-
-        // ── Multi-Kernel Routing (ADR-0003 cloud mode) ──
-        // When a KernelManager is wired in, per-request routing targets the
-        // project's dedicated kernel. Self-hosted / legacy deployments leave
-        // `kernelManager` unset and continue using the constructor kernel.
-        // Reserved virtual id 'platform' addresses the control plane through
-        // the regular project URL family — never spin up a per-project kernel
-        // for it (there is no projects row to look up).
+        // ── Environment Resolution + Multi-Kernel Routing (ADR-0006 Phase 5) ──
+        // The host's KernelResolver owns the whole step: it resolves the
+        // request to an environment (hostname / header / session / defaults —
+        // strategy lives in the cloud distribution), SETS
+        // `context.environmentId` (+ `dataDriver`), and returns the kernel to
+        // serve from. The dispatcher only contributes parsing hints. No
+        // resolver registered → single-environment: every request serves from
+        // `defaultKernel` with no environment context.
+        this.prepareResolverHints(context, cleanPath);
         if (this.kernelResolver) {
-            // ADR-0006 Phase 2 seam: the host owns kernel selection. The
-            // resolver returns `defaultKernel` (or undefined) for platform /
-            // unscoped / single-env requests, so this branch is
-            // behavior-equivalent to the kernelManager path below for the
-            // cloud resolver (which delegates to the same KernelManager).
             this.kernel = (await this.kernelResolver.resolveKernel(context, this.defaultKernel)) ?? this.defaultKernel;
-        } else if (this.kernelManager && context.environmentId && context.environmentId !== 'platform') {
-            this.kernel = await this.kernelManager.getOrCreate(context.environmentId);
         } else {
             this.kernel = this.defaultKernel;
         }

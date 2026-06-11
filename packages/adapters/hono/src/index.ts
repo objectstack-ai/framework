@@ -60,17 +60,14 @@ export interface ObjectStackHonoOptions {
   /** CORS configuration. Set to `false` to disable entirely. */
   cors?: ObjectStackHonoCorsOptions | false;
   /**
-   * Optional {@link KernelManager}. When provided, the dispatcher will route
-   * per-project requests to a project-scoped kernel resolved via
-   * `kernelManager.getOrCreate(environmentId)`. When absent (self-hosted mode),
-   * all requests use the single `kernel` passed above.
+   * @deprecated RETIRED (ADR-0006 Phase 5) — ignored. Multi-tenant routing is
+   * owned by the host's `KernelResolver` (registered as the
+   * `kernel-resolver` kernel service); the dispatcher picks it up there.
    */
   kernelManager?: KernelManager;
   /**
-   * Optional {@link EnvironmentDriverRegistry}. When provided, the dispatcher
-   * resolves incoming requests to a project via hostname / `X-Environment-Id`
-   * header / session before invoking the KernelManager. Required for
-   * host-based routing in cloud / multi-environment mode.
+   * @deprecated RETIRED (ADR-0006 Phase 5) — ignored. Environment resolution
+   * is owned by the host's `KernelResolver` (`kernel-resolver` service).
    */
   envRegistry?: EnvironmentDriverRegistry;
 }
@@ -114,11 +111,11 @@ export function objectStackMiddleware(kernel: ObjectKernel) {
 export function createHonoApp(options: ObjectStackHonoOptions): Hono {
   const app = new Hono();
   const prefix = options.prefix || '/api';
-  const dispatcher = new HttpDispatcher(
-    options.kernel,
-    options.envRegistry,
-    options.kernelManager ? { kernelManager: options.kernelManager } : undefined,
-  );
+  // ADR-0006 Phase 5: env resolution + multi-kernel routing belong to the
+  // host's KernelResolver (the dispatcher resolves the `kernel-resolver`
+  // service itself). The legacy envRegistry/kernelManager options are
+  // accepted-but-ignored for source compatibility.
+  const dispatcher = new HttpDispatcher(options.kernel);
 
   // ─── CORS Middleware ──────────────────────────────────────────────────────
   // Enabled by default. Controlled via options.cors or environment variables:

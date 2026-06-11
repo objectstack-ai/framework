@@ -1651,71 +1651,11 @@ describe('HttpDispatcher', () => {
         });
     });
 
-    // ------------------------------------------------------------------
-    // Phase 2 — URL-param project resolution
-    // ------------------------------------------------------------------
-    describe('resolveEnvironmentContext — URL-param environmentId', () => {
-        let envDispatcher: HttpDispatcher;
-        let envRegistry: any;
+    // NOTE (ADR-0006 Phase 5): the `resolveEnvironmentContext` suite that
+    // lived here moved with the behavior — environment resolution is owned
+    // by the host's KernelResolver now. Equivalent coverage:
+    //   cloud packages/objectos-runtime/src/kernel-resolver.test.ts
 
-        beforeEach(() => {
-            envRegistry = {
-                resolveByHostname: vi.fn().mockResolvedValue(null),
-                resolveById: vi.fn(),
-            };
-            envDispatcher = new HttpDispatcher(kernel, envRegistry);
-        });
-
-        it('resolves environmentId from /projects/:id/... path before hostname / header', async () => {
-            envRegistry.resolveById = vi.fn().mockResolvedValue({ name: 'driver-for-proj-123' });
-
-            const context: any = { request: { headers: { host: 'anyhost' } } };
-            // Access the private resolver through a public entry point: handleData
-            // triggers resolveEnvironmentContext with the given path.
-            await (envDispatcher as any).resolveEnvironmentContext(
-                context,
-                '/api/v1/environments/proj-123/data/task',
-            );
-
-            expect(envRegistry.resolveById).toHaveBeenCalledWith('proj-123');
-            expect(context.environmentId).toBe('proj-123');
-            expect(context.dataDriver).toEqual({ name: 'driver-for-proj-123' });
-            // Hostname path should NOT have been tried.
-            expect(envRegistry.resolveByHostname).not.toHaveBeenCalled();
-        });
-
-        it('does not treat /cloud/environments/:id as a scoping prefix', async () => {
-            envRegistry.resolveById = vi.fn().mockResolvedValue({ name: 'wrong' });
-
-            const context: any = { request: { headers: {} } };
-            await (envDispatcher as any).resolveEnvironmentContext(
-                context,
-                '/api/v1/cloud/environments/proj-123',
-            );
-
-            // /cloud is explicitly skipped.
-            expect(envRegistry.resolveById).not.toHaveBeenCalled();
-            expect(context.environmentId).toBeUndefined();
-        });
-
-        it('falls through to header resolution when URL-param project is unknown', async () => {
-            envRegistry.resolveById = vi.fn()
-                .mockResolvedValueOnce(null) // URL-param lookup fails
-                .mockResolvedValueOnce({ name: 'header-driver' }); // header lookup succeeds
-
-            const context: any = {
-                request: { headers: { 'x-environment-id': 'proj-header' } },
-            };
-            await (envDispatcher as any).resolveEnvironmentContext(
-                context,
-                '/api/v1/environments/proj-unknown/data/task',
-            );
-
-            expect(envRegistry.resolveById).toHaveBeenNthCalledWith(1, 'proj-unknown');
-            expect(envRegistry.resolveById).toHaveBeenNthCalledWith(2, 'proj-header');
-            expect(context.environmentId).toBe('proj-header');
-        });
-    });
 
     describe('enforceProjectMembership (RBAC)', () => {
         const SYSTEM_ENVIRONMENT_ID = '00000000-0000-0000-0000-000000000001';
