@@ -147,13 +147,31 @@ export default class Compile extends Command {
         this.exit(1);
       }
 
-      // 3c. Widget-binding diagnostics (issue #1719) — semantic checks that
-      //     need the widget's `dataset` reference resolved to its dataset and
-      //     `values` resolved to measures with known aggregates. Advisory
-      //     only: warnings are printed (and included in --json output) but
-      //     never fail the build. Suppress per widget via
+      // 3c. Widget-binding diagnostics (issues #1719/#1721) — semantic checks
+      //     that need the widget's `dataset` reference resolved to its dataset
+      //     and `dimensions`/`values` resolved to declared names. Errors are
+      //     unresolvable bindings (dangling dataset/dimension/measure or a
+      //     chartConfig field the query result won't contain) and fail the
+      //     build; warnings are advisory and suppressible per widget via
       //     `suppressWarnings: ['<rule-id>']`.
-      const widgetWarnings = validateWidgetBindings(result.data as Record<string, unknown>);
+      if (!flags.json) printStep('Checking dashboard widget bindings (ADR-0021)...');
+      const widgetFindings = validateWidgetBindings(result.data as Record<string, unknown>);
+      const widgetErrors = widgetFindings.filter((f) => f.severity === 'error');
+      const widgetWarnings = widgetFindings.filter((f) => f.severity === 'warning');
+      if (widgetErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'widget binding validation failed', issues: widgetErrors }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Dashboard widget integrity failed (${widgetErrors.length} issue${widgetErrors.length > 1 ? 's' : ''})`);
+        for (const f of widgetErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
       if (widgetWarnings.length > 0 && !flags.json) {
         console.log('');
         for (const w of widgetWarnings) {
