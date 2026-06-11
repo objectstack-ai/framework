@@ -112,3 +112,29 @@ Options considered:
 ## Rollout & sequencing
 
 Phase 1+2 land together (one objectui PR + a cloud pin bump) ≈ one week → 80 % of the Airtable feel (structure-level WYSIWYG). Phase 3 is one framework PR ≈ cumulative 2–3 weeks → the full "living app" feel. Phase 4 follows independently. Each phase is separately shippable and separately revertible (the canvas is additive; no existing surface changes behavior when it is closed).
+
+---
+
+## Amendment (2026-06-10) — product boundaries: one truth, four altitudes
+
+Discussion after the proposal surfaced the integration question: the AI's designs already land in the metadata repository, Studio already exists as the metadata workbench, and the floating AI chat is already everywhere — where does the canvas END and everything else BEGIN? The answer that keeps this from becoming a fourth competing product: **these are not four products; they are one truth (the metadata repository) viewed at four altitudes.**
+
+| Altitude | Surface | Persona | Access |
+|---|---|---|---|
+| L0 — intent | AI chat (floating / Build-with-AI) | anyone | writes drafts via tools |
+| L1 — outcome | **Live Canvas** (this ADR) | app owner / business builder | read-only, `?preview=draft` |
+| L2 — artifact | Studio workbench | developer / implementer | full-fidelity edit (still drafts) |
+| L3 — truth | `sys_metadata` draft+active overlay (ADR-0033) | — | the single store |
+
+All write paths converge on the same draft rows; **Publish remains the single commit gate** shared by every surface.
+
+**Boundary rules (each one is a "we will NOT build"):**
+
+1. **One truth.** The canvas has NO store of its own — no "AI workspace" parallel repository. It renders the same `sys_metadata` rows Studio edits.
+2. **The canvas never edits in place.** It renders and *selects* (point at a widget/field); changing anything goes through exactly two doors — say it (chat → authoring tools → draft) or **"Open in Studio"** (the existing review/designer deep-link). This rule is what guarantees the canvas can never grow into a second Studio.
+3. **There is one chat.** The canvas ships no chat of its own; in build sessions the existing `ChatbotEnhanced` (same conversation, same component) becomes the left pane and the canvas is its result pane. The floating button keeps its role as the everywhere intent-entry; the canvas appears only in building contexts.
+4. **No new lifecycle semantics.** The canvas's Publish calls the existing endpoints; Review deep-links to Studio's diff. Nothing new to govern.
+
+**Relationship to Studio's existing previews**: Studio's dataset-designer live preview (ADR-0021) is *artifact-level* preview; the canvas is *app-level* preview. Both consume the same primitives (`preview=draft` reads; `queryDataset` already accepts inline draft definitions — the hook originally added for Studio preview), so the mechanism is shared, not duplicated. Canvas selection and Studio deep-links ride the same `assistantBus` — three surfaces, one context bus.
+
+This framing also slots ADR-0036 (every app is an API + MCP server) into the same L1 outcome surface — the build-complete state shows "your app + its API + its agent tools" without inventing another surface.
