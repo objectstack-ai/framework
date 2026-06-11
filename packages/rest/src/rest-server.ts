@@ -600,14 +600,21 @@ export class RestServer {
         return result;
     }
 
-    private async resolveProtocol(environmentId?: string, req?: any): Promise<ObjectStackProtocol> {
-        if (environmentId === 'platform') return this.protocol;
-        if (!environmentId && req && this.envRegistry && this.kernelManager) {
+    /**
+     * Resolve the environment a request targets: explicit id → tenant hostname
+     * → `X-Environment-Id` header → single-project default. Returns undefined
+     * for control-plane requests. Shared by every per-environment service
+     * resolution (protocol, analytics, …) so they can never disagree about
+     * which kernel a request belongs to.
+     */
+    private async resolveRequestEnvironmentId(environmentId?: string, req?: any): Promise<string | undefined> {
+        if (environmentId) return environmentId;
+        if (req && this.envRegistry && this.kernelManager) {
             const host = this.extractHostname(req);
             if (host) {
                 try {
                     const result = await this.resolveHostnameCached(host);
-                    if (result?.environmentId) environmentId = result.environmentId;
+                    if (result?.environmentId) return result.environmentId;
                 } catch {
                     // fall through to next strategy
                 }
@@ -618,12 +625,12 @@ export class RestServer {
             //    serving multiple compiled bundles via OS_PROJECT_ARTIFACTS).
             //    We validate the id through the env registry to avoid
             //    routing to a non-existent kernel.
-            if (!environmentId && typeof this.envRegistry.resolveById === 'function') {
+            if (typeof this.envRegistry.resolveById === 'function') {
                 const headerVal = this.extractProjectIdHeader(req);
                 if (headerVal) {
                     try {
                         const driver = await this.envRegistry.resolveById(headerVal);
-                        if (driver) environmentId = headerVal;
+                        if (driver) return headerVal;
                     } catch {
                         // fall through to default fallback
                     }
@@ -635,14 +642,20 @@ export class RestServer {
         //    (no `/projects/<id>` prefix, no hostname mapping, no header)
         //    resolve to the lone project's kernel rather than the control
         //    plane.
-        if (!environmentId && this.defaultEnvironmentIdProvider) {
+        if (this.defaultEnvironmentIdProvider) {
             try {
                 const def = this.defaultEnvironmentIdProvider();
-                if (def) environmentId = def;
+                if (def) return def;
             } catch { /* fall through */ }
         }
-        if (!environmentId || !this.kernelManager) return this.protocol;
-        const kernel = await this.kernelManager.getOrCreate(environmentId);
+        return undefined;
+    }
+
+    private async resolveProtocol(environmentId?: string, req?: any): Promise<ObjectStackProtocol> {
+        if (environmentId === 'platform') return this.protocol;
+        const envId = await this.resolveRequestEnvironmentId(environmentId, req);
+        if (!envId || !this.kernelManager) return this.protocol;
+        const kernel = await this.kernelManager.getOrCreate(envId);
         return kernel.getServiceAsync<ObjectStackProtocol>('protocol');
     }
 
@@ -3589,7 +3602,21 @@ export class RestServer {
      */
     private registerAnalyticsEndpoints(basePath: string): void {
         const isScoped = basePath.includes('/environments/:environmentId');
-        const resolveService = async (environmentId?: string) => {
+        // Resolve the ENVIRONMENT's analytics service first — its strategy
+        // bridges are bound to the env kernel's own data engine. The host
+        // provider (whose 'data' is the host kernel's engine) is only a
+        // fallback: serving a tenant's dataset query from the host engine
+        // reads the WRONG database and silently aggregates over nothing
+        // (the staging "Total Spend: 0 on a populated table" incident).
+        const resolveService = async (environmentId?: string, req?: any) => {
+            try {
+                const envId = await this.resolveRequestEnvironmentId(environmentId, req);
+                if (envId && envId !== 'platform' && this.kernelManager) {
+                    const kernel = await this.kernelManager.getOrCreate(envId);
+                    const svc = await kernel.getServiceAsync<any>('analytics').catch(() => undefined);
+                    if (svc) return svc;
+                }
+            } catch { /* fall back to the host service */ }
             if (!this.analyticsServiceProvider) return undefined;
             try { return await this.analyticsServiceProvider(environmentId); }
             catch { return undefined; }
@@ -3604,7 +3631,7 @@ export class RestServer {
                     const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
 
-                    const svc = await resolveService(environmentId);
+                    const svc = await resolveService(environmentId, req);
                     if (!svc || typeof svc.queryDataset !== 'function') {
                         return res.status(501).json({
                             code: 'NOT_IMPLEMENTED',
