@@ -104,6 +104,37 @@ human-readable with no frontend work:
   gains optional `label` and `format`, so a chart can display "Tasks" and
   "$616,000" while keeping raw numbers for plotting.
 
+### Automation: durable pause survives subflows and restarts
+
+Two reliability upgrades to `@objectstack/service-automation`'s durable pause
+(ADR-0019):
+
+- **Nested durable pause.** A pausing node (approval, screen, wait) inside a
+  subflow used to fail the parent run. The whole chain now suspends as linked
+  runs: the child's screen surfaces through the parent, resume signals
+  delegate down to the suspended child, and a completed child auto-resumes its
+  parent.
+- **Wait timers re-arm after a cold boot.** A timer `wait` scheduled its wake-up
+  in process memory, so a restart left the suspended run paused forever. The
+  wake deadline is now persisted with the run; on boot the service resumes
+  overdue runs immediately and re-schedules future ones.
+
+### Publishing: seed data lands on every publish path
+
+Whether a `seed` draft's rows actually materialized used to depend on which
+route you published through — the per-ref publish (used by the Studio home
+banner) never applied them, yielding "Published!" with empty tables. Seed
+application now lives in the protocol itself (`@objectstack/objectql`), so
+every publish path converges on it and reports the outcome under
+`seedApplied`. A seed problem never fails the publish.
+
+### AI service: tools stream progress while they run
+
+`ToolExecutionContext.onProgress(part)` lets a long-running tool report
+progress before it returns, emitted as custom `data-*` parts on the UI message
+stream (this is what powers the live build tree in Console's Build-with-AI).
+Existing tools that never emit behave exactly as before.
+
 ### Auth: Google sign-in and an extension hook
 
 `@objectstack/plugin-auth` binds the `auth` settings namespace to better-auth
@@ -146,10 +177,31 @@ improvements:
 - **Charts**: crowded bar-chart x-axis labels angle and truncate instead of
   overlapping.
 
+## ObjectStack Cloud
+
+ObjectStack Cloud (the hosted control plane) versions independently of this
+release train and deploys continuously; changes that affect how you ship apps
+are summarized here when a framework release lands.
+
+- **Package install via reconciliation (ADR-0007 ①).** Installing a published
+  package into an environment is now a control-plane operation: the
+  environment's **Installed** view in Console reads the control-plane install
+  list when cloud-bound, and publish → install is the documented deployment
+  path (install from the environment Marketplace, not a publish flag).
+- **Authorization hardening across the environment API surface** — environment
+  reads are org-scoped, and destructive environment/organization operations
+  require an owner/admin role.
+
+The second phase of ADR-0007 — org-scoped private package catalogs with
+`os package publish` defaulting to organization visibility — ships in the next
+framework release.
+
 ## Notable fixes
 
 - Publishing pending drafts by ref so package-less drafts can't get stuck in
   the metadata-admin publish queue.
+- New projects scaffolded by `create-objectstack` start cleanly under pnpm.
+- Setup → System Settings menu labels and pages are fully translated.
 - `FlowRunner` closes cleanly when a terminal resume fails instead of leaving
   a dead dialog.
 - The AI service treats a stored or env-locked `provider=memory` as an explicit
