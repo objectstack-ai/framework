@@ -36,6 +36,7 @@ export const FlowNodeAction = z.enum([
   'screen',             // Screen / User-Input Element
   'wait',               // Delay/Sleep
   'subflow',            // Call another flow
+  'map',                // Sequential multi-instance — per-item subflow, each may pause (ADR-0037 A2)
   'connector_action',   // Zapier-style integration action
   'parallel_gateway',   // BPMN Parallel Gateway — AND-split (all outgoing branches execute concurrently)
   'join_gateway',       // BPMN Join Gateway — AND-join (waits for all incoming branches to complete)

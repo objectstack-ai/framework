@@ -917,11 +917,113 @@ export const InvoiceDualSignoffFlow = defineFlow({
   ],
 });
 
+/**
+ * One Task Sign-off — a reusable per-item **approval subflow**, invoked once
+ * per task by {@link ReleaseSignoffFlow}'s `map` node. The mapped task is
+ * exposed to this subflow as its record, so the `approval` node opens against
+ * *that* task.
+ */
+export const OneTaskSignoffSubflow = defineFlow({
+  name: 'showcase_one_task_signoff',
+  label: 'One Task Sign-off (per-item subflow)',
+  description: 'Reusable subflow: requests sign-off on a single task. Invoked per item by the batch sign-off map.',
+  type: 'autolaunched',
+  template: true,
+  variables: [{ name: 'decision', type: 'text', isOutput: true }],
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'review',
+      type: 'approval',
+      label: 'Task Sign-off',
+      config: {
+        approvers: [{ type: 'role', value: 'manager' }],
+        behavior: 'first_response',
+        lockRecord: false,
+      },
+    },
+    { id: 'mark_ok', type: 'assignment', label: 'Approved', config: { assignments: { decision: 'approved' } } },
+    { id: 'mark_no', type: 'assignment', label: 'Rejected', config: { assignments: { decision: 'rejected' } } },
+    { id: 'end_ok', type: 'end', label: 'Signed Off' },
+    { id: 'end_no', type: 'end', label: 'Declined' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'review' },
+    { id: 'e2', source: 'review', target: 'mark_ok', label: 'approve' },
+    { id: 'e3', source: 'review', target: 'mark_no', label: 'reject' },
+    { id: 'e4', source: 'mark_ok', target: 'end_ok' },
+    { id: 'e5', source: 'mark_no', target: 'end_no' },
+  ],
+});
+
+/**
+ * Release Sign-off — the worked **batch-approval** example (ADR-0037 Track A2:
+ * the sequential `map` / multi-instance node).
+ *
+ * "Every task in the release must be signed off, one at a time" is a **single
+ * `map` node** over the task list. For each task it runs the
+ * {@link OneTaskSignoffSubflow}, which **pauses** on its `approval`; when that
+ * task is decided, the map **re-enters** and moves to the next task — the run
+ * holds a single program counter throughout (no token tree). The per-task
+ * decisions are collected into `signoffResults`, then the owner is notified.
+ *
+ * Trigger it with the tasks to sign off, e.g.:
+ *   POST /api/v1/automation/showcase_release_signoff/trigger
+ *   { "params": { "items": [ {task record}, {task record} ] } }
+ * then decide each task's approval in turn via /api/v1/approvals.
+ */
+export const ReleaseSignoffFlow = defineFlow({
+  name: 'showcase_release_signoff',
+  label: 'Release Sign-off (batch approval / map)',
+  description: 'Signs off every task in a release one at a time via a map node — demonstrates batch approval (ADR-0037 Track A2).',
+  type: 'autolaunched',
+  variables: [
+    { name: 'items', type: 'list', isInput: true },
+    { name: 'signoffResults', type: 'list', isOutput: true },
+  ],
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'signoffs',
+      type: 'map',
+      label: 'Sign off each task',
+      config: {
+        collection: '{items}',
+        iteratorVariable: 'task',
+        flowName: 'showcase_one_task_signoff',
+        itemObject: 'showcase_task',
+        outputVariable: 'signoffResults',
+      },
+    },
+    {
+      id: 'notify_done',
+      type: 'notify',
+      label: 'Notify: Release Cleared',
+      config: {
+        topic: 'release.signoff',
+        recipients: ['admin@objectos.ai'],
+        channels: ['inbox'],
+        severity: 'info',
+        title: 'Release sign-off complete',
+        message: 'Every task in the release has been signed off.',
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'signoffs' },
+    { id: 'e2', source: 'signoffs', target: 'notify_done' },
+    { id: 'e3', source: 'notify_done', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
   BudgetApprovalFlow,
   InvoiceDualSignoffFlow,
+  OneTaskSignoffSubflow,
+  ReleaseSignoffFlow,
   TaskCompletedSlackFlow,
   TaskAssignedNotifyFlow,
   ScheduledDigestFlow,
