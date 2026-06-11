@@ -1,18 +1,20 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * ADR-0006 Phase 2 — the generic `kernelResolver` seam.
+ * ADR-0006 — the generic `kernelResolver` seam (Phase 5 semantics).
  *
- * The dispatcher gains an optional host-injected resolver that owns
- * per-request kernel selection. It coexists with the legacy `kernelManager`
- * path and TAKES PRECEDENCE over it for primary routing. The framework ships
- * no multi-tenant resolver — these tests pin the seam contract (precedence +
- * undefined → defaultKernel fallback) that cloud's resolver plugs into.
+ * The host's resolver owns per-request ENVIRONMENT RESOLUTION + kernel
+ * selection: the dispatcher contributes parsing hints (`context.routePath`,
+ * `context.urlEnvironmentId`), expects the resolver to set
+ * `context.environmentId` / `context.dataDriver`, and serves from
+ * `defaultKernel` when the resolver returns undefined or none is registered.
+ * The framework ships no multi-tenant resolver — strategy coverage lives in
+ * cloud `packages/objectos-runtime/src/kernel-resolver.test.ts`.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { HttpDispatcher } from './http-dispatcher.js';
-import type { KernelResolver } from './http-dispatcher.js';
+import type { KernelResolver, HttpProtocolContext } from './http-dispatcher.js';
 
 /** Minimal kernel whose objectql records which instance served the request. */
 function makeKernel(tag: string) {
@@ -32,27 +34,45 @@ function makeKernel(tag: string) {
 }
 
 describe('HttpDispatcher — ADR-0006 kernelResolver seam', () => {
-    it('prefers the injected kernelResolver over kernelManager for primary routing', async () => {
+    it('delegates kernel selection to the resolver with parsing hints attached', async () => {
         const defaultKernel = makeKernel('default');
         const envKernel = makeKernel('env');
 
-        const resolveKernel = vi.fn(async () => envKernel);
-        const kernelResolver: KernelResolver = { resolveKernel };
-        const getOrCreate = vi.fn(async () => envKernel);
-
+        const resolveKernel = vi.fn(async (ctx: HttpProtocolContext) => {
+            // Phase 5 contract: the resolver sets the environment context.
+            ctx.environmentId = 'env-from-resolver';
+            return envKernel;
+        });
         const dispatcher = new HttpDispatcher(defaultKernel, undefined, {
-            kernelResolver,
-            kernelManager: { getOrCreate } as any,
+            kernelResolver: { resolveKernel },
             enforceProjectMembership: false,
         });
 
-        await dispatcher.dispatch('GET', '/data/widget', undefined, {}, { request: {} } as any);
+        const context: any = { request: { headers: { host: 'tenant.example.com' } } };
+        await dispatcher.dispatch('GET', '/environments/env-123/data/widget', undefined, {}, context);
 
-        // The seam was consulted exactly once, with (context, defaultKernel)…
         expect(resolveKernel).toHaveBeenCalledTimes(1);
+        const passed = resolveKernel.mock.calls[0][0] as HttpProtocolContext;
+        // Dispatcher-provided hints (pure parsing, unvalidated):
+        expect(passed.routePath).toBe('/environments/env-123/data/widget');
+        expect(passed.urlEnvironmentId).toBe('env-123');
+        // Resolver-set environment context survives for downstream stages:
+        expect(context.environmentId).toBe('env-from-resolver');
         expect(resolveKernel.mock.calls[0][1]).toBe(defaultKernel);
-        // …and it WON: the legacy kernelManager path was not used for routing.
-        expect(getOrCreate).not.toHaveBeenCalled();
+    });
+
+    it('does not parse /cloud/environments/:id as a scoped-path candidate', async () => {
+        const defaultKernel = makeKernel('default');
+        const resolveKernel = vi.fn(async () => undefined);
+        const dispatcher = new HttpDispatcher(defaultKernel, undefined, {
+            kernelResolver: { resolveKernel },
+            enforceProjectMembership: false,
+        });
+
+        const context: any = { request: {} };
+        await dispatcher.dispatch('GET', '/cloud/environments/env-9', undefined, {}, context);
+        const passed = resolveKernel.mock.calls[0][0] as HttpProtocolContext;
+        expect(passed.urlEnvironmentId).toBeUndefined();
     });
 
     it('falls back to defaultKernel when the resolver returns undefined', async () => {
@@ -64,28 +84,21 @@ describe('HttpDispatcher — ADR-0006 kernelResolver seam', () => {
             enforceProjectMembership: false,
         });
 
-        // Should not throw — undefined routes to the single defaultKernel.
         const result = await dispatcher.dispatch('GET', '/data/widget', undefined, {}, { request: {} } as any);
         expect(resolveKernel).toHaveBeenCalledTimes(1);
         expect(result).toBeDefined();
     });
 
-    it('uses the legacy kernelManager path when no resolver is injected (back-compat)', async () => {
+    it('serves single-environment hosts (no resolver) from defaultKernel without env context', async () => {
         const defaultKernel = makeKernel('default');
-        const envKernel = makeKernel('env');
-        const getOrCreate = vi.fn(async () => envKernel);
-
         const dispatcher = new HttpDispatcher(defaultKernel, undefined, {
-            kernelManager: { getOrCreate } as any,
             enforceProjectMembership: false,
         });
 
-        // Force a resolved environmentId so the kernelManager branch is taken.
-        await dispatcher.dispatch('GET', '/data/widget', undefined, {}, {
-            request: {},
-            environmentId: 'env_123',
-        } as any);
-
-        expect(getOrCreate).toHaveBeenCalledWith('env_123');
+        const context: any = { request: { headers: { host: 'localhost' } } };
+        const result = await dispatcher.dispatch('GET', '/data/widget', undefined, {}, context);
+        expect(result).toBeDefined();
+        // No resolver registered → nothing resolves an environment.
+        expect(context.environmentId).toBeUndefined();
     });
 });

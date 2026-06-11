@@ -92,18 +92,14 @@ export type { LoadArtifactBundleOptions } from './load-artifact-bundle.js';
 // ── ObjectOS Cloud Runtime (artifact-fetching shared multi-tenant host) ───────
 // Multi-tenant / cloud-operations code is NOT part of the framework
 // (ADR-0006). The MULTI-TENANT runtime — createObjectOSStack, the kernel
-// manager, artifact fetching, the auth proxy, per-environment kernel
-// construction, platform SSO, marketplace browse/install, the
-// runtime-config endpoint — lives in the cloud distribution
-// (`@objectstack/objectos-runtime`). ADR-0006 Phase 4 removed the
-// framework's deprecated duplicate cloud plugins (MarketplaceProxyPlugin,
-// MarketplaceInstallLocalPlugin, RuntimeConfigPlugin, cloud-url; =
-// cloud ADR-0007 ⑤). The framework keeps only the generic contracts a host
-// runtime needs to plug in an externally-supplied multi-tenant kernel
-// router: `KernelResolver` (exported above with HttpDispatcher) and the
-// `EnvironmentDriverRegistry` / `KernelManager` interfaces below (D3 —
-// converged into the resolver seam in Phase 5).
-export type { EnvironmentDriverRegistry, KernelManager } from './cloud/environment-registry.js';
+// manager, environment registries, artifact fetching, the auth proxy,
+// per-environment kernel construction, platform SSO, marketplace
+// browse/install, the runtime-config endpoint — lives in the cloud
+// distribution (`@objectstack/objectos-runtime`). Phase 4 removed the
+// framework's duplicate cloud plugins (= cloud ADR-0007 ⑤); Phase 5
+// converged the dispatcher's environment resolution + kernel routing into
+// the single generic `KernelResolver` seam (exported above with
+// HttpDispatcher) — the only multi-tenant contract the framework retains.
 
 // Export Sandbox (script body runner) — engine choice is quickjs-emscripten.
 // See packages/runtime/src/sandbox/script-runner.ts for the decision rationale.
