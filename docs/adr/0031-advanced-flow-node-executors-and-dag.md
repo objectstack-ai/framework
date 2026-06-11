@@ -196,6 +196,10 @@ with best-effort folding of foreign BPMN gateways. BPMN 2.0 **XML**
 - Relaxing the DAG invariant to allow arbitrary cycles (loops are structured
   containers instead).
 - Runtime BPMN boundary events (timer/signal) — interop representation retained.
+- Durable pause *inside* a `parallel` branch or `loop` iteration — the structured
+  constructs run their regions synchronously here. Generalizing the engine's
+  single-program-counter to a token/scope tree (the runtime dual of these
+  regions) is [ADR-0037](./0037-token-scope-tree-execution.md).
 
 ## Already shipped this line of work
 

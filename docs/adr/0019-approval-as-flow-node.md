@@ -176,7 +176,7 @@ The open-source / enterprise split is **not** an architectural concern and is **
 A pausing node inside a **subflow** now suspends the whole chain instead of failing the parent.
 Model: **linked runs** (the inter-flow half of the long-term execution-state architecture —
 cf. Step Functions nested executions / Temporal child workflows; the intra-flow half, a
-token/scope tree replacing the single-program-counter continuation, is a separate future ADR).
+token/scope tree replacing the single-program-counter continuation, is [ADR-0037](./0037-token-scope-tree-execution.md)).
 
 - The child's continuation persists under its **own run id** (run identity keeps per-flow version
   pinning, run logs, and `$runId`-based approval/wait correlation intact). The parent suspends at
