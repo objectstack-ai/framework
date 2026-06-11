@@ -25,14 +25,22 @@ describe('ReportSchema (dataset-bound)', () => {
     expect(r.rows).toEqual(['stage']);
   });
 
-  it('accepts a matrix report (rows = down × across, flattened) + runtimeFilter', () => {
+  it('accepts a matrix report (rows down × columns across) + runtimeFilter', () => {
     const r = ReportSchema.parse({
       name: 'hours_matrix', label: 'Hours', type: 'matrix',
-      dataset: 'tasks', rows: ['owner', 'category'], values: ['est_hours', 'actual_hours'],
+      dataset: 'tasks', rows: ['owner'], columns: ['category'], values: ['est_hours', 'actual_hours'],
       runtimeFilter: { is_completed: true },
     });
-    expect(r.rows).toHaveLength(2);
+    expect(r.rows).toEqual(['owner']);
+    expect(r.columns).toEqual(['category']);
     expect(r.runtimeFilter).toEqual({ is_completed: true });
+  });
+
+  it('drilldown defaults on and can be disabled', () => {
+    const on = ReportSchema.parse({ name: 'r1', label: 'R', type: 'summary', dataset: 'sales', rows: ['stage'], values: ['revenue'] });
+    expect(on.drilldown).toBe(true);
+    const off = ReportSchema.parse({ name: 'r2', label: 'R', type: 'summary', dataset: 'sales', rows: ['stage'], values: ['revenue'], drilldown: false });
+    expect(off.drilldown).toBe(false);
   });
 
   it('accepts an embedded chart', () => {

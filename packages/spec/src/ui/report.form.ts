@@ -39,6 +39,9 @@ export const reportForm = defineForm({
         { field: 'dataset', widget: 'ref:dataset', helpText: 'Dataset to bind (measures/dimensions come from its semantic layer)' },
         { field: 'values', widget: 'string-tags', helpText: 'Measure names (from the dataset) to display' },
         { field: 'rows', widget: 'string-tags', helpText: 'Dimension names (from the dataset) to group rows by' },
+        // CEL visibility — only Matrix reports pivot across a second dimension.
+        { field: 'columns', widget: 'string-tags', visibleOn: "data.type == 'matrix'", helpText: 'Dimension names across (matrix only)' },
+        { field: 'drilldown', helpText: 'Click an aggregated row/cell to open the underlying records' },
       ],
     },
     {
