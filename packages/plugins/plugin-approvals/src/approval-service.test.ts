@@ -407,6 +407,113 @@ describe('ApprovalService (node era)', () => {
     expect(actions.map(a => (a as any).actor_name)).toEqual(['Ada Lovelace', 'Grace Hopper']);
   });
 
+  // ── thread interactions ─────────────────────────────────────────
+
+  it('reassign: hands the slot to a new approver and audits the move', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9', 'u2']), CTX);
+    const out = await svc.reassign(req.id, { actorId: 'u9', to: 'u7' }, CTX);
+    expect(out.request.pending_approvers).toEqual(['u7', 'u2']);
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.at(-1)).toMatchObject({ action: 'reassign', actor_id: 'u9', comment: 'u9 → u7' });
+  });
+
+  it('reassign: notifies the new approver via messaging', async () => {
+    const emitted: any[] = [];
+    svc.attachMessaging({ async emit(input) { emitted.push(input); } });
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.reassign(req.id, { actorId: 'u9', to: 'u7' }, CTX);
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ topic: 'approval.reassigned', audience: ['u7'] });
+  });
+
+  it('reassign: blocks a non-holder and duplicate targets', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9', 'u2']), CTX);
+    await expect(svc.reassign(req.id, { actorId: 'intruder', to: 'u7' }, CTX)).rejects.toThrow(/FORBIDDEN/);
+    await expect(svc.reassign(req.id, { actorId: 'u9', to: 'u2' }, CTX)).rejects.toThrow(/VALIDATION_FAILED/);
+  });
+
+  it('remind: notifies pending approvers, audits, and throttles repeats', async () => {
+    const emitted: any[] = [];
+    svc.attachMessaging({ async emit(input) { emitted.push(input); } });
+    const req = await svc.openNodeRequest(openInput(['u9', 'u2']), CTX);
+    const out = await svc.remind(req.id, { actorId: 'u1' }, CTX); // u1 = submitter (CTX.userId)
+    expect(out.notified).toBe(2);
+    expect(emitted[0]).toMatchObject({ topic: 'approval.reminder', audience: ['u9', 'u2'] });
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.at(-1)?.action).toBe('remind');
+    // The fake clock steps 1s per call — well inside the 4h cool-down.
+    await expect(svc.remind(req.id, { actorId: 'u1' }, CTX)).rejects.toThrow(/THROTTLED/);
+  });
+
+  it('remind: only the submitter may nudge', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await expect(svc.remind(req.id, { actorId: 'u9' }, { roles: [], permissions: [] } as any))
+      .rejects.toThrow(/FORBIDDEN/);
+  });
+
+  it('requestInfo: keeps the request pending and notifies the submitter', async () => {
+    const emitted: any[] = [];
+    svc.attachMessaging({ async emit(input) { emitted.push(input); } });
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const out = await svc.requestInfo(req.id, { actorId: 'u9', comment: 'Need the Q3 numbers' }, CTX);
+    expect(out.request.status).toBe('pending');
+    expect(out.request.pending_approvers).toEqual(['u9']);
+    expect(emitted[0]).toMatchObject({ topic: 'approval.request_info', audience: ['u1'] });
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.at(-1)).toMatchObject({ action: 'request_info', comment: 'Need the Q3 numbers' });
+  });
+
+  it('comment: submitter and approver may reply; outsiders may not', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.comment(req.id, { actorId: 'u1', comment: 'Numbers attached.' }, CTX);
+    await svc.comment(req.id, { actorId: 'u9', comment: 'Thanks, reviewing.' }, CTX);
+    await expect(svc.comment(req.id, { actorId: 'outsider', comment: 'hi' }, { roles: [], permissions: [] } as any))
+      .rejects.toThrow(/FORBIDDEN/);
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.filter(a => a.action === 'comment')).toHaveLength(2);
+  });
+
+  // ── SLA + flow steps ────────────────────────────────────────────
+
+  it('rows expose sla_due_at when the node declares escalation.timeoutHours', async () => {
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 48, action: 'notify', notifySubmitter: true } }), CTX,
+    );
+    expect(req.sla_due_at).toBe(new Date(Date.parse(req.created_at!) + 48 * 3600_000).toISOString());
+    const noSla = await svc.openNodeRequest(openInput(['u9'], { recordId: 'opp2', record: { id: 'opp2' } }), CTX);
+    expect(noSla.sla_due_at).toBeUndefined();
+  });
+
+  it('getRequest attaches flow_steps from the owning flow graph', async () => {
+    svc.attachAutomation({
+      async getFlow(name: string) {
+        if (name !== 'deal_approval') return null;
+        return {
+          name: 'deal_approval',
+          nodes: [
+            { id: 'start', type: 'start', label: 'Start' },
+            { id: 'approve_step', type: 'approval', label: 'Manager Approval' },
+            { id: 'gate', type: 'decision', label: 'Big?' },
+            { id: 'exec_step', type: 'approval', label: 'Executive Approval' },
+            { id: 'end', type: 'end', label: 'End' },
+          ],
+          edges: [
+            { id: 'e1', source: 'start', target: 'approve_step' },
+            { id: 'e2', source: 'approve_step', target: 'gate', label: 'approve' },
+            { id: 'e3', source: 'gate', target: 'exec_step', label: 'true' },
+            { id: 'e4', source: 'exec_step', target: 'end', label: 'approve' },
+          ],
+        };
+      },
+    });
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const fresh = await svc.getRequest(req.id, SYS);
+    expect(fresh?.flow_steps).toEqual([
+      { id: 'approve_step', label: 'Manager Approval', state: 'current' },
+      { id: 'exec_step', label: 'Executive Approval', state: 'upcoming' },
+    ]);
+  });
+
   it('enrichment resolves an email submitter via sys_user.email', async () => {
     engine._tables['sys_user'] = [{ id: 'u7', name: 'Grace Hopper', email: 'grace@example.com' }];
     await svc.openNodeRequest(openInput(['u9'], { submitterId: 'grace@example.com' }), CTX);

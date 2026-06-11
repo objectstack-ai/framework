@@ -4252,6 +4252,7 @@ export class RestServer {
                 [/^VALIDATION_FAILED/, 400, 'VALIDATION_FAILED'],
                 [/^DUPLICATE_REQUEST/, 409, 'DUPLICATE_REQUEST'],
                 [/^INVALID_STATE/, 409, 'INVALID_STATE'],
+                [/^THROTTLED/, 429, 'THROTTLED'],
                 [/^FORBIDDEN/, 403, 'FORBIDDEN'],
                 [/^REQUEST_NOT_FOUND/, 404, 'REQUEST_NOT_FOUND'],
             ];
@@ -4399,6 +4400,69 @@ export class RestServer {
                 }
             },
             metadata: { summary: 'Recall (withdraw) an approval request', tags: ['approvals'] },
+        });
+
+        // Thread interactions — reassign / remind / request-info / comment.
+        // None of these move the flow; they update approver slots or the
+        // audit thread. Registered generically: the service method enforces
+        // the per-action permission (slot holder / submitter / participant).
+        const threadRoute = (
+            action: 'reassign' | 'remind' | 'request-info' | 'comment',
+            invoke: (svc: any, id: string, body: any, context: any) => Promise<unknown>,
+        ) => {
+            this.routeManager.register({
+                method: 'POST',
+                path: `${dataPath}/approvals/requests/:id/${action}`,
+                handler: async (req: any, res: any) => {
+                    try {
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const context = await this.resolveExecCtx(environmentId, req);
+                        if (this.enforceAuth(req, res, context)) return;
+                        const svc = await resolveService(environmentId);
+                        if (!svc) return respond501(res);
+                        const body = req.body ?? {};
+                        try {
+                            const out = await invoke(svc, req.params.id, body, context ?? {});
+                            res.json(out);
+                        } catch (err: any) {
+                            if (handleApprovalError(res, err)) return;
+                            throw err;
+                        }
+                    } catch (error: any) {
+                        logError(`[REST] ${action} approval error:`, error);
+                        res.status(500).json({ code: `APPROVAL_${action.toUpperCase().replace('-', '_')}_FAILED`, error: String(error?.message ?? error).slice(0, 500) });
+                    }
+                },
+                metadata: { summary: `${action} on an approval request`, tags: ['approvals'] },
+            });
+        };
+        threadRoute('reassign', (svc, id, body, context) => {
+            if (typeof svc.reassign !== 'function') throw new Error('VALIDATION_FAILED: reassign is not supported');
+            return svc.reassign(id, {
+                actorId: body.actorId ?? body.actor_id ?? context?.userId,
+                to: body.to, from: body.from, comment: body.comment,
+            }, context);
+        });
+        threadRoute('remind', (svc, id, body, context) => {
+            if (typeof svc.remind !== 'function') throw new Error('VALIDATION_FAILED: remind is not supported');
+            return svc.remind(id, {
+                actorId: body.actorId ?? body.actor_id ?? context?.userId,
+                comment: body.comment,
+            }, context);
+        });
+        threadRoute('request-info', (svc, id, body, context) => {
+            if (typeof svc.requestInfo !== 'function') throw new Error('VALIDATION_FAILED: request-info is not supported');
+            return svc.requestInfo(id, {
+                actorId: body.actorId ?? body.actor_id ?? context?.userId,
+                comment: body.comment,
+            }, context);
+        });
+        threadRoute('comment', (svc, id, body, context) => {
+            if (typeof svc.comment !== 'function') throw new Error('VALIDATION_FAILED: comment is not supported');
+            return svc.comment(id, {
+                actorId: body.actorId ?? body.actor_id ?? context?.userId,
+                comment: body.comment,
+            }, context);
         });
 
         this.routeManager.register({

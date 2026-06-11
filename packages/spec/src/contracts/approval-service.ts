@@ -70,7 +70,35 @@ export interface ApprovalRequestRow {
    * record's display name), so inbox summaries never show foreign-key ids.
    */
   payload_display?: Record<string, string>;
+  /**
+   * SLA deadline, when the node config carries `escalation.timeoutHours`:
+   * `created_at + timeoutHours`. Display-only for now — automatic escalation
+   * needs a scheduler pass and is not yet wired.
+   */
+  sla_due_at?: string;
+  /**
+   * The owning flow's approval steps in graph order, for progress display
+   * (resolved on single-request reads when the automation engine is
+   * attached). `state` is relative to this request's node.
+   */
+  flow_steps?: Array<{ id: string; label: string; state: 'done' | 'current' | 'upcoming' }>;
 }
+
+/** Kinds of entries on a request's audit trail. */
+export type ApprovalActionKind =
+  | 'submit'
+  | 'approve'
+  | 'reject'
+  | 'recall'
+  | 'escalate'
+  /** A pending approver handed their slot to someone else. */
+  | 'reassign'
+  /** The submitter nudged the pending approvers. */
+  | 'remind'
+  /** An approver asked the submitter for more information (request stays pending). */
+  | 'request_info'
+  /** A free-form reply on the thread (submitter or approver). */
+  | 'comment';
 
 /** Audit row. */
 export interface ApprovalActionRow {
@@ -78,7 +106,7 @@ export interface ApprovalActionRow {
   request_id: string;
   step_name?: string;
   step_index?: number;
-  action: 'submit' | 'approve' | 'reject' | 'recall' | 'escalate';
+  action: ApprovalActionKind;
   actor_id?: string;
   comment?: string;
   created_at?: string;
@@ -167,6 +195,50 @@ export interface IApprovalService {
    * run down the `reject` branch with `output.decision = 'recall'`.
    */
   recall(requestId: string, input: ApprovalRecallInput, context: SharingExecutionContext): Promise<ApprovalRecallResult>;
+
+  /**
+   * Hand a pending-approver slot to someone else. The actor must currently
+   * be a pending approver (or system); `from` defaults to the actor's own
+   * matching identity. Audits a `reassign` action and notifies the new
+   * approver when a messaging service is attached.
+   */
+  reassign(
+    requestId: string,
+    input: { actorId: string; to: string; from?: string; comment?: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }>;
+
+  /**
+   * Submitter nudge: notify every pending approver. Throttled — repeat
+   * reminders inside the cool-down window are rejected (`THROTTLED`).
+   * Audits a `remind` action.
+   */
+  remind(
+    requestId: string,
+    input: { actorId: string; comment?: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow; notified: number }>;
+
+  /**
+   * Approver asks the submitter for more information. The request STAYS
+   * pending (no flow movement) — this is a thread interaction, audited as
+   * `request_info`, with the submitter notified when messaging is attached.
+   */
+  requestInfo(
+    requestId: string,
+    input: { actorId: string; comment: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }>;
+
+  /**
+   * Free-form reply on the request thread (submitter or any pending
+   * approver). Audited as `comment`.
+   */
+  comment(
+    requestId: string,
+    input: { actorId: string; comment: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow }>;
 
   /** Audit trail for a request. */
   listActions(requestId: string, context: SharingExecutionContext): Promise<ApprovalActionRow[]>;
