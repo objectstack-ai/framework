@@ -1141,7 +1141,16 @@ export class AutomationEngine implements IAutomationService {
             const context = run.context;
 
             try {
-                await this.traverseNext(node, flow, variables, context, steps, signal?.branchLabel);
+                // ── Map re-entry (sequential multi-instance, ADR-0037 A2).
+                // A run paused at a `map` node (correlation `map:<childRunId>`)
+                // does NOT continue past the node on resume — it RE-RUNS the
+                // node so the executor can record the just-completed unit and
+                // start the next item. The default path continues past the node.
+                if (typeof run.correlation === 'string' && run.correlation.startsWith('map:')) {
+                    await this.executeNode(node, flow, variables, context, steps);
+                } else {
+                    await this.traverseNext(node, flow, variables, context, steps, signal?.branchLabel);
+                }
 
                 // Collect output variables
                 const output: Record<string, unknown> = {};
@@ -1264,10 +1273,17 @@ export class AutomationEngine implements IAutomationService {
      * caller who resumed the child.
      */
     private async bubbleToParent(run: SuspendedRun, output: Record<string, unknown>): Promise<void> {
-        const parentRunId = (run.context as Record<string, unknown> | undefined)?.$parentRunId;
+        const ctx = run.context as Record<string, unknown> | undefined;
+        const parentRunId = ctx?.$parentRunId;
         if (typeof parentRunId !== 'string' || !parentRunId) return;
         try {
-            const sig = this.buildSubflowResumeSignal(run.context, output);
+            // A `map` child (ADR-0037 A2): hand the unit's output to the map
+            // node + flag the completion, so on re-entry it records this item
+            // and starts the next. A plain subflow child uses the 1:1 mapping.
+            const mapNode = ctx?.$parentMapNode;
+            const sig = typeof mapNode === 'string' && mapNode
+                ? { variables: { [`${mapNode}.$mapItemOutput`]: output ?? null, [`${mapNode}.$mapItemDone`]: true } }
+                : this.buildSubflowResumeSignal(run.context, output);
             const parentRes = await this.resumeInternal(parentRunId, sig, false);
             if (!parentRes.success) {
                 this.logger.warn(
