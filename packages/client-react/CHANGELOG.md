@@ -1,5 +1,14 @@
 # @objectstack/client-react
 
+## 9.1.0
+
+### Patch Changes
+
+- Updated dependencies [b9062c9]
+  - @objectstack/spec@9.1.0
+  - @objectstack/client@9.1.0
+  - @objectstack/core@9.1.0
+
 ## 9.0.1
 
 ### Patch Changes
