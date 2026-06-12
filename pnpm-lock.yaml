@@ -245,6 +245,9 @@ importers:
 
   examples/app-showcase:
     dependencies:
+      '@objectstack/cloud-connection':
+        specifier: workspace:*
+        version: link:../../packages/cloud-connection
       '@objectstack/connector-rest':
         specifier: workspace:*
         version: link:../../packages/connectors/connector-rest
