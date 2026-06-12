@@ -89,6 +89,17 @@ Today `chatWithTools` offers the **whole tool registry** to every agent; skills 
 - Until then, a "read-only analyst" custom agent is a *persona*, not a *boundary* — documented as such wherever custom agents are exposed.
 - This incident is also why scoping matters beyond security: the Data Assistant failed precisely because it could reach tools whose disciplines it didn't carry.
 
+### 5. Build-scope rule — oversized goals decompose into phased modules
+
+A "build me a whole ERP, hundreds of tables" goal must not become one mass-generated blueprint: it is unreviewable in the blueprint-confirm step (ADR-0033's safety valve), unbuildable inside the agent's per-turn runtime budget, and design coherence collapses at that scale. The platform's answer is **consultative decomposition**, in two layers sharing one limit:
+
+- **Soft (design-time)** — `propose_blueprint` carries a SCALE rule: a single blueprint never exceeds the per-build object cap (aim ≤10). Larger goals blueprint ONLY the core module (smallest object set with end-to-end value); the remaining modules are emitted as a phased roadmap in `assumptions`. Later phases are ordinary follow-up blueprints in the same environment, referencing earlier objects via lookups.
+- **Hard (apply-time)** — `apply_blueprint` rejects an oversized blueprint **before staging anything** (`code: 'blueprint_too_large'`), returning the same decomposition guidance so the agent re-proposes instead of retrying. The cap defaults to 20 and is read from one per-context limit (`BlueprintToolContext.limits.maxBlueprintObjects`) — the designated read point for plan-tier entitlements (a free tier is the same code path with a smaller N and the upsell moment built into the roadmap).
+
+**Perception rule**: limits that can manifest as *advice* stay invisible — the agent frames phasing as professional delivery methodology, never as a system or plan limitation. Limits that can only manifest as *refusal* (quota exhausted) must be stated honestly at the moment of impact, with a recovery path. An invisible wall the user can hit reads as "the AI is broken," which is the most expensive failure mode.
+
+Verified by the L5 suite's `golden_erp_scope` case: an "entire ERP" prompt must yield a bounded core-module build plus a roadmap, never dozens of staged objects.
+
 ## Non-goals
 
 - **Not** removing the multi-agent system — binding, API selection, eval, and channels all need it.
