@@ -176,9 +176,32 @@ export interface IApprovalService {
        */
       approverId?: string | string[];
       submitterId?: string;
+      /**
+       * Free-text search, pushed into the engine query: matches the source
+       * name, object, record id, submitter, and the payload snapshot (which
+       * carries record titles), case behavior per the underlying driver.
+       */
+      q?: string;
+      /**
+       * Page window. Honoured as an engine-level window when the filter is
+       * fully pushable; an `approverId` / status-array filter still
+       * post-filters in memory (bounded personal queues), where the window
+       * is applied after filtering.
+       */
+      limit?: number;
+      offset?: number;
     } | undefined,
     context: SharingExecutionContext,
   ): Promise<ApprovalRequestRow[]>;
+
+  /**
+   * Total rows matching a {@link listRequests} filter (ignoring
+   * `limit`/`offset`) — the pagination companion.
+   */
+  countRequests(
+    filter: Parameters<IApprovalService['listRequests']>[0],
+    context: SharingExecutionContext,
+  ): Promise<number>;
 
   getRequest(requestId: string, context: SharingExecutionContext): Promise<ApprovalRequestRow | null>;
 

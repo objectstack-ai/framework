@@ -1149,16 +1149,17 @@ export class ApprovalService implements IApprovalService {
 
   // ── Read API ─────────────────────────────────────────────────
 
-  async listRequests(
+  /** Filter type accepted by {@link listRequests} / {@link countRequests}. */
+  private buildRequestWhere(
     filter: {
       object?: string;
       recordId?: string;
       status?: ApprovalStatus | ApprovalStatus[];
-      approverId?: string | string[];
       submitterId?: string;
+      q?: string;
     } | undefined,
     context: SharingExecutionContext,
-  ): Promise<ApprovalRequestRow[]> {
+  ): { where: any; statusPostFilter?: ApprovalStatus[] } {
     const f: any = {};
     if (filter?.object) f.object_name = filter.object;
     if (filter?.recordId) f.record_id = filter.recordId;
@@ -1171,34 +1172,113 @@ export class ApprovalService implements IApprovalService {
     // on pending_approvers which RLS can't model cleanly).
     const tenantOrg = (context as any)?.organizationId ?? (context as any)?.tenantId;
     if (tenantOrg) f.organization_id = tenantOrg;
+    // Free-text search, pushed down: `payload_json` carries the record
+    // snapshot, so record titles match without any join. `$contains` is the
+    // driver's escaped-LIKE operator.
+    const q = filter?.q?.trim();
+    if (q) {
+      f.$or = [
+        { process_name: { $contains: q } },
+        { object_name: { $contains: q } },
+        { record_id: { $contains: q } },
+        { submitter_id: { $contains: q } },
+        { payload_json: { $contains: q } },
+      ];
+    }
     // Status: when array, post-filter; when single, push into engine filter.
-    let statusFilter: ApprovalStatus[] | undefined;
-    if (Array.isArray(filter?.status)) statusFilter = filter!.status as ApprovalStatus[];
+    let statusPostFilter: ApprovalStatus[] | undefined;
+    if (Array.isArray(filter?.status)) statusPostFilter = filter!.status as ApprovalStatus[];
     else if (filter?.status) f.status = filter.status;
+    return { where: f, statusPostFilter };
+  }
 
-    const rows = await this.engine.find('sys_approval_request', {
-      where: f, limit: 500, orderBy: [{ field: 'updated_at', direction: 'desc' }], context: SYSTEM_CTX,
-    });
+  async listRequests(
+    filter: {
+      object?: string;
+      recordId?: string;
+      status?: ApprovalStatus | ApprovalStatus[];
+      approverId?: string | string[];
+      submitterId?: string;
+      q?: string;
+      limit?: number;
+      offset?: number;
+    } | undefined,
+    context: SharingExecutionContext,
+  ): Promise<ApprovalRequestRow[]> {
+    const { where, statusPostFilter } = this.buildRequestWhere(filter, context);
+    const approverTargets = (Array.isArray(filter?.approverId) ? filter!.approverId : filter?.approverId ? [filter.approverId] : [])
+      .map(t => String(t).trim())
+      .filter(Boolean);
+
+    // The page window pushes into the engine only when nothing post-filters
+    // in memory; an approver/status-array query still scans the (bounded)
+    // candidate set and windows after filtering — correct for personal
+    // queues, and the documented residual limit for org-wide approver
+    // queries (issue #1745's join-table follow-up).
+    const pushWindow = approverTargets.length === 0 && !statusPostFilter
+      && (filter?.limit != null || filter?.offset != null);
+    const findOpts: any = {
+      where,
+      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      context: SYSTEM_CTX,
+    };
+    if (pushWindow) {
+      findOpts.limit = Math.min(Math.max(filter?.limit ?? 50, 1), 200);
+      if (filter?.offset) findOpts.offset = Math.max(filter.offset, 0);
+    } else {
+      findOpts.limit = 500;
+    }
+
+    const rows = await this.engine.find('sys_approval_request', findOpts);
     let list = Array.isArray(rows) ? rows.map(rowFromRequest) : [];
-    if (statusFilter) list = list.filter(r => statusFilter!.includes(r.status));
-    if (filter?.approverId) {
-      // Accept one identity or a list: a request matches when ANY of the
-      // caller's identities (user id / email / role:<r>) is a pending
-      // approver. This lets the Console badge fetch "my pending approvals"
-      // in a single request instead of one-per-identity (previously the
-      // client looped, firing N near-simultaneous calls per poll).
-      const targets = (Array.isArray(filter.approverId) ? filter.approverId : [filter.approverId])
-        .map(t => String(t).trim())
-        .filter(Boolean);
-      if (targets.length) {
-        list = list.filter(r => {
-          const pending = r.pending_approvers ?? [];
-          return targets.some(t => pending.includes(t));
-        });
-      }
+    if (statusPostFilter) list = list.filter(r => statusPostFilter.includes(r.status));
+    if (approverTargets.length) {
+      // A request matches when ANY of the caller's identities (user id /
+      // email / role:<r>) is a pending approver — exact CSV-entry match.
+      list = list.filter(r => {
+        const pending = r.pending_approvers ?? [];
+        return approverTargets.some(t => pending.includes(t));
+      });
+    }
+    if (!pushWindow && (filter?.limit != null || filter?.offset != null)) {
+      const start = Math.max(filter?.offset ?? 0, 0);
+      list = list.slice(start, start + Math.min(Math.max(filter?.limit ?? 50, 1), 200));
     }
     await this.enrichRows(list);
     return list;
+  }
+
+  async countRequests(
+    filter: Parameters<IApprovalService['listRequests']>[0],
+    context: SharingExecutionContext,
+  ): Promise<number> {
+    const { where, statusPostFilter } = this.buildRequestWhere(filter, context);
+    const approverTargets = (Array.isArray(filter?.approverId) ? filter!.approverId : filter?.approverId ? [filter.approverId] : [])
+      .map(t => String(t).trim())
+      .filter(Boolean);
+
+    // Fully pushable → engine count; post-filtered → bounded scan count.
+    if (approverTargets.length === 0 && !statusPostFilter) {
+      const countFn = (this.engine as any).count;
+      if (typeof countFn === 'function') {
+        try {
+          const n = await countFn.call(this.engine, 'sys_approval_request', { where, context: SYSTEM_CTX });
+          if (typeof n === 'number') return n;
+        } catch { /* fall through to scan */ }
+      }
+    }
+    const rows = await this.engine.find('sys_approval_request', {
+      where, fields: ['id', 'status', 'pending_approvers'], limit: 500, context: SYSTEM_CTX,
+    });
+    let list: any[] = Array.isArray(rows) ? rows : [];
+    if (statusPostFilter) list = list.filter(r => statusPostFilter.includes(r.status));
+    if (approverTargets.length) {
+      list = list.filter(r => {
+        const pending = csvSplit(r.pending_approvers);
+        return approverTargets.some(t => pending.includes(t));
+      });
+    }
+    return list.length;
   }
 
   async getRequest(requestId: string, context: SharingExecutionContext): Promise<ApprovalRequestRow | null> {

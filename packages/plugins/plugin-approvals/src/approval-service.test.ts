@@ -23,6 +23,10 @@ function makeFakeEngine() {
   function matches(row: FakeRow, filter: any): boolean {
     if (!filter || typeof filter !== 'object') return true;
     for (const [k, v] of Object.entries(filter)) {
+      if (k === '$or') {
+        if (!(v as any[]).some(sub => matches(row, sub))) return false;
+        continue;
+      }
       const rv = row[k];
       if (v != null && typeof v === 'object' && '$in' in (v as any)) {
         if (!(v as any).$in.includes(rv)) return false;
@@ -30,6 +34,10 @@ function makeFakeEngine() {
       }
       if (v != null && typeof v === 'object' && '$ne' in (v as any)) {
         if (rv === (v as any).$ne) return false;
+        continue;
+      }
+      if (v != null && typeof v === 'object' && '$contains' in (v as any)) {
+        if (!String(rv ?? '').includes(String((v as any).$contains))) return false;
         continue;
       }
       if (rv !== v) return false;
@@ -51,7 +59,8 @@ function makeFakeEngine() {
           return direction === 'desc' ? -cmp : cmp;
         });
       }
-      return rows.slice(0, options?.limit ?? 1000);
+      const start = options?.offset ?? 0;
+      return rows.slice(start, start + (options?.limit ?? 1000));
     },
     async insert(object: string, data: any) {
       ensure(object).push({ ...data });
@@ -471,6 +480,49 @@ describe('ApprovalService (node era)', () => {
       .rejects.toThrow(/FORBIDDEN/);
     const actions = await svc.listActions(req.id, SYS);
     expect(actions.filter(a => a.action === 'comment')).toHaveLength(2);
+  });
+
+  // ── pagination + search pushdown (#1745) ────────────────────────
+
+  async function openMany(n: number) {
+    for (let i = 0; i < n; i++) {
+      await svc.openNodeRequest(openInput(['u9'], {
+        recordId: `opp${i}`, record: { id: `opp${i}`, name: `Deal ${i}` },
+      }), CTX);
+    }
+  }
+
+  it('listRequests: windows pushable queries newest-first with limit/offset', async () => {
+    await openMany(5);
+    const page1 = await svc.listRequests({ limit: 2, offset: 0 }, SYS);
+    const page2 = await svc.listRequests({ limit: 2, offset: 2 }, SYS);
+    expect(page1.map(r => r.record_id)).toEqual(['opp4', 'opp3']); // created_at desc
+    expect(page2.map(r => r.record_id)).toEqual(['opp2', 'opp1']);
+  });
+
+  it('listRequests: q matches the payload snapshot (record titles) via pushdown', async () => {
+    await openMany(3);
+    const hit = await svc.listRequests({ q: 'Deal 1', limit: 10 }, SYS);
+    expect(hit.map(r => r.record_id)).toEqual(['opp1']);
+    const miss = await svc.listRequests({ q: 'no-such-thing', limit: 10 }, SYS);
+    expect(miss).toHaveLength(0);
+  });
+
+  it('countRequests: returns the unwindowed total for a filter', async () => {
+    await openMany(4);
+    expect(await svc.countRequests({ status: 'pending' }, SYS)).toBe(4);
+    expect(await svc.countRequests({ q: 'Deal 2' }, SYS)).toBe(1);
+  });
+
+  it('listRequests: approver queries window in memory AFTER exact-match filtering', async () => {
+    await openMany(4); // approver u9 on all
+    await svc.openNodeRequest(openInput(['someone-else'], {
+      recordId: 'oppX', record: { id: 'oppX', name: 'Other' },
+    }), CTX);
+    const page = await svc.listRequests({ approverId: 'u9', limit: 2, offset: 2 }, SYS);
+    expect(page).toHaveLength(2);
+    expect(page.every(r => r.pending_approvers?.includes('u9'))).toBe(true);
+    expect(await svc.countRequests({ approverId: 'u9' }, SYS)).toBe(4);
   });
 
   // ── SLA escalation (ADR-0042) ───────────────────────────────────

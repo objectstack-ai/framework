@@ -4310,13 +4310,26 @@ export class RestServer {
                         .flatMap((s: any) => String(s).split(','))
                         .map((s: string) => s.trim())
                         .filter(Boolean);
-                    const rows = await svc.listRequests({
+                    const limit = q.limit != null ? Number(q.limit) : undefined;
+                    const offset = q.offset != null ? Number(q.offset) : undefined;
+                    const listFilter = {
                         object: q.object,
                         recordId: q.recordId ?? q.record_id,
                         status: q.status,
                         approverId: approverIds.length ? approverIds : undefined,
                         submitterId: q.submitterId ?? q.submitter_id,
-                    }, context ?? {});
+                        q: typeof q.q === 'string' ? q.q : undefined,
+                        limit: Number.isFinite(limit) ? limit : undefined,
+                        offset: Number.isFinite(offset) ? offset : undefined,
+                    };
+                    const rows = await svc.listRequests(listFilter, context ?? {});
+                    // `total` only when the caller pages — counting costs a
+                    // second query and unpaged callers don't need it.
+                    if (listFilter.limit != null && typeof svc.countRequests === 'function') {
+                        const total = await svc.countRequests(listFilter, context ?? {});
+                        res.json({ data: rows, total });
+                        return;
+                    }
                     res.json({ data: rows });
                 } catch (error: any) {
                     logError('[REST] List approval requests error:', error);
