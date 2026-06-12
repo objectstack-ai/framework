@@ -1422,12 +1422,12 @@ export default class Serve extends Command {
           // the `FlowTrigger` wiring; these plugins are the concrete triggers:
           // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
           // via the job service — so pair `triggers` with `job`).
-          pkg: '@objectstack/plugin-trigger-record-change',
+          pkg: '@objectstack/trigger-record-change',
           export: 'RecordChangeTriggerPlugin',
           nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
           extras: [
             {
-              pkg: '@objectstack/plugin-trigger-schedule',
+              pkg: '@objectstack/trigger-schedule',
               export: 'ScheduleTriggerPlugin',
               nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
             },

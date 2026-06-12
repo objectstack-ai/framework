@@ -271,7 +271,7 @@ export const TaskCompletedSlackFlow = defineFlow({
  *
  * A `type: 'schedule'` flow whose start node carries an interval descriptor.
  * The automation engine parses that into a schedule binding; the schedule
- * trigger plugin (`@objectstack/plugin-trigger-schedule`, paired with the job
+ * trigger plugin (`@objectstack/trigger-schedule`, paired with the job
  * service) registers a job that fires this flow every interval. Each tick runs
  * the `notify` node, dropping a fresh `sys_inbox_message` row — so the
  * scheduled fire is observable end-to-end with no manual `engine.execute()`.

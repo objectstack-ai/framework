@@ -3,13 +3,24 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { SysApprovalRequest } from './sys-approval-request.object.js';
 import { SysApprovalAction } from './sys-approval-action.object.js';
-import { ApprovalService, type ApprovalEngine } from './approval-service.js';
+import {
+  ApprovalService,
+  ESCALATION_JOB_NAME,
+  ESCALATION_SCAN_INTERVAL_MS,
+  type ApprovalEngine,
+} from './approval-service.js';
 import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
 import { registerApprovalNode, type ApprovalAutomationSurface } from './approval-node.js';
 
 export interface ApprovalsPluginOptions {
   /** Disable runtime registration (schemas still register). */
   disableService?: boolean;
+  /**
+   * Interval between SLA escalation scans (ADR-0042). Defaults to
+   * {@link ESCALATION_SCAN_INTERVAL_MS} (5 min). Only takes effect when a
+   * `job` service is installed; without one, SLA stays display-only.
+   */
+  escalationScanIntervalMs?: number;
   /**
    * Disable the record-lock hook. Schema + service stay intact; only the
    * engine-level lock wiring is suppressed. Useful when a caller wants the
@@ -36,6 +47,7 @@ export class ApprovalsServicePlugin implements Plugin {
   private readonly options: ApprovalsPluginOptions;
   private service?: ApprovalService;
   private engine?: any;
+  private escalationJobScheduled = false;
 
   constructor(options: ApprovalsPluginOptions = {}) {
     this.options = options;
@@ -123,6 +135,33 @@ export class ApprovalsServicePlugin implements Plugin {
       }
     } catch { /* messaging not installed */ }
 
+    // SLA escalation clock (ADR-0042): a plugin-internal job, deliberately
+    // NOT a flow trigger (ADR-0041 §1). Interval sweep + one catch-up scan at
+    // boot so a restart doesn't extend a breach by a scan period. Wired on
+    // kernel:ready — the job service may start after this plugin. No `job`
+    // service → SLA stays display-only.
+    const wireEscalationClock = async () => {
+      try {
+        const jobs = ctx.getService<any>('job');
+        if (!jobs || typeof jobs.schedule !== 'function' || !this.service) return;
+        const svc = this.service;
+        const intervalMs = this.options.escalationScanIntervalMs ?? ESCALATION_SCAN_INTERVAL_MS;
+        await jobs.schedule(ESCALATION_JOB_NAME, { type: 'interval', intervalMs }, async () => {
+          await svc.runEscalations();
+        });
+        this.escalationJobScheduled = true;
+        void svc.runEscalations().catch((err: any) => {
+          ctx.logger.warn?.('[approvals] boot escalation sweep failed', { error: err?.message });
+        });
+        ctx.logger.info('ApprovalsServicePlugin: SLA escalation scan scheduled', { intervalMs });
+      } catch { /* job service not installed */ }
+    };
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', wireEscalationClock);
+    } else {
+      await wireEscalationClock();
+    }
+
     // ADR-0019: contribute the `approval` node to the flow engine when one is
     // present. The node lets a flow suspend on an approval and resume on
     // decision; the service is wired to the same engine so `decide()` can
@@ -138,7 +177,14 @@ export class ApprovalsServicePlugin implements Plugin {
     }
   }
 
-  async stop(_ctx: PluginContext): Promise<void> {
+  async stop(ctx: PluginContext): Promise<void> {
+    if (this.escalationJobScheduled) {
+      try {
+        const jobs = ctx.getService<any>('job');
+        await jobs?.cancel?.(ESCALATION_JOB_NAME);
+      } catch { /* ignore */ }
+      this.escalationJobScheduled = false;
+    }
     if (this.engine) {
       try { unbindAllHooks(this.engine); } catch { /* ignore */ }
     }

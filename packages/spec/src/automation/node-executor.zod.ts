@@ -259,6 +259,16 @@ export const ActionDescriptorSchema = lazySchema(() => z.object({
   isAsync: z.boolean().default(false)
     .describe('Suspends the flow awaiting an external reply'),
 
+  /**
+   * Runtime maturity of the capability behind this descriptor (ADR-0041 §4).
+   * The platform routinely ships contracts ahead of runtimes; `reserved`
+   * marks a surface whose runtime has NOT shipped, so designers (Studio)
+   * can render it visible-but-disabled instead of letting authors build on
+   * something that silently never runs.
+   */
+  maturity: z.enum(['ga', 'beta', 'reserved']).default('ga')
+    .describe('Runtime maturity: ga (shipped), beta, or reserved (contract only — designers grey this out)'),
+
   // ── provenance ────────────────────────────────────────────────────
   /**
    * Whether this action ships with the platform (`builtin`, seeded by the

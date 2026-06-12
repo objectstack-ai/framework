@@ -71,6 +71,13 @@ export interface ApprovalMessagingSurface {
 /** Minimum time between submitter reminders on one request. */
 export const REMIND_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
+/** Named job under which the SLA escalation scan is registered (ADR-0042). */
+export const ESCALATION_JOB_NAME = 'approvals-sla-escalation';
+/** Default interval between SLA escalation scans. */
+export const ESCALATION_SCAN_INTERVAL_MS = 5 * 60 * 1000;
+/** Reserved actor id for machine decisions made by the SLA scanner. */
+export const SLA_ACTOR_ID = 'system:sla';
+
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
 function uid(prefix: string): string {
@@ -825,6 +832,125 @@ export class ApprovalService implements IApprovalService {
 
     const fresh = await this.getRequest(requestId, context);
     return { request: fresh! };
+  }
+
+  // ── SLA escalation (ADR-0042) ─────────────────────────────────
+
+  /**
+   * One escalation sweep: every *pending* request whose node config declares
+   * `escalation.timeoutHours` and whose deadline has passed is escalated
+   * **at most once, ever** — the `escalate` audit row is the idempotency
+   * marker, written before any mutation (audit-first, like reassign). One
+   * bad row never stops the sweep.
+   */
+  async runEscalations(): Promise<{ scanned: number; escalated: number }> {
+    let rows: any[] = [];
+    try {
+      rows = await this.engine.find('sys_approval_request', {
+        where: { status: 'pending' }, limit: 500, context: SYSTEM_CTX,
+      }) ?? [];
+    } catch (err: any) {
+      this.logger?.warn?.('[approvals] escalation scan failed to list requests', {
+        error: err?.message ?? String(err),
+      });
+      return { scanned: 0, escalated: 0 };
+    }
+
+    let escalated = 0;
+    for (const raw of rows) {
+      try {
+        const cfg = parseJson<any>(raw.node_config_json, undefined);
+        const esc = cfg?.escalation;
+        if (!esc || typeof esc.timeoutHours !== 'number' || esc.timeoutHours <= 0) continue;
+        const due = slaDueAt(raw.created_at, cfg);
+        if (!due || Date.parse(due) > this.clock.now().getTime()) continue;
+
+        // Single-shot: a prior 'escalate' action means this request is done.
+        const prior = await this.engine.find('sys_approval_action', {
+          where: { request_id: raw.id, action: 'escalate' }, limit: 1, context: SYSTEM_CTX,
+        });
+        if (Array.isArray(prior) && prior[0]) continue;
+
+        await this.escalateRequest(raw, esc);
+        escalated++;
+      } catch (err: any) {
+        this.logger?.warn?.('[approvals] escalation failed for request', {
+          request: raw?.id, error: err?.message ?? String(err),
+        });
+      }
+    }
+    if (escalated > 0) {
+      this.logger?.info?.('[approvals] SLA escalation sweep', { scanned: rows.length, escalated });
+    }
+    return { scanned: rows.length, escalated };
+  }
+
+  /** Execute the configured escalation action for one overdue request. */
+  private async escalateRequest(raw: any, esc: any): Promise<void> {
+    const action: string = esc.action ?? 'notify';
+    const escalateTo: string | undefined =
+      typeof esc.escalateTo === 'string' && esc.escalateTo.trim() ? esc.escalateTo.trim() : undefined;
+    const now = this.clock.now().toISOString();
+    const pending = csvSplit(raw.pending_approvers);
+
+    // Audit first — this row IS the idempotency marker (ADR-0042 §1).
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: raw.id, organization_id: raw.organization_id ?? null,
+      step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'escalate',
+      actor_id: SLA_ACTOR_ID,
+      comment: `${action}${escalateTo ? ` → ${escalateTo}` : ''}`,
+      created_at: now,
+    }, { context: SYSTEM_CTX });
+
+    if (action === 'reassign' && escalateTo) {
+      await this.engine.update('sys_approval_request', {
+        id: raw.id, pending_approvers: escalateTo, updated_at: now,
+      }, { context: SYSTEM_CTX });
+      await this.notify({
+        topic: 'approval.escalated',
+        audience: [escalateTo],
+        actorId: SLA_ACTOR_ID,
+        source: { object: 'sys_approval_request', id: raw.id },
+        payload: {
+          title: 'Approval escalated to you',
+          message: `An overdue approval on ${raw.object_name}/${raw.record_id} was escalated to you.`,
+          actionUrl: '/system/approvals',
+        },
+      });
+    } else if (action === 'auto_approve' || action === 'auto_reject') {
+      await this.decide(raw.id, {
+        decision: action === 'auto_approve' ? 'approve' : 'reject',
+        actorId: SLA_ACTOR_ID,
+        comment: 'SLA escalation',
+      }, SYSTEM_CTX as unknown as SharingExecutionContext);
+    } else {
+      // 'notify' (and the reassign-without-target fallback)
+      await this.notify({
+        topic: 'approval.sla_breached',
+        audience: [...pending, ...(escalateTo ? [escalateTo] : [])],
+        actorId: SLA_ACTOR_ID,
+        source: { object: 'sys_approval_request', id: raw.id },
+        payload: {
+          title: 'Approval SLA breached',
+          message: `A decision on ${raw.object_name}/${raw.record_id} is overdue.`,
+          actionUrl: '/system/approvals',
+        },
+      });
+    }
+
+    if (esc.notifySubmitter !== false && raw.submitter_id) {
+      await this.notify({
+        topic: 'approval.sla_breached',
+        audience: [String(raw.submitter_id)],
+        actorId: SLA_ACTOR_ID,
+        source: { object: 'sys_approval_request', id: raw.id },
+        payload: {
+          title: 'Your approval request breached its SLA',
+          message: `${raw.object_name}/${raw.record_id}: escalation action '${action}' was taken.`,
+          actionUrl: '/system/approvals',
+        },
+      });
+    }
   }
 
   // ── Display enrichment ───────────────────────────────────────

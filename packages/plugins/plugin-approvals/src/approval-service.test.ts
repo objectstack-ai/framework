@@ -473,6 +473,82 @@ describe('ApprovalService (node era)', () => {
     expect(actions.filter(a => a.action === 'comment')).toHaveLength(2);
   });
 
+  // ── SLA escalation (ADR-0042) ───────────────────────────────────
+
+  function makeOverdue(reqId: string) {
+    // Push created_at into the past so a small timeoutHours is breached.
+    const row = engine._tables['sys_approval_request'].find(r => r.id === reqId)!;
+    row.created_at = new Date(baseTime - 10 * 3600_000).toISOString();
+  }
+
+  it('runEscalations: notify action messages approvers + escalateTo + submitter, once', async () => {
+    const emitted: any[] = [];
+    svc.attachMessaging({ async emit(input) { emitted.push(input); } });
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 2, action: 'notify', escalateTo: 'boss', notifySubmitter: true } }), CTX,
+    );
+    makeOverdue(req.id);
+    const first = await svc.runEscalations();
+    expect(first.escalated).toBe(1);
+    expect(emitted.map(e => e.topic)).toEqual(['approval.sla_breached', 'approval.sla_breached']);
+    expect(emitted[0].audience).toEqual(['u9', 'boss']);
+    expect(emitted[1].audience).toEqual(['u1']); // submitter
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.at(-1)).toMatchObject({ action: 'escalate', actor_id: 'system:sla', comment: 'notify → boss' });
+    // Single-shot: second sweep is a no-op.
+    const second = await svc.runEscalations();
+    expect(second.escalated).toBe(0);
+    expect(emitted).toHaveLength(2);
+  });
+
+  it('runEscalations: auto_approve decides as system:sla and resumes the flow', async () => {
+    const resumed: any[] = [];
+    svc.attachAutomation({ async resume(runId, signal) { resumed.push({ runId, signal }); } });
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 1, action: 'auto_approve', notifySubmitter: false } }), CTX,
+    );
+    makeOverdue(req.id);
+    const out = await svc.runEscalations();
+    expect(out.escalated).toBe(1);
+    const fresh = await svc.getRequest(req.id, SYS);
+    expect(fresh?.status).toBe('approved');
+    expect(resumed[0]).toMatchObject({ runId: 'run_1', signal: { branchLabel: 'approve' } });
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.map(a => a.action)).toEqual(['submit', 'escalate', 'approve']);
+    expect(actions.at(-1)?.actor_id).toBe('system:sla');
+  });
+
+  it('runEscalations: auto_reject decides as system:sla', async () => {
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 1, action: 'auto_reject', notifySubmitter: false } }), CTX,
+    );
+    makeOverdue(req.id);
+    await svc.runEscalations();
+    const fresh = await svc.getRequest(req.id, SYS);
+    expect(fresh?.status).toBe('rejected');
+  });
+
+  it('runEscalations: reassign replaces the approver set with escalateTo', async () => {
+    const req = await svc.openNodeRequest(
+      openInput(['u9', 'u2'], {}, { escalation: { timeoutHours: 1, action: 'reassign', escalateTo: 'boss', notifySubmitter: false } }), CTX,
+    );
+    makeOverdue(req.id);
+    await svc.runEscalations();
+    const fresh = await svc.getRequest(req.id, SYS);
+    expect(fresh?.status).toBe('pending');
+    expect(fresh?.pending_approvers).toEqual(['boss']);
+  });
+
+  it('runEscalations: skips requests that are not yet due or have no SLA', async () => {
+    await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 1000, action: 'auto_approve' } }), CTX,
+    );
+    await svc.openNodeRequest(openInput(['u9'], { recordId: 'opp2', record: { id: 'opp2' } }), CTX);
+    const out = await svc.runEscalations();
+    expect(out.scanned).toBe(2);
+    expect(out.escalated).toBe(0);
+  });
+
   // ── SLA + flow steps ────────────────────────────────────────────
 
   it('rows expose sla_due_at when the node declares escalation.timeoutHours', async () => {
