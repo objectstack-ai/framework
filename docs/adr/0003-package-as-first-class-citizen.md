@@ -1,6 +1,6 @@
 # ADR-0003: Package as First-Class Citizen with Versioned Releases
 
-**Status**: Accepted
+**Status**: Accepted — **revised by cloud ADR-0007 (2026-06-12)**: `sys_package_installation` is hereby redefined as **desired state owned by the management plane**, never read as "what is actually installed" on any runtime path. Runtime truth lives with the environment itself (env-local artifact cache for cloud-managed environments; the `LocalManifestSource` ledger in `@objectstack/cloud-connection` for self-hosted runtimes). `observed_status` / `last_reconciled_at` on the installation row are a reported projection for drift visibility, not truth. The original "installation state lives only in the control plane, environment DBs hold zero system tables" framing of ADR-0002/0003 is superseded to that extent — driven by the hard constraint that environments must boot and serve with the cloud down.
 **Date**: 2026-04-20
 **Deciders**: ObjectStack Protocol Architects
 **Supersedes**: The flat `sys_package_installation (package_id + version string)` model introduced alongside ADR-0002

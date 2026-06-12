@@ -36,6 +36,10 @@ export { MarketplaceProxyPlugin } from './marketplace-proxy-plugin.js';
 export type { MarketplaceProxyPluginConfig } from './marketplace-proxy-plugin.js';
 export { MarketplaceInstallLocalPlugin } from './marketplace-install-local-plugin.js';
 export type { MarketplaceInstallLocalPluginConfig } from './marketplace-install-local-plugin.js';
+// ADR-0007 step ⑤ — the local desired-state ledger, exported as a first-class
+// seam so hosts/reconcilers can read the same ledger without going through HTTP.
+export { LocalManifestSource, DEFAULT_INSTALLED_PACKAGES_DIR } from './local-manifest-source.js';
+export type { InstalledManifestEntry } from './local-manifest-source.js';
 export { CloudConnectionPlugin, createCloudConnectionPlugin } from './cloud-connection-plugin.js';
 export type { CloudConnectionPluginConfig } from './cloud-connection-plugin.js';
 export { RuntimeConfigPlugin } from './runtime-config-plugin.js';

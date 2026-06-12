@@ -41,15 +41,13 @@
  * cloud round-trips.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { readEnvWithDeprecation } from '@objectstack/types';
 import { resolveCloudUrl } from './cloud-url.js';
 import { resolveMarketplacePublicBaseUrl } from './marketplace-public-url.js';
+import { LocalManifestSource, type InstalledManifestEntry } from './local-manifest-source.js';
 
 const ROUTE_BASE = '/api/v1/marketplace/install-local';
-const DEFAULT_DIR = '.objectstack/installed-packages';
 
 export interface MarketplaceInstallLocalPluginConfig {
     /** Cloud control-plane base URL. When unset, falls back to OS_CLOUD_URL
@@ -62,36 +60,23 @@ export interface MarketplaceInstallLocalPluginConfig {
     storageDir?: string;
 }
 
-interface InstalledEntry {
-    packageId: string;
-    versionId: string;
-    manifestId: string;
-    version: string;
-    manifest: any;
-    installedAt: string;
-    installedBy: string | null;
-    /** Whether the bundled seed datasets have been loaded into the kernel
-     *  database. True after install (seedNow=true) or an explicit reseed;
-     *  false after a purge. Persisted so the UI can show "Add" vs "Re-seed". */
-    withSampleData?: boolean;
-}
-
-function safeFilename(manifestId: string): string {
-    return manifestId.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
-}
+// Desired-state entry shape — owned by the LocalManifestSource ledger
+// (ADR-0007 step ⑤: the ledger is the named local desired-state owner;
+// this plugin is its HTTP mutation surface).
+type InstalledEntry = InstalledManifestEntry;
 
 export class MarketplaceInstallLocalPlugin implements Plugin {
     readonly name = 'com.objectstack.runtime.marketplace-install-local';
     readonly version = '1.0.0';
 
     private readonly cloudUrl: string;
+    private readonly ledger: LocalManifestSource;
     private readonly storageDir: string;
 
     constructor(config: MarketplaceInstallLocalPluginConfig = {}) {
         this.cloudUrl = resolveCloudUrl(config.controlPlaneUrl);
-        this.storageDir = config.storageDir
-            ? resolve(config.storageDir)
-            : resolve(process.cwd(), DEFAULT_DIR);
+        this.ledger = new LocalManifestSource(config.storageDir);
+        this.storageDir = this.ledger.dir;
     }
 
     init = async (_ctx: PluginContext): Promise<void> => {
@@ -325,8 +310,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             withSampleData: false,
         };
         try {
-            mkdirSync(this.storageDir, { recursive: true });
-            writeFileSync(join(this.storageDir, safeFilename(manifestId)), JSON.stringify(entry, null, 2), 'utf8');
+            this.ledger.write(entry);
         } catch (err: any) {
             return c.json({
                 success: false,
@@ -357,7 +341,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         if (seededSummary.seeded.mode === 'inline' && (seededSummary.seeded.inserted ?? 0) + (seededSummary.seeded.updated ?? 0) > 0) {
             entry.withSampleData = true;
             try {
-                writeFileSync(join(this.storageDir, safeFilename(manifestId)), JSON.stringify(entry, null, 2), 'utf8');
+                this.ledger.write(entry);
             } catch { /* non-fatal — entry already on disk */ }
         }
 
@@ -406,12 +390,11 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         if (!manifestId) {
             return c.json({ success: false, error: { code: 'bad_request', message: 'manifestId path param required.' } }, 400);
         }
-        const file = join(this.storageDir, safeFilename(manifestId));
-        if (!existsSync(file)) {
+        if (!this.ledger.has(manifestId)) {
             return c.json({ success: false, error: { code: 'not_found', message: `No marketplace install for ${manifestId}.` } }, 404);
         }
         try {
-            unlinkSync(file);
+            this.ledger.remove(manifestId);
         } catch (err: any) {
             return c.json({ success: false, error: { code: 'storage_failed', message: err?.message ?? String(err) } }, 500);
         }
@@ -435,8 +418,8 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
      *                    (refuse to avoid silently overwriting authored code)
      */
     private findConflict = (ctx: PluginContext, manifestId: string): 'none' | 'marketplace' | 'user-code' => {
-        // First check: do we already have a marketplace install file?
-        if (existsSync(join(this.storageDir, safeFilename(manifestId)))) {
+        // First check: do we already have a marketplace install entry?
+        if (this.ledger.has(manifestId)) {
             return 'marketplace';
         }
         // Then check: is the manifest_id already in the engine's registry?
@@ -479,16 +462,12 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         if (!manifestId) {
             return c.json({ success: false, error: { code: 'bad_request', message: 'manifestId path param required.' } }, 400);
         }
-        const file = join(this.storageDir, safeFilename(manifestId));
-        if (!existsSync(file)) {
+        if (!this.ledger.has(manifestId)) {
             return c.json({ success: false, error: { code: 'not_found', message: `No marketplace install for ${manifestId}.` } }, 404);
         }
-
-        let entry: InstalledEntry;
-        try {
-            entry = JSON.parse(readFileSync(file, 'utf8'));
-        } catch (err: any) {
-            return c.json({ success: false, error: { code: 'storage_failed', message: `Failed to read manifest cache: ${err?.message ?? err}` } }, 500);
+        const entry: InstalledEntry | null = this.ledger.read(manifestId);
+        if (!entry) {
+            return c.json({ success: false, error: { code: 'storage_failed', message: 'Failed to read manifest cache.' } }, 500);
         }
 
         const summary = await this.applySideEffects(ctx, entry.manifest, { seedNow: true, c });
@@ -505,7 +484,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         // Persist flag flip
         try {
             entry.withSampleData = true;
-            writeFileSync(file, JSON.stringify(entry, null, 2), 'utf8');
+            this.ledger.write(entry);
         } catch { /* non-fatal */ }
 
         return c.json({
@@ -538,16 +517,12 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         if (!manifestId) {
             return c.json({ success: false, error: { code: 'bad_request', message: 'manifestId path param required.' } }, 400);
         }
-        const file = join(this.storageDir, safeFilename(manifestId));
-        if (!existsSync(file)) {
+        if (!this.ledger.has(manifestId)) {
             return c.json({ success: false, error: { code: 'not_found', message: `No marketplace install for ${manifestId}.` } }, 404);
         }
-
-        let entry: InstalledEntry;
-        try {
-            entry = JSON.parse(readFileSync(file, 'utf8'));
-        } catch (err: any) {
-            return c.json({ success: false, error: { code: 'storage_failed', message: `Failed to read manifest cache: ${err?.message ?? err}` } }, 500);
+        const entry: InstalledEntry | null = this.ledger.read(manifestId);
+        if (!entry) {
+            return c.json({ success: false, error: { code: 'storage_failed', message: 'Failed to read manifest cache.' } }, 500);
         }
 
         const datasets = Array.isArray(entry.manifest?.data)
@@ -594,7 +569,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         // Flip flag so UI reflects the empty baseline
         try {
             entry.withSampleData = false;
-            writeFileSync(file, JSON.stringify(entry, null, 2), 'utf8');
+            this.ledger.write(entry);
         } catch { /* non-fatal */ }
 
         ctx.logger?.info?.(`[MarketplaceInstallLocal] purged ${manifestId}: deleted=${deleted} skipped=${skipped} errors=${errors}`);
@@ -814,16 +789,5 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         return null;
     };
 
-    private readAll = (): InstalledEntry[] => {
-        if (!existsSync(this.storageDir)) return [];
-        const out: InstalledEntry[] = [];
-        for (const name of readdirSync(this.storageDir)) {
-            if (!name.endsWith('.json')) continue;
-            try {
-                const raw = readFileSync(join(this.storageDir, name), 'utf8');
-                out.push(JSON.parse(raw));
-            } catch { /* skip corrupt files */ }
-        }
-        return out;
-    };
+    private readAll = (): InstalledEntry[] => this.ledger.list();
 }
