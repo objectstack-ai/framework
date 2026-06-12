@@ -893,9 +893,18 @@ export class ObjectQLPlugin implements Plugin {
                             return;
                         }
                         
-                        // Register other types in the registry
+                        // Register other types in the registry. Pass through
+                        // the item's own source package id (stamped by the
+                        // metadata plugin's artifact loader) so registerItem's
+                        // applyProtection re-stamps _packageId/_provenance and
+                        // GET /meta consumers can tell package-shipped items
+                        // from user-authored ones. Items without _packageId
+                        // (FS project files, runtime-authored rows) must stay
+                        // unstamped — a synthetic id like 'metadata-service'
+                        // would flip isArtifactBacked() and the two-tier write
+                        // authorization for genuinely runtime-authored items.
                         if (this.ql?.registry?.registerItem) {
-                            this.ql.registry.registerItem(type, item, keyField);
+                            this.ql.registry.registerItem(type, item, keyField, item._packageId);
                         }
                     });
 

@@ -110,3 +110,70 @@ describe('MetadataPlugin._parseAndRegisterArtifact — view name resolution (PR-
         expect(label).toBe('Service Workflow');
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Filesystem-scanner provenance: when the host declares its package id
+// (options.packageId — the project's `defineStack` manifest id), scanned
+// source-file metadata must be stamped `_packageId`/`_provenance` exactly
+// like the artifact path, so GET /meta consumers (objectui
+// NavigationSyncEffect) can tell code-defined items from user-authored
+// rows. Without the option, items must stay unstamped — `_packageId`
+// feeds isArtifactBacked() write authorization.
+// ─────────────────────────────────────────────────────────────────────────
+describe('MetadataPlugin._loadFromFileSystem — package provenance stamping', () => {
+    const fakeCtx = {
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    } as any;
+
+    it('stamps _packageId/_provenance on scanned items when options.packageId is set', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'eager' },
+            packageId: 'com.example.proj',
+        });
+        const mgr = (plugin as any).manager as NodeMetadataManager;
+        vi.spyOn(mgr, 'loadMany').mockImplementation(async (type: string) =>
+            type === 'page' ? [{ name: 'home_page', label: 'Home' }] : []);
+
+        await (plugin as any)._loadFromFileSystem(fakeCtx);
+
+        const item = await mgr.get('page', 'home_page') as any;
+        expect(item).toBeDefined();
+        expect(item._packageId).toBe('com.example.proj');
+        expect(item._provenance).toBe('package');
+    });
+
+    it('does not overwrite an item\'s pre-existing _packageId', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'eager' },
+            packageId: 'com.example.proj',
+        });
+        const mgr = (plugin as any).manager as NodeMetadataManager;
+        vi.spyOn(mgr, 'loadMany').mockImplementation(async (type: string) =>
+            type === 'page' ? [{ name: 'vendor_page', _packageId: 'com.vendor.pkg' }] : []);
+
+        await (plugin as any)._loadFromFileSystem(fakeCtx);
+
+        const item = await mgr.get('page', 'vendor_page') as any;
+        expect(item._packageId).toBe('com.vendor.pkg');
+        expect(item._provenance).toBe('package');
+    });
+
+    it('leaves scanned items unstamped when options.packageId is not configured', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'eager' },
+        });
+        const mgr = (plugin as any).manager as NodeMetadataManager;
+        vi.spyOn(mgr, 'loadMany').mockImplementation(async (type: string) =>
+            type === 'page' ? [{ name: 'plain_page', label: 'Plain' }] : []);
+
+        await (plugin as any)._loadFromFileSystem(fakeCtx);
+
+        const item = await mgr.get('page', 'plain_page') as any;
+        expect(item).toBeDefined();
+        expect(item._packageId).toBeUndefined();
+        expect(item._provenance).toBeUndefined();
+    });
+});

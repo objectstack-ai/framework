@@ -141,6 +141,20 @@ export interface MetadataPluginOptions {
      * business-data namespaces.
      */
     registerSystemObjects?: boolean;
+    /**
+     * Owning package id for source-file metadata loaded by the filesystem
+     * scanner (`watch`/eager mode) — the project's `defineStack({ manifest:
+     * { id } })` id. When set, scanned items are stamped with
+     * `_packageId`/`_provenance: 'package'` via `applyProtection`, exactly
+     * like the artifact path, so GET /meta consumers can tell code-defined
+     * metadata from user-authored rows.
+     *
+     * Leave unset when the host has no package identity — items then stay
+     * unstamped (runtime-authored semantics). Do NOT pass a guessed value:
+     * `_packageId` feeds `isArtifactBacked()` write authorization, so a
+     * wrong id silently changes who may edit these items.
+     */
+    packageId?: string;
 }
 
 export class MetadataPlugin implements Plugin {
@@ -654,6 +668,15 @@ export class MetadataPlugin implements Plugin {
                     for (const item of items) {
                         const meta = item as any;
                         if (meta?.name) {
+                            // Stamp package provenance when the host declared
+                            // its package id (see MetadataPluginOptions.packageId)
+                            // — same applyProtection call the artifact path
+                            // uses, so both load paths produce identical
+                            // _packageId/_provenance state. No-op when the
+                            // option is unset or the item is already stamped.
+                            applyProtection(meta, {
+                                packageId: this.options.packageId,
+                            });
                             await this.manager.register(entry.type, meta.name, item);
                         }
                     }

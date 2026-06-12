@@ -26,10 +26,16 @@ export class MetadataFacade {
     const definition = typeof data === 'object' && data !== null
       ? { ...data, name: data.name ?? name }
       : data;
+    // Pass through the item's own source package id (when stamped by an
+    // artifact loader) so provenance survives re-registration. Never
+    // synthesize one here — unstamped items are runtime-authored by
+    // definition and must not become artifact-backed (protocol.ts
+    // isArtifactBacked gates write authorization on _packageId).
+    const packageId = definition?._packageId;
     if (type === 'object') {
-      this.registry.registerItem(type, definition, 'name' as any);
+      this.registry.registerItem(type, definition, 'name' as any, packageId);
     } else {
-      this.registry.registerItem(type, definition, definition.id ? 'id' as any : 'name' as any);
+      this.registry.registerItem(type, definition, definition.id ? 'id' as any : 'name' as any, packageId);
     }
   }
 

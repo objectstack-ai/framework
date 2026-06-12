@@ -757,6 +757,26 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             });
         });
 
+        it('serves _packageId/_provenance for items registered with a source package id', async () => {
+            // Package-shipped item — registered with its real package id, as
+            // the engine manifest path and the metadata-service sync both do.
+            registry.registerItem('page', { name: 'pkg_page', label: 'Pkg Page' }, 'name', 'com.example.crm');
+            // Runtime-authored item — no package id, must stay unstamped so
+            // clients can tell the two apart (objectui NavigationSyncEffect).
+            registry.registerItem('page', { name: 'user_page', label: 'User Page' }, 'name');
+            mockEngine.find.mockResolvedValue([]);
+
+            const result = await protocol.getMetaItems({ type: 'page' });
+
+            const pkgPage = result.items.find((i: any) => i.name === 'pkg_page');
+            expect(pkgPage._packageId).toBe('com.example.crm');
+            expect(pkgPage._provenance).toBe('package');
+
+            const userPage = result.items.find((i: any) => i.name === 'user_page');
+            expect(userPage._packageId).toBeUndefined();
+            expect(userPage._provenance).toBeUndefined();
+        });
+
         it('should fall back to DB when registry is empty for type', async () => {
             mockEngine.find.mockResolvedValue([
                 {

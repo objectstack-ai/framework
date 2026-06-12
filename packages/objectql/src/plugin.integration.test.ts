@@ -298,6 +298,55 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Note: The actual sync happens in start phase
       // We can verify by checking if ObjectQL detected external service
     });
+
+    it('passes each item\'s _packageId through so synced items carry provenance', async () => {
+      // Arrange — a view stamped by an artifact loader (carries _packageId)
+      // and a runtime-authored view (no stamp). The sync must preserve the
+      // distinction: stamped items get _provenance, unstamped stay clean.
+      const packagedView = {
+        name: 'pkg_view',
+        label: 'Packaged View',
+        _packageId: 'com.example.crm',
+      };
+      const runtimeView = {
+        name: 'user_view',
+        label: 'User View',
+      };
+
+      const mockMetadataService = {
+        load: async () => null,
+        loadMany: async (type: string) => (type === 'view' ? [packagedView, runtimeView] : []),
+        save: async () => ({ success: true, path: '/test' }),
+        exists: async () => false,
+        list: async () => []
+      };
+
+      await kernel.use({
+        name: 'mock-metadata',
+        type: 'metadata',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('metadata', mockMetadataService);
+        }
+      });
+
+      await kernel.use(new ObjectQLPlugin());
+
+      // Act
+      await kernel.bootstrap();
+
+      // Assert
+      const objectql = kernel.getService('objectql') as any;
+      const synced = objectql.registry.getItem('view', 'pkg_view');
+      expect(synced).toBeDefined();
+      expect(synced._packageId).toBe('com.example.crm');
+      expect(synced._provenance).toBe('package');
+
+      const runtime = objectql.registry.getItem('view', 'user_view');
+      expect(runtime).toBeDefined();
+      expect(runtime._packageId).toBeUndefined();
+      expect(runtime._provenance).toBeUndefined();
+    });
   });
 
   describe('Schema Sync on Start', () => {
