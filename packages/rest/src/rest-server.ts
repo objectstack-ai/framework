@@ -975,6 +975,13 @@ export class RestServer {
      */
     private filterAppForUser(item: any, sysPerms: Set<string>): any | null {
         if (!item || typeof item !== 'object') return item;
+        // ADR-0045: an unpublished app (`hidden: true`) is externally
+        // unobservable — only builders (studio/setup access) receive it at all,
+        // for direct-URL preview. The launcher's client-side hidden filter is a
+        // listing courtesy; THIS is the visibility gate.
+        if (item.hidden === true && !sysPerms.has('studio.access') && !sysPerms.has('setup.access')) {
+            return null;
+        }
         const reqApp = Array.isArray(item.requiredPermissions) ? item.requiredPermissions : [];
         if (reqApp.length > 0 && !reqApp.every((p: string) => sysPerms.has(p))) {
             return null;
