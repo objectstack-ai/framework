@@ -1707,6 +1707,46 @@ export class HttpDispatcher {
                                 (result as any).seedApplied = { success: false, error: e?.message ?? 'seed apply failed' };
                             }
                         }
+                        // ADR-0045: "Publish" makes the package live AND visible.
+                        // A materialized (additive) build has no drafts left to
+                        // promote — its app sits at `hidden: true` awaiting the
+                        // visibility flip. Unhide every hidden app bound to this
+                        // package so ONE publish verb serves both regimes (the
+                        // caller never needs to know how the package was built).
+                        // Best-effort: a custom protocol without the meta
+                        // primitives keeps plain draft-publish semantics.
+                        try {
+                            if (
+                                typeof (protocol as any).getMetaItems === 'function' &&
+                                typeof (protocol as any).saveMetaItem === 'function'
+                            ) {
+                                const appsRes = await (protocol as any).getMetaItems({
+                                    type: 'app',
+                                    packageId: id,
+                                    ...(organizationId ? { organizationId } : {}),
+                                });
+                                const apps: any[] = Array.isArray(appsRes)
+                                    ? appsRes
+                                    : Array.isArray((appsRes as any)?.items) ? (appsRes as any).items : [];
+                                const unhidden: string[] = [];
+                                for (const app of apps) {
+                                    if (app && typeof app === 'object' && app.hidden === true && typeof app.name === 'string') {
+                                        await (protocol as any).saveMetaItem({
+                                            type: 'app',
+                                            name: app.name,
+                                            item: { ...app, hidden: false },
+                                            packageId: id,
+                                            ...(organizationId ? { organizationId } : {}),
+                                            ...(body?.actor ? { actor: body.actor } : {}),
+                                        });
+                                        unhidden.push(app.name);
+                                    }
+                                }
+                                if (unhidden.length > 0) (result as any).unhiddenApps = unhidden;
+                            }
+                        } catch (e: any) {
+                            (result as any).unhideError = e?.message ?? 'visibility flip failed';
+                        }
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
                         return { handled: true, response: this.error(e.message, e.statusCode || 500) };

@@ -1022,6 +1022,59 @@ describe('HttpDispatcher', () => {
             expect(insert).toHaveBeenCalledTimes(2);
             expect(insert).toHaveBeenCalledWith('project', expect.objectContaining({ name: 'Apollo' }), expect.anything());
         });
+
+        // ADR-0045: "Publish" = live AND visible. A materialized (additive)
+        // build leaves its app at hidden:true; publish-drafts must flip it so
+        // one publish verb serves both the draft and the materialize regimes.
+        it('POST /packages/:id/publish-drafts unhides the package\'s hidden app', async () => {
+            const publishPackageDrafts = vi.fn().mockResolvedValue({
+                success: true, publishedCount: 0, failedCount: 0, published: [], failed: [], seedApplied: { success: true },
+            });
+            const getMetaItems = vi.fn().mockResolvedValue([
+                { name: 'production_management', label: '生产管理', hidden: true, navigation: [] },
+                { name: 'already_visible', hidden: false, navigation: [] },
+            ]);
+            const saveMetaItem = vi.fn().mockResolvedValue({ ok: true });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ publishPackageDrafts, getMetaItems, saveMetaItem });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.production_management/publish-drafts', 'POST', {}, {}, { request: {} });
+
+            expect(result.response?.status).toBe(200);
+            expect(getMetaItems).toHaveBeenCalledWith(expect.objectContaining({ type: 'app', packageId: 'app.production_management' }));
+            // Only the hidden app is re-saved, with hidden:false and everything else intact.
+            expect(saveMetaItem).toHaveBeenCalledTimes(1);
+            expect(saveMetaItem).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'app',
+                name: 'production_management',
+                item: expect.objectContaining({ hidden: false, label: '生产管理' }),
+                packageId: 'app.production_management',
+            }));
+            expect((result.response as any)?.body?.data?.unhiddenApps).toEqual(['production_management']);
+        });
+
+        it('POST /packages/:id/publish-drafts reports (not throws) when the visibility flip fails', async () => {
+            const publishPackageDrafts = vi.fn().mockResolvedValue({
+                success: true, publishedCount: 1, failedCount: 0, published: [], failed: [], seedApplied: { success: true },
+            });
+            const getMetaItems = vi.fn().mockRejectedValue(new Error('meta backend down'));
+            const saveMetaItem = vi.fn();
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ publishPackageDrafts, getMetaItems, saveMetaItem });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.edu/publish-drafts', 'POST', {}, {}, { request: {} });
+
+            // The draft publish itself succeeded — the flip failure is surfaced, not fatal.
+            expect(result.response?.status).toBe(200);
+            expect((result.response as any)?.body?.data?.unhideError).toBe('meta backend down');
+            expect(saveMetaItem).not.toHaveBeenCalled();
+        });
     });
 
     // ═══════════════════════════════════════════════════════════════

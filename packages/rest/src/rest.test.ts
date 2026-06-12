@@ -1741,3 +1741,39 @@ describe('RestServer metadata translation — envelope unwrap', () => {
     expect(out[0].navigation[0].children[0].label).toBe('文件存储');
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-0045 — hidden-app visibility gate (filterAppForUser)
+// ---------------------------------------------------------------------------
+
+describe('filterAppForUser — ADR-0045 hidden-app gate', () => {
+  const make = () => new RestServer(createMockServer() as any, createMockProtocol() as any);
+  const hiddenApp = { name: 'production_management', hidden: true, navigation: [] };
+  const visibleApp = { name: 'crm', navigation: [] };
+
+  it('drops a hidden app for users without builder access', () => {
+    const rest: any = make();
+    expect(rest.filterAppForUser(hiddenApp, new Set<string>())).toBeNull();
+    expect(rest.filterAppForUser(hiddenApp, new Set(['manage_users']))).toBeNull();
+  });
+
+  it('returns a hidden app to builders (studio.access or setup.access)', () => {
+    const rest: any = make();
+    expect(rest.filterAppForUser(hiddenApp, new Set(['studio.access']))?.name).toBe('production_management');
+    expect(rest.filterAppForUser(hiddenApp, new Set(['setup.access']))?.name).toBe('production_management');
+  });
+
+  it('leaves visible apps untouched for everyone', () => {
+    const rest: any = make();
+    expect(rest.filterAppForUser(visibleApp, new Set<string>())?.name).toBe('crm');
+  });
+
+  it('still applies requiredPermissions to hidden apps builders can see', () => {
+    const rest: any = make();
+    const gated = { ...hiddenApp, requiredPermissions: ['manage_platform_settings'] };
+    expect(rest.filterAppForUser(gated, new Set(['studio.access']))).toBeNull();
+    expect(
+      rest.filterAppForUser(gated, new Set(['studio.access', 'manage_platform_settings']))?.name,
+    ).toBe('production_management');
+  });
+});
