@@ -1,5 +1,68 @@
 # @objectstack/cli
 
+## 9.3.0
+
+### Minor Changes
+
+- 59c2d32: New `os package install <id|artifact.json>` command — install a package into a RUNNING runtime via its install-local endpoint. Catalog mode resolves from the runtime's configured catalog; passing a compiled artifact file installs inline (air-gapped, no catalog round-trip). Authenticates against the target runtime with --email/--password (better-auth session; Origin header included for the CSRF check).
+
+### Patch Changes
+
+- f15d6f6: ADR-0042 SLA auto-escalation + ADR-0041 mechanical landing. plugin-approvals now owns a jobs-backed escalation scanner (`runEscalations`, interval job `approvals-sla-escalation` + boot catch-up): overdue pending requests escalate **at most once** (the `escalate` audit row is the idempotency marker, written audit-first) executing the node's `escalation.action` — notify / reassign-to-`escalateTo` / auto_approve / auto_reject as the reserved actor `system:sla`. The trigger packages drop their `plugin-` prefix (`@objectstack/trigger-record-change`, `@objectstack/trigger-schedule`) per ADR-0041, and `ActionDescriptor` gains an optional `maturity: 'ga' | 'beta' | 'reserved'` field so designers can grey out contract-ahead-of-runtime surfaces.
+- ad4e97f: ADR-0041 Tier 1 complete: `@objectstack/trigger-api` — inbound webhook/HTTP flow trigger. The engine now derives an `api` trigger binding for `type: 'api'` flows (activating the long-reserved enum value); the trigger mounts `POST /api/v1/automation/hooks/:flowName/:hookId` with GitHub/Stripe-style HMAC verification (`x-objectstack-signature`, constant-time compare, identical 404s for unknown flows and wrong hookIds) and queue-backed ingestion — the handler enqueues and ACKs 202, a queue consumer executes the flow with the JSON payload as the trigger record (`$record` / `record.*` / bare references), and `x-idempotency-key` passes through to the queue's dedup window. The CLI's serve preset auto-loads the trigger alongside record-change and schedule.
+- Updated dependencies [3219191]
+- Updated dependencies [290f631]
+- Updated dependencies [50b7b47]
+- Updated dependencies [f15d6f6]
+- Updated dependencies [f8684ea]
+- Updated dependencies [c802327]
+- Updated dependencies [b10aa78]
+- Updated dependencies [2796a1f]
+- Updated dependencies [ad4e97f]
+  - @objectstack/plugin-approvals@9.3.0
+  - @objectstack/spec@9.3.0
+  - @objectstack/service-automation@9.3.0
+  - @objectstack/rest@9.3.0
+  - @objectstack/trigger-record-change@9.3.0
+  - @objectstack/trigger-schedule@9.3.0
+  - @objectstack/platform-objects@9.3.0
+  - @objectstack/objectql@9.3.0
+  - @objectstack/trigger-api@9.3.0
+  - @objectstack/account@9.3.0
+  - @objectstack/client@9.3.0
+  - @objectstack/core@9.3.0
+  - @objectstack/formula@9.3.0
+  - @objectstack/mcp@9.3.0
+  - @objectstack/observability@9.3.0
+  - @objectstack/driver-memory@9.3.0
+  - @objectstack/driver-mongodb@9.3.0
+  - @objectstack/driver-sql@9.3.0
+  - @objectstack/driver-sqlite-wasm@9.3.0
+  - @objectstack/plugin-audit@9.3.0
+  - @objectstack/plugin-auth@9.3.0
+  - @objectstack/plugin-email@9.3.0
+  - @objectstack/plugin-hono-server@9.3.0
+  - @objectstack/plugin-org-scoping@9.3.0
+  - @objectstack/plugin-reports@9.3.0
+  - @objectstack/plugin-security@9.3.0
+  - @objectstack/plugin-sharing@9.3.0
+  - @objectstack/plugin-webhooks@9.3.0
+  - @objectstack/runtime@9.3.0
+  - @objectstack/service-ai@9.3.0
+  - @objectstack/service-analytics@9.3.0
+  - @objectstack/service-cache@9.3.0
+  - @objectstack/service-datasource@9.3.0
+  - @objectstack/service-feed@9.3.0
+  - @objectstack/service-job@9.3.0
+  - @objectstack/service-messaging@9.3.0
+  - @objectstack/service-package@9.3.0
+  - @objectstack/service-queue@9.3.0
+  - @objectstack/service-realtime@9.3.0
+  - @objectstack/service-settings@9.3.0
+  - @objectstack/service-storage@9.3.0
+  - @objectstack/types@9.3.0
+  - @objectstack/console@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes

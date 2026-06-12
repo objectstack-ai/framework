@@ -1,5 +1,13 @@
 # @objectstack/hono
 
+## 9.3.0
+
+### Patch Changes
+
+- @objectstack/plugin-hono-server@9.3.0
+- @objectstack/runtime@9.3.0
+- @objectstack/types@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes
