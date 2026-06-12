@@ -750,65 +750,36 @@ export class AIServicePlugin implements Plugin {
           ctx.logger.info(`[AI] ${DATA_TOOL_DEFINITIONS.length} data tools registered as metadata`);
         }
 
-        // Register the built-in data_chat agent (requires metadata service)
+        // Register the built-in agent + skills (requires metadata service).
+        //
+        // UPSERT, not exists-gate (ADR-0040): built-in records are
+        // platform-owned — when the shipped definition changes (new skills,
+        // new instructions), existing environments must pick it up on next
+        // boot. The old exists-gate froze the FIRST shipped version forever
+        // once sys_metadata became durable, which silently stranded every
+        // persona/skill improvement on existing envs. Tenants who want a
+        // different assistant define a CUSTOM agent and bind it via
+        // app.defaultAgent — editing built-ins in place is not a supported
+        // path, so an unconditional content-refresh clobbers nothing legit.
         if (metadataService) {
-          try {
-            const agentExists =
-              typeof metadataService.exists === 'function'
-                ? await withTimeout(metadataService.exists('agent', DATA_CHAT_AGENT.name))
-                : false;
-
-            if (agentExists === null) {
-              ctx.logger.warn('[AI] Metadata service timed out checking data_chat agent, skipping');
-            } else if (!agentExists) {
-              await withTimeout(metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT));
-              console.log('[AI] Registered data_chat agent to metadataService');
-              ctx.logger.info('[AI] data_chat agent registered');
-            } else {
-              console.log('[AI] data_chat agent already exists, skipping');
-              ctx.logger.debug('[AI] data_chat agent already exists, skipping auto-registration');
+          const upsertBuiltin = async (type: string, name: string, def: unknown): Promise<void> => {
+            try {
+              const stored = await withTimeout(metadataService.get(type, name));
+              if (stored !== null && stored !== undefined && JSON.stringify(stored) === JSON.stringify(def)) {
+                ctx.logger.debug(`[AI] built-in ${type} ${name} up to date`);
+                return;
+              }
+              await withTimeout(metadataService.register(type, name, def));
+              ctx.logger.info(
+                stored ? `[AI] built-in ${type} ${name} refreshed (shipped definition changed)` : `[AI] built-in ${type} ${name} registered`,
+              );
+            } catch (err) {
+              ctx.logger.warn(`[AI] Failed to register built-in ${type} ${name}`, err instanceof Error ? { error: err.message } : { error: String(err) });
             }
-          } catch (err) {
-            ctx.logger.warn('[AI] Failed to register data_chat agent', err instanceof Error ? { error: err.message, stack: err.stack } : { error: String(err) });
-          }
-
-          // Register the built-in data_explorer skill (capability bundle for data_chat)
-          try {
-            const skillExists =
-              typeof metadataService.exists === 'function'
-                ? await withTimeout(metadataService.exists('skill', DATA_EXPLORER_SKILL.name))
-                : false;
-
-            if (skillExists === null) {
-              ctx.logger.warn('[AI] Metadata service timed out checking data_explorer skill, skipping');
-            } else if (!skillExists) {
-              await withTimeout(metadataService.register('skill', DATA_EXPLORER_SKILL.name, DATA_EXPLORER_SKILL));
-              ctx.logger.info('[AI] data_explorer skill registered');
-            } else {
-              ctx.logger.debug('[AI] data_explorer skill already exists, skipping auto-registration');
-            }
-          } catch (err) {
-            ctx.logger.warn('[AI] Failed to register data_explorer skill', err instanceof Error ? { error: err.message } : { error: String(err) });
-          }
-
-          // Register the built-in actions_executor skill (write-side bundle for data_chat)
-          try {
-            const skillExists =
-              typeof metadataService.exists === 'function'
-                ? await withTimeout(metadataService.exists('skill', ACTIONS_EXECUTOR_SKILL.name))
-                : false;
-
-            if (skillExists === null) {
-              ctx.logger.warn('[AI] Metadata service timed out checking actions_executor skill, skipping');
-            } else if (!skillExists) {
-              await withTimeout(metadataService.register('skill', ACTIONS_EXECUTOR_SKILL.name, ACTIONS_EXECUTOR_SKILL));
-              ctx.logger.info('[AI] actions_executor skill registered');
-            } else {
-              ctx.logger.debug('[AI] actions_executor skill already exists, skipping auto-registration');
-            }
-          } catch (err) {
-            ctx.logger.warn('[AI] Failed to register actions_executor skill', err instanceof Error ? { error: err.message } : { error: String(err) });
-          }
+          };
+          await upsertBuiltin('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
+          await upsertBuiltin('skill', DATA_EXPLORER_SKILL.name, DATA_EXPLORER_SKILL);
+          await upsertBuiltin('skill', ACTIONS_EXECUTOR_SKILL.name, ACTIONS_EXECUTOR_SKILL);
         }
       }
     } catch {
