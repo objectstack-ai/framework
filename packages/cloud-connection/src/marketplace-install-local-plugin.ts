@@ -46,6 +46,7 @@ import { readEnvWithDeprecation } from '@objectstack/types';
 import { resolveCloudUrl } from './cloud-url.js';
 import { resolveMarketplacePublicBaseUrl } from './marketplace-public-url.js';
 import { LocalManifestSource, type InstalledManifestEntry } from './local-manifest-source.js';
+import { ConnectionCredentialStore } from './connection-credential-store.js';
 
 const ROUTE_BASE = '/api/v1/marketplace/install-local';
 
@@ -72,11 +73,13 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
     private readonly cloudUrl: string;
     private readonly ledger: LocalManifestSource;
     private readonly storageDir: string;
+    private readonly credentials: ConnectionCredentialStore;
 
     constructor(config: MarketplaceInstallLocalPluginConfig = {}) {
         this.cloudUrl = resolveCloudUrl(config.controlPlaneUrl);
         this.ledger = new LocalManifestSource(config.storageDir);
         this.storageDir = this.ledger.dir;
+        this.credentials = new ConnectionCredentialStore();
     }
 
     init = async (_ctx: PluginContext): Promise<void> => {
@@ -215,11 +218,22 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
                 url: `${this.cloudUrl}/api/v1/marketplace/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest`,
             });
 
+            // Credential for the CLOUD attempt: the env→cloud service key
+            // (cloud-hosted) or the bound oscc_ bearer (self-hosted). With it
+            // the catalog also serves the caller's OWN org/private packages —
+            // anonymous fetches keep getting public/listed only. The public
+            // R2 fast-path stays anonymous (it only ever holds public).
+            const cloudCredential = (process.env.OS_CLOUD_API_KEY ?? '').trim()
+                || this.credentials.read()?.runtimeToken
+                || '';
+
             let lastErrStatus = 0;
             let lastErrText = '';
             for (const attempt of fetchAttempts) {
                 try {
-                    const resp = await fetch(attempt.url, { headers: { 'Accept': 'application/json' } });
+                    const headers: Record<string, string> = { Accept: 'application/json' };
+                    if (attempt.label === 'cloud' && cloudCredential) headers.Authorization = `Bearer ${cloudCredential}`;
+                    const resp = await fetch(attempt.url, { headers });
                     if (!resp.ok) {
                         lastErrStatus = resp.status;
                         lastErrText = (await resp.text().catch(() => '')).slice(0, 200);
