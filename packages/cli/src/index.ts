@@ -31,3 +31,4 @@ export { default as CloudWhoamiCommand } from './commands/cloud/whoami.js';
 
 // ─── Package topic subcommands ──────────────────────────────────────
 export { default as PackagePublishCommand } from './commands/package/publish.js';
+export { default as PackageInstallCommand } from './commands/package/install.js';

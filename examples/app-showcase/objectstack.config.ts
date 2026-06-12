@@ -3,6 +3,13 @@
 import { defineStack } from '@objectstack/spec';
 import { ConnectorRestPlugin } from '@objectstack/connector-rest';
 import { ConnectorSlackPlugin } from '@objectstack/connector-slack';
+import {
+  MarketplaceProxyPlugin,
+  MarketplaceInstallLocalPlugin,
+  CloudConnectionPlugin,
+  RuntimeConfigPlugin,
+  resolveCloudUrl,
+} from '@objectstack/cloud-connection';
 
 import * as objects from './src/objects/index.js';
 import { TaskViews, ProjectViews } from './src/views/index.js';
@@ -32,6 +39,10 @@ import { ShowcaseSeedData } from './src/data/index.js';
 // doesn't pull in `@types/node`, but the CLI provides the real `process` at
 // runtime. Keeps `pnpm typecheck` green without widening the type surface.
 declare const process: { env: Record<string, string | undefined> };
+
+// Marketplace catalog URL: `OS_CLOUD_URL` → public ObjectStack catalog by
+// default; `OS_CLOUD_URL=off` returns '' and disables the marketplace plugins.
+const marketplaceUrl = resolveCloudUrl();
 
 /**
  * Showcase — a kitchen-sink workspace that exercises every metadata type,
@@ -88,6 +99,22 @@ export default defineStack({
     new ConnectorSlackPlugin({
       token: process.env.SLACK_BOT_TOKEN ?? 'xoxb-showcase-demo-token',
     }),
+    // App Marketplace for the open single-environment shape (ADR-0008).
+    // Since ADR-0006 Phase 4 the CLI no longer auto-injects these — a host
+    // that wants a marketplace wires @objectstack/cloud-connection explicitly.
+    // Browse + install resolve against `OS_CLOUD_URL` (default: the public
+    // ObjectStack catalog; set `OS_CLOUD_URL=off` for fully-offline runs —
+    // air-gapped installs still work via `os package install <artifact.json>`).
+    // install-local merges packages into THIS runtime's kernel: once
+    // installed, nothing here depends on the cloud at runtime.
+    ...(marketplaceUrl
+      ? [
+          new MarketplaceProxyPlugin({ controlPlaneUrl: marketplaceUrl }),
+          new MarketplaceInstallLocalPlugin({ controlPlaneUrl: marketplaceUrl }),
+          new CloudConnectionPlugin({ singleEnvironment: true, controlPlaneUrl: marketplaceUrl }),
+        ]
+      : []),
+    new RuntimeConfigPlugin({ controlPlaneUrl: '', singleEnvironment: true, installLocal: true }),
   ],
 
   // Infrastructure
