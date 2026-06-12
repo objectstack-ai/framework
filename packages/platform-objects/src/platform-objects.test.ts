@@ -28,7 +28,7 @@ import {
   SysMetadataHistoryObject,
 } from './metadata/index.js';
 import { SysSetting } from './system/index.js';
-import { SETUP_APP, SETUP_NAV_CONTRIBUTIONS } from './apps/index.js';
+import { ACCOUNT_APP, SETUP_APP, SETUP_NAV_CONTRIBUTIONS, STUDIO_APP } from './apps/index.js';
 import { AppSchema } from '@objectstack/spec/ui';
 
 const systemObjects = [
@@ -153,6 +153,24 @@ describe('@objectstack/platform-objects', () => {
       // The webhooks entries are no longer static here — plugin-webhooks
       // contributes them into this slot (ADR-0029 D7 / K2.a).
       expect((group as { children?: unknown[] }).children).toEqual([]);
+    });
+  });
+
+  describe('platform app protection (ADR-0010 §3.7)', () => {
+    // All three platform apps are core UI shipped by this package: a
+    // tenant overlay that breaks Setup/Studio locks admins/implementers
+    // out of the repair surface, and Account is every user's only
+    // self-service security surface. The loader translates `protection`
+    // into the `_lock` envelope; clients (e.g. objectui's
+    // isNavigationSyncableApp) rely on `_lock` to skip automatic
+    // navigation writes into these apps.
+    it.each([
+      ['SETUP_APP', SETUP_APP],
+      ['STUDIO_APP', STUDIO_APP],
+      ['ACCOUNT_APP', ACCOUNT_APP],
+    ])('%s declares a full lock', (_name, app) => {
+      expect(app.protection?.lock).toBe('full');
+      expect(() => AppSchema.parse(app)).not.toThrow();
     });
   });
 

@@ -34,6 +34,15 @@ export const STUDIO_APP: App = {
   icon: 'hammer',
   active: true,
   isDefault: false,
+  // ADR-0010 §3.7 — author-facing protection block. Loader translates
+  // this into the `_lock` envelope at registration time. Same rationale
+  // as Setup: tenant overlay edits to the metadata workbench can lock
+  // implementers out of the very surface used to repair metadata.
+  protection: {
+    lock: 'full',
+    reason: 'Core developer workbench shipped by @objectstack/platform-objects — see ADR-0010.',
+    docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
+  },
   // Studio is the metadata-authoring host, so its ambient copilot is
   // pinned to the schema-architect agent. Resolved by the ambient chat
   // endpoint via `app.defaultAgent` — no UI-side `?agent=` override

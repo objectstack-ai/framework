@@ -38,6 +38,16 @@ export const ACCOUNT_APP: App = {
   isDefault: false,
   // Surface via the avatar dropdown, not the App Switcher — see App.hidden.
   hidden: true,
+  // ADR-0010 §3.7 — author-facing protection block. Loader translates
+  // this into the `_lock` envelope at registration time. Every
+  // authenticated user depends on this app to manage their own
+  // sessions / API keys / linked accounts, so a tenant overlay that
+  // breaks it is a security-relevant outage — same class as Setup.
+  protection: {
+    lock: 'full',
+    reason: 'Core self-service security UI shipped by @objectstack/platform-objects — see ADR-0010.',
+    docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
+  },
   branding: {
     primaryColor: '#0ea5e9', // sky-500 — distinct from Setup's slate
   },
