@@ -416,7 +416,21 @@ export class CloudConnectionPlugin implements Plugin {
                         revoked = resp.ok;
                     } catch { /* control plane unreachable — local clear still proceeds */ }
                 }
-                const cleared = (() => { try { return this.store.clear(); } catch { return false; } })();
+                // Clear the CREDENTIAL but keep the IDENTITY: a residual
+                // {runtimeId} lets a later re-bind to the same org claim the
+                // same registration (revive the revoked row) instead of
+                // piling up a new device per disconnect cycle — same as an
+                // iCloud device record surviving sign-out.
+                const residualId = this.store.read()?.runtimeId;
+                const cleared = (() => {
+                    try {
+                        if (residualId) {
+                            this.store.write({ runtimeToken: '', runtimeId: residualId });
+                            return true;
+                        }
+                        return this.store.clear();
+                    } catch { return false; }
+                })();
                 return c.json({ success: true, data: { environmentId: environmentId ?? null, revoked, cleared } });
             });
 

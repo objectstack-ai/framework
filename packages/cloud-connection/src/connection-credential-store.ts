@@ -60,12 +60,20 @@ export class ConnectionCredentialStore {
             : resolve(process.cwd(), DEFAULT_CONNECTION_CREDENTIAL_PATH);
     }
 
-    /** Read the stored credential; null when absent or unreadable. */
+    /**
+     * Read the stored credential; null when absent or unreadable.
+     *
+     * An IDENTITY RESIDUAL — `runtimeToken: ''` with a `runtimeId` — is a
+     * valid record: unbind leaves one behind so a later re-bind to the same
+     * org claims the same registration (ADR runtime-identity-binding §2.1).
+     * Callers already treat the empty token as "no credential".
+     */
     read(): StoredConnectionCredential | null {
         if (!existsSync(this.path)) return null;
         try {
             const parsed = JSON.parse(readFileSync(this.path, 'utf8'));
-            if (!parsed || typeof parsed.runtimeToken !== 'string' || !parsed.runtimeToken) return null;
+            if (!parsed || typeof parsed.runtimeToken !== 'string') return null;
+            if (!parsed.runtimeToken && !(typeof parsed.runtimeId === 'string' && parsed.runtimeId)) return null;
             return parsed as StoredConnectionCredential;
         } catch {
             return null;
