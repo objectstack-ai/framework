@@ -1,6 +1,6 @@
 # ADR-0015: External Datasource Federation
 
-**Status**: Proposed (2026-05-29)
+**Status**: Accepted — backend/REST/CLI implemented; Studio UI + extra dialect drivers pending (proposed 2026-05-29 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source of truth per metadata type)
 **Consumers**: `@objectstack/spec`, `@objectstack/runtime`, `@objectstack/objectql`, `@objectstack/plugins/driver-sql`, `@objectstack/services/service-ai`, `@objectstack/cli`, `../objectui`

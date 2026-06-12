@@ -1,6 +1,6 @@
 # ADR-0024: MCP Servers as Connectors — Adopting an Open, Vendor-Neutral Tool Protocol
 
-**Status**: Proposed (2026-06-01)
+**Status**: Accepted — library implemented; examples pending (proposed 2026-06-01 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0011](./0011-actions-as-ai-tools.md) (actions as AI tools), [ADR-0015](./0015-external-datasource-federation.md) (open mechanism / enterprise lifecycle split), [ADR-0018](./0018-unified-node-action-registry.md) (`connector_action` baseline dispatch + connector registry), [ADR-0022](./0022-connectors-vs-messaging-channels.md) (Connector = transport/integration mechanism), [ADR-0023](./0023-openapi-to-connector-generator.md) (OpenAPI → Connector generator)
 **Consumers**: `@objectstack/spec` (`integration/connector.zod.ts`), `@objectstack/service-automation` (connector registry on the engine), `@objectstack/runtime` (the `GET /api/v1/automation/connectors` discovery route), new `@objectstack/connector-mcp`, `@objectstack/service-ai` (the same MCP tools double as AI tools, ADR-0011), the Studio flow palette

@@ -1,6 +1,6 @@
 # ADR-0023: OpenAPI → Connector Generator — Bulk Connectors From Declarative API Specs
 
-**Status**: Proposed (2026-06-01)
+**Status**: Accepted — library implemented; CLI + examples pending (proposed 2026-06-01 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0015](./0015-external-datasource-federation.md) (open mechanism / enterprise lifecycle split), [ADR-0018](./0018-unified-node-action-registry.md) (`connector_action` baseline dispatch + `engine.registerConnector()`), [ADR-0022](./0022-connectors-vs-messaging-channels.md) (Connector = transport/integration mechanism; not the messaging-semantic layer)
 **Consumers**: `@objectstack/spec` (`integration/connector.zod.ts`), `@objectstack/service-automation` (connector registry on the engine), `@objectstack/runtime` (the `GET /api/v1/automation/connectors` discovery route), new `@objectstack/connector-openapi`, the Studio flow palette

@@ -1,6 +1,6 @@
 # ADR-0039: Concurrent durable pause — multi-instance nodes now, token/scope-tree later
 
-**Status**: Proposed (2026-06-11) — revised after a code + industry self-review
+**Status**: Accepted — Track A implemented; Track B deferred (proposed 2026-06-11, revised after a code + industry self-review · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-approval-as-flow-node.md) (durable-pause node via suspend/resume — *between*-flow chaining added in its 2026-06-10 addendum), [ADR-0031](./0031-advanced-flow-node-executors-and-dag.md) (structured `loop` / `parallel` / `try_catch` constructs, DAG invariant), [ADR-0018](./0018-unified-node-action-registry.md) (open node/executor registry)
 **Consumers**: `@objectstack/services/service-automation` (engine core — `executeNode` / `traverseNext` / `runRegion` / `resume`, `SuspendedRun`, `sys_automation_run`), `@objectstack/spec` (`automation/execution.zod.ts`), `../objectui` (Runs panel, flow runner)

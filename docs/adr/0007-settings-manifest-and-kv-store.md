@@ -1,6 +1,6 @@
 # ADR-0007: Settings — Manifest + K/V Store + Resolver (Apple-style)
 
-**Status**: Draft (2026-05-20)
+**Status**: Accepted — backend implemented; UI pending (objectui) (proposed 2026-05-20 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (Metadata Customization Overlay), [ADR-0006](./0006-project-environment-split.md) (Project/Environment Split)
 **Consumers**: `@objectstack/spec`, `@objectstack/platform-objects`, new `@objectstack/service-settings`, `@objectstack/plugin-auth` (Setup app), `objectui` (Settings renderer)

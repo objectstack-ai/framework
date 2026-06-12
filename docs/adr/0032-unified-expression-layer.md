@@ -1,6 +1,6 @@
 # ADR-0032: Expression layer for an AI-authored platform — validate-by-default, schema-aware, one CEL language, no silent failure
 
-**Status**: Proposed (2026-06-02)
+**Status**: Accepted — implemented; designer builders pending (objectui) (proposed 2026-06-02 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring of metadata — **the design center**), [ADR-0018](./0018-unified-node-action-registry.md) (open action registry), [ADR-0031](./0031-advanced-flow-node-executors-and-dag.md) (structured, statically-analyzable constructs for AI)
 **Consumers**: `@objectstack/formula` (CEL engine + stdlib + template interpolation + validator), `@objectstack/spec` (expression-field types + introspection: every `condition`/`guard`/`value`/template field across data / automation / ui / security; the coercion in `shared/expression.zod.ts`), `@objectstack/services/service-automation` (`engine.ts` `evaluateCondition`, `builtin/template.ts`, builtin node executors), `@objectstack/cli` (compile-time validation in `objectstack build`), the **agent tool layer** (an `validate_expression` / schema-introspection tool surfaced to authoring agents), `../objectui` (flow designer condition/template builders)

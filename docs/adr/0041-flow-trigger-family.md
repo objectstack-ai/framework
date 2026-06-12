@@ -1,6 +1,6 @@
 # ADR-0041: Flow trigger family — taxonomy, naming, and the open-source core set
 
-**Status**: Proposed (2026-06-12)
+**Status**: Accepted — Tier 1 implemented (rename deprecation stubs pending) (proposed 2026-06-12 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open node/executor registry — descriptors as the engine-owned contract surface), [ADR-0030](./0030-notification-platform-convergence.md) (outbox-backed delivery), [ADR-0012](./0012-notification-platform.md) (notification platform / messaging)
 **Consumers**: `@objectstack/service-automation` (the `FlowTrigger` seam), `@objectstack/cli` (`serve` auto-wiring), runtime presets, Studio flow designer (trigger pickers), future marketplace packaging

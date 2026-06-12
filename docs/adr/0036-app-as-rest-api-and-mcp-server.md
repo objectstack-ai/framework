@@ -1,6 +1,6 @@
 # ADR-0036: Every app is a REST API + an MCP server — make it visible and connectable after build
 
-**Status**: Proposed (2026-06-06)
+**Status**: Accepted — framework implemented; cloud surfacing pending (proposed 2026-06-06 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0011](./0011-actions-as-ai-tools.md) (actions/objects as AI tools), [ADR-0024](./0024-mcp-connectors.md) (MCP as connectors — the *inbound* sibling: ObjectStack **consuming** external MCP servers; this ADR is the *outbound* direction), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (AI builds the metadata; publishing makes it live)
 **Consumers**: `@objectstack/rest` (REST CRUD + `/api/v1/discovery`), new HTTP transport in `@objectstack/mcp`, `@objectstack/platform-objects` (`sys_api_key`), `../objectui` (Developer Hub → new Integrations page; publish surface), `../cloud` (per-env public hostname = the API/MCP base)

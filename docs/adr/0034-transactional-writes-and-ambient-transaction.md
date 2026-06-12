@@ -1,6 +1,6 @@
 # ADR-0034: Robust multi-write transactions (ambient transaction context)
 
-**Status**: Proposed
+**Status**: Accepted — implemented (v8.0.0) (calibrated 2026-06-12)
 **Author**: surfaced while implementing the cross-object atomic batch (issue #1604) + autonumber sequence (issue #1603)
 **Affects**: `@objectstack/objectql` (engine), `@objectstack/driver-sql` (and every driver), `@objectstack/rest`
 
