@@ -199,7 +199,7 @@ const SCHEMAS: Record<string, SchemaInfo> = {
   object: 'project_task',
   fields: ['title', 'status', 'assigned_to'],
   filters: [{ field: 'status', operator: 'eq', value: 'open' }],
-  sort: [{ field: 'created_at', direction: 'desc' }],
+  sort: [{ field: 'created_at', order: 'desc' }],
   limit: 50,
 }`,
     related: ['object', 'field', 'view'],

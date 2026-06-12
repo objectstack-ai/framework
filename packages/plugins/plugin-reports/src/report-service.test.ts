@@ -24,12 +24,15 @@ function makeFakeEngine() {
     async find(object: string, options?: any) {
       const rows = ensure(object).filter(r => matches(r, options?.filter ?? options?.where));
       if (options?.orderBy?.[0]) {
-        const { field, direction } = options.orderBy[0];
+        // Canonical SortNode key only (spec/data/query.zod.ts): the real
+        // engine strips an unknown `direction:` key and defaults to asc, so
+        // the mock must too — honoring both keys masks wrong-key sorts.
+        const { field, order } = options.orderBy[0];
         rows.sort((a, b) => {
           const av = a[field]; const bv = b[field];
           if (av === bv) return 0;
           const cmp = av > bv ? 1 : -1;
-          return direction === 'desc' ? -cmp : cmp;
+          return order === 'desc' ? -cmp : cmp;
         });
       }
       return rows.slice(0, options?.limit ?? 1000);
@@ -161,6 +164,18 @@ describe('ReportService', () => {
     const leads = await svc.listReports({ object: 'lead' }, CTX);
     expect(leads.length).toBe(1);
     expect(leads[0].name).toBe('A');
+  });
+
+  it('listReports: most recently updated first', async () => {
+    // Regression: the query sorted with the non-canonical `direction: 'desc'`
+    // key, which SortNode strips — so it sorted ascending (oldest first).
+    engine._tables['sys_saved_report'] = [
+      { id: 'r_old', name: 'Old', object_name: 'lead', query_json: '{}', updated_at: '2026-01-01T00:00:00Z' },
+      { id: 'r_new', name: 'New', object_name: 'lead', query_json: '{}', updated_at: '2026-03-01T00:00:00Z' },
+      { id: 'r_mid', name: 'Mid', object_name: 'lead', query_json: '{}', updated_at: '2026-02-01T00:00:00Z' },
+    ];
+    const rows = await svc.listReports({ object: 'lead' }, CTX);
+    expect(rows.map(r => r.id)).toEqual(['r_new', 'r_mid', 'r_old']);
   });
 
   it('getReport: returns null on miss', async () => {

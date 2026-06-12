@@ -42,7 +42,7 @@ describe('Data Domain — Schema Parse Performance', () => {
     object: 'benchmark_object',
     fields: ['name', 'status', 'priority'],
     filters: [['status', '=', 'active'], 'and', ['priority', '>', 0]],
-    sort: [{ field: 'priority', direction: 'desc' }],
+    orderBy: [{ field: 'priority', order: 'desc' }],
     top: 25,
     skip: 0,
   };
@@ -82,7 +82,7 @@ describe('UI Domain — Schema Parse Performance', () => {
         { field: 'name', width: 200 },
         { field: 'status', width: 100 },
       ],
-      defaultSort: { field: 'name', direction: 'asc' },
+      sort: [{ field: 'name', order: 'asc' }],
       pageSize: 25,
     },
   };

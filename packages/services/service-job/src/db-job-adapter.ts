@@ -138,7 +138,7 @@ export class DbJobAdapter implements IJobService {
     const rows = await this.engine.find(RUN_TABLE, {
       where: { status },
       limit: limit ?? 50,
-      orderBy: [{ field: 'started_at', direction: 'desc' }],
+      orderBy: [{ field: 'started_at', order: 'desc' }],
       context: SYSTEM_CTX,
     });
     return (rows ?? []).map((r: any) => ({

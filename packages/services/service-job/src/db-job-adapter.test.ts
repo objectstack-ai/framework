@@ -13,12 +13,15 @@ function makeFakeEngine() {
         ? t.filter((r) => Object.entries(opts.where).every(([k, v]) => r[k] === v))
         : [...t];
       if (opts.orderBy) {
-        for (const order of [...opts.orderBy].reverse()) {
+        for (const ord of [...opts.orderBy].reverse()) {
+          // Canonical SortNode key only (spec/data/query.zod.ts): the real
+          // engine strips an unknown `direction:` key and defaults to asc,
+          // so the mock must too — honoring both keys masks wrong-key sorts.
           out.sort((a, b) => {
-            const av = a[order.field], bv = b[order.field];
+            const av = a[ord.field], bv = b[ord.field];
             if (av === bv) return 0;
             const cmp = av > bv ? 1 : -1;
-            return order.direction === 'desc' ? -cmp : cmp;
+            return ord.order === 'desc' ? -cmp : cmp;
           });
         }
       }
@@ -116,6 +119,18 @@ describe('DbJobAdapter', () => {
     const ok = await adapter.listExecutionsByStatus('success');
     expect(ok).toHaveLength(1);
     expect(ok[0].jobId).toBe('mix');
+  });
+
+  it('listExecutionsByStatus returns the newest run first', async () => {
+    // Regression: the query sorted with the non-canonical `direction: 'desc'`
+    // key, which SortNode strips — so "latest run" returned the OLDEST run.
+    engine.tables.set('sys_job_run', [
+      { id: '1', job_name: 'first', status: 'success', started_at: '2026-01-01T00:00:00Z' },
+      { id: '2', job_name: 'third', status: 'success', started_at: '2026-03-01T00:00:00Z' },
+      { id: '3', job_name: 'second', status: 'success', started_at: '2026-02-01T00:00:00Z' },
+    ]);
+    const runs = await adapter.listExecutionsByStatus('success');
+    expect(runs.map((r) => r.jobId)).toEqual(['third', 'second', 'first']);
   });
 
   it('replay tags a synthetic run as replay trigger', async () => {
