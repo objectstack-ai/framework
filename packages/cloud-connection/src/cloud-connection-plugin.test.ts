@@ -118,7 +118,7 @@ describe('multi-tenant mode (env-registry + per-env kernel auth)', () => {
         await new CloudConnectionPlugin({ controlPlaneUrl: 'http://cloud.test', controlPlaneApiKey: 'svc-key' }).start(ctx as any);
         await fireKernelReady();
         const res = await rawApp.routes.get('GET /api/v1/cloud-connection/status')!(makeC('https://t1.example.com/api/v1/cloud-connection/status'));
-        expect(res.payload).toEqual({ success: true, data: { environmentId: ENV, bound: true, provider: 'objectstack-cloud', connection: null } });
+        expect(res.payload).toEqual({ success: true, data: { environmentId: ENV, runtimeId: null, bound: true, provider: 'objectstack-cloud', connection: null } });
     });
 
     it('status 404s for an unknown hostname', async () => {
@@ -200,7 +200,7 @@ describe('single-environment mode (host auth, fixed env id)', () => {
         await fireKernelReady();
         const res = await rawApp.routes.get('GET /api/v1/cloud-connection/status')!(makeC('http://localhost:3000/x'));
         expect(res.status).toBe(200);
-        expect(res.payload.data).toEqual({ environmentId: null, bound: false, provider: 'objectstack-cloud', connection: null });
+        expect(res.payload.data).toEqual({ environmentId: null, runtimeId: null, bound: false, provider: 'objectstack-cloud', connection: null });
     });
 
     it('uses the configured environment id + the host kernel auth session', async () => {

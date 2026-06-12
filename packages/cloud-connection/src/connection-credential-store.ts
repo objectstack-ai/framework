@@ -29,8 +29,17 @@ import { dirname, resolve } from 'node:path';
 export interface StoredConnectionCredential {
     /** The `oscc_…` runtime bearer returned ONCE by the bind route. */
     runtimeToken: string;
-    /** Control-plane environment id this runtime is bound as. */
-    environmentId: string;
+    /**
+     * Cloud-minted durable runtime identity (ADR runtime-identity-binding).
+     * Presented as a claim on re-bind so the registration survives token
+     * rotation. Absent on stores written before v2.
+     */
+    runtimeId?: string;
+    /**
+     * Control-plane environment id — set only when the binding targeted a
+     * cloud-hosted environment. Self-hosted v2 registrations have none.
+     */
+    environmentId?: string;
     /** Control-plane base URL the binding was made against. */
     controlPlaneUrl?: string;
     organizationId?: string;
@@ -57,7 +66,6 @@ export class ConnectionCredentialStore {
         try {
             const parsed = JSON.parse(readFileSync(this.path, 'utf8'));
             if (!parsed || typeof parsed.runtimeToken !== 'string' || !parsed.runtimeToken) return null;
-            if (typeof parsed.environmentId !== 'string' || !parsed.environmentId) return null;
             return parsed as StoredConnectionCredential;
         } catch {
             return null;
