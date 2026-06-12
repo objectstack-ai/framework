@@ -1832,6 +1832,29 @@ export class RestServer {
                             }
                         }
 
+                        // ADR-0046: `doc` list responses omit `content` by
+                        // default — manuals are the one metadata payload that
+                        // grows unbounded, and the list surface only needs
+                        // name + label. `?include=content` opts back in; the
+                        // single-item GET /meta/doc/:name always returns the
+                        // full body.
+                        if (req.params.type === 'doc' && req.query?.include !== 'content') {
+                            const raw = visible as unknown;
+                            const list: any[] | null = Array.isArray(raw)
+                                ? (raw as any[])
+                                : (raw && typeof raw === 'object' && Array.isArray((raw as any).items))
+                                    ? ((raw as any).items as any[])
+                                    : null;
+                            if (list) {
+                                const slim = list.map((it: any) => {
+                                    if (!it || typeof it !== 'object') return it;
+                                    const { content: _content, ...rest } = it;
+                                    return rest;
+                                });
+                                visible = Array.isArray(raw) ? slim : { ...(raw as any), items: slim };
+                            }
+                        }
+
                         const translated = await this.translateMetaItems(req, req.params.type, environmentId, visible);
                         res.header('Vary', 'Accept-Language');
                         res.json(translated);
