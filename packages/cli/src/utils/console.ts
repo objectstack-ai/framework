@@ -35,7 +35,7 @@
 import path from 'path';
 import fs from 'fs';
 import { createRequire } from 'module';
-import { pathToFileURL } from 'url';
+import { pathToFileURL, fileURLToPath } from 'url';
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -44,6 +44,66 @@ export const CONSOLE_PATH = '/_console';
 
 /** Canonical npm package name that ships the Console SPA. */
 const CONSOLE_PACKAGE = '@objectstack/console';
+
+// ─── Version Guard ──────────────────────────────────────────────────
+
+/**
+ * The vendored `@objectstack/console` package is version-locked to the
+ * framework release, so a healthy install always carries the same major
+ * as the CLI. Node module resolution from the consumer cwd, however,
+ * climbs `node_modules` directories all the way up the filesystem — a
+ * stray install outside the workspace (e.g. a leftover
+ * `~/node_modules/@objectstack/console` from an old npm experiment) can
+ * shadow the bundled build and silently serve a stale Console.
+ *
+ * Guard: skip any candidate whose major version differs from the CLI's
+ * own, and warn so the stray install is discoverable.
+ */
+export function isConsoleVersionCompatible(
+  candidateVersion: unknown,
+  cliVersion: string,
+): boolean {
+  if (typeof candidateVersion !== 'string') return false;
+  const candidateMajor = majorOf(candidateVersion);
+  const cliMajor = majorOf(cliVersion);
+  return candidateMajor !== null && candidateMajor === cliMajor;
+}
+
+function majorOf(version: string): number | null {
+  const match = /^v?(\d+)[.-]/.exec(version.trim()) ?? /^v?(\d+)$/.exec(version.trim());
+  return match ? Number(match[1]) : null;
+}
+
+let cachedCliVersion: string | null | undefined;
+
+/**
+ * Read this CLI's own version by walking up from the compiled module to
+ * the nearest `package.json`. Returns null (guard disabled, fail open)
+ * if it can't be determined — never let the version check break
+ * resolution outright.
+ */
+function getCliVersion(): string | null {
+  if (cachedCliVersion !== undefined) return cachedCliVersion;
+  let version: string | null = null;
+  try {
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let depth = 0; depth < 6; depth++) {
+      const pkgPath = path.join(dir, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        if (typeof pkg.version === 'string') version = pkg.version;
+        break;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // Unreadable own package.json — leave the guard disabled.
+  }
+  cachedCliVersion = version;
+  return version;
+}
 
 // ─── Path Resolution ────────────────────────────────────────────────
 
@@ -70,9 +130,40 @@ const CONSOLE_PACKAGE = '@objectstack/console';
  *   3. Sibling-repo dev fallback — `../objectui/apps/console` — matched
  *      by the package name on disk so an unrelated `apps/console`
  *      doesn't get picked up by accident.
+ *
+ * Strategies 1 and 2 additionally require the candidate's major version
+ * to match the CLI's own (see `isConsoleVersionCompatible`) — node
+ * resolution climbs past the workspace root, so a stale install higher
+ * up the filesystem must not shadow the version-locked bundle.
+ * Mismatches are skipped with a warning. The sibling-repo fallback is
+ * exempt: the objectui workspace versions independently and is an
+ * explicit dev opt-in.
  */
-export function resolveConsolePath(): string | null {
-  const cwd = process.cwd();
+export interface ResolveConsoleOptions {
+  /** Resolution origin; defaults to `process.cwd()`. */
+  cwd?: string;
+  /** Override the CLI's own version (tests). */
+  cliVersion?: string;
+  /** Warning sink; defaults to `console.warn`. */
+  warn?: (message: string) => void;
+}
+
+export function resolveConsolePath(options?: ResolveConsoleOptions): string | null {
+  const cwd = options?.cwd ?? process.cwd();
+  const cliVersion = options?.cliVersion ?? getCliVersion();
+  const warn = options?.warn ?? ((message: string) => console.warn(message));
+
+  /** Version guard for vendored-package candidates (strategies 1 & 2). */
+  const versionOk = (dir: string, candidateVersion: unknown): boolean => {
+    if (!cliVersion) return true; // own version unknown — fail open
+    if (isConsoleVersionCompatible(candidateVersion, cliVersion)) return true;
+    const shown = typeof candidateVersion === 'string' ? candidateVersion : 'unknown';
+    warn(
+      `  ⚠ Ignoring ${CONSOLE_PACKAGE}@${shown} at ${dir} — major version does not match this CLI (${cliVersion}). ` +
+      `This is usually a stale install outside your workspace (e.g. a leftover ~/node_modules); remove it or install a matching version.`,
+    );
+    return false;
+  };
 
   const resolutionBases = [
     pathToFileURL(path.join(cwd, 'package.json')).href, // consumer workspace
@@ -91,7 +182,11 @@ export function resolveConsolePath(): string | null {
       const dir = path.dirname(resolvedPkgJson);
       try {
         const pkg = JSON.parse(fs.readFileSync(resolvedPkgJson, 'utf-8'));
-        if (pkg.name === CONSOLE_PACKAGE && !candidates.includes(dir)) {
+        if (
+          pkg.name === CONSOLE_PACKAGE &&
+          versionOk(dir, pkg.version) &&
+          !candidates.includes(dir)
+        ) {
           candidates.push(dir);
         }
       } catch {
@@ -104,11 +199,16 @@ export function resolveConsolePath(): string | null {
 
   // 2: direct filesystem check in cwd/node_modules.
   const directPath = path.join(cwd, 'node_modules', ...CONSOLE_PACKAGE.split('/'));
-  if (
-    fs.existsSync(path.join(directPath, 'package.json')) &&
-    !candidates.includes(directPath)
-  ) {
-    candidates.push(directPath);
+  const directPkgJson = path.join(directPath, 'package.json');
+  if (fs.existsSync(directPkgJson) && !candidates.includes(directPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(directPkgJson, 'utf-8'));
+      if (pkg.name === CONSOLE_PACKAGE && versionOk(directPath, pkg.version)) {
+        candidates.push(directPath);
+      }
+    } catch {
+      // Skip invalid package.json
+    }
   }
 
   // 3: sibling-repo dev fallback. Useful when iterating on the Console
