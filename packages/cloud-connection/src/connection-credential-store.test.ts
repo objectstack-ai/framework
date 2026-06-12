@@ -208,6 +208,11 @@ describe('CloudConnectionPlugin credential behavior', () => {
         );
         expect(res.status).toBe(200);
         expect(res.payload.data.user_code).toBe('ABCD-EFGH');
+        // Device context rides the verification URL for the approval page.
+        const complete = new URL(res.payload.data.verification_uri_complete);
+        expect(complete.searchParams.get('user_code')).toBe('ABCD-EFGH');
+        expect(complete.searchParams.get('runtime_name')).toBeTruthy();
+        expect(complete.searchParams.get('runtime_version')).toBeTruthy();
     });
 
     it('unbind without an environment id revokes via the bearer (empty body) and clears the store', async () => {

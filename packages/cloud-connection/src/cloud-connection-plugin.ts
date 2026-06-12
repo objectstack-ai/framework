@@ -271,11 +271,27 @@ export class CloudConnectionPlugin implements Plugin {
                     });
                     const json: any = await resp.json().catch(() => ({}));
                     if (!resp.ok) return c.json({ success: false, error: { code: 'device_code_failed', message: json?.error ?? `device/code ${resp.status}` } }, 502);
+                    // Device context for the approval page (ADR
+                    // runtime-identity-binding §2.3): name the requesting
+                    // runtime in the verification URL so the approver sees
+                    // WHAT they are authorizing. Display-only — informed
+                    // consent, not an authenticity proof (the page carries
+                    // the "only approve if you started this" warning).
+                    const withContext = (uri: unknown): string | undefined => {
+                        if (typeof uri !== 'string' || !uri) return undefined;
+                        try {
+                            const u = new URL(uri);
+                            try { u.searchParams.set('runtime_name', hostname()); } catch { /* no hostname */ }
+                            const ver = (process.env.OS_RUNTIME_VERSION ?? this.version) || '';
+                            if (ver) u.searchParams.set('runtime_version', ver);
+                            return u.toString();
+                        } catch { return uri; }
+                    };
                     return c.json({ success: true, data: {
                         device_code: json.device_code,
                         user_code: json.user_code,
-                        verification_uri: json.verification_uri,
-                        verification_uri_complete: json.verification_uri_complete,
+                        verification_uri: withContext(json.verification_uri),
+                        verification_uri_complete: withContext(json.verification_uri_complete),
                         interval: json.interval ?? 5,
                         expires_in: json.expires_in ?? 600,
                     } });
