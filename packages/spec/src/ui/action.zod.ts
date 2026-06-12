@@ -421,6 +421,25 @@ export const ActionSchema = lazySchema(() => z.object({
    */
   mode: z.enum(['create', 'edit', 'delete', 'custom']).optional().describe('Semantic mode of the action.'),
 
+  /**
+   * Open the action's result in a NEW TAB. The renderer pre-opens the tab
+   * synchronously on click (preserving the user gesture so popup blockers
+   * don't fire), paints a progress page, then drives the tab to the
+   * handler's returned `redirectUrl` — or, when `newTabUrl` is set, straight
+   * to that URL with no server round trip.
+   */
+  opensInNewTab: z.boolean().optional().describe('Open the action result in a new tab. The renderer pre-opens the tab synchronously on click (popup-blocker-safe) and navigates it to the handler\'s redirectUrl.'),
+
+  /**
+   * Zero-roundtrip new-tab target. A path template the renderer navigates
+   * the pre-opened tab to IMMEDIATELY on click, skipping the action POST
+   * entirely. Only valid together with `opensInNewTab`. The target endpoint
+   * MUST perform all auth/authz itself (e.g. the cloud `/sso-open` endpoint,
+   * which re-runs every check the POST half would have done). Supports the
+   * `{recordId}` placeholder, URL-encoded on substitution.
+   */
+  newTabUrl: z.string().optional().describe('Direct new-tab URL template ({recordId} placeholder). When set with opensInNewTab, the renderer navigates the pre-opened tab here immediately — no action POST. The endpoint must enforce auth itself.'),
+
   /** Execution */
   timeout: z.number().optional().describe('Maximum execution time in milliseconds for the action'),
 
