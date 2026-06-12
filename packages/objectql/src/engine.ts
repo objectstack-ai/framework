@@ -936,6 +936,8 @@ export class ObjectQL implements IDataEngine {
         'hooks', 'mappings', 'analyticsCubes',
         // Integration Protocol
         'connectors',
+        // System Protocol — package documentation (ADR-0046); inert data
+        'docs',
       ];
       for (const key of metadataArrayKeys) {
           const items = (manifest as any)[key];
@@ -1081,6 +1083,7 @@ export class ObjectQL implements IDataEngine {
           'roles', 'permissions', 'profiles', 'sharingRules', 'policies',
           'agents', 'ragPipelines', 'apis',
           'hooks', 'mappings', 'analyticsCubes', 'connectors',
+          'docs',
       ];
       for (const key of metadataArrayKeys) {
           const items = (plugin as any)[key];

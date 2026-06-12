@@ -8,6 +8,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
 import { DEFAULT_METADATA_EVAL_CORPUS } from '../lint/corpus.js';
@@ -302,6 +303,13 @@ export default class Lint extends Command {
 
       const normalized = normalizeStackInput(config as Record<string, unknown>);
       const issues = lintConfig(normalized);
+
+      // ── Package docs (ADR-0046) ── collected src/docs/*.md + inline docs:
+      // flatness, namespace-prefixed names, MDX/image ban, link resolution.
+      const docsResult = collectAndLintDocs(absolutePath, normalized as Record<string, unknown>);
+      for (const d of docsResult.issues) {
+        issues.push({ severity: d.severity, rule: d.rule, message: d.message, path: d.path });
+      }
 
       // ── Translation coverage ──
       if (!flags['skip-i18n']) {

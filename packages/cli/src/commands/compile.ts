@@ -10,6 +10,7 @@ import { loadConfig } from '../utils/config.js';
 import { lowerCallables } from '../utils/lower-callables.js';
 import { validateStackExpressions } from '../utils/validate-expressions.js';
 import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
   printHeader,
@@ -181,6 +182,36 @@ export default class Compile extends Command {
         }
       }
 
+      // 3d. Package docs (ADR-0046): compile flat `src/docs/*.md` into
+      //     `docs: DocSchema[]` and lint the combined set (flatness,
+      //     namespace-prefixed names, MDX/image ban, same-package link
+      //     resolution). Errors fail the build — the artifact is the
+      //     publish unit, so this IS the publish lint for docs.
+      if (!flags.json) printStep('Collecting package docs (ADR-0046)...');
+      const docsResult = collectAndLintDocs(absolutePath, result.data as Record<string, unknown>);
+      const docErrors = docsResult.issues.filter((i) => i.severity === 'error');
+      const docWarnings = docsResult.issues.filter((i) => i.severity === 'warning');
+      if (docErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'docs validation failed', issues: docErrors }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Package docs validation failed (${docErrors.length} issue${docErrors.length > 1 ? 's' : ''})`);
+        for (const i of docErrors.slice(0, 50)) {
+          console.log(`  • ${i.path}: ${i.message}`);
+          console.log(chalk.dim(`      rule: ${i.rule}`));
+        }
+        this.exit(1);
+      }
+      if (docWarnings.length > 0 && !flags.json) {
+        console.log('');
+        for (const w of docWarnings) {
+          printWarning(`${w.path}: ${w.message}`);
+          console.log(chalk.dim(`    rule: ${w.rule}`));
+        }
+      }
+
       // 4. Generate Artifact
       if (!flags.json) printStep('Writing artifact...');
       const output = flags.output!;
@@ -192,6 +223,9 @@ export default class Compile extends Command {
       }
 
       const finalBundle: Record<string, unknown> = { ...(result.data as Record<string, unknown>) };
+      if (docsResult.docs.length > 0) {
+        finalBundle.docs = docsResult.docs;
+      }
 
       // 4b. Bundle handler functions into `<artifactDir>/objectstack-runtime.{hash}.mjs`
       //     and stamp the relative path into the JSON so the runtime can

@@ -104,6 +104,7 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
   'function',    // Serverless functions
   'service',     // Service definitions
   'email_template', // Outbound email templates (EmailTemplateSchema)
+  'doc',         // Package documentation — flat Markdown items (DocSchema, ADR-0046)
 
   // Security Protocol
   'permission',  // Permission sets (PermissionSetSchema)
@@ -659,6 +660,12 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   { type: 'function', label: 'Function', filePatterns: ['**/*.function.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },
   { type: 'service', label: 'Service', filePatterns: ['**/*.service.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },
   { type: 'email_template', label: 'Email Template', filePatterns: ['**/*.email-template.ts', '**/*.email-template.yml', '**/*.email-template.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 85, domain: 'system' },
+  // ADR-0046: package documentation. Inert data — no runtime behavior, no
+  // overlay (a manual is the publisher's voice; tenants don't patch it).
+  // Runtime-creatable so AI/authors can draft docs via saveMetaItem
+  // (ADR-0033). Collected from flat `src/docs/*.md` by the CLI; the kernel
+  // never parses `content`. loadOrder is last: nothing references docs.
+  { type: 'doc', label: 'Documentation', description: 'Package documentation — flat Markdown items (ADR-0046)', filePatterns: ['**/docs/*.md'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 99, domain: 'system' },
 
   // Security Protocol
   { type: 'permission', label: 'Permission Set', filePatterns: ['**/*.permission.ts', '**/*.permission.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 15, domain: 'security' },

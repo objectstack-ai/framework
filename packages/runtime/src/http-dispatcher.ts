@@ -207,6 +207,25 @@ export class HttpDispatcher {
     }
 
     /**
+     * ADR-0046: `doc` list responses omit `content` by default — manuals
+     * are the one metadata payload that grows unbounded, and the list
+     * surface only needs `name` + `label`. `?include=content` opts back in
+     * (single-item GET /metadata/doc/:name always returns the full body).
+     */
+    private slimDocList(type: string, data: any, query?: Record<string, string>): any {
+        if (type !== 'doc' || query?.include === 'content') return data;
+        const strip = (items: any[]) =>
+            items.map((i) => {
+                if (!i || typeof i !== 'object') return i;
+                const { content: _content, ...rest } = i as Record<string, unknown>;
+                return rest;
+            });
+        if (Array.isArray(data)) return strip(data);
+        if (data && Array.isArray(data.items)) return { ...data, items: strip(data.items) };
+        return data;
+    }
+
+    /**
      * 404 Route Not Found — no route is registered for this path.
      */
     private routeNotFound(route: string) {
@@ -1207,7 +1226,7 @@ export class HttpDispatcher {
                     const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId, previewDrafts });
                     // Return any valid response from protocol (including empty items arrays)
                     if (data && (data.items !== undefined || Array.isArray(data))) {
-                        return { handled: true, response: this.success(data) };
+                        return { handled: true, response: this.success(this.slimDocList(typeOrName, data, query)) };
                     }
                 } catch {
                     // Protocol doesn't know this type, fall through
@@ -1225,7 +1244,7 @@ export class HttpDispatcher {
                         items = items.filter((item: any) => item?._packageId === packageId);
                     }
                     if (items && items.length > 0) {
-                        return { handled: true, response: this.success({ type: typeOrName, items }) };
+                        return { handled: true, response: this.success({ type: typeOrName, items: this.slimDocList(typeOrName, items, query) }) };
                     }
                 } catch (e: any) {
                     // MetadataService doesn't know this type or failed, continue to other fallbacks

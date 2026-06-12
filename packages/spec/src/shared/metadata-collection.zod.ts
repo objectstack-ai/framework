@@ -135,6 +135,7 @@ export const PLURAL_TO_SINGULAR: Record<string, string> = {
   datasources: 'datasource',
   views: 'view',
   emailTemplates: 'email_template',
+  docs: 'doc',
 };
 
 /** Reverse mapping: singular metadata type → plural manifest field name. */
