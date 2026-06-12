@@ -38,22 +38,57 @@ export const MARKETPLACE_BROWSE_UI_BUNDLE = {
     ],
 };
 
-/** "Installed Apps" — owned by the local-install capability. */
+/** "Installed Apps" — owned by the local-install capability (ADR-0009 P2a:
+ *  the page itself is now metadata; the console provides only the
+ *  `marketplace:installed-list` widget). */
+export const MarketplaceInstalledPage = {
+    name: 'marketplace_installed',
+    label: 'Installed Apps',
+    type: 'app' as const,
+    template: 'default',
+    kind: 'full' as const,
+    isDefault: false,
+    regions: [
+        {
+            name: 'header',
+            width: 'full' as const,
+            components: [
+                {
+                    type: 'page:header',
+                    properties: {
+                        title: 'Installed Apps',
+                        subtitle: 'Marketplace packages currently installed into this runtime\'s kernel.',
+                        icon: 'package-check',
+                    },
+                },
+            ],
+        },
+        {
+            name: 'main',
+            width: 'large' as const,
+            components: [
+                { type: 'marketplace:installed-list', properties: {} },
+            ],
+        },
+    ],
+};
+
 export const MARKETPLACE_INSTALLED_UI_BUNDLE = {
     id: 'com.objectstack.cloud-connection.marketplace-installed-ui',
     namespace: 'sys',
-    version: '0.1.0',
+    version: '0.2.0',
     type: 'plugin',
     scope: 'system',
     name: 'Marketplace Installed UI',
-    description: 'Setup navigation for locally-installed marketplace packages.',
+    description: 'Installed Apps page + Setup navigation for locally-installed marketplace packages.',
+    pages: [MarketplaceInstalledPage],
     navigationContributions: [
         {
             app: 'setup',
             group: 'group_apps',
             priority: 110,
             items: [
-                { id: 'nav_marketplace_installed', type: 'url', label: 'Installed Apps', url: '/apps/setup/system/marketplace/installed', icon: 'package-check' },
+                { id: 'nav_marketplace_installed', type: 'page', pageName: 'marketplace_installed', label: 'Installed Apps', icon: 'package-check' },
             ],
         },
     ],
