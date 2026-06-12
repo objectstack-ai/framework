@@ -12,3 +12,4 @@ export { AiTraceObject } from './ai-trace.object.js';
 export { AiPendingActionObject } from './ai-pending-action.object.js';
 export { AiEvalCaseObject } from './ai-eval-case.object.js';
 export { AiEvalRunObject } from './ai-eval-run.object.js';
+export { AiUsageDailyObject } from './ai-usage-daily.object.js';

@@ -2,9 +2,11 @@
 
 import type { ModelMessage } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
+import type { TextStreamPart, ToolSet } from 'ai';
 import type { AIService } from '../ai-service.js';
 import type { AgentRuntime, AgentChatContext } from '../agent-runtime.js';
 import type { RouteDefinition } from './ai-routes.js';
+import type { AgentChatQuota } from '../quota/agent-chat-quota.js';
 import { normalizeMessage, validateMessageContent } from './message-utils.js';
 import { encodeVercelDataStream } from '../stream/vercel-stream-encoder.js';
 
@@ -33,6 +35,25 @@ function validateAgentMessage(raw: unknown): string | null {
   return validateMessageContent(msg, { allowEmptyContent: allowEmpty });
 }
 
+/** Optional behaviors for {@link buildAgentRoutes}. */
+export interface AgentRouteOptions {
+  /**
+   * Per-turn chat quota. Checked before each user turn is dispatched and
+   * consumed exactly once when admitted. Absent → no quota (unchanged
+   * behavior). Policy lives in the implementation; the route only enforces.
+   */
+  quota?: AgentChatQuota;
+}
+
+/**
+ * A quota refusal as a well-formed UI message stream: the honest copy arrives
+ * as an ordinary assistant message (perception rule, ADR-0040 §5), so no
+ * client change is needed and the chat never shows a raw transport error.
+ */
+async function* quotaRefusalParts(message: string): AsyncIterable<TextStreamPart<ToolSet>> {
+  yield { type: 'text-delta', text: message } as TextStreamPart<ToolSet>;
+}
+
 /**
  * Build agent-specific REST routes.
  *
@@ -45,6 +66,7 @@ export function buildAgentRoutes(
   aiService: AIService,
   agentRuntime: AgentRuntime,
   logger: Logger,
+  options?: AgentRouteOptions,
 ): RouteDefinition[] {
   return [
     // ── List active agents ──────────────────────────────────────
@@ -114,6 +136,45 @@ export function buildAgentRoutes(
         }
         if (!agent.active) {
           return { status: 403, body: { error: `Agent "${agentName}" is not active` } };
+        }
+
+        // ── Per-turn quota gate (optional) ───────────────────────
+        // Refusal is HONEST at the moment of impact (ADR-0040 §5): why, when
+        // it recovers, and the way out. Streaming clients get the copy as a
+        // normal assistant message; JSON clients get a 429 with a stable code.
+        const wantStreamMode = body.stream !== false;
+        if (options?.quota && req.user) {
+          const subject = {
+            userId: req.user.userId,
+            environmentId:
+              typeof chatContext?.environmentId === 'string' ? chatContext.environmentId : undefined,
+          };
+          const decision = await options.quota.check(subject);
+          if (!decision.allowed) {
+            const message =
+              decision.message ?? 'Daily AI message limit reached. Please try again tomorrow.';
+            if (wantStreamMode) {
+              return {
+                status: 200,
+                stream: true,
+                vercelDataStream: true,
+                contentType: 'text/event-stream',
+                headers: {
+                  'Content-Type': 'text/event-stream',
+                  'Cache-Control': 'no-cache',
+                  'Connection': 'keep-alive',
+                  'x-vercel-ai-ui-message-stream': 'v1',
+                },
+                events: encodeVercelDataStream(quotaRefusalParts(message)),
+              };
+            }
+            return {
+              status: 429,
+              body: { error: message, code: 'ai_quota_exhausted', resetAt: decision.resetAt },
+            };
+          }
+          // Admitted: count the turn now (not per tool call, not per token).
+          await options.quota.consume(subject);
         }
 
         try {

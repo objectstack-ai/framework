@@ -14,7 +14,8 @@ import { buildToolRoutes } from './routes/tool-routes.js';
 import { buildPendingActionRoutes } from './routes/pending-action-routes.js';
 import { buildEvalRoutes } from './routes/eval-routes.js';
 import { ObjectQLConversationService } from './conversation/objectql-conversation-service.js';
-import { AiConversationObject, AiMessageObject, AiPendingActionObject, AiTraceObject, AiEvalCaseObject, AiEvalRunObject } from './objects/index.js';
+import { AiConversationObject, AiMessageObject, AiPendingActionObject, AiTraceObject, AiEvalCaseObject, AiEvalRunObject, AiUsageDailyObject } from './objects/index.js';
+import { DailyMessageQuota, type AgentChatQuota } from './quota/agent-chat-quota.js';
 import { AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEvalRunView } from './views/index.js';
 import { EvalRunner } from './eval/index.js';
 import { registerDataTools } from './tools/data-tools.js';
@@ -593,7 +594,7 @@ export class AIServicePlugin implements Plugin {
       type: 'plugin',
       scope: 'system',
       namespace: 'ai',
-      objects: [AiConversationObject, AiMessageObject, AiTraceObject, AiPendingActionObject, AiEvalCaseObject, AiEvalRunObject],
+      objects: [AiConversationObject, AiMessageObject, AiTraceObject, AiPendingActionObject, AiEvalCaseObject, AiEvalRunObject, AiUsageDailyObject],
       views: [AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEvalRunView],
     });
 
@@ -857,7 +858,26 @@ export class AIServicePlugin implements Plugin {
     if (metadataService) {
       const skillRegistry = new SkillRegistry(metadataService);
       const agentRuntime = new AgentRuntime(metadataService, skillRegistry);
-      const agentRoutes = buildAgentRoutes(this.service, agentRuntime, ctx.logger);
+
+      // ── Optional per-turn chat quota (ADR-0040 §5, perception rule) ──
+      // Mechanism only: the deployment opts in by setting
+      // AI_DAILY_USER_MESSAGES=<N>. Unset/invalid → no quota, unchanged
+      // behavior. Plan-tier policies (free vs pro) wire a richer
+      // AgentChatQuota here later; the gate and counter do not change.
+      let chatQuota: AgentChatQuota | undefined;
+      const quotaRaw = process.env.AI_DAILY_USER_MESSAGES;
+      const quotaLimit = quotaRaw ? Number.parseInt(quotaRaw, 10) : NaN;
+      if (Number.isFinite(quotaLimit) && quotaLimit > 0) {
+        const quotaDataEngine = ctx.getService<IDataEngine>('data');
+        if (quotaDataEngine && typeof quotaDataEngine.findOne === 'function') {
+          chatQuota = new DailyMessageQuota(quotaDataEngine, quotaLimit);
+          ctx.logger.info(`[AI] Daily chat quota enabled (${quotaLimit} user turns/user/day)`);
+        } else {
+          ctx.logger.warn('[AI] AI_DAILY_USER_MESSAGES set but IDataEngine unavailable — quota disabled');
+        }
+      }
+
+      const agentRoutes = buildAgentRoutes(this.service, agentRuntime, ctx.logger, { quota: chatQuota });
       routes.push(...agentRoutes);
       ctx.logger.info(`[AI] Agent routes registered (${agentRoutes.length} routes)`);
 
