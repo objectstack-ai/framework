@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe('CloudConnectionPlugin — mounting', () => {
-    it('mounts all 7 routes on kernel:ready', async () => {
+    it('mounts all 8 routes on kernel:ready', async () => {
         const rawApp = makeRawApp();
         const { ctx, fireKernelReady } = makeCtx({ rawApp });
         const plugin = new CloudConnectionPlugin({ controlPlaneUrl: 'http://cloud.test' });
@@ -79,12 +79,13 @@ describe('CloudConnectionPlugin — mounting', () => {
             'GET /api/v1/cloud-connection/status',
             'POST /api/v1/cloud-connection/bind/start',
             'POST /api/v1/cloud-connection/bind/poll',
+            'POST /api/v1/cloud-connection/unbind',
             'POST /api/v1/cloud-connection/install',
             'GET /api/v1/cloud-connection/installation',
             'GET /api/v1/cloud-connection/installed',
             'GET /api/v1/cloud-connection/org-packages',
         ]));
-        expect(keys).toHaveLength(7);
+        expect(keys).toHaveLength(8);
     });
 
     it('warns and mounts nothing without an http-server', async () => {

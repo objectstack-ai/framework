@@ -44,3 +44,8 @@ export { CloudConnectionPlugin, createCloudConnectionPlugin } from './cloud-conn
 export type { CloudConnectionPluginConfig } from './cloud-connection-plugin.js';
 export { RuntimeConfigPlugin } from './runtime-config-plugin.js';
 export type { RuntimeConfigPluginConfig, RuntimeConfigPlanFeatures } from './runtime-config-plugin.js';
+// ADR-0008 consumption side — the self-hosted credential ledger (bind
+// persists the oscc_ bearer here; forwards present it to the control plane).
+export { ConnectionCredentialStore, DEFAULT_CONNECTION_CREDENTIAL_PATH } from './connection-credential-store.js';
+export type { StoredConnectionCredential } from './connection-credential-store.js';
+export { CloudConnectionSettingsPage, CLOUD_CONNECTION_UI_BUNDLE } from './cloud-connection-ui.js';

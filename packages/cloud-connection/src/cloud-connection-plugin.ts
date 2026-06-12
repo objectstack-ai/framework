@@ -67,6 +67,9 @@ interface Plugin {
     start(ctx: PluginContext): Promise<void>;
 }
 
+import { ConnectionCredentialStore } from './connection-credential-store.js';
+import { CLOUD_CONNECTION_UI_BUNDLE } from './cloud-connection-ui.js';
+
 const CLOUD_CONNECTION_PREFIX = '/api/v1/cloud-connection';
 
 export interface CloudConnectionPluginConfig {
@@ -88,6 +91,12 @@ export interface CloudConnectionPluginConfig {
      * host kernel's own `auth` service.
      */
     singleEnvironment?: boolean;
+    /**
+     * Override the on-disk credential store location. Defaults to
+     * `<cwd>/.objectstack/cloud-connection.json` — where the bind flow
+     * persists the `oscc_…` runtime bearer for self-hosted runtimes.
+     */
+    credentialPath?: string;
 }
 
 export class CloudConnectionPlugin implements Plugin {
@@ -95,9 +104,11 @@ export class CloudConnectionPlugin implements Plugin {
     readonly version = '0.2.0';
 
     private readonly cfg: CloudConnectionPluginConfig;
+    private readonly store: ConnectionCredentialStore;
 
     constructor(config: CloudConnectionPluginConfig = {}) {
         this.cfg = config;
+        this.store = new ConnectionCredentialStore(config.credentialPath);
     }
 
     init = async (_ctx: PluginContext): Promise<void> => { /* HTTP wiring on kernel:ready */ };
@@ -118,6 +129,17 @@ export class CloudConnectionPlugin implements Plugin {
             const deviceClientId = (this.cfg.deviceClientId ?? process.env.OS_CLI_CLIENT_ID ?? 'objectstack-cli').trim();
             const deviceScope = 'openid profile email';
 
+            // Effective control-plane credential, resolved PER REQUEST:
+            // cloud-hosted runtimes carry the env→cloud service key; a
+            // self-hosted runtime presents the `oscc_…` bearer the bind flow
+            // persisted. Lazy so a bind that completes while the runtime is
+            // up takes effect without a restart.
+            const credential = (): string => cloudApiKey || this.store.read()?.runtimeToken || '';
+            const authHeaders = (): Record<string, string> => {
+                const cred = credential();
+                return cred ? { Authorization: `Bearer ${cred}` } : {};
+            };
+
             const hostOf = (c: any): string => {
                 try { return new URL(c.req.url).hostname; } catch { return ''; }
             };
@@ -125,7 +147,11 @@ export class CloudConnectionPlugin implements Plugin {
             const resolveEnvironmentId = async (c: any): Promise<string | undefined> => {
                 const fixed = (this.cfg.environmentId ?? process.env.OS_ENVIRONMENT_ID ?? '').trim();
                 if (fixed) return fixed;
-                if (this.cfg.singleEnvironment) return undefined;
+                if (this.cfg.singleEnvironment) {
+                    // A completed bind persisted the environment id — a
+                    // self-hosted runtime needs no OS_ENVIRONMENT_ID after it.
+                    return this.store.read()?.environmentId || undefined;
+                }
                 try {
                     const envRegistry = ctx.getService<any>('env-registry');
                     const env = await envRegistry?.resolveByHostname?.(hostOf(c));
@@ -134,6 +160,15 @@ export class CloudConnectionPlugin implements Plugin {
                     return undefined;
                 }
             };
+
+            // SDUI surface: the binding page + Setup-nav entry ship with the
+            // plugin as metadata (ADR-0029 K2); the console only provides the
+            // registered `cloud-connection:panel` widget. Best-effort — a
+            // kernel without a manifest service simply has no Setup entry.
+            try {
+                const manifest = ctx.getService<{ register(m: any): void }>('manifest');
+                manifest?.register?.(CLOUD_CONNECTION_UI_BUNDLE);
+            } catch { /* no manifest service — headless kernel */ }
 
             const sessionFromAuthService = async (authSvc: any, rawReq: Request): Promise<{ userId?: string } | null> => {
                 const api = typeof authSvc?.getApi === 'function' ? await authSvc.getApi() : authSvc?.api ?? authSvc;
@@ -176,22 +211,22 @@ export class CloudConnectionPlugin implements Plugin {
                     return c.json({ success: false, error: { code: 'environment_not_found' } }, 404);
                 }
                 // Prefer the real, device-bound sys_cloud_connection from the
-                // control plane. Fall back to the implicit cloud-hosted binding
-                // (OS_CLOUD_API_KEY) when the control plane is unreachable.
+                // control plane. Fall back to the implicit local binding
+                // (service key or stored runtime bearer) when unreachable.
                 if (cloudUrl) {
                     try {
                         const resp = await fetch(`${cloudUrl}/api/v1/cloud-connection/status?environment_id=${encodeURIComponent(environmentId)}`, {
-                            headers: cloudApiKey ? { Authorization: `Bearer ${cloudApiKey}` } : {},
+                            headers: authHeaders(),
                         });
                         if (resp.ok) {
                             const json: any = await resp.json().catch(() => null);
                             const data = json?.data ?? {};
-                            const bound = Boolean(data.bound) || Boolean(cloudApiKey);
+                            const bound = Boolean(data.bound) || Boolean(credential());
                             return c.json({ success: true, data: { environmentId, bound, provider: 'objectstack-cloud', connection: data.connection ?? null } });
                         }
                     } catch { /* fall through to implicit */ }
                 }
-                const bound = Boolean(cloudApiKey);
+                const bound = Boolean(credential());
                 return c.json({ success: true, data: { environmentId, bound, provider: 'objectstack-cloud', connection: null } });
             });
 
@@ -200,8 +235,16 @@ export class CloudConnectionPlugin implements Plugin {
             // code, returns them to the Setup UI, and the operator approves in
             // the cloud console.
             rawApp.post(`${CLOUD_CONNECTION_PREFIX}/bind/start`, async (c: any) => {
-                const environmentId = await resolveEnvironmentId(c);
-                if (!environmentId) return c.json({ success: false, error: { code: 'environment_not_found' } }, 404);
+                let body: any = {};
+                try { body = await c.req.json(); } catch { body = {}; }
+                // Single-env runtimes that have never bound have no env id yet:
+                // the Setup UI passes the target environment id explicitly (the
+                // operator copies it from the cloud console).
+                let environmentId = await resolveEnvironmentId(c);
+                if (!environmentId && this.cfg.singleEnvironment) {
+                    environmentId = String(body?.environment_id ?? body?.environmentId ?? '').trim() || undefined;
+                }
+                if (!environmentId) return c.json({ success: false, error: { code: 'environment_not_found', message: 'Provide environment_id (create an environment in the cloud console and paste its id).' } }, 404);
                 const session = await resolveSession(environmentId, c.req.raw);
                 if (!session?.userId) return c.json({ success: false, error: { code: 'unauthenticated', message: 'Sign in to this environment to connect a cloud account.' } }, 401);
                 if (!cloudUrl) return c.json({ success: false, error: { code: 'cloud_unconfigured', message: 'No cloud control plane configured.' } }, 503);
@@ -232,14 +275,17 @@ export class CloudConnectionPlugin implements Plugin {
             // the operator token for a persisted sys_cloud_connection via the
             // control plane's /bind.
             rawApp.post(`${CLOUD_CONNECTION_PREFIX}/bind/poll`, async (c: any) => {
-                const environmentId = await resolveEnvironmentId(c);
+                let body: any = {};
+                try { body = await c.req.json(); } catch { body = {}; }
+                let environmentId = await resolveEnvironmentId(c);
+                if (!environmentId && this.cfg.singleEnvironment) {
+                    environmentId = String(body?.environment_id ?? body?.environmentId ?? '').trim() || undefined;
+                }
                 if (!environmentId) return c.json({ success: false, error: { code: 'environment_not_found' } }, 404);
                 const session = await resolveSession(environmentId, c.req.raw);
                 if (!session?.userId) return c.json({ success: false, error: { code: 'unauthenticated' } }, 401);
                 if (!cloudUrl) return c.json({ success: false, error: { code: 'cloud_unconfigured' } }, 503);
 
-                let body: any = {};
-                try { body = await c.req.json(); } catch { body = {}; }
                 const deviceCode = String(body?.device_code ?? body?.deviceCode ?? '').trim();
                 if (!deviceCode) return c.json({ success: false, error: { code: 'invalid_request', message: 'device_code is required' } }, 400);
 
@@ -266,11 +312,56 @@ export class CloudConnectionPlugin implements Plugin {
                         body: JSON.stringify({ environment_id: environmentId, token: accessToken, scope: deviceScope }),
                     });
                     const bindJson: any = await bindResp.json().catch(() => ({ success: false, error: 'bind failed (no body)' }));
+                    // The bind response carries the one-time runtime bearer.
+                    // Persist it HERE (server-side, 0600 file) and STRIP it
+                    // from what goes back to the browser — the SPA never
+                    // holds the credential.
+                    const runtimeToken = bindJson?.data?.runtime_token;
+                    if (bindResp.ok && typeof runtimeToken === 'string' && runtimeToken) {
+                        try {
+                            this.store.write({
+                                runtimeToken,
+                                environmentId,
+                                controlPlaneUrl: cloudUrl,
+                                organizationId: bindJson?.data?.connection?.organization_id ?? undefined,
+                                accountEmail: bindJson?.data?.connection?.account_email ?? undefined,
+                                boundAt: bindJson?.data?.connection?.bound_at ?? new Date().toISOString(),
+                            });
+                        } catch (err: any) {
+                            ctx.logger?.error?.('[CloudConnectionPlugin] failed to persist runtime credential', err instanceof Error ? err : new Error(String(err)));
+                        }
+                        delete bindJson.data.runtime_token;
+                    }
                     return c.json(bindJson, bindResp.status as any);
                 } catch (err: any) {
                     ctx.logger?.error?.('[CloudConnectionPlugin] bind/poll failed', err instanceof Error ? err : new Error(String(err)));
                     return c.json({ success: false, error: { code: 'bind_failed', message: String(err?.message ?? err) } }, 502);
                 }
+            });
+
+            // POST /unbind — disconnect this runtime from the control plane.
+            // Revokes the connection server-side (best-effort) and clears the
+            // local credential. Requires an environment session, mirroring
+            // bind/start.
+            rawApp.post(`${CLOUD_CONNECTION_PREFIX}/unbind`, async (c: any) => {
+                const environmentId = await resolveEnvironmentId(c);
+                if (!environmentId) return c.json({ success: false, error: { code: 'environment_not_found' } }, 404);
+                const session = await resolveSession(environmentId, c.req.raw);
+                if (!session?.userId) return c.json({ success: false, error: { code: 'unauthenticated' } }, 401);
+
+                let revoked = false;
+                if (cloudUrl && credential()) {
+                    try {
+                        const resp = await fetch(`${cloudUrl}/api/v1/cloud-connection/revoke`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                            body: JSON.stringify({ environment_id: environmentId }),
+                        });
+                        revoked = resp.ok;
+                    } catch { /* control plane unreachable — local clear still proceeds */ }
+                }
+                const cleared = (() => { try { return this.store.clear(); } catch { return false; } })();
+                return c.json({ success: true, data: { environmentId, revoked, cleared } });
             });
 
             // POST /install { package_id, seed_sample_data? } — in-environment
@@ -290,7 +381,7 @@ export class CloudConnectionPlugin implements Plugin {
                     return c.json({ success: false, error: { code: 'unauthenticated', message: 'Sign in to this environment to install apps.' } }, 401);
                 }
 
-                if (!cloudUrl || !cloudApiKey) {
+                if (!cloudUrl || !credential()) {
                     return c.json({ success: false, error: { code: 'cloud_unconfigured', message: 'This runtime is not connected to a cloud account; install is unavailable.' } }, 503);
                 }
 
@@ -308,7 +399,7 @@ export class CloudConnectionPlugin implements Plugin {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${cloudApiKey}`,
+                            ...authHeaders(),
                         },
                         body: JSON.stringify({ recordId: packageId, params: { environment_id: environmentId, seed_sample_data: seedSampleData } }),
                     });
@@ -343,7 +434,7 @@ export class CloudConnectionPlugin implements Plugin {
 
                 // Not connected → can't know; report not-installed so the page
                 // still renders (a read should never hard-fail the page).
-                if (!cloudUrl || !cloudApiKey) return c.json({ success: true, data: { installed: false } });
+                if (!cloudUrl || !credential()) return c.json({ success: true, data: { installed: false } });
 
                 try {
                     // Read installed-state from the control plane's
@@ -356,7 +447,7 @@ export class CloudConnectionPlugin implements Plugin {
                     // result back.
                     const resp = await fetch(
                         `${cloudUrl}/api/v1/cloud/environments/${encodeURIComponent(environmentId)}/installations/${encodeURIComponent(packageId)}`,
-                        { headers: { Accept: 'application/json', Authorization: `Bearer ${cloudApiKey}` } },
+                        { headers: { Accept: 'application/json', ...authHeaders() } },
                     );
                     if (!resp.ok) return c.json({ success: true, data: { installed: false } });
                     const json: any = await resp.json().catch(() => ({}));
@@ -389,14 +480,14 @@ export class CloudConnectionPlugin implements Plugin {
                     return c.json({ success: false, error: { code: 'unauthenticated', message: 'Sign in to this environment.' } }, 401);
                 }
 
-                if (!cloudUrl || !cloudApiKey) {
+                if (!cloudUrl || !credential()) {
                     return c.json({ success: true, data: { packages: [], total: 0, connected: false } });
                 }
 
                 try {
                     const resp = await fetch(
                         `${cloudUrl}/api/v1/cloud/environments/${encodeURIComponent(environmentId)}/packages`,
-                        { headers: { Accept: 'application/json', Authorization: `Bearer ${cloudApiKey}` } },
+                        { headers: { Accept: 'application/json', ...authHeaders() } },
                     );
                     if (!resp.ok) return c.json({ success: true, data: { packages: [], total: 0, connected: true } });
                     const json: any = await resp.json().catch(() => ({}));
@@ -424,14 +515,14 @@ export class CloudConnectionPlugin implements Plugin {
                     return c.json({ success: false, error: { code: 'unauthenticated', message: 'Sign in to this environment.' } }, 401);
                 }
 
-                if (!cloudUrl || !cloudApiKey) {
+                if (!cloudUrl || !credential()) {
                     return c.json({ success: true, data: { items: [], total: 0, connected: false } });
                 }
 
                 try {
                     const resp = await fetch(
                         `${cloudUrl}/api/v1/cloud/org-packages?environment_id=${encodeURIComponent(environmentId)}`,
-                        { headers: { Accept: 'application/json', Authorization: `Bearer ${cloudApiKey}` } },
+                        { headers: { Accept: 'application/json', ...authHeaders() } },
                     );
                     if (!resp.ok) return c.json({ success: true, data: { items: [], total: 0, connected: true } });
                     const json: any = await resp.json().catch(() => ({}));
