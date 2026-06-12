@@ -1223,8 +1223,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     // Only hydrate the global registry for unscoped calls —
                     // scoped project entries must not leak process-wide.
-                    if (this.environmentId === undefined) {
-                        this.engine.registry.registerItem(request.type, data, 'name' as any);
+                    // Graft the artifact's protection envelope onto the
+                    // overlay body BEFORE registering: the plain-key entry
+                    // written here shadows the packaged artifact on
+                    // `registry.getItem`, and a bare overlay body would
+                    // strip `_lock`/`_packageId`/`_provenance` from every
+                    // registry-direct reader (ADR-0010 §3.3 — an overlay
+                    // must never loosen a packaged lock).
+                    if (this.environmentId === undefined && data && typeof data === 'object') {
+                        const artifact = this.lookupArtifactItem(request.type, (data as any).name);
+                        this.engine.registry.registerItem(
+                            request.type,
+                            mergeArtifactProtection(data, artifact),
+                            'name' as any,
+                        );
                     }
                 }
                 items = Array.from(byName.values());
@@ -1647,7 +1659,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             // ignore
         }
         if (code === null) {
-            let regItem = this.engine.registry.getItem(request.type, request.name);
+            // Prefer the artifact-only lookup so an overlay row hydrated
+            // into the registry's plain key can't masquerade as the "code
+            // default" layer; fall back to getItem for runtime-only items.
+            let regItem = this.lookupArtifactItem(request.type, request.name)
+                ?? this.engine.registry.getItem(request.type, request.name);
             if (regItem === undefined) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) regItem = this.engine.registry.getItem(alt, request.name);
@@ -3061,22 +3077,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * "authoring a DB-only item" (requires only `allowRuntimeCreate`).
      */
     private isArtifactBacked(type: string, name: string): boolean {
-        const registry = (this.engine as any)?.registry;
-        if (!registry || typeof registry.getItem !== 'function') {
-            // No registry available (test fixtures with partial engine
-            // mocks). Treat as no artifact backing — safer for create paths
-            // and the type-level gates still apply.
-            return false;
-        }
-        const singular = PLURAL_TO_SINGULAR[type] ?? type;
-        const item = registry.getItem(singular, name) ?? registry.getItem(type, name);
-        if (!item || !item._packageId) return false;
-        // `loadMetaFromDb` (line ~3092) registers DB-only objects with
-        // a synthetic `'sys_metadata'` packageId so the registry can
-        // distinguish them from purely transient entries. That sentinel
-        // is NOT an artifact origin — exclude it here so DB-only objects
-        // continue to behave as runtime-authored items.
-        return item._packageId !== 'sys_metadata';
+        // `lookupArtifactItem` only returns items whose `_packageId` marks a
+        // genuine code package (the `'sys_metadata'` rehydration sentinel is
+        // excluded), and — via `SchemaRegistry.getArtifactItem` — is immune
+        // to plain-key shadows hydrated from overlay rows.
+        return this.lookupArtifactItem(type, name) !== undefined;
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -3090,9 +3095,26 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      */
     private lookupArtifactItem(type: string, name: string): unknown {
         const registry = (this.engine as any)?.registry;
-        if (!registry || typeof registry.getItem !== 'function') return undefined;
+        if (!registry) return undefined;
         const singular = PLURAL_TO_SINGULAR[type] ?? type;
-        return registry.getItem(singular, name) ?? registry.getItem(type, name);
+        // Prefer the artifact-only lookup: it scans composite
+        // (`<packageId>:<name>`) entries first, so an overlay row hydrated
+        // into the plain key (getMetaItems / loadMetaFromDb) can never
+        // shadow the packaged artifact's protection envelope (ADR-0010
+        // §3.3 — pre-fix, that shadow made a `_lock: full` app read back
+        // as unlocked after PUT+GET until restart).
+        if (typeof registry.getArtifactItem === 'function') {
+            return registry.getArtifactItem(singular, name)
+                ?? registry.getArtifactItem(type, name);
+        }
+        // Partial registry mocks in tests — fall back to getItem and apply
+        // the same package-provenance filter inline.
+        if (typeof registry.getItem !== 'function') return undefined;
+        const item = registry.getItem(singular, name) ?? registry.getItem(type, name);
+        if (!item || !(item as any)._packageId || (item as any)._packageId === 'sys_metadata') {
+            return undefined;
+        }
+        return item;
     }
 
     /**
@@ -3115,14 +3137,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         lockReason: string | undefined;
         lockSource: 'artifact' | 'overlay' | undefined;
     }> {
-        // 1. Artifact wins.
-        const registry = (this.engine as any)?.registry;
-        const singular = PLURAL_TO_SINGULAR[type] ?? type;
-        let artifactItem: any;
-        if (registry && typeof registry.getItem === 'function') {
-            artifactItem = registry.getItem(singular, name) ?? registry.getItem(type, name);
-        }
-        if (artifactItem && artifactItem._packageId && artifactItem._packageId !== 'sys_metadata') {
+        // 1. Artifact wins. `lookupArtifactItem` is shadow-immune: a
+        //    sys_metadata overlay row hydrated into the registry's plain
+        //    key cannot mask the packaged artifact's `_lock` envelope.
+        const artifactItem = this.lookupArtifactItem(type, name) as any;
+        if (artifactItem) {
             const p = extractProtection(artifactItem);
             if (p.lock !== 'none') {
                 return { lock: p.lock, lockReason: p.lockReason, lockSource: 'artifact' };
@@ -3299,6 +3318,54 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             console.warn(
                 `[Protocol] registerObject failed for ${request.name}: ${err?.message ?? err}`,
             );
+        }
+    }
+
+    /**
+     * Heal the in-memory registry after a metadata reset (overlay-row
+     * delete) on control-plane kernels. Two layers:
+     *
+     *  1. Drop the plain-key runtime shadow so the packaged artifact
+     *     (registered under `<packageId>:<name>`) becomes the visible
+     *     value again. The shadow is written by the overlay-hydration
+     *     paths (`getMetaItems` / `loadMetaFromDb`) and — pre-fix —
+     *     survived the reset until restart, leaving stale overlay
+     *     content (and a stripped `_lock` envelope) in every
+     *     registry-direct read (ADR-0010 §3.3).
+     *  2. When no composite-key artifact exists, fall back to the
+     *     MetadataService baseline (FilesystemLoader-sourced types) and
+     *     re-register it, preserving the historical refresh behaviour
+     *     for items the SchemaRegistry never held as artifacts.
+     *
+     * Best-effort: a failure must never block the delete that already
+     * succeeded; the next full reload fixes the registry anyway.
+     */
+    private async restoreArtifactRegistryView(type: string, name: string): Promise<void> {
+        try {
+            const registry: any = this.engine.registry;
+            let healed = false;
+            if (typeof registry.removeRuntimeShadow === 'function') {
+                const singular = PLURAL_TO_SINGULAR[type] ?? type;
+                healed = registry.removeRuntimeShadow(singular, name);
+                if (type !== singular) {
+                    healed = registry.removeRuntimeShadow(type, name) || healed;
+                }
+            }
+            if (healed) return;
+            // MetadataService re-registration is control-plane-only — it
+            // preserves the historical refresh semantics gated on
+            // `environmentId === undefined` at the original call sites.
+            if (this.environmentId !== undefined) return;
+            const services = this.getServicesRegistry?.();
+            const metadataService = services?.get('metadata');
+            if (metadataService && typeof metadataService.get === 'function') {
+                const artifactItem = await metadataService.get(type, name);
+                if (artifactItem !== undefined) {
+                    this.engine.registry.registerItem(type, artifactItem, 'name');
+                }
+            }
+        } catch {
+            // Best-effort registry refresh; next read fixes it anyway
         }
     }
 
@@ -4519,6 +4586,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 // a conflict. The repo would otherwise throw ConflictError.
                 const current = await repo.get(ref, { state: targetState });
                 if (!current) {
+                    // Self-heal: even with no overlay row, a stale runtime
+                    // shadow may linger in the registry (e.g. pollution from
+                    // before this fix shipped) — drop it so the artifact
+                    // view really IS the default we claim below.
+                    if (targetState === 'active') {
+                        await this.restoreArtifactRegistryView(request.type, request.name);
+                    }
                     return {
                         success: true,
                         reset: false,
@@ -4545,22 +4619,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     state: targetState,
                 });
 
-                // Refresh the in-memory artifact-side state on control-plane
-                // kernels (same logic as the legacy branch — see comments
-                // there for why this only runs when environmentId === undefined).
-                if (this.environmentId === undefined) {
-                    try {
-                        const services = this.getServicesRegistry?.();
-                        const metadataService = services?.get('metadata');
-                        if (metadataService && typeof metadataService.get === 'function') {
-                            const artifactItem = await metadataService.get(request.type, request.name);
-                            if (artifactItem !== undefined) {
-                                this.engine.registry.registerItem(request.type, artifactItem, 'name');
-                            }
-                        }
-                    } catch {
-                        // Best-effort registry refresh; next read fixes it anyway
-                    }
+                // Heal the registry: drop the overlay's runtime shadow so the
+                // packaged artifact is visible again (all kernels), and on
+                // control-plane kernels also refresh from MetadataService —
+                // see {@link restoreArtifactRegistryView}. Draft discards
+                // skip this: drafts never hydrate into the registry, and the
+                // still-active overlay (if any) must keep its shadow.
+                if (targetState === 'active') {
+                    await this.restoreArtifactRegistryView(request.type, request.name);
                 }
 
                 // Storage teardown (opt-in): drop the now-orphaned physical table
@@ -4637,19 +4703,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 }
             }
 
-            if (this.environmentId === undefined) {
-                try {
-                    const services = this.getServicesRegistry?.();
-                    const metadataService = services?.get('metadata');
-                    if (metadataService && typeof metadataService.get === 'function') {
-                        const artifactItem = await metadataService.get(request.type, request.name);
-                        if (artifactItem !== undefined) {
-                            this.engine.registry.registerItem(request.type, artifactItem, 'name');
-                        }
-                    }
-                } catch {
-                    // Best-effort registry refresh; next read fixes it anyway
-                }
+            if (request.state !== 'draft') {
+                await this.restoreArtifactRegistryView(request.type, request.name);
             }
 
             return {
@@ -4696,7 +4751,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     if (normalizedType === 'object') {
                         this.engine.registry.registerObject(data as any, record.packageId || 'sys_metadata');
                     } else {
-                        this.engine.registry.registerItem(normalizedType, data, 'name' as any);
+                        // Same envelope graft as the getMetaItems hydration:
+                        // the plain-key entry shadows any packaged artifact,
+                        // so carry the artifact's `_lock`/`_packageId`/
+                        // `_provenance` along (ADR-0010 §3.3). When artifacts
+                        // load after this hydration the merge finds nothing
+                        // and the row registers unchanged — same as before.
+                        const artifact = this.lookupArtifactItem(normalizedType, (data as any)?.name);
+                        this.engine.registry.registerItem(
+                            normalizedType,
+                            mergeArtifactProtection(data, artifact) as any,
+                            'name' as any,
+                        );
                     }
                     loaded++;
                 } catch (e) {

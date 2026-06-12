@@ -830,6 +830,74 @@ export class SchemaRegistry {
   }
 
   /**
+   * Artifact-only lookup (ADR-0010 §3.3). Unlike {@link getItem} — which
+   * returns the plain-key entry first, so a runtime/DB-rehydrated row
+   * registered under the bare name SHADOWS the packaged artifact — this
+   * scans the composite (`<packageId>:<name>`) entries first and only
+   * returns an item whose `_packageId` marks a genuine code package
+   * (truthy and not the `'sys_metadata'` rehydration sentinel).
+   *
+   * This is what the protocol's lock/provenance resolution must use:
+   * the artifact's `_lock` envelope always wins over an overlay, and an
+   * overlay row hydrated into the plain key must never be able to mask
+   * it (that masking is exactly the "registry pollution" bug where a
+   * locked app's `_lock` read back as undefined after a PUT+GET).
+   */
+  getArtifactItem<T>(type: string, name: string): T | undefined {
+    if (type === 'object' || type === 'objects') {
+      const obj = this.getObject(name) as any;
+      return obj && obj._packageId && obj._packageId !== 'sys_metadata'
+        ? (obj as T)
+        : undefined;
+    }
+    const collection = this.metadata.get(type);
+    if (!collection) return undefined;
+    for (const [key, item] of collection) {
+      if (key !== name && key.endsWith(`:${name}`)) {
+        const it = item as any;
+        if (it && it._packageId && it._packageId !== 'sys_metadata') return item as T;
+      }
+    }
+    const direct = collection.get(name) as any;
+    if (direct && direct._packageId && direct._packageId !== 'sys_metadata') {
+      return direct as T;
+    }
+    return undefined;
+  }
+
+  /**
+   * Remove a plain-key runtime shadow so the packaged artifact registered
+   * under a composite key becomes the visible value again. Used by the
+   * metadata reset path (`deleteMetaItem`): deleting the `sys_metadata`
+   * overlay row must also heal the in-memory registry, otherwise the
+   * stale overlay copy keeps shadowing the artifact until restart.
+   *
+   * Deliberately conservative: the plain-key entry is only deleted when a
+   * packaged artifact still exists under a composite key, so the name
+   * stays resolvable afterwards. A runtime-only item (no artifact
+   * backing) is left untouched. Note the plain entry's own `_packageId`
+   * is NOT consulted — the hydration path grafts the artifact envelope
+   * onto the shadow (ADR-0010 §3.3), so a stamped `_packageId` does not
+   * mean the plain entry IS the artifact registration; artifact loaders
+   * always register under a composite key.
+   */
+  removeRuntimeShadow(type: string, name: string): boolean {
+    const collection = this.metadata.get(type);
+    if (!collection || !collection.has(name)) return false;
+    for (const [key, item] of collection) {
+      if (key !== name && key.endsWith(`:${name}`)) {
+        const it = item as any;
+        if (it && it._packageId && it._packageId !== 'sys_metadata') {
+          collection.delete(name);
+          this.log(`[Registry] Removed runtime shadow ${type}: ${name} (artifact ${it._packageId} restored)`);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Universal List Method
    */
   listItems<T>(type: string, packageId?: string): T[] {
