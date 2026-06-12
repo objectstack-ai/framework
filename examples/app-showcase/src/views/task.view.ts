@@ -28,7 +28,10 @@ export const TaskViews = defineView({
 
     // ADR-0047 — in-view filter tabs (ViewTab presets). Each tab applies
     // its own filter rules on top of the view's base criteria; the first
-    // tab is the unfiltered default.
+    // tab is the unfiltered default. Filter tabs and dropdown filters are
+    // MUTUALLY EXCLUSIVE on the toolbar (Airtable's Elements choice):
+    // this view demonstrates tabs; the `tabular` view below demonstrates
+    // dropdowns. Configuring both renders tabs only.
     tabs: [
       { name: 'all_tasks', label: 'All', isDefault: true },
       { name: 'in_progress', label: 'In Progress', filter: [{ field: 'status', operator: 'equals', value: 'in_progress' }] },
@@ -36,21 +39,10 @@ export const TaskViews = defineView({
       { name: 'done', label: 'Done', filter: [{ field: 'status', operator: 'equals', value: 'done' }] },
     ],
 
-    // ADR-0047 — end-user quick-filter dropdowns (Airtable "User filters").
-    // Options/labels are inferred from the field definitions; `priority`
-    // shows per-option record counts.
-    userFilters: {
-      element: 'dropdown',
-      fields: [
-        { field: 'status' },
-        { field: 'priority', showCount: true },
-        { field: 'done', type: 'boolean' },
-      ],
-    },
-
     // ADR-0047 — runtime visualization whitelist (Airtable "Appearance →
-    // Visualizations"). Users can flip between these renderers; types
-    // whose bindings don't resolve are hidden by the client regardless.
+    // Visualizations"). Rendered as a compact dropdown in the toolbar's
+    // right cluster; types whose bindings don't resolve are hidden by the
+    // client regardless.
     appearance: {
       allowedVisualizations: ['grid', 'kanban', 'gallery', 'calendar'],
     },
@@ -71,6 +63,20 @@ export const TaskViews = defineView({
         { field: 'status' },
         { field: 'estimate_hours' },
       ],
+
+      // ADR-0047 — end-user quick-filter dropdowns (Airtable "User
+      // filters", Elements: dropdowns). Options/labels are inferred from
+      // the field definitions; `priority` shows per-option record counts.
+      // Counterpart to the default view's `tabs` — one element style per
+      // view, never both.
+      userFilters: {
+        element: 'dropdown',
+        fields: [
+          { field: 'status' },
+          { field: 'priority', showCount: true },
+          { field: 'done', type: 'boolean' },
+        ],
+      },
     },
 
     // 1 ── Grid ─────────────────────────────────────────────────────────

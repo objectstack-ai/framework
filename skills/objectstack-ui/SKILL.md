@@ -264,8 +264,19 @@ appearance: { allowedVisualizations: ['grid', 'kanban', 'gallery'] },
 Rules:
 - Every `field` MUST exist on the source object — reference diagnostics
   (`_diagnostics`) flag unknown fields; treat `valid: false` as a failed write.
-- Omit `userFilters` entirely when unsure: the renderer auto-derives dropdowns
-  from select/boolean fields. **Omission is correct.**
+- **Tabs XOR dropdowns — never both on one view.** The toolbar renders ONE
+  filter element style (Airtable's Elements choice). If a view configures
+  both `tabs` and `userFilters`, tabs win and the dropdowns never render.
+  Want both demos? Put them on different views.
+- **Omit `userFilters` when unsure — omission means a clean toolbar.** Filter
+  elements render only when explicitly configured; nothing is auto-derived.
+  In data mode the saved-views switcher already covers the preset use case,
+  so most views need no filter elements at all.
+- `userFilters: { element: 'dropdown' }` (no `fields`) is valid shorthand:
+  the renderer fills the field list from the object's select/boolean fields.
+- The visualization switcher renders as a compact dropdown in the toolbar's
+  right cluster. Authors only control the `allowedVisualizations` whitelist;
+  a single-entry whitelist locks the visualization (no switcher).
 
 ### Sorting
 
