@@ -116,6 +116,35 @@ export interface AIServicePluginOptions {
 }
 
 /**
+ * Provenance of the active LLM adapter, exposed via `GET /api/v1/ai/status`
+ * so operators can see at a glance which provider/model is live and WHERE
+ * it came from — persisted settings silently override env auto-detection,
+ * and without this surface a broken saved config (e.g. provider=cloudflare
+ * with an empty key) is indistinguishable from a working one in the UI.
+ */
+export interface AIAdapterStatus {
+  /** Human-readable description, e.g. `Vercel AI Gateway (model: anthropic/claude-sonnet-4.6)`. */
+  description: string;
+  /** Where the active adapter came from. */
+  source: 'explicit' | 'env' | 'settings' | 'fallback';
+  /** Provider key when known (gateway / openai / anthropic / google / cloudflare / …). */
+  provider?: string;
+  /** Model id when known. */
+  model?: string;
+  /**
+   * Provider stored in the `ai` settings namespace, even when it could not
+   * be applied. `undefined` when no settings are saved (env-only mode).
+   */
+  settingsProvider?: string;
+  /**
+   * Why the last settings apply failed (missing credentials, SDK not
+   * installed, …). `null` when settings applied cleanly or none are saved.
+   * Non-null means the saved settings are NOT in effect.
+   */
+  settingsError?: string | null;
+}
+
+/**
  * AIServicePlugin — Kernel plugin for the unified AI capability service.
  *
  * Lifecycle:
@@ -146,6 +175,11 @@ export class AIServicePlugin implements Plugin {
 
   private service?: AIService;
   private readonly options: AIServicePluginOptions;
+  /** Provenance of the active adapter — served by `GET /api/v1/ai/status`. */
+  private adapterStatus: AIAdapterStatus = {
+    description: 'not initialised',
+    source: 'fallback',
+  };
 
   constructor(options: AIServicePluginOptions = {}) {
     this.options = options;
@@ -210,12 +244,15 @@ export class AIServicePlugin implements Plugin {
   private async buildAdapterFromValues(
     ctx: PluginContext,
     rawValues: Record<string, unknown>,
-  ): Promise<{ adapter: LLMAdapter; description: string } | null> {
+  ): Promise<{ adapter: LLMAdapter; description: string; provider: string; model?: string } | null> {
+    // Report the provider the operator picked (e.g. `cloudflare`), not the
+    // openai shape it normalises to — status/diagnostics must match the form.
+    const rawProvider = String(rawValues.provider ?? 'memory');
     const values = this.normalisePresetProvider(rawValues);
     const provider = String(values.provider ?? 'memory');
 
     if (provider === 'memory') {
-      return { adapter: new MemoryLLMAdapter(), description: 'MemoryLLMAdapter (echo mode)' };
+      return { adapter: new MemoryLLMAdapter(), description: 'MemoryLLMAdapter (echo mode)', provider: 'memory' };
     }
 
     if (provider === 'gateway') {
@@ -241,6 +278,8 @@ export class AIServicePlugin implements Plugin {
         return {
           adapter: new VercelLLMAdapter({ model: gw(gatewayModel) }),
           description: `Vercel AI Gateway (model: ${gatewayModel})`,
+          provider: 'gateway',
+          model: gatewayModel,
         };
       } catch (err) {
         ctx.logger.warn(
@@ -311,6 +350,8 @@ export class AIServicePlugin implements Plugin {
       return {
         adapter: new VercelLLMAdapter({ model }),
         description: `${spec.displayName} (model: ${modelId})${apiSuffix}${baseSuffix}`,
+        provider: rawProvider,
+        model: modelId,
       };
     } catch (err) {
       ctx.logger.warn(
@@ -406,7 +447,7 @@ export class AIServicePlugin implements Plugin {
    *
    * Returns the adapter and a description for logging.
    */
-  private async detectAdapter(ctx: PluginContext): Promise<{ adapter: LLMAdapter; description: string }> {
+  private async detectAdapter(ctx: PluginContext): Promise<{ adapter: LLMAdapter; description: string; status: AIAdapterStatus }> {
     // 1. Vercel AI Gateway — works with any provider via gateway('provider/model').
     //    A per-instance `gatewayModel` option wins over the process-wide env var
     //    so a multi-tenant host can route the model per kernel (e.g. by plan).
@@ -416,7 +457,8 @@ export class AIServicePlugin implements Plugin {
         const gatewayPkg = '@ai-sdk/gateway';
         const { gateway } = await import(/* webpackIgnore: true */ gatewayPkg);
         const adapter = new VercelLLMAdapter({ model: gateway(gatewayModel) });
-        return { adapter, description: `Vercel AI Gateway (model: ${gatewayModel})` };
+        const description = `Vercel AI Gateway (model: ${gatewayModel})`;
+        return { adapter, description, status: { description, source: 'env', provider: 'gateway', model: gatewayModel } };
       } catch (err) {
         ctx.logger.warn(
           `[AI] Failed to load @ai-sdk/gateway for model=${gatewayModel}, trying next provider`,
@@ -477,7 +519,8 @@ export class AIServicePlugin implements Plugin {
               : provider(modelId);
             const adapter = new VercelLLMAdapter({ model });
             const apiSuffix = useChatApi ? ' [chat-completions]' : '';
-            return { adapter, description: `${displayName} (model: ${modelId})${apiSuffix}` };
+            const description = `${displayName} (model: ${modelId})${apiSuffix}`;
+            return { adapter, description, status: { description, source: 'env', provider: factory, model: modelId } };
           }
         } catch (err) {
           ctx.logger.warn(
@@ -490,7 +533,8 @@ export class AIServicePlugin implements Plugin {
 
     // 3. Fallback to MemoryLLMAdapter
     ctx.logger.warn('[AI] No LLM provider configured via environment variables. Falling back to MemoryLLMAdapter (echo mode). Set AI_GATEWAY_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY to use a real LLM.');
-    return { adapter: new MemoryLLMAdapter(), description: 'MemoryLLMAdapter (echo mode - for testing only)' };
+    const description = 'MemoryLLMAdapter (echo mode - for testing only)';
+    return { adapter: new MemoryLLMAdapter(), description, status: { description, source: 'fallback', provider: 'memory' } };
   }
 
   async init(ctx: PluginContext): Promise<void> {
@@ -528,11 +572,13 @@ export class AIServicePlugin implements Plugin {
       // User provided an explicit adapter
       adapter = this.options.adapter;
       adapterDescription = `${adapter.name} (explicitly configured)`;
+      this.adapterStatus = { description: adapterDescription, source: 'explicit' };
     } else {
       // Auto-detect from environment variables
       const detected = await this.detectAdapter(ctx);
       adapter = detected.adapter;
       adapterDescription = detected.description;
+      this.adapterStatus = detected.status;
     }
 
     // Log the selected adapter
@@ -842,7 +888,9 @@ export class AIServicePlugin implements Plugin {
     }
 
     // Build and expose route definitions
-    const routes = buildAIRoutes(this.service, this.service.conversationService, ctx.logger);
+    const routes = buildAIRoutes(this.service, this.service.conversationService, ctx.logger, {
+      getAdapterStatus: () => ({ ...this.adapterStatus }),
+    });
 
     // Build tool routes
     const toolRoutes = buildToolRoutes(this.service, ctx.logger);
@@ -877,11 +925,16 @@ export class AIServicePlugin implements Plugin {
         }
       }
 
-      const agentRoutes = buildAgentRoutes(this.service, agentRuntime, ctx.logger, { quota: chatQuota });
+      const agentRoutes = buildAgentRoutes(this.service, agentRuntime, ctx.logger, {
+        quota: chatQuota,
+        adapterDescription: () => this.adapterStatus.description,
+      });
       routes.push(...agentRoutes);
       ctx.logger.info(`[AI] Agent routes registered (${agentRoutes.length} routes)`);
 
-      const assistantRoutes = buildAssistantRoutes(this.service, agentRuntime, skillRegistry, ctx.logger);
+      const assistantRoutes = buildAssistantRoutes(this.service, agentRuntime, skillRegistry, ctx.logger, {
+        adapterDescription: () => this.adapterStatus.description,
+      });
       routes.push(...assistantRoutes);
       ctx.logger.info(`[AI] Assistant (ambient) routes registered (${assistantRoutes.length} routes)`);
 
@@ -987,19 +1040,34 @@ export class AIServicePlugin implements Plugin {
         // The manifest default is `memory`; default values should not mask
         // boot-time env auto-detection. A stored or env-locked `memory` value
         // is explicit, though, and should switch the service back to memory.
-        if (provider === 'memory' && (sources.provider ?? 'default') === 'default') return;
+        if (provider === 'memory' && (sources.provider ?? 'default') === 'default') {
+          // No settings saved — the boot-time adapter (env/explicit) stays.
+          this.adapterStatus = { ...this.adapterStatus, settingsProvider: undefined, settingsError: null };
+          return;
+        }
         const built = await this.buildAdapterFromValues(ctx, values);
         if (!built) {
-          ctx.logger.warn(
-            `[AI] Settings provider=${provider} could not be applied (missing credentials or package). ` +
-              `Adapter unchanged (current="${this.service.adapterName}").`,
-          );
+          const reason =
+            `Saved settings (provider=${provider}) could not be applied: missing credentials ` +
+            `or provider SDK not installed. The active adapter is unchanged ("${this.service.adapterName}").`;
+          this.adapterStatus = { ...this.adapterStatus, settingsProvider: provider, settingsError: reason };
+          ctx.logger.warn(`[AI] ${reason}`);
           return;
         }
         this.service.setAdapter(built.adapter);
+        this.adapterStatus = {
+          description: built.description,
+          source: 'settings',
+          provider: built.provider,
+          model: built.model,
+          settingsProvider: provider,
+          settingsError: null,
+        };
         ctx.logger.info(`[AI] Adapter rebuilt from settings: ${built.description}`);
       } catch (err: any) {
-        ctx.logger.warn('[AI] Failed to apply ai settings: ' + (err?.message ?? err));
+        const reason = `Failed to apply ai settings: ${err?.message ?? err}`;
+        this.adapterStatus = { ...this.adapterStatus, settingsError: reason };
+        ctx.logger.warn(`[AI] ${reason}`);
       }
     };
 
@@ -1193,6 +1261,29 @@ export class AIServicePlugin implements Plugin {
         }
       });
       ctx.logger.info('[AI] Registered live settings action ai/test');
+
+      // Live `ai/reset` — overrides the settings service's built-in
+      // namespace reset so the LLM adapter is ALSO rebuilt from env
+      // auto-detection right away (the built-in only clears rows and
+      // would leave a previously-applied adapter running until restart).
+      settings.registerAction('ai', 'reset', async ({ ctx: actionCtx }: any) => {
+        let cleared = 0;
+        if (typeof settings.resetNamespace === 'function') {
+          cleared = await settings.resetNamespace('ai', actionCtx ?? {});
+        }
+        const detected = await this.detectAdapter(ctx);
+        this.service!.setAdapter(detected.adapter);
+        this.adapterStatus = { ...detected.status, settingsProvider: undefined, settingsError: null };
+        ctx.logger.info(`[AI] Settings reset — adapter now: ${detected.description}`);
+        return {
+          ok: true,
+          severity: 'info',
+          message:
+            (cleared > 0 ? `Cleared ${cleared} saved value(s). ` : 'No saved values to clear. ') +
+            `Active adapter: ${detected.description}.`,
+        };
+      });
+      ctx.logger.info('[AI] Registered live settings action ai/reset');
     }
   }
 

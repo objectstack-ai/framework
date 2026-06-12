@@ -55,6 +55,10 @@ export function buildAssistantRoutes(
   agentRuntime: AgentRuntime,
   skillRegistry: SkillRegistry,
   logger: Logger,
+  opts: {
+    /** Active adapter description, attached to provider errors in the stream. */
+    adapterDescription?: () => string | undefined;
+  } = {},
 ): RouteDefinition[] {
   return [
     // ── Resolve current assistant + skill set ──────────────────
@@ -257,7 +261,7 @@ export function buildAssistantRoutes(
                 'x-objectstack-agent': agent.name,
                 'x-objectstack-skills': activeSkills.map((s) => s.name).join(','),
               },
-              events: encodeVercelDataStream(events),
+              events: encodeVercelDataStream(events, { adapterDescription: opts.adapterDescription?.() }),
             };
           }
 

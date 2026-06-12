@@ -233,3 +233,23 @@ export class UnknownKeyError extends Error {
     super(`Key '${key}' is not declared in manifest '${namespace}'.`);
   }
 }
+
+/**
+ * Thrown when a write would leave the namespace in an invalid state —
+ * a `required` field that is visible under the post-write values is
+ * empty (e.g. provider=cloudflare saved without an API key). The whole
+ * batch is rejected; `fields` maps each offending key to a message the
+ * UI can render inline.
+ */
+export class SettingsValidationError extends Error {
+  readonly code = 'SETTINGS_VALIDATION' as const;
+  constructor(
+    readonly namespace: string,
+    readonly fields: Record<string, string>,
+  ) {
+    super(
+      `Settings for '${namespace}' are incomplete: ` +
+        Object.entries(fields).map(([k, msg]) => `${k} — ${msg}`).join('; '),
+    );
+  }
+}

@@ -5,6 +5,7 @@ import { SettingsService } from './settings-service';
 import { SettingsLockedError, UnknownKeyError, UnknownNamespaceError, envKeyOf } from './settings-service.types';
 import { NoopCryptoAdapter } from './crypto-adapter';
 import { mailSettingsManifest, mailTestActionHandler } from './manifests/mail.manifest';
+import { aiSettingsManifest } from './manifests/ai.manifest';
 import { brandingSettingsManifest } from './manifests/branding.manifest';
 import { featureFlagsSettingsManifest } from './manifests/feature-flags.manifest';
 import { SettingsManifestSchema } from '@objectstack/spec/system';
@@ -102,7 +103,7 @@ describe('SettingsService — global scope', () => {
   it('returns source="global" for platform-wide values', async () => {
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(mailSettingsManifest);
-    await svc.setMany('mail', { provider: 'smtp', from_email: 'ops@example.com' });
+    await svc.setMany('mail', { provider: 'smtp', smtp_host: 'smtp.example.com', from_email: 'ops@example.com' });
     const r = await svc.get('mail', 'from_email');
     expect(r.source).toBe('global');
     expect(r.value).toBe('ops@example.com');
@@ -112,7 +113,7 @@ describe('SettingsService — global scope', () => {
   it('global value is visible from any user context (no per-user isolation)', async () => {
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(mailSettingsManifest);
-    await svc.setMany('mail', { provider: 'smtp', from_email: 'ops@example.com' }, { userId: 'u1' });
+    await svc.setMany('mail', { provider: 'smtp', smtp_host: 'smtp.example.com', from_email: 'ops@example.com' }, { userId: 'u1' });
     const fromU2 = await svc.get('mail', 'from_email', { userId: 'u2' });
     expect(fromU2.source).toBe('global');
     expect(fromU2.value).toBe('ops@example.com');
@@ -199,6 +200,132 @@ describe('SettingsService — runAction', () => {
     const r = await svc.runAction('branding', 'boom', null);
     expect(r.ok).toBe(false);
     expect(r.message).toContain('kaboom');
+  });
+});
+
+describe('SettingsService — resetNamespace / built-in reset action', () => {
+  it('clears persisted rows so values fall back to defaults', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    await svc.set('branding', 'workspace_name', 'Acme');
+    expect((await svc.get('branding', 'workspace_name')).source).toBe('tenant');
+
+    const cleared = await svc.resetNamespace('branding');
+    expect(cleared).toBe(1);
+    const r = await svc.get('branding', 'workspace_name');
+    expect(r.source).toBe('default');
+    expect(r.value).toBe('ObjectStack');
+  });
+
+  it('leaves env-locked keys untouched', async () => {
+    const svc = new SettingsService({ env: { OS_BRANDING_WORKSPACE_NAME: 'EnvCorp' } });
+    svc.registerManifest(brandingSettingsManifest);
+    await expect(svc.resetNamespace('branding')).resolves.toBe(0);
+    const r = await svc.get('branding', 'workspace_name');
+    expect(r.source).toBe('env');
+    expect(r.value).toBe('EnvCorp');
+  });
+
+  it('runAction falls back to the built-in reset when no handler is registered', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    await svc.set('branding', 'workspace_name', 'Acme');
+
+    const r = await svc.runAction('branding', 'reset', null);
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain('Cleared 1');
+    expect((await svc.get('branding', 'workspace_name')).source).toBe('default');
+  });
+
+  it('a registered reset handler overrides the built-in', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    svc.registerAction('branding', 'reset', async () => ({ ok: true, severity: 'info', message: 'custom' }));
+    const r = await svc.runAction('branding', 'reset', null);
+    expect(r.message).toBe('custom');
+  });
+});
+
+describe('SettingsService — save-time validation (required/visible/pattern)', () => {
+  function aiService(): SettingsService {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(aiSettingsManifest);
+    return svc;
+  }
+
+  it('rejects a provider switch whose required visible fields are empty', async () => {
+    const svc = aiService();
+    // The exact incident: provider=cloudflare saved with an empty API key.
+    await expect(
+      svc.setMany('ai', {
+        provider: 'cloudflare',
+        cloudflare_account_id: '2846eb40a60f4738e292b90dcd8cce10',
+        cloudflare_api_key: '',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SETTINGS_VALIDATION',
+      fields: { cloudflare_api_key: expect.stringContaining('required') },
+    });
+    // Nothing was persisted — the batch is atomic.
+    expect((await svc.get('ai', 'provider')).source).toBe('default');
+  });
+
+  it('rejects switching provider without supplying its required fields at all', async () => {
+    const svc = aiService();
+    await expect(svc.setMany('ai', { provider: 'cloudflare' })).rejects.toMatchObject({
+      code: 'SETTINGS_VALIDATION',
+      fields: {
+        cloudflare_account_id: expect.any(String),
+        cloudflare_api_key: expect.any(String),
+      },
+    });
+  });
+
+  it('accepts a complete provider config', async () => {
+    const svc = aiService();
+    await expect(
+      svc.setMany('ai', {
+        provider: 'cloudflare',
+        cloudflare_account_id: '2846eb40a60f4738e292b90dcd8cce10',
+        cloudflare_api_key: 'cfut_secret',
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('does not validate fields hidden for the selected provider', async () => {
+    const svc = aiService();
+    // openai_api_key is required:true but invisible when provider=memory.
+    await expect(svc.setMany('ai', { provider: 'memory' })).resolves.toBeDefined();
+  });
+
+  it('leaves unrelated single-key writes untouched', async () => {
+    const svc = aiService();
+    // trace_enabled has no required/visible coupling to provider fields.
+    await expect(svc.setMany('ai', { trace_enabled: true })).resolves.toBeDefined();
+  });
+
+  it('enforces the gateway model id pattern (provider/model)', async () => {
+    const svc = aiService();
+    await expect(
+      svc.setMany('ai', { provider: 'gateway', gateway_model: 'gpt-4o' }),
+    ).rejects.toMatchObject({
+      code: 'SETTINGS_VALIDATION',
+      fields: { gateway_model: expect.stringContaining('format') },
+    });
+    await expect(
+      svc.setMany('ai', { provider: 'gateway', gateway_model: 'anthropic/claude-sonnet-4.6' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('still allows resets (all-null patches) of incomplete namespaces', async () => {
+    const svc = aiService();
+    await svc.setMany('ai', {
+      provider: 'cloudflare',
+      cloudflare_account_id: 'acc',
+      cloudflare_api_key: 'key',
+    });
+    await expect(svc.resetNamespace('ai')).resolves.toBeGreaterThan(0);
+    expect((await svc.get('ai', 'provider')).source).toBe('default');
   });
 });
 

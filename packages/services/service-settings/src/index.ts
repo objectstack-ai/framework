@@ -32,9 +32,15 @@ export {
   type SettingsServiceOptions,
   envKeyOf,
   SettingsLockedError,
+  SettingsValidationError,
   UnknownKeyError,
   UnknownNamespaceError,
 } from './settings-service.types.js';
+export {
+  evaluateVisibility,
+  referencedKeys,
+  VisibilityParseError,
+} from './visibility-eval.js';
 export {
   SettingsServicePlugin,
   type SettingsServicePluginOptions,

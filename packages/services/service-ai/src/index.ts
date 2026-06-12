@@ -6,7 +6,7 @@ export type { AIServiceConfig } from './ai-service.js';
 
 // Kernel plugin
 export { AIServicePlugin } from './plugin.js';
-export type { AIServicePluginOptions } from './plugin.js';
+export type { AIServicePluginOptions, AIAdapterStatus } from './plugin.js';
 
 // Adapters
 export { MemoryLLMAdapter } from './adapters/memory-adapter.js';

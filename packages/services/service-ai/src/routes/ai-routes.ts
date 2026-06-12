@@ -124,7 +124,19 @@ export function buildAIRoutes(
   aiService: IAIService,
   conversationService: IAIConversationService,
   logger: Logger,
+  opts: {
+    /**
+     * Provenance of the active LLM adapter (description / source / provider /
+     * model / settingsError). Served by `GET /api/v1/ai/status` so the UI can
+     * show which configuration is actually live.
+     */
+    getAdapterStatus?: () => Record<string, unknown>;
+  } = {},
 ): RouteDefinition[] {
+  const adapterDescription = (): string | undefined => {
+    const d = (opts.getAdapterStatus?.() ?? {}).description;
+    return typeof d === 'string' && d ? d : undefined;
+  };
   return [
     // ── Chat ────────────────────────────────────────────────────
     //
@@ -203,7 +215,7 @@ export function buildAIRoutes(
                 'Connection': 'keep-alive',
                 'x-vercel-ai-ui-message-stream': 'v1',
               },
-              events: encodeVercelDataStream(events),
+              events: encodeVercelDataStream(events, { adapterDescription: adapterDescription() }),
             };
           } catch (err) {
             logger.error('[AI Route] /chat stream error', err instanceof Error ? err : undefined);
@@ -297,6 +309,29 @@ export function buildAIRoutes(
           return { status: 200, body: { models } };
         } catch (err) {
           logger.error('[AI Route] /models error', err instanceof Error ? err : undefined);
+          return { status: 500, body: { error: 'Internal AI service error' } };
+        }
+      },
+    },
+
+    // ── Status ──────────────────────────────────────────────────
+    // Which adapter is live and where it came from. Persisted settings
+    // silently override env auto-detection; this is the surface that makes
+    // that resolution visible (Setup banner / diagnostics).
+    {
+      method: 'GET',
+      path: '/api/v1/ai/status',
+      description: 'Active LLM adapter provenance (source, provider, model, settings errors)',
+      auth: true,
+      permissions: ['ai:read'],
+      handler: async () => {
+        try {
+          const status = opts.getAdapterStatus?.() ?? {};
+          // `adapterName` lives on the concrete AIService, not the contract.
+          const adapter = (aiService as { adapterName?: string }).adapterName ?? 'unknown';
+          return { status: 200, body: { adapter, ...status } };
+        } catch (err) {
+          logger.error('[AI Route] /status error', err instanceof Error ? err : undefined);
           return { status: 500, body: { error: 'Internal AI service error' } };
         }
       },

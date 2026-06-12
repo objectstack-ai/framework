@@ -43,6 +43,11 @@ export interface AgentRouteOptions {
    * behavior). Policy lives in the implementation; the route only enforces.
    */
   quota?: AgentChatQuota;
+  /**
+   * Active adapter description, attached to provider errors in the
+   * stream so failures name the provider/model that was hit.
+   */
+  adapterDescription?: () => string | undefined;
 }
 
 /**
@@ -253,7 +258,7 @@ export function buildAgentRoutes(
                 'Connection': 'keep-alive',
                 'x-vercel-ai-ui-message-stream': 'v1',
               },
-              events: encodeVercelDataStream(events),
+              events: encodeVercelDataStream(events, { adapterDescription: options?.adapterDescription?.() }),
             };
           }
 

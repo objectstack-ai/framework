@@ -23,9 +23,11 @@ import {
   type SettingsServiceOptions,
   envKeyOf,
   SettingsLockedError,
+  SettingsValidationError,
   UnknownKeyError,
   UnknownNamespaceError,
 } from './settings-service.types.js';
+import { evaluateVisibility, referencedKeys } from './visibility-eval.js';
 
 const DEFAULT_OBJECT = 'sys_setting';
 
@@ -446,6 +448,11 @@ export class SettingsService {
       }
     }
 
+    // Reject writes that would leave the namespace in a known-broken
+    // state (visible required field empty / pattern mismatch). See
+    // validatePatch for the exact semantics.
+    await this.validatePatch(namespace, patch, ctx);
+
     for (const [key, rawValue] of Object.entries(patch)) {
       const scope = reg.scopes.get(key)!;
       // global rows are platform-wide (tenant_id=null, user_id=null);
@@ -554,6 +561,116 @@ export class SettingsService {
     return out;
   }
 
+  /**
+   * Save-time validation for `setMany`, fulfilling the spec promise that
+   * `required` is enforced server-side and hidden specifiers are not
+   * validated. Semantics, tuned to reject broken configs without
+   * breaking unrelated single-key writes:
+   *
+   * - The post-write value map is computed (current values overlaid
+   *   with the patch; `null` patch entries fall back to the default).
+   * - A specifier is checked only when the patch TOUCHES it — its own
+   *   key is in the patch, or a key its `visible` expression references
+   *   is (switching provider must validate that provider's fields).
+   * - `required` + visible + empty → rejected.
+   * - `pattern` (text fields) + non-empty value that mismatches → rejected.
+   * - All-null patches (namespace reset) and unparseable visibility
+   *   expressions skip validation rather than block the write.
+   */
+  private async validatePatch(
+    namespace: string,
+    patch: Record<string, unknown>,
+    ctx: SettingsContext,
+  ): Promise<void> {
+    const reg = this.registry.get(namespace);
+    if (!reg) return;
+    const entries = Object.entries(patch);
+    if (entries.length === 0) return;
+    // An all-null patch is a reset — clearing values is never blocked.
+    if (entries.every(([, v]) => v === null || typeof v === 'undefined')) return;
+
+    // Post-write value map: resolved values overlaid with the patch.
+    const data: Record<string, unknown> = {};
+    for (const [key] of reg.scopes) {
+      data[key] = (await this.get(namespace, key, ctx)).value;
+    }
+    for (const [key, value] of entries) {
+      data[key] = value === null || typeof value === 'undefined'
+        ? reg.defaults.get(key) ?? null
+        : value;
+    }
+
+    const patchKeys = new Set(Object.keys(patch));
+    const errors: Record<string, string> = {};
+
+    for (const spec of (reg.manifest.specifiers ?? []) as Array<Record<string, unknown>>) {
+      const key = spec.key as string | undefined;
+      const type = String(spec.type ?? '');
+      if (!key || LAYOUT_ONLY_TYPES.has(type)) continue;
+
+      let visible = true;
+      let deps: string[] = [];
+      if (typeof spec.visible !== 'undefined') {
+        try {
+          visible = evaluateVisibility(spec.visible, data);
+          deps = referencedKeys(spec.visible);
+        } catch {
+          continue; // can't determine visibility — stay lenient
+        }
+      }
+      if (!visible) continue;
+      if (!patchKeys.has(key) && !deps.some((d) => patchKeys.has(d))) continue;
+
+      const value = data[key];
+      const label = typeof spec.label === 'string' ? spec.label : key;
+      const empty =
+        value === null || typeof value === 'undefined' ||
+        (typeof value === 'string' && value.trim() === '');
+
+      if (spec.required === true && empty) {
+        errors[key] = `${label} is required for this configuration.`;
+        continue;
+      }
+      if (!empty && typeof spec.pattern === 'string' && typeof value === 'string') {
+        let re: RegExp | undefined;
+        try {
+          re = new RegExp(spec.pattern);
+        } catch {
+          re = undefined; // invalid manifest pattern — don't block writes
+        }
+        if (re && !re.test(value)) {
+          const hint = typeof spec.description === 'string' ? ` ${spec.description}` : '';
+          errors[key] = `${label} does not match the expected format.${hint}`;
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      throw new SettingsValidationError(namespace, errors);
+    }
+  }
+
+  /**
+   * Clear every persisted row in a namespace so values fall back to
+   * env/defaults. Env-locked keys are untouched (env wins over rows
+   * anyway and refuses writes). Persisted rows are nulled rather than
+   * deleted so the audit trail records the reset per key.
+   *
+   * Returns the number of cleared keys.
+   */
+  async resetNamespace(namespace: string, ctx: SettingsContext = {}): Promise<number> {
+    const payload = await this.getNamespace(namespace, ctx);
+    const patch: Record<string, null> = {};
+    for (const [key, v] of Object.entries(payload.values)) {
+      if (v.source === 'global' || v.source === 'tenant' || v.source === 'user') {
+        patch[key] = null;
+      }
+    }
+    const keys = Object.keys(patch);
+    if (keys.length > 0) await this.setMany(namespace, patch, ctx);
+    return keys.length;
+  }
+
   /** Invoke a declared action (test connection, rotate, …). */
   async runAction(
     namespace: string,
@@ -565,6 +682,20 @@ export class SettingsService {
     if (!reg) throw new UnknownNamespaceError(namespace);
     const handler = reg.actions.get(actionId);
     if (!handler) {
+      // Built-in fallback: every namespace gets a `reset` action that
+      // clears persisted rows (back to env/defaults). Plugins may
+      // override it via registerAction for richer behaviour (e.g. the
+      // AI plugin re-runs env adapter detection after the clear).
+      if (actionId === 'reset') {
+        const cleared = await this.resetNamespace(namespace, ctx);
+        return {
+          ok: true,
+          severity: 'info',
+          message: cleared > 0
+            ? `Cleared ${cleared} saved value(s); environment/default configuration is back in effect.`
+            : 'No saved values to clear — already using environment/default configuration.',
+        };
+      }
       return {
         ok: false,
         severity: 'error',

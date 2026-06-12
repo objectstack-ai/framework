@@ -17,6 +17,7 @@ import type { IHttpServer, IHttpRequest, IHttpResponse, RouteHandler } from '@ob
 import { SettingsService } from './settings-service.js';
 import {
   SettingsLockedError,
+  SettingsValidationError,
   UnknownKeyError,
   UnknownNamespaceError,
   type SettingsContext,
@@ -103,6 +104,11 @@ export function registerSettingsRoutes(
         sendError(res, 404, 'UNKNOWN_NAMESPACE', err.message);
       } else if (err instanceof UnknownKeyError) {
         sendError(res, 400, 'UNKNOWN_KEY', err.message, { namespace: err.namespace, key: err.key });
+      } else if (err instanceof SettingsValidationError) {
+        sendError(res, 400, 'SETTINGS_VALIDATION', err.message, {
+          namespace: err.namespace,
+          fields: err.fields,
+        });
       } else {
         sendError(res, 500, 'INTERNAL', err?.message ?? 'Failed to write namespace');
       }

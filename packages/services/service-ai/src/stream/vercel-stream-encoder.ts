@@ -16,6 +16,7 @@
  */
 
 import type { TextStreamPart, ToolSet } from 'ai';
+import { describeProviderError } from './error-hints.js';
 
 // ── SSE helpers ──────────────────────────────────────────────────────
 
@@ -117,6 +118,14 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
  */
 export async function* encodeVercelDataStream(
   events: AsyncIterable<TextStreamPart<ToolSet>>,
+  opts: {
+    /**
+     * Active adapter description (e.g. `Vercel AI Gateway (model: …)`),
+     * attached to provider errors so the chat surface names the
+     * provider/model that failed instead of a bare HTTP status.
+     */
+    adapterDescription?: string;
+  } = {},
 ): AsyncIterable<string> {
   // Preamble
   yield sse({ type: 'start' });
@@ -132,13 +141,7 @@ export async function* encodeVercelDataStream(
       // Surface error parts emitted by the underlying provider stream.
       if ((part as { type: string }).type === 'error') {
         const errPart = part as unknown as { error?: unknown };
-        const raw = errPart.error;
-        errorMessage =
-          (raw && typeof raw === 'object' && 'message' in raw
-            ? String((raw as { message: unknown }).message)
-            : typeof raw === 'string'
-              ? raw
-              : 'Unknown provider error');
+        errorMessage = describeProviderError(errPart.error, opts.adapterDescription);
         finishReason = 'error';
         break;
       }
@@ -167,7 +170,7 @@ export async function* encodeVercelDataStream(
     // Upstream provider threw (auth failure, network error, etc.). Without
     // this catch the SSE response would hang half-open and the client would
     // never leave its "streaming" state.
-    errorMessage = err instanceof Error ? err.message : String(err);
+    errorMessage = describeProviderError(err, opts.adapterDescription);
     finishReason = 'error';
   }
 

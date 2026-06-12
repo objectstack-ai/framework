@@ -533,9 +533,10 @@ describe('AI Routes', () => {
 
   it('should build all expected routes', () => {
     const routes = buildAIRoutes(service, service.conversationService, silentLogger);
-    expect(routes.length).toBe(10);
+    expect(routes.length).toBe(11);
 
     const paths = routes.map(r => `${r.method} ${r.path}`);
+    expect(paths).toContain('GET /api/v1/ai/status');
     expect(paths).toContain('POST /api/v1/ai/chat');
     expect(paths).toContain('POST /api/v1/ai/chat/stream');
     expect(paths).toContain('POST /api/v1/ai/complete');

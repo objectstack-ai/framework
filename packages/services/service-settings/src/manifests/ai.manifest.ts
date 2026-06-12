@@ -58,7 +58,8 @@ const manifest = {
       visible: "${data.provider === 'gateway'}",
       description: 'Multi-provider router. The model spec follows `provider/model`, e.g. `openai/gpt-4o`.' },
     { type: 'text', key: 'gateway_model', label: 'Gateway model', required: true,
-      description: 'Forwarded as AI_GATEWAY_MODEL. Example: openai/gpt-4o',
+      description: 'Forwarded as AI_GATEWAY_MODEL. Format: provider/model, e.g. openai/gpt-4o or anthropic/claude-sonnet-4.6.',
+      pattern: '^[A-Za-z0-9_-]+\\/[A-Za-z0-9._:-]+$',
       visible: "${data.provider === 'gateway'}" },
     { type: 'password', key: 'gateway_api_key', label: 'Gateway API key',
       required: false, encrypted: true,
@@ -151,6 +152,7 @@ const manifest = {
       visible: "${data.provider === 'cloudflare'}" },
     { type: 'text', key: 'cloudflare_model', label: 'Model', required: false,
       default: 'openai/gpt-4o-mini',
+      pattern: '^[A-Za-z0-9_-]+\\/[A-Za-z0-9._:@-]+$',
       description:
         'Format: provider/model. Allowed providers (per Cloudflare /compat): anthropic, openai, groq, ' +
         'mistral, cohere, perplexity, workers-ai, google-ai-studio, vertex, grok, deepseek, cerebras, baseten, parallel.',
@@ -228,6 +230,13 @@ const manifest = {
     { type: 'action_button', id: 'test', label: 'Test connection',
       required: false, icon: 'Plug',
       handler: { kind: 'http', method: 'POST', url: '/api/settings/ai/test' } },
+    // Escape hatch: clears every saved row in this namespace so the
+    // runtime falls back to env auto-detection (AI_GATEWAY_MODEL /
+    // OPENAI_API_KEY / …). Without it, a broken saved config can only
+    // be removed by editing sys_setting by hand.
+    { type: 'action_button', id: 'reset', label: 'Reset to environment defaults',
+      required: false, icon: 'RotateCcw',
+      handler: { kind: 'http', method: 'POST', url: '/api/settings/ai/reset' } },
 
     // ════════════════════════════════════════════════════════════════
     // Embedder — text → vector provider used by knowledge / RAG.
