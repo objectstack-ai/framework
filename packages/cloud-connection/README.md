@@ -1,0 +1,52 @@
+# @objectstack/cloud-connection
+
+The runtime-side client for an ObjectStack cloud control plane (ADR-0008).
+
+Connects any ObjectStack runtime — vanilla `objectstack dev`, a self-hosted
+single-environment deployment, or a multi-tenant fleet — to a control plane
+for package distribution. Capability progresses with binding:
+
+| State | Capability | Plugin / routes |
+|---|---|---|
+| Unbound (anonymous) | Browse the public marketplace catalog | `MarketplaceProxyPlugin` → `/api/v1/marketplace/*` |
+| Unbound (anonymous) | Install public packages into THIS runtime | `MarketplaceInstallLocalPlugin` → `/api/v1/marketplace/install-local` |
+| Bound (device-code) | Status, bind, org catalog, installed views, control-plane installs | `CloudConnectionPlugin` → `/api/v1/cloud-connection/*` |
+| Always | SPA feature discovery | `RuntimeConfigPlugin` → `/api/v1/runtime/config` |
+
+## Usage
+
+```ts
+import {
+  MarketplaceProxyPlugin,
+  MarketplaceInstallLocalPlugin,
+  CloudConnectionPlugin,
+  RuntimeConfigPlugin,
+  resolveCloudUrl,
+} from '@objectstack/cloud-connection';
+
+const cloudUrl = resolveCloudUrl(); // OS_CLOUD_URL, 'off' disables
+
+const plugins = [
+  ...(cloudUrl ? [
+    new MarketplaceProxyPlugin({ controlPlaneUrl: cloudUrl }),
+    new MarketplaceInstallLocalPlugin({ controlPlaneUrl: cloudUrl }),
+    new CloudConnectionPlugin({ singleEnvironment: true, controlPlaneUrl: cloudUrl }),
+  ] : []),
+  new RuntimeConfigPlugin({ controlPlaneUrl: '', singleEnvironment: true, installLocal: true }),
+];
+```
+
+## Boundary (open mechanism, closed intelligence)
+
+This package is **mechanism**: proxying a catalog, installing into the local
+kernel, performing an RFC 8628 device-code bind, and reporting flags to the
+SPA. The **policy** stays server-side in whatever control plane you point it
+at: org-catalog filtering, entitlements for paid packages, quotas, and plan
+rules. Plan-derived feature flags are injected by the host via
+`RuntimeConfigPluginConfig.resolvePlanFeatures`.
+
+`OS_CLOUD_URL=off` disables every remote call; air-gapped installs keep
+working via inline manifests handed to `install-local`.
+
+See `docs/adr` in the cloud repository (ADR-0008) for the full architecture
+decision.

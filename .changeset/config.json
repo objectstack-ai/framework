@@ -12,6 +12,7 @@
       "@objectstack/spec",
       "@objectstack/cli",
       "@objectstack/console",
+      "@objectstack/cloud-connection",
       "@objectstack/core",
       "@objectstack/client",
       "@objectstack/client-react",

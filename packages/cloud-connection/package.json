@@ -1,0 +1,57 @@
+{
+  "name": "@objectstack/cloud-connection",
+  "version": "9.2.0",
+  "license": "Apache-2.0",
+  "description": "Runtime-side client for an ObjectStack cloud control plane — marketplace browse proxy, install-local, device-code binding, org catalog and installed views, and the /api/v1/runtime/config discovery endpoint. Open mechanism (ADR-0008): the hub service, plan policy, and entitlements stay server-side.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/runtime": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "keywords": [
+    "objectstack",
+    "cloud-connection",
+    "marketplace",
+    "package-install",
+    "device-code",
+    "control-plane"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/cloud-connection"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

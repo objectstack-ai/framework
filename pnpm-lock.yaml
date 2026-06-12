@@ -699,6 +699,31 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/cloud-connection:
+    dependencies:
+      '@objectstack/core':
+        specifier: workspace:*
+        version: link:../core
+      '@objectstack/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../spec
+      '@objectstack/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.2
+        version: 25.9.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(@vitest/coverage-v8@4.1.8)(happy-dom@20.10.2)(msw@2.14.6(@types/node@25.9.2)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
   packages/connectors/connector-mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
