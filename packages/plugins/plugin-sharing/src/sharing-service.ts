@@ -266,7 +266,7 @@ export class SharingService implements ISharingService {
   ): Promise<RecordShare[]> {
     const rows = await this.engine.find('sys_record_share', {
       filter: { object_name: object, record_id: recordId },
-      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      orderBy: [{ field: 'created_at', order: 'desc' }],
       limit: 500,
       context: SYSTEM_CTX,
     });

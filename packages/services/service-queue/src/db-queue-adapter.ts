@@ -189,7 +189,7 @@ export class DbQueueAdapter implements IQueueService {
       where,
       limit: options?.limit ?? 100,
       offset: options?.offset,
-      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      orderBy: [{ field: 'created_at', order: 'desc' }],
       context: SYSTEM_CTX,
     });
     return (rows ?? []).map((r: any) => this.rowToRecord(r));
@@ -265,8 +265,8 @@ export class DbQueueAdapter implements IQueueService {
       where: { queue, status: 'pending' },
       limit: max * 3, // over-fetch in case of CAS contention
       orderBy: [
-        { field: 'priority', direction: 'asc' },
-        { field: 'scheduled_for', direction: 'asc' },
+        { field: 'priority', order: 'asc' },
+        { field: 'scheduled_for', order: 'asc' },
       ],
       context: SYSTEM_CTX,
     });

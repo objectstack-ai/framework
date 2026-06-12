@@ -62,7 +62,7 @@ const ${toCamelCase(name)}ListView: UI.View = {
     columns: [
       { field: 'name', width: 200 },
     ],
-    defaultSort: { field: 'name', direction: 'asc' },
+    sort: [{ field: 'name', order: 'asc' }],
     pageSize: 25,
   },
 };

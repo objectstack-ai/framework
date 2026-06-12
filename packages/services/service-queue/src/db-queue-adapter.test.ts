@@ -25,12 +25,15 @@ function makeFakeEngine() {
       const t = tables.get(table) ?? [];
       let out = opts.where ? t.filter((r) => matches(r, opts.where)) : [...t];
       if (opts.orderBy) {
-        for (const order of [...opts.orderBy].reverse()) {
+        for (const ord of [...opts.orderBy].reverse()) {
+          // Canonical SortNode key only (spec/data/query.zod.ts): the real
+          // engine strips an unknown `direction:` key and defaults to asc,
+          // so the mock must too — honoring both keys masks wrong-key sorts.
           out.sort((a, b) => {
-            const av = a[order.field], bv = b[order.field];
+            const av = a[ord.field], bv = b[ord.field];
             if (av === bv) return 0;
             const cmp = av > bv ? 1 : -1;
-            return order.direction === 'desc' ? -cmp : cmp;
+            return ord.order === 'desc' ? -cmp : cmp;
           });
         }
       }
@@ -162,6 +165,17 @@ describe('DbQueueAdapter', () => {
     expect(failed[0].status).toBe('dlq');
     expect(failed[0].data).toEqual({ a: 1 });
     expect(failed[0].lastError).toContain('x');
+  });
+
+  it('listFailed returns the newest message first', async () => {
+    // Regression: the query sorted with the non-canonical `direction: 'desc'`
+    // key, which SortNode strips — so it sorted ascending (oldest first).
+    engine.tables.set('sys_job_queue', [
+      { id: 'm_old', queue: 'q', status: 'dlq', payload_json: '{}', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'm_new', queue: 'q', status: 'dlq', payload_json: '{}', created_at: '2026-02-01T00:00:00Z' },
+    ]);
+    const failed = await adapter.listFailed('q');
+    expect(failed.map((f) => f.id)).toEqual(['m_new', 'm_old']);
   });
 
   it('replay resets dlq message back to pending and re-processes', async () => {

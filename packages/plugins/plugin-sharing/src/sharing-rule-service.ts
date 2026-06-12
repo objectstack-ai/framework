@@ -149,7 +149,7 @@ export class SharingRuleService implements ISharingRuleService {
     if (orgId) where.organization_id = orgId;
     const rows = await this.engine.find('sys_sharing_rule', {
       filter: where,
-      orderBy: [{ field: 'name', direction: 'asc' }],
+      orderBy: [{ field: 'name', order: 'asc' }],
       limit: 1000,
       context: SYSTEM_CTX,
     });

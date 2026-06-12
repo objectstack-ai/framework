@@ -235,7 +235,7 @@ export class ReportService implements IReportService {
     if (filter?.object) f.object_name = filter.object;
     if (filter?.ownerId) f.owner_id = filter.ownerId;
     const rows = await this.engine.find('sys_saved_report', {
-      filter: f, limit: 500, orderBy: [{ field: 'updated_at', direction: 'desc' }], context: SYSTEM_CTX,
+      filter: f, limit: 500, orderBy: [{ field: 'updated_at', order: 'desc' }], context: SYSTEM_CTX,
     });
     return Array.isArray(rows) ? rows.map(rowFromSaved) : [];
   }
@@ -376,7 +376,7 @@ export class ReportService implements IReportService {
     const f: any = {};
     if (filter?.reportId) f.report_id = filter.reportId;
     const rows = await this.engine.find('sys_report_schedule', {
-      filter: f, limit: 500, orderBy: [{ field: 'next_run_at', direction: 'asc' }], context: SYSTEM_CTX,
+      filter: f, limit: 500, orderBy: [{ field: 'next_run_at', order: 'asc' }], context: SYSTEM_CTX,
     });
     return Array.isArray(rows) ? rows.map(rowFromSchedule) : [];
   }
