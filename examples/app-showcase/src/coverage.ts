@@ -73,6 +73,10 @@ export const COVERAGE = {
   i18nThemingPortals: {
     coveredBy: 'translations/index.ts (en + zh-CN), themes/index.ts (light + dark), portals/index.ts',
   },
+  docs: {
+    source: 'ADR-0046 (doc metadata)',
+    coveredBy: 'src/docs/*.md — flat Markdown compiled to `doc` items: frontmatter title + first-heading title, cross-references with anchors, namespace-prefixed names',
+  },
 } as const;
 
 /** Collect every field `type` used across a set of object definitions. */
