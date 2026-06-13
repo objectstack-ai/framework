@@ -41,7 +41,9 @@ export class SetupAppPlugin {
   readonly name = SETUP_APP_PACKAGE_ID;
   readonly type = 'standard';
   readonly version = SETUP_APP_VERSION;
-  readonly dependencies: string[] = ['com.objectstack.plugin-auth'];
+  // Kernel plugin dependency is matched by plugin NAME (AuthPlugin.name =
+  // 'com.objectstack.auth'), not by package id.
+  readonly dependencies: string[] = ['com.objectstack.auth'];
 
   async init(_ctx: any): Promise<void> {
     // No-op: registration happens in start() once the manifest service exists.
