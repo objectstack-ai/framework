@@ -383,6 +383,31 @@ export default class Serve extends Command {
         config = merged;
       }
 
+      // Package docs (ADR-0046): flat `src/docs/*.md` are collected into the
+      // stack at COMPILE time (compile.ts step 3d). The config-load path here
+      // re-derives metadata from `defineStack(...)`, which never carries the
+      // markdown docs — so without this, `os dev`/`os serve` against a config
+      // serves ZERO docs (GET /meta/doc empty) even though `os build` produces
+      // them and an artifact boot serves them. Mirror compile's collection so
+      // docs render under /docs/<name> in dev exactly as from a built artifact.
+      // Collection only (no lint-fail): docs are additive; never block boot.
+      if (!useArtifactFallback) {
+        try {
+          const { collectDocsFromSrc } = await import('../utils/collect-docs.js');
+          const collected = collectDocsFromSrc(absolutePath);
+          if (collected.docs.length > 0) {
+            const byName = new Map<string, any>();
+            for (const d of (Array.isArray((config as any).docs) ? (config as any).docs : [])) {
+              if (d?.name) byName.set(d.name, d);
+            }
+            for (const d of collected.docs) byName.set(d.name, d);
+            config = { ...config, docs: Array.from(byName.values()) };
+          }
+        } catch {
+          /* docs are additive — never block boot on collection */
+        }
+      }
+
       // Boot-mode dispatch: this open-core CLI only supports `standalone`
       // (and the artifact-fallback shortcut). Cloud / multi-environment
       // boot modes live in a separate distribution and are no longer

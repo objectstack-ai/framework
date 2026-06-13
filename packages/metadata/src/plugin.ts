@@ -71,6 +71,7 @@ const ARTIFACT_FIELD_TO_TYPE: Record<string, string> = {
     analyticsCubes: 'analytics_cube',
     connectors: 'connector',
     emailTemplates: 'email_template',
+    docs: 'doc',
     data: 'dataset',
 };
 

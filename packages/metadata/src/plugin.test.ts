@@ -112,6 +112,50 @@ describe('MetadataPlugin._parseAndRegisterArtifact — view name resolution (PR-
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// ADR-0046 regression: a compiled artifact carries package docs in a
+// top-level `docs: DocSchema[]` array. The artifact loader registers only
+// the metadata fields enumerated in ARTIFACT_FIELD_TO_TYPE; `docs` was
+// omitted, so the bundle's docs were silently dropped and GET /meta/doc
+// returned an empty list even though the package shipped docs. The field
+// must map to the `doc` type so docs register like any other item.
+// ─────────────────────────────────────────────────────────────────────────
+describe('MetadataPlugin._parseAndRegisterArtifact — package docs (ADR-0046)', () => {
+    it('registers `doc` items from the artifact `docs` array', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'eager' },
+            environmentId: 'proj_test',
+        });
+        const mgr = (plugin as any).manager as NodeMetadataManager;
+        const fakeCtx = {
+            logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+        } as any;
+
+        const artifact = {
+            id: 'com.example.docs',
+            name: 'test',
+            version: '0.0.0',
+            type: 'app',
+            scope: 'app',
+            namespace: 'test',
+            defaultDatasource: 'memory',
+            docs: [
+                { name: 'test_index', label: 'Overview', content: '# Overview\n' },
+                { name: 'test_guide', content: '# Guide\n' },
+            ],
+        };
+
+        await (plugin as any)._parseAndRegisterArtifact(fakeCtx, artifact, 'test-artifact');
+
+        const index = await mgr.get('doc', 'test_index');
+        expect(index).toBeDefined();
+        expect((index as any)?.content).toContain('# Overview');
+        const guide = await mgr.get('doc', 'test_guide');
+        expect(guide).toBeDefined();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // Filesystem-scanner provenance: when the host declares its package id
 // (options.packageId — the project's `defineStack` manifest id), scanned
 // source-file metadata must be stamped `_packageId`/`_provenance` exactly
