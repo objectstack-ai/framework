@@ -1,5 +1,34 @@
 # @objectstack/objectql
 
+## 9.3.0
+
+### Minor Changes
+
+- 1ada658: ADR-0046 P1: package documentation as metadata. New `doc` metadata element — flat Markdown files under `src/docs/*.md` compile into `docs: DocSchema[]` on the stack and register like any other metadata.
+
+  - spec: `DocSchema` ({ name, label?, content }) in `system/`, `StackDefinition.docs`, `doc` in `MetadataTypeSchema` + type registry (inert data, runtime-creatable) + canonical schema map, `docs → doc` plural mapping.
+  - cli: `os build` collects flat `src/docs/*.md` (frontmatter `title:`/first `#` heading → label) and enforces the ADR lint — flat directory, namespace-prefixed snake_case names, namespace required when docs ship, MDX/image ban, same-package relative-link resolution. Same rules surface in `os lint`.
+  - objectql: `docs` joins the generic metadata registration loop (manifest + nested plugins).
+  - runtime: docs count as app payload; `GET /metadata/doc` list responses omit `content` by default (`?include=content` opts in) so unbounded manuals stay off hot paths.
+
+- b10aa78: Metadata registered through the metadata-service path now carries package provenance. `loadMetadataFromService` and `MetadataFacade.register` pass each item's own `_packageId` through to `registry.registerItem` so `applyProtection` stamps `_packageId`/`_provenance: 'package'` (never a synthetic id — `isArtifactBacked()` write authorization keys off `_packageId`). New `MetadataPluginOptions.packageId` lets hosts running the filesystem scanner declare the owning package id for scanned source-file metadata, closing the same gap for hand-wired kernels. GET /api/v1/meta/:type consumers (e.g. objectui NavigationSyncEffect) can now distinguish package-shipped items from user-authored rows without name heuristics.
+
+### Patch Changes
+
+- 2796a1f: Fix metadata registry pollution: a packaged artifact's protection envelope (`_lock`/`_packageId`/`_provenance`) survives overlay hydration and reset (ADR-0010 §3.3). GET-list hydration used to register the sys_metadata overlay body under the registry's plain key, shadowing the artifact — a `_lock: full` app read back as unlocked after PUT+GET, and DELETE (reset) left the stale shadow in place until restart. Envelope readers now resolve through the shadow-immune `SchemaRegistry.getArtifactItem()`, hydration grafts the artifact envelope onto the overlay body (overlay content wins, artifact protection wins), and reset heals the registry via `removeRuntimeShadow()` — including self-healing on a no-op DELETE.
+- Updated dependencies [1ada658]
+- Updated dependencies [3219191]
+- Updated dependencies [290f631]
+- Updated dependencies [50b7b47]
+- Updated dependencies [f15d6f6]
+- Updated dependencies [f8684ea]
+- Updated dependencies [b4765be]
+  - @objectstack/spec@9.3.0
+  - @objectstack/core@9.3.0
+  - @objectstack/formula@9.3.0
+  - @objectstack/metadata-core@9.3.0
+  - @objectstack/types@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes

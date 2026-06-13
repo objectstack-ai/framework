@@ -1,5 +1,28 @@
 # @objectstack/metadata
 
+## 9.3.0
+
+### Minor Changes
+
+- b10aa78: Metadata registered through the metadata-service path now carries package provenance. `loadMetadataFromService` and `MetadataFacade.register` pass each item's own `_packageId` through to `registry.registerItem` so `applyProtection` stamps `_packageId`/`_provenance: 'package'` (never a synthetic id — `isArtifactBacked()` write authorization keys off `_packageId`). New `MetadataPluginOptions.packageId` lets hosts running the filesystem scanner declare the owning package id for scanned source-file metadata, closing the same gap for hand-wired kernels. GET /api/v1/meta/:type consumers (e.g. objectui NavigationSyncEffect) can now distinguish package-shipped items from user-authored rows without name heuristics.
+
+### Patch Changes
+
+- Updated dependencies [1ada658]
+- Updated dependencies [3219191]
+- Updated dependencies [290f631]
+- Updated dependencies [50b7b47]
+- Updated dependencies [f15d6f6]
+- Updated dependencies [f8684ea]
+- Updated dependencies [c802327]
+- Updated dependencies [b4765be]
+  - @objectstack/spec@9.3.0
+  - @objectstack/platform-objects@9.3.0
+  - @objectstack/core@9.3.0
+  - @objectstack/metadata-core@9.3.0
+  - @objectstack/types@9.3.0
+  - @objectstack/metadata-fs@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes

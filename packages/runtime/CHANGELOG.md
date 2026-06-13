@@ -1,5 +1,43 @@
 # @objectstack/runtime
 
+## 9.3.0
+
+### Patch Changes
+
+- 1ada658: ADR-0046 P1: package documentation as metadata. New `doc` metadata element — flat Markdown files under `src/docs/*.md` compile into `docs: DocSchema[]` on the stack and register like any other metadata.
+
+  - spec: `DocSchema` ({ name, label?, content }) in `system/`, `StackDefinition.docs`, `doc` in `MetadataTypeSchema` + type registry (inert data, runtime-creatable) + canonical schema map, `docs → doc` plural mapping.
+  - cli: `os build` collects flat `src/docs/*.md` (frontmatter `title:`/first `#` heading → label) and enforces the ADR lint — flat directory, namespace-prefixed snake_case names, namespace required when docs ship, MDX/image ban, same-package relative-link resolution. Same rules surface in `os lint`.
+  - objectql: `docs` joins the generic metadata registration loop (manifest + nested plugins).
+  - runtime: docs count as app payload; `GET /metadata/doc` list responses omit `content` by default (`?include=content` opts in) so unbounded manuals stay off hot paths.
+
+- Updated dependencies [1ada658]
+- Updated dependencies [b08d08d]
+- Updated dependencies [3219191]
+- Updated dependencies [290f631]
+- Updated dependencies [50b7b47]
+- Updated dependencies [f15d6f6]
+- Updated dependencies [f8684ea]
+- Updated dependencies [b4765be]
+- Updated dependencies [b10aa78]
+- Updated dependencies [2796a1f]
+  - @objectstack/spec@9.3.0
+  - @objectstack/objectql@9.3.0
+  - @objectstack/rest@9.3.0
+  - @objectstack/metadata@9.3.0
+  - @objectstack/core@9.3.0
+  - @objectstack/formula@9.3.0
+  - @objectstack/observability@9.3.0
+  - @objectstack/driver-memory@9.3.0
+  - @objectstack/driver-sql@9.3.0
+  - @objectstack/driver-sqlite-wasm@9.3.0
+  - @objectstack/plugin-auth@9.3.0
+  - @objectstack/plugin-org-scoping@9.3.0
+  - @objectstack/plugin-security@9.3.0
+  - @objectstack/service-cluster@9.3.0
+  - @objectstack/service-i18n@9.3.0
+  - @objectstack/types@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes

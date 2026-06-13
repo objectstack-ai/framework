@@ -1,5 +1,23 @@
 # @objectstack/platform-objects
 
+## 9.3.0
+
+### Minor Changes
+
+- c802327: Marketplace Setup navigation is now plugin-owned (cloud ADR-0009): `MarketplaceProxyPlugin` carries the "Browse Marketplace" entry and `MarketplaceInstallLocalPlugin` carries "Installed Apps" — no plugin mounted (e.g. `OS_CLOUD_URL=off`), no entry, no dead page. The two entries are removed from `@objectstack/platform-objects`' setup-nav contributions (ADR-0029 K2 ownership handoff).
+
+### Patch Changes
+
+- Updated dependencies [1ada658]
+- Updated dependencies [3219191]
+- Updated dependencies [290f631]
+- Updated dependencies [50b7b47]
+- Updated dependencies [f15d6f6]
+- Updated dependencies [f8684ea]
+- Updated dependencies [b4765be]
+  - @objectstack/spec@9.3.0
+  - @objectstack/metadata-core@9.3.0
+
 ## 9.2.0
 
 ### Patch Changes
