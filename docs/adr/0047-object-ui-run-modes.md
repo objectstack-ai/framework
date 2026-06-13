@@ -153,6 +153,44 @@ have; we do not rely on lint to forbid what the type can simply not express.
 | User-created views | Allowed, governed by permissions + view `sharing` | Never |
 | Filter state | Session-scoped (URL-param sync is a later, orthogonal step) | Session-scoped |
 
+### 3.4a "No filter bar" is omission, not a literal `element: 'none'`
+
+Airtable's User-filters control is a single tri-state selector
+(**None / Tabs / Dropdown**). We deliberately do **not** mirror "none" as a
+literal enum value: **"none" is the ABSENCE of `userFilters`**.
+
+Rationale (declarative-metadata hygiene):
+
+- **Consistency.** Every optional capability in the protocol is "off = key
+  absent" (`kanban`, `grouping`, …). A literal `element: 'none'` would be the
+  one special case authors and tooling must learn.
+- **No dead config.** `element: 'none'` would leave an object whose `fields` /
+  `tabs` are orphaned — undefined semantics for validation, overlay merge, and
+  AI generation. Omission has one unambiguous meaning.
+- **Cleaner diffs / overlays.** Disabling the bar is a key deletion (ADR-0005
+  overlay semantics), not a value mutation dragging stale sub-config along.
+- **Orthogonal axes.** "Is there a filter bar?" (presence) and "what style?"
+  (`element`) are independent; one enum would couple them.
+
+**`toggle` is deprecated; authoring offers Airtable's three.** The `element`
+enum keeps `dropdown | tabs | toggle` for back-compat (existing configs keep
+rendering), but `toggle` is **not** an authoring choice: it overlaps `tabs`
+(presets) and `dropdown` (per-field values) without adding expressive power,
+needs per-field `defaultValues` to be useful at all, and was the least-
+exercised path. A homogeneous "everything is a toggle" bar only fits all-boolean
+field sets — a narrow case better served by letting field *type* drive the
+control inside `dropdown`. If stackable one-click quick-filters become a
+validated need, design them explicitly (à la Linear filter chips), not via the
+half-spec'd `toggle`.
+
+**Storage and authoring UI are separate layers.** The Studio editor exposes a
+first-class **None / Tabs / Dropdown** segmented selector (the `filter-mode`
+widget) — selecting *None* writes `onChange(undefined)`, removing the key.
+Authors get Airtable's explicit affordance; the protocol stays clean.
+
+If a "disable but remember the configured fields/tabs" need ever arises, the
+right shape is a separate `enabled: false` flag — never `element: 'none'`.
+
 ### 3.5 AI authoring rules (inherits ADR-0033's draft gate)
 
 1. **Default output**: objects + list views + navigation → objects. *No pages.*
