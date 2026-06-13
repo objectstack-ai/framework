@@ -25,6 +25,7 @@
       "@objectstack/formula",
       "@objectstack/platform-objects",
       "@objectstack/studio",
+      "@objectstack/setup",
       "@objectstack/runtime",
       "@objectstack/rest",
       "@objectstack/driver-memory",
