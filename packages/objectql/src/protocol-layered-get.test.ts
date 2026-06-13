@@ -95,4 +95,36 @@ describe('ObjectStackProtocolImplementation - getMetaItemLayered', () => {
         expect(result.overlay).toBeNull();
         expect(result.effective).toBeNull();
     });
+
+    it('scopes the code layer to the requested package on a same-name collision (ADR-0048)', async () => {
+        // Two packages each ship view/clash; the registry stores them under
+        // composite keys. The layered (Studio editor) read must resolve the
+        // code baseline owned by the requested package.
+        registry.registerItem('view', { name: 'clash', type: 'grid', object: 'task', label: 'Alpha view' }, 'name', 'com.acme.alpha');
+        registry.registerItem('view', { name: 'clash', type: 'grid', object: 'task', label: 'Beta view' }, 'name', 'com.acme.beta');
+
+        const alpha = await protocol.getMetaItemLayered({ type: 'view', name: 'clash', packageId: 'com.acme.alpha' });
+        const beta = await protocol.getMetaItemLayered({ type: 'view', name: 'clash', packageId: 'com.acme.beta' });
+
+        expect((alpha.code as any)?.label).toBe('Alpha view');
+        expect((beta.code as any)?.label).toBe('Beta view');
+    });
+
+    it('scopes the overlay query to the requested package (ADR-0048)', async () => {
+        const rows: Record<string, any> = {
+            'com.acme.alpha': { metadata: { name: 'clash', label: 'Alpha overlay' } },
+            'com.acme.beta': { metadata: { name: 'clash', label: 'Beta overlay' } },
+        };
+        // The package-scoped query carries package_id; the package-less
+        // fallback must miss (null) so the scoped row is the only hit.
+        mockEngine.findOne.mockImplementation((_table: string, opts: any) =>
+            Promise.resolve(opts.where?.package_id ? (rows[opts.where.package_id] ?? null) : null),
+        );
+
+        const alpha = await protocol.getMetaItemLayered({ type: 'view', name: 'clash', packageId: 'com.acme.alpha' });
+        const beta = await protocol.getMetaItemLayered({ type: 'view', name: 'clash', packageId: 'com.acme.beta' });
+
+        expect((alpha.overlay as any)?.label).toBe('Alpha overlay');
+        expect((beta.overlay as any)?.label).toBe('Beta overlay');
+    });
 });

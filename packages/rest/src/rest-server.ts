@@ -1917,9 +1917,14 @@ export class RestServer {
                         // diagnostic endpoint, not on the hot read path.
                         const wantLayered = req.query?.layers !== undefined && req.query?.layers !== '';
                         if (wantLayered && typeof (p as any).getMetaItemLayered === 'function') {
+                            // ADR-0048 — thread `?package=` so the layered (Studio
+                            // editor) view is package-scoped; the editor passes the
+                            // edited item's owning package, not the studio app's.
+                            const layeredPackageId = req.query?.package || undefined;
                             const layered = await (p as any).getMetaItemLayered({
                                 type: req.params.type,
                                 name: req.params.name,
+                                ...(layeredPackageId ? { packageId: layeredPackageId } : {}),
                                 ...(environmentId ? { environmentId } : {}),
                             });
                             res.json(layered);

@@ -965,7 +965,7 @@ export class SchemaRegistry {
    * it (that masking is exactly the "registry pollution" bug where a
    * locked app's `_lock` read back as undefined after a PUT+GET).
    */
-  getArtifactItem<T>(type: string, name: string): T | undefined {
+  getArtifactItem<T>(type: string, name: string, currentPackageId?: string): T | undefined {
     if (type === 'object' || type === 'objects') {
       const obj = this.getObject(name) as any;
       return obj && obj._packageId && obj._packageId !== 'sys_metadata'
@@ -974,6 +974,14 @@ export class SchemaRegistry {
     }
     const collection = this.metadata.get(type);
     if (!collection) return undefined;
+    // ADR-0048 prefer-local: when the caller resolves within a package, the
+    // artifact owned by that package wins over a first-match composite scan,
+    // so two installed packages shipping the same name don't resolve by Map
+    // iteration order.
+    if (currentPackageId) {
+      const local = collection.get(`${currentPackageId}:${name}`) as any;
+      if (local && local._packageId && local._packageId !== 'sys_metadata') return local as T;
+    }
     for (const [key, item] of collection) {
       if (key !== name && key.endsWith(`:${name}`)) {
         const it = item as any;

@@ -1698,10 +1698,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const services = this.getServicesRegistry?.();
             const metadataService = services?.get('metadata');
             if (metadataService && typeof metadataService.get === 'function') {
-                let fromService = await metadataService.get(request.type, request.name);
+                // ADR-0048 — package-scope the code layer so a same-name
+                // collision resolves to the requested package's artifact.
+                let fromService = await metadataService.get(request.type, request.name, request.packageId);
                 if (fromService === undefined || fromService === null) {
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                    if (alt) fromService = await metadataService.get(alt, request.name);
+                    if (alt) fromService = await metadataService.get(alt, request.name, request.packageId);
                 }
                 if (fromService !== undefined && fromService !== null) code = fromService;
             }
@@ -1712,11 +1714,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             // Prefer the artifact-only lookup so an overlay row hydrated
             // into the registry's plain key can't masquerade as the "code
             // default" layer; fall back to getItem for runtime-only items.
-            let regItem = this.lookupArtifactItem(request.type, request.name)
-                ?? this.engine.registry.getItem(request.type, request.name);
+            let regItem = this.lookupArtifactItem(request.type, request.name, request.packageId)
+                ?? this.engine.registry.getItem(request.type, request.name, request.packageId);
             if (regItem === undefined) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) regItem = this.engine.registry.getItem(alt, request.name);
+                if (alt) regItem = this.engine.registry.getItem(alt, request.name, request.packageId);
             }
             if (regItem !== undefined) code = regItem;
         }
@@ -1726,20 +1728,24 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         let overlayScope: 'org' | 'env' | null = null;
         try {
             const findOverlay = async (oid: string | null) => {
-                const where: Record<string, unknown> = {
-                    type: request.type,
-                    name: request.name,
-                    state: 'active',
-                    organization_id: oid,
+                // ADR-0048 prefer-local: when a package is supplied, the row
+                // owned by that package wins over a package-less first match.
+                const lookup = async (t: string) => {
+                    const base: Record<string, unknown> = {
+                        type: t, name: request.name, state: 'active', organization_id: oid,
+                    };
+                    if (request.packageId) {
+                        const scoped = await this.engine.findOne('sys_metadata', {
+                            where: { ...base, package_id: request.packageId },
+                        });
+                        if (scoped) return scoped;
+                    }
+                    return await this.engine.findOne('sys_metadata', { where: base });
                 };
-                let rec = await this.engine.findOne('sys_metadata', { where });
+                let rec = await lookup(request.type);
                 if (!rec) {
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                    if (alt) {
-                        rec = await this.engine.findOne('sys_metadata', {
-                            where: { ...where, type: alt },
-                        });
-                    }
+                    if (alt) rec = await lookup(alt);
                 }
                 return rec;
             };
@@ -3143,7 +3149,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * type and its singular/plural twin. Returns `undefined` when the
      * registry is unavailable or the item is not artifact-backed.
      */
-    private lookupArtifactItem(type: string, name: string): unknown {
+    private lookupArtifactItem(type: string, name: string, currentPackageId?: string): unknown {
         const registry = (this.engine as any)?.registry;
         if (!registry) return undefined;
         const singular = PLURAL_TO_SINGULAR[type] ?? type;
@@ -3152,15 +3158,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // into the plain key (getMetaItems / loadMetaFromDb) can never
         // shadow the packaged artifact's protection envelope (ADR-0010
         // §3.3 — pre-fix, that shadow made a `_lock: full` app read back
-        // as unlocked after PUT+GET until restart).
+        // as unlocked after PUT+GET until restart). `currentPackageId`
+        // (ADR-0048) makes that scan package-scoped (prefer-local).
         if (typeof registry.getArtifactItem === 'function') {
-            return registry.getArtifactItem(singular, name)
-                ?? registry.getArtifactItem(type, name);
+            return registry.getArtifactItem(singular, name, currentPackageId)
+                ?? registry.getArtifactItem(type, name, currentPackageId);
         }
         // Partial registry mocks in tests — fall back to getItem and apply
         // the same package-provenance filter inline.
         if (typeof registry.getItem !== 'function') return undefined;
-        const item = registry.getItem(singular, name) ?? registry.getItem(type, name);
+        const item = registry.getItem(singular, name, currentPackageId) ?? registry.getItem(type, name, currentPackageId);
         if (!item || !(item as any)._packageId || (item as any)._packageId === 'sys_metadata') {
             return undefined;
         }
