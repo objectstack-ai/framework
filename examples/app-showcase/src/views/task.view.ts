@@ -75,6 +75,9 @@ export const TaskViews = defineView({
           { field: 'status' },
           { field: 'priority', showCount: true },
           { field: 'done', type: 'boolean' },
+          // Lookup field — renders as a record-picker dropdown (the
+          // CRM-parity case: filter by a referenced record, e.g. owner).
+          { field: 'project' },
         ],
       },
     },
