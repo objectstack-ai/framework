@@ -558,6 +558,28 @@ describe('RestServer', () => {
         expect.objectContaining({ type: 'object', name: 'lead', previewDrafts: true }),
       );
     });
+
+    it('GET /meta/:type/:name?package= bypasses the cache and threads packageId (ADR-0048)', async () => {
+      // A `?package=` read is package-scoped (prefer-local). The cached path
+      // keys ETags on type+name only and drops packageId, so it must be skipped
+      // when a package scope is requested — otherwise two installed packages
+      // shipping the same type/name share one cache entry and the scope hint is
+      // silently lost.
+      protocol.getMetaItemCached = vi.fn();
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type/:name');
+      expect(route).toBeDefined();
+
+      await route!.handler(
+        { params: { type: 'doc', name: 'intro' }, query: { package: 'com.objectstack.studio' }, headers: {} },
+        mockRes(),
+      );
+      expect(protocol.getMetaItemCached).not.toHaveBeenCalled();
+      expect(protocol.getMetaItem).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'doc', name: 'intro', packageId: 'com.objectstack.studio' }),
+      );
+    });
   });
 
   describe('findData handler expand/populate forwarding', () => {

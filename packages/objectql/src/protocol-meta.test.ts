@@ -628,7 +628,9 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             const result = await protocolWithService.getMetaItem({ type: 'view', name: 'case' });
 
             expect(result.item).toMatchObject(fresh);
-            expect(metadataService.get).toHaveBeenCalledWith('view', 'case');
+            // The third arg is the package-scoped resolution hint (ADR-0048),
+            // undefined here since the request carries no packageId.
+            expect(metadataService.get).toHaveBeenCalledWith('view', 'case', undefined);
         });
 
         it('falls back to SchemaRegistry when MetadataService returns undefined', async () => {
@@ -649,6 +651,42 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             const result = await protocolWithService.getMetaItem({ type: 'view', name: 'case' });
 
             expect(result.item).toMatchObject(fromRegistry);
+        });
+
+        it('resolves a same-name collision to the requesting package (ADR-0048 prefer-local)', async () => {
+            // Two installed packages each ship `doc/intro`; the registry stores
+            // them under composite keys `${packageId}:intro`. A single-item GET
+            // carrying `packageId` must resolve to that package's own item.
+            registry.registerItem('doc', { name: 'intro', content: '# Studio' }, 'name' as any, 'com.objectstack.studio');
+            registry.registerItem('doc', { name: 'intro', content: '# Setup' }, 'name' as any, 'com.objectstack.setup');
+
+            mockEngine.findOne.mockResolvedValue(null); // no sys_metadata overlay
+
+            const studio = await protocol.getMetaItem({ type: 'doc', name: 'intro', packageId: 'com.objectstack.studio' });
+            const setup = await protocol.getMetaItem({ type: 'doc', name: 'intro', packageId: 'com.objectstack.setup' });
+
+            expect((studio.item as any).content).toBe('# Studio');
+            expect((setup.item as any).content).toBe('# Setup');
+        });
+
+        it('package-scoped overlay read prefers the row owned by the requesting package (ADR-0048)', async () => {
+            // sys_metadata holds two `doc/intro` rows differing only by package_id.
+            // The overlay lookup must filter on package_id when one is supplied.
+            const rows: Record<string, any> = {
+                'com.objectstack.studio': { type: 'doc', name: 'intro', state: 'active', package_id: 'com.objectstack.studio', metadata: { name: 'intro', content: '# Studio overlay' } },
+                'com.objectstack.setup': { type: 'doc', name: 'intro', state: 'active', package_id: 'com.objectstack.setup', metadata: { name: 'intro', content: '# Setup overlay' } },
+            };
+            // findOne(collection, query) — the package-scoped query carries
+            // `package_id`; the package-less fallback query must miss (null).
+            mockEngine.findOne.mockImplementation(async (_collection: string, query: any) =>
+                query?.where?.package_id ? (rows[query.where.package_id] ?? null) : null,
+            );
+
+            const studio = await protocol.getMetaItem({ type: 'doc', name: 'intro', packageId: 'com.objectstack.studio' });
+            const setup = await protocol.getMetaItem({ type: 'doc', name: 'intro', packageId: 'com.objectstack.setup' });
+
+            expect((studio.item as any).content).toBe('# Studio overlay');
+            expect((setup.item as any).content).toBe('# Setup overlay');
         });
 
         it('should parse metadata JSON string from DB record', async () => {

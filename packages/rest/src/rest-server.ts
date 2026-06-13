@@ -1943,7 +1943,17 @@ export class RestServer {
                         // the preview to the stale published world.
                         const previewDrafts = typeof req.query?.preview === 'string'
                             && req.query.preview.toLowerCase() === 'draft';
-                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts) {
+                        // ADR-0048 — a `?package=` read is package-scoped
+                        // (prefer-local). The cached path keys ETags on
+                        // type+name only and does NOT thread `packageId` into
+                        // `getMetaItemCached`, so two installed packages shipping
+                        // the same type/name would share one cache entry and the
+                        // scope hint would be silently dropped. Bypass the cache
+                        // when a package scope is requested so the disambiguating
+                        // `getMetaItem(type, name, packageId)` path runs.
+                        const packageScoped = typeof req.query?.package === 'string'
+                            && req.query.package.length > 0;
+                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped) {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,

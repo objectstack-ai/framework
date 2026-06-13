@@ -40,10 +40,16 @@ export class MetadataFacade {
   }
 
   /**
-   * Get a metadata item by type and name
+   * Get a metadata item by type and name.
+   *
+   * `currentPackageId` (ADR-0048) opts into package-scoped resolution: when two
+   * installed packages ship an item of the same `type`/`name`, the registry
+   * prefers the one owned by `currentPackageId` (composite key
+   * `${packageId}:${name}`) before falling back to first-match. Omit it for the
+   * legacy context-free lookup.
    */
-  async get(type: string, name: string): Promise<any> {
-    const item = this.registry.getItem(type, name) as any;
+  async get(type: string, name: string, currentPackageId?: string): Promise<any> {
+    const item = this.registry.getItem(type, name, currentPackageId) as any;
     return item?.content ?? item;
   }
 

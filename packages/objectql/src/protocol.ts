@@ -1412,16 +1412,23 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         if (request.previewDrafts && readState !== 'draft') {
             try {
                 const findDraft = async (oid: string | null): Promise<any | undefined> => {
-                    const rec = await this.engine.findOne('sys_metadata', {
-                        where: { type: request.type, name: request.name, state: 'draft', organization_id: oid },
-                    });
+                    // ADR-0048 prefer-local (parity with the active-read overlay below).
+                    const lookup = async (t: string): Promise<any | undefined> => {
+                        const base: Record<string, unknown> = {
+                            type: t, name: request.name, state: 'draft', organization_id: oid,
+                        };
+                        if (request.packageId) {
+                            const scoped = await this.engine.findOne('sys_metadata', {
+                                where: { ...base, package_id: request.packageId },
+                            });
+                            if (scoped) return scoped;
+                        }
+                        return await this.engine.findOne('sys_metadata', { where: base });
+                    };
+                    const rec = await lookup(request.type);
                     if (rec) return rec;
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                    if (alt) {
-                        return await this.engine.findOne('sys_metadata', {
-                            where: { type: alt, name: request.name, state: 'draft', organization_id: oid },
-                        });
-                    }
+                    if (alt) return await lookup(alt);
                     return undefined;
                 };
                 const draftRec = (orgId ? await findDraft(orgId) : undefined) ?? await findDraft(null);
@@ -1447,24 +1454,29 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         //    through to the in-memory registry / MetadataService.
         try {
             const findOverlay = async (oid: string | null): Promise<any | undefined> => {
-                const where: Record<string, unknown> = {
-                    type: request.type,
-                    name: request.name,
-                    state: readState,
-                    organization_id: oid,
-                };
-                const rec = await this.engine.findOne('sys_metadata', { where });
-                if (rec) return rec;
-                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) {
-                    const altWhere: Record<string, unknown> = {
-                        type: alt,
+                // ADR-0048 prefer-local: when a package id is supplied and two
+                // installed packages ship the same type/name, prefer the row owned
+                // by that package before falling back to first-match (package-less
+                // query). This mirrors `SchemaRegistry.getItem(type, name, pkg)`.
+                const lookup = async (t: string): Promise<any | undefined> => {
+                    const base: Record<string, unknown> = {
+                        type: t,
                         name: request.name,
                         state: readState,
                         organization_id: oid,
                     };
-                    return await this.engine.findOne('sys_metadata', { where: altWhere });
-                }
+                    if (request.packageId) {
+                        const scoped = await this.engine.findOne('sys_metadata', {
+                            where: { ...base, package_id: request.packageId },
+                        });
+                        if (scoped) return scoped;
+                    }
+                    return await this.engine.findOne('sys_metadata', { where: base });
+                };
+                const rec = await lookup(request.type);
+                if (rec) return rec;
+                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                if (alt) return await lookup(alt);
                 return undefined;
             };
             const record = (orgId ? await findOverlay(orgId) : undefined)
@@ -1517,13 +1529,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 const services = this.getServicesRegistry?.();
                 const metadataService = services?.get('metadata');
                 if (metadataService && typeof metadataService.get === 'function') {
-                    const fromService = await metadataService.get(request.type, request.name);
+                    // Thread the caller's package id (ADR-0048) so a single-item
+                    // fetch is package-scoped: when two installed packages ship the
+                    // same type/name, the facade prefers the requester's own item.
+                    const fromService = await metadataService.get(request.type, request.name, request.packageId);
                     if (fromService !== undefined && fromService !== null) {
                         item = fromService;
                     } else {
                         const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                         if (alt) {
-                            const altFromService = await metadataService.get(alt, request.name);
+                            const altFromService = await metadataService.get(alt, request.name, request.packageId);
                             if (altFromService !== undefined && altFromService !== null) {
                                 item = altFromService;
                             }
@@ -1548,10 +1563,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         //    `GET /api/v1/meta/object/<name>` 404 even though the object is
         //    registered and visible via the list endpoint.
         if (item === undefined) {
-            item = this.engine.registry.getItem(request.type, request.name);
+            item = this.engine.registry.getItem(request.type, request.name, request.packageId);
             if (item === undefined) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) item = this.engine.registry.getItem(alt, request.name);
+                if (alt) item = this.engine.registry.getItem(alt, request.name, request.packageId);
             }
         }
 
