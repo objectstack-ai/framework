@@ -2,9 +2,11 @@
 name: objectstack-ui
 description: >
   Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt),
-  Apps (navigation), Pages, Dashboards, Reports, Charts, Actions. Use when
+  Apps (navigation), Pages, Dashboards, Reports, Charts, Actions, and
+  package Docs (`src/docs/*.md`). Use when
   the user is adding `*.view.ts` / `*.app.ts` / `*.dashboard.ts` /
-  `*.action.ts` files or designing a Studio-rendered UI surface, including
+  `*.action.ts` / `src/docs/*.md` files or designing a Studio-rendered UI
+  surface, including
   dataset-bound dashboard/report widgets. Do not use for: data schema (see
   objectstack-data), interactive screen flows /
   wizards (those are `*.flow.ts` with `type: 'screen'` — see
@@ -18,7 +20,7 @@ metadata:
   author: objectstack-ai
   version: "1.1"
   domain: ui
-  tags: view, app, page, dashboard, report, chart, action, widget
+  tags: view, app, page, dashboard, report, chart, action, widget, doc
 ---
 
 # UI Design — ObjectStack UI Protocol
@@ -37,6 +39,8 @@ App navigation, Dashboards, Reports, and Actions.
 - You need a **dashboard** with widget grids.
 - You are adding **reports** (tabular, summary, matrix, chart).
 - You are configuring **actions** (buttons, URL jumps, screen flows).
+- You are writing **package documentation** (`src/docs/*.md`) that ships
+  with the package and renders at `/docs/<name>`.
 
 ---
 
@@ -613,6 +617,90 @@ export const LeadDetailPage: Page = {
 > **Actions in header** — pass full `Action` objects into
 > `page:header.properties.actions`; do **not** create a sibling action node.
 > The header renders them inline in the action slot.
+
+---
+
+## Docs — Package Documentation (ADR-0046)
+
+A **Doc** is a page of package documentation shipped *as metadata*. You
+author plain Markdown in a flat `src/docs/` directory; `os build`
+compiles each `*.md` into a `doc` item that travels inside the package
+artifact and renders in the console at `/docs/<name>`. Docs are also the
+grounding the AI assistant reads about a package.
+
+```
+src/docs/
+  crm_index.md         → doc "crm_index"      → /docs/crm_index
+  crm_user_guide.md    → doc "crm_user_guide" → /docs/crm_user_guide
+```
+
+### Authoring rules (each enforced by `os build`)
+
+1. **Flat directory.** Every `.md` lives directly in `src/docs/`;
+   subdirectories are a build error. Flatness is what keeps links stable
+   — a reference resolves by basename, never by path.
+2. **Namespace-prefixed filename.** The filename stem becomes the doc
+   `name` (`^[a-z][a-z0-9_]*$`) and must start with the package namespace
+   (`crm_…`). Names share one flat, instance-global space with the URL, so
+   a bare `user_guide` would collide across packages and fail at install
+   (ADR-0048).
+3. **Title** resolves: frontmatter `title:` → first `#` heading → `name`.
+4. **Pure Markdown.** CommonMark + GFM only, plus heading anchors, fenced
+   code highlighting, and GitHub alerts (`> [!NOTE]`, `> [!WARNING]`, …).
+   **MDX and image references are rejected at build time** — docs are
+   publisher content rendered inside the platform (no authored code across
+   the trust boundary; images await a content-addressed asset service).
+5. **Cross-references** use plain relative links — `[overview](./crm_index.md)`.
+   The console rewrites `*.md` → `/docs/<target>` (anchors preserved);
+   broken same-package links fail the build.
+
+### Routing model — platform-level viewer, opt-in entry
+
+The viewer is **platform-level**: one global `/docs/<name>` route
+resolves any doc regardless of which app you came from. The URL is
+**single-coordinate** — no package or app prefix — so a doc has exactly
+one URL. Do **not** design per-app or per-package doc URLs; that gives one
+doc many addresses and breaks cross-references.
+
+To surface a doc inside an app, add a navigation item that **links into**
+that global URL. There is no dedicated `doc` nav-item type yet, so use a
+`url` item pointing at `/docs/<name>`:
+
+```typescript
+navigation: [
+  { id: 'nav_help', type: 'url', url: '/docs/crm_user_guide',
+    label: 'User Guide', icon: 'book-open' },
+]
+```
+
+A platform-level "Documentation" portal (browse/search all docs by
+package) is a later, additive concern — author-side, nothing to model now.
+
+> **Dynamic content.** Don't try to embed a live component (a flow
+> diagram, a record table) in a doc — there is no inline SDUI. Link to the
+> metadata by URL; the platform renders the live view, the doc points at it.
+
+### Example
+
+```md
+---
+title: CRM Overview
+---
+
+# CRM
+
+Manages accounts, contacts, and opportunities.
+
+> [!TIP]
+> New here? Start with the [user guide](./crm_user_guide.md).
+
+| Object | Purpose |
+| :--- | :--- |
+| `crm_account` | Companies and organizations |
+| `crm_contact` | People at an account |
+```
+
+In-repo reference: `examples/app-showcase/src/docs/showcase_docs_guide.md`.
 
 ---
 

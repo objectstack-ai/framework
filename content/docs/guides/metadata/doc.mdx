@@ -1,0 +1,159 @@
+---
+title: Doc Metadata
+description: Ship package documentation as metadata — flat src/docs/*.md files compiled into the manifest and rendered in the console
+---
+
+# Doc Metadata
+
+A **Doc** is a single page of package documentation. You write plain
+Markdown files in a flat `src/docs/` directory; `os build` compiles each
+one into a `doc` metadata item that ships inside the package artifact and
+renders in the console at `/docs/<name>`. Docs are also the grounding the
+AI assistant reads when answering questions about your package.
+
+Unlike `content/docs/` (which builds a standalone website), package docs
+are **package source** — they travel with the package, version with it,
+and are addressable as metadata like any Object or View.
+
+## Authoring: flat `src/docs/*.md`
+
+The normal way to author a doc is to drop a Markdown file in `src/docs/`:
+
+```
+src/docs/
+  crm_index.md            → doc name "crm_index"
+  crm_user_guide.md       → doc name "crm_user_guide"
+```
+
+The filename stem becomes the doc `name`. There is no directory taxonomy
+and no ordering file — the flat layout is what keeps cross-references
+stable (a link resolves by basename, never by path).
+
+### Frontmatter
+
+A leading YAML frontmatter block is optional. Only `title` is read:
+
+```md
+---
+title: User Guide
+---
+
+# Getting started with CRM
+...
+```
+
+The display title resolves in order: frontmatter `title:` → the first
+`#` heading → the doc `name`.
+
+## Doc Properties
+
+When a `*.md` file is collected, it becomes a `doc` item with this shape:
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `name` | `string` | ✅ | Machine name (`snake_case`), from the filename stem. Must match `^[a-z][a-z0-9_]*$` and be **namespace-prefixed** |
+| `label` | `string` | — | Display title (from frontmatter `title`) |
+| `content` | `string` | ✅ | The Markdown body |
+
+You can also declare a doc programmatically with `DocSchema` in a stack
+definition's `docs` array, but the `src/docs/*.md` path is the convention
+— it gives you native editor and GitHub preview for free.
+
+## Naming and routing
+
+Doc names live in the same flat, instance-global namespace as the URL.
+The console route is **single-coordinate** — `/docs/<name>`, with no
+package or app prefix — so a doc has exactly one URL no matter who links
+it.
+
+That only works if names don't collide, so the build requires every doc
+name to be **namespace-prefixed**:
+
+```
+src/docs/crm_user_guide.md      ✅  package namespace is "crm"
+src/docs/user_guide.md          ❌  bare name — collides across packages
+```
+
+This is the same uniqueness rule the platform already applies to other
+named metadata (ADR-0048). Two packages that both ship `user_guide` would
+overwrite each other on the registry key and fail at install; the prefix
+makes the collision impossible.
+
+> **Routing model.** The viewer is platform-level: one global
+> `/docs/<name>` route resolves any doc regardless of which app you came
+> from. Anything that wants to *link into* docs — an app's navigation, a
+> registry package page, an agent's answer — does so with that same URL.
+> Per-app or per-package URL nesting is explicitly **not** the model
+> (it would give one doc many URLs and break cross-references).
+
+## Cross-references
+
+Link to a sibling doc with a plain relative Markdown link:
+
+```md
+See the [overview](./crm_index.md).
+```
+
+The console rewrites `*.md` links to `/docs/<target>` (anchors are
+preserved); in an editor or on GitHub the same link resolves natively.
+**Broken same-package links fail the build**, so references can't rot
+silently.
+
+## Markdown support
+
+Docs render **CommonMark + GFM** through a sanitizing pipeline. Supported
+out of the box:
+
+- Standard Markdown — headings, lists, tables, blockquotes, inline/fenced
+  code, links.
+- **Heading anchors** — every heading gets a slug id and a hover anchor,
+  so `#section` deep-links work.
+- **Syntax highlighting** — fenced code blocks are highlighted by
+  language.
+- **GitHub alerts** — `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, etc.
+  render as callouts.
+
+Two things are **rejected at build time**, by design:
+
+- **MDX / embedded components.** Docs are publisher-supplied content
+  rendered inside the platform; executing authored code would cross a
+  trust boundary. Markdown is data, not code.
+- **Image references.** Images need a content-addressed asset service
+  (a later, additive concern). Until then, `![...](...)` fails the build
+  rather than producing broken `<img>` tags in a tenant.
+
+For dynamic content (a live flow diagram, a record table), don't try to
+embed a component — link to the metadata by URL instead. The platform
+renders the live view; the doc just points at it.
+
+## Example
+
+```md
+---
+title: CRM Overview
+---
+
+# CRM
+
+The CRM package manages accounts, contacts, and opportunities.
+
+> [!TIP]
+> New here? Start with the [user guide](./crm_user_guide.md).
+
+## Objects
+
+| Object | Purpose |
+| :--- | :--- |
+| `crm_account` | Companies and organizations |
+| `crm_contact` | People at an account |
+```
+
+Saved as `src/docs/crm_index.md`, this compiles to a `crm_index` doc and
+renders at `/docs/crm_index`.
+
+## Next Steps
+
+- See the in-repo authoring reference in the showcase package:
+  `examples/app-showcase/src/docs/showcase_docs_guide.md`.
+- Read [ADR-0046](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0046-package-docs-as-metadata.md)
+  for the full design rationale and rollout phases.

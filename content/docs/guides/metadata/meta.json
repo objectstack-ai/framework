@@ -11,6 +11,7 @@
     "flow",
     "workflow",
     "validation",
-    "permission"
+    "permission",
+    "doc"
   ]
 }
