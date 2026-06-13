@@ -1,5 +1,100 @@
 # @objectstack/cli
 
+## 9.4.0
+
+### Minor Changes
+
+- 060467a: feat(ADR-0046): add optional `description` to package docs
+
+  A doc can now carry a one-line `description` (frontmatter `description:`),
+  giving the natural minimal model: title / summary / body. `DocSchema` gains an
+  optional `description`; `os build` reads it from frontmatter. It travels in the
+  `GET /meta/doc` list response (unlike `content`, which the list omits), so a
+  docs portal can show summaries without fetching each body. Example docs
+  (app-showcase, app-todo) updated.
+
+  Also records the deferred-to-P3 design for doc **tags** in ADR-0046: tags are
+  keys (i18n-resolved, never display strings), with a small protocol core
+  vocabulary plus namespace-prefixed package tags — not a field to bolt on early.
+
+- 2511a98: ADR-0048 follow-up: `os lint` now emits a `naming/namespace-prefix` **warning** when a bare-named UI/automation item is not namespace-prefixed. This shifts the cross-package collision detection (ADR-0048, runtime `MetadataCollisionError`) left to authoring time — a soft nudge to prefix `app`/`page`/`dashboard`/`flow`/`action`/`report`/`dataset` names with the package namespace, so a clash with another package is unlikely to ever reach install.
+
+  Warning-only and never fatal (only errors fail the lint). An app named after the namespace (ADR-0019 single-app convention, e.g. `crm`) and `sys_`-reserved names are exempt; objects (already prefix-enforced as an error) and object-derived views are untouched.
+
+### Patch Changes
+
+- 2c8e607: fix(ADR-0046): serve package docs at runtime, not just in the compiled artifact
+
+  Package docs (`src/docs/*.md`) compiled into a bundle were never reaching the
+  runtime, so `GET /meta/doc` returned an empty list and the docs were invisible
+  even though `os build` produced them.
+
+  Two gaps:
+
+  - **`os dev` / `os serve` (config-load path)** re-derives metadata from
+    `defineStack(...)`, which never carries the markdown docs — those are
+    collected only at compile time. `serve.ts` now collects `src/docs/*.md` into
+    the stack on the config-load path too (collection only — additive, never
+    blocks boot), so docs serve in dev exactly as from a built artifact.
+  - **The MetadataPlugin artifact loader** (`ARTIFACT_FIELD_TO_TYPE`) omitted the
+    `docs` → `doc` mapping, so the bundle's `docs` array was skipped when loading
+    through that path. Added the mapping (with a regression test) for parity with
+    the ObjectQL engine's `metadataArrayKeys`.
+
+- Updated dependencies [060467a]
+- Updated dependencies [c1dfe34]
+- Updated dependencies [0856476]
+- Updated dependencies [fef38ec]
+- Updated dependencies [593d43b]
+- Updated dependencies [593d43b]
+- Updated dependencies [593d43b]
+- Updated dependencies [3e675f6]
+  - @objectstack/spec@9.4.0
+  - @objectstack/objectql@9.4.0
+  - @objectstack/rest@9.4.0
+  - @objectstack/runtime@9.4.0
+  - @objectstack/account@9.4.0
+  - @objectstack/setup@9.4.0
+  - @objectstack/studio@9.4.0
+  - @objectstack/client@9.4.0
+  - @objectstack/core@9.4.0
+  - @objectstack/formula@9.4.0
+  - @objectstack/mcp@9.4.0
+  - @objectstack/observability@9.4.0
+  - @objectstack/platform-objects@9.4.0
+  - @objectstack/driver-memory@9.4.0
+  - @objectstack/driver-mongodb@9.4.0
+  - @objectstack/driver-sql@9.4.0
+  - @objectstack/driver-sqlite-wasm@9.4.0
+  - @objectstack/plugin-approvals@9.4.0
+  - @objectstack/plugin-audit@9.4.0
+  - @objectstack/plugin-auth@9.4.0
+  - @objectstack/plugin-email@9.4.0
+  - @objectstack/plugin-hono-server@9.4.0
+  - @objectstack/plugin-org-scoping@9.4.0
+  - @objectstack/plugin-reports@9.4.0
+  - @objectstack/plugin-security@9.4.0
+  - @objectstack/plugin-sharing@9.4.0
+  - @objectstack/plugin-webhooks@9.4.0
+  - @objectstack/service-ai@9.4.0
+  - @objectstack/service-analytics@9.4.0
+  - @objectstack/service-automation@9.4.0
+  - @objectstack/service-cache@9.4.0
+  - @objectstack/service-datasource@9.4.0
+  - @objectstack/service-feed@9.4.0
+  - @objectstack/service-job@9.4.0
+  - @objectstack/service-messaging@9.4.0
+  - @objectstack/service-package@9.4.0
+  - @objectstack/service-queue@9.4.0
+  - @objectstack/service-realtime@9.4.0
+  - @objectstack/service-settings@9.4.0
+  - @objectstack/service-storage@9.4.0
+  - @objectstack/trigger-api@9.4.0
+  - @objectstack/trigger-record-change@9.4.0
+  - @objectstack/trigger-schedule@9.4.0
+  - @objectstack/types@9.4.0
+  - @objectstack/console@9.4.0
+
 ## 9.3.0
 
 ### Minor Changes
