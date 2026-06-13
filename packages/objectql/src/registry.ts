@@ -318,6 +318,17 @@ function isRealPackage(pkg: unknown): pkg is string {
 }
 
 /**
+ * Platform namespaces that multiple packages may legitimately share, so the
+ * install-time namespace-uniqueness gate (ADR-0048 Phase 1) must never fire on
+ * them: the FQN-exempt reserved namespaces (`base`, `system`) plus `sys`
+ * (system objects such as `sys_metadata` are contributed by many packages — see
+ * {@link SchemaRegistry.registerNamespace}, which is intentionally many-to-one).
+ */
+function isShareableNamespace(ns: string): boolean {
+  return RESERVED_NAMESPACES.has(ns) || ns === 'sys';
+}
+
+/**
  * Raised when two **different** code packages register a generic (non-object)
  * metadata item under the same `(type, name)` in the code-defined base layer
  * (ADR-0048).
@@ -352,6 +363,43 @@ export class MetadataCollisionError extends Error {
     this.type = type;
     // `name` is the Error message-class name; store the metadata name separately.
     this.name_ = name;
+    this.existingPackageId = existingPackageId;
+    this.incomingPackageId = incomingPackageId;
+  }
+}
+
+/**
+ * Raised when a package is installed whose `manifest.namespace` is already owned
+ * by a **different** installed package in this installation (ADR-0048 Phase 1).
+ *
+ * The namespace is the mandatory object-name prefix (`${namespace}_${shortName}`)
+ * and — once installed — the container that scopes a package's UI/automation
+ * metadata. Two packages sharing a namespace would collide at the object/table
+ * layer (a duplicate `CREATE TABLE crm_account` already fails loudly at the DB)
+ * and would make container-scoped resolution ambiguous. This gate refuses the
+ * install up front with an actionable error, instead of letting a half-applied
+ * install blow up later at table creation. Shareable platform namespaces
+ * (`base`/`system`/`sys`) are exempt.
+ */
+export class NamespaceConflictError extends Error {
+  readonly namespace: string;
+  readonly existingPackageId: string;
+  readonly incomingPackageId: string;
+
+  constructor(namespace: string, existingPackageId: string, incomingPackageId: string) {
+    super(
+      `Namespace conflict: namespace "${namespace}" is already owned by ` +
+        `package "${existingPackageId}", so package "${incomingPackageId}" ` +
+        `cannot be installed alongside it. A namespace is the mandatory prefix ` +
+        `of every object name (e.g. "${namespace}_account") and the container ` +
+        `that scopes a package's UI metadata, so it must be unique per ` +
+        `installation. Choose a different namespace for "${incomingPackageId}", ` +
+        `or uninstall "${existingPackageId}" first. If this is a deliberate ` +
+        `migration, set OS_METADATA_COLLISION=warn to downgrade to a warning. ` +
+        `See ADR-0048.`,
+    );
+    this.name = 'NamespaceConflictError';
+    this.namespace = namespace;
     this.existingPackageId = existingPackageId;
     this.incomingPackageId = incomingPackageId;
   }
@@ -837,7 +885,15 @@ export class SchemaRegistry {
     //     artifact-vs-DB warning below.
     if (isRealPackage(packageId)) {
       const conflictOwner = this.findOtherPackageOwner(collection, baseName, packageId);
-      if (conflictOwner) {
+      if (conflictOwner && !this.isPreferLocalDisambiguable(packageId, conflictOwner)) {
+        // ADR-0048 Phase 2 — the guard now only fires when prefer-local
+        // resolution (see getItem) CANNOT disambiguate the two owners: they
+        // share a namespace (possible only for shareable platform namespaces
+        // like `sys`, which the install gate exempts) or one lacks a namespace
+        // (legacy package with no container to scope by). Two packages in
+        // DIFFERENT namespaces legitimately coexist on the same bare name —
+        // the install-time namespace gate keeps their namespaces distinct and
+        // prefer-local routes each caller to its own container.
         const err = new MetadataCollisionError(type, baseName, conflictOwner, packageId);
         if (this.collisionPolicy === 'warn') {
           console.warn(`[Registry] ${err.message}`);
@@ -895,6 +951,21 @@ export class SchemaRegistry {
   }
 
   /**
+   * True when prefer-local resolution ({@link getItem}) can route callers in
+   * each owner's container to the right item — i.e. the two packages declare
+   * **distinct, non-empty namespaces** (ADR-0048 Phase 2). When it returns
+   * false (shared namespace, or a missing namespace on either side) a same
+   * `(type, name)` clash is genuinely unresolvable and the collision guard
+   * fires. Namespaces are read from the installed-package records, which the
+   * install path registers before a package's metadata is loaded.
+   */
+  private isPreferLocalDisambiguable(incoming: string, owner: string): boolean {
+    const incomingNs = this.getPackage(incoming)?.manifest?.namespace;
+    const ownerNs = this.getPackage(owner)?.manifest?.namespace;
+    return !!incomingNs && !!ownerNs && incomingNs !== ownerNs;
+  }
+
+  /**
    * Validate Metadata against Spec Zod Schemas
    */
   validate(type: string, item: any): unknown {
@@ -939,19 +1010,40 @@ export class SchemaRegistry {
   }
 
   /**
-   * Universal Get Method
+   * Universal Get Method.
+   *
+   * ADR-0048 Phase 2 — *prefer-local* resolution. When `currentNamespace` is
+   * given (the container the caller is resolving within), a bare name resolves
+   * to the item owned by *that namespace's* package before any cross-package
+   * fallback, so two packages shipping e.g. `page/home` no longer resolve by
+   * registration order (first-match-wins). Omitting `currentNamespace`
+   * preserves the legacy resolution exactly, so this is backward compatible.
+   *
+   * Precedence (highest first):
+   *   1. bare-key runtime/DB overlay (ADR-0005 sanctioned override) — unchanged
+   *   2. the `currentNamespace` owner's composite entry (prefer-local)
+   *   3. first composite match (legacy first-registered-wins fallback)
    */
-  getItem<T>(type: string, name: string): T | undefined {
+  getItem<T>(type: string, name: string, currentNamespace?: string): T | undefined {
     // Special handling for 'object' and 'objects' types - use objectContributors
     if (type === 'object' || type === 'objects') {
       return this.getObject(name) as unknown as T | undefined;
     }
-    
+
     const collection = this.metadata.get(type);
     if (!collection) return undefined;
     const direct = collection.get(name);
     if (direct) return direct as T;
-    // Scan for composite keys
+
+    // Prefer-local: resolve within the caller's container (namespace) first.
+    if (currentNamespace) {
+      for (const owner of this.getNamespaceOwners(currentNamespace)) {
+        const local = collection.get(`${owner}:${name}`);
+        if (local) return local as T;
+      }
+    }
+
+    // Fallback: first composite key matching the bare name (legacy behaviour).
     for (const [key, item] of collection) {
       if (key.endsWith(`:${name}`)) {
         return item as T;
@@ -1080,6 +1172,30 @@ export class SchemaRegistry {
   // ==========================================
 
   installPackage(manifest: ObjectStackManifest, settings?: Record<string, any>): InstalledPackage {
+    // ADR-0048 Phase 1 — install-time namespace gate. Refuse a package whose
+    // namespace is already owned by a *different* installed package; this is
+    // the constraint the object/table layer enforces implicitly (a duplicate
+    // `CREATE TABLE <ns>_<obj>` fails at the DB), made explicit and early.
+    // Same-package reinstall/reload is excluded (owner === manifest.id), and
+    // shareable platform namespaces (base/system/sys) are exempt.
+    if (manifest.namespace && !isShareableNamespace(manifest.namespace)) {
+      const conflictOwner = this.getNamespaceOwners(manifest.namespace).find(
+        (owner) => owner !== manifest.id,
+      );
+      if (conflictOwner) {
+        if (this.collisionPolicy === 'warn') {
+          console.warn(
+            `[Registry] Namespace conflict (downgraded to warning via ` +
+              `OS_METADATA_COLLISION=warn): namespace "${manifest.namespace}" is ` +
+              `already owned by "${conflictOwner}"; installing "${manifest.id}" ` +
+              `anyway. See ADR-0048.`,
+          );
+        } else {
+          throw new NamespaceConflictError(manifest.namespace, conflictOwner, manifest.id);
+        }
+      }
+    }
+
     const now = new Date().toISOString();
     const disabled = this.initialDisabledPackageIds.has(manifest.id);
     const pkg: InstalledPackage = {
@@ -1175,7 +1291,10 @@ export class SchemaRegistry {
   }
 
   getApp(name: string): any {
-    const app = this.getItem('app', name);
+    // ADR-0048 (v1) — one app per package, with `app.name ≡ manifest.namespace`,
+    // so the app name *is* its own container: resolve prefer-local against it so
+    // two packages' apps never resolve by registration order.
+    const app = this.getItem('app', name, name);
     if (!app) return app;
     return this.applyNavContributions(app);
   }
