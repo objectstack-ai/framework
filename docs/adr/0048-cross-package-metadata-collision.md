@@ -199,9 +199,13 @@ detect.**
   an error; the fix (rename with a namespace prefix, or `warn` during
   migration) is in the message.
 - No change to the key shape, the overlay model, or object/nav paths.
-- Follow-ups (not in this ADR): a CLI lint that flags non-prefixed
-  bare-named metadata as a warning; prefix-strict spec validation for the
-  next net-new bare-named type.
+- Follow-ups: a CLI lint that flags non-prefixed bare-named metadata as a
+  warning — **implemented** as the `naming/namespace-prefix` rule in
+  `os lint` (covers `app`/`page`/`dashboard`/`flow`/`action`/`report`/
+  `dataset`; exempts an app named after the namespace per ADR-0019 and
+  `sys_` names; warning-only, never fatal). This shifts detection left from
+  the registration-time guard to authoring time. Still open: prefix-strict
+  spec validation for the next net-new bare-named type.
 
 ## 5. Implementation notes
 
