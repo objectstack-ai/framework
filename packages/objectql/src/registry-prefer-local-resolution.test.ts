@@ -1,45 +1,32 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * ADR-0048 Phase 2 — prefer-local (container-scoped) resolution.
+ * ADR-0048 §3.3 — package-scoped (prefer-local) resolution.
  *
- * With the install-time namespace gate (Phase 1) keeping namespaces distinct,
- * two packages may legitimately ship the same bare name (e.g. `page/home`).
- * They no longer collide at registration; instead `getItem(type, name, ns)`
- * routes each caller to the item owned by its own namespace's package. The
- * per-item collision guard now fires only where prefer-local CANNOT
- * disambiguate (shared / missing namespace).
+ * Two installed packages may ship the same bare name (e.g. `page/home`). They
+ * coexist under distinct composite keys, and `getItem(type, name,
+ * currentPackageId)` routes each caller to its own package's item. Because
+ * package ids are globally unique, this is unambiguous and needs no install-time
+ * gate to hold — it works for any caller carrying its package id.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SchemaRegistry } from './registry';
 
-const install = (reg: SchemaRegistry, id: string, namespace: string) =>
-  reg.installPackage({ id, name: id, namespace, version: '1.0.0' } as any);
-
-describe('SchemaRegistry — prefer-local resolution (ADR-0048 Phase 2)', () => {
+describe('SchemaRegistry — package-scoped resolution (ADR-0048 §3.3)', () => {
   let registry: SchemaRegistry;
 
   beforeEach(() => {
-    registry = new SchemaRegistry({ multiTenant: false, collisionPolicy: 'error' });
+    registry = new SchemaRegistry({ multiTenant: false });
     registry.logLevel = 'silent';
-    install(registry, 'com.acme.crm', 'crm');
-    install(registry, 'com.acme.hr', 'hr');
   });
 
-  it('lets two distinct-namespace packages coexist on the same bare name', () => {
-    registry.registerItem('page', { name: 'home', title: 'CRM Home' }, 'name', 'com.acme.crm');
-    expect(() =>
-      registry.registerItem('page', { name: 'home', title: 'HR Home' }, 'name', 'com.acme.hr'),
-    ).not.toThrow();
-  });
-
-  it('resolves prefer-local to the namespace owner', () => {
+  it('resolves prefer-local to the caller package', () => {
     registry.registerItem('page', { name: 'home', title: 'CRM Home' }, 'name', 'com.acme.crm');
     registry.registerItem('page', { name: 'home', title: 'HR Home' }, 'name', 'com.acme.hr');
 
-    expect(registry.getItem<any>('page', 'home', 'crm')?.title).toBe('CRM Home');
-    expect(registry.getItem<any>('page', 'home', 'hr')?.title).toBe('HR Home');
+    expect(registry.getItem<any>('page', 'home', 'com.acme.crm')?.title).toBe('CRM Home');
+    expect(registry.getItem<any>('page', 'home', 'com.acme.hr')?.title).toBe('HR Home');
   });
 
   it('context-free getItem still returns one of the entries (legacy first-match fallback)', () => {
@@ -52,28 +39,25 @@ describe('SchemaRegistry — prefer-local resolution (ADR-0048 Phase 2)', () => 
 
   it('keeps runtime/DB overlay (bare key) precedence over prefer-local (ADR-0005)', () => {
     registry.registerItem('page', { name: 'home', title: 'CRM Home' }, 'name', 'com.acme.crm');
-    // Runtime-authored overlay under the bare key (no package provenance).
-    registry.registerItem('page', { name: 'home', title: 'overlay' }, 'name');
+    registry.registerItem('page', { name: 'home', title: 'overlay' }, 'name'); // bare, no package
 
-    expect(registry.getItem<any>('page', 'home', 'crm')?.title).toBe('overlay');
+    expect(registry.getItem<any>('page', 'home', 'com.acme.crm')?.title).toBe('overlay');
   });
 
-  it('falls back to first-match when the namespace owns no such item', () => {
+  it('falls back to first-match when the caller package owns no such item', () => {
     registry.registerItem('page', { name: 'home', title: 'CRM Home' }, 'name', 'com.acme.crm');
-    // hr has no `home`; asking within hr's container falls back to the only entry.
-    expect(registry.getItem<any>('page', 'home', 'hr')?.title).toBe('CRM Home');
+    // com.acme.hr has no `home`; asking within its package falls back to the only entry.
+    expect(registry.getItem<any>('page', 'home', 'com.acme.hr')?.title).toBe('CRM Home');
   });
 
-  it('still fails loudly when two packages SHARE a namespace (unresolvable)', () => {
-    const reg = new SchemaRegistry({ multiTenant: false, collisionPolicy: 'error' });
-    reg.logLevel = 'silent';
-    // `sys` is a shareable platform namespace, exempt from the install gate, so
-    // two packages CAN both own it — but then a same-named item is ambiguous.
-    install(reg, 'com.a.sys', 'sys');
-    install(reg, 'com.b.sys', 'sys');
-    reg.registerItem('flow', { name: 'cleanup' }, 'name', 'com.a.sys');
-    expect(() =>
-      reg.registerItem('flow', { name: 'cleanup' }, 'name', 'com.b.sys'),
-    ).toThrow();
+  it('disambiguates even when two packages share a namespace (package id is the key)', () => {
+    // `sys` is a shareable namespace, so two packages can both own it. Under
+    // package-scoped resolution that is still unambiguous — the key is the
+    // package id, not the namespace.
+    registry.registerItem('flow', { name: 'cleanup', title: 'A' }, 'name', 'com.a.sys');
+    registry.registerItem('flow', { name: 'cleanup', title: 'B' }, 'name', 'com.b.sys');
+
+    expect(registry.getItem<any>('flow', 'cleanup', 'com.a.sys')?.title).toBe('A');
+    expect(registry.getItem<any>('flow', 'cleanup', 'com.b.sys')?.title).toBe('B');
   });
 });

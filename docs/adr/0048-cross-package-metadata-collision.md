@@ -1,4 +1,4 @@
-# ADR-0048: Cross-package metadata collision — package-scoped identity, namespace install gate, container-scoped resolution
+# ADR-0048: Cross-package metadata collision — package-id identity, namespace install gate, package-scoped resolution
 
 **Status**: Revised (2026-06-13) — supersedes the original *per-item collision
 detection* framing. The runtime guard shipped under the original proposal is
@@ -42,15 +42,22 @@ resolution**, not write-time clash detection:
    *different* installed package is **refused** — making explicit and early a
    constraint the object/table layer already enforces implicitly (a duplicate
    `CREATE TABLE crm_account` fails loudly at the DB).
-3. **Resolution is container-scoped.** UI/automation metadata resolves within
-   its package/app container, so a cross-package clash on a bare name is
-   *structurally impossible* rather than *detected after the fact*.
-4. **Per-item runtime detection (shipped) is demoted to a same-package
-   authoring backstop** + an authoring-time lint — it now only catches an
-   author shipping two `page/home` *within one package*.
+3. **Resolution is package-scoped, keyed on the package id.** A bare name
+   resolves within the caller's package first (`getItem(type, name,
+   currentPackageId?)`; items already carry `_packageId`). Because package ids
+   are globally unique, two packages shipping `page/home` coexist and each
+   caller resolves to its own — a cross-package clash *cannot mis-resolve* for
+   any caller carrying its package id.
+4. **The per-item cross-package throw retires.** Distinct packages are always
+   disambiguable by package id, so what the original guard flagged as a
+   collision is now the *supported* coexistence case. Same-package writes
+   overwrite (idempotent reload); the `os lint` namespace-prefix rule keeps
+   authoring hygiene.
 5. **Namespace rename-on-install is an explicit non-goal for now** (deep
    rewrite of every object name, cross-reference, and formula). v1 is
    *refuse-on-conflict*; rename is a separate future work item.
+6. **The package-id URL is transparent; a per-tenant namespace alias is an
+   optional sugar** (`/apps/crm` → `com.acme.crm`), never the stored identity.
 
 ## 1. Context
 
@@ -203,35 +210,52 @@ DB). The gate just makes that constraint **explicit and early** (a clean
 pre-install check) instead of a half-applied install blowing up at
 `CREATE TABLE`.
 
-Reserved namespaces (`base`, `system`, `sys`) are exempt, as today.
+Note the gate is **not load-bearing for routing** under §3.1 — routing keys on
+the globally-unique package id, which is correct with or without the gate
+(local dev, build-time, federation). The gate serves the object/table layer
+and is the basis for the optional per-tenant alias (§3.6). Reserved namespaces
+(`base`, `system`, `sys`) are exempt, as today.
 
-### 3.3 Resolution is container-scoped (prefer-local, qualify-to-cross)
+### 3.3 Resolution is package-scoped (prefer-local, qualify-to-cross)
 
 `getItem`/route resolution resolves a bare name **within the current package
-container first**:
+first**, keyed on the **package id**:
 
 - Within `/apps/<packageId>/…`, a bare `page/home` resolves to *this
-  package's* `home`. The current package is already known from the route and
-  from React context (`activeApp`), so this is a single-field scoping, not a
-  signature change at every call site.
+  package's* `home`. The current package id is already known from the route and
+  from React context (`activeApp._packageId`), so this is a single-field
+  scoping — `getItem(type, name, currentPackageId?)` — not a signature change
+  at every call site. Items already carry their owner (`_packageId`, ADR-0010),
+  so the match is `_packageId === currentPackageId`.
 - A **deliberate cross-package reference** uses a qualified form
-  (`<packageId>:<name>` / `<namespace>:<name>`) — the only place a second
-  package's metadata is reachable, and it is explicit.
+  (`<packageId>:<name>`) — the only place a second package's metadata is
+  reachable, and it is explicit.
 
-Because two packages can never share a namespace (§3.2) and bare names resolve
-inside the container (§3.3), **a cross-package clash on `page/home` cannot
-occur** — there is nothing left to detect at the cross-package level.
+The disambiguation rests on the **package id being globally unique**, *not* on
+the namespace gate: two packages legitimately ship `page/home`, store under
+distinct composite keys (`com.acme.crm:home`, `com.acme.hr:home`), and each
+caller resolves to its own package's item. **A cross-package clash on
+`page/home` therefore cannot mis-resolve for any caller that carries its
+package id** — which every routed UI surface does. A *context-free* read
+(`getItem` with no package id) is best-effort: it returns the first match and
+the caller is expected to pass the package id when it cares.
 
-### 3.4 Per-item runtime detection is demoted to a same-package backstop
+### 3.4 Per-item cross-package detection retires; same-package overwrite stays
 
-The shipped guard (`MetadataCollisionError`, `collisionPolicy`,
-`OS_METADATA_COLLISION`, `findOtherPackageOwner` in
-`packages/objectql/src/registry.ts`) **stays**, but its role narrows: with the
-namespace gate (§3.2) eliminating cross-package clashes, the only remaining
-duplicate is **one package shipping two items with the same `(type, name)`** —
-an authoring mistake, best caught by the `naming/namespace-prefix` lint in
-`os lint` at authoring time, with the runtime guard as the last-line backstop.
-The guard is cheap and already there; no reason to remove it.
+The original proposal's per-item guard threw `MetadataCollisionError` whenever
+two **different** packages registered the same `(type, name)`. Under
+package-scoped resolution that is exactly the case we now *support*: package
+ids are always distinct, so prefer-local always disambiguates two different
+packages — there is no unresolvable cross-package clash to detect. The
+cross-package **throw is retired**; two distinct packages coexist on the same
+bare name by construction.
+
+What remains is the narrow, genuinely-ambiguous case the guard still earns its
+keep on: **a write with no real package provenance** (a `sys_metadata`/runtime
+overlay) is governed by the ADR-0005 overlay precedence (artifact-vs-DB warning,
+unchanged), and **same-package re-registration** simply overwrites (idempotent
+reload). Authoring-time hygiene — an author shipping two `page/home` in one
+package — stays covered by the `naming/namespace-prefix` lint in `os lint`.
 
 ### 3.5 Namespace rename-on-install is deferred (non-goal)
 
@@ -241,16 +265,34 @@ formula / view / flow that names `crm_account`. That is a deep rewrite, not a
 URL change. v1 is **refuse-on-conflict** (§3.2). Rename-on-install is recorded
 as future work, not part of this decision.
 
+### 3.6 The package-id URL is transparent; a friendly alias is optional
+
+A reverse-domain URL — `/apps/com.acme.crm/page/home` — is **self-describing**:
+vendor (`acme`), product (`crm`), and surface are legible at a glance, the way
+Android package names, Java FQNs, and `k8s` `namespace/name` are. For a host
+that runs third-party packages this is a feature, not noise: "which package is
+this page from?" is answerable from the URL alone — a trust, support, and
+debugging win — and one vendor's `crm` cannot be mistaken for another's.
+
+Its one real cost is **length**. When a short URL is wanted, a host MAY expose a
+**per-tenant friendly alias** — `/apps/crm` resolving to `com.acme.crm` —
+because the namespace gate (§3.2) makes the namespace unique *within a tenant*.
+The alias is a tenant-local presentation convenience layered over the canonical
+package-id route; it is **never** the stored identity. Canonical = package id
+(robust, coordination-free); alias = namespace (pretty, tenant-scoped). The
+alias is optional and out of scope for the phases below.
+
 ## 4. Consequences
 
 - **Two vendors' packages coexist.** `com.acme.crm` and `com.beta.crm` install
   side by side; each `home` page is reachable under its own
   `/apps/<packageId>/…` container. The marketplace becomes viable for
   common-named packages.
-- **One per-package gate replaces N per-item checks.** Cross-package safety is
-  an `O(1)`-per-package namespace check at install, not an `O(every
-  page/dashboard/flow)` registration scan — cheaper, right granularity, and it
-  fires *before* a half-install.
+- **Cross-package safety becomes structural, not detected.** Package-scoped
+  resolution (§3.3) keyed on the unique package id means two packages never
+  mis-resolve a shared bare name, so the `O(every page/dashboard/flow)`
+  per-item registration scan is retired. The remaining install-time work is a
+  single `O(1)`-per-package namespace check for the object/table layer (§3.2).
 - **Object and UI metadata share one scope model.** The package container
   scopes both; the long-standing "objects are safe, UI metadata isn't"
   asymmetry disappears, with **zero artifact renames**.
@@ -264,27 +306,33 @@ as future work, not part of this decision.
 
 ## 5. Implementation phasing
 
-Status legend: **[done]** shipped under the original proposal · **[proposed]**
-this revision.
+Status legend: **[done]** shipped · **[proposed]** not yet built ·
+**[deferred]** out of scope here.
 
-- **[done]** Runtime same-package backstop: `MetadataCollisionError`,
-  `isRealPackage`, `collisionPolicy` + `OS_METADATA_COLLISION`, the guard in
-  `SchemaRegistry.registerItem`, `findOtherPackageOwner`
-  (`packages/objectql/src/registry.ts`); tests
-  `registry-cross-package-collision.test.ts` and
-  `engine-cross-package-collision.test.ts`.
 - **[done]** Authoring lint: `naming/namespace-prefix` in `os lint` (warns on
   non-prefixed `app`/`page`/`dashboard`/`flow`/`action`/`report`/`dataset`;
   exempts the namespace-named app per ADR-0019 and `sys_` names; warning-only).
-- **[proposed] Phase 1 — install-time namespace gate.** In the package install
-  path, refuse a package whose `manifest.namespace` is already owned by a
-  different installed package; actionable error naming both packages. Backed by
-  the installed-package registry (`InstalledPackage`).
-- **[proposed] Phase 2 — container-scoped resolution.** Thread the current
-  package/app into `SchemaRegistry.getItem` (prefer-local) and into `objectui`
-  metadata resolution (`MetadataProvider` / the `pages.find(name===)` sites),
-  collapsing the frontend's first-match-wins mirror of the bug. Routes keyed on
-  `packageId`; `app.label` carries display.
+- **[done] Phase 1 — install-time namespace gate.** `NamespaceConflictError` +
+  the gate in `SchemaRegistry.installPackage` (refuses a package whose
+  `manifest.namespace` is already owned by a different installed package;
+  same-package reload and shareable `base`/`system`/`sys` exempt;
+  `OS_METADATA_COLLISION=warn` downgrades). Tests:
+  `registry-namespace-install-gate.test.ts`.
+- **[done] Phase 2 (backend) — package-scoped resolution.**
+  `getItem(type, name, currentPackageId?)` prefers the current package's
+  composite entry, keeping ADR-0005 overlay precedence; backward compatible.
+  The per-item **cross-package throw is retired** (§3.4) — two distinct
+  packages coexist on the same bare name. Tests:
+  `registry-prefer-local-resolution.test.ts`; the original
+  `*-cross-package-collision.test.ts` are rewritten from "throws" to
+  "coexists + prefer-local resolves".
+- **[done] Phase 2 (frontend) — prefer-local in objectui.**
+  `preferLocal(list, name, ownerPackageId)` keyed on `_packageId`, wired at the
+  page/dashboard/report/header bare-name sites.
+- **[proposed] Phase 2 (frontend, remaining) — package-id routing.** Move the
+  `/apps/:appName` segment to the package id and select the active app by
+  `_packageId` (closing the app-selection ambiguity that `appName` leaves
+  open). Optional: the per-tenant namespace alias (§3.6).
 - **[proposed] Phase 3 — qualified cross-package references.** Define and
   document the `<packageId>:<name>` reference form for the deliberate
   cross-package case (nav contributions, shared pages); resolution falls back
@@ -298,10 +346,10 @@ this revision.
   the missing package coordinate; its optimistic-concurrency `parentVersion`
   check already rejects a blind base-layer double-create with `ConflictError`.
   The genuinely *silent* path was the objectql `SchemaRegistry` read
-  resolution — which §3.3 makes container-scoped.
+  resolution — which §3.3 makes package-scoped.
 - `objectui` route inventory (for Phase 2): metadata reachable by name divides
   into (a) already-safe — `object`/`view` (kernel namespace), `component`
   (`:ns/:name` segment), `doc` (ADR-0046 authoring prefix), marketplace/package
-  routes (already keyed on `packageId`); (b) container-scoped via this ADR —
+  routes (already keyed on `packageId`); (b) package-scoped via this ADR —
   `page`/`dashboard`/`report`; (c) one-off — `app` (now keyed on `packageId`);
   (d) intentionally global — `action`, Studio's `metadata/:type/:name` admin.

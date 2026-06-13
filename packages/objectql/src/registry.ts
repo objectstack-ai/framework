@@ -143,19 +143,21 @@ export interface SchemaRegistryOptions {
   multiTenant?: boolean;
 
   /**
-   * Policy for cross-package base-layer metadata collisions (ADR-0048) — two
-   * different code packages registering a bare-named generic item under the
-   * same `(type, name)`.
+   * Policy for the install-time namespace gate (ADR-0048 Phase 1) — installing
+   * a package whose `manifest.namespace` is already owned by a *different*
+   * installed package.
    *
-   * - `'error'` (default): throw {@link MetadataCollisionError} at registration
-   *   time, naming both packages and the type/name. Makes the otherwise-silent
-   *   last-write-wins shadowing a loud, actionable failure.
-   * - `'warn'`: log a warning and let the registration proceed. For deliberate
-   *   migrations where a collision is temporarily expected.
+   * - `'error'` (default): throw {@link NamespaceConflictError} at install time,
+   *   naming both packages. Makes the namespace land-grab a loud, early failure
+   *   instead of a mid-install `CREATE TABLE` blow-up.
+   * - `'warn'`: log a warning and let the install proceed. For deliberate
+   *   migrations where the conflict is temporarily expected.
    *
    * Sourced from `OS_METADATA_COLLISION` (`warn` to downgrade) when not set
-   * explicitly. Legitimate runtime/DB overlays and same-package reloads are
-   * never treated as collisions regardless of this setting.
+   * explicitly. Same-package reinstall and shareable platform namespaces
+   * (`base`/`system`/`sys`) are never treated as conflicts. (The per-item
+   * cross-package collision throw was retired in ADR-0048 §3.4 — distinct
+   * package ids are always disambiguable by package-scoped resolution.)
    */
   collisionPolicy?: 'error' | 'warn';
 }
@@ -301,23 +303,6 @@ export function applySystemFields(
 }
 
 /**
- * The rehydration sentinel stamped on items loaded back from `sys_metadata`
- * (runtime/DB overlay rows). It is NOT a real owning code package, so it must
- * never participate in cross-package collision detection (ADR-0048).
- */
-const SYS_METADATA_OWNER = 'sys_metadata';
-
-/**
- * True when `pkg` identifies a genuine code package (an artifact owner), as
- * opposed to absent provenance or the `sys_metadata` runtime-overlay sentinel.
- * Cross-package collision detection (ADR-0048) only compares real owners so
- * that legitimate runtime/DB overlays never look like a base-layer collision.
- */
-function isRealPackage(pkg: unknown): pkg is string {
-  return typeof pkg === 'string' && pkg.length > 0 && pkg !== SYS_METADATA_OWNER;
-}
-
-/**
  * Platform namespaces that multiple packages may legitimately share, so the
  * install-time namespace-uniqueness gate (ADR-0048 Phase 1) must never fire on
  * them: the FQN-exempt reserved namespaces (`base`, `system`) plus `sys`
@@ -326,46 +311,6 @@ function isRealPackage(pkg: unknown): pkg is string {
  */
 function isShareableNamespace(ns: string): boolean {
   return RESERVED_NAMESPACES.has(ns) || ns === 'sys';
-}
-
-/**
- * Raised when two **different** code packages register a generic (non-object)
- * metadata item under the same `(type, name)` in the code-defined base layer
- * (ADR-0048).
- *
- * The registry key for bare-named UI/automation metadata (`page`, `dashboard`,
- * `flow`, `app`, `action`, `doc`, …) carries no package coordinate — those
- * names are only snake_case-validated, never namespace-prefix-validated the way
- * object names are. So two installed packages that each define e.g. a `page`
- * named `home` collide on the same logical key, and bare-name read resolution
- * (`getItem`) would silently return whichever the registry iterates first,
- * leaving the other package's item unreachable. This error makes that hazard
- * loud at registration/install time instead of silent at read time.
- */
-export class MetadataCollisionError extends Error {
-  readonly type: string;
-  readonly name_: string;
-  readonly existingPackageId: string;
-  readonly incomingPackageId: string;
-
-  constructor(type: string, name: string, existingPackageId: string, incomingPackageId: string) {
-    super(
-      `Cross-package metadata collision: ${type}/${name} is registered by ` +
-        `package "${existingPackageId}" and package "${incomingPackageId}". ` +
-        `Bare-named ${type} metadata has no package coordinate in the registry, ` +
-        `so the second registration would silently shadow the first ` +
-        `(last-write-wins at read time). Rename one of them (a namespace prefix ` +
-        `such as "<namespace>_${name}" is recommended), or, if this is a ` +
-        `deliberate migration, set OS_METADATA_COLLISION=warn to downgrade to a ` +
-        `warning. See ADR-0048.`,
-    );
-    this.name = 'MetadataCollisionError';
-    this.type = type;
-    // `name` is the Error message-class name; store the metadata name separately.
-    this.name_ = name;
-    this.existingPackageId = existingPackageId;
-    this.incomingPackageId = incomingPackageId;
-  }
 }
 
 /**
@@ -883,25 +828,16 @@ export class SchemaRegistry {
     //     package provenance (or the `sys_metadata` sentinel): that is the
     //     legitimate ADR-0005 overlay path, already surfaced by the
     //     artifact-vs-DB warning below.
-    if (isRealPackage(packageId)) {
-      const conflictOwner = this.findOtherPackageOwner(collection, baseName, packageId);
-      if (conflictOwner && !this.isPreferLocalDisambiguable(packageId, conflictOwner)) {
-        // ADR-0048 Phase 2 — the guard now only fires when prefer-local
-        // resolution (see getItem) CANNOT disambiguate the two owners: they
-        // share a namespace (possible only for shareable platform namespaces
-        // like `sys`, which the install gate exempts) or one lacks a namespace
-        // (legacy package with no container to scope by). Two packages in
-        // DIFFERENT namespaces legitimately coexist on the same bare name —
-        // the install-time namespace gate keeps their namespaces distinct and
-        // prefer-local routes each caller to its own container.
-        const err = new MetadataCollisionError(type, baseName, conflictOwner, packageId);
-        if (this.collisionPolicy === 'warn') {
-          console.warn(`[Registry] ${err.message}`);
-        } else {
-          throw err;
-        }
-      }
-    }
+    // ADR-0048 §3.4 — the per-item CROSS-package throw is retired. Package ids
+    // are globally unique, so package-scoped resolution (see getItem) always
+    // disambiguates two different packages: two installed packages shipping the
+    // same bare name (e.g. `page/home`) legitimately COEXIST under distinct
+    // composite keys and each caller resolves to its own. What the original
+    // guard flagged as a collision is now the supported marketplace case.
+    //
+    // Same-package re-registration still overwrites (idempotent reload), and a
+    // runtime/DB overlay over a packaged item is the sanctioned ADR-0005 path,
+    // surfaced by the artifact-vs-DB warning below.
 
     // Artifact-vs-DB collision warning. When a code package ships an item
     // whose name already exists as a DB-only entry (registered earlier
@@ -926,43 +862,6 @@ export class SchemaRegistry {
 
     collection.set(storageKey, item);
     this.log(`[Registry] Registered ${type}: ${storageKey}`);
-  }
-
-  /**
-   * Find a code package OTHER than `incoming` that already owns `baseName` in
-   * `collection` (ADR-0048 cross-package collision detection). Scans the live
-   * collection — like {@link getItem} / {@link unregisterItem} — so it always
-   * reflects current state with no parallel index to drift across
-   * reset/unregister. Returns the conflicting owner's package id, or undefined
-   * when the name is free or only held by the same package / a runtime overlay.
-   */
-  private findOtherPackageOwner(
-    collection: Map<string, any>,
-    baseName: string,
-    incoming: string,
-  ): string | undefined {
-    for (const [key, item] of collection) {
-      // Same logical name only — the bare key or any `<pkg>:<baseName>` key.
-      if (key !== baseName && !key.endsWith(`:${baseName}`)) continue;
-      const owner = item?._packageId;
-      if (isRealPackage(owner) && owner !== incoming) return owner;
-    }
-    return undefined;
-  }
-
-  /**
-   * True when prefer-local resolution ({@link getItem}) can route callers in
-   * each owner's container to the right item — i.e. the two packages declare
-   * **distinct, non-empty namespaces** (ADR-0048 Phase 2). When it returns
-   * false (shared namespace, or a missing namespace on either side) a same
-   * `(type, name)` clash is genuinely unresolvable and the collision guard
-   * fires. Namespaces are read from the installed-package records, which the
-   * install path registers before a package's metadata is loaded.
-   */
-  private isPreferLocalDisambiguable(incoming: string, owner: string): boolean {
-    const incomingNs = this.getPackage(incoming)?.manifest?.namespace;
-    const ownerNs = this.getPackage(owner)?.manifest?.namespace;
-    return !!incomingNs && !!ownerNs && incomingNs !== ownerNs;
   }
 
   /**
@@ -1012,19 +911,21 @@ export class SchemaRegistry {
   /**
    * Universal Get Method.
    *
-   * ADR-0048 Phase 2 — *prefer-local* resolution. When `currentNamespace` is
-   * given (the container the caller is resolving within), a bare name resolves
-   * to the item owned by *that namespace's* package before any cross-package
-   * fallback, so two packages shipping e.g. `page/home` no longer resolve by
-   * registration order (first-match-wins). Omitting `currentNamespace`
-   * preserves the legacy resolution exactly, so this is backward compatible.
+   * ADR-0048 §3.3 — *package-scoped* resolution. When `currentPackageId` is
+   * given (the package the caller is resolving within — known from the route /
+   * `activeApp._packageId`), a bare name resolves to *that package's* item
+   * before any cross-package fallback, so two packages shipping e.g.
+   * `page/home` no longer resolve by registration order (first-match-wins).
+   * Because package ids are globally unique this is unambiguous. Omitting
+   * `currentPackageId` preserves the legacy resolution exactly (backward
+   * compatible) and is best-effort: it returns the first match.
    *
    * Precedence (highest first):
    *   1. bare-key runtime/DB overlay (ADR-0005 sanctioned override) — unchanged
-   *   2. the `currentNamespace` owner's composite entry (prefer-local)
+   *   2. the `currentPackageId` composite entry (prefer-local)
    *   3. first composite match (legacy first-registered-wins fallback)
    */
-  getItem<T>(type: string, name: string, currentNamespace?: string): T | undefined {
+  getItem<T>(type: string, name: string, currentPackageId?: string): T | undefined {
     // Special handling for 'object' and 'objects' types - use objectContributors
     if (type === 'object' || type === 'objects') {
       return this.getObject(name) as unknown as T | undefined;
@@ -1035,12 +936,10 @@ export class SchemaRegistry {
     const direct = collection.get(name);
     if (direct) return direct as T;
 
-    // Prefer-local: resolve within the caller's container (namespace) first.
-    if (currentNamespace) {
-      for (const owner of this.getNamespaceOwners(currentNamespace)) {
-        const local = collection.get(`${owner}:${name}`);
-        if (local) return local as T;
-      }
+    // Prefer-local: resolve within the caller's package first.
+    if (currentPackageId) {
+      const local = collection.get(`${currentPackageId}:${name}`);
+      if (local) return local as T;
     }
 
     // Fallback: first composite key matching the bare name (legacy behaviour).
@@ -1290,11 +1189,11 @@ export class SchemaRegistry {
     this.registerItem('app', app, 'name', packageId);
   }
 
-  getApp(name: string): any {
-    // ADR-0048 (v1) — one app per package, with `app.name ≡ manifest.namespace`,
-    // so the app name *is* its own container: resolve prefer-local against it so
-    // two packages' apps never resolve by registration order.
-    const app = this.getItem('app', name, name);
+  getApp(name: string, currentPackageId?: string): any {
+    // ADR-0048 §3.1 — apps are addressed by package id (one app per package).
+    // When the caller knows it (route segment / `_packageId`), resolve
+    // prefer-local; otherwise this is a best-effort by-name lookup.
+    const app = this.getItem('app', name, currentPackageId);
     if (!app) return app;
     return this.applyNavContributions(app);
   }
