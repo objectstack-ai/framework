@@ -59,6 +59,8 @@
     "@objectstack/plugin-audit": "workspace:*",
     "@objectstack/plugin-auth": "workspace:*",
     "@objectstack/plugin-email": "workspace:*",
+    "@objectstack/setup": "workspace:*",
+    "@objectstack/studio": "workspace:*",
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/mcp": "workspace:*",
     "@objectstack/plugin-org-scoping": "workspace:*",

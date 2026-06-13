@@ -548,6 +548,23 @@ export class DevPlugin implements Plugin {
       } catch {
         ctx.logger.warn('  ✘ @objectstack/plugin-auth not installed — skipping auth');
       }
+
+      // ADR-0048 — the platform apps (Setup/Studio/Account) moved out of
+      // plugin-auth's manifest into their own one-app packages. Register each
+      // after AuthPlugin so they load alongside the auth objects they navigate.
+      for (const spec of [
+        ['@objectstack/setup', 'createSetupAppPlugin'],
+        ['@objectstack/studio', 'createStudioAppPlugin'],
+        ['@objectstack/account', 'createAccountAppPlugin'],
+      ] as const) {
+        try {
+          const mod: any = await import(/* @vite-ignore */ spec[0]);
+          this.childPlugins.push(mod[spec[1]]());
+          ctx.logger.info(`  ✔ App package enabled (${spec[0]})`);
+        } catch {
+          ctx.logger.warn(`  ✘ ${spec[0]} not installed — skipping its app`);
+        }
+      }
     }
 
     // 5. Security Plugin (RBAC, RLS, field-level masking)

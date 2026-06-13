@@ -4,10 +4,8 @@ import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import type { BetterAuthOptions } from 'better-auth';
 import { AuthConfig, type SocialProviderConfig, SystemObjectName, SystemUserId } from '@objectstack/spec/system';
 import {
-  SETUP_APP,
-  SETUP_NAV_CONTRIBUTIONS,
-  STUDIO_APP,
-  ACCOUNT_APP,
+  // ADR-0048 — the Setup/Studio/Account apps moved to their own packages
+  // (@objectstack/{setup,studio,account}); plugin-auth no longer registers them.
   SystemOverviewDashboard,
   SystemOverviewDatasets,
 } from '@objectstack/platform-objects/apps';
@@ -180,15 +178,10 @@ export class AuthPlugin implements Plugin {
         ? { defaultDatasource: this.options.manifestDatasource }
         : {}),
       objects: authIdentityObjects,
-      // The platform Setup App is a static metadata artifact (lives in
-      // @objectstack/platform-objects/apps). plugin-auth is the natural
-      // owner of its registration since it loads first among the trio
-      // (auth + security + audit) that supplies the underlying objects.
-      apps: [SETUP_APP, STUDIO_APP, ACCOUNT_APP],
-      // ADR-0029 D7 — the Setup App is a shell of group anchors; its entries
-      // for platform-objects-owned objects are contributed here. Capability
-      // plugins (e.g. plugin-webhooks) contribute their own slots' entries.
-      navigationContributions: SETUP_NAV_CONTRIBUTIONS,
+      // ADR-0048 — Setup/Studio/Account apps (and the Setup nav contributions)
+      // moved to their own one-app packages (@objectstack/{setup,studio,account}),
+      // each registering under its own package id so /apps/<packageId> resolves
+      // unambiguously. plugin-auth keeps only the auth objects + their pages.
       // Slotted record-detail pages for system objects — currently
       // sys_organization gets a Members / Invitations / Teams tab strip
       // (see SysOrganizationDetailPage for the rationale and the

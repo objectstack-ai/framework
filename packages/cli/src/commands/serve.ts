@@ -1176,6 +1176,23 @@ export default class Serve extends Command {
             }));
             trackPlugin('Auth');
 
+            // ADR-0048 — the platform apps (Setup/Studio/Account) moved out of
+            // plugin-auth's manifest into their own one-app packages. Register
+            // each after AuthPlugin (best-effort; skipped if not installed).
+            for (const [appPkg, factory] of [
+              ['@objectstack/setup', 'createSetupAppPlugin'],
+              ['@objectstack/studio', 'createStudioAppPlugin'],
+              ['@objectstack/account', 'createAccountAppPlugin'],
+            ] as const) {
+              try {
+                const appMod: any = await import(/* webpackIgnore: true */ appPkg);
+                await kernel.use(appMod[factory]());
+                trackPlugin(appPkg);
+              } catch {
+                // best-effort — the app package is optional
+              }
+            }
+
             // Pair: OrgScopingPlugin (multi-tenant) — optional, must register BEFORE SecurityPlugin
             // OrgScopingPlugin provides `organization_id` auto-stamp, per-org
             // seed-replay, and default-org bootstrap. SecurityPlugin probes
