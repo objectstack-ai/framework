@@ -19,7 +19,7 @@ export const pageForm = defineForm({
         { field: 'name', required: true, colSpan: 1, helpText: 'Unique identifier (snake_case)' },
         { field: 'label', required: true, colSpan: 1, helpText: 'Page title shown to users' },
         { field: 'icon', colSpan: 1, helpText: 'Icon for navigation menu' },
-        { field: 'type', colSpan: 1, helpText: 'Page type (record, home, app, dashboard, etc.)' },
+        { field: 'type', colSpan: 1, helpText: 'Page type — "list" for an interface/list page; also record, home, app, dashboard, etc.' },
         { field: 'template', colSpan: 2, helpText: 'Layout template (e.g., "header-sidebar-main")' },
         { field: 'description', widget: 'textarea', colSpan: 2, helpText: 'Page description for navigation' },
       ],
@@ -27,6 +27,10 @@ export const pageForm = defineForm({
     {
       label: 'Data Context',
       description: 'Record binding and page-local state.',
+      // Interface/list pages bind their data via the Interface section
+      // (source/sourceView), not a page-level object — hide this to keep
+      // the panel lean (the region/record machinery doesn't apply).
+      visibleOn: "data.type != 'list'",
       fields: [
         { field: 'object', widget: 'ref:object', helpText: 'Bound object (for Record pages)' },
         { field: 'variables', type: 'repeater', helpText: 'Local page state variables' },
@@ -35,15 +39,20 @@ export const pageForm = defineForm({
     {
       label: 'Layout',
       description: 'Page regions and components placed within them.',
+      // List pages render a curated list surface, not free-form regions —
+      // the region designer is irrelevant here, so hide it for list pages.
+      visibleOn: "data.type != 'list'",
       fields: [
         { field: 'regions', type: 'repeater', required: true, helpText: 'Layout regions (header, main, sidebar, footer) with components' },
       ],
     },
     {
+      name: 'interface',
       label: 'Interface (list pages)',
       description: 'ADR-0047 interface mode: bind a source view and curate the end-user surface — quick filters, locked visualizations, toolbar actions (Airtable Interfaces parity).',
       collapsible: true,
-      collapsed: true,
+      // Primary content for a list page — open by default (still collapsible).
+      collapsed: false,
       visibleOn: "data.type == 'list'",
       fields: [
         {
@@ -51,6 +60,7 @@ export const pageForm = defineForm({
           type: 'composite',
           helpText:
             'source/sourceView bind the object view (columns, base filter and sort are inherited — the iron rule); appearance.allowedVisualizations whitelists renderers (one entry = locked); userActions toggles the toolbar.',
+          // Order: common authoring controls first, rarely-used ones last.
           // Explicit sub-fields so `userFilters` can use the dedicated
           // filter-mode selector (None / Tabs / Dropdown, ADR-0047 §3.4a).
           // None maps to ABSENCE of userFilters — the protocol stores
@@ -58,20 +68,21 @@ export const pageForm = defineForm({
           // (`element: 'toggle'` stays valid but deprecated — not offered.)
           // Keep this list in sync with InterfacePageConfigSchema.
           fields: [
-            { field: 'source' },
-            { field: 'sourceView' },
-            { field: 'levels' },
-            { field: 'filterBy', type: 'repeater' },
-            { field: 'appearance', type: 'composite' },
+            { field: 'source', widget: 'ref:object', helpText: 'Object this list reads from' },
+            { field: 'sourceView', helpText: 'Named list view to inherit columns/filter/sort from (blank = object default)' },
+            { field: 'appearance', type: 'composite', helpText: 'Allowed visualizations (Grid / Kanban / Calendar / …) and description visibility' },
             {
               field: 'userFilters',
               widget: 'filter-mode',
               helpText: 'End-user filter bar: None (no bar) / Tabs (named presets) / Dropdown (per-field). None removes the config.',
             },
-            { field: 'userActions', type: 'composite' },
-            { field: 'addRecord', type: 'composite' },
-            { field: 'showRecordCount' },
-            { field: 'allowPrinting' },
+            { field: 'userActions', type: 'composite', helpText: 'Toolbar toggles (search, sort, filter, row height)' },
+            { field: 'addRecord', type: 'composite', helpText: 'Add-record entry point' },
+            { field: 'showRecordCount', helpText: 'Show the record count bar' },
+            // Less-common — kept last.
+            { field: 'filterBy', type: 'repeater', helpText: 'Always-on page filter (in addition to the source view)' },
+            { field: 'levels', helpText: 'Hierarchy levels to display (tree-like sources)' },
+            { field: 'allowPrinting', helpText: 'Allow users to print this page' },
           ],
         },
       ],
