@@ -117,13 +117,17 @@ export const VISUALIZE_DATA_TOOL: AIToolDefinition = {
   name: 'visualize_data',
   label: 'Visualize Data (Chart)',
   description:
-    'Aggregate a data object and render the result as a CHART in the chat. ' +
-    'Use this — instead of query_records / aggregate_data — whenever the ' +
-    'best answer is a visualization (counts/sums grouped by a category, a ' +
-    'trend over time, a distribution, etc.). The chart is shown to the user ' +
-    'automatically; you only need to briefly describe what it shows. ' +
-    'Field names in `dimension`, `measures[].field` and `where` MUST be real ' +
-    'fields obtained from describe_object — do NOT guess generic names.',
+    'Aggregate a data object and render the result as a CHART shown inline in ' +
+    'the chat. This is the ONLY tool that draws a chart. You MUST call this — ' +
+    'NOT query_records / aggregate_data, and NOT a markdown table — whenever ' +
+    'the user asks to chart/plot/graph/visualize/draw data, or to show, ' +
+    'compare, or break down a count or sum grouped by a category, or a trend ' +
+    'over time. If you already fetched the numbers with another tool, still ' +
+    'call visualize_data to render them. After it runs the chart is shown to ' +
+    'the user automatically; reply with one or two sentences describing it and ' +
+    'do NOT re-print the data as a table. Field names in `dimension`, ' +
+    '`measures[].field` and `where` MUST be real fields obtained from ' +
+    'describe_object — do NOT guess generic names.',
   parameters: {
     type: 'object',
     properties: {
