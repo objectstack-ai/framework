@@ -1,4 +1,4 @@
-# ADR-0048: Semantic-reference metadata embeds in package documentation — the author supplies a name, the platform supplies the component
+# ADR-0049: Semantic-reference metadata embeds in package documentation — the author supplies a name, the platform supplies the component
 
 **Status**: Proposed (2026-06-13)
 **Deciders**: ObjectStack Protocol Architects
