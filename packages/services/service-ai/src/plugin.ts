@@ -2,7 +2,7 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { readEnvWithDeprecation } from '@objectstack/types';
-import type { IAIService, IAIConversationService, IAutomationService, IDataEngine, IEmbedder, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, IAnalyticsService, IAutomationService, IDataEngine, IEmbedder, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
 import { EMBEDDER_SERVICE } from '@objectstack/spec/contracts';
 import type * as AI from '@objectstack/spec/ai';
 import { AIService } from './ai-service.js';
@@ -20,6 +20,7 @@ import { AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEval
 import { EvalRunner } from './eval/index.js';
 import { registerDataTools } from './tools/data-tools.js';
 import { registerQueryDataTool } from './tools/query-data.tool.js';
+import { registerVisualizeDataTool, VISUALIZE_DATA_TOOL } from './tools/visualize-data.tool.js';
 import { registerActionsAsTools } from './tools/action-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
 import { SkillRegistry } from './skill-registry.js';
@@ -705,6 +706,23 @@ export class AIServicePlugin implements Plugin {
         });
         ctx.logger.info('[AI] Built-in data tools registered');
 
+        // Register visualize_data when an analytics service is available — it
+        // turns an aggregation into an SDUI chart that renders inline in chat
+        // (emitted as a `data-chart` stream part). Only needs analytics, so it
+        // sits outside the metadata gate below.
+        let analyticsService: IAnalyticsService | undefined;
+        try {
+          analyticsService = ctx.getService<IAnalyticsService>('analytics');
+        } catch {
+          analyticsService = undefined;
+        }
+        if (analyticsService) {
+          registerVisualizeDataTool(this.service.toolRegistry, { analytics: analyticsService });
+          ctx.logger.info('[AI] visualize_data tool registered');
+        } else {
+          ctx.logger.debug('[AI] No analytics service — visualize_data tool not registered');
+        }
+
         // Register query_data tool when metadata service is also available —
         // it composes AI + Metadata + Data into a single NL-to-records call.
         if (metadataService) {
@@ -770,7 +788,12 @@ export class AIServicePlugin implements Plugin {
         // Register data tools as metadata (for Studio visibility)
         if (metadataService) {
           const { DATA_TOOL_DEFINITIONS } = await import('./tools/data-tools.js');
-          for (const toolDef of DATA_TOOL_DEFINITIONS) {
+          // visualize_data is only usable (and only registered above) when an
+          // analytics service is present — persist it as metadata in lockstep.
+          const toolDefsToPersist = analyticsService
+            ? [...DATA_TOOL_DEFINITIONS, VISUALIZE_DATA_TOOL]
+            : DATA_TOOL_DEFINITIONS;
+          for (const toolDef of toolDefsToPersist) {
             const toolExists =
               typeof metadataService.exists === 'function'
                 ? await withTimeout(metadataService.exists('tool', toolDef.name))
@@ -794,7 +817,7 @@ export class AIServicePlugin implements Plugin {
               }
             }
           }
-          ctx.logger.info(`[AI] ${DATA_TOOL_DEFINITIONS.length} data tools registered as metadata`);
+          ctx.logger.info(`[AI] ${toolDefsToPersist.length} data tools registered as metadata`);
         }
 
         // Register the built-in agent + skills (requires metadata service).

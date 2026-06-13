@@ -100,6 +100,14 @@ export {
 } from './tools/query-data.tool.js';
 export type { QueryDataToolContext, QueryPlan } from './tools/query-data.tool.js';
 
+// visualize_data tool (analytics aggregation → SDUI chart via `data-chart` part)
+export {
+  VISUALIZE_DATA_TOOL,
+  createVisualizeDataHandler,
+  registerVisualizeDataTool,
+} from './tools/visualize-data.tool.js';
+export type { VisualizeDataToolContext } from './tools/visualize-data.tool.js';
+
 // Routes
 export { buildAIRoutes } from './routes/ai-routes.js';
 export { buildAgentRoutes } from './routes/agent-routes.js';
