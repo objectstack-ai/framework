@@ -939,6 +939,86 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       });
     });
 
+    // A driver that serves one runtime-created object (with inline fields)
+    // from sys_metadata — models an isolated, proxy-free project kernel.
+    const makeLocalMetadataDriver = (findCalls: Array<{ object: string }>) => ({
+      name: 'local-meta-driver',
+      version: '1.0.0',
+      connect: async () => {},
+      disconnect: async () => {},
+      find: async (object: string) => {
+        findCalls.push({ object });
+        if (object === 'sys_metadata') {
+          return [
+            {
+              id: '1',
+              type: 'object',
+              name: 'product',
+              state: 'active',
+              metadata: JSON.stringify({
+                name: 'product',
+                label: 'Product',
+                fields: { sku: { name: 'sku', label: 'SKU', type: 'text' } },
+              }),
+              packageId: 'inventory_pkg',
+            },
+          ];
+        }
+        return [];
+      },
+      findOne: async () => null,
+      create: async (_o: string, d: any) => d,
+      update: async (_o: string, _i: any, d: any) => d,
+      delete: async () => true,
+      syncSchema: async () => {},
+    });
+
+    it('does NOT hydrate a project kernel (environmentId set) without the opt-in', async () => {
+      // Default behavior: a project kernel sources metadata from the artifact /
+      // control-plane proxy, so boot must not read a local sys_metadata.
+      const findCalls: Array<{ object: string }> = [];
+      await kernel.use({
+        name: 'mock-noopt-driver',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => ctx.registerService('driver.noopt', makeLocalMetadataDriver(findCalls)),
+      });
+
+      const plugin = new ObjectQLPlugin({ environmentId: 'env_1' });
+      await kernel.use(plugin);
+      await kernel.bootstrap();
+
+      expect(findCalls.find((c) => c.object === 'sys_metadata')).toBeUndefined();
+      const registry = (kernel.getService('objectql') as any).registry;
+      expect(registry.getObject('product')).toBeUndefined();
+    });
+
+    it('hydrates a project kernel from local sys_metadata when hydrateMetadataFromDb is set (runtime objects regain their fields)', async () => {
+      // The single-env tenant runtime case: an isolated, proxy-free kernel that
+      // persists its OWN sys_metadata. Objects created at runtime (here:
+      // `product`, not in any boot manifest) must re-enter the registry WITH
+      // their fields after a restart — otherwise registry.getObject('product')
+      // is empty and the engine.find unknown-$select guard can't fire.
+      const findCalls: Array<{ object: string }> = [];
+      await kernel.use({
+        name: 'mock-opt-driver',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => ctx.registerService('driver.opt', makeLocalMetadataDriver(findCalls)),
+      });
+
+      const plugin = new ObjectQLPlugin({ environmentId: 'env_1', hydrateMetadataFromDb: true });
+      await kernel.use(plugin);
+      await kernel.bootstrap();
+
+      expect(findCalls.find((c) => c.object === 'sys_metadata')).toBeDefined();
+      const registry = (kernel.getService('objectql') as any).registry;
+      const product = registry.getObject('product') as any;
+      expect(product).toBeDefined();
+      expect(product.fields).toBeDefined();
+      expect(Object.keys(product.fields)).toContain('sku');
+    });
+
     it('should not throw when protocol.loadMetaFromDb fails (graceful degradation)', async () => {
       // Arrange — driver that throws on find('sys_metadata')
       const mockDriver = {

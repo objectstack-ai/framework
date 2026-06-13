@@ -75,6 +75,28 @@ export interface ObjectQLPluginOptions {
    * code change.
    */
   skipSchemaSync?: boolean;
+  /**
+   * Hydrate the SchemaRegistry from this kernel's local `sys_metadata`
+   * even when `environmentId` is set.
+   *
+   * By default Phase-2 hydration in `start()` is gated on
+   * `environmentId === undefined`, because the original multi-environment
+   * model assumed project kernels source metadata from a remote artifact /
+   * control-plane proxy and have NO local `sys_metadata` to read. That is
+   * NOT true for an isolated, proxy-free project kernel that persists its
+   * OWN `sys_metadata` locally (e.g. the cloud single-env tenant runtime on
+   * Turso): objects CREATED AT RUNTIME there — not present in the boot
+   * artifact manifest — would otherwise never re-enter the registry after a
+   * restart, so `registry.getObject(name)` returns nothing for them and any
+   * registry consumer (the unknown-`$select` guard, hooks, relationships)
+   * silently degrades.
+   *
+   * Set this ONLY when the kernel's registry is per-instance isolated AND
+   * `sys_metadata` lives on the kernel's own local driver (no control-plane
+   * proxy) — hydrating a proxied kernel would read the wrong database.
+   * Safe to leave unset: hydration tolerates a missing table.
+   */
+  hydrateMetadataFromDb?: boolean;
 }
 
 export class ObjectQLPlugin implements Plugin {
@@ -92,6 +114,7 @@ export class ObjectQLPlugin implements Plugin {
   private hostContext?: Record<string, any>;
   private environmentId?: string;
   private skipSchemaSync = false;
+  private hydrateMetadataFromDb = false;
   /** Unsubscribe handles for metadata-event subscriptions (ADR-0008 PR-7). */
   private metadataUnsubscribes: Array<() => void> = [];
 
@@ -116,6 +139,7 @@ export class ObjectQLPlugin implements Plugin {
       typeof opts.skipSchemaSync === 'boolean'
         ? opts.skipSchemaSync
         : process.env.OS_SKIP_SCHEMA_SYNC === '1';
+    this.hydrateMetadataFromDb = opts.hydrateMetadataFromDb === true;
   }
 
   init = async (ctx: PluginContext) => {
@@ -313,11 +337,19 @@ export class ObjectQLPlugin implements Plugin {
     }
 
     // Phase 2: Hydrate SchemaRegistry from sys_metadata (loads custom/template objects).
-    // Project kernels (environmentId set) never persist sys_metadata locally —
-    // metadata is sourced from the artifact (MetadataPlugin) or routed to the
-    // control plane via ControlPlaneProxyDriver. Skip to avoid querying a table
-    // that does not exist on local project DBs.
-    if (this.environmentId === undefined) {
+    // Project kernels (environmentId set) USUALLY source metadata from the
+    // artifact (MetadataPlugin) or a control-plane proxy and have no local
+    // sys_metadata, so hydration is skipped to avoid querying a table that
+    // does not exist (or, worse, a proxied remote one). EXCEPTION: an
+    // isolated, proxy-free project kernel that persists its OWN sys_metadata
+    // locally (the cloud single-env tenant runtime) opts in via
+    // `hydrateMetadataFromDb` so objects CREATED AT RUNTIME there re-enter the
+    // registry after a restart — otherwise registry.getObject() returns
+    // nothing for them and every registry consumer (the unknown-$select
+    // guard, hooks, relationships) silently degrades. Safe because each engine
+    // owns its registry (no cross-kernel leakage) and hydration tolerates a
+    // missing table.
+    if (this.environmentId === undefined || this.hydrateMetadataFromDb) {
         await this.restoreMetadataFromDb(ctx);
     } else {
         ctx.logger.info('Project kernel — skipping sys_metadata hydration (metadata sourced from artifact)');
