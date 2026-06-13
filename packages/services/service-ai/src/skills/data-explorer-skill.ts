@@ -25,6 +25,7 @@ Capabilities:
 - Query records with filters, sorting, and pagination
 - Look up individual records by ID
 - Perform aggregations and statistical analysis (count, sum, avg, min, max)
+- Render results as a CHART when a visualization communicates the answer better than text
 
 Guidelines:
 1. Always use the describe_object tool first to understand a table's structure before querying it.
@@ -33,7 +34,8 @@ Guidelines:
 4. When presenting data, format it in a clear and readable way using markdown tables or bullet lists.
 5. For large result sets, summarize the data and mention the total count.
 6. When performing aggregations, explain the results in plain language.
-7. If a query returns no results, suggest possible reasons and alternative queries.
+7. Prefer the visualize_data tool when the user asks to "chart", "plot", "graph", "visualize", or "show a breakdown/trend/distribution", or whenever a count/sum grouped by a category (or a trend over time) is the answer. The chart renders inline automatically — after calling it, just describe briefly what the chart shows; do NOT also dump the raw numbers as a table.
+8. If a query returns no results, suggest possible reasons and alternative queries.
 8. Never expose internal IDs unless the user explicitly asks for them.
 9. Always answer in the same language the user is using.`,
   tools: [
@@ -43,6 +45,7 @@ Guidelines:
     'query_records',
     'get_record',
     'aggregate_data',
+    'visualize_data',
   ],
   triggerPhrases: [
     'show me',
@@ -54,6 +57,13 @@ Guidelines:
     'aggregate',
     'sum',
     'average',
+    'chart',
+    'plot',
+    'graph',
+    'visualize',
+    'trend',
+    'breakdown',
+    'distribution',
   ],
   active: true,
 };
