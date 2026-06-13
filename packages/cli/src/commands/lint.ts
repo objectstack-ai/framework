@@ -216,6 +216,51 @@ export function lintConfig(config: any): LintIssue[] {
     }
   }
 
+  // ── Namespace-prefix advisory for bare-named metadata (ADR-0048 §3.3) ──
+  // Cross-package collision detection (ADR-0048) makes a clash between two
+  // packages' bare-named items (`page`/`flow`/`action`/…) a loud error at
+  // registration time. This shifts that left: a non-fatal nudge to prefix
+  // the name with the package namespace at authoring time, so the clash is
+  // unlikely to ever happen. Objects are already prefix-*enforced* (error)
+  // in defineStack; views are object-derived; `doc` has its own build lint
+  // — so they are excluded here. Warning only — prefix stays a recommended
+  // convention for legacy types, not a retroactive requirement.
+  const ns: string | undefined = config.manifest?.namespace;
+  if (ns) {
+    // A name is namespace-safe if it IS the namespace (ADR-0019: a package's
+    // single app is conventionally named after the namespace, e.g. `crm`),
+    // is prefixed with it (`crm_lead`), or is a platform-reserved `sys_` name.
+    const isNamespaceSafe = (name: string) =>
+      name === ns || name.startsWith(`${ns}_`) || name.startsWith('sys_');
+
+    // Bare-named UI/automation types subject to the cross-package collision
+    // (ADR-0048 §1.1). Data-driven so a new bare-named type is one line.
+    const PREFIXED_TYPES: Array<{ key: string; label: string }> = [
+      { key: 'apps', label: 'App' },
+      { key: 'pages', label: 'Page' },
+      { key: 'dashboards', label: 'Dashboard' },
+      { key: 'flows', label: 'Flow' },
+      { key: 'actions', label: 'Action' },
+      { key: 'reports', label: 'Report' },
+      { key: 'datasets', label: 'Dataset' },
+    ];
+
+    for (const { key, label } of PREFIXED_TYPES) {
+      const items: any[] = Array.isArray(config[key]) ? config[key] : [];
+      for (let i = 0; i < items.length; i++) {
+        const name = items[i]?.name;
+        if (typeof name !== 'string' || !name || isNamespaceSafe(name)) continue;
+        issues.push({
+          severity: 'warning',
+          rule: 'naming/namespace-prefix',
+          message: `${label} "${name}" is not namespace-prefixed. Two packages defining "${name}" collide on the registry key and fail at install (ADR-0048). Rename to "${ns}_${name}".`,
+          path: `${key}[${i}].name`,
+          fix: `${ns}_${name}`,
+        });
+      }
+    }
+  }
+
   // ── Data-model best practices (relationships / master-detail / roll-ups) ──
   // Cross-object rules that encode the conventions in ADR-0035 and the
   // objectstack-data/-ui skills. These double as the eval rubric (see score.ts).
