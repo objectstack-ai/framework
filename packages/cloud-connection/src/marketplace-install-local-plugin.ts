@@ -186,13 +186,27 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         // Bypass the cloud-fetch entirely; no OS_CLOUD_URL required.
         const inlineManifest = body?.manifest && typeof body.manifest === 'object' ? body.manifest : null;
 
+        // A COMPILED stack bundle (`dist/objectstack.json`, what publish
+        // uploads as the version payload) nests its meta under `.manifest`:
+        //   { manifest: { id, namespace, version, … }, objects, views, … }
+        // while ObjectQL's registerApp expects the FLAT app shape (top-level
+        // id + sections). Flatten when detected — otherwise every install of
+        // a published compiled bundle dies with "Invalid manifest payload".
+        const normalizeBundle = (m: any): any => {
+            if (m && !m.id && !m.name && m.manifest && typeof m.manifest === 'object' && (m.manifest.id || m.manifest.name)) {
+                const { manifest: meta, ...sections } = m;
+                return { ...meta, ...sections };
+            }
+            return m;
+        };
+
         let manifest: any;
         let resolvedVersionId: string;
         let version: string;
         let packageId: string;
 
         if (inlineManifest) {
-            manifest = inlineManifest;
+            manifest = normalizeBundle(inlineManifest);
             packageId = String(manifest.id ?? manifest.name ?? '').trim();
             version = String(manifest.version ?? 'unknown');
             resolvedVersionId = String(body?.versionId ?? version);
@@ -278,7 +292,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             }
 
             const data = payload?.data ?? payload;
-            manifest = data?.manifest;
+            manifest = normalizeBundle(data?.manifest);
             resolvedVersionId = String(data?.version_id ?? versionId);
             version = String(data?.version ?? 'unknown');
         }
