@@ -59,6 +59,29 @@ GET    /api/v1/{object}/aggregate # Aggregation queries
 > **Key rule:** If your object defines `apiMethods`, only those operations are
 > exposed. For example, `apiMethods: ['get', 'list']` creates a read-only API.
 
+### Metadata API (`/meta`)
+
+The metadata read surface lives under `/api/v1/meta` (separate from the data
+CRUD routes above):
+
+```
+GET /api/v1/meta/:type            # List metadata items of a type (object, view, flow, doc, …)
+GET /api/v1/meta/:type/:name      # Read a single metadata item
+```
+
+Three query-param contracts gained in 9.x:
+
+- **`?preview=draft`** (#1763) — overlay pending **draft** metadata instead of the
+  published copy, on both list and get. The draft path is **cache-bypassed**, so
+  it always reflects the latest unpublished edit (ADR-0033/0037 authoring loop).
+- **`?package=<packageId>`** (ADR-0048, #1816/#1819) — **package-scope** a read so
+  two installed packages that share a bare metadata name disambiguate by owning
+  package; prefer-local resolution. A package-scoped read **bypasses the meta
+  cache**. The layered / Studio-editor read is package-scoped the same way.
+- **`/meta/doc`** (ADR-0046, #1790) — docs-as-metadata. The **list** response omits
+  each doc's `content` by default (use `?include=content` to include it); the
+  **single-item** `GET /meta/doc/:name` always returns the full body.
+
 ### Public (anonymous) Form Endpoints
 
 Any `FormView` declared with `sharing.allowAnonymous: true` and a

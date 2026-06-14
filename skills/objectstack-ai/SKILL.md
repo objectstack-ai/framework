@@ -57,6 +57,35 @@ Agent  →  Skill  →  Tool
 > agents is supported but considered legacy. Skills provide better
 > discoverability, instruction scoping, and reuse.
 
+### Built-in Unified Assistant (ADR-0040)
+
+The runtime ships a unified persona agent **`data_chat`** (`DEFAULT_DATA_AGENT_NAME`)
+— the implicit default copilot for any app that doesn't pin `app.defaultAgent`
+(Studio overrides to `metadata_assistant`). It attaches built-in skills:
+
+- **`data_explorer`** — read-only data Q&A: `list_objects`, `describe_object`,
+  `query_data` / `query_records`, `get_record`, `aggregate_data`, `visualize_data`.
+- **`metadata_authoring`** + **`solution_design`** — app-building, **cloud/EE only**.
+
+To grant data exploration to your own agent, add `data_explorer` to its `skills[]`;
+deactivating that skill (`active: false`) revokes data Q&A for every agent that
+references it.
+
+> **Edition gate (#1803):** when neither `metadata_authoring` nor `solution_design`
+> is registered — the open single-env framework — the assistant is **query-only**
+> and declines build/authoring requests. App-building tools are supplied entirely
+> by the cloud AI Studio plugin; do not assume they resolve in the open framework.
+
+> **`visualize_data` (#1820/#1821):** the only built-in tool that draws a chart —
+> it aggregates an object and emits an inline `data-chart` part. Auto-registered
+> **only** when an analytics service (`IAnalyticsService`) is wired; `query_data` /
+> `aggregate_data` return numbers, not charts.
+
+> **Ops:** set `AI_DAILY_USER_MESSAGES=<N>` to cap user turns per user per day
+> (ADR-0040 §5; backed by the `ai_usage_daily` object, no-op if unset). Adapter
+> health is observable at `GET /api/v1/ai/status`; invalid `ai` settings are
+> rejected at save time (#1788).
+
 ---
 
 ## Agent Configuration
@@ -110,9 +139,9 @@ export default defineAgent({
     temperature: 0.3,
   },
   guardrails: {
-    blockedTopics: ['internal_pricing', 'employee_data'],
-    maxTurns: 20,
-    requireApprovalFor: ['delete_record', 'escalate'],
+    blockedTopics: ['internal_pricing', 'employee_data'],   // forbidden topics / action names
+    maxTokensPerInvocation: 8000,                            // token budget per invocation
+    maxExecutionTimeSec: 60,                                 // wall-clock cap per invocation
   },
 });
 ```
@@ -321,6 +350,11 @@ Retrieval-Augmented Generation gives agents access to domain knowledge.
 | `anthropic` | Claude Sonnet 4, Claude Haiku | Long context, safety |
 | `azure_openai` | Same as OpenAI, enterprise managed | Compliance, data residency |
 | `local` | Ollama, vLLM, llama.cpp | On-premise, air-gapped |
+
+> The inline agent `model.provider` enum is the narrow set above
+> (`openai` / `azure_openai` / `anthropic` / `local`). **Model-registry** entries
+> (`ModelProviderSchema`) accept a wider set: also `google`, `cohere`,
+> `huggingface`, `custom`.
 
 ### Model Selection Guidelines
 

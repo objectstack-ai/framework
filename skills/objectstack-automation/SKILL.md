@@ -57,7 +57,7 @@ parallel. Flows are the primary automation building block in ObjectStack.
 | `screen` | Interactive — presents UI screens to the user (wizards, forms) |
 | `schedule` | Runs on a cron schedule (daily cleanup, weekly reports) |
 | `record_change` | Fires automatically on record create/update/delete (bind via the `start` node's `triggerType`) |
-| `api` | Invoked explicitly via the API / `engine.execute()` |
+| `api` | Invoked explicitly via the API / `engine.execute()`, **or** bound as an inbound **webhook**: `POST /api/v1/automation/hooks/:flowName/:hookId` (see *Inbound webhook triggers* below) |
 
 ### Flow Node Types
 
@@ -342,6 +342,7 @@ branch — you never resume the flow by hand.
 | `lockRecord` | Lock the triggering record from edits while pending. Default `true` |
 | `approvalStatusField` | Business-object field to mirror `pending`/`approved`/`rejected`/`recalled` onto (should be readonly) |
 | `escalation` | Optional per-node SLA — `{ enabled, timeoutHours, action: reassign\|auto_approve\|auto_reject\|notify, escalateTo?, notifySubmitter }` |
+| `maxRevisions` | ADR-0044 — max **send-backs-for-revision** per run before auto-reject. Default `3`; `0` disables send-back. Only meaningful when the node has a `revise` out-edge |
 
 ### Branching, side-effects & rejection
 
@@ -353,6 +354,12 @@ These are wired on the **graph**, not in node config:
   `http_request`, an email node, …) to the `approve` / `reject` out-edge.
 - **Roll back on reject** — route the `reject` edge as a **back-edge** to an
   earlier node so the submitter can revise (the old `back_to_previous`).
+- **Send back for revision (ADR-0044)** — distinct from a plain reject: an
+  Approval node can emit a third decision **`revise`** on a `revise`-labeled
+  out-edge that routes to a rework wait point. The submitter edits and
+  resubmits, re-entering the node via an edge `type: 'back'` (a declared
+  back-edge — traversed at run time but excluded from DAG cycle validation).
+  `maxRevisions` (node config, default `3`) caps the loop before auto-reject.
 - **Hard reject** — route the `reject` edge to an `end` node (the old
   `reject_process`).
 
@@ -381,16 +388,37 @@ ObjectQL lifecycle hook.
 
 ### Prerequisite — enable the `triggers` capability
 
-Record-change (and schedule) triggers ship as a plugin gated behind the
+Record-change, schedule, **and inbound-webhook (`api`)** triggers ship behind the
 `triggers` capability. **Without it the flows register but never fire.** Add it
-to the package config (pair with `job` for schedule/cron triggers):
+to the package config:
 
 ```typescript
 defineStack({
   // …
-  requires: ['automation', 'triggers'],   // + 'job' for scheduled flows
+  requires: ['automation', 'triggers'],
+  //   + 'job'   for scheduled (cron) flows
+  //   + 'queue' for inbound-webhook ('api') flows — the trigger-api plugin
+  //             depends on the queue service; without it every inbound POST
+  //             returns 503 queue_unavailable.
 });
 ```
+
+### Inbound webhook (`api`) triggers (ADR-0041 Tier 1)
+
+An `api` flow can be bound to an inbound HTTP endpoint:
+`POST /api/v1/automation/hooks/:flowName/:hookId`. Configure it on the **start
+node `config`** (the start `config` is a free-form record, so these keys are
+read at runtime, not Zod-validated):
+
+| `config` key | Purpose |
+|:-------------|:--------|
+| `hookId` | URL path token (default `'default'`). **Rotate it to revoke** a leaked endpoint |
+| `secret` | HMAC-SHA256 shared secret. Strongly recommended — without it unsigned posts are accepted and a warning is logged |
+
+- **Signature:** sender sends `x-objectstack-signature: sha256=<hex>` (GitHub/Stripe style).
+- **Idempotency:** `x-idempotency-key` dedupes retries — author the flow to be idempotent (delivery is at-least-once).
+- **Queue-backed:** the endpoint ACKs `202` and enqueues; the flow runs on the consumer, never in-band. Requires the `queue` service (see prerequisite).
+- The JSON body surfaces to the flow as the trigger record (`record.*` / bare fields) plus `params`.
 
 ### Trigger Types (start-node `config.triggerType`)
 

@@ -695,6 +695,12 @@ For `lookup` fields, supply the **natural key** of the target record (not
 its UUID). The seed runner resolves at load time. Order datasets so parents
 appear before children in the exported array:
 
+> If a lookup value matches no natural key, the loader now falls back to
+> resolving it as the target's `id` (#1814) — so a reference to a real existing
+> record by internal id resolves instead of dangling to null. Natural keys
+> remain the portable default; rely on the id fallback only for records you
+> didn't seed (e.g. a system user).
+
 ```typescript
 const contacts = defineDataset(Contact, {
   externalId: 'email',
