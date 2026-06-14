@@ -16,15 +16,12 @@ export interface QueueServicePluginOptions {
    *  - 'auto' (default): use DbQueueAdapter when objectql engine available, else MemoryQueueAdapter
    *  - 'db': require objectql; persists messages, retries, and DLQ to sys_job_queue
    *  - 'memory': in-process MemoryQueueAdapter (non-durable, dev/test)
-   *  - 'bullmq': reserved for M10.43 (throws today)
    */
-  adapter?: 'auto' | 'db' | 'memory' | 'bullmq';
+  adapter?: 'auto' | 'db' | 'memory';
   /** Options for the memory queue adapter */
   memory?: MemoryQueueAdapterOptions;
   /** Options for the DB adapter (polling, batch, lease, idempotency window…) */
   db?: DbQueueAdapterOptions;
-  /** Redis connection URL (reserved for bullmq) */
-  redisUrl?: string;
 }
 
 /**
@@ -67,13 +64,6 @@ export class QueueServicePlugin implements Plugin {
     }
 
     const choice = this.options.adapter ?? 'auto';
-
-    if (choice === 'bullmq') {
-      throw new Error(
-        'BullMQ queue adapter is not yet implemented (M10.43). ' +
-        'Use adapter: "auto", "db", or "memory", or provide a custom IQueueService.',
-      );
-    }
 
     if (choice === 'memory') {
       const q = new MemoryQueueAdapter(this.options.memory);

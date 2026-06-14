@@ -2,7 +2,7 @@
   "name": "@objectstack/service-queue",
   "version": "9.4.0",
   "license": "Apache-2.0",
-  "description": "Queue Service for ObjectStack — implements IQueueService with in-memory and BullMQ adapters",
+  "description": "Queue Service for ObjectStack — implements IQueueService with in-memory and durable DB-backed (sys_job_queue) adapters",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -4,9 +4,19 @@
  * @objectstack/service-cluster
  *
  * Pluggable cluster primitives (PubSub / Lock / KV / Counter) for
- * ObjectStack. The default `memory` driver is exported here; remote
- * drivers (postgres/redis/nats) ship as sibling packages and register
- * themselves via `registerClusterDriver()`.
+ * ObjectStack. The default `memory` driver is exported here and is the
+ * only driver needed for single-process runtimes.
+ *
+ * A remote driver is required only when running multiple processes that
+ * must share these primitives. Remote drivers ship as sibling packages
+ * and register via `registerClusterDriver()`; `@objectstack/service-cluster-redis`
+ * is the reference remote driver. (Postgres/NATS drivers are not built —
+ * add one on demand against the same SPI.)
+ *
+ * NOTE: the `memory` driver is per-process. Running multiple replicas on
+ * the memory driver silently splits state (each process holds its own
+ * locks/counters; pub/sub does not fan out across processes). Use a
+ * remote driver for any multi-replica deployment.
  *
  * See `content/docs/concepts/cluster-semantics.mdx` for the protocol.
  */
