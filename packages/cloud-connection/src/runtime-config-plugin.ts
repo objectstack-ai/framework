@@ -14,29 +14,54 @@
  *     cloudUrl: string,            // base URL of the upstream cloud ('' = same origin)
  *     singleEnvironment: boolean,
  *     defaultOrgId?, defaultEnvironmentId?,   // multi-tenant, per-hostname
- *     features: { installLocal, marketplace, aiStudio, autoPublishAiBuilds },
+ *     features: { installLocal, marketplace, aiStudio, autoPublishAiBuilds, ... },
  *     branding: { productName, productShortName }
  *   }
  *
- * ## Policy seam (ADR-0008 / open-mechanism-closed-intelligence)
+ * ## Feature seam (open-core boundary — cloud ADR-0012)
  *
- * Which features a *plan* unlocks is distribution policy, not mechanism — it
- * intentionally does NOT live in this open package. Hosts inject it via
- * {@link RuntimeConfigPluginConfig.resolvePlanFeatures}: the cloud
- * distribution passes its plan-entitlement rules there; a self-hosted or
- * vanilla deployment omits it and gets static config-driven flags.
+ * This open package owns the **mechanism**: serve a per-request `features`
+ * map to the SPA. It does NOT own the **catalog or policy** — which feature
+ * keys exist and which billing plan unlocks them is a distribution concern
+ * and must never be enumerated here (that would bleed commercial/pricing
+ * policy into the open framework).
+ *
+ * Hosts inject policy via {@link RuntimeConfigPluginConfig.resolveFeatures}: it
+ * receives an opaque environment token (the cloud distribution passes the plan
+ * string) and returns an **open-ended** map of feature flags that is merged
+ * verbatim into `features`. The framework neither names nor knows those keys —
+ * e.g. the cloud distribution returns `customDomain` / `sso` from its plan
+ * entitlements without any framework change. A self-hosted / vanilla
+ * deployment omits the hook and gets static, config-driven flags.
+ *
+ * `aiStudio` / `autoPublishAiBuilds` are the framework's own non-commercial
+ * mechanism defaults (ADR-0005: AI authoring is an all-plan capability gated
+ * by cost, not a paid tier), so they keep first-class config knobs here.
  */
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { resolveCloudUrl } from './cloud-url.js';
 
-/** Capability flags a host's plan policy can derive per request. */
-export interface RuntimeConfigPlanFeatures {
+/**
+ * Feature-flag overrides a host's distribution policy can derive per request.
+ *
+ * Open-ended on purpose: the framework's own flags (`aiStudio`,
+ * `autoPublishAiBuilds`) are named, but a distribution may return **any**
+ * additional boolean keys (commercial tiering, white-label toggles, …) and
+ * they pass through to the SPA untouched. The framework does not enumerate
+ * the distribution's feature catalog.
+ */
+export interface RuntimeFeatureOverrides {
     /** Whether the SPA should surface AI-driven metadata authoring. */
     aiStudio?: boolean;
     /** Whether AI-built apps auto-publish in the author's own environment. */
     autoPublishAiBuilds?: boolean;
+    /** Distribution-specific flags pass through opaquely (e.g. customDomain, sso). */
+    [feature: string]: boolean | undefined;
 }
+
+/** @deprecated billing-vocab name; use {@link RuntimeFeatureOverrides}. */
+export type RuntimeConfigPlanFeatures = RuntimeFeatureOverrides;
 
 export interface RuntimeConfigPluginConfig {
     /**
@@ -71,13 +96,21 @@ export interface RuntimeConfigPluginConfig {
     /** Short product name (PWA shortName, compact spots). Defaults to productName. */
     productShortName?: string;
     /**
-     * Plan → feature policy hook. Called with `undefined` for the static
-     * default (no environment resolved / no plan known) and with the
-     * environment's plan string once hostname resolution provides one.
-     * Returned flags override the static config defaults; omitted keys keep
-     * them. When the hook itself is omitted, flags are purely config-driven.
+     * Distribution feature-policy hook (open-core seam — cloud ADR-0012).
+     * Called with `undefined` for the static default (no environment resolved
+     * / no token known) and with an opaque environment token (the cloud
+     * distribution passes the plan string) once hostname resolution provides
+     * one. Returned flags are merged verbatim into `features` — arbitrary keys
+     * pass through. Omitted keys keep the static config defaults; when the hook
+     * itself is omitted, flags are purely config-driven. The framework does NOT
+     * know the distribution's feature catalog or pricing.
      */
-    resolvePlanFeatures?: (plan: string | undefined) => RuntimeConfigPlanFeatures;
+    resolveFeatures?: (token: string | undefined) => RuntimeFeatureOverrides;
+    /**
+     * @deprecated billing-vocab name; use {@link resolveFeatures}. Still
+     * honoured when `resolveFeatures` is absent so existing hosts keep working.
+     */
+    resolvePlanFeatures?: (plan: string | undefined) => RuntimeFeatureOverrides;
 }
 
 export class RuntimeConfigPlugin implements Plugin {
@@ -90,7 +123,7 @@ export class RuntimeConfigPlugin implements Plugin {
     private readonly singleEnvironment: boolean;
     private readonly productName: string;
     private readonly productShortName: string;
-    private readonly resolvePlanFeatures?: (plan: string | undefined) => RuntimeConfigPlanFeatures;
+    private readonly resolveFeatures?: (token: string | undefined) => RuntimeFeatureOverrides;
 
     constructor(config: RuntimeConfigPluginConfig = {}) {
         // An explicit empty string means "stay on this origin" — bypass the
@@ -101,7 +134,8 @@ export class RuntimeConfigPlugin implements Plugin {
         this.installLocal = !!config.installLocal;
         this.aiStudio = config.aiStudio !== false; // default true (override-to-hide)
         this.singleEnvironment = !!config.singleEnvironment;
-        this.resolvePlanFeatures = config.resolvePlanFeatures;
+        // Prefer the plan-agnostic seam; fall back to the deprecated alias.
+        this.resolveFeatures = config.resolveFeatures ?? config.resolvePlanFeatures;
         const envName = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_NAME : undefined)?.trim();
         const envShort = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_SHORT_NAME : undefined)?.trim();
         this.productName = (config.productName ?? envName ?? 'ObjectOS').trim() || 'ObjectOS';
@@ -138,12 +172,20 @@ export class RuntimeConfigPlugin implements Plugin {
             let envRegistry: any = null;
             try { envRegistry = ctx.getService('env-registry'); } catch { /* not mounted (file/CLI mode) */ }
 
-            const featuresFor = (plan: string | undefined, base: { aiStudio: boolean; autoPublishAiBuilds: boolean }) => {
-                const derived = this.resolvePlanFeatures?.(plan);
-                return {
-                    aiStudio: derived?.aiStudio ?? base.aiStudio,
-                    autoPublishAiBuilds: derived?.autoPublishAiBuilds ?? base.autoPublishAiBuilds,
-                };
+            // Merge the distribution's feature overrides over the static base.
+            // Arbitrary keys returned by the host pass through verbatim — the
+            // framework does not enumerate the distribution's feature catalog.
+            const featuresFor = (
+                token: string | undefined,
+                base: Record<string, boolean>,
+            ): Record<string, boolean> => {
+                const derived = this.resolveFeatures?.(token);
+                if (!derived) return { ...base };
+                const out: Record<string, boolean> = { ...base };
+                for (const [k, v] of Object.entries(derived)) {
+                    if (typeof v === 'boolean') out[k] = v;
+                }
+                return out;
             };
 
             const handler = async (c: any) => {
@@ -153,7 +195,7 @@ export class RuntimeConfigPlugin implements Plugin {
                 let defaultOrgId: string | undefined;
                 let resolvedSingleEnv = this.singleEnvironment;
                 // Static defaults: config-driven, optionally shaped by the
-                // host's policy hook for the "no plan known" case.
+                // host's policy hook for the "no token known" case.
                 let features = featuresFor(undefined, { aiStudio: this.aiStudio, autoPublishAiBuilds: false });
                 // EnvironmentDriverRegistry exposes `resolveByHostname()`;
                 // older code paths used `resolveHostname()` on the client.
@@ -176,8 +218,8 @@ export class RuntimeConfigPlugin implements Plugin {
                             // operator's POV: surface as single-environment
                             // so the SPA hides multi-env affordances.
                             resolvedSingleEnv = true;
-                            // Plan-derived features — only an explicit
-                            // non-empty plan re-runs the policy hook.
+                            // Distribution-derived features — only an explicit
+                            // non-empty token re-runs the policy hook.
                             if (typeof resolved.plan === 'string' && resolved.plan.trim() !== '') {
                                 features = featuresFor(resolved.plan, features);
                             }
@@ -196,8 +238,8 @@ export class RuntimeConfigPlugin implements Plugin {
                     features: {
                         installLocal: this.installLocal,
                         marketplace: true,
-                        aiStudio: features.aiStudio,
-                        autoPublishAiBuilds: features.autoPublishAiBuilds,
+                        // aiStudio + autoPublishAiBuilds + any distribution keys.
+                        ...features,
                     },
                     branding: {
                         productName: this.productName,
@@ -208,13 +250,6 @@ export class RuntimeConfigPlugin implements Plugin {
             rawApp.get('/api/v1/runtime/config', handler);
             // Legacy alias for older Studio bundles.
             rawApp.get('/api/v1/studio/runtime-config', handler);
-            ctx.logger?.info?.('[RuntimeConfigPlugin] mounted /api/v1/runtime/config', {
-                cloudUrl: this.cloudUrl || '(empty)',
-                installLocal: this.installLocal,
-                perHostEnvResolution: !!envRegistry,
-            });
         });
     };
-
-    destroy = async (): Promise<void> => {};
 }
