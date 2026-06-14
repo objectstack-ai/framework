@@ -18,7 +18,7 @@ export const pageForm = defineForm({
       fields: [
         { field: 'name', required: true, colSpan: 1, helpText: 'Unique identifier (snake_case)' },
         { field: 'label', required: true, colSpan: 1, helpText: 'Page title shown to users' },
-        { field: 'icon', colSpan: 1, helpText: 'Icon for navigation menu' },
+        { field: 'icon', widget: 'icon', colSpan: 1, helpText: 'Icon for navigation menu' },
         {
           field: 'type',
           colSpan: 1,
