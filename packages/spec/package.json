@@ -185,6 +185,8 @@
     "gen:openapi": "tsx scripts/build-openapi.ts",
     "gen:docs": "tsx scripts/build-docs.ts",
     "gen:skill-refs": "tsx scripts/build-skill-references.ts",
+    "gen:skill-docs": "tsx scripts/build-skill-docs.ts",
+    "check:skill-docs": "tsx scripts/build-skill-docs.ts --check",
     "analyze": "tsx scripts/analyze-bundle-size.ts",
     "gen:sbom": "tsx scripts/generate-sbom.ts",
     "test": "vitest run",

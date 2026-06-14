@@ -12,17 +12,23 @@ authoritative Zod sources in `node_modules/@objectstack/spec/src/...`.
 
 ## Index
 
-| Skill | Use when you are… |
-|:------|:------------------|
-| [objectstack-platform](./objectstack-platform/SKILL.md) | Bootstrapping or operating a runtime — `defineStack`, drivers, adapters, plugins, services, CLI, deploy. |
-| [objectstack-data](./objectstack-data/SKILL.md) | Modelling objects, fields, field conditional rules, relationships, validations, indexes, lifecycle hooks, permissions / RLS, or seed datasets. |
-| [objectstack-query](./objectstack-query/SKILL.md) | Writing ObjectQL — filters, sorting, pagination, aggregation, joins, window functions, full-text search. |
-| [objectstack-ui](./objectstack-ui/SKILL.md) | Designing Views, Apps, Pages, Dashboards, dataset-bound widgets, Reports, Charts, or Actions. |
-| [objectstack-automation](./objectstack-automation/SKILL.md) | Wiring Flows, Workflows, Triggers, Approvals, scheduled jobs, or webhooks. |
-| [objectstack-ai](./objectstack-ai/SKILL.md) | Designing Agents, Tools, Skills, Conversations, Model Registry entries, or MCP integrations. |
-| [objectstack-api](./objectstack-api/SKILL.md) | Exposing server-side API surface — REST/GraphQL endpoints, auth, realtime, error envelopes. |
-| [objectstack-i18n](./objectstack-i18n/SKILL.md) | Authoring translation bundles, configuring locale fallback, or reading coverage reports. |
-| [objectstack-formula](./objectstack-formula/SKILL.md) | Writing CEL expressions — formula fields, field rules, predicates (validation / sharing / visibility), conditions, dynamic seed values. |
+<!-- BEGIN GENERATED: skills (packages/spec/scripts/build-skill-docs.ts) — DO NOT EDIT -->
+
+| Skill | Domain | What it covers |
+|:------|:-------|:---------------|
+| [Platform](./objectstack-platform/SKILL.md) | `platform` | Bootstrap, configure, extend, and operate ObjectStack runtimes. Covers project setup (`defineStack`, drivers, adapters, scaffolding), plugin and service development (PluginContext, DI, kernel hooks like `kernel:ready` and `data:*`), and operations (CLI commands, migrations, deployment, test harnesses via LiteKernel). |
+| [Data](./objectstack-data/SKILL.md) | `data` | Design ObjectStack data schemas — objects, fields, field conditional rules, relationships, validations, indexes, lifecycle hooks, permissions, row-level security — and the seed datasets (`defineDataset()`) that load fixtures and reference data alongside them. |
+| [Query](./objectstack-query/SKILL.md) | `query` | Construct ObjectQL queries — filters, sorting, pagination, aggregation, joins/expansion, window functions, and full-text search. |
+| [UI](./objectstack-ui/SKILL.md) | `ui` | Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt), Apps (navigation), Pages, Dashboards, Reports, Charts, Actions, and package Docs (`src/docs/*.md`). |
+| [Automation](./objectstack-automation/SKILL.md) | `automation` | Design ObjectStack automation — Flows (visual logic), Workflows (declarative rules), Triggers, Approvals, scheduled jobs, and webhooks. |
+| [AI](./objectstack-ai/SKILL.md) | `ai` | Design ObjectStack AI agents, tools, skills, conversations, model registry entries, and MCP integrations. |
+| [API](./objectstack-api/SKILL.md) | `api` | Design the server-side API surface that an ObjectStack runtime exposes — REST/GraphQL endpoints, auth providers, realtime channels, error envelopes, batch/versioning contracts. |
+| [i18n](./objectstack-i18n/SKILL.md) | `i18n` | Author ObjectStack translation bundles — object/field labels, view text, app navigation strings, automation messages — and configure locale fallback, coverage reporting, and the per-locale source layout. |
+| [Formula](./objectstack-formula/SKILL.md) | `expression` | Author CEL expressions used across ObjectStack — formula fields, field conditional rules (`visibleWhen`, `readonlyWhen`, `requiredWhen`), validation / sharing / visibility predicates, flow conditions, and dynamic seed values. Use whenever the user is writing an `F`, `P`, or `cel` tagged-template literal, or asks "how do I express X as a formula / predicate". Do not use for SQL fragments (driver-native), cron schedules (cron dialect), or L2 hook bodies (those belong in objectstack-data). |
+
+<!-- END GENERATED: skills -->
+
+> Regenerate with `pnpm --filter @objectstack/spec gen:skill-docs` after editing any `SKILL.md` frontmatter.
 
 ---
 
