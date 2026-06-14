@@ -22,6 +22,20 @@ npx @objectstack/cli init my-app
 cd my-app
 ```
 
+### Add AI skills to your editor
+
+Install the ObjectStack skill bundle so your AI assistant (Claude Code, Copilot, Cursor, …) knows the protocol's schemas and conventions:
+
+```bash
+npx skills add objectstack-ai/framework --all
+```
+
+Re-run the same command any time to update — the bundle is versioned as one unit. See the [AI Skills Reference](/docs/guides/skills) for the full catalog.
+
+<Callout type="info">
+Scaffolding with `npm create objectstack@latest` runs this step automatically.
+</Callout>
+
 ### Define your first object
 
 The scaffolded project includes a sample object. Open `src/objects/my_app.ts`:
