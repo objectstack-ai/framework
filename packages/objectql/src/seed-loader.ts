@@ -448,6 +448,25 @@ export class SeedLoaderService implements ISeedLoaderService {
       if (records && records.length > 0) {
         return String(records[0].id || records[0]._id);
       }
+      // Fallback: the value may already be the target's internal id rather than
+      // its natural key — a seed that wires a lookup to a real existing record
+      // (e.g. a people field → the current user, whose id is not a UUID/ObjectId
+      // so `looksLikeInternalId` did not short-circuit). Resolving by id lets a
+      // valid id resolve instead of dangling null, with no risk of a false
+      // natural-key match (an id either exists or it does not).
+      if (targetField !== 'id') {
+        const byId: Record<string, unknown> = { id: value };
+        if (organizationId) byId.organization_id = organizationId;
+        const idMatch = await this.engine.find(targetObject, {
+          where: byId,
+          fields: ['id'],
+          limit: 1,
+          context: { isSystem: true },
+        } as any);
+        if (idMatch && idMatch.length > 0) {
+          return String(idMatch[0].id || idMatch[0]._id);
+        }
+      }
     } catch {
       // Target object may not exist yet
     }
