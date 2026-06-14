@@ -20,5 +20,18 @@
       "Bash(agent-browser snapshot *)",
       "Bash(agent-browser skills *)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-main-checkout.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
