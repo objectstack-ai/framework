@@ -202,8 +202,7 @@ describe('PageSchema', () => {
   it('should accept different page types', () => {
     const types: Array<Page['type']> = [
       'record', 'home', 'app', 'utility',
-      'dashboard', 'grid', 'list', 'gallery', 'kanban', 'calendar',
-      'timeline', 'form', 'record_detail', 'overview',
+      'dashboard', 'list', 'form', 'record_detail', 'overview',
     ];
 
     types.forEach(type => {
@@ -487,12 +486,19 @@ describe('PageTypeSchema', () => {
 
   it('should accept all interface page types', () => {
     const types = [
-      'dashboard', 'grid', 'list', 'gallery', 'kanban', 'calendar',
-      'timeline', 'form', 'record_detail', 'record_review', 'overview', 'blank',
+      'dashboard', 'list', 'form', 'record_detail', 'record_review', 'overview', 'blank',
     ];
 
     types.forEach(type => {
       expect(() => PageTypeSchema.parse(type)).not.toThrow();
+    });
+  });
+
+  it('should reject visualizations as page types (they belong in interfaceConfig.appearance.allowedVisualizations)', () => {
+    // grid/kanban/calendar/gallery/timeline are visualizations of a `list`
+    // page, not page kinds — they were removed from PageTypeSchema.
+    ['grid', 'kanban', 'calendar', 'gallery', 'timeline'].forEach(type => {
+      expect(() => PageTypeSchema.parse(type)).toThrow();
     });
   });
 
@@ -653,8 +659,7 @@ describe('PageSchema with page types', () => {
 
   it('should accept all interface page types', () => {
     const basicTypes = [
-      'dashboard', 'grid', 'list', 'gallery', 'kanban', 'calendar',
-      'timeline', 'form', 'record_detail', 'overview',
+      'dashboard', 'list', 'form', 'record_detail', 'overview',
     ];
 
     basicTypes.forEach(type => {
@@ -984,16 +989,18 @@ describe('Page end-to-end', () => {
     expect(page.recordReview?.actions).toHaveLength(3);
   });
 
-  it('should accept a grid page bound to an object', () => {
+  it('should accept a list page bound to an object', () => {
+    // A grid is a *visualization* of a list page, not a page type — bind the
+    // object on a `list` page and pick the grid visualization via interfaceConfig.
     const page = PageSchema.parse({
       name: 'page_grid',
       label: 'All Orders',
-      type: 'grid',
+      type: 'list',
       object: 'order',
       regions: [],
     });
 
-    expect(page.type).toBe('grid');
+    expect(page.type).toBe('list');
     expect(page.object).toBe('order');
   });
 });
@@ -1269,9 +1276,9 @@ describe('PageSchema - conditional validation', () => {
 
   it('should not require recordReview for non-record_review types', () => {
     expect(() => PageSchema.parse({
-      name: 'grid_page',
-      label: 'Grid',
-      type: 'grid',
+      name: 'list_page',
+      label: 'List',
+      type: 'list',
       regions: [],
     })).not.toThrow();
   });

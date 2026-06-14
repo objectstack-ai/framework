@@ -19,7 +19,24 @@ export const pageForm = defineForm({
         { field: 'name', required: true, colSpan: 1, helpText: 'Unique identifier (snake_case)' },
         { field: 'label', required: true, colSpan: 1, helpText: 'Page title shown to users' },
         { field: 'icon', colSpan: 1, helpText: 'Icon for navigation menu' },
-        { field: 'type', colSpan: 1, helpText: 'Page type — "list" for an interface/list page; also record, home, app, dashboard, etc.' },
+        {
+          field: 'type',
+          colSpan: 1,
+          // The page KIND, not a visualization. Kanban/Calendar/Gallery/Timeline
+          // are visualizations OF a List page (set under Interface →
+          // Appearance → Allowed visualizations), not page types — so they are
+          // deliberately absent here. Only kinds with a dedicated renderer are
+          // offered; roadmap kinds (dashboard/form/record_detail/…) are valid in
+          // the schema but hidden until they render distinctly.
+          options: [
+            { label: 'List / Interface page', value: 'list' },
+            { label: 'Record page', value: 'record' },
+            { label: 'Home page', value: 'home' },
+            { label: 'App page', value: 'app' },
+            { label: 'Utility panel', value: 'utility' },
+          ],
+          helpText: 'Page kind. "List / Interface" binds a source view into a curated surface — how it looks (grid / kanban / calendar / …) is a visualization set under Interface, not a page type.',
+        },
         { field: 'template', colSpan: 2, helpText: 'Layout template (e.g., "header-sidebar-main")' },
         { field: 'description', widget: 'textarea', colSpan: 2, helpText: 'Page description for navigation' },
       ],

@@ -142,6 +142,14 @@ export const BlankPageLayoutSchema = lazySchema(() => z.object({
  * Unified page type enum covering both platform pages (Salesforce FlexiPage style)
  * and Airtable-inspired interface page types.
  *
+ * **Page type is the page KIND, NOT a visualization.** How an interface (`list`)
+ * page displays its records — grid / kanban / calendar / gallery / timeline — is a
+ * *visualization*, configured via `interfaceConfig.appearance.allowedVisualizations`
+ * and switched at runtime. Those are deliberately NOT page types: a kanban is a `list`
+ * page shown as a board, not a distinct page kind. (Historically grid/kanban/calendar/
+ * gallery/timeline appeared here; the runtime never branched on them — it always read
+ * the visualization from `interfaceConfig` — so they were removed to stop misleading authors.)
+ *
  * **Disambiguation of similar types:**
  * - `record` vs `record_detail`: `record` is a component-based layout page (FlexiPage style with regions),
  *   `record_detail` is a field-display page showing all fields of a single record (Airtable style).
@@ -152,27 +160,30 @@ export const BlankPageLayoutSchema = lazySchema(() => z.object({
  * - `app` vs `utility` vs `blank`: `app` is an app-level page with navigation context,
  *   `utility` is a floating utility panel (e.g. notes, phone), `blank` is a free-form canvas
  *   for custom composition. They serve distinct layout purposes.
+ *
+ * **Implementation status:** only `record`, `home`, `app`, `utility`, and `list` have
+ * dedicated renderers today; the remaining interface types (`dashboard`, `form`,
+ * `record_detail`, `record_review`, `overview`, `blank`) are declared for roadmap parity
+ * but currently fall back to the list renderer. The authoring form only offers the
+ * implemented set (see `page.form.ts`) to avoid presenting dead options.
  */
 export const PageTypeSchema = lazySchema(() => z.enum([
-  // Platform page types (Salesforce FlexiPage style)
+  // Platform page types (Salesforce FlexiPage style) — region/component composition
   'record',         // Component-based record layout page with regions
   'home',           // Platform-level home/landing page
   'app',            // App-level page with navigation context
   'utility',        // Floating utility panel (e.g. notes, phone dialer)
-  // Interface page types (Airtable Interface parity)
-  'dashboard',      // KPI summary with charts/metrics
-  'grid',           // Spreadsheet-like data table
-  'list',           // Record list with quick actions
-  'gallery',        // Card-based visual browsing
-  'kanban',         // Status-based board
-  'calendar',       // Date-based scheduling
-  'timeline',       // Gantt-like project timeline
-  'form',           // Data entry form
-  'record_detail',  // Auto-generated single record field display
-  'record_review',  // Sequential record review/approval
-  'overview',       // Interface-level navigation/landing hub
-  'blank',          // Free-form canvas for custom composition
-]).describe('Page type — platform or interface page types'));
+  // Interface page types (Airtable Interface parity) — data-driven surfaces.
+  // NOTE: grid/kanban/calendar/gallery/timeline are NOT here — they are visualizations
+  // of a `list` page (interfaceConfig.appearance.allowedVisualizations), not page types.
+  'list',           // Record list/grid surface with switchable visualizations + quick actions
+  'dashboard',      // [roadmap] KPI summary with charts/metrics
+  'form',           // [roadmap] Data entry form
+  'record_detail',  // [roadmap] Auto-generated single record field display
+  'record_review',  // [roadmap] Sequential record review/approval
+  'overview',       // [roadmap] Interface-level navigation/landing hub
+  'blank',          // [roadmap] Free-form canvas for custom composition
+]).describe('Page type — the page KIND (platform or interface). Visualizations of a list page live in interfaceConfig, not here.'));
 
 /**
  * Record Review Config Schema
