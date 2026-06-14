@@ -14,6 +14,9 @@ import type { Doc } from '@objectstack/spec/system';
  *
  * Principle (from the HotCRM reference docs): document the *invisible*
  * business logic, not what the Studio UI already shows on screen.
+ *
+ * `translations` carries per-locale variants (ADR-0046 i18n); the REST layer
+ * collapses the doc to the request's `Accept-Language` and serves one body.
  */
 export const STUDIO_OVERVIEW_DOC: Doc = {
   name: 'studio_overview',
@@ -55,4 +58,38 @@ safely in one environment before shipping.
 
 See <https://docs.objectstack.ai> for drafts, overlays, and deployment in depth.
 `,
+  translations: {
+    zh: {
+      label: 'Studio 概览',
+      description: '搭建者入门:元数据优先模型、覆盖层优先级、发布与部署。',
+      content: `# Studio 概览
+
+Studio 是搭建者应用——塑造平台*元数据*的工作台:对象、字段、视图、流程、智能体等。
+它的大多数界面一目了然;本页讲的是那条界面上看不见、却支配你在这里一切操作的规则。
+完整参考见 <https://docs.objectstack.ai>。
+
+## 元数据优先
+
+在 Studio 里你编辑的不是运行中的数据库,而是*定义*。每个对象、字段、视图都是一条
+元数据记录,运行的应用由这些元数据生成。这就是为什么 Studio 里的一处改动能同时重塑
+UI 和 API:你改的是模型,而不是修补某个界面。
+
+## 编辑即覆盖层(看不见的规则)
+
+你的改动不会原地修改某个包发布的元数据。Studio 在基础定义之上写一层**覆盖层**,
+运行时按优先级解析两者:未发布的**草稿**在你编辑时对你生效,已发布的**租户覆盖层**
+优先于包的基线,包基线则是兜底(ADR-0005、ADR-0033)。实际后果:基础定义永不被
+销毁,所以覆盖层总能回退以恢复原样——而一个"改不动"的字段,通常是被更高优先级的
+层遮住了。
+
+## 发布与部署
+
+草稿只对你自己可见,直到你**发布**它,把覆盖层提升给整个租户看到。在环境之间搬运
+改动(例如开发 → 生产)是单独的**部署**步骤,不是发布的自动副作用——把两者分开,
+才能让你在一个环境里安全搭建、再上线。
+
+草稿、覆盖层与部署的细节见 <https://docs.objectstack.ai>。
+`,
+    },
+  },
 };

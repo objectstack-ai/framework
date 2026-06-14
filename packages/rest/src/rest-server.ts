@@ -1832,6 +1832,25 @@ export class RestServer {
                             }
                         }
 
+                        // ADR-0046 i18n: collapse each doc to the request
+                        // locale (localized label/description, `translations`
+                        // map dropped) before the content-strip step below.
+                        if (req.params.type === 'doc') {
+                            const locale = this.extractLocale(req);
+                            const { resolveDocLocale } = await import('@objectstack/spec/system');
+                            const raw = visible as unknown;
+                            const list: any[] | null = Array.isArray(raw)
+                                ? (raw as any[])
+                                : (raw && typeof raw === 'object' && Array.isArray((raw as any).items))
+                                    ? ((raw as any).items as any[])
+                                    : null;
+                            if (list) {
+                                const localized = list.map((it: any) =>
+                                    it && typeof it === 'object' ? resolveDocLocale(it as any, locale) : it);
+                                visible = Array.isArray(raw) ? localized : { ...(raw as any), items: localized };
+                            }
+                        }
+
                         // ADR-0046: `doc` list responses omit `content` by
                         // default — manuals are the one metadata payload that
                         // grows unbounded, and the list surface only needs
@@ -1958,7 +1977,7 @@ export class RestServer {
                         // `getMetaItem(type, name, packageId)` path runs.
                         const packageScoped = typeof req.query?.package === 'string'
                             && req.query.package.length > 0;
-                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped) {
+                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped && req.params.type !== 'doc') {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
@@ -2039,6 +2058,17 @@ export class RestServer {
                                         return;
                                     }
                                 }
+                            }
+
+                            // ADR-0046 i18n: collapse the doc to the request
+                            // locale (label/description/content) and drop the
+                            // `translations` map so consumers get one body.
+                            if (req.params.type === 'doc' && visible) {
+                                const locale = this.extractLocale(req);
+                                const { resolveDocLocale } = await import('@objectstack/spec/system');
+                                visible = isMetaEnvelope(visible)
+                                    ? { ...visible, item: resolveDocLocale(visible.item as any, locale) }
+                                    : resolveDocLocale(visible as any, locale);
                             }
 
                             res.header('Vary', 'Accept-Language');

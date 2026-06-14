@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { DocSchema } from './doc.zod';
+import { DocSchema, resolveDocLocale } from './doc.zod';
 import { ObjectStackDefinitionSchema } from '../stack.zod';
 import { MetadataTypeSchema } from '../kernel/metadata-plugin.zod';
 import { getMetadataTypeSchema } from '../kernel/metadata-type-schemas';
@@ -56,5 +56,44 @@ describe('stack `docs` element wiring', () => {
 
   it('maps the plural stack key to the singular registry type', () => {
     expect(pluralToSingular('docs')).toBe('doc');
+  });
+});
+
+describe('resolveDocLocale (ADR-0046 i18n)', () => {
+  const base = {
+    name: 'crm_index',
+    label: 'Overview',
+    description: 'Start.',
+    content: '# Overview',
+    translations: {
+      zh: { label: '概览', description: '从这里开始。', content: '# 概览' },
+      ja: { content: '# 概要' }, // label/description omitted → inherit base
+    },
+  } as any;
+
+  it('collapses to an exact locale and strips the translations map', () => {
+    const r = resolveDocLocale(base, 'zh');
+    expect(r.content).toBe('# 概览');
+    expect(r.label).toBe('概览');
+    expect((r as any).translations).toBeUndefined();
+  });
+
+  it('falls back from a region tag to the primary subtag (zh-CN → zh)', () => {
+    expect(resolveDocLocale(base, 'zh-CN').content).toBe('# 概览');
+  });
+
+  it('inherits base label/description when a variant omits them', () => {
+    const r = resolveDocLocale(base, 'ja');
+    expect(r.content).toBe('# 概要');
+    expect(r.label).toBe('Overview'); // inherited
+    expect(r.description).toBe('Start.'); // inherited
+  });
+
+  it('returns the base body (minus translations) for unknown/empty locale', () => {
+    for (const loc of ['fr', '', undefined, null] as any[]) {
+      const r = resolveDocLocale(base, loc);
+      expect(r.content).toBe('# Overview');
+      expect((r as any).translations).toBeUndefined();
+    }
   });
 });
