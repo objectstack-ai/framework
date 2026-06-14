@@ -1,8 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 // Core engine
-export { AutomationEngine } from './engine.js';
+export { AutomationEngine, DEFAULT_MAX_EXECUTION_LOG_SIZE } from './engine.js';
 export type {
+    AutomationEngineOptions,
     NodeExecutor,
     NodeExecutionResult,
     FlowTrigger,

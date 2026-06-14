@@ -198,6 +198,26 @@ export interface ConnectorDescriptor {
 // ─── Core Automation Engine ─────────────────────────────────────────
 
 /**
+ * Default ceiling on the in-memory execution-log ring buffer. Execution logs are
+ * process-local and diagnostic only (launch-readiness.md P1-2); the buffer keeps
+ * the most recent N entries and evicts the oldest, so memory is bounded
+ * regardless of throughput. Operators tune the window via
+ * {@link AutomationServicePluginOptions.maxLogSize}. Durable, queryable run
+ * history is the DB-backed `sys_automation_run` store (a post-GA HA item), not
+ * this buffer.
+ */
+export const DEFAULT_MAX_EXECUTION_LOG_SIZE = 1000;
+
+/** Construction options for {@link AutomationEngine}. */
+export interface AutomationEngineOptions {
+    /**
+     * Max in-memory execution-log entries retained (ring buffer; oldest evicted).
+     * Defaults to {@link DEFAULT_MAX_EXECUTION_LOG_SIZE}. Must be > 0.
+     */
+    maxLogSize?: number;
+}
+
+/**
  * Execution step log entry. Part of a {@link SuspendedRun}'s persisted state, so
  * it survives serialization to a durable {@link SuspendedRunStore}.
  */
@@ -334,7 +354,7 @@ export class AutomationEngine implements IAutomationService {
     /** Connectors registered by integration plugins, keyed by connector name (ADR-0018 §Addendum). */
     private connectors = new Map<string, RegisteredConnector>();
     private executionLogs: ExecutionLogEntry[] = [];
-    private maxLogSize = 1000;
+    private readonly maxLogSize: number;
     private logger: Logger;
     /**
      * Runs paused at a node, keyed by runId (ADR-0019). In-memory hot cache —
@@ -354,9 +374,10 @@ export class AutomationEngine implements IAutomationService {
      */
     private resuming = new Set<string>();
 
-    constructor(logger: Logger, store?: SuspendedRunStore) {
+    constructor(logger: Logger, store?: SuspendedRunStore, options?: AutomationEngineOptions) {
         this.logger = logger;
         this.store = store;
+        this.maxLogSize = options?.maxLogSize ?? DEFAULT_MAX_EXECUTION_LOG_SIZE;
     }
 
     /**

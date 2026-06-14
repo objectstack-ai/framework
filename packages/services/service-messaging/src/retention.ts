@@ -5,6 +5,15 @@ import { NOTIFICATION_EVENT_OBJECT } from './messaging-service.js';
 import { DELIVERY_OBJECT } from './sql-outbox.js';
 import { INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channel.js';
 
+/**
+ * Default retention window for the notification pipeline, in days. Default-on as
+ * of GA (launch-readiness.md P1-2): 90 days keeps a quarter of in-app history
+ * for the bell / audit while bounding `sys_notification` (+ delivery / inbox /
+ * receipt) growth. Operators override via `MessagingServicePlugin` options;
+ * `0` disables pruning entirely.
+ */
+export const DEFAULT_NOTIFICATION_RETENTION_DAYS = 90;
+
 /** Minimal logger surface (matches the channel/service context). */
 interface RetentionLogger {
     info(msg: string): void;

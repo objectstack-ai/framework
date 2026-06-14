@@ -24,6 +24,13 @@ export interface AutomationServicePluginOptions {
      * survives a process restart and can be resumed after a cold boot.
      */
     suspendedRunStore?: 'auto' | 'memory';
+    /**
+     * Max in-memory execution-log entries retained per process (ring buffer;
+     * oldest evicted). The buffer is diagnostic-only and already bounded
+     * (launch-readiness.md P1-2); this just makes the window tunable. Defaults
+     * to {@link DEFAULT_MAX_EXECUTION_LOG_SIZE} (1000).
+     */
+    maxLogSize?: number;
 }
 
 /**
@@ -71,7 +78,9 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async init(ctx: PluginContext): Promise<void> {
-        this.engine = new AutomationEngine(ctx.logger);
+        this.engine = new AutomationEngine(ctx.logger, undefined, {
+            maxLogSize: this.options.maxLogSize,
+        });
 
         // Register as global service — other plugins access via ctx.getService('automation')
         ctx.registerService('automation', this.engine);

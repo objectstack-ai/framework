@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { InMemoryRealtimeAdapter } from './in-memory-realtime-adapter';
+import { InMemoryRealtimeAdapter, DEFAULT_MAX_SUBSCRIPTIONS } from './in-memory-realtime-adapter';
 import type { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 
 describe('InMemoryRealtimeAdapter', () => {
@@ -196,6 +196,24 @@ describe('InMemoryRealtimeAdapter', () => {
     await expect(realtime.subscribe('ch3', () => {})).rejects.toThrow(
       /Maximum subscription limit reached/,
     );
+  });
+
+  it('enforces a default maxSubscriptions cap when none is configured (P0-5 backstop)', () => {
+    const realtime = new InMemoryRealtimeAdapter();
+    expect(DEFAULT_MAX_SUBSCRIPTIONS).toBeGreaterThan(0);
+    expect(Number.isFinite(DEFAULT_MAX_SUBSCRIPTIONS)).toBe(true);
+    expect((realtime as unknown as { maxSubscriptions: number }).maxSubscriptions).toBe(
+      DEFAULT_MAX_SUBSCRIPTIONS,
+    );
+  });
+
+  it('treats maxSubscriptions: 0 as an explicit unbounded opt-out', async () => {
+    const realtime = new InMemoryRealtimeAdapter({ maxSubscriptions: 0 });
+    expect((realtime as unknown as { maxSubscriptions: number }).maxSubscriptions).toBe(0);
+    for (let i = 0; i < 5; i++) {
+      await realtime.subscribe(`ch${i}`, () => {});
+    }
+    expect(realtime.getSubscriptionCount()).toBe(5);
   });
 
   it('should not break publish loop on handler error', async () => {

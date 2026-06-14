@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { InMemoryFeedAdapter } from './in-memory-feed-adapter';
+import { InMemoryFeedAdapter, DEFAULT_MAX_FEED_ITEMS } from './in-memory-feed-adapter';
 import type { IFeedService, CreateFeedItemInput } from '@objectstack/spec/contracts';
 
 /** Helper to create a standard comment input. */
@@ -123,6 +123,24 @@ describe('InMemoryFeedAdapter', () => {
 
     await expect(feed.createFeedItem(commentInput({ body: 'third' })))
       .rejects.toThrow(/Maximum feed item limit reached/);
+  });
+
+  it('enforces a default maxItems cap when none is configured (P0-5 backstop)', async () => {
+    // The cap is default-on so a long-running single-instance feed can't grow
+    // until OOM. Adapter constructed with no options uses the default cap.
+    const feed = new InMemoryFeedAdapter();
+    expect(DEFAULT_MAX_FEED_ITEMS).toBeGreaterThan(0);
+    expect(Number.isFinite(DEFAULT_MAX_FEED_ITEMS)).toBe(true);
+    expect((feed as unknown as { maxItems: number }).maxItems).toBe(DEFAULT_MAX_FEED_ITEMS);
+  });
+
+  it('treats maxItems: 0 as an explicit unbounded opt-out', async () => {
+    const feed = new InMemoryFeedAdapter({ maxItems: 0 });
+    expect((feed as unknown as { maxItems: number }).maxItems).toBe(0);
+    for (let i = 0; i < 5; i++) {
+      await feed.createFeedItem(commentInput({ body: `c${i}` }));
+    }
+    expect(feed.getItemCount()).toBe(5);
   });
 
   // ==========================================

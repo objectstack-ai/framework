@@ -12,10 +12,24 @@ import type { FeedItem, Reaction } from '@objectstack/spec/data';
 import type { RecordSubscription } from '@objectstack/spec/data';
 
 /**
+ * Default safety cap on stored feed items. This adapter is process-local and
+ * non-durable (the v1 single-instance contract — see launch-readiness.md P0-5),
+ * so an unbounded store would grow until the pod OOMs. The cap is a backstop:
+ * `createFeedItem` throws loudly once it's reached rather than letting memory
+ * grow without bound. Operators who need a higher ceiling raise `maxItems`;
+ * `maxItems: 0` opts out entirely (unbounded — only for tests / short-lived
+ * processes).
+ */
+export const DEFAULT_MAX_FEED_ITEMS = 100_000;
+
+/**
  * Configuration options for InMemoryFeedAdapter.
  */
 export interface InMemoryFeedAdapterOptions {
-  /** Maximum number of feed items to store (0 = unlimited) */
+  /**
+   * Maximum number of feed items to store. Defaults to
+   * {@link DEFAULT_MAX_FEED_ITEMS}; `0` = unbounded (explicit opt-out).
+   */
   maxItems?: number;
 }
 
@@ -50,7 +64,7 @@ export class InMemoryFeedAdapter implements IFeedService {
   private readonly maxItems: number;
 
   constructor(options: InMemoryFeedAdapterOptions = {}) {
-    this.maxItems = options.maxItems ?? 0;
+    this.maxItems = options.maxItems ?? DEFAULT_MAX_FEED_ITEMS;
   }
 
   async listFeed(options: ListFeedOptions): Promise<FeedListResult> {

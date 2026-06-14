@@ -21,6 +21,12 @@ export interface FeedServicePluginOptions {
  * Registers a Feed/Chatter service with the kernel during the init phase.
  * Currently supports in-memory storage for single-process environments.
  *
+ * **v1 deployment contract (launch-readiness.md P0-5): single-instance only.**
+ * The in-memory adapter is process-local and non-durable — feed data is lost on
+ * restart and is not shared across nodes. A default `maxItems` safety cap is
+ * enforced (see {@link InMemoryFeedAdapter}) so the store can't grow until OOM.
+ * HA (a DB-backed feed adapter) is a post-GA fast-follow.
+ *
  * @example
  * ```ts
  * import { ObjectKernel } from '@objectstack/core';

@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
-import { AutomationEngine } from './engine.js';
+import { AutomationEngine, DEFAULT_MAX_EXECUTION_LOG_SIZE } from './engine.js';
 import { AutomationServicePlugin } from './plugin.js';
 import { registerScreenNodes } from './builtin/screen-nodes.js';
 import { InMemorySuspendedRunStore } from './suspended-run-store.js';
@@ -28,6 +28,30 @@ describe('AutomationEngine', () => {
 
     beforeEach(() => {
         engine = new AutomationEngine(createTestLogger());
+    });
+
+    describe('Execution-log ring buffer (P1-2)', () => {
+        it('defaults the cap to DEFAULT_MAX_EXECUTION_LOG_SIZE', () => {
+            const e = new AutomationEngine(createTestLogger());
+            expect(DEFAULT_MAX_EXECUTION_LOG_SIZE).toBeGreaterThan(0);
+            expect((e as unknown as { maxLogSize: number }).maxLogSize).toBe(
+                DEFAULT_MAX_EXECUTION_LOG_SIZE,
+            );
+        });
+
+        it('honours a configured maxLogSize and evicts oldest beyond it', async () => {
+            const e = new AutomationEngine(createTestLogger(), undefined, { maxLogSize: 3 });
+            expect((e as unknown as { maxLogSize: number }).maxLogSize).toBe(3);
+
+            // Drive the private ring buffer directly: push 5, keep newest 3.
+            const rec = (e as any).recordLog.bind(e);
+            for (let i = 0; i < 5; i++) {
+                rec({ id: `run_${i}`, flowName: 'f', status: 'success' });
+            }
+            const buf = (e as unknown as { executionLogs: Array<{ id: string }> }).executionLogs;
+            expect(buf).toHaveLength(3);
+            expect(buf.map((l) => l.id)).toEqual(['run_2', 'run_3', 'run_4']);
+        });
     });
 
     describe('Node Executor Registration', () => {

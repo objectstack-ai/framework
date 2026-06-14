@@ -18,10 +18,23 @@ interface Subscription {
 }
 
 /**
+ * Default safety cap on active subscriptions. This adapter is process-local
+ * (the v1 single-instance contract — see launch-readiness.md P0-5); an
+ * unbounded subscription map would grow until the pod OOMs under a subscription
+ * leak or an abusive client. The cap is a backstop: `subscribe` throws once
+ * it's reached. Operators raise `maxSubscriptions` for high-fan-out nodes;
+ * `maxSubscriptions: 0` opts out entirely (unbounded — only for tests).
+ */
+export const DEFAULT_MAX_SUBSCRIPTIONS = 50_000;
+
+/**
  * Configuration options for InMemoryRealtimeAdapter.
  */
 export interface InMemoryRealtimeAdapterOptions {
-  /** Maximum number of subscriptions allowed (0 = unlimited) */
+  /**
+   * Maximum number of subscriptions allowed. Defaults to
+   * {@link DEFAULT_MAX_SUBSCRIPTIONS}; `0` = unbounded (explicit opt-out).
+   */
   maxSubscriptions?: number;
 }
 
@@ -59,7 +72,7 @@ export class InMemoryRealtimeAdapter implements IRealtimeService {
   private readonly maxSubscriptions: number;
 
   constructor(options: InMemoryRealtimeAdapterOptions = {}) {
-    this.maxSubscriptions = options.maxSubscriptions ?? 0;
+    this.maxSubscriptions = options.maxSubscriptions ?? DEFAULT_MAX_SUBSCRIPTIONS;
   }
 
   async publish(event: RealtimeEventPayload): Promise<void> {

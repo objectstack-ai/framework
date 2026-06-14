@@ -9,7 +9,7 @@ import { SqlNotificationOutbox } from './sql-outbox.js';
 import { SqlHttpOutbox } from './sql-http-outbox.js';
 import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
 import { HttpDispatcher } from './http-dispatcher.js';
-import { NotificationRetention } from './retention.js';
+import { NotificationRetention, DEFAULT_NOTIFICATION_RETENTION_DAYS } from './retention.js';
 import { createEmailChannel } from './email-channel.js';
 import { NotificationTemplateStore } from './template-renderer.js';
 import {
@@ -46,11 +46,15 @@ export interface MessagingServicePluginOptions {
     mandatoryTopics?: readonly string[];
     /**
      * Retention window in days for the notification pipeline (ADR-0030
-     * hardening). When set (> 0), a periodic sweep prunes events, deliveries,
-     * inbox materializations and receipts older than this — bounding the
-     * event-log growth from high-frequency periodic flows. **Opt-in**: unset (or
-     * ≤ 0) disables retention (default), so no notification data is ever deleted
-     * without explicit operator policy.
+     * hardening). When > 0, a periodic sweep prunes events, deliveries, inbox
+     * materializations and receipts older than this — bounding the event-log
+     * growth from high-frequency periodic flows.
+     *
+     * **Default-on** at {@link DEFAULT_NOTIFICATION_RETENTION_DAYS} as of GA
+     * (launch-readiness.md P1-2): an unbounded notification log is a slow leak,
+     * so retention ships enabled rather than opt-in. Set to `0` to disable
+     * retention entirely (notification history kept forever; operator owns
+     * cleanup). Raise/lower the number to widen/narrow the window.
      */
     retentionDays?: number;
     /** Retention sweep interval in ms (default 1 hour). Only used when `retentionDays` is set. */
@@ -98,7 +102,7 @@ export class MessagingServicePlugin implements Plugin {
             partitionCount: 8,
             dispatchIntervalMs: 500,
             mandatoryTopics: [],
-            retentionDays: 0,
+            retentionDays: DEFAULT_NOTIFICATION_RETENTION_DAYS,
             retentionSweepMs: 3_600_000,
             ...options,
         };

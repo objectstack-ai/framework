@@ -21,6 +21,13 @@ export interface RealtimeServicePluginOptions {
  * Registers a realtime pub/sub service with the kernel during the init phase.
  * Currently supports in-memory pub/sub for single-process environments.
  *
+ * **v1 deployment contract (launch-readiness.md P0-5): single-instance only.**
+ * The in-memory adapter is process-local — events published on node A are not
+ * delivered to subscribers on node B. A default `maxSubscriptions` safety cap is
+ * enforced (see {@link InMemoryRealtimeAdapter}) so the subscription map can't
+ * grow until OOM. HA (a Redis-backed adapter over the existing `RedisPubSub` in
+ * `service-cluster-redis`) is a post-GA fast-follow.
+ *
  * @example
  * ```ts
  * import { ObjectKernel } from '@objectstack/core';

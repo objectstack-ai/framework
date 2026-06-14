@@ -6,7 +6,12 @@ import { IntervalJobAdapter } from './interval-job-adapter.js';
 import type { IntervalJobAdapterOptions } from './interval-job-adapter.js';
 import { CronJobAdapter } from './cron-job-adapter.js';
 import { DbJobAdapter } from './db-job-adapter.js';
-import type { DbJobAdapterOptions } from './db-job-adapter.js';
+import type { DbJobAdapterOptions, JobEngineLike } from './db-job-adapter.js';
+import {
+  JobRunRetention,
+  DEFAULT_JOB_RUN_RETENTION_DAYS,
+  DEFAULT_JOB_RUN_SWEEP_MS,
+} from './job-run-retention.js';
 
 /**
  * Configuration options for the JobServicePlugin.
@@ -26,6 +31,17 @@ export interface JobServicePluginOptions {
   db?: DbJobAdapterOptions;
   /** Whether to also wire CronJobAdapter for cron schedules (default: true when available) */
   enableCron?: boolean;
+  /**
+   * Retention window in days for `sys_job_run` execution-history rows
+   * (launch-readiness.md P1-2). Every run appends a row, so without pruning the
+   * table grows unbounded. **Default-on** at {@link DEFAULT_JOB_RUN_RETENTION_DAYS}
+   * — a periodic sweep deletes rows older than this. Set to `0` to disable
+   * retention (rows kept forever; operator owns cleanup). Only applies on the
+   * DB-backed adapter (no `sys_job_run` table exists for interval/cron).
+   */
+  retentionDays?: number;
+  /** Retention sweep interval in ms (default {@link DEFAULT_JOB_RUN_SWEEP_MS}). Only used when `retentionDays > 0`. */
+  retentionSweepMs?: number;
 }
 
 /**
@@ -44,9 +60,16 @@ export class JobServicePlugin implements Plugin {
   private readonly options: JobServicePluginOptions;
   private dbAdapter?: DbJobAdapter;
   private intervalAdapter?: IntervalJobAdapter;
+  private retentionTimer?: ReturnType<typeof setInterval>;
 
   constructor(options: JobServicePluginOptions = {}) {
-    this.options = { adapter: 'auto', enableCron: true, ...options };
+    this.options = {
+      adapter: 'auto',
+      enableCron: true,
+      retentionDays: DEFAULT_JOB_RUN_RETENTION_DAYS,
+      retentionSweepMs: DEFAULT_JOB_RUN_SWEEP_MS,
+      ...options,
+    };
   }
 
   async init(ctx: PluginContext): Promise<void> {
@@ -125,10 +148,39 @@ export class JobServicePlugin implements Plugin {
       } catch (err) {
         ctx.logger.warn('JobServicePlugin: replaceService failed; staying on IntervalJobAdapter', err as any);
       }
+
+      // Retention sweep (launch-readiness.md P1-2): bound the append-only
+      // sys_job_run log. Default-on — an unbounded run history is a guaranteed
+      // slow leak. Runs once now then on a low-frequency interval; the timer is
+      // unref'd so it never keeps the process alive. Only wired on the DB path
+      // (the table exists only there).
+      const retentionDays = this.options.retentionDays ?? DEFAULT_JOB_RUN_RETENTION_DAYS;
+      if (retentionDays > 0) {
+        const retention = new JobRunRetention({
+          getEngine: () => engine as JobEngineLike,
+          logger: ctx.logger,
+        });
+        const sweepMs = this.options.retentionSweepMs ?? DEFAULT_JOB_RUN_SWEEP_MS;
+        const sweep = () => {
+          void retention.prune(retentionDays).catch((err) =>
+            ctx.logger.warn(`JobServicePlugin: retention sweep failed: ${(err as Error)?.message ?? err}`),
+          );
+        };
+        sweep();
+        this.retentionTimer = setInterval(sweep, sweepMs);
+        this.retentionTimer.unref?.();
+        ctx.logger.info(
+          `JobServicePlugin: sys_job_run retention on (prune > ${retentionDays}d every ${Math.round(sweepMs / 1000)}s)`,
+        );
+      }
     });
   }
 
   async destroy(): Promise<void> {
+    if (this.retentionTimer) {
+      clearInterval(this.retentionTimer);
+      this.retentionTimer = undefined;
+    }
     await this.dbAdapter?.destroy();
     await this.intervalAdapter?.destroy();
   }

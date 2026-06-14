@@ -97,7 +97,17 @@ fix or acceptance.**
 - **Action (cluster launch):** Provide a Redis-backed realtime adapter and a
   DB-backed feed adapter, **or** formally restrict v1 to single-instance and
   document it as non-HA. Enforce a `maxItems` cap if shipping in-memory feed.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Decision = single-instance for v1 (non-HA).** Recorded: realtime/feed stay
+  process-local for GA; HA is a post-GA fast-follow (the Redis primitive already
+  exists — `service-cluster-redis`'s `RedisPubSub` — so the realtime adapter is a
+  wrap, and a DB-backed feed adapter is the larger remaining piece). Both plugin
+  JSDocs now state the non-HA contract explicitly.
+- **Backstops shipped:** safety caps are now **default-on** — `InMemoryFeedAdapter`
+  caps at `DEFAULT_MAX_FEED_ITEMS` (100k) and `InMemoryRealtimeAdapter` at
+  `DEFAULT_MAX_SUBSCRIPTIONS` (50k); `createFeedItem`/`subscribe` throw loudly at
+  the cap (fail-loud beats silent OOM). `0` is an explicit unbounded opt-out
+  (tests / short-lived processes). +4 tests (default-cap + opt-out, both packages).
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`)  ·  Sign-off ☐  ·  Notes: **Accepted for v1 as single-instance/non-HA**; caps default-on + documented. HA adapters tracked as post-GA roadmap. Awaiting human sign-off.
 
 ---
 
@@ -130,7 +140,27 @@ fix or acceptance.**
 - **Risk:** Long-running pods OOM; history tables grow without bound.
 - **Action:** Make retention **default-on** for all event/run tables; schedule
   sweepers at startup; persist automation logs to a table rather than memory.
-- **Owner:** _______  ·  Verify ☐  ·  Sign-off ☐  ·  Notes: _______
+- **Verification finding (corrected scope):** only one of the three is truly
+  unbounded. **automation** exec logs are *already* a bounded 1000-entry ring
+  buffer (`engine.ts` `recordLog` — `splice`); memory-safe today, never persisted
+  → no OOM risk. **`sys_job_run`** is the real leak: append-only, zero retention.
+  **messaging** retention was fully built + tested (`NotificationRetention`) but
+  shipped opt-in (`retentionDays: 0`).
+- **Fixes shipped:**
+  - **service-job** — new `JobRunRetention` (mirrors `NotificationRetention`):
+    bulk `delete sys_job_run where created_at < cutoff` under a system context,
+    **default-on** at `DEFAULT_JOB_RUN_RETENTION_DAYS` (30d), swept every 6h via
+    an unref'd timer wired in `JobServicePlugin`'s `kernel:ready` (DB path only);
+    `retentionDays: 0` disables. +5 tests.
+  - **service-messaging** — flipped `retentionDays` default `0 → 90`
+    (`DEFAULT_NOTIFICATION_RETENTION_DAYS`); sweeper/timer/shutdown already
+    existed. **Behaviour change**: notification history now auto-prunes at 90d by
+    default (set `0` to keep the old keep-forever behaviour). Changeset notes it.
+  - **service-automation** — exec-log ring buffer cap made configurable via
+    `AutomationServicePluginOptions.maxLogSize` (default unchanged at 1000,
+    `DEFAULT_MAX_EXECUTION_LOG_SIZE`); +2 tests. Durable `sys_automation_run`-style
+    persistence is deferred to the HA fast-follow (roadmap), not a GA blocker.
+- **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`; scope corrected)  ·  Sign-off ☐  ·  Notes: `sys_job_run` retention is the one true fix; messaging default-flipped; automation already bounded (now tunable). Awaiting human sign-off.
 
 ### P1-3 — Graceful shutdown (mostly a false positive; one real drain bug fixed)
 - **Area:** `core` (`kernel.ts`), `cli` (`serve.ts`), `plugin-hono-server` (`adapter.ts`)
@@ -196,6 +226,10 @@ notes, not treated as blockers.
 - ☐ **Unverified features — confirm stub vs. minimal, then include or exclude:**
   `knowledge-ragflow`, `connector-openapi` (the sweep could not locate full
   implementations; the packages exist — verify scope before GA).
+- ☐ **HA / multi-node (post-GA fast-follow, from P0-5 decision):** Redis-backed
+  realtime adapter (wrap `service-cluster-redis`'s `RedisPubSub`), DB-backed feed
+  adapter, and persisting automation execution logs to a table (currently a
+  process-local 1000-entry ring buffer — see P1-2). Not needed for single-instance v1.
 - ☐ **Proposed ADRs (roadmap):** ADR-0021 (analytics semantic layer),
   ADR-0022/0023/0024 (connectors / OpenAPI→connector / MCP connectors),
   ADR-0025/0026 (plugin & client-UI distribution), ADR-0027 (metadata authoring
@@ -211,7 +245,8 @@ notes, not treated as blockers.
 - ☐ Pending changesets reviewed (4 at last check) and version bump intentional.
 - ☐ `pnpm run release` path verified (`build` → `build-console.sh` → `changeset publish`).
 - ☐ Required env vars documented for go-live (at minimum `OS_AUTH_SECRET`; see P0-1).
-- ☐ Deployment topology decided: **single-instance** vs. **HA/cluster** (drives P0-5).
+- ☑ Deployment topology decided: **single-instance** for v1 (drives P0-5; HA is a
+  post-GA fast-follow). Realtime/feed run process-local with default-on memory caps.
 
 ---
 
