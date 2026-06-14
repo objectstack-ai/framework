@@ -17,14 +17,21 @@ const ROWS = [
   { type: 'object', name: 'live', state: 'active', package_id: 'app.edu', organization_id: null, updated_at: 't4' },
 ];
 
-function makeRepo(rows = ROWS) {
-  // Minimal engine whose find() does equality-only WHERE matching.
+const matchesWhere = (r: any, clause: any): boolean =>
+  Object.entries(clause).every(([k, v]) =>
+    k === '$or'
+      ? (v as any[]).some((c) => matchesWhere(r, c))
+      : (r as any)[k] === v,
+  );
+
+function makeRepo(rows = ROWS, organizationId: string | null = null) {
+  // Minimal engine whose find() does equality WHERE matching, plus `$or`.
   const find = vi.fn(async (_table: string, q: any) => {
     const where = q?.where ?? {};
-    return rows.filter((r) => Object.entries(where).every(([k, v]) => (r as any)[k] === v));
+    return rows.filter((r) => matchesWhere(r, where));
   });
   const engine = { find } as any;
-  const repo = new SysMetadataRepository({ engine, organizationId: null, orgLabel: 'env' });
+  const repo = new SysMetadataRepository({ engine, organizationId, orgLabel: 'env' });
   return { repo, find };
 }
 
@@ -48,6 +55,28 @@ describe('SysMetadataRepository.listDrafts (ADR-0033)', () => {
     const { repo } = makeRepo();
     const out = await repo.listDrafts({ packageId: 'app.edu' });
     expect(out.map((d) => d.name).sort()).toEqual(['course', 'course_list', 'student']);
+  });
+
+  it('surfaces env-wide (org IS NULL) drafts even when the repo has a non-null active org', async () => {
+    // Regression (orphaned-draft bug): AI-authored metadata is written env-wide
+    // (organization_id NULL). A non-null active org used a strict equality that
+    // dropped those drafts → they showed in preview but the Publish CTA never
+    // appeared, so the user could not publish them.
+    const { repo } = makeRepo(ROWS, 'org_acme');
+    const names = (await repo.listDrafts()).map((d) => d.name).sort();
+    expect(names).toEqual(['course', 'course_list', 'legacy', 'student']);
+    expect(names).not.toContain('live');
+  });
+
+  it('returns both org-scoped and env-wide drafts for a non-null org, excluding other orgs', async () => {
+    const rows = [
+      { type: 'object', name: 'env_wide', state: 'draft', package_id: 'p', organization_id: null, updated_at: 't1' },
+      { type: 'object', name: 'org_scoped', state: 'draft', package_id: 'p', organization_id: 'org_acme', updated_at: 't2' },
+      { type: 'object', name: 'other_org', state: 'draft', package_id: 'p', organization_id: 'org_other', updated_at: 't3' },
+    ];
+    const { repo } = makeRepo(rows, 'org_acme');
+    const names = (await repo.listDrafts()).map((d) => d.name).sort();
+    expect(names).toEqual(['env_wide', 'org_scoped']);
   });
 
   it('filters by type', async () => {

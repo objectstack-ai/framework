@@ -730,10 +730,23 @@ export class SysMetadataRepository implements MetadataRepository {
     }>
   > {
     this.assertOpen();
-    const where: Record<string, unknown> = {
-      organization_id: this.organizationId,
-      state: 'draft',
-    };
+    const where: Record<string, unknown> = { state: 'draft' };
+    // Surface BOTH org-scoped drafts and env-wide (`organization_id IS NULL`)
+    // drafts. Env-wide drafts are real pending changes — `getMetaItems`/preview
+    // overlays them and `publish-drafts` promotes them — but a strict
+    // `organization_id = this.organizationId` equality silently dropped them
+    // whenever the active org was non-null. AI-authored metadata is written
+    // env-wide, so its drafts vanished from the pending-changes list and the
+    // Publish CTA never appeared: the change showed in preview yet could not be
+    // published from the UI (the "orphaned draft" bug).
+    if (this.organizationId != null) {
+      where.$or = [
+        { organization_id: this.organizationId },
+        { organization_id: null },
+      ];
+    } else {
+      where.organization_id = null;
+    }
     if (filter?.type) where.type = filter.type;
     if (filter?.packageId) where.package_id = filter.packageId;
     const rows = await this.engine.find('sys_metadata', { where });
