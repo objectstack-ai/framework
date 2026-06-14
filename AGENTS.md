@@ -58,17 +58,21 @@ Other scripts: `objectui:bump` (pull only), `objectui:build`, `objectui:clean`. 
 8. **North Star alignment.** Read `content/docs/concepts/north-star.mdx` before structural changes. If a change doesn't advance §7 Built, shrink Drift, or unlock Missing — it probably shouldn't ship.
 9. **`OS_` env-var prefix.** All ObjectStack-owned env vars MUST start with `OS_`. When renaming a legacy var, use `readEnvWithDeprecation('OS_NEW', 'LEGACY')` from `@objectstack/types` (keeps legacy working one release). Third-party exceptions kept as-is: `NODE_ENV`, `HOME`, `OPENAI_API_KEY`, `TURSO_*`, OAuth `*_CLIENT_ID/SECRET`, `RESEND_API_KEY`, `POSTMARK_TOKEN`, `AI_GATEWAY_*`, `SMTP_*`. See #1382.
 10. **File issues for out-of-scope findings — don't silently expand scope or leave them buried.** When you hit a bug, gap, or unenforced capability that's unrelated to the current task, or too large to fix in scope, open a GitHub issue (`gh issue create`) with a clear repro/decision and link it from your PR. Corollary: **never advertise or demo a capability the runtime doesn't actually deliver** (declared ≠ enforced) — fix it, trim it, or file an issue, but don't fake coverage. Example: the spec declares 9 validation-rule types but the write-path validator enforces only 3 (`state_machine`/`script`/`cross_field`); the other 6 are tracked in #1475 rather than demoed in the showcase.
+11. **Worktree-first — never edit on the shared `main` checkout.** This repo is edited by **multiple agents at once**; the shared `main` tree has its HEAD switched and reset *under you*, silently clobbering uncommitted work. Before your **first file edit**, you MUST be in a dedicated worktree on a feature branch: `git worktree add ../framework-<task> -b <branch> main && cd ../framework-<task> && pnpm install`. A PreToolUse hook (`.claude/hooks/guard-main-checkout.sh`) **enforces** this — it blocks `Edit`/`Write`/`NotebookEdit` whenever HEAD is on `main` (override for a deliberate non-task fix with `OS_ALLOW_MAIN_EDITS=1`). Full playbook below.
 
 ---
 
 ## Multi-agent working discipline
 
-This repo is worked on by **multiple agents in parallel**. Prefer **one git
+This repo is worked on by **multiple agents in parallel**. **Use one git
 worktree per agent/task** (`git worktree add ../framework-<task> -b <branch>`;
 run `pnpm install` in the new tree) so file systems are physically isolated —
-that avoids most of the contention below. When agents must share one working
-tree, branches get switched and shared files change *under you* mid-task — this
-is expected, not a bug. Operate defensively:
+this is mandatory, not a preference (Prime Directive #11), and a PreToolUse hook
+blocks edits made while on the shared `main` branch. Working in the shared `main`
+checkout is *not* a supported fallback: branches get switched and shared files —
+including ones you just wrote — get reset *under you* mid-task (a full session's
+work was silently reverted twice before this rule was enforced). Even inside your
+own worktree, operate defensively:
 
 1. **Only touch the files your task needs.** Don't "fix" unrelated diffs,
    reverts, or other agents' in-flight edits, and don't try to manage the whole
