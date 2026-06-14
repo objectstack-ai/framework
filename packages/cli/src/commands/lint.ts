@@ -216,48 +216,68 @@ export function lintConfig(config: any): LintIssue[] {
     }
   }
 
-  // ── Namespace-prefix advisory for bare-named metadata (ADR-0048 §3.3) ──
-  // Cross-package collision detection (ADR-0048) makes a clash between two
-  // packages' bare-named items (`page`/`flow`/`action`/…) a loud error at
-  // registration time. This shifts that left: a non-fatal nudge to prefix
-  // the name with the package namespace at authoring time, so the clash is
-  // unlikely to ever happen. Objects are already prefix-*enforced* (error)
-  // in defineStack; views are object-derived; `doc` has its own build lint
-  // — so they are excluded here. Warning only — prefix stays a recommended
-  // convention for legacy types, not a retroactive requirement.
+  // ── Intra-package duplicate-name advisory (ADR-0048 §3.4) ──
+  // ADR-0048 §3.4 retired the per-item CROSS-package throw: package ids are
+  // globally unique, so two installed packages shipping the same bare name
+  // (e.g. `page/home`) legitimately COEXIST under distinct composite keys and
+  // each caller resolves to its own via package-scoped resolution. A bare name
+  // is therefore NOT a collision risk and must not warn on its own.
+  //
+  // What the lint still earns its keep on is the narrow authoring-time hygiene
+  // case the ADR explicitly leaves to `os lint`: "an author shipping two
+  // `page/home` in one package". Two items of the same (type, name) declared
+  // within ONE package's config share a single composite registry key and
+  // shadow each other (last-write-wins). We only see one package's config here,
+  // so the legitimate signal is a genuine duplicate `(type, name)` pair within
+  // it — never a unique bare name.
+  //
+  // Objects are already prefix-*enforced* (error) in defineStack; views are
+  // object-derived; `doc` has its own build lint — so they are excluded here.
   const ns: string | undefined = config.manifest?.namespace;
-  if (ns) {
-    // A name is namespace-safe if it IS the namespace (ADR-0019: a package's
-    // single app is conventionally named after the namespace, e.g. `crm`),
-    // is prefixed with it (`crm_lead`), or is a platform-reserved `sys_` name.
-    const isNamespaceSafe = (name: string) =>
-      name === ns || name.startsWith(`${ns}_`) || name.startsWith('sys_');
 
-    // Bare-named UI/automation types subject to the cross-package collision
-    // (ADR-0048 §1.1). Data-driven so a new bare-named type is one line.
-    const PREFIXED_TYPES: Array<{ key: string; label: string }> = [
-      { key: 'apps', label: 'App' },
-      { key: 'pages', label: 'Page' },
-      { key: 'dashboards', label: 'Dashboard' },
-      { key: 'flows', label: 'Flow' },
-      { key: 'actions', label: 'Action' },
-      { key: 'reports', label: 'Report' },
-      { key: 'datasets', label: 'Dataset' },
-    ];
+  // Bare-named UI/automation types that share the generic registry namespace.
+  // Data-driven so a new bare-named type is one line.
+  const PREFIXED_TYPES: Array<{ key: string; label: string }> = [
+    { key: 'apps', label: 'App' },
+    { key: 'pages', label: 'Page' },
+    { key: 'dashboards', label: 'Dashboard' },
+    { key: 'flows', label: 'Flow' },
+    { key: 'actions', label: 'Action' },
+    { key: 'reports', label: 'Report' },
+    { key: 'datasets', label: 'Dataset' },
+  ];
 
-    for (const { key, label } of PREFIXED_TYPES) {
-      const items: any[] = Array.isArray(config[key]) ? config[key] : [];
-      for (let i = 0; i < items.length; i++) {
-        const name = items[i]?.name;
-        if (typeof name !== 'string' || !name || isNamespaceSafe(name)) continue;
-        issues.push({
-          severity: 'warning',
-          rule: 'naming/namespace-prefix',
-          message: `${label} "${name}" is not namespace-prefixed. Two packages defining "${name}" collide on the registry key and fail at install (ADR-0048). Rename to "${ns}_${name}".`,
-          path: `${key}[${i}].name`,
-          fix: `${ns}_${name}`,
-        });
+  for (const { key, label } of PREFIXED_TYPES) {
+    const items: any[] = Array.isArray(config[key]) ? config[key] : [];
+    // First occurrence of each name → its index, so a later duplicate can point
+    // back at the original declaration.
+    const firstSeen = new Map<string, number>();
+    for (let i = 0; i < items.length; i++) {
+      const name = items[i]?.name;
+      if (typeof name !== 'string' || !name) continue;
+      const original = firstSeen.get(name);
+      if (original === undefined) {
+        firstSeen.set(name, i);
+        continue;
       }
+      // Genuine intra-package duplicate: two items of the same (type, name)
+      // declared in this package's config. They collapse onto one registry key
+      // and shadow each other. Renaming one with the package namespace prefix
+      // (`crm_home`) is the simplest fix; any distinct name works.
+      const suggestion = ns && !name.startsWith(`${ns}_`) ? `${ns}_${name}` : undefined;
+      issues.push({
+        severity: 'warning',
+        rule: 'naming/namespace-prefix',
+        message:
+          `${label} "${name}" is declared more than once in this package ` +
+          `(also at ${key}[${original}].name). Two items of the same type sharing ` +
+          `a bare name within one package shadow each other on the registry key ` +
+          `(ADR-0048 §3.4) — rename one${suggestion ? `, e.g. "${suggestion}"` : ''}. ` +
+          `Distinct packages may reuse the same name freely; the namespace prefix ` +
+          `is an optional convention, not a collision-avoidance requirement.`,
+        path: `${key}[${i}].name`,
+        ...(suggestion ? { fix: suggestion } : {}),
+      });
     }
   }
 
