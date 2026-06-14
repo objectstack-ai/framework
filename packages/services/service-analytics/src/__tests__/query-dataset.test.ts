@@ -53,6 +53,25 @@ describe('AnalyticsService.queryDataset', () => {
     ).rejects.toThrow(/not declared in the dataset's `include`/);
   });
 
+  it('degrades to an empty result when the backing table is missing (no such table)', async () => {
+    const svc = new AnalyticsService({
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+      executeRawSql: async () => { throw new Error('SELECT COUNT(*) FROM "opportunity" - no such table: opportunity'); },
+    });
+    const result = await svc.queryDataset(dataset, { dimensions: ['region'], measures: ['revenue'] }, { tenantId: 'org_A' } as ExecutionContext);
+    expect(result).toEqual({ rows: [], fields: [], totals: [] });
+  });
+
+  it('still throws on a non-missing-source error (real query bugs surface)', async () => {
+    const svc = new AnalyticsService({
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+      executeRawSql: async () => { throw new Error('syntax error near "FROM"'); },
+    });
+    await expect(
+      svc.queryDataset(dataset, { dimensions: ['region'], measures: ['revenue'] }, { tenantId: 'org_A' } as ExecutionContext),
+    ).rejects.toThrow(/syntax error/);
+  });
+
   it('pre-registered datasets (config.datasets) are compiled at construction', () => {
     const svc = new AnalyticsService({
       datasets: [dataset],
