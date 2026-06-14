@@ -138,3 +138,36 @@ describe('collectAndLintDocs', () => {
     expect(issues).toHaveLength(0);
   });
 });
+
+describe('locale variants (ADR-0046 i18n)', () => {
+  it('folds `<base>.<locale>.md` into the base doc translations', () => {
+    write('crm_index.md', '# Overview\n\nEnglish body.'); // no frontmatter → exact content
+    write('crm_index.zh.md', '---\ntitle: 概览\ndescription: 从这里开始。\n---\n\n# 概览\n\n中文正文。');
+    write('crm_index.pt-BR.md', '# Visão geral\n\nCorpo PT.');
+    const { docs, issues } = collectDocsFromSrc(configPath);
+    expect(issues).toHaveLength(0);
+    expect(docs).toHaveLength(1); // variants do NOT become separate docs
+    const doc = docs[0];
+    expect(doc.name).toBe('crm_index');
+    expect(doc.content).toBe('# Overview\n\nEnglish body.'); // base = default
+    expect(doc.translations?.zh?.label).toBe('概览'); // frontmatter title
+    expect(doc.translations?.zh?.description).toBe('从这里开始。');
+    expect(doc.translations?.zh?.content).toContain('中文正文。'); // frontmatter stripped
+    expect(doc.translations?.zh?.content).not.toContain('title:');
+    expect(doc.translations?.['pt-BR']?.content).toBe('# Visão geral\n\nCorpo PT.');
+  });
+
+  it('errors on an orphan variant with no base file', () => {
+    write('crm_index.zh.md', '# 概览');
+    const { docs, issues } = collectDocsFromSrc(configPath);
+    expect(docs).toHaveLength(0);
+    expect(issues.some((i) => i.rule === 'docs/orphan-translation' && i.severity === 'error')).toBe(true);
+  });
+
+  it('applies the v1 MDX/image bans to variant content too', () => {
+    write('crm_index.md', '# ok');
+    write('crm_index.zh.md', '# 概览\n\n![img](./x.png)');
+    const issues = lintDocs(collectDocsFromSrc(configPath).docs, 'crm');
+    expect(issues.some((i) => i.rule === 'docs/no-images' && i.path.endsWith('.zh'))).toBe(true);
+  });
+});

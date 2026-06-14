@@ -60,5 +60,47 @@ export const DocSchema = lazySchema(() => z.object({
    * content-agnostic.
    */
   content: z.string().describe('Raw Markdown content (CommonMark + GFM)'),
+
+  /**
+   * Per-locale content variants (ADR-0046 i18n addendum). Compiled from
+   * sibling `<name>.<locale>.md` files; the base `<name>.md` is the default
+   * and the fallback. The REST layer resolves the request locale, returns a
+   * single collapsed body, and strips this map — so consumers never see it.
+   * Inert like the rest of the doc: the kernel stores it without parsing.
+   */
+  translations: z
+    .record(
+      z.string(),
+      z.object({
+        label: z.string().optional(),
+        description: z.string().optional(),
+        content: z.string(),
+      }),
+    )
+    .optional()
+    .describe('Per-locale {label?,description?,content} variants; the base doc is the fallback'),
 }));
 export type Doc = z.infer<typeof DocSchema>;
+export type DocTranslation = NonNullable<Doc['translations']>[string];
+
+/**
+ * Collapse a doc to a single locale (ADR-0046 i18n). Returns a copy with
+ * `label`/`description`/`content` swapped to the best-matching variant and the
+ * `translations` map removed. Match order: exact locale -> primary subtag
+ * (`zh-CN` -> `zh`) -> base doc. Per-field fallback: a variant that omits
+ * `label`/`description` inherits the base value. A nullish/empty `locale`, or
+ * no matching variant, yields the base doc (still minus `translations`).
+ */
+export function resolveDocLocale(doc: Doc, locale?: string | null): Doc {
+  const { translations, ...base } = doc;
+  if (!translations || !locale) return base as Doc;
+  const want = String(locale);
+  const variant = translations[want] ?? translations[want.split('-')[0]];
+  if (!variant) return base as Doc;
+  return {
+    ...base,
+    label: variant.label ?? base.label,
+    description: variant.description ?? base.description,
+    content: variant.content,
+  } as Doc;
+}

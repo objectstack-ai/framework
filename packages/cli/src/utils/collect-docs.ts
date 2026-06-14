@@ -26,11 +26,22 @@
 import fs from 'fs';
 import path from 'path';
 
+export interface DocTranslationItem {
+  label?: string;
+  description?: string;
+  content: string;
+}
+
 export interface DocItem {
   name: string;
   label?: string;
   description?: string;
   content: string;
+  /**
+   * Per-locale variants (ADR-0046 i18n), compiled from sibling
+   * `<name>.<locale>.md` files. The base file is the default + fallback.
+   */
+  translations?: Record<string, DocTranslationItem>;
 }
 
 export interface DocIssue {
@@ -41,6 +52,11 @@ export interface DocIssue {
 }
 
 const DOC_NAME_RE = /^[a-z][a-z0-9_]*$/;
+// A locale-variant file is `<base>.<locale>.md` (ADR-0046 i18n), e.g.
+// `crm_lead_guide.zh.md` or `crm_lead_guide.pt-BR.md`. The base stem must be a
+// valid doc name; the locale is a BCP-47-ish tag (primary subtag + optional
+// region). Flatness is unchanged — variants are still flat siblings.
+const DOC_VARIANT_RE = /^([a-z][a-z0-9_]*)\.([A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?)$/;
 
 /** Extract a single-line scalar `key: value` from a frontmatter block. */
 function frontmatterScalar(block: string, key: string): string | undefined {
@@ -89,9 +105,11 @@ function firstHeading(markdown: string): string | undefined {
  */
 export function collectDocsFromSrc(configPath: string): { docs: DocItem[]; issues: DocIssue[] } {
   const docsDir = path.join(path.dirname(configPath), 'src', 'docs');
-  const docs: DocItem[] = [];
   const issues: DocIssue[] = [];
-  if (!fs.existsSync(docsDir)) return { docs, issues };
+  if (!fs.existsSync(docsDir)) return { docs: [], issues };
+
+  const baseByName = new Map<string, DocItem>();
+  const variants: Array<{ base: string; locale: string; item: DocTranslationItem; rel: string }> = [];
 
   for (const entry of fs.readdirSync(docsDir, { withFileTypes: true })) {
     const rel = `src/docs/${entry.name}`;
@@ -107,26 +125,67 @@ export function collectDocsFromSrc(configPath: string): { docs: DocItem[]; issue
     if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
 
     const stem = entry.name.slice(0, -3);
+    const raw = fs.readFileSync(path.join(docsDir, entry.name), 'utf-8');
+    const { title, description, body } = parseFrontmatter(raw);
+
+    // Locale variant `<base>.<locale>.md` (ADR-0046 i18n) — checked before the
+    // bare-name rule, since a variant stem legitimately contains a dot.
+    const variantMatch = stem.match(DOC_VARIANT_RE);
+    if (variantMatch) {
+      variants.push({
+        base: variantMatch[1],
+        locale: variantMatch[2],
+        item: { ...(title ? { label: title } : {}), ...(description ? { description } : {}), content: body },
+        rel,
+      });
+      continue;
+    }
+
     if (!DOC_NAME_RE.test(stem)) {
       issues.push({
         severity: 'error',
         rule: 'docs/filename',
-        message: `Doc filename "${entry.name}" must be snake_case (e.g. crm_lead_guide.md); the stem becomes the doc name.`,
+        message: `Doc filename "${entry.name}" must be snake_case (e.g. crm_lead_guide.md), optionally with a locale suffix (crm_lead_guide.zh.md); the stem becomes the doc name.`,
         path: rel,
       });
       continue;
     }
 
-    const raw = fs.readFileSync(path.join(docsDir, entry.name), 'utf-8');
-    const { title, description, body } = parseFrontmatter(raw);
-    docs.push({
+    baseByName.set(stem, {
       name: stem,
       label: title ?? firstHeading(body),
       ...(description ? { description } : {}),
       content: body,
     });
   }
-  return { docs, issues };
+
+  // Fold variants into their base doc. An orphan variant (no base file) is an
+  // error: it would silently never render (resolution always starts from the
+  // base doc).
+  for (const v of variants) {
+    const base = baseByName.get(v.base);
+    if (!base) {
+      issues.push({
+        severity: 'error',
+        rule: 'docs/orphan-translation',
+        message: `Locale variant "${path.basename(v.rel)}" has no base doc "${v.base}.md" in this package — add the base file or remove the variant.`,
+        path: v.rel,
+      });
+      continue;
+    }
+    if (base.translations?.[v.locale]) {
+      issues.push({
+        severity: 'error',
+        rule: 'docs/duplicate-translation',
+        message: `Duplicate "${v.locale}" variant for doc "${v.base}".`,
+        path: v.rel,
+      });
+      continue;
+    }
+    (base.translations ??= {})[v.locale] = v.item;
+  }
+
+  return { docs: [...baseByName.values()], issues };
 }
 
 /**
@@ -198,6 +257,32 @@ export function lintDocs(docs: DocItem[], namespace: string | undefined): DocIss
         message: `Doc "${doc.name}" appears to contain MDX/JSX — only CommonMark + GFM Markdown is allowed (ADR-0046 §3.3/§3.4).`,
         path: where,
       });
+    }
+
+    // Locale variants get the same v1 content bans — a translated body must
+    // not smuggle in MDX/images that the base file forbids.
+    for (const [locale, variant] of Object.entries(doc.translations ?? {})) {
+      const vScannable = stripCode(variant.content);
+      if (/!\[[^\]]*\]\(/.test(vScannable) || /<img[\s>]/i.test(vScannable)) {
+        issues.push({
+          severity: 'error',
+          rule: 'docs/no-images',
+          message: `Doc "${doc.name}" (${locale}) contains an image reference — not allowed in v1 (ADR-0046 §3.4).`,
+          path: `${where}.${locale}`,
+        });
+      }
+      if (
+        /^\s*import\s+.+\s+from\s+['"]/m.test(vScannable) ||
+        /^\s*export\s+(default|const|function)\s/m.test(vScannable) ||
+        /<[A-Z][A-Za-z0-9]*[\s/>]/.test(vScannable)
+      ) {
+        issues.push({
+          severity: 'error',
+          rule: 'docs/no-mdx',
+          message: `Doc "${doc.name}" (${locale}) appears to contain MDX/JSX — only CommonMark + GFM Markdown is allowed (ADR-0046 §3.3/§3.4).`,
+          path: `${where}.${locale}`,
+        });
+      }
     }
   }
 
