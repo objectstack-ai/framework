@@ -278,6 +278,8 @@ Rules:
   so most views need no filter elements at all.
 - `userFilters: { element: 'dropdown' }` (no `fields`) is valid shorthand:
   the renderer fills the field list from the object's select/boolean fields.
+- `element` is `dropdown` or `tabs`; `toggle` is **deprecated** (ADR-0047 §3.4a)
+  — it stays in the enum for back-compat rendering, but author `dropdown`/`tabs`.
 - The visualization switcher renders as a compact dropdown in the toolbar's
   right cluster. Authors only control the `allowedVisualizations` whitelist;
   a single-entry whitelist locks the visualization (no switcher).
@@ -328,6 +330,9 @@ export const CrmApp = App.create({
   label: 'Enterprise CRM',
   icon: 'briefcase',
   defaultAgent: 'sales_copilot',          // optional AI copilot binding
+  // hidden: true,                         // ADR-0045 — drop from the App Switcher but keep
+                                           // routable & permission-checked; the shell surfaces
+                                           // hidden apps (e.g. `account`) via the avatar menu.
   branding: {
     primaryColor: '#4169E1',
     logo: '/assets/crm-logo.png',
@@ -440,7 +445,7 @@ filter; keep `filter` on the widget when binding a dataset.
 |:-----|:------------|
 | `tabular` | Flat data table with columns and filters |
 | `summary` | Grouped data with subtotals (e.g., revenue by region) |
-| `matrix` | Cross-tab / pivot table (two grouping dimensions) |
+| `matrix` | Cross-tab / pivot table (`rows` down × `columns` across) |
 | `chart` | Visual chart report |
 | `joined` | Multi-block analytic surface (combines several sub-reports) |
 
@@ -458,9 +463,11 @@ export const PipelineCoverageReport: ReportInput = {
   label: 'Pipeline Coverage (Quarter)',
   type: 'matrix',
   dataset: 'opportunity_metrics',
-  rows: ['forecast_category', 'close_date'],
-  values: ['amount_sum'],
+  rows: ['forecast_category'],   // down axis
+  columns: ['close_date'],       // across axis (ADR-0021 D2) — matrix pivots rows × columns
+  values: ['amount_sum'],        // measures placed in the cells
   runtimeFilter: { stage: { $ne: 'closed_lost' } },
+  // drilldown defaults true — click a cell to open the underlying records; set false to disable.
   chart: { type: 'bar', xAxis: 'forecast_category', yAxis: 'amount_sum' },
 };
 ```
@@ -470,8 +477,11 @@ export const PipelineCoverageReport: ReportInput = {
 > field server-side in a single aggregate query — do **not** pre-compute virtual
 > columns for this.
 > **`rows`** are the report's grouping dimensions (selected from the dataset by
-> name). A `summary` groups by them; a `matrix` cross-tabs them. Multi-level
-> grouping = multiple dimension names in the array.
+> name). A `summary` groups *down* by `rows`. A `matrix` pivots `rows` (down) ×
+> **`columns`** (across, ADR-0021 D2) with `values` in the cells — do **not**
+> put both axes in `rows`. Multi-level grouping on either axis = multiple
+> dimension names in that array. `drilldown` (default `true`) makes cells
+> click-through to the underlying records.
 
 ---
 
@@ -1093,6 +1103,29 @@ export const AddToCampaignAction: Action = {
   },
   successMessage: 'Leads added to campaign!',
   refreshAfter: true,
+};
+```
+
+### Opening in a New Tab (`opensInNewTab` / `newTabUrl`)
+
+For actions that should land in a new browser tab, set `opensInNewTab: true`
+(#1787). The renderer pre-opens the tab **synchronously** on click so popup
+blockers don't fire, then navigates it to the handler's returned `redirectUrl`.
+
+For external deep-links / SSO with no server round-trip, add `newTabUrl` — a
+direct URL template (supports the `{recordId}` placeholder). It is valid **only**
+alongside `opensInNewTab: true`, and the target endpoint must enforce its own
+auth (the new tab carries no in-app session context).
+
+```typescript
+export const OpenInvoicePdfAction: Action = {
+  name: 'open_invoice_pdf',
+  label: 'Open PDF',
+  objectName: 'invoice',
+  type: 'url',
+  opensInNewTab: true,
+  newTabUrl: '/api/v1/invoice/{recordId}/pdf',   // zero-roundtrip; endpoint self-auths
+  locations: ['record_header'],
 };
 ```
 

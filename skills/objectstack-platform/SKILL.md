@@ -297,7 +297,9 @@ manifest: {
 }
 ```
 
-**Object naming:** The object `name` is the canonical identifier and equals the physical table name. If you want a domain prefix, embed it directly in the name (e.g. `name: 'crm_account'`). There is no automatic namespace prefixing.
+**Object naming:** The object `name` is the canonical identifier and equals the physical table name. Embed any domain prefix directly in the name (e.g. `name: 'crm_account'`); the object-level `namespace` *field* is deprecated and ignored by the runtime.
+
+**`manifest.namespace` (ADR-0048):** Optional, but **enforced once set**. When a package declares `manifest.namespace: 'crm'`, every `object.name` must start with `crm_` or `defineStack` errors (`validateNamespacePrefix` in `@objectstack/spec`); the legacy `<ns>__<short>` double-underscore form is rejected, and `sys_`-prefixed names are platform-reserved and exempt. The namespace is also a package-ownership key — installing two packages that both claim `crm` fails with `NamespaceConflictError` (downgrade to a warning with `OS_METADATA_COLLISION=warn`). `os lint` additionally emits a non-fatal `naming/namespace-prefix` warning for bare-named UI/automation items (app, page, dashboard, flow, action, report, dataset) when a namespace is set.
 
 ---
 
@@ -419,12 +421,14 @@ CLI: `os serve` / `os dev`
      ├── AppPlugin (loads the defineStack bundle)
      ├── I18nServicePlugin (if translations/i18n defined)
      ├── AuthPlugin
+     ├── Split platform-app plugins (ADR-0048, optional/best-effort, after AuthPlugin):
+     │     @objectstack/setup → createSetupAppPlugin   (first-run wizard)
+     │     @objectstack/studio → createStudioAppPlugin
+     │     @objectstack/account → createAccountAppPlugin
      ├── HonoServerPlugin
-     ├── SetupPlugin (first-run wizard)
      ├── RESTPlugin (auto-generated API)
      ├── DispatcherPlugin
-     ├── AIServicePlugin (if available)
-     └── StudioPlugin (if --ui flag)
+     └── AIServicePlugin (if available)
   5. Runtime.start() → init + start all plugins
   6. Server listens on the resolved port (see "Ports & networking" in Part 3)
 ```
@@ -958,6 +962,10 @@ describe('AuditPlugin', () => {
 | `com.objectstack.metadata` | `metadata` | `@objectstack/metadata` |
 | `com.objectstack.realtime` | `realtime` | `@objectstack/service-realtime` |
 | `com.objectstack.cache` | `cache` | `@objectstack/service-cache` |
+| `com.objectstack.setup` | — | `@objectstack/setup` → `createSetupAppPlugin` (ADR-0048 one-app pkg) |
+| `com.objectstack.studio` | — | `@objectstack/studio` → `createStudioAppPlugin` |
+| `com.objectstack.account` | — | `@objectstack/account` → `createAccountAppPlugin` |
+| `com.objectstack.cloud-connection` | — | `@objectstack/cloud-connection` → `createCloudConnectionPlugin` |
 
 ---
 
@@ -968,6 +976,8 @@ metadata is read-only and artifact/file backed:
 
 - Do **not** register `sys_metadata` or `sys_metadata_history` from an ObjectOS
   runtime plugin. Those persistence tables belong to the control plane.
+  (Exception, #1826: an *isolated project kernel* may opt into `sys_metadata`
+  hydration from its own DB — the general boundary otherwise stands.)
 - Do **not** call `MetadataManager.setDataEngine()` automatically from
   `MetadataPlugin.start()`. Project databases must contain business rows only.
 - Use `artifactSource: { mode: 'local-file', path: './dist/objectstack.json' }`
@@ -1124,6 +1134,17 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 | `os publish` | Push the compiled stack to a cloud environment |
 | `os register` | Register the local stack as a deployable target |
 | `os cloud …` | Cloud-specific subcommands (logs, metrics, status) |
+| `os package publish [dist/objectstack.json] [--env … --install --visibility org]` | Upload the compiled artifact as a versioned package to the cloud catalog (ADR-0008 P3) |
+| `os package install <manifest-id │ ./dist/objectstack.json> [--version │ --runtime http://localhost:3000]` | Install a package into a **running** runtime via its install-local endpoint. Catalog mode (by manifest id) or air-gapped local-artifact mode. Auths with the **target runtime's** session (`--email/--password` or `OS_RUNTIME_EMAIL`/`OS_RUNTIME_PASSWORD`), not the cloud login |
+
+> **Cloud connection & marketplace (`@objectstack/cloud-connection`, ADR-0008/0009).**
+> The open runtime-side cloud client. Its plugins —
+> `CloudConnectionPlugin`/`createCloudConnectionPlugin`, `MarketplaceProxyPlugin`,
+> `MarketplaceInstallLocalPlugin`, `RuntimeConfigPlugin` — expose the install-local
+> endpoint that `os package install` targets, ship the **Installed Apps** page and
+> marketplace Setup nav as plugin metadata, and maintain `LocalManifestSource`
+> (a local desired-state ledger) plus runtime-identity bind v2 (environment-less
+> self-hosted binding).
 
 ## Testing pattern
 
