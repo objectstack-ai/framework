@@ -1,5 +1,62 @@
 # @objectstack/rest
 
+## 9.4.0
+
+### Minor Changes
+
+- 0856476: feat(metadata): package-scoped single-item resolution via `?package=` (ADR-0048)
+
+  A single-item metadata GET (`/meta/:type/:name?package=<id>`) now resolves
+  package-scoped (prefer-local): when two installed packages ship an item of the
+  same `type`/`name`, the requester's own package wins. Previously only the _list_
+  endpoint was package-aware; a single-item fetch was context-free, so a
+  cross-package collision always resolved to whichever package registered first.
+
+  The fix threads `packageId` end-to-end:
+
+  - `@objectstack/rest` — the cacheable single-item path called `getMetaItemCached`
+    (ETag keyed on type+name only) and dropped `?package=`. A `?package=` read now
+    bypasses that cache and takes the disambiguating `getMetaItem(type, name,
+packageId)` path, so two same-named items never share one cache entry.
+  - `@objectstack/objectql` — `protocol.getMetaItem` forwards `packageId` to the
+    overlay query (`sys_metadata.package_id`), `MetadataFacade.get`, and
+    `registry.getItem`; `MetadataFacade.get` gained an optional `currentPackageId`.
+  - `@objectstack/runtime` — the parallel HTTP dispatcher threads `?package=` too.
+
+  This lets the doc viewer (`/apps/:packageId/docs/:name`) resolve one doc scoped
+  to its app, so `doc` names no longer need a namespace prefix for uniqueness (the
+  prefix becomes a recommended convention, like `page`/`dashboard`/`report`);
+  `doc.zod` doc-comments updated accordingly.
+
+### Patch Changes
+
+- 3e675f6: fix(metadata): package-scope the layered (Studio editor) read via `?package=` (ADR-0048)
+
+  The `?layers=true` single-item read (the Studio metadata editor's 3-state
+  code/overlay/effective view) ignored `packageId`, so editing one of two
+  same-named items from different packages resolved ambiguously (first match).
+
+  - `protocol.getMetaItemLayered` now threads `packageId` into the code layer
+    (`metadataService.get` + `lookupArtifactItem` + `registry.getItem`) and the
+    `sys_metadata` overlay query (`package_id` prefer-local).
+  - `registry.getArtifactItem(type, name, currentPackageId?)` and
+    `lookupArtifactItem` gained the optional package-scope hint.
+  - `rest-server` threads `?package=` into the layered branch.
+
+  This completes the per-route package-scoped resolution audit: the runtime
+  render surface (dashboard/report/page/doc) was already scoped; this closes the
+  Studio editor (`/apps/:appName/metadata/:type/:name`). Frontend counterpart
+  sends `?package=` from the metadata list row's owning package.
+
+- Updated dependencies [060467a]
+- Updated dependencies [0856476]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+  - @objectstack/spec@9.4.0
+  - @objectstack/core@9.4.0
+  - @objectstack/service-package@9.4.0
+
 ## 9.3.0
 
 ### Minor Changes

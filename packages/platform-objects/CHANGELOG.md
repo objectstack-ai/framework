@@ -1,5 +1,18 @@
 # @objectstack/platform-objects
 
+## 9.4.0
+
+### Patch Changes
+
+- Updated dependencies [060467a]
+- Updated dependencies [0856476]
+- Updated dependencies [fef38ec]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+  - @objectstack/spec@9.4.0
+  - @objectstack/metadata-core@9.4.0
+
 ## 9.3.0
 
 ### Minor Changes

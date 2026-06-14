@@ -1,5 +1,172 @@
 # @objectstack/objectql
 
+## 9.4.0
+
+### Minor Changes
+
+- 0856476: feat(metadata): package-scoped single-item resolution via `?package=` (ADR-0048)
+
+  A single-item metadata GET (`/meta/:type/:name?package=<id>`) now resolves
+  package-scoped (prefer-local): when two installed packages ship an item of the
+  same `type`/`name`, the requester's own package wins. Previously only the _list_
+  endpoint was package-aware; a single-item fetch was context-free, so a
+  cross-package collision always resolved to whichever package registered first.
+
+  The fix threads `packageId` end-to-end:
+
+  - `@objectstack/rest` — the cacheable single-item path called `getMetaItemCached`
+    (ETag keyed on type+name only) and dropped `?package=`. A `?package=` read now
+    bypasses that cache and takes the disambiguating `getMetaItem(type, name,
+packageId)` path, so two same-named items never share one cache entry.
+  - `@objectstack/objectql` — `protocol.getMetaItem` forwards `packageId` to the
+    overlay query (`sys_metadata.package_id`), `MetadataFacade.get`, and
+    `registry.getItem`; `MetadataFacade.get` gained an optional `currentPackageId`.
+  - `@objectstack/runtime` — the parallel HTTP dispatcher threads `?package=` too.
+
+  This lets the doc viewer (`/apps/:packageId/docs/:name`) resolve one doc scoped
+  to its app, so `doc` names no longer need a namespace prefix for uniqueness (the
+  prefix becomes a recommended convention, like `page`/`dashboard`/`report`);
+  `doc.zod` doc-comments updated accordingly.
+
+- fef38ec: feat(metadata): package-scoped customization overlays (ADR-0048 #1824)
+
+  A `sys_metadata` customization overlay is now keyed by `(type, name,
+organization_id, package_id)`, so two installed packages shipping an item of the
+  same `type`/`name` can each carry their **own** overlay. Previously the overlay
+  uniqueness key was `(type, name, organization_id)` — physically one row per
+  name — so customizing one package's item shadowed both, and a package-scoped
+  read fell back to whichever row existed.
+
+  - **Index**: `idx_sys_metadata_overlay_active` / `…_draft` now include
+    `package_id`. The runtime migration (`ensureOverlayIndex`) uses
+    `COALESCE(package_id, '')` so package-less (global) overlays stay unique among
+    themselves (a plain unique index treats NULLs as distinct). DROP-then-CREATE,
+    idempotent; existing rows migrate safely (the old key already guaranteed one
+    row per `(type, name, org)`).
+  - **Write**: `SysMetadataRepository.whereFor`/`put`/`get` scope the upsert to the
+    requested package, so a save bound to package B no longer finds and overwrites
+    package A's same-name overlay. A package-less save (`packageId` null) targets
+    the global row.
+  - **Read**: `getMetaItem` / `getMetaItemLayered` overlay lookups already prefer
+    the package-scoped row; the fallback now resolves only the **global**
+    (`package_id IS NULL`) overlay, never a _different_ package's row. Package-less
+    readers are unchanged (match-any, back-compat).
+
+  Verified live against a real collision (two packages each shipping
+  `page/showcase_task_workbench`): two overlay rows coexist, and `?package=` single
+  reads + the `?layers=true` Studio editor view each return that package's own
+  overlay; the unique index migrated in place.
+
+  Known follow-up: the _unscoped list_ (`GET /meta/:type` with no `?package=`)
+  still dedupes by bare name, so when two packages both carry an overlay on the
+  same name the list collapses them — the per-package single-item and editor paths
+  are unaffected. Tracked for the list-dedup-by-name work.
+
+- b678d8c: feat(objectql): ADR-0048 Phase 1+2 — namespace install gate + package-scoped resolution
+
+  Phase 1 — install-time namespace gate. `SchemaRegistry.installPackage` refuses a
+  package whose `manifest.namespace` is already owned by a DIFFERENT installed
+  package (new `NamespaceConflictError`), making explicit and early the constraint
+  the table layer already enforces implicitly. Same-package reinstall and
+  shareable platform namespaces (`base`/`system`/`sys`) are exempt;
+  `OS_METADATA_COLLISION=warn` downgrades to a warning.
+
+  Phase 2 — prefer-local resolution, pivoted to ADR-0048 option A (package id as
+  the routing key). `getItem(type, name, currentPackageId?)` prefers
+  `${currentPackageId}:${name}` before any cross-package fallback (ADR-0005 overlay
+  precedence and backward compatibility unchanged); `getApp(name,
+currentPackageId?)` resolves prefer-local by package id. Because package ids are
+  globally unique, package-scoped resolution always disambiguates two distinct
+  packages — so the old per-item CROSS-package throw (and the now-dead
+  `MetadataCollisionError`, `findOtherPackageOwner`, `SYS_METADATA_OWNER`, …) is
+  retired; two different-namespace packages legitimately coexist on the same bare
+  name. `collisionPolicy` now governs only the Phase 1 namespace gate.
+
+- b678d8c: feat(objectql): opt-in `sys_metadata` hydration for isolated project kernels
+
+  Boot Phase-2 hydration (`restoreMetadataFromDb` → `loadMetaFromDb`, which
+  registers objects WITH their fields into the `SchemaRegistry`) was gated on
+  `environmentId === undefined`, assuming every project kernel sources its
+  metadata from a remote artifact / control-plane proxy. That is untrue for an
+  isolated, proxy-free project kernel that persists its OWN `sys_metadata`
+  locally (the cloud single-env tenant runtime): objects created at runtime there
+  never re-entered the registry after a restart, so `registry.getObject(name)`
+  returned nothing and every registry consumer silently degraded (notably the
+  `engine.find` unknown-`$select` guard, which then let an unknown projected
+  column zero the result set).
+
+  Adds an explicit `hydrateMetadataFromDb` plugin option (default `false`, so the
+  control-plane/proxy path is untouched). When set, hydration runs even with
+  `environmentId` defined — safe because each engine now owns its registry
+  instance and `loadMetaFromDb` already tolerates a missing table.
+
+### Patch Changes
+
+- c1dfe34: fix(metadata): keep each colliding item's own `_packageId` provenance (ADR-0048)
+
+  When two installed packages ship an item of the same `type`/`name`, the
+  single-item and list reads grafted the artifact protection envelope from a
+  **first-match** artifact lookup (`lookupArtifactItem(type, name)`), so the
+  second package's item inherited the FIRST package's `_packageId`. The frontend
+  prefer-local resolution (dashboard/report/page) filters the unscoped list by
+  `_packageId`, so this mislabel made it resolve a collision to the wrong package
+  (or fail to find the local item entirely).
+
+  - `getMetaItem` now scopes the artifact lookup to `request.packageId`.
+  - `getMetaItems` scopes the per-item decorate to the requested package (when the
+    whole list is package-scoped) else to each item's own `_packageId`.
+
+  `getItem` ordering is unchanged — a bare-key runtime/DB overlay still takes
+  ADR-0005 precedence over the packaged item (clarifying comment added). An
+  env-wide (package-less) overlay of a name that collides across packages remains
+  inherently ambiguous by schema (`sys_metadata` is unique on `type+name+org`, not
+  package); pure-artifact collisions (the marketplace default) now resolve and
+  list correctly per package.
+
+- 3e675f6: fix(metadata): package-scope the layered (Studio editor) read via `?package=` (ADR-0048)
+
+  The `?layers=true` single-item read (the Studio metadata editor's 3-state
+  code/overlay/effective view) ignored `packageId`, so editing one of two
+  same-named items from different packages resolved ambiguously (first match).
+
+  - `protocol.getMetaItemLayered` now threads `packageId` into the code layer
+    (`metadataService.get` + `lookupArtifactItem` + `registry.getItem`) and the
+    `sys_metadata` overlay query (`package_id` prefer-local).
+  - `registry.getArtifactItem(type, name, currentPackageId?)` and
+    `lookupArtifactItem` gained the optional package-scope hint.
+  - `rest-server` threads `?package=` into the layered branch.
+
+  This completes the per-route package-scoped resolution audit: the runtime
+  render surface (dashboard/report/page/doc) was already scoped; this closes the
+  Studio editor (`/apps/:appName/metadata/:type/:name`). Frontend counterpart
+  sends `?package=` from the metadata list row's owning package.
+
+- b678d8c: fix(objectql): seed reference resolution falls back to matching by `id`
+
+  `SeedLoaderService.resolveFromDatabase` only matched a reference value against
+  the target's natural-key field. A seed that wires a lookup to a REAL existing
+  record by its internal id — e.g. a people field (approver/applicant → user)
+  pointed at the current user — dangled to `null` when that id is not a
+  UUID/ObjectId (so the caller's `looksLikeInternalId` guard did not
+  short-circuit) and is not the target's natural key.
+
+  Adds an id fallback: when the natural-key lookup finds nothing, try resolving
+  the value as the target's `id`. Safe — an id either exists or it doesn't, so
+  there is no risk of a false natural-key match, and it is tenant-scoped like the
+  primary lookup.
+
+- Updated dependencies [060467a]
+- Updated dependencies [0856476]
+- Updated dependencies [fef38ec]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+  - @objectstack/spec@9.4.0
+  - @objectstack/metadata-core@9.4.0
+  - @objectstack/core@9.4.0
+  - @objectstack/formula@9.4.0
+  - @objectstack/types@9.4.0
+
 ## 9.3.0
 
 ### Minor Changes

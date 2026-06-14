@@ -1,5 +1,90 @@
 # @objectstack/service-ai
 
+## 9.4.0
+
+### Minor Changes
+
+- b678d8c: feat(service-ai): open framework AI is query-only, declines app-building
+
+  The unified `data_chat` persona (ADR-0040) advertised that it can BUILD or
+  CHANGE the application, but that capability is supplied entirely by the cloud AI
+  Studio plugin's `metadata_authoring`/`solution_design` skills. On the open
+  single-env framework those skills are not registered, so the authoring tools
+  never resolve — yet the LLM, still reading the "you can build" persona,
+  role-played designing a whole system (emitting design docs it had no tools to
+  execute).
+
+  Fix: in `buildSystemMessages`, when no authoring (build-register) skill is
+  active, append a deployment-capability note constraining the assistant to
+  data/query and instructing it to decline build requests instead of pretending.
+  Keyed off actual skill presence, so cloud/EE (AI Studio loaded) keeps the full
+  build UX with zero extra wiring.
+
+- b678d8c: feat(service-ai): steer the agent to `visualize_data` for chart requests
+
+  Small models sometimes answered a "draw a bar chart" request with a markdown
+  TABLE instead of calling `visualize_data` — a tool-selection problem where the
+  chart preference was buried as a low-priority guideline competing with
+  "format with markdown tables".
+
+  - `data-explorer-skill.ts` — adds a prominent "Choosing the right tool" section
+    above the guidelines: chart intent (incl. CN terms 图表/柱状图/折线图/饼图/画图)
+    MUST call `visualize_data`, never substitute a table; reconciles the
+    table-formatting guideline and fixes duplicate guideline numbering.
+  - `visualize-data.tool.ts` — strengthens the tool description to be imperative
+    ("the ONLY tool that draws a chart… if you already fetched the numbers, still
+    call `visualize_data` to render them").
+
+  Prompt-only tuning — no behavior/contract change.
+
+- b678d8c: feat(service-ai): `visualize_data` tool — return charts from AI data queries
+
+  Adds a `visualize_data` AI tool so the data-query assistant can answer with a
+  CHART instead of plain text/markdown. The tool runs an aggregation through the
+  existing analytics service (auto-inferred cube), maps the result into the SDUI
+  `<chart>` contract, and emits it to the client as a `data-chart` custom stream
+  part (the same `onProgress` channel `data-build-progress` already uses). It also
+  returns a compact textual summary so the model narrates the answer alongside the
+  rendered chart.
+
+  - `tools/visualize-data.tool.ts` — tool definition, handler, and register fn
+    (function+field → analytics measure key; single dimension → x-axis; measures →
+    series; `chartType` bar/line/pie/…).
+  - `plugin.ts` — registers the tool when an analytics service is present and
+    persists it as tool metadata in lockstep (Studio visibility).
+  - `skills/data-explorer-skill.ts` — exposes `visualize_data` plus chart trigger
+    phrases and guidance to prefer it for "chart/plot/trend/breakdown" requests.
+
+### Patch Changes
+
+- b678d8c: fix(service-ai): resolve the current object for AI chat across languages
+
+  The console assistant reported "can't find the X object" when asked to analyse
+  the object on the current page — most visibly for non-English prompts. Three
+  compounding gaps fixed:
+
+  - `SchemaRetriever.tokenise()` dropped all CJK text, so a Chinese request
+    yielded zero terms; it now emits CJK single-char + bigram terms.
+  - Nothing fed the current object's schema to the agent, so "this object" could
+    not be resolved without a lucky keyword hit. `AgentRuntime.buildContextSchema
+Messages()` now injects the current object's schema into the system prompt and
+    both chat routes call it.
+  - `ToolExecutionContext` (and the `ai-service` spec contract) gains
+    `currentObjectName`/`currentViewName`; routes thread them through and
+    `query_data` falls back to the current object when keyword retrieval is empty
+    (so the open edition, which lacks `describe_object`/`list_objects`, still
+    resolves the page's object).
+
+- Updated dependencies [060467a]
+- Updated dependencies [0856476]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+- Updated dependencies [b678d8c]
+  - @objectstack/spec@9.4.0
+  - @objectstack/core@9.4.0
+  - @objectstack/formula@9.4.0
+  - @objectstack/types@9.4.0
+
 ## 9.3.0
 
 ### Minor Changes
