@@ -1,5 +1,91 @@
 # @objectstack/spec
 
+## 9.4.0
+
+### Minor Changes
+
+- 060467a: feat(ADR-0046): add optional `description` to package docs
+
+  A doc can now carry a one-line `description` (frontmatter `description:`),
+  giving the natural minimal model: title / summary / body. `DocSchema` gains an
+  optional `description`; `os build` reads it from frontmatter. It travels in the
+  `GET /meta/doc` list response (unlike `content`, which the list omits), so a
+  docs portal can show summaries without fetching each body. Example docs
+  (app-showcase, app-todo) updated.
+
+  Also records the deferred-to-P3 design for doc **tags** in ADR-0046: tags are
+  keys (i18n-resolved, never display strings), with a small protocol core
+  vocabulary plus namespace-prefixed package tags — not a field to bolt on early.
+
+- 0856476: feat(metadata): package-scoped single-item resolution via `?package=` (ADR-0048)
+
+  A single-item metadata GET (`/meta/:type/:name?package=<id>`) now resolves
+  package-scoped (prefer-local): when two installed packages ship an item of the
+  same `type`/`name`, the requester's own package wins. Previously only the _list_
+  endpoint was package-aware; a single-item fetch was context-free, so a
+  cross-package collision always resolved to whichever package registered first.
+
+  The fix threads `packageId` end-to-end:
+
+  - `@objectstack/rest` — the cacheable single-item path called `getMetaItemCached`
+    (ETag keyed on type+name only) and dropped `?package=`. A `?package=` read now
+    bypasses that cache and takes the disambiguating `getMetaItem(type, name,
+packageId)` path, so two same-named items never share one cache entry.
+  - `@objectstack/objectql` — `protocol.getMetaItem` forwards `packageId` to the
+    overlay query (`sys_metadata.package_id`), `MetadataFacade.get`, and
+    `registry.getItem`; `MetadataFacade.get` gained an optional `currentPackageId`.
+  - `@objectstack/runtime` — the parallel HTTP dispatcher threads `?package=` too.
+
+  This lets the doc viewer (`/apps/:packageId/docs/:name`) resolve one doc scoped
+  to its app, so `doc` names no longer need a namespace prefix for uniqueness (the
+  prefix becomes a recommended convention, like `page`/`dashboard`/`report`);
+  `doc.zod` doc-comments updated accordingly.
+
+- b678d8c: feat(spec): page form filter-mode widget + ADR-0047 §3.4a (omit-is-none)
+
+  The Interface section's `interfaceConfig` composite now lists its sub-fields
+  explicitly so `userFilters` can use the dedicated `filter-mode` selector widget
+  (None / Tabs / Dropdown, objectui). An unknown widget name degrades gracefully
+  to the prior composite rendering, so this is independently mergeable.
+
+  ADR-0047 §3.4a records the design decision: "no filter bar" is the ABSENCE of
+  `userFilters`, not a literal `element: 'none'` — presence and style are
+  orthogonal axes, keeping declarative metadata and overlay diffs clean. The
+  `userFilters` element `'toggle'` is deprecated (kept in the enum for back-compat;
+  authoring offers None/Tabs/Dropdown only, Airtable parity).
+
+- b678d8c: feat(spec): ADR-0047 — list pages hide region/data-context, interface section prominent
+
+  Reorganizes the page form (`page.form.ts`) so interface/list pages get a lean,
+  relevant panel instead of the generic page-form dump:
+
+  - Data Context + Layout sections gain `visibleOn` `data.type != 'list'` (region
+    designer / page object don't apply to a list surface).
+  - Interface section becomes primary content (`collapsed: false`, named for i18n).
+  - `interfaceConfig` sub-fields reordered (common first, rare last); `source`
+    gets the `ref:object` picker; `sourceView`/`userActions`/etc. gain helpText.
+  - `type` field helpText notes `'list'` = interface page.
+
+### Patch Changes
+
+- b678d8c: fix(service-ai): resolve the current object for AI chat across languages
+
+  The console assistant reported "can't find the X object" when asked to analyse
+  the object on the current page — most visibly for non-English prompts. Three
+  compounding gaps fixed:
+
+  - `SchemaRetriever.tokenise()` dropped all CJK text, so a Chinese request
+    yielded zero terms; it now emits CJK single-char + bigram terms.
+  - Nothing fed the current object's schema to the agent, so "this object" could
+    not be resolved without a lucky keyword hit. `AgentRuntime.buildContextSchema
+Messages()` now injects the current object's schema into the system prompt and
+    both chat routes call it.
+  - `ToolExecutionContext` (and the `ai-service` spec contract) gains
+    `currentObjectName`/`currentViewName`; routes thread them through and
+    `query_data` falls back to the current object when keyword retrieval is empty
+    (so the open edition, which lacks `describe_object`/`list_objects`, still
+    resolves the page's object).
+
 ## 9.3.0
 
 ### Minor Changes
