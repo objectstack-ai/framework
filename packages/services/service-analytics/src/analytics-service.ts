@@ -22,6 +22,27 @@ import { resolveDimensionLabels, type DimensionLabelDeps } from './dimension-lab
 import { evaluateAnalyticsQueryOverRows } from './preview-evaluator.js';
 
 /**
+ * Detect the "backing object/table isn't present in this kernel" class of
+ * error so a dataset query can degrade to an empty result instead of failing
+ * the widget with a 500. Matches the missing-relation signatures across the
+ * drivers ObjectStack runs on (sqlite/libsql, postgres, mysql) plus the
+ * framework's own unknown-object signal. Deliberately scoped to MISSING SOURCE
+ * (table/object/relation) — not column/syntax errors, which stay hard failures
+ * so real query bugs still surface.
+ */
+function isMissingSourceError(err: unknown): boolean {
+  const msg = String((err as { message?: unknown })?.message ?? err ?? '').toLowerCase();
+  return (
+    msg.includes('no such table') ||      // sqlite / libsql
+    (msg.includes('relation') && msg.includes('does not exist')) || // postgres
+    msg.includes("doesn't exist") ||      // mysql ("table ... doesn't exist")
+    msg.includes('not registered') ||     // framework: object not in registry
+    msg.includes('unknown object') ||
+    msg.includes('is not a registered object')
+  );
+}
+
+/**
  * Configuration for AnalyticsService.
  */
 export interface AnalyticsServiceConfig {
@@ -390,7 +411,25 @@ export class AnalyticsService implements IAnalyticsService {
       }
     }
 
-    const result = await new DatasetExecutor(this).execute(compiled, selection, context);
+    // Graceful degradation: a dashboard/report widget whose backing object or
+    // table is not present in this kernel (e.g. a platform dashboard like
+    // System Overview that charts `sys_audit_log`, opened in an environment
+    // that never mounted the audit object) must render as "no data" — NOT
+    // crash the widget with a 500. Datasets were the one read surface that
+    // hard-failed on a missing source.
+    let result: AnalyticsResult;
+    try {
+      result = await new DatasetExecutor(this).execute(compiled, selection, context);
+    } catch (err) {
+      if (isMissingSourceError(err)) {
+        this.logger.warn(
+          `[Analytics] dataset "${dataset.name}" backing object "${dataset.object}" is unavailable ` +
+          `(${String((err as Error)?.message ?? err)}); returning an empty result instead of failing the widget`,
+        );
+        return { rows: [], fields: [], totals: [] };
+      }
+      throw err;
+    }
 
     // ADR-0021 — resolve grouped dimension values to human display labels
     // (select option label, lookup related-record name). Charts render the
