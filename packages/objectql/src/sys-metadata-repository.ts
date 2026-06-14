@@ -579,8 +579,19 @@ export class SysMetadataRepository implements MetadataRepository {
     opts: { actor: string; source?: string; message?: string; intent?: MetadataWriteIntent },
   ): Promise<{ version: string; seq: number; item: MetadataItem }> {
     this.assertOpen();
-    const draft = await this.get(ref, { state: 'draft' });
-    if (!draft) {
+    // Read the RAW draft row (not just the body) so the promotion can carry
+    // the draft's package binding onto the active row. ADR-0048 keys overlay
+    // rows by `(org, type, name, package_id)`; promoteDraft historically
+    // called put() WITHOUT a packageId, so the freshly-created active row
+    // landed unbound (`package_id = NULL`). That silently broke every
+    // package-scoped reader — most visibly the ADR-0045 publish visibility
+    // flip (`getMetaItems({ type:'app', packageId })` → unhide), which then
+    // never matched the just-published app and left AI-built apps `hidden`
+    // (invisible in the app switcher / home) forever.
+    const draftRow = await this.engine.findOne('sys_metadata', {
+      where: this.whereFor(ref, 'draft'),
+    });
+    if (!draftRow) {
       const err: any = new Error(
         `[no_draft] No pending draft exists for ${ref.type}/${ref.name} — nothing to publish.`,
       );
@@ -588,7 +599,12 @@ export class SysMetadataRepository implements MetadataRepository {
       err.status = 404;
       throw err;
     }
-    const currentActive = await this.get(ref, { state: 'active' });
+    const draftPackageId = (draftRow as { package_id?: string | null }).package_id ?? null;
+    const draft = this.rowToItem(ref, draftRow);
+    // Read the active row through the SAME package scope we will write, so the
+    // optimistic-lock `parentVersion` matches the exact row `put` upserts.
+    // (Package-less drafts → packageId null → identical to the prior behaviour.)
+    const currentActive = await this.get(ref, { state: 'active', packageId: draftPackageId });
     const result = await this.put(ref, draft.body, {
       parentVersion: currentActive?.hash ?? null,
       actor: opts.actor,
@@ -597,6 +613,7 @@ export class SysMetadataRepository implements MetadataRepository {
       intent: opts.intent ?? 'override-artifact',
       state: 'active',
       opType: 'publish',
+      packageId: draftPackageId,
     });
     // Drop the draft row — it has been promoted. Tolerate races where
     // a second publisher already drained it.
