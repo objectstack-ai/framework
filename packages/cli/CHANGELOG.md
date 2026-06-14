@@ -1,5 +1,86 @@
 # @objectstack/cli
 
+## 9.5.0
+
+### Patch Changes
+
+- f19caef: fix(ADR-0048): rescope the `os lint` `naming/namespace-prefix` rule to intra-package duplicates
+
+  ADR-0048 §3.4 retired the per-item cross-package collision throw — two
+  installed packages may legitimately ship the same bare name (e.g. `page/home`),
+  stored under distinct composite keys and disambiguated by package-scoped
+  resolution. The `naming/namespace-prefix` lint rule was never updated to match,
+  so it still:
+
+  - **fired on every bare-named UI/automation item** (apps/pages/dashboards/flows/
+    actions/reports/datasets) regardless of whether a duplicate existed — a normal
+    single-package app got dozens of false positives (hotcrm: 63), and
+  - **claimed the package would "collide on the registry key and fail at install"**,
+    which is no longer true.
+
+  The rule now warns **only on a genuine intra-package duplicate `(type, name)`
+  pair** within the linted config — the narrow authoring-time hygiene case ADR-0048
+  §3.4 explicitly leaves to `os lint` ("an author shipping two `page/home` in one
+  package"). A unique bare name produces zero warnings. The message no longer
+  claims an install failure; it explains the items shadow each other on the
+  registry key and that distinct packages may reuse the same name freely (the
+  namespace prefix is an optional convention). Runtime/registry behavior is
+  unchanged.
+
+- Updated dependencies [f19caef]
+- Updated dependencies [f19caef]
+- Updated dependencies [f19caef]
+- Updated dependencies [5be7102]
+- Updated dependencies [707aeed]
+- Updated dependencies [7a103d4]
+- Updated dependencies [4b01250]
+- Updated dependencies [1a4f079]
+  - @objectstack/service-feed@9.5.0
+  - @objectstack/service-realtime@9.5.0
+  - @objectstack/service-job@9.5.0
+  - @objectstack/service-messaging@9.5.0
+  - @objectstack/service-automation@9.5.0
+  - @objectstack/platform-objects@9.5.0
+  - @objectstack/spec@9.5.0
+  - @objectstack/setup@9.5.0
+  - @objectstack/studio@9.5.0
+  - @objectstack/plugin-webhooks@9.5.0
+  - @objectstack/plugin-approvals@9.5.0
+  - @objectstack/account@9.5.0
+  - @objectstack/plugin-audit@9.5.0
+  - @objectstack/plugin-auth@9.5.0
+  - @objectstack/plugin-email@9.5.0
+  - @objectstack/plugin-org-scoping@9.5.0
+  - @objectstack/plugin-reports@9.5.0
+  - @objectstack/plugin-security@9.5.0
+  - @objectstack/plugin-sharing@9.5.0
+  - @objectstack/service-ai@9.5.0
+  - @objectstack/service-queue@9.5.0
+  - @objectstack/service-settings@9.5.0
+  - @objectstack/client@9.5.0
+  - @objectstack/core@9.5.0
+  - @objectstack/formula@9.5.0
+  - @objectstack/mcp@9.5.0
+  - @objectstack/objectql@9.5.0
+  - @objectstack/observability@9.5.0
+  - @objectstack/driver-memory@9.5.0
+  - @objectstack/driver-mongodb@9.5.0
+  - @objectstack/driver-sql@9.5.0
+  - @objectstack/driver-sqlite-wasm@9.5.0
+  - @objectstack/plugin-hono-server@9.5.0
+  - @objectstack/rest@9.5.0
+  - @objectstack/runtime@9.5.0
+  - @objectstack/service-analytics@9.5.0
+  - @objectstack/service-cache@9.5.0
+  - @objectstack/service-datasource@9.5.0
+  - @objectstack/service-package@9.5.0
+  - @objectstack/service-storage@9.5.0
+  - @objectstack/trigger-api@9.5.0
+  - @objectstack/trigger-record-change@9.5.0
+  - @objectstack/trigger-schedule@9.5.0
+  - @objectstack/types@9.5.0
+  - @objectstack/console@9.5.0
+
 ## 9.4.0
 
 ### Minor Changes

@@ -1,5 +1,28 @@
 # @objectstack/spec
 
+## 9.5.0
+
+### Patch Changes
+
+- 707aeed: ui(page.form): sourceView is a view picker; hide template on list pages
+
+  - `interfaceConfig.sourceView` now declares `widget: 'view-ref'` + `dependsOn: 'source'` so the page editor renders a dropdown of the source object's views instead of a free-text input (where an author could type a non-existent view name). The objectui `view-ref` widget reads the source object's views; until it ships, the field degrades to the existing text input.
+  - The `template` field is now hidden for `type == 'list'` (`visibleOn: "data.type != 'list'"`). A list/interface page renders via InterfaceListPage and ignores the region template, so showing the field only added noise — same rationale as the already-hidden Data Context / Layout sections.
+
+- 7a103d4: ui(page.form): icon field uses the searchable icon-picker widget
+
+  The Basics → `icon` field now carries `widget: 'icon'`, so the metadata-admin
+  form renders a searchable Lucide icon picker (preview + name) instead of a raw
+  text input where authors had to type an exact icon name. Mirrors the existing
+  `view-ref` / `filter-mode` widget hints; the picker ships in
+  `@object-ui/app-shell` and is reusable for app/object icon fields.
+
+- 4b01250: ui(page): page `type` is the page kind, not a visualization
+
+  Removed `grid` / `kanban` / `calendar` / `gallery` / `timeline` from `PageTypeSchema`. They are visualizations of a `list` (interface) page — configured via `interfaceConfig.appearance.allowedVisualizations` and switched at runtime — never distinct page kinds. The runtime never branched on them as page types (it always read the visualization from `interfaceConfig`), so they only misled authors (e.g. selecting page type "kanban" did nothing). `VisualizationTypeSchema` is unchanged and remains the home for those values.
+
+  The roadmap interface kinds (`dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`) stay valid in the schema but the page authoring form (`page.form.ts`) now offers only the kinds with a dedicated renderer — `list`, `record`, `home`, `app`, `utility` — with explicit labels, so the dropdown stops presenting dead options.
+
 ## 9.4.0
 
 ### Minor Changes
