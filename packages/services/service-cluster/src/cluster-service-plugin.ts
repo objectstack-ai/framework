@@ -4,6 +4,7 @@ import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IClusterService } from '@objectstack/spec/contracts';
 import type { ClusterCapabilityConfigInput } from '@objectstack/spec/kernel';
 import { defineCluster } from './cluster.js';
+import { assertClusterDriverSafeForTopology } from './split-brain-guard.js';
 
 /**
  * Options for `ClusterServicePlugin`.
@@ -59,6 +60,11 @@ export class ClusterServicePlugin implements Plugin {
             this.cluster = defineCluster(this.options.config ?? {});
             this.owned = true;
         }
+        // Split-brain guard (ADR-0010): fail fast if a multi-node topology is
+        // declared but the resolved driver is in-process. Runs before
+        // registration so a misconfiguration never half-wires the service.
+        assertClusterDriverSafeForTopology(this.cluster.driver);
+
         ctx.registerService('cluster', this.cluster);
         ctx.logger.info(
             `ClusterServicePlugin: registered "${this.cluster.driver}" driver (node=${this.cluster.nodeId})`,
