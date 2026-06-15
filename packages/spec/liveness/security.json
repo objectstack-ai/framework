@@ -1,0 +1,77 @@
+{
+  "category": "security",
+  "_note": "Liveness classification for authorable security metadata. Seeded from docs/audits/2026-06-security-identity-property-liveness.md (file:line evidence) plus targeted greps for schemas the audit did not cover. Statuses: live | experimental | planned | dead | (schema-level) internal. 'dead' = parsed, no runtime consumer → enforce-or-remove (security ADR). Security-critical: a 'dead' boundary prop = false compliance.",
+  "schemas": {
+    "ObjectPermission": {
+      "props": {
+        "allowCreate": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
+        "allowRead": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
+        "allowEdit": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
+        "allowDelete": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
+        "viewAllRecords": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts" },
+        "modifyAllRecords": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts" },
+        "allowTransfer": { "status": "dead", "evidence": "permission-evaluator.ts:8-16 (absent from OPERATION_TO_PERMISSION)", "note": "destructive op (ownership transfer) NOT gated by RBAC — enforce-or-remove. Spec marks experimental." },
+        "allowRestore": { "status": "dead", "evidence": "permission-evaluator.ts:8-16 (absent)", "note": "undelete NOT gated — enforce-or-remove." },
+        "allowPurge": { "status": "dead", "evidence": "permission-evaluator.ts:8-16 (absent)", "note": "hard-delete/GDPR purge NOT gated — enforce-or-remove." }
+      }
+    },
+    "FieldPermission": {
+      "props": {
+        "readable": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts", "note": "FLS read-mask enforced." },
+        "editable": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts", "note": "FLS write-deny enforced." }
+      }
+    },
+    "PermissionSet": {
+      "props": {
+        "name": { "status": "live", "evidence": "permission-evaluator.ts", "note": "registration/assignment key." },
+        "label": { "status": "live", "note": "display metadata (admin forms), not a security boundary." },
+        "objects": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
+        "fields": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts" },
+        "rowLevelSecurity": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "enforced on find + analytics raw-SQL." },
+        "systemPermissions": { "status": "live", "evidence": "packages/plugins/plugin-hono-server/src/hono-plugin.ts", "note": "PARTIAL — enforced only for app-entry/nav visibility, NOT as a general capability gate (e.g. manage_users unchecked in data path)." },
+        "tabPermissions": { "status": "live", "note": "PARTIAL — only 'hidden' is read; default_on/default_off ignored; UI-only, not a boundary." },
+        "isProfile": { "status": "dead", "evidence": "audit: profile-vs-permset never gates anything", "note": "enforce-or-remove." },
+        "contextVariables": { "status": "dead", "evidence": "rls-compiler.ts never reads it", "note": "RLS uses only current_user.* built-ins; doc claim of runtime evaluation is false." }
+      }
+    },
+    "RowLevelSecurityPolicy": {
+      "props": {
+        "name": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
+        "object": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
+        "operation": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
+        "using": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "compiled into find + analytics SQL." },
+        "check": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
+        "roles": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "flat role match — no subordinate rollup." },
+        "enabled": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
+        "priority": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "policy ordering." },
+        "label": { "status": "live", "note": "display metadata." },
+        "description": { "status": "live", "note": "display metadata." },
+        "tags": { "status": "live", "note": "organizational metadata (not a boundary)." }
+      }
+    },
+    "Policy": {
+      "_note": "PolicySchema is 100% DEAD — not even registered as a metadata type; better-auth runs its own hardcoded config (packages/plugins/plugin-auth/src/index.ts). Authoring a compliance Policy = false compliance.",
+      "props": {
+        "name": { "status": "experimental", "evidence": "spec describe(): [EXPERIMENTAL — not enforced]" },
+        "password": { "status": "dead", "evidence": "auth: better-auth hardcoded scrypt/session", "note": "false compliance — enforce or remove." },
+        "network": { "status": "dead", "evidence": "no consumer", "note": "IP allow-list/VPN unenforced." },
+        "session": { "status": "dead", "evidence": "auth: better-auth hardcoded session", "note": "idle/absolute timeout + forceMfa unenforced." },
+        "audit": { "status": "dead", "evidence": "no consumer", "note": "retention/redaction unenforced." },
+        "isDefault": { "status": "dead", "evidence": "no consumer" },
+        "assignedProfiles": { "status": "dead", "evidence": "no consumer" }
+      }
+    },
+    "PasswordPolicy": { "_schema": "dead", "_note": "Policy.password subtree — better-auth hardcoded; unenforced. enforce-or-remove.", "props": {} },
+    "SessionPolicy": { "_schema": "dead", "_note": "Policy.session subtree — idle/absoluteTimeout/forceMfa all unenforced; better-auth hardcoded. forceMfa=true is a silent no-op (false compliance).", "props": {} },
+    "NetworkPolicy": { "_schema": "dead", "_note": "Policy.network subtree — trustedRanges/blockUnknown/vpnRequired unenforced.", "props": {} },
+    "AuditPolicy": { "_schema": "dead", "_note": "Policy.audit subtree — logRetentionDays/sensitiveFields/captureRead unenforced.", "props": {} },
+    "OwnerSharingRule": { "_schema": "dead", "_note": "Spec SharingRule has NO runtime consumer; runtime enforces a divergent sys_sharing_rule model (packages/plugins/plugin-sharing/src/sharing-plugin.ts). Authoring the spec rule has no effect — reconcile to one contract.", "props": {} },
+    "RLSConfig": { "_schema": "dead", "_note": "No runtime consumer (grep). RLS enforcement reads RowLevelSecurityPolicy via rls-compiler.ts, not this config object.", "props": {} },
+    "RLSAuditConfig": { "_schema": "dead", "_note": "No runtime consumer (grep).", "props": {} },
+    "Territory": { "_schema": "dead", "_note": "Salesforce-style territory management — no runtime consumer (grep).", "props": {} },
+    "TerritoryModel": { "_schema": "dead", "_note": "No runtime consumer (grep).", "props": {} },
+    "RLSEvaluationResult": { "_schema": "internal", "_note": "RLS runtime evaluation result — not authorable metadata." },
+    "RLSAuditEvent": { "_schema": "internal", "_note": "RLS runtime audit event — not authorable metadata." },
+    "RLSUserContext": { "_schema": "internal", "_note": "RLS runtime user context — not authorable metadata." }
+  }
+}

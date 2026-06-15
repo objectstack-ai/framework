@@ -191,7 +191,8 @@
     "gen:sbom": "tsx scripts/generate-sbom.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "check:liveness": "node scripts/liveness/check-liveness.mjs"
   },
   "keywords": [
     "objectstack",
