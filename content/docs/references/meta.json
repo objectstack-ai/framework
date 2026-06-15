@@ -1,5 +1,7 @@
 {
-  "title": "Protocol Reference",
+  "title": "Reference",
+  "icon": "FileCode",
+  "root": true,
   "pages": [
     "ai",
     "api",

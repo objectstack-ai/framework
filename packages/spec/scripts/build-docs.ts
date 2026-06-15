@@ -442,7 +442,11 @@ const pages = [
 ];
 
 const meta = {
-  title: "Protocol Reference",
+  title: "Reference",
+  icon: "FileCode",
+  // Render the (large, generated) reference as its own sidebar tab so it does not
+  // crowd the hand-written docs. Keep in sync with the other root sections' meta.json.
+  root: true,
   pages: pages
 };
 fs.writeFileSync(path.join(DOCS_ROOT, 'meta.json'), JSON.stringify(meta, null, 2));

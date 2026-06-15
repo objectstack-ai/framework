@@ -1,7 +1,10 @@
 {
   "title": "Guides",
+  "icon": "BookOpen",
+  "root": true,
   "pages": [
     "index",
+    "---Foundations---",
     "packages",
     "metadata",
     "adding-a-metadata-type",
@@ -26,6 +29,7 @@
     "---Integration---",
     "api-reference",
     "client-sdk",
+    "contracts",
     "project-scoping",
     "driver-configuration",
     "kernel-services",
@@ -43,8 +47,7 @@
     "error-handling-server",
     "standards",
     "troubleshooting",
-    "---",
-    "contracts",
+    "---Cheatsheets---",
     "cheatsheets"
   ]
 }

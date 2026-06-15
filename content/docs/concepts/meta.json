@@ -1,4 +1,6 @@
 {
   "title": "Concepts",
+  "icon": "Lightbulb",
+  "root": true,
   "pages": ["index", "north-star", "metadata-driven", "metadata-lifecycle", "design-principles", "architecture", "cluster-semantics", "webhook-delivery", "skills", "core", "packages", "setup-app", "cloud-artifact-api", "terminology", "implementation-status"]
 }
