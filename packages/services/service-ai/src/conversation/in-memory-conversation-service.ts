@@ -2,10 +2,32 @@
 
 import type {
   AIConversation,
+  AIResult,
   ModelMessage,
   IAIConversationService,
   MessageObservability,
 } from '@objectstack/spec/contracts';
+
+/** Compose the side-map key for a turn. */
+function turnKey(conversationId: string, turnId: string): string {
+  return `${conversationId}::${turnId}`;
+}
+
+/**
+ * Whether an assistant message is the turn's FINAL reply — plain text with no
+ * tool-call parts. Mirrors the ObjectQL service's "assistant row with no
+ * pending tool_calls" rule so both impls agree on what completes a turn.
+ */
+function assistantReplyText(message: ModelMessage): string | null {
+  if (message.role !== 'assistant') return null;
+  if (typeof message.content === 'string') return message.content;
+  const parts = message.content;
+  if (parts.some((p) => p.type === 'tool-call')) return null;
+  return parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join('');
+}
 
 /**
  * InMemoryConversationService — Reference implementation of IAIConversationService.
@@ -16,6 +38,10 @@ import type {
  */
 export class InMemoryConversationService implements IAIConversationService {
   private readonly store = new Map<string, AIConversation>();
+  // Per-turn reconciliation state (ADR-0013 D1), keyed by
+  // `${conversationId}::${turnId}`. Kept beside `store` because the public
+  // `messages` array is plain `ModelMessage[]` with no turn tagging.
+  private readonly turns = new Map<string, { userExists: boolean; reply: AIResult | null }>();
   private counter = 0;
 
   async create(options: {
@@ -79,7 +105,8 @@ export class InMemoryConversationService implements IAIConversationService {
   async addMessage(
     conversationId: string,
     message: ModelMessage,
-    _extras?: MessageObservability,
+    extras?: MessageObservability,
+    turnId?: string,
   ): Promise<AIConversation> {
     // Observability extras are accepted for interface parity with
     // ObjectQLConversationService but not persisted — the in-memory
@@ -91,7 +118,39 @@ export class InMemoryConversationService implements IAIConversationService {
 
     conversation.messages.push(message);
     conversation.updatedAt = new Date().toISOString();
+
+    // Track per-turn state so getTurnState can dedup/short-circuit (ADR-0013 D1).
+    if (turnId) {
+      const key = turnKey(conversationId, turnId);
+      const state = this.turns.get(key) ?? { userExists: false, reply: null };
+      if (message.role === 'user') state.userExists = true;
+      const replyText = assistantReplyText(message);
+      if (replyText !== null) {
+        state.reply = {
+          content: replyText,
+          ...(extras?.model ? { model: extras.model } : {}),
+          ...(extras?.totalTokens != null
+            ? {
+                usage: {
+                  promptTokens: extras.promptTokens ?? 0,
+                  completionTokens: extras.completionTokens ?? 0,
+                  totalTokens: extras.totalTokens,
+                },
+              }
+            : {}),
+        };
+      }
+      this.turns.set(key, state);
+    }
+
     return conversation;
+  }
+
+  async getTurnState(
+    conversationId: string,
+    turnId: string,
+  ): Promise<{ userExists: boolean; reply: AIResult | null }> {
+    return this.turns.get(turnKey(conversationId, turnId)) ?? { userExists: false, reply: null };
   }
 
   async update(
@@ -120,6 +179,7 @@ export class InMemoryConversationService implements IAIConversationService {
   /** Clear all conversations. */
   clear(): void {
     this.store.clear();
+    this.turns.clear();
     this.counter = 0;
   }
 }

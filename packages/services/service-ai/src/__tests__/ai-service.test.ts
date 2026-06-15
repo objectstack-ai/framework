@@ -518,6 +518,165 @@ describe('AIService', () => {
     );
     expect(result.content).toBe('still ok');
   });
+
+  // ─── Turn idempotency (ADR-0013 D1) ─────────────────────────────
+
+  it('chatWithTools re-sending the same turnId returns the stored reply without re-running the model', async () => {
+    const conversationService = new InMemoryConversationService();
+    let calls = 0;
+    const adapter: LLMAdapter = {
+      name: 'turn-idem',
+      chat: async () => {
+        calls += 1;
+        return { content: `reply #${calls}`, model: 'test' };
+      },
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, logger: silentLogger });
+    const conv = await conversationService.create();
+    const ctx = { toolExecutionContext: { conversationId: conv.id, turnId: 'turn-1' } };
+
+    const first = await service.chatWithTools([{ role: 'user', content: 'hi' }], ctx);
+    const second = await service.chatWithTools([{ role: 'user', content: 'hi' }], ctx);
+
+    // Adapter ran exactly once; the retry short-circuited the stored reply.
+    expect(calls).toBe(1);
+    expect(first.content).toBe('reply #1');
+    expect(second.content).toBe('reply #1');
+
+    // No duplicate user/assistant rows — still just the one turn.
+    const after = await conversationService.get(conv.id);
+    expect(after?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+  });
+
+  it('chatWithTools re-sending the same turnId does NOT re-execute tools', async () => {
+    const conversationService = new InMemoryConversationService();
+    const toolRegistry = new ToolRegistry();
+    let toolCalls = 0;
+    toolRegistry.register(
+      { name: 'echo', description: 'echo', parameters: {} as any },
+      async (input: any) => {
+        toolCalls += 1;
+        return JSON.stringify({ ok: true, input });
+      },
+    );
+    let modelCalls = 0;
+    const adapter: LLMAdapter = {
+      name: 'turn-idem-tools',
+      chat: async () => {
+        modelCalls += 1;
+        if (modelCalls === 1) {
+          return {
+            content: '',
+            model: 'test',
+            toolCalls: [{ type: 'tool-call' as const, toolCallId: 'tc1', toolName: 'echo', input: { x: 1 } }],
+          };
+        }
+        return { content: 'all done', model: 'test' };
+      },
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, toolRegistry, logger: silentLogger });
+    const conv = await conversationService.create();
+    const ctx = { toolExecutionContext: { conversationId: conv.id, turnId: 'turn-1' } };
+
+    await service.chatWithTools([{ role: 'user', content: 'use echo' }], ctx);
+    expect(toolCalls).toBe(1);
+
+    // Retry the SAME completed turn → no further tool execution / planning.
+    const retry = await service.chatWithTools([{ role: 'user', content: 'use echo' }], ctx);
+    expect(retry.content).toBe('all done');
+    expect(toolCalls).toBe(1);
+    expect(modelCalls).toBe(2); // unchanged from the first turn's two rounds
+  });
+
+  it('chatWithTools dedups the inbound user message when re-running an INCOMPLETE turn', async () => {
+    const conversationService = new InMemoryConversationService();
+    // Seed an incomplete turn: a user message exists, but no assistant reply.
+    const conv = await conversationService.create();
+    await conversationService.addMessage(conv.id, { role: 'user', content: 'hi' }, undefined, 'turn-1');
+
+    let calls = 0;
+    const adapter: LLMAdapter = {
+      name: 'turn-idem-incomplete',
+      chat: async () => {
+        calls += 1;
+        return { content: 'recovered reply', model: 'test' };
+      },
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, logger: silentLogger });
+
+    const result = await service.chatWithTools(
+      [{ role: 'user', content: 'hi' }],
+      { toolExecutionContext: { conversationId: conv.id, turnId: 'turn-1' } },
+    );
+
+    // Re-ran (turn was incomplete) but did NOT write a second user row.
+    expect(calls).toBe(1);
+    expect(result.content).toBe('recovered reply');
+    const after = await conversationService.get(conv.id);
+    expect(after?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+  });
+
+  it('chatWithTools without a turnId keeps the legacy behaviour (each call is a fresh turn)', async () => {
+    const conversationService = new InMemoryConversationService();
+    let calls = 0;
+    const adapter: LLMAdapter = {
+      name: 'no-turn',
+      chat: async () => {
+        calls += 1;
+        return { content: `reply #${calls}`, model: 'test' };
+      },
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, logger: silentLogger });
+    const conv = await conversationService.create();
+    const ctx = { toolExecutionContext: { conversationId: conv.id } };
+
+    await service.chatWithTools([{ role: 'user', content: 'hi' }], ctx);
+    await service.chatWithTools([{ role: 'user', content: 'hi' }], ctx);
+
+    // No idempotency key → both calls run and persist independently.
+    expect(calls).toBe(2);
+    const after = await conversationService.get(conv.id);
+    expect(after?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+  });
+
+  it('streamChatWithTools re-sending the same turnId replays the stored reply without re-running the model', async () => {
+    const conversationService = new InMemoryConversationService();
+    let calls = 0;
+    const adapter: LLMAdapter = {
+      name: 'turn-idem-stream',
+      chat: async () => {
+        calls += 1;
+        return { content: 'streamed reply', model: 'test' };
+      },
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, logger: silentLogger });
+    const conv = await conversationService.create();
+    const ctx = { toolExecutionContext: { conversationId: conv.id, turnId: 'turn-1' } };
+
+    const drain = async () => {
+      const events: TextStreamPart<ToolSet>[] = [];
+      for await (const ev of service.streamChatWithTools([{ role: 'user', content: 'hi' }], ctx)) {
+        events.push(ev);
+      }
+      return events;
+    };
+
+    await drain();
+    const second = await drain();
+
+    expect(calls).toBe(1); // retry short-circuited; adapter not called again
+    const text = second.find((e) => (e as { type: string }).type === 'text-delta');
+    expect(text && (text as any).text).toBe('streamed reply');
+    expect(second[second.length - 1].type).toBe('finish');
+
+    const after = await conversationService.get(conv.id);
+    expect(after?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────

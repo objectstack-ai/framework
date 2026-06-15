@@ -415,6 +415,60 @@ describe('ObjectQLConversationService', () => {
     expect(fetched!.metadata).toBeUndefined();
   });
 
+  // ── Turn idempotency (ADR-0013 D1) ──────────────────────────────
+
+  it('persists turn_id on every message of a turn', async () => {
+    const conv = await service.create();
+    await service.addMessage(conv.id, { role: 'user', content: 'hi' }, undefined, 'turn-1');
+    await service.addMessage(conv.id, { role: 'assistant', content: 'reply' }, undefined, 'turn-1');
+
+    const rows = await engine.find('ai_messages', { where: { conversation_id: conv.id } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r: any) => r.turn_id === 'turn-1')).toBe(true);
+  });
+
+  it('getTurnState reports a completed turn (user + final assistant reply)', async () => {
+    const conv = await service.create();
+    await service.addMessage(conv.id, { role: 'user', content: 'hi' }, undefined, 'turn-1');
+    await service.addMessage(
+      conv.id,
+      { role: 'assistant', content: 'final answer' },
+      { model: 'test', promptTokens: 3, completionTokens: 5, totalTokens: 8 },
+      'turn-1',
+    );
+
+    const state = await service.getTurnState(conv.id, 'turn-1');
+    expect(state.userExists).toBe(true);
+    expect(state.reply?.content).toBe('final answer');
+    expect(state.reply?.model).toBe('test');
+    expect(state.reply?.usage?.totalTokens).toBe(8);
+  });
+
+  it('getTurnState treats a tool-call-only assistant turn as NOT a final reply', async () => {
+    const conv = await service.create();
+    await service.addMessage(conv.id, { role: 'user', content: 'use a tool' }, undefined, 'turn-1');
+    // Assistant turn that only requested tools — carries tool_calls, no final text.
+    await service.addMessage(
+      conv.id,
+      {
+        role: 'assistant',
+        content: [{ type: 'tool-call', toolCallId: 'tc1', toolName: 'echo', input: {} }],
+      } as ModelMessage,
+      undefined,
+      'turn-1',
+    );
+
+    const state = await service.getTurnState(conv.id, 'turn-1');
+    expect(state.userExists).toBe(true);
+    expect(state.reply).toBeNull(); // turn never produced a final reply
+  });
+
+  it('getTurnState returns no reply / no user for an unknown turn', async () => {
+    const conv = await service.create();
+    const state = await service.getTurnState(conv.id, 'never-seen');
+    expect(state).toEqual({ userExists: false, reply: null });
+  });
+
   it('should handle invalid JSON in tool_calls gracefully', async () => {
     const conv = await service.create();
     await service.addMessage(conv.id, { role: 'assistant', content: 'checking tools' });

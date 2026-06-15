@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   AIConversation,
+  AIResult,
   ModelMessage,
   ToolCallPart,
   ToolResultPart,
@@ -34,6 +35,11 @@ interface DbMessageRow {
   content: string;
   tool_calls: string | null;
   tool_call_id: string | null;
+  turn_id?: string | null;
+  model?: string | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_tokens?: number | null;
   created_at: string;
 }
 
@@ -173,6 +179,7 @@ export class ObjectQLConversationService implements IAIConversationService {
     conversationId: string,
     message: ModelMessage,
     extras?: MessageObservability,
+    turnId?: string,
   ): Promise<AIConversation> {
     // Verify conversation exists
     const row: DbConversationRow | null = await this.engine.findOne(CONVERSATIONS_OBJECT, {
@@ -239,6 +246,10 @@ export class ObjectQLConversationService implements IAIConversationService {
       content: contentStr && contentStr.length > 0 ? contentStr : '(no content)',
       tool_calls: toolCallsJson,
       tool_call_id: toolCallId,
+      // Per-turn idempotency key (ADR-0013 D1). Every message of a turn is
+      // tagged so the turn can be deduped/reconciled on Retry. Null for
+      // internal/system writes that carry no turn.
+      turn_id: turnId ?? null,
       model: extras?.model ?? null,
       prompt_tokens: extras?.promptTokens ?? null,
       completion_tokens: extras?.completionTokens ?? null,
@@ -266,6 +277,44 @@ export class ObjectQLConversationService implements IAIConversationService {
 
     // Return the full updated conversation
     return (await this.get(conversationId))!;
+  }
+
+  async getTurnState(
+    conversationId: string,
+    turnId: string,
+  ): Promise<{ userExists: boolean; reply: AIResult | null }> {
+    const rows: DbMessageRow[] = await this.engine.find(MESSAGES_OBJECT, {
+      where: { conversation_id: conversationId, turn_id: turnId },
+      orderBy: MESSAGE_ORDER,
+    });
+
+    const userExists = rows.some((r) => r.role === 'user');
+
+    // The turn's final reply is an assistant message with NO pending tool
+    // calls (intermediate tool-call turns and tool results carry the same
+    // turn_id but a non-null tool_calls / a tool role). Take the last such
+    // row so a turn that ended after several tool rounds resolves correctly.
+    const replyRow = [...rows]
+      .reverse()
+      .find((r) => r.role === 'assistant' && !r.tool_calls);
+
+    const reply: AIResult | null = replyRow
+      ? {
+          content: replyRow.content,
+          ...(replyRow.model ? { model: replyRow.model } : {}),
+          ...(replyRow.total_tokens != null
+            ? {
+                usage: {
+                  promptTokens: replyRow.prompt_tokens ?? 0,
+                  completionTokens: replyRow.completion_tokens ?? 0,
+                  totalTokens: replyRow.total_tokens,
+                },
+              }
+            : {}),
+        }
+      : null;
+
+    return { userExists, reply };
   }
 
   async update(

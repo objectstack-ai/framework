@@ -235,6 +235,10 @@ export function buildAgentRoutes(
                   },
                   conversationId:
                     typeof body.conversationId === 'string' ? body.conversationId : undefined,
+                  // Stable per-user-turn idempotency key (ADR-0013 D1). The
+                  // service dedups the inbound user message and short-circuits
+                  // a completed turn instead of re-running tools on Retry.
+                  turnId: typeof body.turnId === 'string' ? body.turnId : undefined,
                   environmentId:
                     typeof chatContext?.environmentId === 'string'
                       ? chatContext.environmentId

@@ -398,6 +398,14 @@ export interface ToolExecutionContext {
     };
     /** Conversation id for trace/HITL correlation. */
     conversationId?: string;
+    /**
+     * Stable per-user-turn idempotency key (ADR-0013 D1). Supplied by the
+     * client and constant across a Retry of the same turn. The service dedups
+     * the inbound user message by `(conversationId, turnId)` and short-circuits
+     * the stored reply when the turn already completed. Omit for
+     * internal/system invocations that have no user-facing turn.
+     */
+    turnId?: string;
     /** Assistant message id that produced the tool call. */
     messageId?: string;
     /** Active environment (multi-tenant project) id, if known. */
@@ -558,13 +566,36 @@ export interface IAIConversationService {
      *                usage, latency, and model id alongside the message
      *                so each `ai_messages` row can be analysed without
      *                joining `ai_traces` by timestamp.
+     * @param turnId - Optional stable per-user-turn idempotency key
+     *                (ADR-0013 D1). Persisted as `turn_id` so the turn's
+     *                messages can be deduped and reconciled on Retry.
      * @returns The updated conversation
      */
     addMessage(
         conversationId: string,
         message: ModelMessage,
         extras?: MessageObservability,
+        turnId?: string,
     ): Promise<AIConversation>;
+
+    /**
+     * Reconcile the state of a single user turn (ADR-0013 D1).
+     *
+     * Lets the tool loop make a turn idempotent: dedup the inbound user
+     * message and short-circuit a turn that already completed instead of
+     * re-running tools / re-planning.
+     *
+     * @param conversationId - Conversation the turn belongs to
+     * @param turnId - The turn's stable idempotency key
+     * @returns `userExists` — whether a `user` message was already recorded
+     *          for this turn; `reply` — the turn's final assistant text reply
+     *          (an assistant message with no pending tool calls), or null if
+     *          the turn never completed.
+     */
+    getTurnState(
+        conversationId: string,
+        turnId: string,
+    ): Promise<{ userExists: boolean; reply: AIResult | null }>;
 
     /**
      * Update mutable conversation fields (title, metadata).

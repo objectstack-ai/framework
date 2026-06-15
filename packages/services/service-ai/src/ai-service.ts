@@ -352,9 +352,10 @@ export class AIService implements IAIService {
     conversationId: string,
     message: ModelMessage,
     extras?: MessageObservability,
+    turnId?: string,
   ): Promise<void> {
     try {
-      await this.conversationService.addMessage(conversationId, message, extras);
+      await this.conversationService.addMessage(conversationId, message, extras, turnId);
     } catch (err) {
       this.logger.warn('[AI] persist message failed', {
         conversationId,
@@ -565,13 +566,34 @@ export class AIService implements IAIService {
     // Working copy of the conversation
     const conversation = [...messages];
 
+    // Turn idempotency (ADR-0013 D1). When the client supplies a stable
+    // turnId, dedup the inbound user message and short-circuit a turn that
+    // already completed instead of re-running the tool loop / re-planning.
+    const turnId = toolExecutionContext?.turnId;
+
     // Persist the inbound user turn when a conversationId is supplied.
     // Only the last message is written — callers are assumed to pass
     // prior history alongside the new turn; we don't diff.
     if (conversationId && messages.length > 0) {
       const last = messages[messages.length - 1];
       if (last && (last as { role?: string }).role === 'user') {
-        await this.persistMessage(conversationId, last);
+        if (turnId) {
+          const state = await this.conversationService.getTurnState(conversationId, turnId);
+          // Completed turn re-requested → return the stored reply, no tools.
+          if (state.reply) {
+            this.logger.debug('[AI] chatWithTools short-circuit completed turn', { turnId });
+            return autoCreatedConversationId
+              ? { ...state.reply, conversationId: autoCreatedConversationId }
+              : state.reply;
+          }
+          // Incomplete/failed turn re-requested → don't write a duplicate
+          // user row; fall through and re-run (D2 handles "already succeeded").
+          if (!state.userExists) {
+            await this.persistMessage(conversationId, last, undefined, turnId);
+          }
+        } else {
+          await this.persistMessage(conversationId, last);
+        }
       }
     }
 
@@ -602,6 +624,7 @@ export class AIService implements IAIService {
               content: result.content,
             } as ModelMessage,
             turnObservability,
+            turnId,
           );
           void this.summarizeConversation(conversationId);
         }
@@ -627,8 +650,9 @@ export class AIService implements IAIService {
       if (conversationId) {
         // Attribute usage / latency to the assistant turn that triggered
         // the tool calls — the subsequent role:'tool' messages have no
-        // LLM cost of their own.
-        await this.persistMessage(conversationId, assistantTurn, turnObservability);
+        // LLM cost of their own. Tagged with turnId but keeps tool_calls,
+        // so getTurnState never mistakes it for the turn's final reply.
+        await this.persistMessage(conversationId, assistantTurn, turnObservability, turnId);
       }
 
       // Execute all tool calls in parallel, threading the per-request
@@ -666,7 +690,7 @@ export class AIService implements IAIService {
         } as ModelMessage;
         conversation.push(toolTurn);
         if (conversationId) {
-          await this.persistMessage(conversationId, toolTurn);
+          await this.persistMessage(conversationId, toolTurn, undefined, turnId);
         }
       }
 
@@ -700,6 +724,7 @@ export class AIService implements IAIService {
           content: finalResult.content,
         } as ModelMessage,
         finalObservability,
+        turnId,
       );
       void this.summarizeConversation(conversationId);
     }
@@ -760,10 +785,28 @@ export class AIService implements IAIService {
       } as TextStreamPart<ToolSet>;
     }
 
+    // Turn idempotency (ADR-0013 D1) — see chatWithToolsImpl for the rationale.
+    const turnId = toolExecutionContext?.turnId;
+
     if (conversationId && messages.length > 0) {
       const last = messages[messages.length - 1];
       if (last && (last as { role?: string }).role === 'user') {
-        await this.persistMessage(conversationId, last);
+        if (turnId) {
+          const state = await this.conversationService.getTurnState(conversationId, turnId);
+          // Completed turn re-requested → replay the stored reply, no tools.
+          if (state.reply) {
+            this.logger.debug('[AI] streamChatWithTools short-circuit completed turn', { turnId });
+            yield textDeltaPart('stream', state.reply.content);
+            yield finishPart(state.reply);
+            return;
+          }
+          // Incomplete/failed turn → don't duplicate the user row; re-run.
+          if (!state.userExists) {
+            await this.persistMessage(conversationId, last, undefined, turnId);
+          }
+        } else {
+          await this.persistMessage(conversationId, last);
+        }
       }
     }
 
@@ -783,6 +826,7 @@ export class AIService implements IAIService {
               content: result.content,
             } as ModelMessage,
             turnObservability,
+            turnId,
           );
           void this.summarizeConversation(conversationId);
         }
@@ -805,7 +849,7 @@ export class AIService implements IAIService {
       } as ModelMessage;
       conversation.push(assistantTurn);
       if (conversationId) {
-        await this.persistMessage(conversationId, assistantTurn, turnObservability);
+        await this.persistMessage(conversationId, assistantTurn, turnObservability, turnId);
       }
 
       // Drain tool PROGRESS events (emitted via `ctx.onProgress` during a
@@ -872,7 +916,7 @@ export class AIService implements IAIService {
         } as ModelMessage;
         conversation.push(toolTurn);
         if (conversationId) {
-          await this.persistMessage(conversationId, toolTurn);
+          await this.persistMessage(conversationId, toolTurn, undefined, turnId);
         }
       }
 
@@ -899,6 +943,7 @@ export class AIService implements IAIService {
           content: result.content,
         } as ModelMessage,
         finalObservability,
+        turnId,
       );
       void this.summarizeConversation(conversationId);
     }

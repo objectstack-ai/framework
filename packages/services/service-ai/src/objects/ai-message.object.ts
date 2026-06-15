@@ -61,6 +61,19 @@ export const AiMessageObject = ObjectSchema.create({
       description: 'ID of the tool call this message responds to (when role=tool)',
     }),
 
+    // Stable per-user-turn idempotency key (ADR-0013 D1). The client mints
+    // one id per user turn and re-sends it verbatim on Retry; the server
+    // dedups the inbound user message by (conversation_id, turn_id) and
+    // short-circuits the stored reply when the turn already completed,
+    // instead of re-running the tool loop and re-planning. Null on rows
+    // written before D1 (and on internal/system invocations with no turn).
+    turn_id: Field.text({
+      label: 'Turn ID',
+      required: false,
+      maxLength: 255,
+      description: 'Stable per-user-turn idempotency key (ADR-0013 D1)',
+    }),
+
     // ── Per-message observability ────────────────────────────────────
     // Populated when this message is the output of an LLM call (most
     // assistant turns). User and tool messages leave them null. Lets
@@ -109,6 +122,7 @@ export const AiMessageObject = ObjectSchema.create({
   indexes: [
     { fields: ['conversation_id'] },
     { fields: ['conversation_id', 'created_at'] },
+    { fields: ['conversation_id', 'turn_id'] },
     { fields: ['model'] },
   ],
 
