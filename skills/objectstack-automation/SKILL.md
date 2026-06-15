@@ -511,6 +511,50 @@ read at runtime, not Zod-validated):
 5. **Scheduled flows without idempotency.** If the flow runs twice
    accidentally, the result should be the same.
 
+### Valid-but-silently-wrong (passes build, fails at runtime)
+
+These are *legal* metadata that authors — AI especially — get wrong. Most are now
+caught by `objectstack build` (a hard error, or an advisory warning), but write
+them right the first time:
+
+6. **Flow node VALUE interpolation uses SINGLE braces.** Value fields on a node's
+   `config` (`fields`, `inputs`, notify `message`/`title`, …) interpolate
+   `{token}`:
+   - `{var}` / `{record.title}` — variable / record field
+   - `{record.tags.0}` — **array index** (e.g. a `multiple: true` lookup, stored as an array)
+   - `{$User.Id}` / `{NOW()}` / `{TODAY() + 30}` — current user / date macros
+   - anything without `{…}` is a **literal**
+
+   ❌ `body: '{{ai_reply}}'` — double-brace is the *formula / template-field* dialect, **not** flow values
+   ❌ `ticket: '$source.id'` — a bare `$ref` is a literal string, not interpolated
+   ✅ `body: '{ai_reply}'`, `ticket: '{source.id}'`
+
+7. **`create_record`'s `outputVariable` holds the created RECORD, not its id.**
+   Reference a field explicitly.
+   ❌ `update_record … fields: { ref: '{newRec}' }` → yields the whole record object
+   ✅ `fields: { ref: '{newRec.id}' }`
+
+8. **Time-relative rules ("alert N days before a date") are SCHEDULE flows, not
+   record-change date-equality.** `record.end_date == daysFromNow(60)` on a
+   `record-*` trigger only fires if the record happens to be written on that exact
+   day — unattended rules never run.
+   ✅ A daily `schedule` flow whose `get_record` filters `end_date` BETWEEN
+   `{TODAY()}` and `{TODAY() + N}`, then loops over the results.
+
+9. **`script` nodes must name a callable.** Set `config.actionType` to a built-in
+   side-effect (`email` / `slack`) **or** `config.function` to a function
+   registered via `defineStack({ functions: { my_fn: (ctx) => … } })`. An empty
+   `script` node — or one pointing at an unregistered function — fails loudly.
+   Inline `config.script` JS is **not executed** by the built-in runtime (no
+   server-side sandbox) — move logic into a registered `function`.
+
+10. **Conditions are bare CEL — only the stdlib is callable.** `now()`,
+    `today()`, `daysFromNow(n)`, `daysAgo(n)`, `isBlank(v)`, `coalesce(a, b)`,
+    `trim(s)`, plus CEL built-ins (`has`, `size`, `contains`, `startsWith`, …).
+    An UNKNOWN function (`PRIOR()`, a typo'd name) **fails the build**. And never
+    wrap a field reference in `{…}` inside a condition — that's a template brace
+    and fails as CEL: write `record.x`, not `{record.x}`.
+
 ---
 
 ## CRM Automation Blueprint
