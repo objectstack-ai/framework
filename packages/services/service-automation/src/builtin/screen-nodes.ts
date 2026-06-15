@@ -102,6 +102,22 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
           };
         }
 
+        // Inline `config.script` (a JS source body) is a distinct, recognized
+        // form — but the built-in runtime has no server-side JS sandbox, so it
+        // does not execute it. Warn loudly (not a silent success) and steer the
+        // author to the supported path — a registered function — rather than
+        // failing the flow. Executing inline scripts is a separate capability,
+        // out of #1870's callable-resolution scope.
+        const inlineScript = typeof cfg.script === 'string' && cfg.script.trim() ? cfg.script : undefined;
+        if (!fnName && inlineScript) {
+          ctx.logger.warn(
+            `[Script] node '${node.id}': inline \`config.script\` is not executed by the built-in runtime ` +
+              `(no server-side JS sandbox) — this node is a no-op. To run server logic, move it into a ` +
+              `registered function and call it via \`config.function\` + \`defineStack({ functions })\`.`,
+          );
+          return { success: true, output: { script: 'not-executed' } };
+        }
+
         // Otherwise the node names a function to invoke. `function` is canonical;
         // a bare `actionType` that matched no built-in is accepted as a shorthand
         // function name (so templates that point a node straight at e.g.

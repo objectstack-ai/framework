@@ -34,8 +34,10 @@ export const FlowNodeAction = z.enum([
   'notify',             // Outbound notification (ADR-0012) — dispatched via the messaging service
   'script',             // Custom action: a built-in side-effect (`config.actionType: 'email'|'slack'`)
                         //   or a registered function (`config.function: 'name'` + `config.inputs`),
-                        //   resolved from `defineStack({ functions })`. An empty script node is
-                        //   rejected at build/registration and fails loudly at run time (#1870).
+                        //   resolved from `defineStack({ functions })`. (Inline `config.script` JS is
+                        //   recognized but NOT executed by the built-in runtime — no server-side
+                        //   sandbox.) A script node naming none of these is flagged at build and
+                        //   fails loudly at run time (#1870).
   'screen',             // Screen / User-Input Element
   'wait',               // Delay/Sleep
   'subflow',            // Call another flow

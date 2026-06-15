@@ -86,7 +86,11 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
       if (node.type === 'script') {
         const fn = typeof cfg.function === 'string' ? cfg.function.trim() : '';
         const action = typeof cfg.actionType === 'string' ? cfg.actionType.trim() : '';
-        if (!fn && !action) {
+        // Inline `config.script` (a JS body) is also a declared form — the
+        // built-in runtime doesn't execute it (warned at run time), but the node
+        // is not the empty no-op this check targets, so don't flag it.
+        const inline = typeof cfg.script === 'string' ? cfg.script.trim() : '';
+        if (!fn && !action && !inline) {
           issues.push({
             where: `flow '${flowName}' · node '${node.id}' (script) callable`,
             message:

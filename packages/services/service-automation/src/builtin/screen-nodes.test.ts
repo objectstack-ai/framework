@@ -86,6 +86,13 @@ describe('script node (#1870 — callable resolution)', () => {
         expect(result.error).toMatch(/no function named|not a built-in/i);
     });
 
+    it('recognizes inline config.script as a no-op (not a loud failure) — built-in runtime has no JS sandbox', async () => {
+        engine.registerFlow('script_flow', scriptFlow({ script: 'variables.x = 1;', outputVariables: ['x'] }));
+        const result = await engine.execute('script_flow', {} as any);
+        // Recognized form: succeeds (doesn't fail loud), but is documented as not executed.
+        expect(result.success).toBe(true);
+    });
+
     it('FAILS LOUDLY when the script node declares no target at all (actionType: undefined repro)', async () => {
         engine.registerFlow('script_flow', scriptFlow({ actionType: undefined }));
         const result = await engine.execute('script_flow', {} as any);

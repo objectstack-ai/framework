@@ -92,6 +92,7 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
           { id: 'start', type: 'start', config: {} },
           { id: 'mail', type: 'script', config: { actionType: 'email' } },
           { id: 'triage', type: 'script', config: { function: 'helpdesk.aiTriageStub' } },
+          { id: 'inline', type: 'script', config: { script: 'variables.x = 1;' } },
         ],
         edges: [],
       }],
