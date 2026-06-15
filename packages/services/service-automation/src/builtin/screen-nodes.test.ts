@@ -107,4 +107,22 @@ describe('script node (#1870 — callable resolution)', () => {
         expect(result.success).toBe(false);
         expect(result.error).toMatch(/explode.*failed|failed.*boom|boom/i);
     });
+it('resolves config.functionName as an alias for function (#1870 DX)', async () => {
+        let calledWith: any;
+        engine.setFunctionResolver((name) =>
+            name === 'helpdesk.aiTriageStub' ? ((c: any) => { calledWith = c.input; return { triaged: true }; }) : undefined);
+        engine.registerFlow('script_flow', scriptFlow({ actionType: 'invoke_function', functionName: 'helpdesk.aiTriageStub', inputs: { ticketId: 't1' } }));
+        const r = await engine.execute('script_flow', {} as any);
+        expect(r.success).toBe(true);
+        expect(calledWith).toEqual({ ticketId: 't1' });
+    });
+
+    it('treats actionType invoke_function as a marker, not a function name', async () => {
+        // invoke_function alone (no function/functionName) must NOT try to resolve a
+        // function literally named 'invoke_function'; it fails with a clear message.
+        engine.registerFlow('script_flow', scriptFlow({ actionType: 'invoke_function' }));
+        const r = await engine.execute('script_flow', {} as any);
+        expect(r.success).toBe(false);
+        expect(r.error).toMatch(/invoke_function.*requires.*function/i);
+    });
 });

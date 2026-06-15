@@ -84,7 +84,10 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
       // not serialized into the artifact — so this is a structural check; the
       // runtime verifies the named function is actually registered.)
       if (node.type === 'script') {
-        const fn = typeof cfg.function === 'string' ? cfg.function.trim() : '';
+        // `function` is canonical; `functionName` is an accepted alias.
+        const fn =
+          (typeof cfg.function === 'string' ? cfg.function.trim() : '') ||
+          (typeof cfg.functionName === 'string' ? cfg.functionName.trim() : '');
         const action = typeof cfg.actionType === 'string' ? cfg.actionType.trim() : '';
         // Inline `config.script` (a JS body) is also a declared form — the
         // built-in runtime doesn't execute it (warned at run time), but the node
@@ -97,6 +100,16 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
               `script node declares neither \`actionType\` nor \`function\` — it would do nothing at runtime. ` +
               `Name a built-in action (e.g. \`actionType: 'email'\`) or a registered function ` +
               `(\`function: 'my_fn'\`, registered via \`defineStack({ functions })\`).`,
+            source: JSON.stringify({ id: node.id, type: node.type, config: cfg }),
+          });
+        } else if (action === 'invoke_function' && !fn) {
+          // `actionType: 'invoke_function'` is a marker that names no callable on
+          // its own — the function name must be in `function`/`functionName`.
+          issues.push({
+            where: `flow '${flowName}' · node '${node.id}' (script) callable`,
+            message:
+              `script node uses \`actionType: 'invoke_function'\` but no \`function\` (or \`functionName\`) — ` +
+              `it names no callable. Set \`function: 'my_fn'\` and register it via \`defineStack({ functions })\`.`,
             source: JSON.stringify({ id: node.id, type: node.type, config: cfg }),
           });
         }

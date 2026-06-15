@@ -85,7 +85,10 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
       }),
       async execute(node, variables, context) {
         const cfg = (node.config ?? {}) as Record<string, unknown>;
-        const fnName = typeof cfg.function === 'string' && cfg.function.trim() ? cfg.function.trim() : undefined;
+        // `function` is canonical; `functionName` is an accepted alias — AI/templates
+        // commonly emit it alongside `actionType: 'invoke_function'` (#1870 DX).
+        const fnRaw = cfg.function ?? cfg.functionName;
+        const fnName = typeof fnRaw === 'string' && fnRaw.trim() ? fnRaw.trim() : undefined;
         const actionType = typeof cfg.actionType === 'string' && cfg.actionType.trim() ? cfg.actionType.trim() : undefined;
 
         // Built-in side-effect actions keep their logger-backed behavior — but
@@ -118,18 +121,18 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
           return { success: true, output: { script: 'not-executed' } };
         }
 
-        // Otherwise the node names a function to invoke. `function` is canonical;
-        // a bare `actionType` that matched no built-in is accepted as a shorthand
-        // function name (so templates that point a node straight at e.g.
-        // `helpdesk.aiTriageStub` resolve).
-        const target = fnName ?? actionType;
+        // `actionType: 'invoke_function'` is a MARKER meaning "call the named
+        // function" — the name lives in `function`/`functionName`, not in actionType
+        // itself. A bare actionType that matched no built-in is still accepted as a
+        // function name (shorthand).
+        const target = fnName ?? (actionType === 'invoke_function' ? undefined : actionType);
         if (!target) {
-          // Defense in depth: registerFlow already rejects this structurally
-          // (#1870), so reaching here means a node bypassed registration.
           return {
             success: false,
             error:
-              `script node '${node.id}': declares neither \`actionType\` nor \`function\` — nothing to run.`,
+              actionType === 'invoke_function'
+                ? `script node '${node.id}': actionType 'invoke_function' requires \`config.function\` (or \`functionName\`) naming the function to call.`
+                : `script node '${node.id}': declares neither \`actionType\` nor \`function\` — nothing to run.`,
           };
         }
 
