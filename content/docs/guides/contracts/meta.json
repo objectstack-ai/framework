@@ -1,4 +1,4 @@
 {
-  "title": "Contracts Protocol",
+  "title": "Service Contracts",
   "pages": ["index", "metadata-service", "auth-service", "storage-service", "data-engine", "cache-service"]
 }

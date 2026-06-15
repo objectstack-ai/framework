@@ -1,4 +1,6 @@
 {
   "title": "Getting Started",
+  "icon": "Rocket",
+  "root": true,
   "pages": ["index", "quick-start", "core-concepts", "architecture", "examples", "cli", "glossary"]
 }

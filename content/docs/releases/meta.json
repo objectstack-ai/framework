@@ -1,4 +1,6 @@
 {
   "title": "Releases",
+  "icon": "Tag",
+  "root": true,
   "pages": ["index", "v9"]
 }

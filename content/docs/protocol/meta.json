@@ -1,4 +1,6 @@
 {
-  "title": "Protocol Overview",
+  "title": "Protocol",
+  "icon": "Network",
+  "root": true,
   "pages": ["index", "objectql", "objectui", "objectos", "knowledge"]
 }
