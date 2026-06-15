@@ -70,6 +70,39 @@ describe('lowerCallables', () => {
     expect(out.functions.dup__2).toBe(f2);
   });
 
+  // #1876 — a handler referencing a module-scope helper must NOT be lowered to a
+  // metadata body (it would ReferenceError at runtime). Instead it stays
+  // registered for BUNDLING (closure preserved) and a body-extraction warning is
+  // recorded naming the offending identifier.
+  it('does not body-lower a handler that references a module-scope helper; keeps it for bundling (#1876)', () => {
+    const handler = (ctx: any) => {
+      ctx.record.slug = moduleHelper(ctx.record.name);
+    };
+    const out = lowerCallables({
+      hooks: [{ name: 'slugify_hook', handler, events: ['beforeInsert'], object: 'doc' }],
+    });
+    // Still registered (so the bundle carries the real closure)…
+    expect(out.functions.slugify_hook).toBe(handler);
+    expect((out.lowered.hooks as any[])[0].handler).toBe('slugify_hook');
+    // …but NOT shipped as a metadata-only body…
+    expect((out.lowered.hooks as any[])[0].body).toBeUndefined();
+    expect(out.bodyExtracted).toBe(0);
+    // …and the reason is recorded, naming the free identifier.
+    expect(out.bodyExtractionWarnings).toHaveLength(1);
+    expect(out.bodyExtractionWarnings[0].reason).toMatch(/moduleHelper|not in scope at runtime/);
+  });
+
+  it('still body-lowers a self-contained handler (params + globals only) (#1876)', () => {
+    const handler = (ctx: any) => {
+      ctx.record.id = Math.round(Number(ctx.record.raw));
+    };
+    const out = lowerCallables({
+      hooks: [{ name: 'contained_hook', handler, events: ['beforeInsert'], object: 'doc' }],
+    });
+    expect(out.bodyExtracted).toBe(1);
+    expect((out.lowered.hooks as any[])[0].body).toBeDefined();
+  });
+
   it('produces a JSON-serializable lowered shape', () => {
     const out = lowerCallables({
       hooks: [
@@ -81,3 +114,8 @@ describe('lowerCallables', () => {
     expect(JSON.parse(json).hooks[0].handler).toBe('h');
   });
 });
+
+/** Module-scope helper referenced by the #1876 bundle-fallback test. */
+function moduleHelper(s: string): string {
+  return String(s).toLowerCase().replace(/\s+/g, '-');
+}

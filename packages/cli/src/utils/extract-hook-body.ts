@@ -21,7 +21,14 @@
  * `ctx.crypto.*` access patterns and add the matching capability tokens to
  * `body.capabilities` automatically. Authors can still override by setting
  * `// @capabilities api.read api.write` as the first line of the function.
+ *
+ * Self-containment (#1876): a handler that references a module-scope identifier
+ * (helper, import, top-level const) cannot be shipped body-only — the reference
+ * would `ReferenceError` at runtime. {@link detectFreeIdentifiers} finds those;
+ * extraction throws so the caller falls back to bundling the real closure.
  */
+
+import { detectFreeIdentifiers } from './detect-free-identifiers.js';
 
 const FORBIDDEN_PATTERNS: Array<{ rx: RegExp; reason: string }> = [
   { rx: /\bimport\s*[\(\*\{]/, reason: 'dynamic `import()` and ES imports are not allowed in hook/action bodies — declare a Connector recipe instead' },
@@ -79,6 +86,23 @@ export function extractHookBody(fn: (...a: unknown[]) => unknown, originLabel: s
           `--- offending body source ---\n${block.source.slice(0, 400)}${block.source.length > 400 ? '…' : ''}`,
       );
     }
+  }
+
+  // #1876 — a handler that references a MODULE-SCOPE identifier (a helper, an
+  // imported binding, a top-level const) is NOT self-contained: shipping it as
+  // a metadata-only `body` would throw `ReferenceError` at runtime (the
+  // reference ships without its definition). Detect those free identifiers and
+  // throw — the caller catches this and keeps the handler in the BUNDLED form,
+  // where esbuild carries the real closure along. The whole `fn` source (params
+  // included) is analyzed so parameters are correctly in scope.
+  const { free, unparsed } = detectFreeIdentifiers(raw);
+  if (!unparsed && free.length > 0) {
+    throw new Error(
+      `[hook-body-extract] ${originLabel}: handler references identifier(s) not in scope at runtime: ` +
+        `${free.join(', ')}. Module-scope helpers/imports aren't shipped with a metadata-only body, so ` +
+        `this handler will be BUNDLED instead (no behavior change). To make it body-only, inline the ` +
+        `helper(s) into the handler or move the logic behind \`ctx\` (e.g. \`ctx.api\`).`,
+    );
   }
 
   // Infer capabilities from API surface usage.

@@ -93,4 +93,28 @@ describe('extractHookBody', () => {
     const ext = extractHookBody(fn, 'hook e');
     expect(ext.capabilities.sort()).toEqual(['api.read', 'api.write', 'log']);
   });
+
+  // #1876 — a handler that references a module-scope helper is not self-
+  // contained; extraction must throw so lowerCallables falls back to bundling
+  // (which carries the closure) instead of shipping a body that ReferenceErrors.
+  it('rejects a handler that references a module-scope helper (#1876)', () => {
+    const fn = (ctx: any) => {
+      ctx.record.slug = moduleScopeHelper(ctx.record.name);
+    };
+    expect(() => extractHookBody(fn, 'hook free')).toThrow(/not in scope at runtime|moduleScopeHelper/);
+  });
+
+  it('extracts a self-contained handler that only uses params + globals (#1876)', () => {
+    const fn = (ctx: any) => {
+      ctx.record.id = Math.round(Number(ctx.record.raw));
+      ctx.record.tags = JSON.stringify(ctx.record.list ?? []);
+    };
+    const ext = extractHookBody(fn, 'hook contained');
+    expect(ext.source).toContain('Math.round');
+  });
 });
+
+/** Module-scope helper used by the #1876 free-identifier test above. */
+function moduleScopeHelper(s: string): string {
+  return String(s).toLowerCase();
+}
