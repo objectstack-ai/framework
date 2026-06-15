@@ -5,6 +5,7 @@ import { CoreServiceName } from '@objectstack/spec/system';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import { setPackageDisabled } from './package-state-store.js';
+import { checkApiExposure } from './api-exposure.js';
 
 /** Minimal local interface — full EnvironmentScopeManager was removed in Phase R. */
 interface EnvironmentScopeManager {
@@ -258,6 +259,24 @@ export class HttpDispatcher {
         scopeId?: string,
         executionContext?: ExecutionContext,
     ): Promise<any> {
+        // ── Object-level API exposure gate (ADR-0049, #1889) ─────
+        // Honour the object's `apiEnabled` / `apiMethods` declarations for
+        // external traffic. System/internal contexts bypass — these flags
+        // govern API *exposure*, not internal engine self-writes.
+        if (!executionContext?.isSystem && params?.object) {
+            let def: any;
+            try {
+                const meta = await this.resolveService('metadata', scopeId);
+                def = await (meta as any)?.getObject?.(params.object);
+            } catch {
+                def = undefined; // fall open to schema defaults (apiEnabled=true)
+            }
+            const gate = checkApiExposure(def, action);
+            if (!gate.allowed) {
+                throw { statusCode: gate.status ?? 403, message: gate.reason ?? 'API access denied' };
+            }
+        }
+
         const protocol = await this.resolveService('protocol', scopeId);
         const qlService = dataDriver ?? await this.getObjectQLService(scopeId);
         const ql = qlService ?? await this.resolveService('objectql', scopeId);

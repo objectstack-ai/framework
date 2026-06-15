@@ -9,6 +9,7 @@ import type { RouteDefinition } from './ai-routes.js';
 import type { AgentChatQuota } from '../quota/agent-chat-quota.js';
 import { normalizeMessage, validateMessageContent } from './message-utils.js';
 import { encodeVercelDataStream } from '../stream/vercel-stream-encoder.js';
+import { evaluateAgentAccess } from './agent-access.js';
 
 /**
  * Allowed message roles for the agent chat endpoint.
@@ -141,6 +142,18 @@ export function buildAgentRoutes(
         }
         if (!agent.active) {
           return { status: 403, body: { error: `Agent "${agentName}" is not active` } };
+        }
+
+        // ── Per-agent access control (ADR-0049, #1884) ───────────
+        // The route-level `permissions` gate above is the same for every
+        // agent; it does NOT honour this agent's own `access`/`permissions`.
+        // Enforce those here so "who can chat with this agent" is real.
+        const access = evaluateAgentAccess(agent, req.user);
+        if (!access.allowed) {
+          return {
+            status: 403,
+            body: { error: `Access to agent "${agentName}" denied: ${access.reason}` },
+          };
         }
 
         // ── Per-turn quota gate (optional) ───────────────────────
