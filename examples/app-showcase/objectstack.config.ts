@@ -21,6 +21,7 @@ import { allActions } from './src/actions/index.js';
 import { ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage } from './src/pages/index.js';
 import { allFlows } from './src/flows/index.js';
 import { allWebhooks } from './src/webhooks/index.js';
+import { allHooks } from './src/hooks/index.js';
 import { allJobs } from './src/jobs/index.js';
 import { allEmails } from './src/emails/index.js';
 import { ShowcaseAssistantAgent, ProjectOpsSkill } from './src/agents/index.js';
@@ -152,6 +153,7 @@ export default defineStack({
   flows: allFlows,
   jobs: allJobs,
   emailTemplates: allEmails,
+  hooks: allHooks,
   webhooks: allWebhooks,
 
   // Security
