@@ -99,4 +99,34 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
     });
     expect(issues).toHaveLength(0);
   });
+
+  // #1870 DX — `functionName` is an accepted alias for `function`.
+  it('accepts a script node that names a callable via the functionName alias', () => {
+    const issues = validateStackExpressions({
+      flows: [{
+        name: 'helpdesk_flow',
+        nodes: [
+          { id: 'start', type: 'start', config: {} },
+          { id: 'triage', type: 'script', config: { actionType: 'invoke_function', functionName: 'helpdesk.aiTriageStub' } },
+        ],
+        edges: [],
+      }],
+    });
+    expect(issues).toHaveLength(0);
+  });
+
+  it('flags actionType invoke_function with no function/functionName', () => {
+    const issues = validateStackExpressions({
+      flows: [{
+        name: 'helpdesk_flow',
+        nodes: [
+          { id: 'start', type: 'start', config: {} },
+          { id: 'triage', type: 'script', config: { actionType: 'invoke_function', inputs: { x: 1 } } },
+        ],
+        edges: [],
+      }],
+    });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toMatch(/invoke_function.*no .*function/i);
+  });
 });
