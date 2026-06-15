@@ -45,6 +45,32 @@ const DATE_EQ = new RegExp(
 );
 
 export const FLOW_TIME_RELATIVE_ANTIPATTERN = 'flow-time-relative-antipattern';
+export const FLOW_DOUBLE_BRACE_INTERP = 'flow-double-brace-interpolation';
+export const FLOW_BARE_DOLLAR_REF = 'flow-bare-dollar-reference';
+
+// Flow node VALUES interpolate with SINGLE braces (`{var}` / `{rec.field}` /
+// `{$User.Id}`). Two wrong-syntax mistakes AI/human authors carry over from the
+// *formula* template dialect (`{{ path }}`) or other platforms:
+//   - `{{ai_reply}}`  — double-brace (verified: no flow node uses `{{ }}`).
+//   - `$source.id`    — a `$`-prefixed reference written bare (resolves as a
+//                       literal string), instead of `{source.id}`.
+const DOUBLE_BRACE = /\{\{\s*[\w$][\w$.\s]*\}\}/;
+// A `$Ident.field` not immediately inside a `{` (so `{$User.Id}` is NOT flagged).
+// Require a letter/_ after `$` so currency like `$5.00` is never matched.
+const BARE_DOLLAR_REF = /(?:^|[^{])\$[A-Za-z_]\w*\.[A-Za-z_]/;
+
+/** Config keys whose string values are CEL predicates, not interpolated templates. */
+const CEL_KEYS = new Set(['condition', 'expression', 'conditions']);
+
+/** Collect every interpolated-template string value in a node config (skips CEL keys). */
+function collectTemplateStrings(value: unknown, key: string | undefined, out: string[]): void {
+  if (key && CEL_KEYS.has(key)) return;
+  if (typeof value === 'string') { out.push(value); return; }
+  if (Array.isArray(value)) { for (const v of value) collectTemplateStrings(v, key, out); return; }
+  if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value as AnyRec)) collectTemplateStrings(v, k, out);
+  }
+}
 
 /**
  * Lint every flow's start node for known authoring anti-patterns. Returns a
@@ -55,24 +81,52 @@ export function lintFlowPatterns(stack: AnyRec): FlowLintFinding[] {
   for (const flow of asArray(stack.flows)) {
     const flowName = typeof flow.name === 'string' ? flow.name : '(unnamed flow)';
     const nodes = Array.isArray(flow.nodes) ? (flow.nodes as AnyRec[]) : [];
-    const start = nodes.find((n) => n.type === 'start');
-    if (!start) continue;
-    const cfg = (start.config ?? {}) as AnyRec;
-    const triggerType = typeof cfg.triggerType === 'string' ? cfg.triggerType : '';
-    if (!triggerType.startsWith('record-')) continue;
 
-    const src = conditionSource(cfg.condition).trim();
-    if (src && DATE_EQ.test(src)) {
-      findings.push({
-        where: `flow '${flowName}' · start condition`,
-        message:
-          `record-change trigger uses a date-EQUALITY time condition (\`${src}\`) — it only fires if the ` +
-          `record happens to be written on that exact day, so unattended "N days before" rules never run.`,
-        hint:
-          `Use a SCHEDULE trigger (daily cron) + a range query instead — e.g. a scheduled flow whose ` +
-          `get_record filters \`end_date\` BETWEEN {TODAY()} and {TODAY()+N}. (#1874)`,
-        rule: FLOW_TIME_RELATIVE_ANTIPATTERN,
-      });
+    // (a) #1874 — date-equality time condition on a record-change start node.
+    const start = nodes.find((n) => n.type === 'start');
+    const startCfg = (start?.config ?? {}) as AnyRec;
+    const triggerType = typeof startCfg.triggerType === 'string' ? startCfg.triggerType : '';
+    if (triggerType.startsWith('record-')) {
+      const src = conditionSource(startCfg.condition).trim();
+      if (src && DATE_EQ.test(src)) {
+        findings.push({
+          where: `flow '${flowName}' · start condition`,
+          message:
+            `record-change trigger uses a date-EQUALITY time condition (\`${src}\`) — it only fires if the ` +
+            `record happens to be written on that exact day, so unattended "N days before" rules never run.`,
+          hint:
+            `Use a SCHEDULE trigger (daily cron) + a range query instead — e.g. a scheduled flow whose ` +
+            `get_record filters \`end_date\` BETWEEN {TODAY()} and {TODAY()+N}. (#1874)`,
+          rule: FLOW_TIME_RELATIVE_ANTIPATTERN,
+        });
+      }
+    }
+
+    // (b) #1315 — wrong interpolation syntax in any node's template values. Flow
+    //     node values use SINGLE braces; double-brace `{{ }}` and bare `$ref.x`
+    //     are carried over from the formula template dialect / other platforms.
+    for (const node of nodes) {
+      const strings: string[] = [];
+      collectTemplateStrings(node.config, undefined, strings);
+      const nodeWhere = `flow '${flowName}' · node '${node.id}' (${node.type})`;
+      for (const str of strings) {
+        if (DOUBLE_BRACE.test(str)) {
+          findings.push({
+            where: nodeWhere,
+            message: `double-brace interpolation \`${str.trim().slice(0, 80)}\` — flow node values use SINGLE braces.`,
+            hint: `Use \`{var}\` (e.g. \`{record.title}\`). Double-brace \`{{ }}\` is the formula/template-field dialect, not flow node values. (#1315)`,
+            rule: FLOW_DOUBLE_BRACE_INTERP,
+          });
+        }
+        if (BARE_DOLLAR_REF.test(str)) {
+          findings.push({
+            where: nodeWhere,
+            message: `\`${str.trim().slice(0, 80)}\` looks like a reference written as a literal — a bare \`$ref.field\` is NOT interpolated.`,
+            hint: `Wrap it and bind a variable: \`{source.id}\` (or \`{$User.Id}\` for the current user). (#1315)`,
+            rule: FLOW_BARE_DOLLAR_REF,
+          });
+        }
+      }
     }
   }
   return findings;
