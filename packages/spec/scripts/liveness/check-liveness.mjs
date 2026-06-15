@@ -38,7 +38,7 @@ const ledgerRoot = join(specRoot, 'liveness');
 
 // Categories whose authorable schemas must be fully classified. Extend
 // highest-risk-first as each category's ledger is seeded from its audit.
-const GOVERNED = ['security'];
+const GOVERNED = ['security', 'identity'];
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');

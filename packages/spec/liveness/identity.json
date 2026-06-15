@@ -1,0 +1,40 @@
+{
+  "category": "identity",
+  "_note": "Liveness for authorable identity metadata. Same audit as security (docs/audits/2026-06-security-identity-property-liveness.md), which scoped identity to RoleSchema. The only author-written metadata type here is Role (RBAC). The rest are NOT authorable metadata: SCIM 2.0 provisioning protocol DTOs, better-auth runtime tables (User/Session/Account/VerificationToken/ApiKey), and org/membership primitives (Member/Organization/Invitation) managed by plugin-auth / better-auth / the org plugins — classified `internal`.",
+  "schemas": {
+    "Role": {
+      "props": {
+        "name": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:113", "note": "sys_role.name reused as a permission-set name for RBAC resolution." },
+        "label": { "status": "live", "note": "display metadata (admin nav/forms, security-plugin.ts:153)." },
+        "description": { "status": "live", "note": "display metadata." },
+        "parent": { "status": "dead", "evidence": "no consumer (grep); org hierarchy walks sys_department.parent_department_id via department-graph.ts, not sys_role.parent", "note": "Role 'Reports To' rollup unimplemented — removal candidate (ADR-0049). label/description display-only." }
+      }
+    },
+    "User": { "_schema": "internal", "_note": "better-auth runtime user table — not authorable metadata." },
+    "Session": { "_schema": "internal", "_note": "better-auth runtime session table." },
+    "Account": { "_schema": "internal", "_note": "better-auth runtime account/credential table." },
+    "VerificationToken": { "_schema": "internal", "_note": "better-auth runtime verification token." },
+    "ApiKey": { "_schema": "internal", "_note": "better-auth API key table." },
+    "Member": { "_schema": "internal", "_note": "org membership primitive (org plugin), not author-written metadata." },
+    "Organization": { "_schema": "internal", "_note": "org/tenant primitive (org plugin)." },
+    "Invitation": { "_schema": "internal", "_note": "org invitation primitive (org plugin)." },
+    "SCIMUser": { "_schema": "internal", "_note": "SCIM 2.0 provisioning protocol DTO." },
+    "SCIMGroup": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMEnterpriseUser": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMName": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMEmail": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMPhoneNumber": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMAddress": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMMeta": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMGroupReference": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMMemberReference": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMListResponse": { "_schema": "internal", "_note": "SCIM 2.0 protocol response DTO." },
+    "SCIMError": { "_schema": "internal", "_note": "SCIM 2.0 protocol error DTO." },
+    "SCIMPatchOperation": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMPatchRequest": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMBulkOperation": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMBulkRequest": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMBulkResponse": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." },
+    "SCIMBulkResponseOperation": { "_schema": "internal", "_note": "SCIM 2.0 protocol DTO." }
+  }
+}
