@@ -78,7 +78,7 @@ export const Lead = ObjectSchema.create({
     /** CEL formula: is this lead in a terminal converted/disqualified state? */
     is_closed: Field.formula({
       label: 'Is Closed',
-      expression: cel`status == "converted" || status == "disqualified"`,
+      expression: cel`record.status == "converted" || record.status == "disqualified"`,
     }),
   },
 

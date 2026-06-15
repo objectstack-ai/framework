@@ -45,7 +45,11 @@ export const Opportunity = ObjectSchema.create({
     }),
     expected_revenue: Field.formula({
       label: 'Expected Revenue',
-      expression: cel`(amount == null ? 0 : amount) * (probability == null ? 0 : probability) / 100`,
+      // NOTE: the divisor is the float literal `100.0`, not `100`. cel-js has no
+      // `double <op> int` arithmetic overload, so `<currency/number field> / 100`
+      // faults at runtime and the formula silently evaluates to null. Using a
+      // float literal keeps both operands `double`. See objectstack-formula skill.
+      expression: cel`(record.amount == null ? 0.0 : record.amount) * (record.probability == null ? 0.0 : record.probability) / 100.0`,
     }),
     close_date: Field.date({
       label: 'Close Date',
@@ -88,9 +92,9 @@ export const Opportunity = ObjectSchema.create({
       type: 'cross_field' as const,
       name: 'opp_close_date_not_past',
       label: 'Close Date Must Be Future',
-      description: 'Prevent setting close_date to a date in the past on new records.',
+      description: 'Prevent back-dating the close_date of an OPEN opportunity. Closed (won/lost) deals legitimately carry a historical close date, so they are exempt.',
       fields: ['close_date'],
-      condition: P`has(record.close_date) && record.close_date < now()`,
+      condition: P`has(record.close_date) && record.close_date < now() && record.stage != "closed_won" && record.stage != "closed_lost"`,
       message: 'Close Date must be today or a future date.',
       events: ['insert'],
     },

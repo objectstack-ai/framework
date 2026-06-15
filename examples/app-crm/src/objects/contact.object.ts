@@ -23,7 +23,7 @@ export const Contact = ObjectSchema.create({
     }),
     full_name: Field.formula({
       label: 'Full Name',
-      expression: cel`(first_name == null ? '' : first_name + ' ') + last_name`,
+      expression: cel`(record.first_name == null ? '' : record.first_name + ' ') + record.last_name`,
     }),
     email: Field.email({
       label: 'Email',
