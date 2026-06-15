@@ -254,7 +254,7 @@ export default class Dev extends Command {
       printKV('Artifact', isUrl ? artifactPath : path.relative(process.cwd(), artifactPath), '📦');
       if (effectiveDb) printKV('Database', redactDbUrl(effectiveDb), '🗄️');
 
-      const port = flags.port ?? readEnvWithDeprecation('OS_PORT', 'PORT');
+      const port = flags.port ?? readEnvWithDeprecation('OS_PORT', 'PORT', { silent: true });
       const binPath = process.argv[1];
       const serveChild = spawn(
         process.execPath,

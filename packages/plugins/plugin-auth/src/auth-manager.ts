@@ -1221,6 +1221,30 @@ export class AuthManager {
    * @returns Web standard Response object
    */
   async handleRequest(request: Request): Promise<Response> {
+    // Dev DX: better-auth's CSRF protection rejects state-changing requests
+    // (e.g. `/sign-in/email`) with a 403 when neither `Origin` nor `Referer`
+    // is present. Browsers always send one; non-browser API clients (curl,
+    // fetch from a script, integration tests) often don't, so they hit an
+    // opaque 403 in local dev. A request with *no* Origin header is never a
+    // browser-driven cross-site attack — CSRF is fundamentally cross-origin —
+    // so in non-production we synthesize a same-origin `Origin` from the
+    // request URL. It matches the dev localhost trusted-origins set, so the
+    // CSRF check passes without weakening protection in production (gated on
+    // NODE_ENV, the same dev signal used for the fallback auth secret above).
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      !request.headers.get('origin') &&
+      !request.headers.get('referer')
+    ) {
+      try {
+        const headers = new Headers(request.headers);
+        headers.set('origin', new URL(request.url).origin);
+        request = new Request(request, { headers });
+      } catch {
+        /* malformed URL — leave the request untouched */
+      }
+    }
+
     const auth = await this.getOrCreateAuth();
     // better-auth's HTTP entrypoint (`createBetterAuth.handler`) wraps execution
     // in `runWithAdapter` but NOT `runWithRequestState`. Endpoints that read

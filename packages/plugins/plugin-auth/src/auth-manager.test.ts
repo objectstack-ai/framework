@@ -124,6 +124,80 @@ describe('AuthManager', () => {
     });
   });
 
+  describe('handleRequest – dev Origin injection (CSRF DX)', () => {
+    const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+
+    afterEach(() => {
+      if (ORIGINAL_NODE_ENV === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    });
+
+    const makeManager = () => {
+      const captured: { request?: Request } = {};
+      const mockHandler = vi.fn().mockImplementation((req: Request) => {
+        captured.request = req;
+        return new Response(null, { status: 200 });
+      });
+      (betterAuth as any).mockReturnValue({ handler: mockHandler, api: {} });
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      return { manager, captured };
+    };
+
+    it('injects a same-origin Origin header in dev when none is present', async () => {
+      process.env.NODE_ENV = 'development';
+      const { manager, captured } = makeManager();
+
+      await manager.handleRequest(new Request('http://localhost:3000/sign-in/email', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'a@b.com', password: 'pass' }),
+        headers: { 'Content-Type': 'application/json' },
+      }));
+
+      expect(captured.request?.headers.get('origin')).toBe('http://localhost:3000');
+    });
+
+    it('does NOT inject an Origin header in production', async () => {
+      process.env.NODE_ENV = 'production';
+      const { manager, captured } = makeManager();
+
+      await manager.handleRequest(new Request('http://localhost:3000/sign-in/email', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'a@b.com', password: 'pass' }),
+        headers: { 'Content-Type': 'application/json' },
+      }));
+
+      expect(captured.request?.headers.get('origin')).toBeNull();
+    });
+
+    it('preserves a caller-supplied Origin header in dev', async () => {
+      process.env.NODE_ENV = 'development';
+      const { manager, captured } = makeManager();
+
+      await manager.handleRequest(new Request('http://localhost:3000/sign-in/email', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'a@b.com', password: 'pass' }),
+        headers: { 'Content-Type': 'application/json', origin: 'http://example.test' },
+      }));
+
+      expect(captured.request?.headers.get('origin')).toBe('http://example.test');
+    });
+
+    it('does not inject when a Referer is already present in dev', async () => {
+      process.env.NODE_ENV = 'development';
+      const { manager, captured } = makeManager();
+
+      await manager.handleRequest(new Request('http://localhost:3000/sign-in/email', {
+        method: 'POST',
+        headers: { referer: 'http://localhost:3000/login' },
+      }));
+
+      expect(captured.request?.headers.get('origin')).toBeNull();
+    });
+  });
+
   describe('createDatabaseConfig – adapter wrapping', () => {
     it('should pass a function (AdapterFactory) to betterAuth when dataEngine is provided', () => {
       const mockDataEngine = {

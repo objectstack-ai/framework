@@ -36,11 +36,17 @@ const _warnedKeys = new Set<string>();
  *
  * @param preferred  Canonical OS_*-prefixed env var name.
  * @param legacy     Older name (or array of older names) to fall back on.
+ * @param options    Optional behaviour flags. Set `silent: true` for aliases
+ *                   that remain accepted conventions rather than true legacy
+ *                   names — e.g. `PORT`, which PaaS platforms (Render, Railway,
+ *                   Heroku, Fly, …) inject automatically. Warning on those
+ *                   would nag operators about env they never set.
  * @returns The resolved value, or `undefined` if neither is set.
  */
 export function readEnvWithDeprecation(
   preferred: string,
   legacy: string | readonly string[],
+  options?: { silent?: boolean },
 ): string | undefined {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
     .process?.env;
@@ -54,7 +60,7 @@ export function readEnvWithDeprecation(
     const legacyValue = env[legacyName];
     if (legacyValue !== undefined) {
       const dedupeKey = `${preferred}|${legacyName}`;
-      if (!_warnedKeys.has(dedupeKey)) {
+      if (!options?.silent && !_warnedKeys.has(dedupeKey)) {
         _warnedKeys.add(dedupeKey);
         const consoleRef = (globalThis as { console?: { warn?: (msg: string) => void } }).console;
         try {

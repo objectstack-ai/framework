@@ -145,7 +145,7 @@ export default class Serve extends Command {
   };
 
   static override flags = {
-    port: Flags.string({ char: 'p', description: 'Server port', default: readEnvWithDeprecation('OS_PORT', 'PORT') ?? '3000' }),
+    port: Flags.string({ char: 'p', description: 'Server port', default: readEnvWithDeprecation('OS_PORT', 'PORT', { silent: true }) ?? '3000' }),
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
     ui: Flags.boolean({ description: 'Enable the bundled Console portal at /_console/ when @object-ui/console is installed (default: true)', default: true, allowNo: true }),
     console: Flags.boolean({
@@ -641,16 +641,21 @@ export default class Serve extends Command {
              resolvedDriverLabel = 'SqlDriver(mysql2)';
              resolvedDatabaseUrl = databaseUrl;
            } else if (isDev) {
-             // Default in dev: prefer SQLite for production-like SQL semantics,
-             // falling back to the pure-JS in-memory driver (mingo) only when the
-             // native `better-sqlite3` binary is unavailable — not built, ABI
-             // mismatch after a Node upgrade, or a blocked prebuild download.
+             // Default in dev: prefer native SQLite for production-like SQL
+             // semantics at native speed. When the native `better-sqlite3`
+             // binary is unavailable — not built, ABI mismatch after a Node
+             // upgrade (e.g. Node 25 → NODE_MODULE_VERSION mismatch), or a
+             // blocked prebuild download — fall back to the pure-JS wasm SQLite
+             // driver, which keeps *real* SQL semantics (and on-disk
+             // persistence) without any native build step. Only if wasm also
+             // fails to load do we drop to the in-memory driver (mingo), which
+             // is neither real SQL nor persistent.
              //
              // knex loads its client lazily (at first query, not at construction),
              // so the only reliable signal inside this registration window is to
              // actually open a connection: connect() runs `SELECT 1`, which forces
-             // better-sqlite3 to load. If that throws we drop to the in-memory
-             // driver instead of letting the failure surface much later — as a
+             // better-sqlite3 to load. If that throws we step down the chain here
+             // instead of letting the failure surface much later — as a
              // missing-module crash on the first real query — or be swallowed by
              // the silent catch below, leaving the kernel with no driver at all.
              let sqliteDriver: any;
@@ -677,15 +682,47 @@ export default class Serve extends Command {
                resolvedDriverLabel = 'SqlDriver(sqlite)';
                resolvedDatabaseUrl = ':memory:';
              } else {
-               const { InMemoryDriver } = await import('@objectstack/driver-memory');
-               await kernel.use(new DriverPlugin(new InMemoryDriver()));
-               trackPlugin('MemoryDriver');
-               resolvedDriverLabel = 'InMemoryDriver';
-               resolvedDatabaseUrl = '(in-memory)';
-               console.warn(chalk.yellow(
-                 '  ⚠ better-sqlite3 unavailable — dev falling back to InMemoryDriver (mingo, not real SQL).\n' +
-                 '    Rebuild better-sqlite3, or set OS_DATABASE_URL / OS_DATABASE_DRIVER for SQL fidelity.'
-               ));
+               // Native unavailable → try the pure-JS wasm SQLite driver before
+               // giving up on SQL fidelity entirely. Same probe-by-connect
+               // approach: actually open the connection so a load failure is
+               // caught here rather than on the first real query.
+               let wasmDriver: any;
+               let wasmOk = false;
+               try {
+                 const { SqliteWasmDriver } = await import('@objectstack/driver-sqlite-wasm');
+                 wasmDriver = new SqliteWasmDriver({
+                   filename: ':memory:',
+                   persist: 'on-disconnect',
+                 });
+                 await wasmDriver.connect();
+                 wasmOk = true;
+               } catch {
+                 wasmOk = false;
+                 if (wasmDriver?.disconnect) {
+                   try { await wasmDriver.disconnect(); } catch { /* ignore */ }
+                 }
+               }
+
+               if (wasmOk) {
+                 await kernel.use(new DriverPlugin(wasmDriver));
+                 trackPlugin('SqliteWasmDriver');
+                 resolvedDriverLabel = 'SqliteWasmDriver';
+                 resolvedDatabaseUrl = ':memory:';
+                 console.warn(chalk.yellow(
+                   '  ⚠ native better-sqlite3 unavailable (ABI mismatch or not built) — dev using wasm SQLite (real SQL, slower).\n' +
+                   '    Rebuild better-sqlite3 for native speed, or set OS_DATABASE_DRIVER=sqlite-wasm to silence this.'
+                 ));
+               } else {
+                 const { InMemoryDriver } = await import('@objectstack/driver-memory');
+                 await kernel.use(new DriverPlugin(new InMemoryDriver()));
+                 trackPlugin('MemoryDriver');
+                 resolvedDriverLabel = 'InMemoryDriver';
+                 resolvedDatabaseUrl = '(in-memory)';
+                 console.warn(chalk.yellow(
+                   '  ⚠ neither native nor wasm SQLite available — dev falling back to InMemoryDriver (mingo, not real SQL).\n' +
+                   '    Rebuild better-sqlite3, or set OS_DATABASE_URL / OS_DATABASE_DRIVER for SQL fidelity.'
+                 ));
+               }
              }
            }
          } catch (e: any) {

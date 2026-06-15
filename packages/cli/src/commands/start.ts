@@ -214,7 +214,7 @@ export default class Start extends Command {
     // Resolve the port the child `serve` will actually bind, matching its
     // flag default (`--port` > $OS_PORT/$PORT > 3000). Using `flags.port`
     // alone printed the wrong URL whenever the port came from the env.
-    const bannerPort = flags.port ?? readEnvWithDeprecation('OS_PORT', 'PORT') ?? 3000;
+    const bannerPort = flags.port ?? readEnvWithDeprecation('OS_PORT', 'PORT', { silent: true }) ?? 3000;
     if (flags.ui) printKV('Console', `http://localhost:${bannerPort}/_console/`, '🖥️');
 
     printStep('Starting server...');

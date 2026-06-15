@@ -36,6 +36,16 @@ describe('readEnvWithDeprecation', () => {
     expect(String(warn.mock.calls[0][0])).toContain('deprecated');
   });
 
+  it('returns the legacy value without warning when silent is set', () => {
+    delete process.env.OS_TEST_FOO;
+    process.env.TEST_FOO = 'legacy-value';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(
+      readEnvWithDeprecation('OS_TEST_FOO', 'TEST_FOO', { silent: true }),
+    ).toBe('legacy-value');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('returns undefined and does not warn when neither var is set', () => {
     delete process.env.OS_TEST_FOO;
     delete process.env.TEST_FOO;
