@@ -16,6 +16,17 @@ const OPERATION_TO_PERMISSION: Record<string, keyof ObjectPermission> = {
 };
 
 /**
+ * Destructive operation class — operations that must FAIL CLOSED when they are
+ * not mapped to a concrete permission key. See ADR-0049: an unrecognised
+ * destructive operation (e.g. a future `transfer`/`restore`/`purge` added
+ * without a matching `OPERATION_TO_PERMISSION` entry, gated by the spec's
+ * `allowTransfer`/`allowRestore`/`allowPurge` bits) must be DENIED rather than
+ * silently allowed by the default-allow fallthrough. Non-destructive unknown
+ * operations retain default-allow so custom read-side operations are not broken.
+ */
+const DESTRUCTIVE_OPERATIONS = new Set<string>(['transfer', 'restore', 'purge']);
+
+/**
  * PermissionEvaluator
  * 
  * Runtime evaluator for PermissionSet definitions.
@@ -32,7 +43,12 @@ export class PermissionEvaluator {
     permissionSets: PermissionSet[]
   ): boolean {
     const permKey = OPERATION_TO_PERMISSION[operation];
-    if (!permKey) return true; // Unknown operations are allowed by default
+    if (!permKey) {
+      // Fail CLOSED for the destructive operation class (ADR-0049): an
+      // unrecognised destructive op must be denied, never silently allowed.
+      // Other unknown operations are allowed by default.
+      return !DESTRUCTIVE_OPERATIONS.has(operation);
+    }
 
     for (const ps of permissionSets) {
       // Honour the `'*'` wildcard sentinel — admin permission sets typically

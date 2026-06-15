@@ -24,10 +24,19 @@ export const ObjectPermissionSchema = lazySchema(() => z.object({
   /** D: Delete (Owned records or Shared records) */
   allowDelete: z.boolean().default(false).describe('Delete permission'),
   
-  /** Lifecycle Operations */
-  allowTransfer: z.boolean().default(false).describe('Change record ownership'),
-  allowRestore: z.boolean().default(false).describe('Restore from trash (Undelete)'),
-  allowPurge: z.boolean().default(false).describe('Permanently delete (Hard Delete/GDPR)'),
+  /**
+   * Lifecycle Operations.
+   *
+   * EXPERIMENTAL — not enforced (ADR-0049). The `transfer`/`restore`/`purge`
+   * operations these bits gate do not yet exist as ObjectQL operations, and no
+   * runtime consumer reads these bits. Authoring them is currently a no-op.
+   * The runtime fails CLOSED if such an operation is ever introduced without a
+   * matching permission mapping (see `permission-evaluator.ts`
+   * DESTRUCTIVE_OPERATIONS). Tracked by #1883.
+   */
+  allowTransfer: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Change record ownership'),
+  allowRestore: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Restore from trash (Undelete)'),
+  allowPurge: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Permanently delete (Hard Delete/GDPR)'),
 
   /** 
    * View All Records: Super-user read access. 

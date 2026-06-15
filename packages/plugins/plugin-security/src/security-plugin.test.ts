@@ -610,9 +610,22 @@ describe('PermissionEvaluator', () => {
     expect(evaluator.checkObjectPermission('insert', 'contact', [ps])).toBe(false);
   });
 
-  it('should allow unknown operations by default', () => {
+  it('should allow unknown (non-destructive) operations by default', () => {
     const evaluator = new PermissionEvaluator();
     expect(evaluator.checkObjectPermission('unknownOp', 'contact', [])).toBe(true);
+  });
+
+  it('should fail CLOSED for unmapped destructive operations (ADR-0049)', () => {
+    const evaluator = new PermissionEvaluator();
+    // transfer/restore/purge are not in OPERATION_TO_PERMISSION; they must be
+    // denied rather than falling through to default-allow — even for an
+    // otherwise fully-permissioned set.
+    const ps = makePermSet('admin', {
+      contact: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true },
+    });
+    expect(evaluator.checkObjectPermission('transfer', 'contact', [ps])).toBe(false);
+    expect(evaluator.checkObjectPermission('restore', 'contact', [ps])).toBe(false);
+    expect(evaluator.checkObjectPermission('purge', 'contact', [ps])).toBe(false);
   });
 
   it('should allow via viewAllRecords', () => {
