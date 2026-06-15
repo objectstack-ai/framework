@@ -70,6 +70,22 @@ describe('celEngine', () => {
     expect(r.ok).toBe(true);
   });
 
+  // #1877 — cel-js `check()` returns a `{ valid, error }` object, not an array.
+  // compile() must read that shape so an UNKNOWN function (here `PRIOR`) is
+  // reported as a type fault at build time instead of slipping through.
+  it('compile() rejects an unknown function as a type error (#1877)', () => {
+    const r = celEngine.compile('PRIOR(status) != "promoted"');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.kind).toBe('type');
+      expect(r.error.message).toMatch(/overload|PRIOR/);
+    }
+  });
+
+  it('compile() still accepts a registered stdlib function (#1877)', () => {
+    expect(celEngine.compile('!isBlank(record.target_channels)').ok).toBe(true);
+  });
+
   it('handles timestamp + duration arithmetic', () => {
     const pinned = new Date('2026-01-01T00:00:00Z');
     const r = celEngine.evaluate(cel('now() + duration("720h")'), { now: pinned });

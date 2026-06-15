@@ -26,6 +26,27 @@ describe('validateExpression (ADR-0032)', () => {
       expect(validateExpression('predicate', '').ok).toBe(true);
       expect(validateExpression('predicate', null).ok).toBe(true);
     });
+
+    // #1877 — a predicate calling an UNKNOWN function (e.g. `PRIOR()`, a typo'd
+    // `isBlnk()`) must be rejected at build/registration, not silently accepted
+    // and then no-op the flow at runtime. cel-js's type checker reports these as
+    // `found no matching overload`; the engine surfaces them as an invalid CEL
+    // predicate.
+    it('rejects an unknown function call (#1877)', () => {
+      const r = validateExpression('predicate', 'PRIOR(status) != "promoted"');
+      expect(r.ok).toBe(false);
+      expect(r.errors[0].message).toMatch(/invalid CEL predicate/i);
+      expect(r.errors[0].message).toMatch(/overload|PRIOR/);
+    });
+
+    it('rejects an unknown function even when guarded by a short-circuit (#1877)', () => {
+      const r = validateExpression('predicate', 'status == "promoted" && PRIOR(status) != "promoted"');
+      expect(r.ok).toBe(false);
+    });
+
+    it('still accepts a registered stdlib function (isBlank)', () => {
+      expect(validateExpression('predicate', '!isBlank(record.target_channels)').ok).toBe(true);
+    });
   });
 
   describe('templates', () => {
