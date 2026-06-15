@@ -1,5 +1,27 @@
 # Changelog
 
+## 9.6.0
+
+### Patch Changes
+
+- 1b82b64: auth: expose `isPlatformAdmin` on the customSession user payload
+
+  The session already derives a coarse `admin` role for platform admins or
+  active-org admins, but never surfaced the underlying platform-admin signal.
+  Console action `visible` CEL predicates need it to gate platform-admin-only
+  object actions (e.g. `sys_environment.change_plan`) without hiding org-admin
+  actions. Both `customSession` return paths now carry the boolean; org-admins
+  who are not platform admins correctly get `isPlatformAdmin: false`.
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [71578f2]
+- Updated dependencies [5e3a301]
+- Updated dependencies [5db2742]
+  - @objectstack/spec@9.6.0
+  - @objectstack/core@9.6.0
+  - @objectstack/platform-objects@9.6.0
+  - @objectstack/types@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes

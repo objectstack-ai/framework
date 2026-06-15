@@ -1,5 +1,157 @@
 # @objectstack/cli
 
+## 9.6.0
+
+### Patch Changes
+
+- 8c7e7e4: fix(cli): keep non-self-contained hook/action handlers out of body-only lowering (#1876)
+
+  A hook/action handler that references a **module-scope identifier** (a helper,
+  an import, a top-level const) was lowered to a metadata-only `body` by
+  `objectstack build` — but that body ships without the referenced definition, so
+  it throws `ReferenceError` at runtime. Build was green; the app didn't boot —
+  exactly the build↔runtime parity gap #1876 describes.
+
+  `extractHookBody` now runs a conservative free-identifier analysis (via the
+  `ts` AST already available through `ts-morph`): it computes the handler's free
+  variables — names referenced but bound neither by the function (params/locals)
+  nor by the JS runtime (a generous global allow-list). When any are found,
+  extraction is refused, so `lowerCallables` falls back to **bundling** the real
+  function (esbuild carries the closure along) — no `ReferenceError`, no build
+  break. The analysis is biased to never over-report: a missed case preserves
+  today's behavior, and a false positive only causes a self-contained handler to
+  be bundled instead of inlined (a size cost, never a correctness or build
+  failure).
+
+  Note: the other #1876 repro — legacy `object`/`aggregate` dashboard widgets
+  passing build but rejected by the runtime — is already closed on `main` by the
+  ADR-0021 single-form cutover (`DashboardWidgetSchema` now requires
+  `dataset`/`values`, enforced by the same schema build and runtime both use).
+
+- 266c0f8: feat(cli): build lint warns on wrong flow-value interpolation syntax (double-brace / bare `$ref`) (#1315)
+
+  Extends the flow authoring anti-pattern lint with two advisory WARNINGs for the
+  interpolation-syntax mistakes AI/human authors carry over from other dialects:
+
+  - **double-brace** `{{ai_reply}}` in a flow node value — flow node values use
+    SINGLE braces (`{var}`); `{{ }}` is the formula/template-field dialect, never
+    flow node values (verified: no flow node executor uses `{{ }}`).
+  - **bare `$ref.field`** (e.g. `$source.id`) written as a plain value — it's not
+    interpolated; the author meant `{source.id}` (or `{$User.Id}`).
+
+  Precise: single-brace interpolation, braced `{$User.Id}`, currency literals
+  (`$5.00`), and CEL condition fields are NOT flagged; never fails the build.
+
+- dc8b2de: feat(automation): resolve & validate `script`-node callables; first-class function registration (#1870)
+
+  A flow `script` node that pointed at an unregistered callable (or declared no
+  `actionType`/`function` at all) built fine and silently did nothing at runtime.
+  Two changes close that gap:
+
+  - **Loud runtime resolution.** The built-in `script` executor now resolves its
+    target in order — built-in side-effect (`email`/`slack`) → a registered
+    function (`config.function`, or a bare `config.actionType` that matches no
+    built-in) → otherwise **fail the step loudly**. The old `(no-op handler)`
+    success path is gone, so an unwired callable can no longer quietly skip.
+  - **First-class registration path.** `AutomationEngine.setFunctionResolver()` /
+    `resolveFunction()` bridge flow nodes to the host function registry. The
+    automation plugin wires it to ObjectQL's `resolveFunction` (populated from
+    `bundle.functions` / `defineStack({ functions })`), so an authored package can
+    register a function and call it from a `script` node:
+    `{ type: 'script', config: { function: 'my_fn', inputs: { … } } }`.
+  - **Build-time structural check.** `objectstack build` now flags a `script` node
+    that declares neither `actionType` nor `function` (the `actionType: undefined`
+    repro). Function _existence_ is verified at runtime — functions are code, not
+    serialized into the artifact.
+
+- c226e93: feat(cli): build-time lint warns on the record-change date-equality time anti-pattern (#1874)
+
+  `objectstack build` now emits an advisory WARNING when a record-change flow's
+  start condition compares a date field for EQUALITY against a time function
+  (`end_date == daysFromNow(60)`, `today() != …`). That construct is valid CEL but
+  a runtime footgun — it only fires if the record happens to be written on that
+  exact day, so unattended "N days before" rules never run. The warning points the
+  author to the robust pattern (a daily SCHEDULE trigger + a range query).
+
+  Range comparisons (`>=`/`<=`) and non-time-field equality are NOT flagged, and it
+  never fails the build — it guides authors (very often an AI generating templates)
+  toward the correct shape without breaking technically-legal metadata.
+
+- b9d0526: fix(cli): drop stale `ownership` key from the `os init` scaffold object template
+
+  The `app` and `plugin` scaffold templates emitted `ownership: 'own'` on the starter object. `ownership` is no longer a valid `ObjectSchema` field (it's not in `ObjectSchemaBase`, and `ObjectSchema.create()` rejects unknown top-level keys per ADR-0032 / #1535), so a user migrating the scaffolded object into `ObjectSchema.create({...})` would hit a validation error. Removed the key from both templates; the rest of the scaffold output is unchanged.
+
+- ab942f2: feat(automation): accept `functionName` alias + `invoke_function` marker on script nodes (#1870 DX)
+
+  AI-authored templates commonly emit `config: { actionType: 'invoke_function', functionName: 'my_fn' }`,
+  but the runtime only read `config.function`. Now:
+
+  - `config.functionName` is accepted as an alias for `config.function` (runtime + build).
+  - `actionType: 'invoke_function'` is treated as a MARKER ("call the named function") — the
+    name comes from `function`/`functionName`, not from actionType itself; it no longer
+    tries to resolve a function literally named `invoke_function`.
+  - `objectstack build` errors on `actionType: 'invoke_function'` with no `function`/`functionName`
+    (it names no callable) instead of letting it fail at runtime.
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [1b82b64]
+- Updated dependencies [71578f2]
+- Updated dependencies [6c82aa0]
+- Updated dependencies [dc8b2de]
+- Updated dependencies [bb00a50]
+- Updated dependencies [5e3a301]
+- Updated dependencies [b0df09c]
+- Updated dependencies [5db2742]
+- Updated dependencies [ab942f2]
+- Updated dependencies [1402be0]
+- Updated dependencies [b04b7e3]
+- Updated dependencies [d13df3f]
+  - @objectstack/spec@9.6.0
+  - @objectstack/plugin-auth@9.6.0
+  - @objectstack/objectql@9.6.0
+  - @objectstack/rest@9.6.0
+  - @objectstack/runtime@9.6.0
+  - @objectstack/service-automation@9.6.0
+  - @objectstack/formula@9.6.0
+  - @objectstack/trigger-record-change@9.6.0
+  - @objectstack/account@9.6.0
+  - @objectstack/setup@9.6.0
+  - @objectstack/studio@9.6.0
+  - @objectstack/client@9.6.0
+  - @objectstack/core@9.6.0
+  - @objectstack/mcp@9.6.0
+  - @objectstack/observability@9.6.0
+  - @objectstack/platform-objects@9.6.0
+  - @objectstack/driver-memory@9.6.0
+  - @objectstack/driver-mongodb@9.6.0
+  - @objectstack/driver-sql@9.6.0
+  - @objectstack/driver-sqlite-wasm@9.6.0
+  - @objectstack/plugin-approvals@9.6.0
+  - @objectstack/plugin-audit@9.6.0
+  - @objectstack/plugin-email@9.6.0
+  - @objectstack/plugin-hono-server@9.6.0
+  - @objectstack/plugin-org-scoping@9.6.0
+  - @objectstack/plugin-reports@9.6.0
+  - @objectstack/plugin-security@9.6.0
+  - @objectstack/plugin-sharing@9.6.0
+  - @objectstack/plugin-webhooks@9.6.0
+  - @objectstack/service-ai@9.6.0
+  - @objectstack/service-analytics@9.6.0
+  - @objectstack/service-cache@9.6.0
+  - @objectstack/service-datasource@9.6.0
+  - @objectstack/service-feed@9.6.0
+  - @objectstack/service-job@9.6.0
+  - @objectstack/service-messaging@9.6.0
+  - @objectstack/service-package@9.6.0
+  - @objectstack/service-queue@9.6.0
+  - @objectstack/service-realtime@9.6.0
+  - @objectstack/service-settings@9.6.0
+  - @objectstack/service-storage@9.6.0
+  - @objectstack/trigger-api@9.6.0
+  - @objectstack/trigger-schedule@9.6.0
+  - @objectstack/types@9.6.0
+  - @objectstack/console@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes
