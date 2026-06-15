@@ -78,10 +78,11 @@ Interface-level page configuration (Airtable parity)
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **source** | `string` | optional | Source object name for the page |
+| **sourceView** | `string` | optional | Named list view on the source object to inherit columns/filter/sort from (ADR-0047 iron rule: the page adds presentation policy only). Omit to use the object default view |
 | **levels** | `integer` | optional | Number of hierarchy levels to display |
 | **filterBy** | `Object[]` | optional | Page-level filter criteria |
 | **appearance** | `Object` | optional | Appearance and visualization configuration |
-| **userFilters** | `Object` | optional | User filter configuration |
+| **userFilters** | `Object` | optional | End-user quick-filter bar for this page (overrides the source view's userFilters) |
 | **userActions** | `Object` | optional | User action toggles |
 | **addRecord** | `Object` | optional | Add record entry point configuration |
 | **showRecordCount** | `boolean` | optional | Show record count at page bottom |
@@ -133,7 +134,7 @@ Interface-level page configuration (Airtable parity)
 
 ## PageType
 
-Page type — platform or interface page types
+Page type — the page KIND (platform or interface). Visualizations of a list page live in interfaceConfig, not here.
 
 ### Allowed Values
 
@@ -141,13 +142,8 @@ Page type — platform or interface page types
 * `home`
 * `app`
 * `utility`
-* `dashboard`
-* `grid`
 * `list`
-* `gallery`
-* `kanban`
-* `calendar`
-* `timeline`
+* `dashboard`
 * `form`
 * `record_detail`
 * `record_review`

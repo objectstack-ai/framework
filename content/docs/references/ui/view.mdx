@@ -16,8 +16,8 @@ Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
 ## TypeScript Usage
 
 ```typescript
-import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
-import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AddRecordConfig.parse(data);
@@ -50,7 +50,7 @@ Appearance and visualization configuration
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **showDescription** | `boolean` | ✅ | Show the view description text |
-| **allowedVisualizations** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map'>[]` | optional | Whitelist of visualization types users can switch between (e.g. ["grid", "gallery", "kanban"]) |
+| **allowedVisualizations** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart'>[]` | optional | Whitelist of visualization types users can switch between (e.g. ["grid", "gallery", "kanban"]) |
 
 
 ---
@@ -318,6 +318,40 @@ User action toggles for the view toolbar
 
 ---
 
+## UserFilterField
+
+Quick-filter field configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **field** | `string` | ✅ | Field name on the source object (must exist — checked by reference diagnostics) |
+| **label** | `string` | optional | Display label override (defaults to the field label) |
+| **type** | `Enum<'select' \| 'multi-select' \| 'boolean' \| 'date-range' \| 'text'>` | optional | Filter control type. Omit to infer from the field definition |
+| **options** | `Object[]` | optional | Static options. Omit to derive from the field definition (select options / lookup records) |
+| **showCount** | `boolean` | optional | Show per-option record counts |
+| **defaultValues** | `string \| number \| boolean[]` | optional | Pre-selected values when the view loads |
+
+
+---
+
+## UserFilters
+
+End-user quick-filter configuration (Airtable "User filters" parity)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **element** | `Enum<'dropdown' \| 'tabs' \| 'toggle'>` | ✅ | Filter control style: "dropdown" (per-field value selectors) or "tabs" (named presets). "toggle" is deprecated. |
+| **fields** | `Object[]` | optional | Fields exposed as quick filters (dropdown/toggle elements) |
+| **tabs** | `Object[]` | optional | Named filter presets rendered as tabs (tabs element). Reuses ViewTabSchema |
+| **showAllRecords** | `boolean` | optional | Show an "All records" tab before the presets (tabs element) |
+
+
+---
+
 ## ViewData
 
 ### Union Options
@@ -464,6 +498,7 @@ Visualization type that users can switch to
 * `timeline`
 * `gantt`
 * `map`
+* `chart`
 
 
 ---
