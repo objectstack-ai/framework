@@ -10,6 +10,7 @@ import { loadConfig } from '../utils/config.js';
 import { lowerCallables } from '../utils/lower-callables.js';
 import { validateStackExpressions } from '../utils/validate-expressions.js';
 import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { lintFlowPatterns } from '../utils/lint-flow-patterns.js';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
@@ -179,6 +180,21 @@ export default class Compile extends Command {
           printWarning(`${w.where}: ${w.message}`);
           console.log(chalk.dim(`    ${w.hint}`));
           console.log(chalk.dim(`    rule: ${w.rule}  at ${w.path}`));
+        }
+      }
+
+      // 3d. Flow authoring anti-pattern lint (#1874) — advisory warnings for
+      //     valid-but-fragile flow metadata (e.g. a record-change trigger using a
+      //     date-EQUALITY time condition that only fires on the exact day). Guides
+      //     the author — very often an AI generating templates — toward the robust
+      //     pattern; NEVER fails the build.
+      const flowLint = lintFlowPatterns(result.data as Record<string, unknown>);
+      if (flowLint.length > 0 && !flags.json) {
+        console.log('');
+        for (const fnd of flowLint) {
+          printWarning(`${fnd.where}: ${fnd.message}`);
+          console.log(chalk.dim(`    ${fnd.hint}`));
+          console.log(chalk.dim(`    rule: ${fnd.rule}`));
         }
       }
 
