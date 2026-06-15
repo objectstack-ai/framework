@@ -8,8 +8,8 @@ description: Reference for the Cache Service contract — key-value caching with
 The Cache Service provides a **key-value caching** layer used throughout ObjectStack for metadata caching, query result caching, session storage, and rate limiting. Implementations can range from in-memory Maps to Redis clusters.
 
 <Callout type="info">
-**Source:** `packages/spec/src/system/contracts/cache-service.ts`  
-**Token:** `CACHE_SERVICE`
+**Source:** `packages/spec/src/contracts/cache-service.ts`  
+**Service name:** `cache` — resolve with `kernel.getService('cache')`
 </Callout>
 
 ---
@@ -19,27 +19,25 @@ The Cache Service provides a **key-value caching** layer used throughout ObjectS
 ```typescript
 export interface ICacheService {
   // Core Operations
-  get<T = unknown>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, options?: CacheSetOptions): Promise<void>;
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  set<T = unknown>(key: string, value: T, ttl?: number): Promise<void>;
   delete(key: string): Promise<boolean>;
   has(key: string): Promise<boolean>;
-  clear(pattern?: string): Promise<void>;
+  clear(): Promise<void>;
 
-  // TTL Management
-  getTtl(key: string): Promise<number | null>;
-  setTtl(key: string, ttl: number): Promise<boolean>;
+  // Observability
+  stats(): Promise<CacheStats>;
+}
+```
 
-  // Bulk Operations
-  getMany<T = unknown>(keys: string[]): Promise<Map<string, T>>;
-  setMany(entries: CacheEntry[], options?: CacheSetOptions): Promise<void>;
-  deleteMany(keys: string[]): Promise<number>;
+`CacheStats` is returned by `stats()` for monitoring:
 
-  // Atomic Operations
-  increment(key: string, amount?: number): Promise<number>;
-  decrement(key: string, amount?: number): Promise<number>;
-
-  // Namespace
-  namespace(prefix: string): ICacheService;
+```typescript
+export interface CacheStats {
+  hits: number;          // Total number of cache hits
+  misses: number;        // Total number of cache misses
+  keyCount: number;      // Number of keys currently stored
+  memoryUsage?: number;  // Memory usage in bytes (if available)
 }
 ```
 
@@ -49,7 +47,7 @@ export interface ICacheService {
 
 ### get
 
-Retrieves a cached value by key. Returns `null` if the key does not exist or has expired.
+Retrieves a cached value by key. Returns `undefined` if the key does not exist or has expired.
 
 ```typescript
 const user = await cacheService.get<AuthUser>('user:usr_01HQ3V5K8N');
@@ -60,15 +58,13 @@ if (user) {
 
 ### set
 
-Stores a value with an optional TTL (time-to-live).
+Stores a value with an optional TTL (time-to-live), passed as a positional argument in seconds.
 
 ```typescript
 // Cache for 5 minutes
-await cacheService.set('user:usr_01HQ3V5K8N', userData, {
-  ttl: 300,
-});
+await cacheService.set('user:usr_01HQ3V5K8N', userData, 300);
 
-// Cache indefinitely
+// Cache indefinitely (omit the ttl argument)
 await cacheService.set('config:feature_flags', flags);
 ```
 
@@ -92,174 +88,31 @@ const exists = await cacheService.has('user:usr_01HQ3V5K8N');
 
 ### clear
 
-Removes all keys, or keys matching a glob pattern.
+Removes all entries from the cache. `clear()` takes no arguments — it flushes the entire store.
 
 ```typescript
-// Clear all keys
+// Clear every key in the cache
 await cacheService.clear();
-
-// Clear all user cache entries
-await cacheService.clear('user:*');
-
-// Clear all metadata cache
-await cacheService.clear('meta:*');
 ```
-
----
-
-## CacheSetOptions
-
-```typescript
-export interface CacheSetOptions {
-  ttl?: number;         // Time-to-live in seconds
-  ifNotExists?: boolean; // Only set if key doesn't already exist
-  ifExists?: boolean;    // Only set if key already exists
-}
-```
-
-| Option | Type | Default | Description |
-|:---|:---|:---|:---|
-| `ttl` | `number` | — | Seconds until the key expires. Omit for no expiration |
-| `ifNotExists` | `boolean` | `false` | SET-if-not-exists (NX) semantics |
-| `ifExists` | `boolean` | `false` | SET-if-exists (XX) semantics |
 
 <Callout type="tip">
-**Lock Pattern:** Use `set` with `ifNotExists: true` and a short TTL to implement distributed locks:  
-`await cache.set('lock:task_import', true, { ttl: 30, ifNotExists: true })`
+The contract has no pattern-based clearing, TTL inspection, bulk, atomic, or namespace
+operations. To scope keys, prefix them yourself (e.g. `meta:object:task`) and track which
+keys to invalidate at the call site.
 </Callout>
 
 ---
 
-## TTL Management
+## Observability
 
-### getTtl
+### stats
 
-Returns the remaining TTL in seconds for a key. Returns `null` if the key does not exist, or `-1` if the key has no expiration.
-
-```typescript
-const remaining = await cacheService.getTtl('user:usr_01HQ3V5K8N');
-// 245 (seconds remaining) | null (key missing) | -1 (no expiry)
-```
-
-### setTtl
-
-Updates the TTL on an existing key without modifying its value.
+Returns counters for monitoring cache effectiveness.
 
 ```typescript
-// Extend the cache for another 10 minutes
-await cacheService.setTtl('user:usr_01HQ3V5K8N', 600);
-```
-
----
-
-## Bulk Operations
-
-### getMany
-
-Retrieves multiple keys in a single round-trip.
-
-```typescript
-const users = await cacheService.getMany<AuthUser>([
-  'user:usr_01HQ3V5K8N',
-  'user:usr_01HQ3W6L9O',
-  'user:usr_01HQ3X7M0P',
-]);
-
-// Returns Map<string, AuthUser>
-for (const [key, user] of users) {
-  console.log(`${key}: ${user.name}`);
-}
-```
-
-### setMany
-
-Stores multiple entries in a single operation.
-
-```typescript
-await cacheService.setMany(
-  [
-    { key: 'meta:task', value: taskDefinition },
-    { key: 'meta:project', value: projectDefinition },
-    { key: 'meta:user', value: userDefinition },
-  ],
-  { ttl: 3600 }
-);
-```
-
-### CacheEntry
-
-```typescript
-export interface CacheEntry {
-  key: string;
-  value: unknown;
-  ttl?: number; // Per-entry TTL override
-}
-```
-
-### deleteMany
-
-Removes multiple keys at once. Returns the number of keys deleted.
-
-```typescript
-const count = await cacheService.deleteMany([
-  'user:usr_01HQ3V5K8N',
-  'user:usr_01HQ3W6L9O',
-]);
-// 2
-```
-
----
-
-## Atomic Operations
-
-### increment / decrement
-
-Atomically modify numeric values. Useful for counters and rate limiting.
-
-```typescript
-// Rate limiting: increment request counter
-const count = await cacheService.increment('ratelimit:usr_01HQ3V:minute');
-if (count === 1) {
-  // First request in this window — set TTL
-  await cacheService.setTtl('ratelimit:usr_01HQ3V:minute', 60);
-}
-if (count > 100) {
-  throw new Error('Rate limit exceeded');
-}
-
-// View counter
-await cacheService.increment('views:page_home', 1);
-
-// Decrement available seats
-const remaining = await cacheService.decrement('seats:event_123', 1);
-```
-
----
-
-## Namespaces
-
-### namespace
-
-Creates a scoped cache instance where all keys are automatically prefixed.
-
-```typescript
-// Create a namespaced cache for metadata
-const metaCache = cacheService.namespace('meta');
-
-// These operations use keys like "meta:task", "meta:project"
-await metaCache.set('task', taskDefinition, { ttl: 3600 });
-const task = await metaCache.get('task');
-
-// Clear only the metadata namespace
-await metaCache.clear();
-```
-
-Namespaces can be nested:
-
-```typescript
-const tenantCache = cacheService.namespace('tenant:acme');
-const tenantMetaCache = tenantCache.namespace('meta');
-// Keys: "tenant:acme:meta:task"
+const { hits, misses, keyCount } = await cacheService.stats();
+const hitRate = hits / (hits + misses || 1);
+console.log(`Cache hit rate: ${(hitRate * 100).toFixed(1)}% (${keyCount} keys)`);
 ```
 
 ---
@@ -281,7 +134,7 @@ async function getObjectDefinition(name: string): Promise<ObjectDefinition> {
   if (!definition) throw new Error(`Object not found: ${name}`);
 
   // Store in cache
-  await cacheService.set(cacheKey, definition, { ttl: 3600 });
+  await cacheService.set(cacheKey, definition, 3600);
 
   return definition;
 }
@@ -298,7 +151,7 @@ async function updateObjectDefinition(
   const updated = await metadataService.updateObject(name, changes);
 
   // Update cache immediately
-  await cacheService.set(`meta:object:${name}`, updated, { ttl: 3600 });
+  await cacheService.set(`meta:object:${name}`, updated, 3600);
 
   return updated;
 }
@@ -308,19 +161,20 @@ async function updateObjectDefinition(
 
 ```typescript
 metadataService.onChange((event) => {
-  // Invalidate cache when metadata changes
+  // Invalidate the affected key when metadata changes.
+  // The contract deletes individual keys — track related keys
+  // (e.g. cached queries) yourself to invalidate them.
   cacheService.delete(`meta:object:${event.objectName}`);
-  cacheService.clear(`query:${event.objectName}:*`);
 });
 ```
 
 ---
 
-## Error Codes
+## Implementations
 
-| Code | Description |
-|:---|:---|
-| `CACHE_UNAVAILABLE` | Cache backend is not reachable |
-| `SERIALIZATION_ERROR` | Value cannot be serialized/deserialized |
-| `KEY_TOO_LONG` | Key exceeds maximum length (typically 512 bytes) |
-| `VALUE_TOO_LARGE` | Value exceeds maximum size limit |
+Two adapters ship in `@objectstack/service-cache`, both implementing `ICacheService`:
+
+- **`MemoryCacheAdapter`** — Map-backed in-process store with TTL expiry and optional LRU-style
+  eviction (`maxSize`). Suitable for development, testing, and single-process deployments.
+- **`RedisCacheAdapter`** — a skeleton placeholder for future Redis integration; its methods
+  currently throw `RedisCacheAdapter not yet implemented`.

@@ -242,7 +242,7 @@ when multiple relationships target the same parent object.
 | `signature` | `Field.signature()` | Digital signature capture |
 | `qrcode` | `Field.qrcode()` | QR/barcode generator |
 | `code` | `Field.code()` | Code editor with syntax highlighting |
-| `json` | — | JSON data |
+| `json` | `Field.json()` | JSON data |
 | `vector` | `Field.vector()` | AI embedding vectors |
 | `tags` | — | Tag list |
 | `progress` | — | Progress bar |
@@ -251,9 +251,9 @@ when multiple relationships target the same parent object.
 office: Field.address({ label: 'Office Address', addressFormat: 'international' }),
 coordinates: Field.location({ label: 'Location', displayMap: true }),
 brand_color: Field.color({ label: 'Color', colorFormat: 'hex' }),
-satisfaction: Field.rating({ label: 'Rating', maxRating: 5 }),
+satisfaction: Field.rating(5, { label: 'Rating' }),
 approval_signature: Field.signature({ label: 'Signature' }),
-embedding: Field.vector({ label: 'Embedding', vectorConfig: { dimensions: 1536 } }),
+embedding: Field.vector(1536, { label: 'Embedding' }),
 ```
 
 ## Common Properties

@@ -41,12 +41,15 @@ Common use cases:
 `record:alert` is registered as a slot component in the slotted page schema. Add it to the `alerts` slot of your `*.page.ts`:
 
 ```ts
-import { definePage } from '@objectstack/spec';
+import type { Page } from '@objectstack/spec/ui';
 
-export default definePage({
-  name: 'sys_user_record',
+export const SysUserDetailPage: Page = {
+  name: 'sys_user_detail',
+  label: 'User',
   object: 'sys_user',
   type: 'record',
+  kind: 'slotted',   // required: slotted pages override individual slots
+  regions: [],
   slots: {
     alerts: [
       {
@@ -56,7 +59,7 @@ export default definePage({
           icon: 'mail',
           title: '邮箱未验证',
           body: '验证你的邮箱以接收密码重置和重要的系统通知。',
-          visible: 'record.id == ctx.user.id && record.email_verified == false',
+          visible: 'record.id == os.user.id && record.email_verified == false',
           action: {
             actionName: 'resend_verification_email',
             label: '重新发送验证邮件',
@@ -65,28 +68,28 @@ export default definePage({
         },
       },
     ],
-    // …other slots: highlights, sections, …
+    // …other slots: header, actions, highlights, details, tabs, discussion
   },
-});
+};
 ```
 
 The `alerts` slot is rendered between the page header (`header/actions`) and the highlights strip — the standard enterprise UX placement for contextual notices.
 
 ## Visibility predicate
 
-The `visible` predicate uses the same CEL pipeline every `<ActionButton>` and `<ActionBar>` does. The evaluation scope exposes:
+The `visible` predicate uses the same CEL pipeline every condition in the framework does. The evaluation scope (`buildScope` in `@objectstack/formula`) binds:
 
 | Identifier | Source |
 |:---|:---|
 | `record` | The loaded record (e.g. `record.email_verified`) |
-| `user` | The authenticated user (also available as `ctx.user`) |
-| `objectName` | The current object name |
-| `ctx.*` | Mirror namespace (canonical) — `ctx.user.id`, `ctx.record.id`, … |
+| `os.user` | The authenticated user — `os.user.id`, … |
+| `os.org` | The active organization |
+| `os.env` | Environment values |
 
 Examples:
 
 ```ts
-visible: 'record.id == ctx.user.id && record.email_verified == false'
+visible: 'record.id == os.user.id && record.email_verified == false'
 visible: 'record.status == "locked"'
 visible: 'record.trial_expires_at != null && record.trial_expires_at < now()'
 ```
@@ -99,15 +102,15 @@ Rules:
 
 ## CTA wiring
 
-The optional `action.actionName` resolves against the object's `actions[]` (the same array that backs `record:quick_actions`). When clicked, the renderer dispatches through `useActionEngine`, which means the action inherits:
+The optional `action.actionName` resolves against the object's `actions[]` (the same array that backs `record:quick_actions`). When clicked, the renderer dispatches the resolved action, which means it inherits the action's declared behavior from the [action schema](../../references/ui/action):
 
 - Confirm dialog (`confirmText`)
 - Param collection (`params: [...]`)
-- Toast notifications (`successMessage`, `errorMessage`)
-- Navigation / reload (`refreshAfter`, `navigate`)
+- Success toast (`successMessage`)
+- Refresh after execution (`refreshAfter`)
 - Result dialog (`resultDialog`)
 
-…from the surrounding `<ActionProvider>` — the exact same pipeline as the Lightning-style buttons in the page header. No need to re-declare handlers.
+…the exact same pipeline as the buttons in the page header. No need to re-declare handlers.
 
 ## Severity → defaults
 

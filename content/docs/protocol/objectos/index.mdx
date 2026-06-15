@@ -85,25 +85,25 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
   <Card
     icon={<Layers />}
     title="Lifecycle Management"
-    href="/docs/protocols/objectos/lifecycle"
+    href="/docs/protocol/objectos/lifecycle"
     description="Boot sequence, plugin installation, zero-downtime upgrades, rollback strategies"
   />
   <Card
     icon={<Package />}
     title="Plugin Specification"
-    href="/docs/protocols/objectos/plugin-spec"
+    href="/docs/protocol/objectos/plugin-spec"
     description="Manifest structure, dependency graph, versioning semantics, distribution format"
   />
   <Card
     icon={<Cog />}
     title="Configuration Resolution"
-    href="/docs/protocols/objectos/config-resolution"
+    href="/docs/protocol/objectos/config-resolution"
     description="Merge strategies, precedence rules, environment overrides, tenant isolation"
   />
   <Card
     icon={<Globe />}
     title="i18n Standard"
-    href="/docs/protocols/objectos/i18n-standard"
+    href="/docs/protocol/objectos/i18n-standard"
     description="Translation bundles, locale resolution, date/number formatting, dynamic loading"
   />
 </Cards>
@@ -126,8 +126,8 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
 
 **ObjectOS Approach:**
 ```bash
-# Declarative deployment
-objectstack deploy @mycompany/crm@2.0.0
+# Publish a compiled artifact to ObjectStack Cloud
+os publish dist/objectstack.json --environment <environment-id>
 # ✓ Validated dependencies
 # ✓ Applied schema changes
 # ✓ Updated configuration
@@ -247,7 +247,7 @@ ObjectOS is the **runtime coordinator** that makes ObjectQL and ObjectUI work to
 
 ### 1. Boot Sequence
 ```typescript
-// Real boot — packages/runtime/src/runtime.ts
+// Manual boot — the pattern the Runtime wrapper in @objectstack/runtime automates
 import { ObjectKernel } from '@objectstack/core';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
@@ -309,7 +309,7 @@ async function handleRequest(req) {
 
 ### 3. Plugin Installation
 ```typescript
-// Install a plugin: objectstack plugin install @vendor/salesforce-sync
+// Install a package: os package install @vendor/salesforce-sync
 await ObjectOS.installPlugin({
   source: '@vendor/salesforce-sync@1.5.0',
   
@@ -368,7 +368,7 @@ permissions:
 ```
 
 ### Idempotent Operations
-Run `objectstack deploy` 100 times → Same result.
+Run `os publish` 100 times → Same result.
 - Installing a plugin twice does nothing (it's already installed)
 - Applying same configuration twice doesn't duplicate settings
 - Schema migrations are versioned (run once, skip if already applied)
@@ -386,7 +386,7 @@ All system configuration lives in Git:
 ### Plugin Development
 ```bash
 # Scaffold new plugin
-objectstack plugin create @mycompany/slack-integration
+os create plugin slack-integration
 
 # Generated structure:
 slack-integration/
@@ -481,7 +481,7 @@ const message = context.i18n.t('slack.button.send');
 | **i18n** | Built-in engine | Manual (libraries) | Manual | Manual |
 | **Dependency Resolution** | Semantic versioning | Manual (YAML) | Manual | Manual |
 | **Zero-Downtime Upgrades** | Declarative | Rolling updates | Blue-green | Git push |
-| **Developer UX** | `objectstack deploy` | `kubectl apply` | `cf push` | `git push heroku` |
+| **Developer UX** | `os publish` | `kubectl apply` | `cf push` | `git push heroku` |
 
 **Key Differentiator:** ObjectOS is **application-aware**. Kubernetes knows about containers, not plugins. ObjectOS knows about ObjectQL objects, ObjectUI views, and business logic dependencies.
 
@@ -491,25 +491,25 @@ const message = context.i18n.t('slack.button.send');
   <Card
     icon={<Layers />}
     title="Learn Lifecycle Management"
-    href="/docs/protocols/objectos/lifecycle"
+    href="/docs/protocol/objectos/lifecycle"
     description="Understand boot sequence, installation, upgrade strategies, and rollback procedures"
   />
   <Card
     icon={<Package />}
     title="Build Your First Plugin"
-    href="/docs/protocols/objectos/plugin-spec"
+    href="/docs/protocol/objectos/plugin-spec"
     description="Create a plugin manifest, define dependencies, and implement lifecycle hooks"
   />
   <Card
     icon={<Cog />}
     title="Master Configuration"
-    href="/docs/protocols/objectos/config-resolution"
+    href="/docs/protocol/objectos/config-resolution"
     description="Learn merge strategies, environment overrides, and tenant-specific settings"
   />
   <Card
     icon={<Globe />}
     title="Internationalize Your App"
-    href="/docs/protocols/objectos/i18n-standard"
+    href="/docs/protocol/objectos/i18n-standard"
     description="Add multi-language support with translation bundles and locale resolution"
   />
 </Cards>

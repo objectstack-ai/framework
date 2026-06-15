@@ -31,34 +31,33 @@ Service contracts are **TypeScript interfaces** that define the boundaries betwe
 
 | Contract | Interface | Description |
 |:---|:---|:---|
-| [Data Engine](/references/contracts/data-engine) | `IDataEngine` | Core data persistence — CRUD, queries, aggregations, transactions |
-| [Metadata Service](/references/contracts/metadata-service) | `IMetadataService` | Object and field definition management, schema registry |
-| Query Engine | `IQueryEngine` | Structured query parsing, optimization, and execution |
-| Search Engine | `ISearchEngine` | Full-text search indexing and querying |
-| Driver | `IDriver` | Low-level database adapter (SQL, NoSQL, API) |
+| Data Engine | `IDataEngine` | Core data persistence — CRUD, queries, aggregations, transactions |
+| Metadata Service | `IMetadataService` | Object and field definition management, schema registry |
+| Search Service | `ISearchService` | Full-text search indexing and querying |
+| Data Driver | `IDataDriver` | Low-level database adapter (SQL, NoSQL, API) |
 
 ### Authentication & Security Contracts
 
 | Contract | Interface | Description |
 |:---|:---|:---|
-| [Auth Service](/references/contracts/auth-service) | `IAuthService` | Authentication — login, verify, logout, session management |
-| Permission Service | `IPermissionService` | Object and field-level permission checks |
+| Auth Service | `IAuthService` | Authentication — login, verify, logout, session management |
 | Sharing Service | `ISharingService` | Record sharing rules and access grants |
 
 ### Storage & Caching Contracts
 
 | Contract | Interface | Description |
 |:---|:---|:---|
-| [Storage Service](/references/contracts/storage-service) | `IStorageService` | File upload, download, and management |
-| [Cache Service](/references/contracts/cache-service) | `ICacheService` | Key-value caching with TTL support |
+| Storage Service | `IStorageService` | File upload, download, and management |
+| Cache Service | `ICacheService` | Key-value caching with TTL support |
 
 ### System Contracts
 
 | Contract | Interface | Description |
 |:---|:---|:---|
-| Event Bus | `IEventBus` | Publish/subscribe event system for triggers and realtime |
-| Logger | `ILogger` | Structured logging with levels and context |
-| Plugin Manager | `IPluginManager` | Plugin lifecycle — registration, initialization, teardown |
+| Realtime Service | `IRealtimeService` | Publish/subscribe event system for triggers and realtime |
+| Lifecycle Events | `IPluginLifecycleEvents` | Typed plugin and kernel lifecycle events |
+| Logger | `Logger` | Structured logging with levels and context |
+| Service Registry | `IServiceRegistry` | Service registration and resolution |
 
 ### Integration Contracts
 
@@ -66,45 +65,46 @@ Service contracts are **TypeScript interfaces** that define the boundaries betwe
 |:---|:---|:---|
 | Email Service | `IEmailService` | Transactional and bulk email delivery |
 | Notification Service | `INotificationService` | Multi-channel notifications (email, push, in-app) |
-| Scheduler | `IScheduler` | Cron-based job scheduling and execution |
+| Job Service | `IJobService` | Cron-based background job scheduling and execution |
 
 ### AI Contracts
 
 | Contract | Interface | Description |
 |:---|:---|:---|
-| Model Provider | `IModelProvider` | LLM inference — chat, completion, embedding |
-| RAG Pipeline | `IRagPipeline` | Document indexing, retrieval, and augmented generation |
+| AI Service | `IAIService` | LLM inference — chat, completion, embedding |
+| Knowledge Service | `IKnowledgeService` | Document indexing, retrieval, and augmented generation |
 
 ---
 
 ## Contract Structure
 
-Every contract follows a consistent pattern:
+Every contract is a plain TypeScript interface that depends only on shared types — never on a concrete implementation:
 
 ```typescript
-import { z } from 'zod';
+// packages/spec/src/contracts/data-engine.ts
+import type {
+  EngineQueryOptions,
+  DataEngineInsertOptions,
+  EngineUpdateOptions,
+  EngineDeleteOptions,
+} from '../data/index.js';
 
-// 1. Define input/output schemas with Zod
-export const CreateRecordInputSchema = z.object({
-  object: z.string(),
-  data: z.record(z.unknown()),
-});
-
-export type CreateRecordInput = z.infer<typeof CreateRecordInputSchema>;
-
-// 2. Define the contract interface
+/**
+ * IDataEngine — abstract interface for data persistence.
+ * Plugins depend on this interface, not on concrete database implementations.
+ */
 export interface IDataEngine {
-  create(input: CreateRecordInput): Promise<Record<string, unknown>>;
-  read(object: string, id: string): Promise<Record<string, unknown> | null>;
+  find(objectName: string, query?: EngineQueryOptions): Promise<any[]>;
+  findOne(objectName: string, query?: EngineQueryOptions): Promise<any>;
+  insert(objectName: string, data: any | any[], options?: DataEngineInsertOptions): Promise<any>;
+  update(objectName: string, data: any, options?: EngineUpdateOptions): Promise<any>;
+  delete(objectName: string, options?: EngineDeleteOptions): Promise<any>;
   // ...
 }
-
-// 3. Export a contract token for DI
-export const DATA_ENGINE = Symbol('IDataEngine');
 ```
 
 <Callout type="tip">
-**Convention:** Contract interfaces are prefixed with `I` (e.g., `IDataEngine`). The DI token is an uppercase `Symbol` (e.g., `DATA_ENGINE`).
+**Convention:** Contract interfaces are prefixed with `I` (e.g., `IDataEngine`). Services are registered and resolved by **string name** through the kernel service registry (e.g., `ctx.registerService('dataEngine', impl)`).
 </Callout>
 
 ---
@@ -115,17 +115,20 @@ Plugins declare which contracts they implement and which they consume:
 
 ```typescript
 import type { Plugin } from '@objectstack/core';
-import type { IDataEngine, ICacheService } from '@objectstack/spec';
+import type { IDataEngine } from '@objectstack/spec/contracts';
 
 export const myPlugin: Plugin = {
   name: 'my-plugin',
 
-  // Declare which contracts this plugin requires
-  requires: ['ICacheService'],
+  // Declare which other plugins must be initialized first
+  dependencies: ['com.objectstack.cache'],
 
-  async onEnable(ctx) {
-    // Plugins provide implementations via the DI container
-    ctx.di.register<IDataEngine>('dataEngine', () => new MyDataEngine(ctx));
+  // Init phase: register the services this plugin provides
+  init(ctx) {
+    ctx.registerService('dataEngine', new MyDataEngine(ctx));
+
+    // Consume a service another plugin registered
+    const cache = ctx.getService('cache');
   },
 };
 ```
@@ -136,21 +139,21 @@ export const myPlugin: Plugin = {
 
 ```mermaid
 flowchart LR
-    A[Plugin Registered] --> B[Contracts Resolved]
-    B --> C[Dependencies Injected]
-    C --> D[Service Initialized]
+    A[Plugin Registered] --> B[Dependencies Resolved]
+    B --> C[init: Services Registered]
+    C --> D[start: Service Started]
     D --> E[Ready to Serve]
-    E --> F[Shutdown / Teardown]
+    E --> F[destroy: Shutdown / Teardown]
 ```
 
 | Phase | Description |
 |:---|:---|
-| **Registered** | Plugin declares its contracts via `definePlugin()` |
+| **Registered** | Plugin is added to the kernel with its `name` and `dependencies` |
 | **Resolved** | Kernel resolves the dependency graph across all plugins |
-| **Injected** | Required services are injected into each plugin factory |
-| **Initialized** | Plugin `onInit()` hook runs — connections established, caches warmed |
+| **Initialized** | Plugin `init(ctx)` hook runs — services are registered |
+| **Started** | Plugin `start(ctx)` hook runs — connections established, servers started |
 | **Ready** | Contract methods are available to the Kernel and other plugins |
-| **Teardown** | Plugin `onDestroy()` hook runs — connections closed, resources freed |
+| **Teardown** | Plugin `destroy()` hook runs — connections closed, resources freed |
 
 <Callout type="info">
 **See also:**

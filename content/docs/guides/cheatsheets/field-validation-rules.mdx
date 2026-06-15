@@ -346,7 +346,7 @@ These properties apply to **all** field types and are validated by the base `Fie
   name: 'full_name',
   label: 'Full Name',
   type: 'formula',
-  expression: 'CONCAT(first_name, " ", last_name)',
+  expression: 'record.first_name + " " + record.last_name',
   dependencies: ['first_name', 'last_name'],
   cached: { enabled: true, ttl: 3600, invalidateOn: ['first_name', 'last_name'] }
 }

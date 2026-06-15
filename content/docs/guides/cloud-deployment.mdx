@@ -23,7 +23,7 @@ environment-aware runtime seams exported from `@objectstack/runtime`.
 Use the repo scripts for framework development:
 
 ```bash
-PORT=3000 pnpm dev
+OS_PORT=3000 pnpm dev
 pnpm dev:crm -- --fresh -p 38421
 pnpm docs:dev
 ```
@@ -37,7 +37,7 @@ For a generated app:
 ```bash
 os dev
 os start
-os serve --artifact ./dist/objectstack.json
+os start --artifact ./dist/objectstack.json
 ```
 
 The active environment is selected with `OS_ENVIRONMENT_ID`.
@@ -51,7 +51,7 @@ or `@objectstack/runtime` helpers:
 
 ```bash
 os compile
-OS_ENVIRONMENT_ID=env_prod os serve --artifact ./dist/objectstack.json
+OS_ENVIRONMENT_ID=env_prod OS_ARTIFACT_PATH=./dist/objectstack.json os serve
 ```
 
 Deployment config stays outside the artifact. Database URLs, auth secrets,
@@ -129,8 +129,8 @@ requests and do not run through a target environment kernel.
 | `OS_ARTIFACT_PATH` | Artifact path for `os serve` and standalone hosts. |
 | `OS_DATABASE_URL` | Local runtime business database URL. |
 | `OS_DATABASE_DRIVER` | Local runtime driver id. |
-| `AUTH_SECRET` | Better Auth session secret for hosted runtimes. |
-| `PORT` / `HOST` | HTTP bind settings. |
+| `OS_AUTH_SECRET` | Better Auth session secret for hosted runtimes. |
+| `OS_PORT` | HTTP listen port. |
 
 Third-party provider variables such as `OPENAI_API_KEY`, `TURSO_*`,
 `SMTP_*`, `RESEND_API_KEY`, and OAuth client secrets keep their provider names.

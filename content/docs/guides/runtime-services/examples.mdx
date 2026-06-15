@@ -9,16 +9,18 @@ description: Practical examples for flow nodes, hooks, and plugin event subscrip
 
 ```ts
 export async function run(ctx: any) {
-  const order = await ctx.services?.data?.get('sales_order', ctx.input.orderId);
-  const lines = await ctx.services?.data?.list('sales_order_line', {
-    filter: { sales_order_id: order.id },
-    sort: [{ field: 'line_no', order: 'asc' }],
-    top: 200,
+  const order = await ctx.services?.data?.findOne('sales_order', {
+    where: { id: ctx.input.orderId },
+  });
+  const lines = await ctx.services?.data?.find('sales_order_line', {
+    where: { sales_order_id: order.id },
+    orderBy: [{ field: 'line_no', order: 'asc' }],
+    limit: 200,
   });
 
   return {
     order,
-    lines: lines.data ?? lines.items ?? [],
+    lines: lines ?? [],
   };
 }
 ```
@@ -46,12 +48,12 @@ import type { Plugin } from '@objectstack/core';
 
 export const ExamplePlugin: Plugin = {
   name: 'example-plugin',
-  async onEnable(ctx: any) {
-    ctx.events.on('kernel:ready', async () => {
+  async init(ctx) {
+    ctx.hook('kernel:ready', async () => {
       ctx.logger.info('Kernel ready, initializing subscriptions');
     });
 
-    ctx.events.on('service:registered', async (serviceName: string) => {
+    ctx.hook('service:registered', async (serviceName: string) => {
       ctx.logger.debug('Service registered', { serviceName });
     });
   },

@@ -74,25 +74,25 @@ Traditional frontend development chains you to specific frameworks and platforms
   <Card
     icon={<Layout />}
     title="Layout DSL"
-    href="/docs/protocols/objectui/layout-dsl"
+    href="/docs/protocol/objectui/layout-dsl"
     description="Declarative page structure with responsive grid system"
   />
   <Card
     icon={<Component />}
     title="Widget Contract"
-    href="/docs/protocols/objectui/widget-contract"
+    href="/docs/protocol/objectui/widget-contract"
     description="Standard props and events for UI components"
   />
   <Card
     icon={<MousePointer />}
     title="Action Protocol"
-    href="/docs/protocols/objectui/actions"
+    href="/docs/protocol/objectui/actions"
     description="Buttons, triggers, and navigation definitions"
   />
   <Card
     icon={<Blocks />}
     title="UI as Data Concept"
-    href="/docs/protocols/objectui/concept"
+    href="/docs/protocol/objectui/concept"
     description="Philosophy and benefits of metadata-driven UIs"
   />
 </Cards>
@@ -191,7 +191,7 @@ actions:
 └────┬─────┘                                    └────┬─────┘
      │                                               │
      │  1. Request Layout                            │
-     │  GET /api/ui/layouts/customer/form            │
+     │  GET /api/v1/meta/view/customer               │
      │──────────────────────────────────────────────>│
      │                                               │
      │                                     2. Resolve Layout
@@ -207,7 +207,7 @@ actions:
      │  5. User Interaction (Click Save)             │
      │                                               │
      │  6. Submit Data                               │
-     │  POST /api/data/customer/123                  │
+     │  POST /api/v1/data/customer                   │
      │──────────────────────────────────────────────>│
      │                                               │
      │                                   7. Validate & Save
@@ -228,7 +228,7 @@ actions:
 FormView.create({
   object: 'project',
   layout: {
-    mode: 'tabbed',  # or 'simple' | 'wizard'
+    type: 'tabbed',  # or 'simple' | 'wizard' | 'split' | 'drawer' | 'modal'
     tabs: [
       {
         label: 'Details',
@@ -258,7 +258,7 @@ FormView.create({
 ```yaml
 ListView.create({
   object: 'project',
-  viewType: 'grid',  # or 'kanban' | 'calendar' | 'gantt'
+  type: 'grid',  # or 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map' | 'chart'
   columns: [
     { field: 'name', width: 200, sortable: true },
     { field: 'status', width: 120, filter: true },
@@ -387,7 +387,7 @@ sections:
 ObjectUI definitions are Zod schemas:
 
 ```typescript
-import { FormViewSchema } from '@objectstack/spec';
+import { FormViewSchema } from '@objectstack/spec/ui';
 
 // Runtime validation
 const config = FormViewSchema.parse(userConfig);
@@ -403,7 +403,7 @@ type FormView = z.infer<typeof FormViewSchema>;
 
 ## Integration with ObjectQL
 
-ObjectUI is tightly integrated with [ObjectQL](/docs/protocols/objectql):
+ObjectUI is tightly integrated with [ObjectQL](/docs/protocol/objectql):
 
 ```yaml
 # 1. Define Object (ObjectQL)
@@ -517,25 +517,25 @@ mobile_renderer:
   <Card
     icon={<Blocks />}
     title="UI as Data Concept"
-    href="/docs/protocols/objectui/concept"
+    href="/docs/protocol/objectui/concept"
     description="Deep dive into Server-Driven UI philosophy and benefits"
   />
   <Card
     icon={<Layout />}
     title="Layout DSL"
-    href="/docs/protocols/objectui/layout-dsl"
+    href="/docs/protocol/objectui/layout-dsl"
     description="Master the page, view, and section composition syntax"
   />
   <Card
     icon={<Component />}
     title="Widget Contract"
-    href="/docs/protocols/objectui/widget-contract"
+    href="/docs/protocol/objectui/widget-contract"
     description="Standard props and events for all UI components"
   />
   <Card
     icon={<MousePointer />}
     title="Action Protocol"
-    href="/docs/protocols/objectui/actions"
+    href="/docs/protocol/objectui/actions"
     description="Define buttons, triggers, and navigation flows"
   />
 </Cards>
@@ -546,21 +546,21 @@ mobile_renderer:
 
 Building a renderer for ObjectUI?
 
-- [Renderer Interface](/docs/references/ui/Renderer) - Required methods and lifecycle
-- [Component Registry](/docs/guides/custom-components) - Register custom widgets
-- [Test Suite](/docs/guides/renderer-testing) - Conformance tests
+- [Component Reference](/docs/references/ui/component) - Widget contract and standard props
+- [Widget Reference](/docs/references/ui/widget) - Dashboard widget schema
+- [Widget Contract](/docs/protocol/objectui/widget-contract) - Standard props and events
 
 ### For Users
 
 Using ObjectUI to build applications?
 
-- [FormView Guide](/docs/guides/formview-configuration) - Build complex forms
-- [ListView Guide](/docs/guides/listview-configuration) - Tables, kanban, calendars
-- [Dashboard Examples](/docs/guides/dashboard-examples) - Analytics dashboards
-- [Theming Guide](/docs/guides/theming) - Customize colors and typography
+- [Layout DSL](/docs/protocol/objectui/layout-dsl) - Page, view, and section composition
+- [View Reference](/docs/references/ui/view) - FormView and ListView configuration
+- [Dashboard Reference](/docs/references/ui/dashboard) - Analytics dashboards
+- [Action Protocol](/docs/protocol/objectui/actions) - Buttons, triggers, and navigation
 
 ### Related Protocols
 
-- **[ObjectQL (Data Protocol)](/docs/protocols/objectql)** - Define objects and queries
-- **[ObjectOS (System Protocol)](/docs/protocols/objectos)** - Runtime configuration
+- **[ObjectQL (Data Protocol)](/docs/protocol/objectql)** - Define objects and queries
+- **[ObjectOS (System Protocol)](/docs/protocol/objectos)** - Runtime configuration
 - **[UI Reference](/docs/references/ui)** - Complete API reference

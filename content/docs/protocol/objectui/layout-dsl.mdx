@@ -694,75 +694,95 @@ layout:
 ### Page Definition
 
 ```typescript
-interface PageLayout {
-  template: 'standard' | 'console' | 'wizard';
-  title?: string;
-  subtitle?: string;
+// Source: packages/spec/src/ui/page.zod.ts (PageSchema)
+interface Page {
+  name: string;          // lowercase snake_case
+  label: string;
+  description?: string;
   icon?: string;
-  regions: {
-    header?: Component[];
-    main: Component[];
-    sidebar?: Component[];
-    footer?: Component[];
-  };
-  responsive?: ResponsiveConfig;
+  type?: 'record' | 'home' | 'app' | 'utility' | 'list'
+       | 'dashboard' | 'form' | 'record_detail'
+       | 'record_review' | 'overview' | 'blank';  // default 'record'
+  object?: string;       // bound object for record pages
+  template?: string;     // layout template name, default 'default'
+  regions: PageRegion[]; // named regions, each holding components
+}
+
+interface PageRegion {
+  name: string;          // e.g. "header", "main", "sidebar"
+  width?: 'small' | 'medium' | 'large' | 'full';
+  components: PageComponent[];
 }
 ```
 
 ### Section Definition
 
 ```typescript
-interface Section {
-  type: 'section';
-  label: string;
+// Source: packages/spec/src/ui/view.zod.ts (FormSectionSchema)
+interface FormSection {
+  name?: string;          // stable snake_case id for i18n
+  label?: string;
   description?: string;
-  icon?: string;
-  collapsible?: boolean;
-  collapsed?: boolean;
-  columns?: number | ResponsiveColumns;
-  variant?: 'default' | 'compact' | 'spacious' | 'danger';
-  visible?: VisibilityRule;
-  fields: FieldReference[];
+  collapsible?: boolean;  // default false
+  collapsed?: boolean;    // default false
+  columns?: 1 | 2 | 3 | 4;  // default 1
+  visibleOn?: string;     // CEL visibility predicate; hides section when false
+  fields: (string | FormField)[];
 }
 ```
 
 ### Field Layout
 
 ```typescript
-interface FieldLayout {
-  field: string;  // Field name from ObjectQL schema
-  span?: number;  // Column span (1-12)
-  offset?: number;  // Column offset
-  label?: string;  // Override label
+// Source: packages/spec/src/ui/view.zod.ts (FormFieldSchema)
+interface FormField {
+  field: string;     // Field name (snake_case)
+  type?: FieldType;  // auto-infers widget when omitted
+  colSpan?: number;  // Column span within the section grid (1-4)
+  label?: string;    // Override label
   placeholder?: string;
   helpText?: string;
   required?: boolean;
   readonly?: boolean;
-  visible?: VisibilityRule;
+  hidden?: boolean;
+  widget?: string;     // custom widget override
+  visibleOn?: string;  // CEL visibility predicate
 }
 ```
 
 ### Responsive Columns
 
 ```typescript
+// Source: packages/spec/src/ui/responsive.zod.ts (BreakpointColumnMapSchema)
+// Grid columns (1-12) per named breakpoint. All entries optional.
 interface ResponsiveColumns {
-  desktop?: number;   // ≥1024px
-  tablet?: number;    // 768-1023px
-  mobile?: number;    // less than 768px
-  portrait?: number;
-  landscape?: number;
+  xs?: number;    // ~480px
+  sm?: number;    // ~640px
+  md?: number;    // ~768px
+  lg?: number;    // ~1024px
+  xl?: number;    // ~1280px
+  '2xl'?: number; // ~1536px
 }
 ```
 
 ### Visibility Rule
 
+Visibility is a single **CEL expression** string, not a structured rule object.
+Page components expose it as `visibility` (`packages/spec/src/ui/page.zod.ts`);
+form sections and fields expose it as `visibleOn` (`packages/spec/src/ui/view.zod.ts`).
+The component is shown only when the expression evaluates truthy.
+
 ```typescript
-type VisibilityRule =
-  | { field: string; value: any }  // Show if field equals value
-  | { permission: string }         // Show if user has permission
-  | { expression: string }         // Show if expression evaluates to true
-  | { desktop?: boolean; tablet?: boolean; mobile?: boolean };
+// e.g. on a PageComponent:
+visibility: "record.account_type == 'premium'"
+
+// e.g. on a FormSection / FormField:
+visibleOn: "record.status != 'closed' && user.hasRole('admin')"
 ```
+
+Breakpoint-based show/hide is handled separately via the component's
+`responsive.hiddenOn` array (e.g. `hiddenOn: ['xs', 'sm']`), see
+`packages/spec/src/ui/responsive.zod.ts`.
 
 ## Real-World Examples
 
@@ -918,20 +938,19 @@ layout:
   <Card
     icon={<Box />}
     title="Widget Contract"
-    href="/docs/protocols/objectui/widget-contract"
+    href="/docs/protocol/objectui/widget-contract"
     description="Standard props and events for UI components"
   />
   <Card
     icon={<MousePointer />}
     title="Action Protocol"
-    href="/docs/protocols/objectui/actions"
+    href="/docs/protocol/objectui/actions"
     description="Buttons, triggers, and navigation flows"
   />
 </Cards>
 
 ## Related Resources
 
-- [FormView Reference](/docs/references/ui/FormView) - Complete form configuration API
-- [ListView Reference](/docs/references/ui/ListView) - Table, kanban, calendar views
-- [Responsive Design Guide](/docs/guides/responsive-design) - Best practices
-- [Accessibility Guide](/docs/guides/accessibility) - WCAG 2.1 AA compliance
+- [Page Reference](/docs/references/ui/page) - Page, region, and component schemas
+- [View Reference](/docs/references/ui/view) - Form, list, kanban, and calendar views
+- [Responsive Reference](/docs/references/ui/responsive) - Responsive and performance configuration

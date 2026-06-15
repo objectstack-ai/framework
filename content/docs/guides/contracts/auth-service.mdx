@@ -5,11 +5,11 @@ description: Reference for the Auth Service contract — authentication, session
 
 # IAuthService Contract
 
-The Auth Service handles **authentication** — verifying user identity through credentials, tokens, or external providers. It does not handle authorization (permissions); that is the responsibility of the Permission Service.
+The Auth Service handles **authentication** — verifying user identity through credentials, tokens, or external providers. It does not handle authorization (permissions); that is governed separately by the security layer (PermissionSets, sharing rules) in `plugin-security`.
 
 <Callout type="info">
-**Source:** `packages/spec/src/system/contracts/auth-service.ts`  
-**Token:** `AUTH_SERVICE`
+**Source:** `packages/spec/src/contracts/auth-service.ts`  
+**Service token:** `'auth'` (the `CoreServiceName` value; resolve with `ctx.getService('auth')`)
 </Callout>
 
 ---
@@ -18,26 +18,21 @@ The Auth Service handles **authentication** — verifying user identity through 
 
 ```typescript
 export interface IAuthService {
-  // Core Authentication
-  handleRequest(request: AuthRequest): Promise<AuthResult>;
-  verify(token: string): Promise<AuthUser | null>;
-  logout(token: string): Promise<void>;
+  /** Handle an incoming HTTP authentication request (login, callback, etc.). */
+  handleRequest(request: Request): Promise<Response>;
 
-  // User Resolution
-  getCurrentUser(context: RequestContext): Promise<AuthUser | null>;
-  getUserById(id: string): Promise<AuthUser | null>;
+  /** Verify a bearer token or session identifier and return the result. */
+  verify(token: string): Promise<AuthResult>;
 
-  // Session Management
-  createSession(user: AuthUser, options?: SessionOptions): Promise<AuthSession>;
-  refreshSession(refreshToken: string): Promise<AuthSession>;
-  invalidateSession(sessionId: string): Promise<void>;
-  listActiveSessions(userId: string): Promise<AuthSession[]>;
+  /** Invalidate a session (logout). Optional. */
+  logout?(sessionId: string): Promise<void>;
 
-  // Provider Management
-  getProviders(): Promise<AuthProvider[]>;
-  getProvider(name: string): Promise<AuthProvider | null>;
+  /** Resolve the current user from a request. Optional. */
+  getCurrentUser?(request: Request): Promise<AuthUser | undefined>;
 }
 ```
+
+The interface is intentionally minimal: it follows the Dependency Inversion Principle so that plugins depend on the contract rather than a concrete provider. Concrete implementations (better-auth, custom, LDAP, etc.) supply the actual logic. `handleRequest` works directly with the standard `Request`/`Response` types; `logout` and `getCurrentUser` are optional.
 
 ---
 
@@ -45,55 +40,32 @@ export interface IAuthService {
 
 ### handleRequest
 
-The primary entry point for authentication. Accepts credentials and returns an auth result with tokens.
+The HTTP entry point for authentication. It receives a standard `Request` (login, OAuth callback, etc.) and returns a standard `Response`. The concrete implementation owns route handling, credential parsing, and cookie/token issuance.
 
 ```typescript
-// Email/password authentication
-const result = await authService.handleRequest({
-  provider: 'credentials',
-  credentials: {
-    email: 'jane@example.com',
-    password: 'secure-password-123',
-  },
-});
-
-if (result.success) {
-  console.log(result.user.id);         // "usr_01HQ3V5K8N2M4P6R7T9W"
-  console.log(result.session.token);   // "eyJhbGciOiJIUzI1NiIs..."
-  console.log(result.session.expiresAt); // "2025-01-21T10:30:00.000Z"
-}
-```
-
-```typescript
-// OAuth provider authentication
-const result = await authService.handleRequest({
-  provider: 'google',
-  credentials: {
-    code: 'oauth-authorization-code',
-    redirectUri: 'https://app.example.com/auth/callback',
-  },
-});
+// Wire the auth service into an HTTP handler
+const response = await authService.handleRequest(request);
+return response;
 ```
 
 ### verify
 
-Validates an access token and returns the associated user. Returns `null` for expired or invalid tokens.
+Validates a bearer token or session identifier and returns an `AuthResult`. On success the result carries `user` and `session`; on failure `success` is `false` and `error` holds a message.
 
 ```typescript
-const user = await authService.verify(accessToken);
-if (!user) {
-  throw new Error('Invalid or expired token');
+const result = await authService.verify(accessToken);
+if (!result.success) {
+  throw new Error(result.error ?? 'Invalid or expired token');
 }
-console.log(user.email); // "jane@example.com"
+console.log(result.user?.email); // "jane@example.com"
 ```
 
 ### logout
 
-Invalidates the token and its associated session.
+Invalidates a session by its identifier. This method is optional on the contract.
 
 ```typescript
-await authService.logout(accessToken);
-// Token is now invalid; subsequent verify() calls return null
+await authService.logout?.(session.id);
 ```
 
 ---
@@ -104,42 +76,26 @@ The `AuthUser` object represents an authenticated user throughout the system.
 
 ```typescript
 export interface AuthUser {
+  /** User identifier */
   id: string;
+  /** Email address */
   email: string;
+  /** Display name */
   name: string;
-  avatar?: string;
-
-  // Role and profile
-  role: string;
-  profile: string;
-  permissions: string[];
-
-  // Organization context
-  orgId?: string;
-  orgRole?: string;
-
-  // Provider info
-  provider: string;
-  providerId?: string;
-
-  // Metadata
-  emailVerified: boolean;
-  active: boolean;
-  lastLoginAt?: string;
-  metadata?: Record<string, unknown>;
+  /** Assigned role identifiers */
+  roles?: string[];
+  /** Current tenant identifier (multi-tenant) */
+  tenantId?: string;
 }
 ```
 
 | Property | Type | Description |
 |:---|:---|:---|
-| `id` | `string` | Unique user identifier (e.g., `usr_01HQ...`) |
+| `id` | `string` | Unique user identifier |
 | `email` | `string` | User's email address |
 | `name` | `string` | Display name |
-| `role` | `string` | System role (e.g., `admin`, `user`, `guest`) |
-| `profile` | `string` | Security profile for permission resolution |
-| `permissions` | `string[]` | Resolved permission set |
-| `orgId` | `string?` | Current organization context |
-| `provider` | `string` | Auth provider used (e.g., `credentials`, `google`) |
+| `roles` | `string[]?` | Assigned role identifiers |
+| `tenantId` | `string?` | Current tenant identifier (multi-tenant) |
 
 ---
 
@@ -147,60 +103,13 @@ export interface AuthUser {
 
 ### getCurrentUser
 
-Resolves the authenticated user from a request context. Used by middleware to populate `context.user`.
+Resolves the authenticated user from a request. Returns `undefined` when the request is unauthenticated. This method is optional on the contract.
 
 ```typescript
-const user = await authService.getCurrentUser(requestContext);
+const user = await authService.getCurrentUser?.(request);
 if (user) {
-  console.log(`Request from ${user.name} (${user.role})`);
+  console.log(`Request from ${user.name} (${user.roles?.join(', ')})`);
 }
-```
-
-### getUserById
-
-Fetches a user by ID without requiring a token. Used internally for record ownership lookups.
-
-```typescript
-const owner = await authService.getUserById('usr_01HQ3V5K8N2M4P6R7T9W');
-```
-
----
-
-## Session Management
-
-### createSession
-
-Creates a new session for an authenticated user. Returns access and refresh tokens.
-
-```typescript
-const session = await authService.createSession(user, {
-  expiresIn: '24h',
-  device: 'web-browser',
-  ipAddress: '192.168.1.100',
-});
-
-console.log(session.token);        // Access token
-console.log(session.refreshToken); // Refresh token
-console.log(session.expiresAt);    // Expiry timestamp
-```
-
-### refreshSession
-
-Exchanges a refresh token for a new access token.
-
-```typescript
-const newSession = await authService.refreshSession(refreshToken);
-// Old access token is invalidated
-```
-
-### invalidateSession / listActiveSessions
-
-```typescript
-// List all sessions for a user
-const sessions = await authService.listActiveSessions(userId);
-
-// Invalidate a specific session (e.g., remote logout)
-await authService.invalidateSession(sessions[0].id);
 ```
 
 ---
@@ -209,94 +118,32 @@ await authService.invalidateSession(sessions[0].id);
 
 ```typescript
 export interface AuthSession {
+  /** Session identifier */
   id: string;
+  /** Associated user identifier */
   userId: string;
-  token: string;
-  refreshToken: string;
+  /** Session expiry (ISO 8601) */
   expiresAt: string;
-  createdAt: string;
-  device?: string;
-  ipAddress?: string;
-  lastActiveAt?: string;
+  /** Bearer token (if not using cookies) */
+  token?: string;
 }
 ```
 
 ---
 
-## SessionOptions
+## AuthResult
+
+`verify` resolves to an `AuthResult`. On success it carries the `user` and `session`; on failure `error` holds a message string.
 
 ```typescript
-export interface SessionOptions {
-  expiresIn?: string;    // Duration string: '1h', '24h', '7d'
-  device?: string;       // Device identifier
-  ipAddress?: string;    // Client IP address
-  metadata?: Record<string, unknown>;
-}
-```
-
----
-
-## AuthRequest / AuthResult
-
-```typescript
-export interface AuthRequest {
-  provider: string;
-  credentials: Record<string, unknown>;
-  options?: {
-    rememberMe?: boolean;
-    mfaCode?: string;
-  };
-}
-
 export interface AuthResult {
+  /** Whether authentication succeeded */
   success: boolean;
+  /** Authenticated user (if success) */
   user?: AuthUser;
+  /** Active session (if success) */
   session?: AuthSession;
-  error?: {
-    code: string;
-    message: string;
-  };
-  mfaRequired?: boolean;
-  mfaChallenge?: {
-    type: 'totp' | 'sms' | 'email';
-    challengeId: string;
-  };
+  /** Error message (if failure) */
+  error?: string;
 }
 ```
-
----
-
-## Provider Management
-
-### getProviders
-
-Lists all configured authentication providers.
-
-```typescript
-const providers = await authService.getProviders();
-// [
-//   { name: 'credentials', type: 'local', enabled: true },
-//   { name: 'google', type: 'oauth', enabled: true },
-//   { name: 'github', type: 'oauth', enabled: true },
-// ]
-```
-
-<Callout type="tip">
-**Multi-Factor Authentication:** When `AuthResult.mfaRequired` is `true`, the client must re-submit with `options.mfaCode` to complete authentication.
-</Callout>
-
----
-
-## Error Codes
-
-| Code | Description |
-|:---|:---|
-| `INVALID_CREDENTIALS` | Email/password combination is incorrect |
-| `USER_NOT_FOUND` | No user matches the provided identifier |
-| `USER_DISABLED` | Account has been deactivated |
-| `TOKEN_EXPIRED` | Access or refresh token has expired |
-| `TOKEN_INVALID` | Token is malformed or has been revoked |
-| `MFA_REQUIRED` | Multi-factor authentication is required |
-| `MFA_INVALID` | MFA code is incorrect or expired |
-| `PROVIDER_ERROR` | External auth provider returned an error |
-| `SESSION_LIMIT` | Maximum concurrent sessions exceeded |

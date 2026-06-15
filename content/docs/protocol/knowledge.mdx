@@ -73,9 +73,9 @@ delegates the rest to plugins.
 │  • Search router  → adapter.search   │    │      (dev/test only)         │
 │  • Permission wrapper (RLS filter)   │    │  • knowledge-ragflow  │
 │  • Event sync (record.* → upsert)    │    │      (reference impl, REST)  │
-│  • Audit + metrics                   │    │  • knowledge-turso    │
-│                                      │    │  • knowledge-dify     │
-│  Registers `knowledge` service       │    │  • knowledge-pgvector │
+│  • Audit + metrics                   │    │                       │
+│                                      │    │  (turso / dify /       │
+│  Registers `knowledge` service       │    │   pgvector: planned)   │
 └──────────────────────────────────────┘    └──────────────────────────────┘
               ▲
               │ consumes
@@ -134,22 +134,36 @@ caller's `ExecutionContext` and drops hits the user is not allowed to
 read. **A hit that the user could not have queried directly is never
 returned.**
 
-### 3.3 `IKnowledgeService` (consumed by `service-ai`, REST, Studio)
+### 3.3 `IKnowledgeService` (consumed by `service-ai`, REST, Console)
 
 ```ts
 interface IKnowledgeService {
-  search(query: string, opts: KnowledgeSearchOptions): Promise<KnowledgeHit[]>;
+  // Adapters
+  registerAdapter(id: string, adapter: IKnowledgeAdapter): void;
+  getAdapter(id: string): IKnowledgeAdapter;
+  listAdapters(): string[];
+
+  // Sources
+  registerSource(source: KnowledgeSource): void;
+  unregisterSource(sourceId: string): void;
+  listSources(): KnowledgeSource[];
+  getSource(sourceId: string): KnowledgeSource | undefined;
+
+  // Documents
   indexDocument(sourceId: string, doc: KnowledgeDocument): Promise<void>;
   deleteDocument(sourceId: string, documentId: string): Promise<void>;
-  reindexSource(sourceId: string, opts?: { dryRun?: boolean }): Promise<{ indexed: number }>;
-  registerAdapter(id: string, adapter: IKnowledgeAdapter): void;
-  listSources(): KnowledgeSource[];
+  reindexSource(sourceId: string, opts?: KnowledgeReindexOptions): Promise<KnowledgeReindexResult>;
+
+  // Search
+  search(query: string, opts?: KnowledgeSearchOptions): Promise<KnowledgeHit[]>;
 }
 ```
 
 `KnowledgeSearchOptions` includes `sourceIds`, `topK`, `filter`, and
-the all-important `executionContext` (from the freshly-shipped
-permission-aware tool execution work — see `ai-capabilities.mdx`).
+the all-important `executionContext` (from the permission-aware tool
+execution work — see `ai-capabilities.mdx`). `KnowledgeReindexOptions`
+accepts `dryRun` and `limit`; `reindexSource` returns a
+`KnowledgeReindexResult` (`indexed`, `discovered`, `ok`, …).
 
 ### 3.4 `IKnowledgeAdapter` (implemented by plugins)
 
@@ -176,22 +190,24 @@ Adapters ship as standalone npm packages, registered via the standard
 `defineStack({ plugins: [...] })` flow:
 
 ```ts
-import { knowledgeServicePlugin } from '@objectstack/service-knowledge';
-import { knowledgeMemoryPlugin } from '@objectstack/knowledge-memory';
-import { knowledgeRagflowPlugin } from '@objectstack/knowledge-ragflow';
-import { KnowledgeTursoPlugin, OpenAIEmbeddingProvider } from '@objectstack/knowledge-turso';
+import { KnowledgeServicePlugin } from '@objectstack/service-knowledge';
+import { KnowledgeMemoryPlugin } from '@objectstack/knowledge-memory';
+import { KnowledgeRagflowPlugin } from '@objectstack/knowledge-ragflow';
 
 defineStack({
   plugins: [
-    knowledgeServicePlugin(),
-    knowledgeMemoryPlugin(),                           // dev / test
-    knowledgeRagflowPlugin({                           // production
-      baseUrl: process.env.RAGFLOW_URL!,
+    new KnowledgeServicePlugin(),
+    new KnowledgeMemoryPlugin(),                        // dev / test
+    new KnowledgeRagflowPlugin({                        // production
+      endpoint: process.env.RAGFLOW_URL!,
       apiKey: process.env.RAGFLOW_KEY!,
     }),
   ],
 });
 ```
+
+The plugins are also usable directly against the kernel:
+`kernel.use(new KnowledgeServicePlugin())`.
 
 Each plugin:
 
@@ -255,7 +271,7 @@ event triggers a single `adapter.upsert` / `adapter.delete` call.
   back-pressure.
 
 `file` / `http` sources rely on explicit `reindexSource` calls
-(typically triggered by a cron job, a Studio button, or a webhook).
+(typically triggered by a cron job, a Console button, or a webhook).
 
 ---
 
@@ -278,7 +294,7 @@ up.
 | `knowledge-ragflow` | ✅ | Minimal REST adapter (datasets + chunks + retrieval) |
 | `search_knowledge` AI tool | ✅ | Threads `ToolExecutionContext` |
 | Event-driven sync for `object` sources | ✅ (sync) | MVP synchronous; queue in Phase 2 |
-| Studio source-management UI | ⏳ Phase 2 |  |
+| Console source-management UI | ⏳ Phase 2 |  |
 | Async indexer (queue) | ⏳ Phase 2 |  |
 | Audit + metrics | ⏳ Phase 2 |  |
 | `knowledge-llamaindex` | ⏳ Phase 2 |  |

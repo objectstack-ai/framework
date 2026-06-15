@@ -38,8 +38,8 @@ Define business logic and process automation.
 
 | Metadata Type | Description | File Convention |
 | :--- | :--- | :--- |
-| [**Flow**](./flow) | Visual automation — decision trees, data operations, screens | `*.flow.ts` / `*.flow.yml` |
-| [**Workflow**](./workflow) | Event-triggered rules — field updates, alerts, HTTP calls | `*.workflow.ts` / `*.workflow.yml` |
+| [**Flow**](./flow) | Visual automation — decision trees, data operations, screens, approval nodes | `*.flow.ts` / `*.flow.yml` |
+| [**Workflow**](./workflow) | Not a standalone metadata type (ADR-0020) — use Flow for automation, or a `state_machine` validation rule for lifecycle transitions | Authored as Flow / Validation |
 
 ### Security Layer
 

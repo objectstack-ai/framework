@@ -111,17 +111,27 @@ v4.0.0  →  Feature removed (earliest possible removal)
 
 ## Migration Support
 
-### Automated Migrations
+### Linting Your Project
 
-ObjectStack provides tooling to ease upgrades across MAJOR versions:
+The CLI's `lint` command validates your metadata against the current schema and surfaces issues. Adding `--fix` prints the suggested fix for each issue (dry-run; it does not modify files):
 
 ```bash
-# Check for deprecated usage in your project
-npx @objectstack/cli lint --deprecations
+# Validate metadata against the current schema
+os lint
 
-# Auto-migrate to the latest schema version
-npx @objectstack/cli migrate --from 3.x --to 4.x
+# Show what could be auto-fixed (dry-run)
+os lint --fix
+
+# Scan your source for deprecated ObjectStack patterns
+os doctor --scan-deprecations
+
+# Compare two configs and detect breaking changes between versions
+os diff <before> <after> --breaking-only
 ```
+
+<Callout type="info">
+There is no `lint --deprecations` flag — deprecation scanning lives on `os doctor --scan-deprecations`. An automated `migrate`/`codemod` command is referenced in the migration guides but is not yet available; until then, combine `os doctor --scan-deprecations`, `os diff`, and the CHANGELOG migration notes (below) to upgrade across MAJOR versions.
+</Callout>
 
 ### Migration Guides
 
@@ -129,8 +139,7 @@ Each MAJOR release includes:
 
 - **CHANGELOG.md** — Complete list of changes with migration notes
 - **RELEASE_NOTES.md** — High-level summary and upgrade instructions
-- **Codemods** — Automated code transformations where possible
-- **Schema Diff** — Machine-readable diff of all schema changes
+- **Schema Diff** — Use `os diff <before> <after>` to produce a machine-readable (`--json`) diff of breaking changes between two configs
 
 ### Support Windows
 
@@ -160,7 +169,7 @@ The `@objectstack/spec` package provides additional stability guarantees:
 
 ### Runtime Behavior
 
-- `z.parse()` results are guaranteed consistent within a MAJOR version
+- `Schema.parse()` results are guaranteed consistent within a MAJOR version
 - Default values applied by `.default()` are stable within a MAJOR version
 - Validation error messages may change in MINOR/PATCH releases (do not rely on exact error text)
 

@@ -290,7 +290,7 @@ Define user interfaces using ObjectUI layout DSL:
 
 ```typescript
 // src/views/account_list.view.ts
-import { defineView } from '@objectstack/core';
+import { defineView } from '@objectstack/spec';
 
 export default defineView({
   name: 'account_list',
@@ -322,10 +322,14 @@ export default defineView({
 
 ### Triggers
 
-Define business logic that executes on data changes:
+Define business logic that executes on data changes. (Like `definePlugin()`
+above, `defineTrigger()` is part of the **proposed** ergonomic authoring
+surface — there is no such helper today. Record-triggered logic currently
+lives in a lifecycle hook module under `src/objects/<name>.hook.ts`. Treat the
+snippet below as design intent, not paste-ready code.)
 
 ```typescript
-// src/triggers/account_validation.trigger.ts
+// src/triggers/account_validation.trigger.ts (proposed shape)
 import { defineTrigger } from '@objectstack/core';
 
 export default defineTrigger({
@@ -674,12 +678,12 @@ Plugins are distributed as **NPM packages** for easy versioning and distribution
     "build": "tsc",
     "test": "jest",
     "lint": "eslint src/",
-    "package": "objectstack plugin package"
+    "package": "os plugin build"
   },
   
   "files": [
     "dist/",
-    "plugin.manifest.ts",
+    "objectstack.plugin.json",
     "i18n/",
     "assets/",
     "README.md",
@@ -714,35 +718,42 @@ Plugins are distributed as **NPM packages** for easy versioning and distribution
 # Build plugin
 npm run build
 
-# Package plugin (validates manifest, bundles assets)
-objectstack plugin package
+# Build the plugin artifact (validates manifest, bundles entry)
+os plugin build
 
-# Publish to NPM
-npm publish
+# Sign the artifact (separate step; emits a publisher signature)
+os plugin sign crm-1.5.0.osplugin
 
-# Or publish to private registry
-npm publish --registry=https://npm.mycompany.com
+# Publish to the ObjectStack package registry
+os plugin publish
 ```
 
-### Plugin Archive (.ospkg)
+### Plugin Archive (.osplugin)
 
-For air-gapped environments or marketplaces, plugins can be packaged as **.ospkg** files:
+For air-gapped environments or marketplaces, plugins are packaged as **.osplugin** files:
 
 ```bash
-# Create .ospkg archive
-objectstack plugin package --format ospkg --output crm-1.5.0.ospkg
+# Create the .osplugin artifact (defaults to <id>-<version>.osplugin)
+os plugin build --out crm-1.5.0.osplugin
 
-# Install from .ospkg
-objectstack plugin install ./crm-1.5.0.ospkg
+# Install from a local artifact into a running runtime (air-gapped)
+os package install ./crm-1.5.0.osplugin
 ```
 
-**.ospkg format:** Tarball containing:
-- Plugin files (dist/, i18n/, assets/)
-- Manifest (plugin.manifest.json)
-- Checksums (SHA256)
-- Signature (for marketplace verification)
+**.osplugin format:** Reproducible ustar+gzip tarball containing:
+- Compiled entry (dist/index.mjs) and bundled assets
+- Manifest (objectstack.plugin.json)
+- Per-file content digests (`sha256-<base64>` integrity map)
+- Signature (`SIGNATURE`, added by `os plugin sign`)
 
 ## Plugin Testing
+
+<Callout type="warn">
+The `@objectstack/testing` package and its `createTestContext()` /
+`createTestEnvironment()` helpers shown below are **proposed** — there is no
+such published package today. The snippets illustrate the intended test
+ergonomics for the plugin spec, not a shipping API.
+</Callout>
 
 ### Unit Tests
 
@@ -817,36 +828,35 @@ describe('CRM Workflow', () => {
 ### 1. Scaffold Plugin
 
 ```bash
-objectstack plugin create @mycompany/crm
+os create plugin crm
 
-? Plugin name: @mycompany/crm
-? Description: Customer Relationship Management
-? Author: MyCompany <dev@mycompany.com>
-? License: MIT
+📁 Creating plugin: crm
+📂 Location: packages/plugins/plugin-crm
 
-✓ Created plugin at @mycompany/crm/
-✓ Generated plugin.manifest.ts
-✓ Generated package.json
-✓ Installed dependencies
+✓ Created package.json
+✓ Created tsconfig.json
+✓ Created src/index.ts
+✓ Created README.md
+
+✅ Project created successfully!
 
 Next steps:
-  cd @mycompany/crm
-  npm run dev
+  cd packages/plugins/plugin-crm
+  pnpm install
+  pnpm build
 ```
 
 ### 2. Develop Locally
 
 ```bash
-cd @mycompany/crm
+cd packages/plugins/plugin-crm
 
 # Watch mode (auto-rebuild on changes)
 npm run dev
 
-# In another terminal, link plugin to test instance
-objectstack plugin link .
-
-# Test instance now uses local plugin
-objectstack dev
+# In another terminal, run the dev server with hot-reload.
+# Pass --ui to also serve the bundled Console portal at /_console/
+os dev --ui
 ```
 
 ### 3. Test Plugin
@@ -858,11 +868,8 @@ npm test
 # Run linter
 npm run lint
 
-# Validate manifest
-objectstack plugin validate
-
-# Test installation
-objectstack plugin install . --dry-run
+# Build the artifact (validates the manifest against ManifestSchema)
+os plugin build
 ```
 
 ### 4. Build & Publish
@@ -871,11 +878,12 @@ objectstack plugin install . --dry-run
 # Build production bundle
 npm run build
 
-# Package plugin
-objectstack plugin package
+# Build + sign the .osplugin artifact
+os plugin build
+os plugin sign crm-1.5.0.osplugin
 
-# Publish to NPM
-npm publish
+# Publish to the ObjectStack package registry
+os plugin publish
 ```
 
 ## Best Practices
@@ -895,7 +903,8 @@ Always include migration guide in CHANGELOG.md for major versions.
 - `account.owner` field (use `account.owner_id` instead)
 
 ### Migration
-Run: `objectstack migrate --plugin @mycompany/crm`
+The `onUpgrade` lifecycle hook runs automatically when the package is upgraded
+to v2.0.0 and renames the field on existing records.
 ```
 
 ### 3. Pin Core Dependencies
@@ -941,6 +950,6 @@ Plugin packages in ObjectOS:
 - **Self-contained:** Bundle objects, views, logic, and config
 - **Dependency-managed:** Semantic versioning with conflict detection
 - **Lifecycle-aware:** Hooks for install, upgrade, boot, and uninstall
-- **NPM-compatible:** Distribute via NPM or .ospkg archives
+- **NPM-compatible:** Distribute via NPM or `.osplugin` archives
 
-**Next:** Learn how configuration is resolved in [Configuration Resolution](/docs/protocols/objectos/config-resolution).
+**Next:** Learn how configuration is resolved in [Configuration Resolution](/docs/protocol/objectos/config-resolution).

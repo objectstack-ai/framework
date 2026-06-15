@@ -29,7 +29,7 @@ const taskListView = {
     { field: 'due_date', label: 'Due Date', width: 150 },
   ],
   filter: [],
-  sort: [{ field: 'created_at', direction: 'desc' }],
+  sort: [{ field: 'created_at', order: 'desc' }],
 };
 ```
 
@@ -44,6 +44,7 @@ const taskListView = {
 | `timeline` | Horizontal timeline | Project scheduling |
 | `gantt` | Gantt chart with dependencies | Project management |
 | `map` | Geographic map pins | Location-based data |
+| `chart` | Aggregate chart visualization | Dashboards and summaries |
 
 ### List View Properties
 
@@ -65,7 +66,7 @@ const taskListView = {
 | `rowActions` | `array` | optional | Per-row action buttons |
 | `bulkActions` | `array` | optional | Bulk selection actions |
 | `inlineEdit` | `boolean` | optional | Enable inline editing |
-| `exportOptions` | `object` | optional | Export configuration |
+| `exportOptions` | `string[]` | optional | Enabled export formats (`csv`, `xlsx`, `pdf`, `json`) |
 
 ### Column Configuration
 
@@ -78,18 +79,14 @@ columns: [
     pinned: 'left',          // 'left' | 'right' — freeze column
     sortable: true,
     resizable: true,
-    summary: {               // Column footer aggregation
-      function: 'count',
-    },
+    summary: 'count',        // Column footer aggregation (enum value)
   },
   {
     field: 'annual_revenue',
     label: 'Revenue',
     width: 150,
     align: 'right',
-    summary: {
-      function: 'sum',
-    },
+    summary: 'sum',
   },
 ]
 ```
@@ -103,12 +100,13 @@ columns: [
 | `pinned` | `'left' \| 'right'` | Freeze column position |
 | `sortable` | `boolean` | Allow column sorting |
 | `resizable` | `boolean` | Allow column resize |
-| `summary` | `object` | Footer aggregation (`count`, `sum`, `avg`, `min`, `max`) |
-| `link` | `string` | Make cell a clickable link |
+| `summary` | `enum` | Footer aggregation: `none`, `count`, `count_empty`, `count_filled`, `count_unique`, `percent_empty`, `percent_filled`, `sum`, `avg`, `min`, `max` |
+| `align` | `'left' \| 'center' \| 'right'` | Text alignment |
+| `link` | `boolean` | Cell functions as the primary navigation link |
 
 ### Data Source
 
-Views can load data from three sources:
+Views can load data from several sources (`object`, `api`, `value`, and `schema`):
 
 ```typescript
 // From an Object (most common)
@@ -134,9 +132,9 @@ data: {
 ```typescript
 type: 'kanban',
 kanban: {
-  groupByField: 'status',
-  titleField: 'title',
-  colorField: 'priority',
+  groupByField: 'status',     // Field to group columns by (usually status/select)
+  summarizeField: 'amount',   // Optional numeric field summed at top of each column
+  columns: ['title', 'assignee', 'priority'],  // Fields shown on each card
 }
 ```
 
@@ -258,7 +256,7 @@ fields: [
 ```typescript
 // Sort related records
 defaultSort: [
-  { field: 'created_at', direction: 'desc' },
+  { field: 'created_at', order: 'desc' },
 ]
 ```
 
@@ -273,7 +271,7 @@ const taskKanban = {
   data: { provider: 'object', object: 'task' },
   kanban: {
     groupByField: 'status',
-    titleField: 'title',
+    columns: ['title', 'assignee', 'priority', 'due_date'],
   },
   columns: [
     { field: 'title', label: 'Title' },
@@ -281,7 +279,7 @@ const taskKanban = {
     { field: 'priority', label: 'Priority' },
     { field: 'due_date', label: 'Due Date' },
   ],
-  sort: [{ field: 'priority', direction: 'desc' }],
+  sort: [{ field: 'priority', order: 'desc' }],
 };
 
 // Form view: Task edit form

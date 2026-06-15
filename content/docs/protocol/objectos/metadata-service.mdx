@@ -41,9 +41,12 @@ The Metadata Service uses a **Provider/Loader** architecture. The core `Metadata
 The `MetadataManager` is the single entry point for all metadata operations. It handles caching, serialization, and correct routing of requests to loaders.
 
 ```typescript
-import { MetadataManager } from '@objectstack/metadata';
+import { NodeMetadataManager } from '@objectstack/metadata/node';
 
-const manager = new MetadataManager({
+// NodeMetadataManager wires up the FilesystemLoader and file watcher.
+// The browser-safe base `MetadataManager` (from '@objectstack/metadata')
+// registers no loaders on its own — callers must provide them.
+const manager = new NodeMetadataManager({
   rootDir: './src',
   watch: true // Enable hot reload
 });
@@ -70,13 +73,14 @@ Each Loader declares its capabilities via a **Contract**:
 ```typescript
 export interface MetadataLoaderContract {
   name: string;
-  protocol: 'file' | 'http' | 'database';
+  protocol: 'file:' | 'http:' | 's3:' | 'datasource:' | 'memory:';
   capabilities: {
     read: boolean;  // Can read items?
     write: boolean; // Can save modifications?
     watch: boolean; // Can push real-time updates?
     list: boolean;  // Can enumerate items?
   };
+  supportedFormats: ('json' | 'yaml' | 'typescript' | 'javascript')[];
 }
 ```
 
@@ -121,7 +125,7 @@ graph LR
 The Service emits events when metadata changes, allowing the runtime to reconfigure itself without restarting.
 
 ```typescript
-manager.watch('object', (event) => {
+const unsubscribe = manager.subscribe('object', (event) => {
   console.log(`Object ${event.name} changed!`);
   console.log(`New Schema:`, event.data);
   
@@ -140,10 +144,10 @@ The system provides standard REST and TypeScript APIs for interacting with metad
 
 ### REST API
 
-- `GET /api/metadata`: List all metadata types.
-- `GET /api/metadata/:type`: List items of a type.
-- `GET /api/metadata/:type/:name`: Get simplified definition of an item.
-- `PUT /api/metadata/:type/:name`: Save or update a metadata item.
+- `GET /api/v1/meta`: List all metadata types.
+- `GET /api/v1/meta/:type`: List items of a type.
+- `GET /api/v1/meta/:type/:name`: Get the definition of an item.
+- `PUT /api/v1/meta/:type/:name`: Save or update a metadata item.
 
 ### Client SDK
 
@@ -182,7 +186,7 @@ Four orthogonal levers shape how `MetadataManager` and `MetadataPlugin` behave a
 | :--- | :--- | :--- |
 | `eager` (default) | Local dev, traditional servers | Scans filesystem (or hydrates from `artifactSource`) at boot. |
 | `lazy` | Cold-start sensitive runtimes, on-demand workloads | Skips the FS prime; reads flow through registered loaders (incl. DatabaseLoader cache). Honors `artifactSource` when set. |
-| `artifact-only` | Edge / serverless / read-only production | Refuses to touch the filesystem. Requires `artifactSource.mode = 'local-file'`. |
+| `artifact-only` | Edge / serverless / read-only production | Refuses to touch the filesystem. Requires `artifactSource` (`mode: 'local-file'` or `'artifact-api'`). |
 
 ```typescript
 new MetadataPlugin({

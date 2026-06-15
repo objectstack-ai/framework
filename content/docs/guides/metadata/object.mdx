@@ -191,9 +191,10 @@ indexes: [
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `fields` | `string[]` | ✅ | Fields in the index |
-| `type` | `enum` | ✅ | `'btree'`, `'hash'`, `'gin'`, `'gist'`, `'fulltext'` |
-| `unique` | `boolean` | ✅ | Enforce uniqueness |
+| `type` | `enum` | optional | `'btree'`, `'hash'`, `'gin'`, `'gist'`, `'fulltext'` (default: `'btree'`) |
+| `unique` | `boolean` | optional | Enforce uniqueness (default: `false`) |
 | `partial` | `string` | optional | Conditional index (SQL WHERE clause) |
+| `name` | `string` | optional | Index name (auto-generated if omitted) |
 
 ### Additional Properties
 
@@ -206,7 +207,6 @@ indexes: [
 | `keyPrefix` | `string` | Short prefix for record IDs (e.g. `'001'`) |
 | `recordTypes` | `string[]` | Record type names for this object |
 | `validations` | `ValidationRule[]` | Object-level validation rules (see [Validation](./validation)) |
-| `stateMachines` | `Record<string, StateMachine>` | Named state machines for parallel lifecycles |
 
 ## Naming Conventions
 
@@ -272,7 +272,7 @@ export const ProjectTask = ObjectSchema.create({
       type: 'script',
       severity: 'warning',
       message: 'Due date should be in the future',
-      condition: 'due_date < TODAY()',
+      condition: 'due_date < today()',
       events: ['insert'],
     },
   ],

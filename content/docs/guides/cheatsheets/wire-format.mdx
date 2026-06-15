@@ -23,27 +23,31 @@ Creates a new record on the `task` object.
 
 ### Request
 
+The request body **is** the record — field values are sent at the top level, not wrapped in a `data` envelope.
+
 ```json
 {
-  "data": {
-    "title": "Implement login page",
-    "description": "Build the authentication UI with email/password and OAuth support",
-    "status": "open",
-    "priority": "high",
-    "assigned_to": "usr_01HQ3V5K8N2M4P6R7T9W",
-    "due_date": "2025-03-15",
-    "estimated_hours": 8,
-    "tags": ["frontend", "auth"],
-    "project": "prj_01HQ3V5K8N2M4P6R7T9X"
-  }
+  "title": "Implement login page",
+  "description": "Build the authentication UI with email/password and OAuth support",
+  "status": "open",
+  "priority": "high",
+  "assigned_to": "usr_01HQ3V5K8N2M4P6R7T9W",
+  "due_date": "2025-03-15",
+  "estimated_hours": 8,
+  "tags": ["frontend", "auth"],
+  "project": "prj_01HQ3V5K8N2M4P6R7T9X"
 }
 ```
 
 ### Response — `201 Created`
 
+The response is the `CreateDataResponse` envelope: `{ object, id, record }`.
+
 ```json
 {
-  "data": {
+  "object": "task",
+  "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
+  "record": {
     "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
     "title": "Implement login page",
     "description": "Build the authentication UI with email/password and OAuth support",
@@ -58,10 +62,6 @@ Creates a new record on the `task` object.
     "updated_at": "2025-01-20T10:30:00.000Z",
     "created_by": "usr_01HQ3V5K8N2M4P6R7T9W",
     "owner": "usr_01HQ3V5K8N2M4P6R7T9W"
-  },
-  "meta": {
-    "object": "task",
-    "operation": "create"
   }
 }
 ```
@@ -80,18 +80,22 @@ No request body. Optional query parameters:
 
 | Parameter | Type | Description |
 |:---|:---|:---|
-| `fields` | `string` | Comma-separated list of fields to return |
+| `select` | `string` | Comma-separated list of fields to return |
 | `expand` | `string` | Comma-separated lookup fields to expand |
 
 ```
-GET /api/v1/data/task/tsk_01HQ4A7B9D3F5G8J2K4L?fields=title,status,assigned_to&expand=assigned_to
+GET /api/v1/data/task/tsk_01HQ4A7B9D3F5G8J2K4L?select=title,status,assigned_to&expand=assigned_to
 ```
 
 ### Response — `200 OK`
 
+The response is the `GetDataResponse` envelope: `{ object, id, record }`.
+
 ```json
 {
-  "data": {
+  "object": "task",
+  "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
+  "record": {
     "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
     "title": "Implement login page",
     "status": "open",
@@ -100,10 +104,6 @@ GET /api/v1/data/task/tsk_01HQ4A7B9D3F5G8J2K4L?fields=title,status,assigned_to&e
       "name": "Jane Smith",
       "email": "jane@example.com"
     }
-  },
-  "meta": {
-    "object": "task",
-    "operation": "read"
   }
 }
 ```
@@ -114,23 +114,27 @@ GET /api/v1/data/task/tsk_01HQ4A7B9D3F5G8J2K4L?fields=title,status,assigned_to&e
 
 **`POST /api/v1/data/task/query`**
 
-Executes a structured query against the `task` object.
+Executes a structured query (a `QueryAST`) against the `task` object.
 
 ### Request
 
+Filtering uses the MongoDB-style `where` clause: `{ field: value }` for equality and `{ field: { $op: value } }` for operators. Combine clauses with `$and` / `$or` / `$not`. `expand` is a map of relationship-field name → nested query.
+
 ```json
 {
-  "filter": {
-    "and": [
-      { "field": "status", "operator": "in", "value": ["open", "in_progress"] },
-      { "field": "priority", "operator": "eq", "value": "high" },
-      { "field": "due_date", "operator": "lte", "value": "2025-03-31" }
+  "where": {
+    "$and": [
+      { "status": { "$in": ["open", "in_progress"] } },
+      { "priority": "high" },
+      { "due_date": { "$lte": "2025-03-31" } }
     ]
   },
   "fields": ["id", "title", "status", "priority", "assigned_to", "due_date"],
-  "expand": ["assigned_to"],
+  "expand": {
+    "assigned_to": { "object": "user", "fields": ["id", "name"] }
+  },
   "orderBy": [
-    { "field": "due_date", "direction": "asc" }
+    { "field": "due_date", "order": "asc" }
   ],
   "limit": 20,
   "offset": 0
@@ -139,9 +143,12 @@ Executes a structured query against the `task` object.
 
 ### Response — `200 OK`
 
+The response is the `FindDataResponse` envelope: `{ object, records, total?, hasMore? }`.
+
 ```json
 {
-  "data": [
+  "object": "task",
+  "records": [
     {
       "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
       "title": "Implement login page",
@@ -165,19 +172,13 @@ Executes a structured query against the `task` object.
       "due_date": "2025-03-20"
     }
   ],
-  "meta": {
-    "object": "task",
-    "operation": "query",
-    "total": 47,
-    "limit": 20,
-    "offset": 0,
-    "hasMore": true
-  }
+  "total": 47,
+  "hasMore": true
 }
 ```
 
 <Callout type="tip">
-**Filter Operators:** `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `contains`, `startsWith`, `endsWith`, `isNull`, `isNotNull`. Combine with `and` / `or` for complex queries.
+**Field Operators:** `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$between`, `$contains`, `$notContains`, `$startsWith`, `$endsWith`, `$null`, `$exists`. Combine clauses with `$and` / `$or` / `$not` for complex queries.
 </Callout>
 
 ---
@@ -186,25 +187,31 @@ Executes a structured query against the `task` object.
 
 **`PATCH /api/v1/data/task/tsk_01HQ4A7B9D3F5G8J2K4L`**
 
-Updates specific fields on an existing record. Only include fields you want to change.
+Updates specific fields on an existing record. Only include fields you want to change. As with create, the changed fields are sent at the top level — not wrapped in a `data` envelope.
 
 ### Request
 
 ```json
 {
-  "data": {
-    "status": "in_progress",
-    "estimated_hours": 12,
-    "tags": ["frontend", "auth", "urgent"]
-  }
+  "status": "in_progress",
+  "estimated_hours": 12,
+  "tags": ["frontend", "auth", "urgent"]
 }
 ```
 
+<Callout type="info">
+**Optimistic concurrency:** Pass the `updated_at` value you last read as an `If-Match` request header (or an `expectedVersion` field in the body) and the server returns `409 CONCURRENT_UPDATE` if the record changed in the meantime.
+</Callout>
+
 ### Response — `200 OK`
+
+The response is the `UpdateDataResponse` envelope: `{ object, id, record }`.
 
 ```json
 {
-  "data": {
+  "object": "task",
+  "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
+  "record": {
     "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
     "title": "Implement login page",
     "description": "Build the authentication UI with email/password and OAuth support",
@@ -219,10 +226,6 @@ Updates specific fields on an existing record. Only include fields you want to c
     "updated_at": "2025-01-20T14:15:00.000Z",
     "created_by": "usr_01HQ3V5K8N2M4P6R7T9W",
     "owner": "usr_01HQ3V5K8N2M4P6R7T9W"
-  },
-  "meta": {
-    "object": "task",
-    "operation": "update"
   }
 }
 ```
@@ -241,36 +244,34 @@ No request body.
 
 ### Response — `200 OK`
 
+The response is the `DeleteDataResponse` envelope: `{ object, id, success }`.
+
 ```json
 {
-  "data": {
-    "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
-    "deleted": true
-  },
-  "meta": {
-    "object": "task",
-    "operation": "delete"
-  }
+  "object": "task",
+  "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
+  "success": true
 }
 ```
 
 <Callout type="info">
-**Soft Delete:** If the object has `enableRecycleBin: true`, the record is moved to the recycle bin instead of being permanently deleted. Use `DELETE /api/v1/data/task/tsk_.../permanent` to bypass.
+**Soft Delete:** If the object enables soft delete (`softDelete: { enabled: true }` in its definition), the record is moved to the trash / recycle bin instead of being permanently deleted.
 </Callout>
 
 ---
 
 ## 6. Get Metadata
 
-**`GET /api/v1/meta/objects`**
+**`GET /api/v1/meta/object`**
 
-Returns metadata for all objects the current user has access to.
+Metadata is addressed by type name. `object` is the metadata type, so this route lists every registered object the current user can access. The response is an `{ type, items }` envelope.
 
 ### Response — `200 OK`
 
 ```json
 {
-  "data": [
+  "type": "object",
+  "items": [
     {
       "name": "task",
       "label": "Task",
@@ -312,19 +313,16 @@ Returns metadata for all objects the current user has access to.
       "enable": {
         "apiEnabled": true,
         "trackHistory": true,
-        "search": true
+        "searchable": true
       }
     }
-  ],
-  "meta": {
-    "total": 12
-  }
+  ]
 }
 ```
 
 ### Single Object Metadata
 
-**`GET /api/v1/meta/objects/task`**
+**`GET /api/v1/meta/object/task`**
 
 Returns metadata for a single object including all fields, relationships, and configuration.
 
@@ -332,33 +330,24 @@ Returns metadata for a single object including all fields, relationships, and co
 
 ## 7. Error Response Format
 
-All errors follow a consistent structure defined by `ErrorResponseSchema`.
+Data route errors are returned as a flat envelope: a top-level `error` message string, a machine-readable `code`, and operation-specific extras (`fields`, `object`, `currentVersion`, …). The HTTP status is carried by the response, not duplicated in the body.
 
 ### Validation Error — `400 Bad Request`
 
+Field-level failures carry a `fields` array.
+
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed for task",
-    "status": 400,
-    "details": [
-      {
-        "field": "title",
-        "message": "Required field is missing",
-        "code": "required"
-      },
-      {
-        "field": "status",
-        "message": "Invalid enum value. Expected 'open' | 'in_progress' | 'done' | 'cancelled', received 'pending'",
-        "code": "invalid_enum_value"
-      }
-    ]
-  },
-  "meta": {
-    "requestId": "req_01HQ4C9D1F5G7H0J2K4L",
-    "timestamp": "2025-01-20T10:30:00.000Z"
-  }
+  "error": "title is required",
+  "code": "VALIDATION_FAILED",
+  "fields": [
+    {
+      "field": "title",
+      "code": "required",
+      "message": "title is required"
+    }
+  ],
+  "object": "task"
 }
 ```
 
@@ -366,15 +355,9 @@ All errors follow a consistent structure defined by `ErrorResponseSchema`.
 
 ```json
 {
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "Record not found: task/tsk_01HQ4A7B9D3F5G8J2K4L",
-    "status": 404
-  },
-  "meta": {
-    "requestId": "req_01HQ4C9D1F5G7H0J2K5M",
-    "timestamp": "2025-01-20T10:31:00.000Z"
-  }
+  "error": "Record tsk_01HQ4A7B9D3F5G8J2K4L not found in task",
+  "code": "RECORD_NOT_FOUND",
+  "object": "task"
 }
 ```
 
@@ -382,45 +365,22 @@ All errors follow a consistent structure defined by `ErrorResponseSchema`.
 
 ```json
 {
-  "error": {
-    "code": "PERMISSION_DENIED",
-    "message": "Insufficient permissions to update task records",
-    "status": 403,
-    "details": [
-      {
-        "permission": "update",
-        "object": "task",
-        "profile": "readonly_user"
-      }
-    ]
-  },
-  "meta": {
-    "requestId": "req_01HQ4C9D1F5G7H0J2K6N",
-    "timestamp": "2025-01-20T10:32:00.000Z"
-  }
+  "error": "Insufficient permissions to update task records",
+  "code": "PERMISSION_DENIED",
+  "object": "task"
 }
 ```
 
-### Rate Limited — `429 Too Many Requests`
+### Concurrent Update — `409 Conflict`
+
+Returned when an `If-Match` / `expectedVersion` token no longer matches the stored record.
 
 ```json
 {
-  "error": {
-    "code": "RATE_LIMITED",
-    "message": "Rate limit exceeded. Retry after 30 seconds.",
-    "status": 429,
-    "details": [
-      {
-        "limit": 1000,
-        "remaining": 0,
-        "resetAt": "2025-01-20T10:35:00.000Z"
-      }
-    ]
-  },
-  "meta": {
-    "requestId": "req_01HQ4C9D1F5G7H0J2K7P",
-    "timestamp": "2025-01-20T10:33:00.000Z"
-  }
+  "error": "Record was modified by another user",
+  "code": "CONCURRENT_UPDATE",
+  "currentVersion": "2025-01-20T14:15:00.000Z",
+  "object": "task"
 }
 ```
 
@@ -434,153 +394,69 @@ All errors follow a consistent structure defined by `ErrorResponseSchema`.
 
 **`POST /api/v1/data/task/batch`**
 
-Execute multiple operations in a single request. Operations are processed in order and can optionally be wrapped in a transaction.
+Process many records of a **single** operation type in one request. The body carries one `operation` (`create`, `update`, `upsert`, or `delete`) plus a `records` array. By default the batch is atomic (rolled back on any failure); set `options.atomic: false` to allow partial success.
 
 ### Request
 
 ```json
 {
-  "operations": [
-    {
-      "method": "create",
-      "data": {
-        "title": "Design mockups",
-        "status": "open",
-        "priority": "medium"
-      }
-    },
-    {
-      "method": "create",
-      "data": {
-        "title": "Write unit tests",
-        "status": "open",
-        "priority": "high"
-      }
-    },
-    {
-      "method": "update",
-      "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
-      "data": {
-        "status": "done"
-      }
-    },
-    {
-      "method": "delete",
-      "id": "tsk_01HQ4B8C0E4G6H9K3L5M"
-    }
+  "operation": "update",
+  "records": [
+    { "id": "tsk_01HQ4A7B9D3F5G8J2K4L", "data": { "status": "done" } },
+    { "id": "tsk_01HQ4B8C0E4G6H9K3L5M", "data": { "status": "done" } }
   ],
   "options": {
-    "transaction": true,
-    "stopOnError": false
+    "atomic": true,
+    "continueOnError": false,
+    "validateOnly": false
   }
 }
 ```
 
 ### Response — `200 OK`
 
+The response is the `BatchUpdateResponse` envelope: a top-level `success` flag plus `total` / `succeeded` / `failed` counts and a per-record `results` array.
+
 ```json
 {
-  "data": {
-    "results": [
-      {
-        "index": 0,
-        "method": "create",
-        "success": true,
-        "data": {
-          "id": "tsk_01HQ4D0E2G6H8J0K2L4N",
-          "title": "Design mockups",
-          "status": "open",
-          "priority": "medium",
-          "created_at": "2025-01-20T15:00:00.000Z"
-        }
-      },
-      {
-        "index": 1,
-        "method": "create",
-        "success": true,
-        "data": {
-          "id": "tsk_01HQ4E1F3H7I9K1L3M5O",
-          "title": "Write unit tests",
-          "status": "open",
-          "priority": "high",
-          "created_at": "2025-01-20T15:00:00.000Z"
-        }
-      },
-      {
-        "index": 2,
-        "method": "update",
-        "success": true,
-        "data": {
-          "id": "tsk_01HQ4A7B9D3F5G8J2K4L",
-          "status": "done",
-          "updated_at": "2025-01-20T15:00:00.000Z"
-        }
-      },
-      {
-        "index": 3,
-        "method": "delete",
-        "success": true,
-        "data": {
-          "id": "tsk_01HQ4B8C0E4G6H9K3L5M",
-          "deleted": true
-        }
-      }
-    ],
-    "summary": {
-      "total": 4,
-      "succeeded": 4,
-      "failed": 0
-    }
-  },
-  "meta": {
-    "object": "task",
-    "operation": "batch"
-  }
+  "success": true,
+  "operation": "update",
+  "total": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "results": [
+    { "id": "tsk_01HQ4A7B9D3F5G8J2K4L", "success": true, "index": 0 },
+    { "id": "tsk_01HQ4B8C0E4G6H9K3L5M", "success": true, "index": 1 }
+  ]
 }
 ```
 
-### Partial Failure Response — `207 Multi-Status`
+### Partial Failure Response
 
-When `stopOnError: false` and some operations fail:
+When `options.atomic: false` and some records fail, the failing entries carry an `errors` array:
 
 ```json
 {
-  "data": {
-    "results": [
-      {
-        "index": 0,
-        "method": "create",
-        "success": true,
-        "data": {
-          "id": "tsk_01HQ4D0E2G6H8J0K2L4N",
-          "title": "Design mockups"
-        }
-      },
-      {
-        "index": 1,
-        "method": "update",
-        "success": false,
-        "error": {
-          "code": "NOT_FOUND",
-          "message": "Record not found: task/tsk_invalid_id"
-        }
-      }
-    ],
-    "summary": {
-      "total": 2,
-      "succeeded": 1,
-      "failed": 1
+  "success": false,
+  "operation": "update",
+  "total": 2,
+  "succeeded": 1,
+  "failed": 1,
+  "results": [
+    { "id": "tsk_01HQ4A7B9D3F5G8J2K4L", "success": true, "index": 0 },
+    {
+      "success": false,
+      "index": 1,
+      "errors": [
+        { "code": "record_not_found", "message": "Record not found: task/tsk_invalid_id" }
+      ]
     }
-  },
-  "meta": {
-    "object": "task",
-    "operation": "batch"
-  }
+  ]
 }
 ```
 
 <Callout type="tip">
-**Batch Limits:** Maximum 200 operations per batch request. For larger imports, use the streaming import endpoint `POST /api/v1/data/:object/import`.
+**Batch Limits:** Maximum 200 records per batch request. For larger imports, use the streaming import endpoint `POST /api/v1/data/:object/import`.
 </Callout>
 
 ---
@@ -593,8 +469,9 @@ When `stopOnError: false` and some operations fail:
 |:---|:---|:---|
 | `Authorization` | Yes | `Bearer <access_token>` |
 | `Content-Type` | Yes | `application/json` |
-| `X-Request-Id` | No | Client-generated request ID for tracing |
-| `X-Idempotency-Key` | No | Prevents duplicate creates on retry |
+| `X-Request-Id` | No | Client-generated request ID for tracing (honored by the observability dispatcher) |
+| `X-Environment-Id` | No | Targets a specific environment/project on unscoped routes |
+| `If-Match` | No | Optimistic-concurrency token for `PATCH` / `DELETE` (the `updated_at` you last read) |
 | `Accept-Language` | No | Locale for translated labels (e.g., `en-US`) |
 
 ### Response Headers

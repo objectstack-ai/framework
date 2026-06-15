@@ -37,7 +37,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 > callbacks, and `OS_TRUSTED_ORIGINS` (CORS). Pin the port explicitly in
 > production (`PORT=8080 os start`) and keep `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`
 > in sync with it.
-| `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Studio Console UI under `/_console`. |
+| `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Console portal under `/_console`. |
 | `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, eagerly materialise all object schemas at boot (slower start, faster first request). |
 | `OS_SKIP_SCHEMA_SYNC` | flag | `0` | When `1`, skip the implicit `db:sync` on boot. Use after running migrations manually. |
 
@@ -50,7 +50,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 | `OS_DATABASE_URL` | url | — | Database connection string (e.g. `file:./data.sqlite`, `postgres://…`, `libsql://…`). |
 | `OS_DATABASE_DRIVER` | enum | inferred | Force a specific driver when the URL is ambiguous. `sqlite` \| `postgres` \| `libsql`. |
 | `OS_STORAGE_ROOT` | path | `<OS_HOME>/storage` | Root directory for the local file storage adapter. |
-| `OS_ARTIFACT_PATH` | path | — | Path to a pre-built metadata artifact (`.os` bundle) to boot the kernel from. |
+| `OS_ARTIFACT_PATH` | path | — | Path or `http(s)://` URL to a compiled `objectstack.json` artifact to boot the kernel from. |
 
 ---
 
@@ -91,8 +91,8 @@ Auth settings precedence:
 |:---|:---|:---|:---|
 | `OS_CORS_ENABLED` | boolean | `true` | Enable CORS middleware. |
 | `OS_CORS_ORIGIN` | csv | `*` | Allowed origins (comma-separated, or `*`). |
-| `OS_CORS_CREDENTIALS` | boolean | `false` | Allow credentialed cross-origin requests. |
-| `OS_CORS_MAX_AGE` | number | `600` | Preflight cache TTL in seconds. |
+| `OS_CORS_CREDENTIALS` | boolean | `true` | Allow credentialed cross-origin requests. |
+| `OS_CORS_MAX_AGE` | number | `86400` | Preflight cache TTL in seconds. |
 
 ---
 
@@ -110,14 +110,16 @@ Auth settings precedence:
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_EMAIL_PROVIDER` | enum | — | Transport. `resend` \| `postmark` \| `smtp` \| `console`. |
+| `OS_EMAIL_PROVIDER` | enum | `log` | Transport. `log` \| `resend` \| `postmark`. `log` (default) prints to stdout without sending. Real SMTP delivery requires the separate `@objectstack/plugin-mail-smtp` package. |
 | `OS_EMAIL_API_KEY` | string | — | API key for `resend` / `postmark`. |
 | `OS_EMAIL_FROM` | email | — | Default `From:` address. |
 | `OS_EMAIL_RETRIES` | number | `3` | Retry count for transient send failures. |
 
-> SMTP credentials (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) keep
-> their conventional unprefixed names and are read by the SMTP transport
-> directly.
+> No SMTP transport ships in the open-core runtime — `OS_EMAIL_PROVIDER`
+> only materialises `log`, `resend`, or `postmark`. Real SMTP delivery
+> requires the separate `@objectstack/plugin-mail-smtp` package, which reads
+> its own SMTP settings (configured in **Settings → Mail** or via the
+> plugin's constructor options).
 
 ---
 
@@ -222,7 +224,7 @@ the hosted ObjectStack Cloud control plane.
 | `OS_ROOT_DOMAIN` | string | — | Root domain for multi-tenant subdomain routing (e.g. `example.com`). |
 | `OS_ORGANIZATION_ID` | string | — | Pin the runtime to a single organization id (per-process scope). |
 | `OS_ENVIRONMENT_ID` | string | — | Pin the runtime to a single environment id (per-process scope). |
-| `OS_CLOUD_URL` | url | `https://objectos.app` | Base URL of the cloud control plane the CLI / runtime talks to. |
+| `OS_CLOUD_URL` | url | `https://cloud.objectos.ai` | Base URL of the cloud control plane the CLI / runtime talks to. Set to `off` / `local` / `none` / `disabled` to disable cloud. |
 | `OS_CLOUD_API_KEY` | string | — | Shared secret authenticating runtime → cloud SSO handoffs. |
 | `OS_CLI_CLIENT_ID` | string | — | OAuth client id used by `os login`. |
 | `OS_TOKEN` | string | — | Personal access token used by the CLI in non-interactive contexts (CI). |
@@ -238,12 +240,12 @@ the hosted ObjectStack Cloud control plane.
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_OBS_EXPORTER` | enum | `console` | OpenTelemetry exporter. `console` \| `otlp` \| `none`. |
+| `OS_OBS_EXPORTER` | enum | `noop` | OpenTelemetry exporter. `noop` \| `console` \| `json` \| `otlp`. `noop` (default) imposes no runtime cost. |
 | `OS_OBS_SERVICE_NAME` | string | `objectstack` | `service.name` resource attribute. |
-| `OS_OBS_DEPLOYMENT_ENV` | string | `NODE_ENV` value | `deployment.environment` resource attribute. |
-| `OS_OTLP_ENDPOINT` | url | — | OTLP/HTTP collector endpoint. |
+| `OS_OBS_DEPLOYMENT_ENV` | string | `production` | `deployment.environment` resource attribute. |
+| `OS_OTLP_ENDPOINT` | url | — | OTLP/HTTP collector endpoint. Required when `OS_OBS_EXPORTER=otlp`. |
 | `OS_OTLP_HEADERS` | csv | — | Comma-separated `key=value` pairs added to every OTLP export. |
-| `OS_OTLP_FLUSH_MS` | number | `5000` | OTLP batch flush interval. |
+| `OS_OTLP_FLUSH_MS` | number | `10000` | OTLP batch flush interval. |
 
 ---
 

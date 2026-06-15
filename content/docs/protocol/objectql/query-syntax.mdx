@@ -25,7 +25,7 @@ LIMIT 10;
 
 **ObjectQL (Canonical Spec Format):**
 ```typescript
-import type { QueryAST } from '@objectstack/spec';
+import type { QueryAST } from '@objectstack/spec/data';
 
 const query: QueryAST = {
   object: 'contact',
@@ -54,7 +54,7 @@ const query: QueryAST = {
 The canonical query structure is defined by `QuerySchema` in `@objectstack/spec`:
 
 ```typescript
-import type { QueryAST } from '@objectstack/spec';
+import type { QueryAST } from '@objectstack/spec/data';
 
 // QueryAST — full structure
 interface QueryAST {
@@ -778,10 +778,10 @@ try {
 
 The tuple/array format (e.g. `['status', '=', 'active']`) and the `filters` key are **legacy input formats** used by some UI-layer filter builders (FilterBuilder, ObjectUI). They are **not** the canonical protocol format.
 
-Before entering the ObjectQL protocol or `IDataEngine`, tuple filters **must** be converted to the canonical `where` + `$op` object format using the `parseFilterAST()` utility from `@objectstack/spec`:
+Before entering the ObjectQL protocol or `IDataEngine`, tuple filters **must** be converted to the canonical `where` + `$op` object format using the `parseFilterAST()` utility from `@objectstack/spec/data`:
 
 ```typescript
-import { parseFilterAST } from '@objectstack/spec';
+import { parseFilterAST } from '@objectstack/spec/data';
 
 // UI Builder output (tuple format)
 const uiFilter = ['and', ['status', '=', 'active'], ['priority', '>', 3]];
@@ -812,17 +812,17 @@ Similarly, the following legacy field names should not be used in new code:
 <Cards>
   <Card
     title="Schema Definition"
-    href="/docs/protocols/objectql/schema"
+    href="/docs/protocol/objectql/schema"
     description="Learn object and field configuration"
   />
   <Card
     title="Security"
-    href="/docs/protocols/objectql/security"
+    href="/docs/protocol/objectql/security"
     description="Implement access control and permissions"
   />
   <Card
     title="Type System"
-    href="/docs/protocols/objectql/types"
+    href="/docs/protocol/objectql/types"
     description="Master all field types and relationships"
   />
 </Cards>

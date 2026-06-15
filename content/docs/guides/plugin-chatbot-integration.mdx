@@ -17,26 +17,28 @@ contract.
 
 ## 1. Enable the AI tier on the framework side
 
-The default `objectstack dev` preset does **not** include AI services. Pass
-`--preset full` (or any preset that opts into `ai`) and provide an OpenAI-
-compatible LLM gateway via env vars:
+The `default` and `full` plugin tier presets both include the `ai`
+capability, so `objectstack dev` boots the AI services unless you opt out
+with `--preset minimal`. Provide a Vercel AI Gateway model and key via env
+vars:
 
 ```bash
 AI_GATEWAY_API_KEY=vck_*** \
 AI_GATEWAY_MODEL=openai/gpt-4.1-mini \
 OS_CORS_ORIGIN=http://localhost:5173 \
-pnpm dev --preset full
+pnpm dev
 ```
 
-You should see `AIService` in the plugin list and three of the endpoints
-below should answer (the streaming one is verified in step 3):
+You should see the `AI Service` plugin (`com.objectstack.service-ai`) in the
+plugin list and the endpoints below should answer (the streaming one is
+verified in step 3):
 
 ```bash
-curl http://localhost:3002/api/v1/ai/agents
+curl http://localhost:3000/api/v1/ai/agents
 # → { "agents": [{ "name": "data_chat", ... }, ...] }
 
-curl http://localhost:3002/api/v1/ai/models
-# → { "models": [...] }   ← may be empty until you register some
+curl http://localhost:3000/api/v1/ai/models
+# → { "models": [...] }   ← may be empty until the adapter lists models
 ```
 
 ## 2. Endpoint map
@@ -44,11 +46,11 @@ curl http://localhost:3002/api/v1/ai/models
 | Chatbot input  | Framework route                                   | Notes |
 |----------------|---------------------------------------------------|-------|
 | `useAgents({ apiBase })` → `${apiBase}/agents`            | `GET  /api/v1/ai/agents`              | Response is `{ agents: [...] }` (also accepts a bare array). |
-| `<ChatbotEnhanced models={...} />` source                | `GET  /api/v1/ai/models`              | Returns `{ models: [{ id, label }] }`. |
+| `<ChatbotEnhanced models={...} />` source                | `GET  /api/v1/ai/models`              | Returns `{ models: [...] }` (a list of model-id strings). |
 | `useObjectChat({ api })` / `<ChatbotEnhanced api={...}>` | `POST /api/v1/ai/assistant/chat`      | Vercel AI data-stream SSE. Body: `{ messages, agent?, conversationId?, ... }`. |
 | HITL pending inbox (custom UI)                           | `GET  /api/v1/ai/pending-actions`     | Filter by `?status=pending`. |
-| Approve a proposed action                                 | `POST /api/v1/ai/pending-actions/:id/approve` | Body: `{ actor: string }`. |
-| Reject a proposed action                                  | `POST /api/v1/ai/pending-actions/:id/reject`  | Body: `{ actor: string, reason?: string }`. |
+| Approve a proposed action                                 | `POST /api/v1/ai/pending-actions/:id/approve` | No body required; the actor is the authenticated user. Requires `ai:approve`. |
+| Reject a proposed action                                  | `POST /api/v1/ai/pending-actions/:id/reject`  | Body: `{ reason?: string }`; actor is the authenticated user. Requires `ai:approve`. |
 
 All endpoints accept the standard tenancy header `X-Environment-Id`. The
 default Hono adapter reflects CORS origins from the `OS_CORS_ORIGIN` env var
@@ -61,7 +63,7 @@ calls from a Vite dev server (`http://localhost:5173`) work out of the box.
 
 ```
 HTTP/1.1 200 OK
-content-type: text/plain; charset=utf-8
+content-type: text/event-stream
 x-vercel-ai-ui-message-stream: v1
 transfer-encoding: chunked
 
@@ -78,16 +80,16 @@ client-side parsing is required. Wire it up like:
 import { useObjectChat } from '@object-ui/plugin-chatbot';
 
 const chat = useObjectChat({
-  api: 'http://localhost:3002/api/v1/ai/assistant/chat',
+  api: 'http://localhost:3000/api/v1/ai/assistant/chat',
   headers: { 'X-Environment-Id': 'env_local' },
   body: { agent: 'data_chat' },
 });
 ```
 
 > **Heads up:** If you ever see the response come back as a JSON envelope
-> like `{"type":"stream","events":{},"vercelDataStream":true,...}` you are
-> running an old `@objectstack/runtime` (< the patch tagged
-> `v5-runtime-ai-sse-stream-fix`). Upgrade and restart the dev server.
+> like `{"type":"stream","events":{},"vercelDataStream":true,...}` your HTTP
+> adapter is not encoding the SSE stream. Make sure you are on a current
+> `@objectstack/runtime` and Hono adapter, then restart the dev server.
 
 ## 4. HITL (Human-in-the-Loop) flow
 
@@ -98,24 +100,25 @@ handler enqueues an `ai_pending_action` row and the chat returns a
 1. Polls `GET /api/v1/ai/pending-actions?status=pending`.
 2. Renders an inbox item per row (`tool_name`, `tool_input`,
    `conversation_id`, `proposed_at`).
-3. On approve: `POST /api/v1/ai/pending-actions/:id/approve` with
-   `{ actor: '<current user id>' }` → row transitions to `executed` with
-   `result` populated.
+3. On approve: `POST /api/v1/ai/pending-actions/:id/approve` (no body; the
+   actor is the authenticated user, recorded on `decided_by`) → row
+   transitions to `executed` with `result` populated.
 4. On reject: `POST /api/v1/ai/pending-actions/:id/reject` with
-   `{ actor, reason }` → row transitions to `rejected`.
+   `{ reason }` → row transitions to `rejected`.
 
-The Studio ships an `ai-pending-action` view with the same actions baked
-in; the same REST endpoints back both surfaces, so a custom Console widget
-needs no additional plumbing.
+The `ai_pending_actions` object ships built-in `approve`/`reject` actions
+targeting the same REST endpoints, so the Console inbox and a custom widget
+share one contract — no additional plumbing.
 
 ## Troubleshooting
 
-- **`/api/v1/ai/*` returns 404** → the AI tier is not loaded. Re-run dev
-  with `--preset full`.
+- **`/api/v1/ai/*` returns 404** → the AI tier is not loaded. Don't run with
+  `--preset minimal`; use the `default` (or `full`) tier.
 - **CORS blocked** → set `OS_CORS_ORIGIN=http://your-frontend-origin` before
   launching the dev server.
-- **Chat returns JSON instead of streaming** → upgrade
-  `@objectstack/runtime` to the patch above.
+- **Chat returns JSON instead of streaming** → the HTTP adapter isn't
+  encoding the SSE stream; update `@objectstack/runtime` and the Hono
+  adapter, then restart.
 - **`/api/v1/ai/models` is empty** → register models on the
   `AIService.modelRegistry` or skip the picker entirely; chat works
   without an explicit model when `AI_GATEWAY_MODEL` is set.

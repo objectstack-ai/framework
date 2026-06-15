@@ -179,7 +179,7 @@ export default defineStack({
 });
 
 // Use the exact same name when querying
-client.records.find('project_task', { /* query */ });
+client.data.find('project_task', { /* query */ });
 ```
 
 ---
@@ -236,11 +236,17 @@ defineStack({
 
 ```typescript
 // ❌ Raw object — no type checking
-const view = { name: 'tasks', object: 'task', type: 'list' };
+const view = { list: { type: 'grid', columns: ['subject', 'status'] } };
 
 // ✅ Parsed with type checking
 import { defineView } from '@objectstack/spec';
-const view = defineView({ name: 'tasks', object: 'task', type: 'list', listType: 'grid' });
+const view = defineView({
+  list: {
+    type: 'grid',
+    data: { provider: 'object', object: 'task' },
+    columns: ['subject', 'status', 'priority'],
+  },
+});
 ```
 
 ---
@@ -282,7 +288,7 @@ console.log(field.maxLength?.toString() ?? 'no limit');
   where: { type: { $eq: 'login' } },      // On indexed field
   orderBy: [{ field: 'created_at', order: 'desc' }],
   limit: 25,
-  keyset: { field: 'id', order: 'desc', after: cursor }  // Cursor pagination
+  cursor: { id: lastSeenId }  // Keyset/cursor pagination (field → last-seen value)
 }
 ```
 
@@ -363,4 +369,4 @@ const CustomFieldSchema = FieldSchema.extend({
 
 ### Where are the JSON Schemas for IDE autocomplete?
 
-The bundled JSON Schema is at `packages/spec/json-schema/objectstack.json` (1,452 definitions). Individual schemas are in `packages/spec/json-schema/`.
+The bundled JSON Schema is at `packages/spec/json-schema/objectstack.json` (its `x-schema-count` field reports the total number of definitions). Per-domain schemas are in subfolders under `packages/spec/json-schema/` (e.g. `data/`, `ui/`, `api/`).

@@ -51,9 +51,10 @@ ObjectOS defines **six configuration sources** with strict precedence:
 └─────────────────────────────────────────────────────────────┘
                           ↓ overrides
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. USER PREFERENCES                                         │
-│    Per-user settings (language, theme, etc.)                │
-│    Stored in database, user-specific                        │
+│ 2. ENVIRONMENT                                              │
+│    Environment variables (OS_*, NODE_ENV, etc.)             │
+│    Set by deployment platform (Kubernetes, Docker)          │
+│    Pins the value (locked) when present                     │
 └─────────────────────────────────────────────────────────────┘
                           ↓ overrides
 ┌─────────────────────────────────────────────────────────────┐
@@ -63,9 +64,9 @@ ObjectOS defines **six configuration sources** with strict precedence:
 └─────────────────────────────────────────────────────────────┘
                           ↓ overrides
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. ENVIRONMENT                                              │
-│    Environment variables (OS_*, NODE_ENV, etc.)             │
-│    Set by deployment platform (Kubernetes, Docker)          │
+│ 4. USER PREFERENCES                                         │
+│    Per-user settings (language, theme, etc.)                │
+│    Stored in database, user-specific                        │
 └─────────────────────────────────────────────────────────────┘
                           ↓ overrides
 ┌─────────────────────────────────────────────────────────────┐
@@ -153,29 +154,33 @@ context.config.set('feature.newCheckout', true);
 
 **Storage:** In-memory Map (per-request context)
 
-### 2. User Preferences
+### 2. Environment Variables
 
-**Use Case:** Per-user settings (language, timezone, UI theme).
+**Use Case:** Deployment-specific config (API keys, database URLs, feature flags).
 
-```typescript
-// User changes language preference
-await context.config.setUserPreference('locale', 'de');
+When an `OS_*` env var is present, it **pins (locks)** the value — no
+database scope (tenant or user) can override it.
 
-// Next request from this user
-const locale = context.config.get('locale');
-// Returns: 'de' (from user preferences)
+```bash
+# .env.production
+OS_STRIPE_APIKEY=sk_live_...
+OS_DATABASE_URL=postgresql://prod-db:5432/objectstack
+OS_FEATURE_NEWUI=true
+NODE_ENV=production
 ```
 
-**Storage:** Database table
+**Naming Convention** (see `envKeyOf` in `service-settings`):
+- Prefix with `OS_`
+- Form the key from `{namespace}_{key}`, then uppercase it
+- Dots and hyphens become underscores: `stripe.apiKey` → `OS_STRIPE_APIKEY`
 
-```sql
-CREATE TABLE objectstack_user_preferences (
-  user_id UUID NOT NULL,
-  key TEXT NOT NULL,
-  value JSONB NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
-  PRIMARY KEY (user_id, key)
-);
+```typescript
+// Environment variables are auto-loaded at boot
+const apiKey = config.get('stripe.apiKey');
+// Reads from: process.env.OS_STRIPE_APIKEY
+
+const dbUrl = config.get('database.url');
+// Reads from: process.env.OS_DATABASE_URL
 ```
 
 ### 3. Tenant (Multi-Tenant)
@@ -210,38 +215,40 @@ CREATE TABLE objectstack_tenant_config (
 
 **Isolation:** Tenant config is **automatically scoped** to current tenant in request context.
 
-### 4. Environment Variables
+### 4. User Preferences
 
-**Use Case:** Deployment-specific config (API keys, database URLs, feature flags).
-
-```bash
-# .env.production
-OS_STRIPE_API_KEY=sk_live_...
-OS_DATABASE_URL=postgresql://prod-db:5432/objectstack
-OS_FEATURE_NEW_UI=true
-NODE_ENV=production
-```
-
-**Naming Convention:**
-- Prefix with `OS_` for ObjectOS config
-- Use `__` for nested keys: `OS_STRIPE__API_KEY` → `stripe.apiKey`
-- Use `_` for snake_case: `OS_DATABASE_URL` → `databaseUrl`
+**Use Case:** Per-user settings (language, timezone, UI theme).
 
 ```typescript
-// Environment variables are auto-loaded at boot
-const apiKey = config.get('stripe.apiKey');
-// Reads from: process.env.OS_STRIPE_API_KEY
+// User changes language preference
+await context.config.setUserPreference('locale', 'de');
 
-const dbUrl = config.get('databaseUrl');
-// Reads from: process.env.OS_DATABASE_URL
+// Next request from this user
+const locale = context.config.get('locale');
+// Returns: 'de' (from user preferences)
 ```
 
-**Type Coercion:**
+**Storage:** Database table
+
+```sql
+CREATE TABLE objectstack_user_preferences (
+  user_id UUID NOT NULL,
+  key TEXT NOT NULL,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
+```
+
+**Type Coercion** is driven by the type of the setting's default value
+(`coerceEnvValue` in `service-settings`):
 ```bash
-OS_HTTP_TIMEOUT=30000        # → number: 30000
-OS_FEATURE_NEW_UI=true       # → boolean: true
-OS_ALLOWED_ORIGINS=a,b,c     # → array: ['a', 'b', 'c']
+OS_HTTP_TIMEOUT=30000              # default is number → 30000
+OS_FEATURE_NEWUI=true              # default is boolean → true ('1'/'yes' also truthy)
+OS_ALLOWED_ORIGINS=["a","b","c"]   # default is array/object → JSON.parse → ['a','b','c']
 ```
+If the raw value can't be parsed for the expected type, it falls back to the
+raw string.
 
 ### 5. Configuration Files
 
@@ -409,7 +416,7 @@ When multiple sources define the same key, ObjectOS uses **deep merge** for obje
 { stripe: { apiKey: 'sk_test_file' } }
 
 // Environment variable
-OS_STRIPE__API_KEY=sk_test_env
+OS_STRIPE_APIKEY=sk_test_env
 
 // Result
 config.get('stripe.apiKey')
@@ -657,7 +664,7 @@ Errors:
   - crm.syncInterval: Invalid enum value. Expected 'hourly' | 'daily' | 'weekly', received 'monthly'
 
 Fix these errors in:
-  1. Environment variable: OS_CRM__API_KEY
+  1. Environment variable: OS_CRM_APIKEY
   2. Config file: objectstack.config.ts
   3. Plugin defaults: @mycompany/crm/plugin.manifest.ts
 ```
@@ -666,24 +673,30 @@ Fix these errors in:
 
 ### CLI Commands
 
+<Callout type="warn">
+A dedicated `config` topic on the `os` CLI is **not yet implemented** — the
+commands below are illustrative of the intended surface. Today, configuration
+is validated as part of `os validate` and inspected via `os info` / `os doctor`.
+</Callout>
+
 ```bash
-# Show all configuration (merged result)
-objectstack config show
+# (planned) Show all configuration (merged result)
+os config show
 
-# Show config for specific namespace
-objectstack config show stripe
+# (planned) Show config for specific namespace
+os config show stripe
 
-# Show which source provides each value
-objectstack config sources
+# (planned) Show which source provides each value
+os config sources
 
-# Validate configuration
-objectstack config validate
+# (planned) Validate configuration
+os config validate
 
-# Export configuration (for backup)
-objectstack config export > backup.json
+# (planned) Export configuration (for backup)
+os config export > backup.json
 
-# Import configuration
-objectstack config import backup.json
+# (planned) Import configuration
+os config import backup.json
 ```
 
 ### Programmatic Inspection
@@ -813,7 +826,7 @@ NODE_ENV=eu node server.js   # Loads objectstack.config.eu.ts
 }
 
 // Developer can further override with .env.local
-OS_EMAIL__PROVIDER=mailhog  # Use local Mailhog for testing
+OS_EMAIL_PROVIDER=mailhog  # Use local Mailhog for testing
 ```
 
 ## Best Practices
@@ -878,11 +891,11 @@ export const configSchema = z.object({
 ## Summary
 
 ObjectOS configuration resolution:
-- **Six sources** with clear precedence (runtime > user > tenant > environment > file > defaults)
+- **Six sources** with clear precedence (runtime > environment > tenant > user > file > defaults)
 - **Deep merge** for objects, **replace** for primitives
 - **Tenant isolation** for multi-tenant SaaS
 - **Secret encryption** with external secret store integration
 - **Boot-time validation** using Zod schemas
 - **Inspection tools** for debugging config issues
 
-**Next:** Learn about internationalization in [i18n Standard](/docs/protocols/objectos/i18n-standard).
+**Next:** Learn about internationalization in [i18n Standard](/docs/protocol/objectos/i18n-standard).

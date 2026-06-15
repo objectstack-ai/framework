@@ -3,170 +3,160 @@ title: State Machine (Lifecycle)
 description: Define strict business logic constraints prevents AI hallucinations by enforcing valid transitions.
 ---
 
-import { Activity } from 'lucide-react';
-
 # State Machine Protocol
 
-The **State Machine Protocol** (`stateMachine`) allows you to define the "Constitution" of a record's lifecycle. It introduces **XState-inspired** state management directly into your ObjectQL definitions.
+The **State Machine** (`state_machine` validation rule) lets you define the "Constitution" of a record's lifecycle: the legal `status` transitions a record may take. It is a **flat, textbook finite-state-machine** transition table that the write path enforces.
+
+<Callout type="info">
+  Per [ADR-0020](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0020-state-machine-converge-and-enforce.md), a state machine is **one of the object's `validations`** — a rule with `type: 'state_machine'`. There is no top-level `stateMachine`/`stateMachines` property on an object, and the older XState-style shape (hierarchical states, `on`/`cond`/`actions`, `meta.aiInstructions`) was retired. A flat `{ from: [to] }` transition table is the only enforced shape.
+</Callout>
 
 ## Why State Machines?
 
-In the era of **AI Agents**, traditional validation rules are not enough. Large Language Models (LLMs) can "hallucinate" and attempt illogical data updates (e.g., moving a contract from `Draft` directly to `Paid` without `Approval`).
+In the era of **AI Agents**, field-level validation is not enough. Large Language Models (LLMs) can "hallucinate" and attempt illogical data updates (e.g., moving a contract from `draft` directly to `paid` without going through `approval`).
 
-**State Machines provide a hard constraint layer:**
-- **Deterministic**: The system rejects any transition not explicitly defined.
-- **Self-Documenting**: The workflow is code, not hidden in triggers.
-- **AI-Guarded**: Agents must "ask" the state machine for available actions.
+**The transition table provides a hard constraint layer:**
+- **Deterministic**: On update, if the state field changed and the new value is not listed under the current value, the write is rejected.
+- **Self-Documenting**: The whole legal graph lives in one place, as data.
+- **Introspectable**: UIs can grey out illegal buttons and an Agent can ask "from here, what's legal next?" instead of parsing a formula.
 
 ## Definition
 
-Add the `stateMachine` property to your `ObjectSchema`.
+Add a `state_machine` rule to the object's `validations` array. The rule names the state `field` and declares a `transitions` map of `{ currentValue: [allowedNextValues] }`.
 
 ```typescript
-import { ObjectSchema } from '@objectstack/spec/data';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 export const PurchaseRequest = ObjectSchema.create({
   name: 'purchase_request',
   label: 'Purchase Request',
-  
+
   fields: {
-    status: Field.select({ 
-      options: ['draft', 'pending', 'approved', 'rejected'] 
+    status: Field.select({
+      label: 'Status',
+      required: true,
+      options: [
+        { label: 'Draft', value: 'draft', default: true },
+        { label: 'Pending', value: 'pending' },
+        { label: 'Approved', value: 'approved' },
+        { label: 'Rejected', value: 'rejected' },
+      ],
     }),
     amount: Field.number(),
   },
 
-  stateMachine: {
-    id: 'purchase_lifecycle',
-    initial: 'draft',
-    states: {
-      draft: {
-        on: {
-          SUBMIT: { 
-            target: 'pending', 
-            cond: 'amount_valid' 
-          }
-        },
-        meta: {
-          aiInstructions: "Help the user fill out the form. Do verify amount limits."
-        }
+  validations: [
+    {
+      type: 'state_machine',
+      name: 'purchase_status_flow',
+      label: 'Purchase Status Flow',
+      field: 'status',
+      // Validated on update; insert sets the initial state from the
+      // `default: true` select option (no separate `initial` key).
+      events: ['update'],
+      message: 'Invalid purchase status transition.',
+      transitions: {
+        draft: ['pending'],
+        pending: ['approved', 'rejected'],
+        // `approved` and `rejected` are dead-end states (no outgoing edges).
       },
-      pending: {
-        on: {
-          APPROVE: 'approved',
-          REJECT: 'rejected'
-        },
-        meta: {
-          aiInstructions: "Read-only mode. Only analyze risk. Do NOT modify fields."
-        }
-      },
-      approved: {
-        type: 'final'
-      },
-      rejected: {
-        type: 'final'
-      }
-    }
-  }
+    },
+  ],
 });
 ```
 
+<Callout type="warn">
+  `ObjectSchema.create()` rejects unknown top-level keys (ADR-0032). A typo'd `stateMachine:` or `stateMachines:` key throws a build error rather than being silently ignored.
+</Callout>
+
 ## Structure
 
-### 1. States (`states`)
-Each key represents a valid status value for the record.
+A `state_machine` rule shares the common validation-rule fields (`name`, `label`, `message`, `severity`, `events`, `priority`, `active`) with its siblings, plus two of its own:
 
-- **`on`**: Event listeners (Transitions).
-- **`meta.aiInstructions`**: Instructions injected into the AI context when the record is in this state.
+| Field | Type | Meaning |
+|:---|:---|:---|
+| `field` | `string` | The state field this rule governs (e.g. `status`). |
+| `transitions` | `Record<string, string[]>` | Map of `{ currentValue: [allowedNextValues] }` — the legal edges. |
 
-### 2. Transitions (`on`)
-Defines how to move from one state to another.
+### Transitions
+
+`transitions` is the whole legal graph. The keys are current state values; each value is the list of states the record may move *to*. A state with no key (or an empty array) is a dead-end with no outgoing edges.
 
 ```typescript
-SUBMIT: { 
-  target: 'pending',    // Next State
-  cond: 'amount_valid', // Guard/Condition name
-  actions: ['notify']   // Side effects
+transitions: {
+  draft: ['pending'],
+  pending: ['approved', 'rejected'],
 }
 ```
 
-### 3. Guards (`cond`)
-Conditions that must be true for the transition to happen.
+### Enforcement semantics
 
-### 4. Actions (`actions`)
-Side effects (emails, webhooks, field updates) that execute during transition.
+- **On insert**, the rule is a no-op — there is no prior state to transition from. The field-level `select` check already constrains the initial value, and the initial state is the option marked `default: true`.
+- **On update**, if the state field changed and the new value is **not** in `transitions[oldValue]`, the write is rejected.
+- The check is **lenient where it cannot reason**: if the prior state is not described by the table (e.g. legacy or externally-written data), it does not block.
+- Only a rule with `severity: 'error'` (the default) blocks the write; `warning`/`info` are logged.
 
-## AI Safety Features
+### Conditional transitions
 
-This protocol is designed specifically to constrain AI behavior:
+A `state_machine` rule has no per-transition guard. To gate a transition on a predicate, add a sibling `script` or `conditional` validation rule (CEL) in the same `validations` array.
 
-1.  **Transition Locking**: If an AI Agent tries to update `status` to `approved` while in `draft`, the kernel throws `InvalidTransitionError`.
-2.  **Context Injection**: The `aiInstructions` are automatically prepended to the Agent's system prompt based on the current record state.
-3.  **Action Whitelisting**: The Agent can only trigger "Events" (like `SUBMIT`), not raw database updates on protected fields.
+## Introspection
+
+Because the transition table is data, both UIs and Agents can ask "from this state, what's legal next?" instead of parsing a formula.
+
+- **In code**, `legalNextStates(objectSchema, field, currentState)` from `@objectstack/objectql` returns the declared next states, `[]` for a known dead-end, or `null` when no `state_machine` rule governs the field.
+- **Over HTTP**, `GET /api/v1/meta/objects/:name/state/:field?from=:state` returns `{ object, field, from, next }`, where `next` is the legal-next list (or `null`).
+
+<Callout type="info">
+  When an AI Agent or Flow tries to update `status` to `approved` while the record is in `draft`, the write fails with a `ValidationError` (field error code `invalid_transition`) — the AI-mistake protection the rule exists for. There is no automatic injection of per-state AI instructions into the prompt; the guardrail is the enforced transition table.
+</Callout>
 
 ## Best Practices: File Structure
 
-For complex business objects (like `Lead`, `Opportunity`, or `Order`), the state machine configuration can grow quite large. To keep your object definitions clean and readable, we **strongly recommend** extracting the state logic into a separate `*.state.ts` file.
-
-### Recommended Pattern
-
-**1. Create `lead.state.ts`**
-
-Define the state machine using `StateMachineConfig` type for full type safety.
+For complex business objects (like `Lead`, `Opportunity`, or `Order`), a transition table can grow large. To keep your object definition readable, extract the rule(s) into a plain TypeScript constant — there is no special `*.state.ts` format or `StateMachineConfig` type for object lifecycles; it is just an array of validation rules.
 
 ```typescript
-// src/objects/lead.state.ts
-import type { StateMachineConfig } from '@objectstack/spec/automation';
-
-export const LeadStateMachine: StateMachineConfig = {
-  id: 'lead_lifecycle',
-  initial: 'new',
-  states: {
-    new: {
-      on: {
-        QUALIFY: { target: 'qualified' },
-        DISQUALIFY: { target: 'unqualified' }
-      }
+// src/objects/lead.validations.ts
+export const leadValidations = [
+  {
+    type: 'state_machine' as const,
+    name: 'lead_status_flow',
+    field: 'status',
+    message: 'Invalid lead status transition.',
+    events: ['update'] as const,
+    transitions: {
+      new: ['qualified', 'unqualified'],
+      qualified: ['converted', 'unqualified'],
     },
-    // ... complex logic ...
-  }
-};
+  },
+];
 ```
-
-**2. Import in `lead.object.ts`**
-
-Keep your object definition focused on schema and metadata.
 
 ```typescript
 // src/objects/lead.object.ts
 import { ObjectSchema } from '@objectstack/spec/data';
-import { LeadStateMachine } from './lead.state';
+import { leadValidations } from './lead.validations';
 
 export const Lead = ObjectSchema.create({
   name: 'lead',
   // ... fields ...
-  stateMachines: {
-    lifecycle: LeadStateMachine, // Named key for the primary lifecycle
-  }
+  validations: leadValidations,
 });
 ```
 
-## Multiple State Machines (Parallel Lifecycles)
+## Multiple Lifecycles (Parallel State Lines)
 
 In real enterprise systems, a single object often has **multiple independent state lines**. For example, an `Order` has:
 
-- **`lifecycle`** — `draft → submitted → confirmed → shipped → delivered`
-- **`payment`** — `unpaid → partial → paid → refunded`
-- **`approval`** — `pending → approved → rejected`
+- **lifecycle** — `draft → submitted → confirmed → shipped → delivered`
+- **payment** — `unpaid → partial → paid → refunded`
+- **approval** — `pending → approved → rejected`
 
-Use the `stateMachines` (plural) property to define them:
+These are **N flat `state_machine` rules, one per state field**, in the same `validations` array — not hierarchical or parallel statechart regions.
 
 ```typescript
 // src/objects/order.object.ts
-import { ObjectSchema } from '@objectstack/spec/data';
-import { OrderLifecycle } from './order-lifecycle.state';
-import { OrderPayment } from './order-payment.state';
-import { OrderApproval } from './order-approval.state';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 export const Order = ObjectSchema.create({
   name: 'order',
@@ -175,19 +165,43 @@ export const Order = ObjectSchema.create({
     payment_status: Field.select({ options: ['unpaid', 'partial', 'paid', 'refunded'] }),
     approval_status: Field.select({ options: ['pending', 'approved', 'rejected'] }),
   },
-  stateMachines: {
-    lifecycle: OrderLifecycle,
-    payment: OrderPayment,
-    approval: OrderApproval,
-  }
+  validations: [
+    {
+      type: 'state_machine',
+      name: 'order_lifecycle',
+      field: 'status',
+      message: 'Invalid order status transition.',
+      transitions: {
+        draft: ['submitted'],
+        submitted: ['confirmed'],
+        confirmed: ['shipped'],
+        shipped: ['delivered'],
+      },
+    },
+    {
+      type: 'state_machine',
+      name: 'order_payment',
+      field: 'payment_status',
+      message: 'Invalid payment status transition.',
+      transitions: {
+        unpaid: ['partial', 'paid'],
+        partial: ['paid', 'refunded'],
+        paid: ['refunded'],
+      },
+    },
+    {
+      type: 'state_machine',
+      name: 'order_approval',
+      field: 'approval_status',
+      message: 'Invalid approval status transition.',
+      transitions: {
+        pending: ['approved', 'rejected'],
+      },
+    },
+  ],
 });
 ```
 
-### `stateMachine` vs `stateMachines`
-
-| Property | Type | Use Case |
-|:---|:---|:---|
-| `stateMachine` | `StateMachineConfig` | Simple objects with a single lifecycle (shorthand) |
-| `stateMachines` | `Record<string, StateMachineConfig>` | Complex objects with parallel state lines |
-
-Both can coexist on the same object. The kernel merges them at runtime.
+<Callout type="info">
+  "Do something when the state changes" (emails, webhooks, downstream record updates) is **not** part of the transition table. Express side effects as a record-triggered [Flow](/docs/guides/metadata/flow) — the state machine only locks the legal edges.
+</Callout>

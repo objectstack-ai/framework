@@ -433,32 +433,39 @@ if (hasCapability(capabilities, 'ui', 'kanbanView')) {
 
 ## Discovery Endpoint
 
-The capabilities schema is typically exposed via the `/api/discovery` endpoint:
+The REST server exposes a discovery document at the API base path (`/api/v1`) and
+at `/api/v1/discovery`. The response follows the `DiscoverySchema`
+(`@objectstack/spec`), where `routes` is a flat map of service-name → route-path and
+`services` is the single source of truth for per-service availability:
 
 ```typescript
-// GET /api/discovery
+// GET /api/v1/discovery
 {
   "name": "ObjectStack Instance",
   "version": "1.0.0",
   "environment": "production",
-  "capabilities": {
-    "data": { /* ... */ },
-    "ui": { /* ... */ },
-    "system": { /* ... */ }
-  },
   "routes": {
-    "data": "/api/data",
-    "metadata": "/api/meta",
-    "auth": "/api/auth",
+    "data": "/api/v1/data",
+    "metadata": "/api/v1/meta",
+    "ui": "/api/v1/ui",
+    "auth": "/api/v1/auth",
     "graphql": "/graphql"
+  },
+  "locale": {
+    "default": "en",
+    "supported": ["en", "zh-CN"],
+    "timezone": "UTC"
+  },
+  "services": {
+    /* per-service { enabled, status, route, provider } entries */
   }
 }
 ```
 
 This allows clients to:
-1. Discover what features are available
-2. Adapt UI based on capabilities
-3. Generate appropriate code
+1. Discover which services are available (via `services`)
+2. Resolve endpoint paths without hardcoding URLs (via `routes`)
+3. Adapt UI based on availability
 4. Validate API requests
 
 ---
@@ -520,8 +527,8 @@ export function SemanticSearch() { /* ... */ }
 
 ## See Also
 
-- [ObjectQL Reference]((/docs/protocol/objectql))
+- [ObjectQL Reference](/docs/protocol/objectql)
 - [ObjectUI Reference](/docs/protocol/objectui)
 - [ObjectOS Reference](/docs/protocol/objectos)
 - [API Discovery](/docs/references/api/discovery)
-- [Driver Capabilities](/docs/references/system/driver/DriverCapabilities)
+- [Driver Capabilities](/docs/references/data/driver)

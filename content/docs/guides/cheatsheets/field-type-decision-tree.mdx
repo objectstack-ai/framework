@@ -38,11 +38,11 @@ flowchart TD
     TEXT -->|Secret value| T8[password]
 
     %% Number branch
-    NUM -->|Decimal number| N1[number]
-    NUM -->|Whole number| N2[integer]
+    NUM -->|Any number| N1[number]
     NUM -->|Money amount| N3[currency]
     NUM -->|Percentage| N4[percent]
     NUM -->|Star rating| N5[rating]
+    NUM -->|Slider input| N6[slider]
 
     %% Date branch
     DATE -->|Date only| D1[date]
@@ -61,16 +61,15 @@ flowchart TD
     REL -->|Reference another object| R1[lookup]
     REL -->|Parent-child cascade| R2[master_detail]
     REL -->|Self-referencing hierarchy| R3[tree]
-    REL -->|Multiple object types| R4[polymorphic]
 
     %% File branch
     FILE -->|Any file| F1[file]
     FILE -->|Image with preview| F2[image]
-    FILE -->|Multiple files| F3[attachment]
+    FILE -->|User profile picture| F3[avatar]
 
     %% Computed branch
     COMP -->|Calculated value| K1[formula]
-    COMP -->|Aggregate children| K2[rollup]
+    COMP -->|Aggregate children| K2[summary]
     COMP -->|Auto-incrementing ID| K3[autonumber]
 
     %% Structured branch
@@ -78,11 +77,10 @@ flowchart TD
     STRUCT -->|GPS coordinates| S2[location]
     STRUCT -->|Color picker| S3[color]
     STRUCT -->|Arbitrary JSON| S4[json]
-    STRUCT -->|Sensitive data| S5[encrypted]
+    STRUCT -->|Sensitive secret value| S5[secret]
 
     %% AI branch
-    AI -->|Vector embedding| A1[vector]
-    AI -->|Text embedding| A2[embedding]
+    AI -->|Vector embedding for semantic search| A1[vector]
 
     style START fill:#4f46e5,color:#fff
     style T1 fill:#059669,color:#fff
@@ -94,10 +92,10 @@ flowchart TD
     style T7 fill:#059669,color:#fff
     style T8 fill:#059669,color:#fff
     style N1 fill:#d97706,color:#fff
-    style N2 fill:#d97706,color:#fff
     style N3 fill:#d97706,color:#fff
     style N4 fill:#d97706,color:#fff
     style N5 fill:#d97706,color:#fff
+    style N6 fill:#d97706,color:#fff
     style D1 fill:#7c3aed,color:#fff
     style D2 fill:#7c3aed,color:#fff
     style D3 fill:#7c3aed,color:#fff
@@ -110,7 +108,6 @@ flowchart TD
     style R1 fill:#0284c7,color:#fff
     style R2 fill:#0284c7,color:#fff
     style R3 fill:#0284c7,color:#fff
-    style R4 fill:#0284c7,color:#fff
     style F1 fill:#be185d,color:#fff
     style F2 fill:#be185d,color:#fff
     style F3 fill:#be185d,color:#fff
@@ -123,7 +120,6 @@ flowchart TD
     style S4 fill:#0d9488,color:#fff
     style S5 fill:#0d9488,color:#fff
     style A1 fill:#6d28d9,color:#fff
-    style A2 fill:#6d28d9,color:#fff
 ```
 
 ---
@@ -141,17 +137,18 @@ flowchart TD
 | `email` | Email address with validation | `email`, `contact_email` |
 | `url` | Web URL with validation | `website`, `linkedin_url` |
 | `phone` | Phone number | `phone`, `mobile` |
-| `password` | Secret/masked value (stored encrypted) | `api_key`, `secret` |
+| `password` | One-way hashed credential (owned by auth subsystem) | `user_password` |
+| `secret` | Reversible encrypted-at-rest value, masked on read | `api_key`, `db_password` |
 
 ### Number Types
 
 | Type | Use When | Example |
 |:---|:---|:---|
-| `number` | Any decimal number | `price`, `weight`, `score` |
-| `integer` | Whole numbers only | `quantity`, `age`, `count` |
+| `number` | Any numeric value (set `precision`/`scale` for decimals) | `price`, `weight`, `quantity` |
 | `currency` | Money amounts with currency code | `amount`, `total_price` |
 | `percent` | Percentage values (0–100 or 0–1) | `completion`, `discount` |
 | `rating` | Star ratings (typically 1–5) | `satisfaction`, `difficulty` |
+| `slider` | Numeric value via slider UI | `volume`, `priority_level` |
 
 ### Date & Time Types
 
@@ -179,7 +176,6 @@ flowchart TD
 | `lookup` | Reference another object (soft link) | `assigned_to → user` |
 | `master_detail` | Parent-child with cascade delete | `line_item → order` |
 | `tree` | Self-referencing hierarchy | `category → category` |
-| `polymorphic` | Reference multiple object types | `related_to → task\|project\|user` |
 
 <Callout type="tip">
 **lookup vs master_detail:** Use `lookup` when the child can exist independently. Use `master_detail` when deleting the parent should delete all children (e.g., order → line items).
@@ -189,16 +185,16 @@ flowchart TD
 
 | Type | Use When | Example |
 |:---|:---|:---|
-| `file` | Any single file upload | `contract`, `resume` |
-| `image` | Image with preview/thumbnail | `avatar`, `product_photo` |
-| `attachment` | Multiple file uploads | `documents`, `screenshots` |
+| `file` | File upload (set `multiple: true` for many files) | `contract`, `documents` |
+| `image` | Image with preview/thumbnail | `product_photo`, `screenshots` |
+| `avatar` | User profile picture | `avatar`, `profile_photo` |
 
 ### Computed Types
 
 | Type | Use When | Example |
 |:---|:---|:---|
 | `formula` | Value calculated from other fields | `full_name = first + last` |
-| `rollup` | Aggregate from child records | `total_amount = SUM(items.price)` |
+| `summary` | Roll-up aggregate from child records | `total_amount = sum(items.price)` |
 | `autonumber` | Auto-incrementing display ID | `ticket_number: TICK-0001` |
 
 ### Structured Data Types
@@ -209,14 +205,13 @@ flowchart TD
 | `location` | GPS coordinates (lat/lng) | `office_location`, `delivery_point` |
 | `color` | Hex color value with picker | `brand_color`, `label_color` |
 | `json` | Arbitrary structured data | `configuration`, `metadata` |
-| `encrypted` | Sensitive data at rest | `ssn`, `tax_id` |
+| `code` | Code editor (JSON/SQL/JS) | `query_body`, `transform` |
 
 ### AI & ML Types
 
 | Type | Use When | Example |
 |:---|:---|:---|
-| `vector` | High-dimensional vector for similarity search | `content_embedding` |
-| `embedding` | Text embedding for semantic search | `description_embedding` |
+| `vector` | High-dimensional embedding for similarity search (semantic search, RAG) | `content_embedding` |
 
 ---
 
@@ -235,11 +230,11 @@ Can't find your use case above? Check this table:
 | Feature flags | `json` | Arbitrary key-value configuration |
 | User avatar | `image` | Single image with thumbnail support |
 | Support ticket ID | `autonumber` | Auto-incrementing human-readable identifier |
-| Total order value | `rollup` | SUM of child line item amounts |
+| Total order value | `summary` | Roll-up sum of child line item amounts |
 | Discount percentage | `percent` | 0–100 range with `%` display |
 | Terms accepted | `boolean` | Simple true/false, no UI toggle needed |
 | Search index | `vector` | Used for AI similarity search |
-| OAuth token | `encrypted` | Sensitive data stored encrypted at rest |
+| OAuth token | `secret` | Reversible value stored encrypted at rest |
 
 ---
 
@@ -247,16 +242,16 @@ Can't find your use case above? Check this table:
 
 | Question | Answer → Field Type |
 |:---|:---|
-| "Can the user type free text?" | `text`, `textarea`, `richtext`, `markdown` |
-| "Is it a number I need to calculate with?" | `number`, `integer`, `currency`, `percent` |
+| "Can the user type free text?" | `text`, `textarea`, `richtext`, `markdown`, `html` |
+| "Is it a number I need to calculate with?" | `number`, `currency`, `percent`, `slider` |
 | "Does the user pick from a list?" | `select`, `multiselect`, `radio`, `checkboxes` |
-| "Does it reference another record?" | `lookup`, `master_detail`, `tree`, `polymorphic` |
-| "Is it a file the user uploads?" | `file`, `image`, `attachment` |
-| "Is the value computed automatically?" | `formula`, `rollup`, `autonumber` |
-| "Does it have internal structure?" | `address`, `location`, `color`, `json` |
-| "Is it sensitive/secret?" | `password`, `encrypted` |
-| "Is it for AI/ML?" | `vector`, `embedding` |
+| "Does it reference another record?" | `lookup`, `master_detail`, `tree` |
+| "Is it a file the user uploads?" | `file`, `image`, `avatar` |
+| "Is the value computed automatically?" | `formula`, `summary`, `autonumber` |
+| "Does it have internal structure?" | `address`, `location`, `color`, `json`, `code` |
+| "Is it sensitive/secret?" | `password`, `secret` |
+| "Is it for AI/ML?" | `vector` |
 
 <Callout type="info">
-**Still unsure?** Start with `text` for strings or `number` for numerics. You can always change the field type later — ObjectStack handles data migration automatically for compatible type changes.
+**Still unsure?** Start with `text` for strings or `number` for numerics. You can change the field type later, but ObjectStack does not auto-convert existing data: compatible changes pass cleanly, while narrowing or incompatible changes surface a build-time warning that existing values may not convert cleanly.
 </Callout>

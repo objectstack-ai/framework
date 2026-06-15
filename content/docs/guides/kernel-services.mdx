@@ -48,16 +48,16 @@ The ObjectStack protocol defines **17 kernel services** registered via the `Core
 
 | # | Service Name | Criticality | Methods | Status | Provider |
 |:--|:-------------|:------------|:--------|:-------|:---------|
-| 1 | **metadata** | `required` | 7 | ⚠️ Framework | Kernel (in-memory) |
+| 1 | **metadata** | `core` | 7 | ⚠️ Framework | Kernel (in-memory) |
 | 2 | **data** | `required` | 9 | ✅ Implemented | `@objectstack/objectql` |
 | 3 | **analytics** | `optional` | 2 | ✅ Implemented | `@objectstack/objectql` |
-| 4 | **auth** | `required` | — | 🟡 In Development | `@objectstack/plugin-auth` |
+| 4 | **auth** | `core` | — | 🟡 In Development | `@objectstack/plugin-auth` |
 | 5 | **ui** | `optional` | 5 | ❌ Plugin Required | TBD plugin |
-| 6 | **workflow** | `optional` | 5 | ❌ Plugin Required | TBD plugin |
+| 6 | **workflow** | `optional` | 3 | ❌ Plugin Required | TBD plugin |
 | 7 | **automation** | `optional` | 1 | ❌ Plugin Required | TBD plugin |
 | 8 | **realtime** | `optional` | 6 | ❌ Plugin Required | TBD plugin |
 | 9 | **notification** | `optional` | 7 | ❌ Plugin Required | TBD plugin |
-| 10 | **ai** | `optional` | 4 | ❌ Plugin Required | TBD plugin |
+| 10 | **ai** | `optional` | 3 | ❌ Plugin Required | TBD plugin |
 | 11 | **i18n** | `core` | 3 | ✅ Built-in (in-memory fallback) | `@objectstack/service-i18n` |
 | 12 | **file-storage** | `optional` | — | ❌ Plugin Required | TBD plugin |
 | 13 | **search** | `optional` | — | ❌ Plugin Required | TBD plugin |
@@ -77,7 +77,7 @@ The ObjectStack protocol defines **17 kernel services** registered via the `Core
 
 ## 1. metadata Service ⚠️ Framework
 
-**Service Name**: `metadata` · **Criticality**: `required`  
+**Service Name**: `metadata` · **Criticality**: `core`  
 **Implementation**: Kernel — `SchemaRegistry` (in-memory)  
 **Route Mounts**: `/api/v1/meta`, `/api/v1`, `/api/v1/packages`
 
@@ -186,9 +186,9 @@ The discovery endpoint returns a `services` map so clients know what is availabl
 
 ---
 
-## 4. auth Service ❌ Plugin Required
+## 4. auth Service 🟡 In Development
 
-**Service Name**: `auth` · **Criticality**: `required`  
+**Service Name**: `auth` · **Criticality**: `core`  
 **Route Mount**: `/api/v1/auth` — only exposed when a plugin registers the auth service
 
 <Callout type="warn">
@@ -222,9 +222,9 @@ The `auth` service covers both **authentication** (identity) and **authorization
 `listViews`, `getView`, `createView`, `updateView`, `deleteView`  
 View CRUD, layout engine, action registry, permission filtering.
 
-### 6. workflow Service — 5 methods
-`getWorkflowConfig`, `getWorkflowState`, `workflowTransition`, `workflowApprove`, `workflowReject`  
-State machine transitions and approval-node decision helpers.
+### 6. workflow Service — 3 methods
+`getWorkflowConfig`, `getWorkflowState`, `workflowTransition`  
+State machine transitions. Approve/reject are no longer workflow methods — per ADR-0019 they moved to the request-id-based approvals API under `/api/v1/approvals`.
 
 ### 7. automation Service — 1 method
 `triggerAutomation`  
@@ -240,8 +240,8 @@ Trigger engine, event triggers from ObjectQL hooks, flow executor, scheduled tri
 ### 9. notification — 7 methods
 `registerDevice`, `unregisterDevice`, `getNotificationPreferences`, `updateNotificationPreferences`, `listNotifications`, `markNotificationsRead`, `markAllNotificationsRead`
 
-### 10. ai — 4 methods
-`aiNlq`, `aiChat`, `aiSuggest`, `aiInsights`
+### 10. ai — 3 methods
+`aiNlq`, `aiSuggest`, `aiInsights`
 
 ### 11. i18n — 3 methods
 `getLocales`, `getTranslations`, `getFieldLabels`
@@ -416,7 +416,7 @@ When a plugin registers a service, the discovery endpoint automatically updates:
     description="Full protocol implementation matrix"
   />
   <Card 
-    href="https://github.com/objectstack-ai/spec" 
+    href="https://github.com/objectstack-ai/framework" 
     title="Contribute"
     description="Help build plugins on GitHub"
   />

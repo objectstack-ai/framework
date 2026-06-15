@@ -543,16 +543,16 @@ If upgrade fails, ObjectOS **automatically rolls back** to previous version.
 
 #### Manual Rollback
 
-`objectstack rollback` activates a previously published artifact revision —
+`os rollback` activates a previously published artifact revision —
 the cloud equivalent of "switch back to yesterday's build". It does not run
 DDL or undo schema migrations.
 
 ```bash
-# Activate the previous artifact revision
-objectstack rollback
+# Activate a specific revision (commit) for an environment
+os rollback --environment <env-id> --commit <commit-id>
 
-# Activate a specific revision
-objectstack rollback --to <revision>
+# Environment can also be supplied via OS_ENVIRONMENT_ID
+OS_ENVIRONMENT_ID=<env-id> os rollback --commit <commit-id>
 ```
 
 For schema rollback, run the `down()` of your generated migration through
@@ -790,4 +790,4 @@ ObjectOS lifecycle management provides:
 - **Automatic Rollback:** Failed upgrades auto-revert to previous version
 - **Health Monitoring:** Built-in health checks validate system state
 
-**Next:** Learn how to define plugin manifests in [Plugin Specification](/docs/protocols/objectos/plugin-spec).
+**Next:** Learn how to define plugin manifests in [Plugin Specification](/docs/protocol/objectos/plugin-spec).

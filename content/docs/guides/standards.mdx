@@ -122,8 +122,12 @@ export const MyObject = ObjectSchema.create({
   
   // ✅ Business Rules
   validations: [...],
-  workflows: [...],
 });
+
+// Note: record-triggered automation is NOT an ObjectSchema field.
+// Author it as a lifecycle hook (src/objects/<name>.hook.ts) or a
+// top-level `record_change` flow — `workflows: [...]` on the object
+// schema is rejected at parse time.
 ```
 
 ### Field Type Selection Guide
@@ -187,8 +191,8 @@ App.create({
   icon: 'icon-name',
   branding: {
     primaryColor: '#4169E1',
-    secondaryColor: '#00AA00',
     logo: '/assets/logo.png',
+    favicon: '/assets/favicon.ico',
   },
   
   navigation: [
@@ -231,37 +235,41 @@ layout: { x: 0, y: 0, w: 3, h: 2 }
 
 ## 🔒 4. Security Standards
 
-### Profile Structure
+### Permission Set / Profile Structure
+
+A profile is just a `PermissionSet` with `isProfile: true`. There is no separate
+`Profile` type — both share the same `PermissionSetSchema`.
 
 ```typescript
-export const MyProfile: Profile = {
+import type { PermissionSet } from '@objectstack/spec/security';
+
+export const MyProfile: PermissionSet = {
   name: 'profile_name',
   label: 'Profile Label',
-  
-  // Object permissions (CRUD)
-  objectPermissions: {
+  isProfile: true,
+
+  // Object permissions: <object_name> -> permissions
+  objects: {
     account: {
-      create: true,
-      read: true,
-      update: true,
-      delete: false,
-      viewAll: false,
-      modifyAll: false,
+      allowCreate: true,
+      allowRead: true,
+      allowEdit: true,
+      allowDelete: false,
+      viewAllRecords: false,
+      modifyAllRecords: false,
     },
   },
-  
-  // Field permissions
-  fieldPermissions: {
-    account: {
-      sensitive_field: { read: false, update: false },
-    },
+
+  // Field-level security: <object>.<field> -> permissions
+  fields: {
+    'account.sensitive_field': { readable: false, editable: false },
   },
-  
-  // Tab visibility
-  tabVisibility: {
-    account: 'default',     // Default tab
-    lead: 'available',      // Available but not default
-    admin: 'hidden',        // Hidden
+
+  // App/tab visibility
+  tabPermissions: {
+    app_crm: 'default_on',     // Shown by default
+    app_sales: 'visible',      // Visible
+    app_admin: 'hidden',       // Hidden
   },
 };
 ```
@@ -269,21 +277,23 @@ export const MyProfile: Profile = {
 ### Sharing Rule Pattern
 
 ```typescript
+import type { SharingRule } from '@objectstack/spec/security';
+
 export const MySharingRule: SharingRule = {
   name: 'rule_name',
-  objectName: 'object_name',
-  type: 'criteria_based',
-  
-  criteria: {
-    field: { $eq: 'value' },
-  },
-  
+  object: 'object_name',
+  type: 'criteria',                       // 'criteria' | 'owner'
+
+  // CEL predicate — records matching it are shared
+  condition: 'record.department == "Sales"',
+
+  // Recipient: one of user | group | role | role_and_subordinates | guest
   sharedWith: {
     type: 'role',
-    roles: ['role_name'],
+    value: 'role_name',
   },
-  
-  accessLevel: 'read_write',
+
+  accessLevel: 'edit',                    // 'read' | 'edit' | 'full'
 };
 ```
 
@@ -294,26 +304,28 @@ export const MySharingRule: SharingRule = {
 ### Flow Definition
 
 ```typescript
-export const MyFlow: Flow = {
+import { defineFlow } from '@objectstack/spec/automation';
+
+export const MyFlow = defineFlow({
   name: 'flow_name',
   label: 'Flow Label',
   description: 'What this flow does',
-  type: 'autolaunched',  // or 'screen', 'scheduled'
-  
-  triggerType: 'on_create',
-  objectName: 'object_name',
-  criteria: 'condition',
-  
+  type: 'autolaunched',  // 'autolaunched' | 'record_change' | 'schedule' | 'screen' | 'api'
+  status: 'active',      // 'draft' | 'active' | 'obsolete' | 'invalid'
+
   variables: [...],
-  
-  steps: [
-    {
-      id: 'step_1',
-      type: 'record_lookup',
-      ...
-    },
+
+  // A flow is a graph of nodes connected by edges (not a linear `steps` list)
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    { id: 'get_record', type: 'get_record', label: 'Get Record' },
+    { id: 'end', type: 'end', label: 'End' },
   ],
-};
+  edges: [
+    { id: 'e1', source: 'start', target: 'get_record' },
+    { id: 'e2', source: 'get_record', target: 'end' },
+  ],
+});
 ```
 
 ### Flow Pattern
@@ -325,11 +337,6 @@ flows: [
     label: 'Flow Name',
     type: 'record_change',
     status: 'active',
-    trigger: {
-      objectName: 'object_name',
-      operations: ['update'],
-      condition: 'record.field != previous.field',
-    },
     nodes: [
       { id: 'start', type: 'start', label: 'Start' },
       { id: 'update_record', type: 'update_record', label: 'Update Record' },
@@ -350,54 +357,53 @@ flows: [
 ### AI Agent Pattern
 
 ```typescript
+import type { Agent } from '@objectstack/spec/ai';
+
 export const MyAgent: Agent = {
   name: 'agent_name',
   label: 'Agent Label',
-  description: 'What this agent does',
-  
-  role: 'assistant',  // or 'worker', 'analyst', 'creator'
-  
+
+  // Free-form persona string (e.g. "Senior Support Engineer"), not an enum
+  role: 'Sales Assistant',
+
   instructions: `Clear instructions for the AI...`,
-  
+
   model: {
-    provider: 'openai',
+    provider: 'openai',  // 'openai' | 'azure_openai' | 'anthropic' | 'local'
     model: 'gpt-4',
     temperature: 0.7,
     maxTokens: 2000,
   },
-  
+
+  // Agent -> Skill -> Tool architecture; `tools` is the legacy inline fallback
+  skills: ['case_management'],
   tools: [...],
-  knowledge: {...},
-  triggers: [...],
+  knowledge: { topics: [...], indexes: [...] },
 };
 ```
 
-### RAG Pipeline Pattern
+### Knowledge Source Pattern (RAG)
+
+> The standalone `RagPipeline` schema was removed and collapsed into the
+> embedding / knowledge-source schemas (`packages/spec/src/ai/embedding.zod.ts`,
+> `knowledge-source.zod.ts`). RAG is now configured by declaring **knowledge
+> sources** that adapters index, then attaching them to an agent via
+> `Agent.knowledge`.
 
 ```typescript
-export const MyRAG: RagPipeline = {
-  name: 'rag_name',
-  label: 'RAG Label',
-  
-  indexes: [
-    {
-      name: 'index_name',
-      type: 'vector',
-      sources: [...],
-      embedding: {...},
-      chunking: {...},
-    }
-  ],
-  
-  retrieval: {
-    strategy: 'hybrid',
-    vectorSearch: {...},
+import type { KnowledgeSource } from '@objectstack/spec/ai';
+
+export const MyKnowledgeSource: KnowledgeSource = {
+  id: 'support_docs',
+  label: 'Support Docs',
+  adapter: 'adapter_id',
+  source: {
+    kind: 'object',                 // 'object' | 'file' | 'http'
+    object: 'article',
+    contentFields: ['title', 'body'],
   },
-  
-  generation: {
-    model: {...},
-    promptTemplate: `...`,
-  },
+  embedding: { /* EmbeddingModel ref */ },
+  vectorStore: { /* VectorStore ref */ },
 };
 ```
 

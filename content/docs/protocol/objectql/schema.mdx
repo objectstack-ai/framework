@@ -76,7 +76,7 @@ label: Project
 
 This 2-line definition creates:
 - Database table `project` with system fields (`id`, `created_at`, `updated_at`)
-- REST API: `GET/POST/PUT/DELETE /api/project`
+- REST API under `/api/v1/data/project` (list, get, create, update, delete)
 - Admin UI: List view + Form
 - TypeScript types
 
@@ -88,15 +88,13 @@ label: Project
 pluralLabel: Projects
 description: "A business project or initiative"
 icon: standard:case
-# color: "#4A90E2" # Removed or check if color exists in ObjectSchemaBase
-# bucket: main # Removed or check
-# datasource: postgres_primary # Removed or check
+datasource: default        # Datasource ID; "default" is the primary DB
+# color / bucket / offline_sync are NOT ObjectSchema fields
 enable:
   trackHistory: true
   searchable: true
   apiEnabled: true
-  activities: true # Replaces workflow?
-  # offline_sync: true # Removed not in schema
+  activities: true
 fields:
   name:
     type: text
@@ -123,7 +121,8 @@ fields:
     required: true
 validations:
   - name: budget_positive
-    condition: "budget < 0"
+    type: script
+    condition: "record.budget < 0"
     message: "Budget must be positive"
 ```
 
@@ -175,23 +174,26 @@ export const Project = ObjectSchema.create({
     activities: true,
   },
 
-  stateMachine: {
-    id: 'project_lifecycle',
-    initial: 'draft',
-    states: {
-      draft: { on: { ACTIVATE: 'active' } },
-      active: { on: { COMPLETE: 'completed' } },
-      completed: { type: 'final' }
-    }
-  },
-  
   validations: [
     {
       name: 'budget_positive',
       type: 'script',
       severity: 'error',
       message: 'Budget must be positive',
-      condition: 'budget < 0',
+      condition: 'record.budget < 0',
+    },
+    // Lifecycle state machine — modelled as a `state_machine` validation rule
+    // (ADR-0020), not a separate `stateMachine` map.
+    {
+      name: 'project_lifecycle',
+      type: 'state_machine',
+      field: 'status',
+      message: 'Illegal status transition',
+      transitions: {
+        draft: ['active'],
+        active: ['completed'],
+        completed: [],
+      },
     },
   ],
 });
@@ -202,16 +204,14 @@ export const Project = ObjectSchema.create({
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `name` | `string` | ✅ | **Machine name.** Must be `snake_case`, unique across the system. |
-| `label` | `string` | ✅ | **Display name** for UI (singular form). |
-| `pluralLabel` | `string` | ❌ | Plural form for lists. Defaults to `label + "s"`. |
+| `label` | `string` | ❌ | **Display name** for UI (singular form). Auto-generated from `name` if omitted. |
+| `pluralLabel` | `string` | ❌ | Plural form for lists. |
 | `description` | `string` | ❌ | Human-readable description for documentation. |
-| `icon` | `string` | ❌ | Icon identifier (e.g., `standard:case`, `custom:project`). |
-| `datasource` | `string` | ❌ | External datasource ID. If omitted, uses default database. |
+| `icon` | `string` | ❌ | Icon identifier (Lucide/Material name). |
+| `datasource` | `string` | ❌ | Target datasource ID. Defaults to `"default"` (the primary DB). |
 | `enable` | `object` | ❌ | Feature flags (see [Capabilities](#capabilities)). |
-| `fields` | `object` | ❌ | Field definitions (see [Field Definition](#field-definition)). |
-| `stateMachine` | `object` | ❌ | Lifecycle state machine definition (see [State Machine](./state-machine.mdx)). |
-| `validations` | `array` | ❌ | Business validation rules (see [Validation](#validation-rules)). |
-| `triggers` | `array` | ❌ | Database triggers (before/after insert/update/delete). |
+| `fields` | `object` | ✅ | Field definitions map (see [Field Definition](#field-definition)). |
+| `validations` | `array` | ❌ | Business validation rules, including state-machine transitions (see [Validation](#validation-rules)). |
 | `indexes` | `array` | ❌ | Composite indexes for query optimization. |
 
 ### Naming Conventions
@@ -278,7 +278,7 @@ fields:
 
 | Property | Type | Applies To | Description |
 |----------|------|------------|-------------|
-| `type` | `string` | All | **Required.** Field type (see [Types](/docs/protocols/objectql/types)). |
+| `type` | `string` | All | **Required.** Field type (see [Types](/docs/protocol/objectql/types)). |
 | `label` | `string` | All | **Required.** Display label in UI. |
 | `required` | `boolean` | All | Validation: Field must have a value. |
 | `unique` | `boolean` | All | Enforce uniqueness at database level. |
@@ -304,31 +304,31 @@ Every object automatically includes system fields:
 ```yaml
 # Auto-generated (not defined in .object.yml)
 id:
-  type: id
+  type: text
   label: Record ID
-  read_only: true
+  readonly: true
 
 created_at:
   type: datetime
   label: Created At
-  read_only: true
+  readonly: true
 
 updated_at:
   type: datetime
   label: Updated At
-  read_only: true
+  readonly: true
 
 created_by:
   type: lookup
-  reference: user
+  reference: sys_user
   label: Created By
-  # readonly: true # Managed by system
+  readonly: true  # Managed by system
 
 updated_by:
   type: lookup
-  reference: user
+  reference: sys_user
   label: Updated By
-  # readonly: true # Managed by system
+  readonly: true  # Managed by system
 ```
 
 **Customizing system fields:**
@@ -355,12 +355,10 @@ description:
   type: textarea
   label: Description
   maxLength: 5000
-  # rows: 10 # UI hint, moved to UI protocol or check if supported
 
 bio:
   type: html
   label: Biography
-  # sanitize: true  # Remove dangerous HTML tags (Check security config)
 ```
 
 #### Numeric Fields
@@ -377,15 +375,15 @@ discount_rate:
   type: percent
   label: Discount
   scale: 2
-  min_value: 0
-  max_value: 100
+  min: 0
+  max: 100
 
 revenue:
   type: currency
   label: Annual Revenue
   scale: 2
   precision: 18
-  default_value: { amount: 0, currency: 'USD' }
+  defaultValue: { value: 0, currency: 'USD' }
 ```
 
 #### Date/Time Fields
@@ -399,7 +397,7 @@ start_date:
 due_datetime:
   type: datetime
   label: Due Date & Time
-  default_value: "{{NOW() + 7}}"  # 7 days from now
+  defaultValue: "daysFromNow(7)"  # 7 days from now (CEL)
 ```
 
 #### Boolean Fields
@@ -408,12 +406,12 @@ due_datetime:
 is_active:
   type: boolean
   label: Active
-  default_value: true
+  defaultValue: true
 
 email_opt_in:
-  type: checkbox
+  type: toggle
   label: Subscribe to Newsletter
-  default_value: false
+  defaultValue: false
 ```
 
 #### Selection Fields
@@ -427,10 +425,10 @@ priority:
     - { value: medium, label: Medium, color: yellow }
     - { value: high, label: High, color: orange }
     - { value: critical, label: Critical, color: red }
-  default_value: medium
+  defaultValue: medium
 
 tags:
-  type: multi_select
+  type: multiselect
   label: Tags
   options:
     - { value: customer, label: Customer }
@@ -445,16 +443,16 @@ tags:
 account_id:
   type: lookup
   label: Account
-  reference_to: account
+  reference: account
   required: true
-  reference_filters:
-    - ['is_active', '=', true]  # Only show active accounts
+  referenceFilters:
+    - "is_active = true"  # Only show active accounts
 
 project_id:
   type: master_detail
   label: Project
-  reference_to: project
-  cascade_delete: true  # Delete tasks when project is deleted
+  reference: project
+  deleteBehavior: cascade  # Delete tasks when project is deleted
 ```
 
 ## Validation Rules
@@ -462,64 +460,77 @@ project_id:
 Validation rules enforce business logic at the data layer:
 
 ```yaml
-validation_rules:
+validations:
   # Simple comparison
   - name: end_after_start
-    condition: "end_date < start_date"
+    type: script
+    condition: "record.end_date < record.start_date"
     message: "End date must be after start date"
     severity: error
   
   # Cross-field validation
   - name: discount_requires_approval
-    condition: "discount > 20 AND approved_by = null"
+    type: cross_field
+    condition: "record.discount > 20 && record.approved_by == null"
+    fields: [discount, approved_by]
     message: "Discounts over 20% require manager approval"
     severity: error
   
   # Conditional validation
   - name: enterprise_contract_required
-    condition: "account_type = 'Enterprise' AND contract_value = null"
+    type: script
+    condition: "record.account_type == 'enterprise' && record.contract_value == null"
     message: "Enterprise accounts must have a contract value"
     severity: error
     active: true
   
   # Warning (non-blocking)
   - name: budget_threshold_warning
-    condition: "budget > 1000000"
+    type: script
+    condition: "record.budget > 1000000"
     message: "Large budget. Please verify approval."
     severity: warning
 ```
 
+Each rule has a `type` (`script`, `cross_field`, `format`, `json_schema`, `conditional`,
+or `state_machine`). The `condition` is a CEL predicate — when it evaluates to `true`,
+the rule **fails** and `message` is shown.
+
 ### Validation Formula Syntax
 
-Formulas use Excel-like syntax:
+Conditions are written in **CEL** (Common Expression Language). Fields are referenced
+through the `record` binding (e.g. `record.budget`). A condition that evaluates to
+`true` means the rule **fails** and the `message` is shown.
 
 **Operators:**
-- Comparison: `=`, `!=`, `>`, `<`, `>=`, `<=`
-- Logical: `AND`, `OR`, `NOT`
-- Arithmetic: `+`, `-`, `*`, `/`, `^` (power)
-- String: `&` (concatenate)
+- Comparison: `==`, `!=`, `>`, `<`, `>=`, `<=`
+- Logical: `&&`, `||`, `!`
+- Arithmetic: `+`, `-`, `*`, `/`, `%`
+- String concatenation: `+`
 
-**Functions:**
-- `ISBLANK(field)`: Check if field is empty
-- `LEN(field)`: String length
-- `CONTAINS(field, "text")`: Substring check
-- `REGEX(field, "pattern")`: Regular expression
-- `TODAY()`: Current date
-- `NOW()`: Current datetime
+**Built-in functions** (from the formula stdlib):
+- `isBlank(value)`: Check if a value is null, empty string, or empty list
+- `coalesce(value, fallback)`: Return `value` unless null/undefined
+- `trim(value)`: Trim surrounding whitespace
+- `len(value)` / `size(value)`: Length of a string or list
+- `contains(s, sub)`, `startsWith(s, sub)`, `endsWith(s, sub)`, `matches(s, regex)`
+- `today()`: Current date (UTC, start of day)
+- `now()`: Current timestamp
+- `daysFromNow(n)`, `daysAgo(n)`: Relative timestamps
 
 **Examples:**
 ```yaml
-# Date validation
-"start_date > TODAY()"
+# Date validation (fails when start_date is in the past)
+"record.start_date < today()"
 
-# String validation
-"LEN(email) > 0 AND CONTAINS(email, '@')"
+# String validation (fails when email is missing or has no '@')
+"isBlank(record.email) || !record.email.contains('@')"
 
-# Null check
-"NOT(ISBLANK(manager_id))"
+# Null check (fails when manager is unset)
+"isBlank(record.manager_id)"
 
 # Complex logic
-"(status = 'Closed' AND close_date != null) OR status != 'Closed'"
+"record.status == 'closed' && record.close_date == null"
 ```
 
 ## Indexes
@@ -540,10 +551,12 @@ indexes:
   - fields: [name, description]
     type: fulltext
   
-  # Geospatial index
-  - fields: [location]
-    type: geo
+  # GIN index (e.g. for JSON / array columns)
+  - fields: [attributes]
+    type: gin
 ```
+
+Supported index `type` values: `btree` (default), `hash`, `gin`, `gist`, `fulltext`.
 
 **Index Strategy:**
 - **Add indexes for:**
@@ -556,89 +569,60 @@ indexes:
   - Fields that change frequently
   - Large text fields (use full-text search instead)
 
-## Triggers
+## Lifecycle Hooks
 
-Execute code on data changes:
+Record-triggered logic is **not** an object-schema field — `triggers` (and `hooks`,
+`workflows`) are rejected at build time. Instead, author a lifecycle hook in its own
+`src/objects/<name>.hook.ts` module as a typed `Hook` and export it (or model the
+automation as a top-level `record_change` flow).
 
-```yaml
-triggers:
-  # Before insert
-  - event: before_insert
-    handler: set_owner
-    code: |
-      record.owner_id = context.user.id;
-  
-  # After insert
-  - event: after_insert
-    handler: send_welcome_email
-    async: true
-    code: |
-      await emailService.send({
-        to: record.email,
-        template: 'welcome'
-      });
-  
-  # Before update
-  - event: before_update
-    handler: validate_status_change
-    condition: "old.status != new.status"
-    code: |
-      if (old.status === 'Closed' && new.status !== 'Closed') {
-        throw new Error('Cannot reopen closed records');
-      }
+```typescript
+// src/objects/customer.hook.ts
+import { Hook, HookContext } from '@objectstack/spec/data';
+
+const customerHook: Hook = {
+  name: 'customer_logic',
+  object: 'customer',
+  events: ['beforeInsert', 'afterInsert', 'beforeUpdate'],
+  handler: async (ctx: HookContext) => {
+    // ctx exposes the input, the previous record (on update), the event, and
+    // the session — e.g. set an owner on insert, send an email on afterInsert,
+    // guard a status transition on beforeUpdate, etc.
+  },
+};
+
+export default customerHook;
 ```
 
-**Event Types:**
-- `before_insert`: Before creating a record
-- `after_insert`: After creating a record
-- `before_update`: Before updating a record
-- `after_update`: After updating a record
-- `before_delete`: Before deleting a record
-- `after_delete`: After deleting a record
+**Event Types** (camelCase):
+- `beforeInsert` / `afterInsert`
+- `beforeUpdate` / `afterUpdate`
+- `beforeDelete` / `afterDelete`
+- Query-side: `beforeFind` / `afterFind`, `beforeCount` / `afterCount`, and the
+  bulk variants `beforeUpdateMany` / `beforeDeleteMany`, etc.
 
 ## Advanced Features
 
-### Inheritance (Mixins)
+### Object Extensions
 
-Reuse field definitions across objects:
+One package can add fields, validations, or indexes to an object **owned** by
+another package via the package-level `objectExtensions` array (declared in the
+stack/package manifest, not on the object schema itself):
 
-```yaml
-# mixins/auditable.mixin.yml
-fields:
-  created_at:
-    type: datetime
-    label: Created At
-    # readonly: true
-  updated_at:
-    type: datetime
-    label: Updated At
-    # readonly: true
-
-# customer.object.yml
-name: customer
-extends: [auditable]  # Inherit fields from mixin
-fields:
-  company_name:
-    type: text
-```
-
-### Polymorphic References
-
-Reference multiple object types:
-
-```yaml
-# activity.object.yml
-parent_id:
-  type: polymorphic
-  label: Related To
-  reference: [account, contact, opportunity]
-```
-
-Query polymorphic fields:
 ```typescript
-const activity = await ObjectQL.findOne('activity', id);
-// activity.parent_id = { id: '123', _type: 'account' }
+objectExtensions: [
+  {
+    extend: 'contact',                       // target object to extend
+    fields: {
+      sales_stage: Field.select(['new', 'qualified', 'won']),
+    },
+  },
+];
 ```
+
+Multiple packages may extend the same object; extensions are merged at boot time
+by `priority` (higher wins on conflict). There is no `extends:` key or `.mixin.yml`
+inheritance mechanism on an object schema.
 
 ### Computed Fields (Virtual)
 
@@ -648,8 +632,7 @@ Fields calculated at query time (not stored):
 full_name:
   type: formula
   label: Full Name
-  expression: "first_name & ' ' & last_name" # formula -> expression
-  # virtual: true  # Not stored in database (Implied by formula type?)
+  expression: "record.first_name + ' ' + record.last_name"  # CEL expression
 ```
 
 ### Multi-Tenant Schemas
@@ -659,85 +642,45 @@ Isolate data by tenant:
 ```yaml
 name: customer
 tenancy:
-  enabled: true  # Automatically filter by tenant_id
+  enabled: true       # Automatically filter by the tenant field
+  strategy: shared    # shared (row-level) | isolated (DB per tenant) | hybrid
+  tenantField: tenant_id
 fields:
   tenant_id:
     type: lookup
     reference: tenant
     required: true
-    defaultValue: "{{CURRENT_TENANT()}}"
 ```
 
-**Runtime behavior:**
-```typescript
-// User in Tenant A queries customers
-const customers = await ObjectQL.query({ object: 'customer' });
-
-// ObjectQL automatically adds: WHERE tenant_id = 'tenant_a'
-// User CANNOT access Tenant B's data
-```
+When the kernel runs in multi-tenant mode (`OS_MULTI_ORG_ENABLED=true`; the older
+`OS_MULTI_TENANT` is still accepted as a deprecated alias), the registry also
+auto-injects an `organization_id` lookup on every user object, and the default
+`tenant_isolation` RLS policy scopes reads/writes to the caller's tenant — so a user in
+Tenant A cannot see Tenant B's records.
 
 ## Schema Versioning
 
-### Migration Strategy
-
-When schemas change, ObjectQL generates migrations:
-
-**Before:**
-```yaml
-# v1: customer.object.yml
-fields:
-  name:
-    type: text
-```
-
-**After:**
-```yaml
-# v2: customer.object.yml
-fields:
-  first_name:
-    type: text
-    migration:
-      from: name
-      transform: "SPLIT(name, ' ')[0]"
-  
-  last_name:
-    type: text
-    migration:
-      from: name
-      transform: "SPLIT(name, ' ')[1]"
-```
-
-**Generated migration:**
-```sql
--- PostgreSQL
-ALTER TABLE customer ADD COLUMN first_name TEXT;
-ALTER TABLE customer ADD COLUMN last_name TEXT;
-
-UPDATE customer SET
-  first_name = SPLIT_PART(name, ' ', 1),
-  last_name = SPLIT_PART(name, ' ', 2);
-
-ALTER TABLE customer DROP COLUMN name;
-```
-
 ### Deployment Workflow
 
+Schema changes flow through the `os` CLI: validate the config against the protocol
+schema, compile it to a JSON artifact, compare it against the previously deployed
+config to surface breaking changes, then publish the artifact to ObjectStack Cloud.
+
 ```bash
-# 1. Detect schema changes
-objectstack diff
+# 1. Validate the config against the protocol schema
+os validate
 
-# 2. Generate migration plan
-objectstack migrate:plan
+# 2. Compile to a deployable JSON artifact
+os build
 
-# 3. Review migration SQL
-cat .objectstack/migrations/001_add_customer_name.sql
+# 3. Compare two configs to detect breaking changes
+os diff ./before.json ./after.json
 
-# 4. Apply migration
-objectstack deploy --migrate
+# 4. Publish the compiled artifact to ObjectStack Cloud
+os publish
 
-# 5. Rollback if needed
-objectstack migrate:rollback
+# 5. Roll back / forward to a previously published revision
+os rollback --commit <commit-id>
 ```
 
 ## Best Practices
@@ -811,10 +754,12 @@ status:
   type: select  # Better than text for fixed values
   options: [...]
 
-# Avoid large text in main table
-file_content:
-  type: text
-  store: blob_storage  # Store in separate table/S3
+# Store large binary content as a file/attachment instead of inline text
+attachment:
+  type: file
+  label: Attachment
+  fileAttachmentConfig:
+    storageProvider: s3  # Offload to object storage
 ```
 
 ## Examples: Real-World Schemas
@@ -873,7 +818,7 @@ fields:
   owner_id:
     type: lookup
     label: Account Owner
-    reference: user
+    reference: sys_user
     required: true
   
   parent_account_id:
@@ -899,7 +844,8 @@ fields:
 
 validations:
   - name: enterprise_revenue_required
-    condition: "industry = 'finance' AND annual_revenue = null"
+    type: script
+    condition: "record.industry == 'finance' && record.annual_revenue == null"
     message: "Financial services accounts must have revenue"
 ```
 
@@ -965,17 +911,17 @@ indexes:
 <Cards>
   <Card
     title="Type System"
-    href="/docs/protocols/objectql/types"
+    href="/docs/protocol/objectql/types"
     description="Learn all 20+ field types: scalars, relationships, formulas"
   />
   <Card
     title="Query Syntax"
-    href="/docs/protocols/objectql/query-syntax"
+    href="/docs/protocol/objectql/query-syntax"
     description="Write database-agnostic queries with filters and joins"
   />
   <Card
     title="Security"
-    href="/docs/protocols/objectql/security"
+    href="/docs/protocol/objectql/security"
     description="Implement row-level and field-level access control"
   />
 </Cards>

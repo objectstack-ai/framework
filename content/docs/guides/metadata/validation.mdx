@@ -5,7 +5,15 @@ description: Define data integrity rules — formula conditions, uniqueness, for
 
 # Validation Metadata
 
-**Validation rules** enforce data integrity at the platform level. They run automatically on insert, update, or delete events, preventing invalid data from being saved. ObjectStack supports 9 validation types covering formulas, uniqueness, formats, state transitions, and custom logic.
+**Validation rules** enforce data integrity at the platform level. They run automatically on the write path (insert/update), preventing invalid data from being saved. A validation rule is a deterministic, synchronous, side-effect-free predicate over a single record — it must be decidable from the incoming write (and, on update, the prior record) with no I/O. ObjectStack supports 6 validation types: `script`, `state_machine`, `format`, `cross_field`, `json_schema`, and `conditional`.
+
+<Callout type="info">
+Three patterns that look like validation rules are deliberately **not** rule types, because each needs I/O or is a client-side concern. Use the layer that already does each one correctly:
+
+- **Uniqueness** → a unique index (`ObjectSchema.indexes`, `{ fields, unique: true }`, with `partial` for a scoped constraint) or field-level `unique: true`. A SELECT-then-INSERT rule is inherently racy (TOCTOU); a DB unique constraint is not.
+- **Async / remote validation** → a client-form concern, and an SSRF/latency hazard on the server write path. Keep it in the form layer, or enforce the invariant with a `unique` index / lifecycle hook.
+- **Custom handler** → a `beforeInsert` / `beforeUpdate` lifecycle hook, the supported extension point for arbitrary validation code.
+</Callout>
 
 ## Basic Structure
 
@@ -37,19 +45,17 @@ export const Order = ObjectSchema.create({
       type: 'script',
       severity: 'error',
       message: 'Amount must be greater than zero',
-      condition: 'amount <= 0',
+      // CEL predicate — TRUE means the record is invalid.
+      condition: 'record.amount <= 0',
       events: ['insert', 'update'],
-    },
-    {
-      name: 'email_unique',
-      type: 'uniqueness',
-      severity: 'error',
-      message: 'Contact email must be unique',
-      fields: ['email'],
     },
   ],
 });
 ```
+
+<Callout type="info">
+Condition expressions are **CEL** (evaluated by `@objectstack/formula`), not Salesforce-style formulas. Reference the incoming record via `record.<field>`, use `==`/`!=`, `&&`/`||`, and helpers like `isBlank(x)` and `has(record.field)`. A string condition is accepted as authoring shorthand and normalized to `{ dialect: 'cel', source }` at build time.
+</Callout>
 
 ## Common Properties
 
@@ -60,10 +66,10 @@ All validation types share these base properties:
 | `name` | `string` | ✅ | Unique rule name (`snake_case`) |
 | `label` | `string` | optional | Display label |
 | `description` | `string` | optional | Developer documentation |
-| `active` | `boolean` | ✅ | Is the rule active |
-| `severity` | `enum` | ✅ | `'error'` (blocks save), `'warning'` (allows save), `'info'` |
+| `active` | `boolean` | optional | Is the rule active (default: `true`) |
+| `severity` | `enum` | optional | `'error'` (blocks save), `'warning'`, `'info'` (default: `'error'`) |
 | `message` | `string` | ✅ | User-facing error message |
-| `events` | `enum[]` | ✅ | When to run: `'insert'`, `'update'`, `'delete'` |
+| `events` | `enum[]` | optional | When to run: `'insert'`, `'update'`, `'delete'` (default: `['insert', 'update']`) |
 | `priority` | `number` | optional | Execution order (0-9999, lower runs first, default: 100) |
 | `tags` | `string[]` | optional | Categorization tags |
 
@@ -87,46 +93,27 @@ Formula-based validation using expressions:
   type: 'script',
   severity: 'error',
   message: 'Close date is required for closed deals',
-  condition: "status = 'closed_won' AND ISBLANK(close_date)",
+  condition: "record.status == 'closed_won' && isBlank(record.close_date)",
   events: ['insert', 'update'],
 }
 ```
 
-The `condition` expression should evaluate to `true` when the data is **invalid**.
+The `condition` is a **CEL** predicate and should evaluate to `true` when the data is **invalid**. A predicate that cannot be evaluated (parse error, unbound variable) is treated as a broken rule — it is logged and skipped rather than blocking the write.
 
-### Uniqueness Validation
+### Uniqueness (use an index, not a validation rule)
 
-Ensure field values are unique (single or composite):
+There is **no** `uniqueness` validation type. A SELECT-then-INSERT rule is inherently racy (TOCTOU), so uniqueness is enforced at the data layer instead:
 
 ```typescript
-// Single field uniqueness
-{
-  name: 'email_unique',
-  type: 'uniqueness',
-  severity: 'error',
-  message: 'Email address must be unique',
-  fields: ['email'],
-  caseSensitive: false,
-  events: ['insert', 'update'],
-}
+// Field-level uniqueness
+email: Field.email({ label: 'Contact Email', unique: true }),
 
-// Composite uniqueness (unique per combination)
-{
-  name: 'code_per_org',
-  type: 'uniqueness',
-  severity: 'error',
-  message: 'Code must be unique within each organization',
-  fields: ['code', 'organization'],
-  scope: 'organization',
-  events: ['insert', 'update'],
-}
+// Composite / scoped uniqueness via ObjectSchema.indexes
+indexes: [
+  { fields: ['code', 'organization'], unique: true },
+  // `partial` expresses a scoped/conditional constraint
+]
 ```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `fields` | `string[]` | Fields that must be unique together |
-| `scope` | `string` | Scope field (for per-parent uniqueness) |
-| `caseSensitive` | `boolean` | Case-sensitive comparison |
 
 ### Format Validation
 
@@ -201,7 +188,7 @@ Validate relationships between multiple fields:
   severity: 'error',
   message: 'End date must be after start date',
   fields: ['start_date', 'end_date'],
-  condition: 'end_date <= start_date',
+  condition: 'record.end_date <= record.start_date',
   events: ['insert', 'update'],
 }
 ```
@@ -213,7 +200,7 @@ Validate JSON data against a JSON Schema:
 ```typescript
 {
   name: 'config_schema',
-  type: 'json',
+  type: 'json_schema',
   severity: 'error',
   message: 'Configuration JSON is invalid',
   field: 'config',
@@ -229,32 +216,6 @@ Validate JSON data against a JSON Schema:
 }
 ```
 
-### Async Validation
-
-Validate against an external service:
-
-```typescript
-{
-  name: 'tax_id_valid',
-  type: 'async',
-  severity: 'error',
-  message: 'Invalid tax ID',
-  field: 'tax_id',
-  validatorUrl: 'https://api.validation-service.com/verify',
-  timeout: 5000,
-  debounce: 300,
-  events: ['insert', 'update'],
-}
-```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `field` | `string` | Field to validate |
-| `validatorUrl` | `string` | External validation endpoint |
-| `validatorFunction` | `string` | Server-side function name |
-| `timeout` | `number` | Timeout in milliseconds |
-| `debounce` | `number` | Debounce delay in milliseconds |
-
 ### Conditional Validation
 
 Apply validation only when a condition is met:
@@ -263,34 +224,21 @@ Apply validation only when a condition is met:
 {
   name: 'billing_required_for_paid',
   type: 'conditional',
-  when: "plan_type = 'paid'",
+  message: 'Billing validation',
+  when: "record.plan_type == 'paid'",
   then: {
     name: 'billing_address_check',
     type: 'script',
     severity: 'error',
     message: 'Billing address is required for paid plans',
-    condition: 'ISBLANK(billing_address)',
-    events: ['insert', 'update'],
+    condition: 'isBlank(record.billing_address)',
   },
-  events: ['insert', 'update'],
+  // Optional: a rule to apply when `when` is false
+  // otherwise: { ... }
 }
 ```
 
-### Custom Validator
-
-Invoke a named server-side handler:
-
-```typescript
-{
-  name: 'inventory_check',
-  type: 'custom',
-  severity: 'error',
-  message: 'Insufficient inventory',
-  handler: 'checkInventoryAvailability',
-  params: { warehouse: 'primary' },
-  events: ['insert', 'update'],
-}
-```
+The outer conditional evaluates the `when` CEL predicate, then recurses into `then` (when true) or `otherwise` (when false). The nested rule supplies the violation message; the conditional itself carries the required base `message`.
 
 ## Priority
 
@@ -317,7 +265,7 @@ validations: [
     type: 'script',
     severity: 'error',
     message: 'Order amount must be positive',
-    condition: 'amount <= 0',
+    condition: 'record.amount <= 0',
     events: ['insert', 'update'],
     priority: 10,
   },
@@ -338,16 +286,6 @@ validations: [
     events: ['update'],
     priority: 20,
   },
-  // Uniqueness
-  {
-    name: 'order_number_unique',
-    type: 'uniqueness',
-    severity: 'error',
-    message: 'Order number must be unique',
-    fields: ['order_number'],
-    events: ['insert', 'update'],
-    priority: 30,
-  },
   // Cross-field
   {
     name: 'shipping_date_after_order',
@@ -355,11 +293,14 @@ validations: [
     severity: 'error',
     message: 'Ship date must be after order date',
     fields: ['order_date', 'ship_date'],
-    condition: 'ship_date < order_date',
+    condition: 'record.ship_date < record.order_date',
     events: ['insert', 'update'],
     priority: 40,
   },
 ]
+
+// Order-number uniqueness is enforced with an index, not a validation rule:
+// indexes: [{ fields: ['order_number'], unique: true }]
 ```
 
 ## Related

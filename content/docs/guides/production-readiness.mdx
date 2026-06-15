@@ -93,6 +93,7 @@ the [HARDENING.md recipes](https://github.com/objectstack-ai/framework/blob/main
 - **A Prometheus `/metrics` endpoint.** Adapters mount their own
   scrape endpoint after wiring the `MetricsRegistry`. We give you the
   recipe, not the endpoint, because TLS / auth / path conventions vary.
-- **A built-in audit log immutability layer.** SecurityPlugin emits
-  audit records via the kernel event bus; durable storage and
-  tamper-evidence are the host's choice (append-only S3, immudb, etc.).
+- **A built-in audit log immutability layer.** `@objectstack/plugin-audit`
+  writes `sys_audit_log` records via ObjectQL afterInsert/afterUpdate/afterDelete
+  hooks; durable storage and tamper-evidence are the host's choice
+  (append-only S3, immudb, etc.).

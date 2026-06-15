@@ -109,7 +109,7 @@ ALTER TABLE users ADD CONSTRAINT email_format
 ### 1. Define UI in Metadata, Not Code
 
 ```yaml
-# customer_form.formview.yml
+# customer_edit.view.yml
 name: customer_edit
 object: customer
 layout:
@@ -144,7 +144,7 @@ actions:
 ### 2. Write Once, Run Anywhere (For Real This Time)
 
 ```yaml
-# customer_form.formview.yml (ONE definition)
+# customer_form.view.yml (ONE definition)
 fields:
   - name: email
     type: email
@@ -276,7 +276,7 @@ fields:
 │  └───────────┘  │                      │  └────────────┘  │
 │        ↓        │                      │        ↑         │
 │  3. Paint UI    │                      │  (customer_form  │
-│                 │                      │   .formview.yml) │
+│                 │                      │     .view.yml)   │
 └─────────────────┘                      └──────────────────┘
 ```
 
@@ -289,7 +289,7 @@ fields:
 ### Layout Request/Response Flow
 
 ```http
-GET /api/ui/layouts/customer/form?recordId=12345
+GET /api/v1/ui/view/customer/form?recordId=12345
 Authorization: Bearer <token>
 ```
 
@@ -641,7 +641,7 @@ fields:
 
 A conformant ObjectUI renderer must:
 
-1. **Fetch Layout:** `GET /api/ui/layouts/{object}/{viewType}`
+1. **Fetch Layout:** `GET /api/v1/ui/view/{object}/{viewType}`
 2. **Parse JSON:** Validate against ObjectUI schema
 3. **Instantiate Components:** Map JSON types to native widgets
 4. **Handle Events:** User clicks → API calls → UI updates
@@ -689,19 +689,19 @@ function renderField(field: FieldDefinition) {
   <Card
     icon={<Code />}
     title="Layout DSL"
-    href="/docs/protocols/objectui/layout-dsl"
+    href="/docs/protocol/objectui/layout-dsl"
     description="Master page templates, sections, and the grid system"
   />
   <Card
     icon={<Sparkles />}
     title="Widget Contract"
-    href="/docs/protocols/objectui/widget-contract"
+    href="/docs/protocol/objectui/widget-contract"
     description="Standard props and events for all UI components"
   />
   <Card
     icon={<Workflow />}
     title="Action Protocol"
-    href="/docs/protocols/objectui/actions"
+    href="/docs/protocol/objectui/actions"
     description="Define buttons, triggers, and navigation flows"
   />
 </Cards>
@@ -710,18 +710,17 @@ function renderField(field: FieldDefinition) {
 
 ### For Architects
 
-- [ObjectQL Integration](/docs/protocols/objectql) - How ObjectUI leverages ObjectQL schemas
-- [Renderer Specification](/docs/references/ui/Renderer) - Build your own renderer
-- [Security Model](/docs/protocols/objectui/security) - Field-level permissions
+- [ObjectQL Integration](/docs/protocol/objectql) - How ObjectUI leverages ObjectQL schemas
+- [Widget Reference](/docs/references/ui/widget) - Widget contract for building renderers
+- [Sharing & Permissions](/docs/references/ui/sharing) - Field-level and view-level access
 
 ### For Developers
 
-- [FormView API](/docs/references/ui/FormView) - Complete form configuration reference
-- [ListView API](/docs/references/ui/ListView) - Table, kanban, calendar views
-- [Dashboard API](/docs/references/ui/Dashboard) - Widget composition
+- [View API](/docs/references/ui/view) - Complete FormView & ListView configuration reference (table, kanban, calendar)
+- [Dashboard API](/docs/references/ui/dashboard) - Widget composition
 
 ### For Business Users
 
-- [Page Builder Guide](/docs/guides/page-builder) - Visual form designer
-- [Dashboard Builder](/docs/guides/dashboard-builder) - Drag-and-drop dashboards
-- [Report Builder](/docs/guides/report-builder) - Create custom reports
+- [Page Builder](/docs/references/studio/page-builder) - Visual page & form designer
+- [Object Designer](/docs/references/studio/object-designer) - Model objects and fields
+- [Flow Builder](/docs/references/studio/flow-builder) - Build automation flows

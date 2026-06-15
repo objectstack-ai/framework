@@ -25,10 +25,10 @@ const crmApp = {
   },
 
   navigation: [
-    { type: 'object', label: 'Accounts', objectName: 'account', icon: 'building' },
-    { type: 'object', label: 'Contacts', objectName: 'contact', icon: 'users' },
-    { type: 'object', label: 'Opportunities', objectName: 'opportunity', icon: 'trending-up' },
-    { type: 'dashboard', label: 'Sales Dashboard', dashboardName: 'sales_overview', icon: 'bar-chart' },
+    { id: 'nav_accounts', type: 'object', label: 'Accounts', objectName: 'account', icon: 'building' },
+    { id: 'nav_contacts', type: 'object', label: 'Contacts', objectName: 'contact', icon: 'users' },
+    { id: 'nav_opportunities', type: 'object', label: 'Opportunities', objectName: 'opportunity', icon: 'trending-up' },
+    { id: 'nav_sales_dashboard', type: 'dashboard', label: 'Sales Dashboard', dashboardName: 'sales_overview', icon: 'bar-chart' },
   ],
 
   requiredPermissions: ['crm_access'],
@@ -43,27 +43,27 @@ const crmApp = {
 | `label` | `string` | ✅ | Display name |
 | `version` | `string` | optional | App version |
 | `description` | `string` | optional | App description |
-| `icon` | `string` | optional | App icon (Lucide/Material) |
+| `icon` | `string` | optional | App icon (Lucide) |
 | `active` | `boolean` | optional | Is app active (default: `true`) |
 | `isDefault` | `boolean` | optional | Is default app |
-| `navigation` | `NavigationItem[]` | ✅ | Navigation tree |
+| `navigation` | `NavigationItem[]` | optional | Navigation tree |
 | `branding` | `AppBranding` | optional | Visual customization |
 | `requiredPermissions` | `string[]` | optional | Required permissions to access |
-| `homePageId` | `string` | optional | Custom home page ID |
+| `homePageId` | `string` | optional | ID of the navigation item to serve as the landing page |
 | `objects` | `string[]` | optional | Objects included in this app |
 | `apis` | `string[]` | optional | API endpoints included |
 | `mobileNavigation` | `object` | optional | Mobile-specific navigation |
 
 ## Navigation Items
 
-The navigation tree supports five item types, combined to create rich menu structures:
+The navigation tree supports eight item types, combined to create rich menu structures. The most common are shown below (`object`, `dashboard`, `page`, `url`, `group`); the spec also defines `report`, `action`, and `component` items.
 
 ### Object Navigation
 
 Links to an object's list view:
 
 ```typescript
-{ type: 'object', label: 'Accounts', objectName: 'account', icon: 'building', viewName: 'all_accounts' }
+{ id: 'nav_accounts', type: 'object', label: 'Accounts', objectName: 'account', icon: 'building', viewName: 'all_accounts' }
 ```
 
 ### Dashboard Navigation
@@ -71,7 +71,7 @@ Links to an object's list view:
 Links to a dashboard:
 
 ```typescript
-{ type: 'dashboard', label: 'Analytics', dashboardName: 'sales_overview', icon: 'bar-chart' }
+{ id: 'nav_analytics', type: 'dashboard', label: 'Analytics', dashboardName: 'sales_overview', icon: 'bar-chart' }
 ```
 
 ### Page Navigation
@@ -79,7 +79,7 @@ Links to a dashboard:
 Links to a custom page:
 
 ```typescript
-{ type: 'page', label: 'Settings', pageName: 'app_settings', icon: 'settings', params: { tab: 'general' } }
+{ id: 'nav_settings', type: 'page', label: 'Settings', pageName: 'app_settings', icon: 'settings', params: { tab: 'general' } }
 ```
 
 ### URL Navigation
@@ -87,7 +87,7 @@ Links to a custom page:
 Links to an external URL:
 
 ```typescript
-{ type: 'url', label: 'Help Center', url: 'https://help.example.com', icon: 'help-circle', target: '_blank' }
+{ id: 'nav_help', type: 'url', label: 'Help Center', url: 'https://help.example.com', icon: 'help-circle', target: '_blank' }
 ```
 
 ### Group Navigation
@@ -96,28 +96,34 @@ Groups items into collapsible sections with children:
 
 ```typescript
 {
+  id: 'grp_sales',
   type: 'group',
   label: 'Sales',
   icon: 'dollar-sign',
   expanded: true,
   children: [
-    { type: 'object', label: 'Accounts', objectName: 'account', icon: 'building' },
-    { type: 'object', label: 'Contacts', objectName: 'contact', icon: 'users' },
-    { type: 'object', label: 'Opportunities', objectName: 'opportunity', icon: 'trending-up' },
+    { id: 'nav_accounts', type: 'object', label: 'Accounts', objectName: 'account', icon: 'building' },
+    { id: 'nav_contacts', type: 'object', label: 'Contacts', objectName: 'contact', icon: 'users' },
+    { id: 'nav_opportunities', type: 'object', label: 'Opportunities', objectName: 'opportunity', icon: 'trending-up' },
   ],
 }
 ```
 
 ### Common Navigation Properties
 
-All navigation items share these base properties:
+All navigation items share these base properties. Every item **must** declare a unique `id` (lowercase `snake_case`) — it is required by the schema and is referenced by `homePageId` and `mobileNavigation.bottomNavItems`:
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
-| `id` | `string` | Unique identifier |
+| `id` | `string` | Unique identifier (`snake_case`, required) |
 | `label` | `string` | Display label |
-| `icon` | `string` | Icon name |
-| `visible` | `boolean \| string` | Visibility (boolean or expression) |
+| `icon` | `string` | Icon name (Lucide) |
+| `order` | `number` | Sort order within the same level (lower = first) |
+| `badge` | `string \| number` | Badge text or count displayed on the item |
+| `visible` | `Expression` | Visibility predicate (CEL expression) |
+| `requiredPermissions` | `string[]` | Permissions required to see/access this item |
+| `requiresObject` | `string` | Hide/disable unless the named object is registered |
+| `requiresService` | `string` | Hide/disable unless the named kernel service is registered |
 
 ## Branding
 
@@ -143,10 +149,12 @@ Configure mobile-specific navigation behavior:
 
 ```typescript
 mobileNavigation: {
-  mode: 'bottom',
-  bottomNavItems: ['home', 'accounts', 'contacts', 'settings'],
+  mode: 'bottom_nav',
+  bottomNavItems: ['nav_home', 'nav_accounts', 'nav_contacts', 'nav_settings'],
 }
 ```
+
+`mode` accepts `'drawer'` (default), `'bottom_nav'`, or `'hamburger'`. `bottomNavItems` lists the navigation item `id`s to surface in the bottom bar (max 5).
 
 ## Complete Example
 
@@ -166,32 +174,36 @@ const projectApp = {
 
   navigation: [
     {
+      id: 'nav_home',
       type: 'page',
       label: 'Home',
       pageName: 'pm_home',
       icon: 'home',
     },
     {
+      id: 'grp_projects',
       type: 'group',
       label: 'Projects',
       icon: 'folder',
       expanded: true,
       children: [
-        { type: 'object', label: 'Projects', objectName: 'project', icon: 'folder' },
-        { type: 'object', label: 'Tasks', objectName: 'project_task', icon: 'check-square', viewName: 'task_board' },
-        { type: 'object', label: 'Milestones', objectName: 'milestone', icon: 'flag' },
+        { id: 'nav_projects', type: 'object', label: 'Projects', objectName: 'project', icon: 'folder' },
+        { id: 'nav_tasks', type: 'object', label: 'Tasks', objectName: 'project_task', icon: 'check-square', viewName: 'task_board' },
+        { id: 'nav_milestones', type: 'object', label: 'Milestones', objectName: 'milestone', icon: 'flag' },
       ],
     },
     {
+      id: 'grp_reports',
       type: 'group',
       label: 'Reports',
       icon: 'bar-chart',
       children: [
-        { type: 'dashboard', label: 'Overview', dashboardName: 'project_overview', icon: 'layout-dashboard' },
-        { type: 'dashboard', label: 'Team Workload', dashboardName: 'team_workload', icon: 'users' },
+        { id: 'nav_overview', type: 'dashboard', label: 'Overview', dashboardName: 'project_overview', icon: 'layout-dashboard' },
+        { id: 'nav_team_workload', type: 'dashboard', label: 'Team Workload', dashboardName: 'team_workload', icon: 'users' },
       ],
     },
     {
+      id: 'nav_docs',
       type: 'url',
       label: 'Documentation',
       url: 'https://docs.example.com/pm',
@@ -201,7 +213,7 @@ const projectApp = {
   ],
 
   requiredPermissions: ['pm_access'],
-  homePageId: 'pm_home',
+  homePageId: 'nav_home',
 };
 ```
 

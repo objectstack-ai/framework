@@ -55,7 +55,7 @@ When a `*.md` file is collected, it becomes a `doc` item with this shape:
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `name` | `string` | ✅ | Machine name (`snake_case`), from the filename stem. Must match `^[a-z][a-z0-9_]*$` and be **namespace-prefixed** |
+| `name` | `string` | ✅ | Machine name (`snake_case`), from the filename stem. Must match `^[a-z][a-z0-9_]*$`. The build lint still requires a **namespace prefix** for authoring hygiene (ADR-0048), though doc resolution is package-scoped |
 | `label` | `string` | — | Display title (from frontmatter `title`) |
 | `description` | `string` | — | One-line summary for listings (from frontmatter `description`) |
 | `content` | `string` | ✅ | The Markdown body |
@@ -66,30 +66,31 @@ definition's `docs` array, but the `src/docs/*.md` path is the convention
 
 ## Naming and routing
 
-Doc names live in the same flat, instance-global namespace as the URL.
-The console route is **single-coordinate** — `/docs/<name>`, with no
-package or app prefix — so a doc has exactly one URL no matter who links
-it.
-
-That only works if names don't collide, so the build requires every doc
-name to be **namespace-prefixed**:
+A doc renders under `/docs/<name>` (in dev `os serve` mounts each
+collected doc there). The build lint still requires every doc name to be
+**namespace-prefixed**, as a same-package authoring-hygiene rule:
 
 ```
 src/docs/crm_user_guide.md      ✅  package namespace is "crm"
-src/docs/user_guide.md          ❌  bare name — collides across packages
+src/docs/user_guide.md          ❌  bare name — lint error (docs/namespace-prefix)
 ```
 
-This is the same uniqueness rule the platform already applies to other
-named metadata (ADR-0048). Two packages that both ship `user_guide` would
-overwrite each other on the registry key and fail at install; the prefix
-makes the collision impossible.
+This is the same `namespace-prefix` lint the platform applies to other
+named metadata for readable, globally-unique filenames. It is no longer
+**load-bearing for uniqueness**, however: per **ADR-0048**, doc
+resolution is **package-scoped**. The metadata registry key carries no
+package coordinate, but each item retains its `_packageId`, so two
+installed packages may each ship a doc with the same bare name and
+coexist — neither silently overwrites the other.
 
-> **Routing model.** The viewer is platform-level: one global
-> `/docs/<name>` route resolves any doc regardless of which app you came
-> from. Anything that wants to *link into* docs — an app's navigation, a
-> registry package page, an agent's answer — does so with that same URL.
-> Per-app or per-package URL nesting is explicitly **not** the model
-> (it would give one doc many URLs and break cross-references).
+> **Resolution model.** Doc resolution is package-scoped (ADR-0048). The
+> single-doc detail route resolves a name within a package id —
+> `getItem('doc', name, packageId)`, surfaced as
+> `?package=<packageId>` on `GET /api/v1/meta/doc/<name>`. A bare
+> `/docs/<name>` link is best-effort (first match), while a caller that
+> carries its package id resolves to its own package's doc. The earlier
+> "one global URL per doc" framing from ADR-0046 was superseded by
+> ADR-0048's package-scoped resolution.
 
 ## Cross-references
 

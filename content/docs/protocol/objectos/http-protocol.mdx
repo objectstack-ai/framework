@@ -29,9 +29,9 @@ GET /.well-known/objectstack HTTP/1.1
 Host: api.acme.com
 ```
 
-**Alternative endpoint:**
+`/.well-known/objectstack` redirects to the canonical discovery route:
 ```http
-GET /api/v1 HTTP/1.1
+GET /api/v1/discovery HTTP/1.1
 ```
 
 **Response:**
@@ -43,33 +43,29 @@ GET /api/v1 HTTP/1.1
   "routes": {
     "data": "/api/v1/data",
     "metadata": "/api/v1/meta",
+    "packages": "/api/v1/packages",
     "auth": "/api/v1/auth",
-    "actions": "/api/v1/actions",
+    "ui": "/api/v1/ui",
     "storage": "/api/v1/storage",
     "graphql": "/api/v1/graphql",
-    "realtime": "wss://api.acme.com/ws"
+    "realtime": "/api/v1/realtime"
   },
   "features": {
     "graphql": true,
-    "websocket": true,
+    "websockets": true,
     "search": true,
     "files": true,
-    "batch": true,
-    "webhooks": true
-  },
-  "limits": {
-    "max_page_size": 100,
-    "default_page_size": 25,
-    "max_batch_size": 50,
-    "rate_limit": 1000,
-    "rate_window": "1m"
+    "analytics": true,
+    "ai": false,
+    "workflow": true,
+    "notifications": true,
+    "i18n": true
   },
   "locale": {
     "default": "en-US",
     "supported": ["en-US", "zh-CN", "es-ES", "fr-FR"],
     "timezone": "America/Los_Angeles"
-  },
-  "documentation": "https://docs.acme.com/api"
+  }
 }
 ```
 
@@ -135,8 +131,8 @@ GET /{base_path}/{object_name}
 | `top` | number | Max records to return | `limit` | `25` |
 | `skip` | number | Records to skip (offset) | `offset` | `50` |
 | `expand` | string | Related objects to embed | `expand` | `assignee,comments` |
-| `page` | number | Page number (1-indexed) | — | `2` |
-| `per_page` | number | Items per page (max from limits) | — | `50` |
+| `search` | string | Full-text search query | `search` | `acme` |
+| `count` | boolean | Include total count in response | `count` | `true` |
 
 > **Transport → Protocol normalization:** The HTTP dispatcher normalizes transport-level
 > parameter names to Spec canonical (QueryAST) field names before forwarding to the
@@ -146,35 +142,37 @@ GET /{base_path}/{object_name}
 
 **Example Request:**
 ```http
-GET /api/v1/data/task?select=id,title,status&filter={"assignee_id":"user_123"}&sort=-created_at&page=1&per_page=25
+GET /api/v1/data/task?select=id,title,status&filter={"assignee_id":"user_123"}&sort=-created_at&top=25&count=true
 Authorization: Bearer <token>
 ```
 
 **Success Response:**
+
+List responses are wrapped in the standard `{ success, data }` envelope. For
+queries, `data` is a `FindDataResponse` containing `object`, `records`, and the
+optional `total` / `hasMore` pagination hints.
+
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "task_456",
-      "title": "Implement login page",
-      "status": "in_progress",
-      "created_at": "2024-01-15T10:30:00Z"
-    },
-    {
-      "id": "task_789",
-      "title": "Fix navigation bug",
-      "status": "todo",
-      "created_at": "2024-01-14T16:20:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "per_page": 25,
+  "data": {
+    "object": "task",
+    "records": [
+      {
+        "id": "task_456",
+        "title": "Implement login page",
+        "status": "in_progress",
+        "created_at": "2024-01-15T10:30:00Z"
+      },
+      {
+        "id": "task_789",
+        "title": "Fix navigation bug",
+        "status": "todo",
+        "created_at": "2024-01-14T16:20:00Z"
+      }
+    ],
     "total": 47,
-    "total_pages": 2,
-    "has_next": true,
-    "has_prev": false
+    "hasMore": true
   }
 }
 ```
@@ -219,11 +217,12 @@ GET /api/data/account?filter={"status":"active"}
 - `$in` - In array
 - `$nin` - Not in array
 - `$contains` - String contains
+- `$notContains` - String does not contain
 - `$startsWith` - String starts with
 - `$endsWith` - String ends with
-- `$between` - Between two values
-- `$null` - Is null
-- `$notNull` - Is not null
+- `$between` - Between two values (tuple)
+- `$null` - Null check (`{ "$null": true }` for IS NULL, `{ "$null": false }` for IS NOT NULL)
+- `$exists` - Field existence check
 
 **OR conditions:**
 ```json
@@ -273,33 +272,33 @@ First sort by priority descending, then by created_at ascending.
 
 ### Pagination
 
-ObjectStack uses offset-based pagination:
+ObjectStack uses offset-based pagination via the `top` (limit) and `skip`
+(offset) parameters:
 
-**Request page 2 with 50 items:**
+**Request 50 items, skipping the first 50 (i.e. the "second page"):**
 ```http
-GET /api/data/account?page=2&per_page=50
+GET /api/data/account?top=50&skip=50
 ```
 
-**Response includes pagination metadata:**
+**Response includes optional pagination hints:**
+
+When `count=true` is requested, the `FindDataResponse` carries a `total`
+record count and a `hasMore` flag:
+
 ```json
 {
   "success": true,
-  "data": [...],
-  "pagination": {
-    "page": 2,
-    "per_page": 50,
+  "data": {
+    "object": "account",
+    "records": [],
     "total": 247,
-    "total_pages": 5,
-    "has_next": true,
-    "has_prev": true
+    "hasMore": true
   }
 }
 ```
 
-**Pagination limits:**
-- Default page size: 25 (from discovery `limits.default_page_size`)
-- Maximum page size: 100 (from discovery `limits.max_page_size`)
-- Requesting `per_page > max_page_size` returns HTTP 400
+> **Note:** The transport names `top`/`skip` are normalized to the canonical
+> `limit`/`offset` QueryAST fields before reaching the data layer.
 
 ### Field Selection
 
@@ -314,14 +313,17 @@ GET /api/data/account?select=id,name,industry,revenue
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "acc_123",
-      "name": "Acme Corp",
-      "industry": "Technology",
-      "revenue": 5000000
-    }
-  ]
+  "data": {
+    "object": "account",
+    "records": [
+      {
+        "id": "acc_123",
+        "name": "Acme Corp",
+        "industry": "Technology",
+        "revenue": 5000000
+      }
+    ]
+  }
 }
 ```
 
@@ -334,46 +336,48 @@ GET /api/data/account?select=id,name,industry,revenue
 
 ### Including Related Objects
 
-Embed related objects to avoid N+1 queries:
+Embed related objects to avoid N+1 queries using the `expand` parameter:
 
 **Request:**
 ```http
-GET /api/data/task?include=assignee,project
+GET /api/data/task?expand=assignee,project
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "task_123",
-      "title": "Implement API",
-      "assignee_id": "user_456",
-      "project_id": "proj_789",
-      "assignee": {
-        "id": "user_456",
-        "name": "John Doe",
-        "email": "john@acme.com"
-      },
-      "project": {
-        "id": "proj_789",
-        "name": "CRM Rebuild",
-        "status": "active"
+  "data": {
+    "object": "task",
+    "records": [
+      {
+        "id": "task_123",
+        "title": "Implement API",
+        "assignee_id": "user_456",
+        "project_id": "proj_789",
+        "assignee": {
+          "id": "user_456",
+          "name": "John Doe",
+          "email": "john@acme.com"
+        },
+        "project": {
+          "id": "proj_789",
+          "name": "CRM Rebuild",
+          "status": "active"
+        }
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
 **Multiple levels:**
 ```http
-GET /api/data/task?include=assignee.department,project.owner
+GET /api/data/task?expand=assignee.department,project.owner
 ```
 
 **Limits:**
-- Maximum include depth: 3 levels
-- Maximum included relations: 5 per request
+- Maximum expand depth: 3 levels by default (configurable via the query adapter's `maxDepth`)
 
 ### Retrieve Single Record
 
@@ -408,15 +412,14 @@ Authorization: Bearer <token>
 ```
 
 **Not Found (HTTP 404):**
+
+REST error responses use a flat envelope: a top-level `error` message string and
+a string `code`, plus optional context fields (`object`, per-field `fields`):
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "Account with id 'acc_999' not found",
-    "resource": "account",
-    "resource_id": "acc_999"
-  }
+  "error": "Record acc_999 not found in account",
+  "code": "RECORD_NOT_FOUND",
+  "object": "account"
 }
 ```
 
@@ -463,24 +466,21 @@ Content-Type: application/json
 **Validation Error (HTTP 400):**
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed",
-    "fields": [
-      {
-        "field": "name",
-        "message": "Name is required",
-        "constraint": "required"
-      },
-      {
-        "field": "industry",
-        "message": "Must be one of: Technology, SaaS, Healthcare, Finance",
-        "constraint": "enum",
-        "value": "InvalidIndustry"
-      }
-    ]
-  }
+  "error": "Validation failed",
+  "code": "VALIDATION_FAILED",
+  "object": "account",
+  "fields": [
+    {
+      "field": "name",
+      "code": "required",
+      "message": "Name is required"
+    },
+    {
+      "field": "industry",
+      "code": "enum",
+      "message": "Must be one of: Technology, SaaS, Healthcare, Finance"
+    }
+  ]
 }
 ```
 
@@ -529,17 +529,14 @@ Attempting to update read-only fields (e.g., `id`, `created_at`) returns HTTP 40
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Cannot update read-only fields",
-    "fields": [
-      {
-        "field": "created_at",
-        "message": "Field is read-only"
-      }
-    ]
-  }
+  "error": "Cannot update read-only fields",
+  "code": "VALIDATION_FAILED",
+  "fields": [
+    {
+      "field": "created_at",
+      "message": "Field is read-only"
+    }
+  ]
 }
 ```
 
@@ -570,7 +567,7 @@ Authorization: Bearer <token>
 ```
 
 **Soft Delete (if enabled):**
-If object has `enable.softDelete`, record is marked deleted but not removed:
+If object has `enable.trash` enabled, record is marked deleted but not removed:
 
 ```json
 {
@@ -584,94 +581,83 @@ If object has `enable.softDelete`, record is marked deleted but not removed:
 }
 ```
 
-**Cascade Considerations:**
-If object has related records and cascade delete is not enabled:
+**Constraint Violations:**
+Database constraint failures are surfaced as structured errors. For example, a
+unique-constraint violation returns HTTP 409:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "CONSTRAINT_VIOLATION",
-    "message": "Cannot delete account with active opportunities",
-    "constraint": "foreign_key",
-    "related_object": "opportunity",
-    "related_count": 5
-  }
+  "error": "A record with this value already exists",
+  "code": "UNIQUE_VIOLATION",
+  "object": "account"
 }
 ```
 
+Cascade behavior on delete (cascade / restrict / set-null) is governed by each
+relationship field's configuration in the object schema, enforced by the
+ObjectQL engine.
+
 ## Batch Operations
 
-Perform multiple operations in a single request.
+Perform multiple create/update/delete operations across objects in a single
+atomic transaction.
 
-**Endpoint:**
+**Endpoint:** the batch endpoint is mounted at the top of the API surface
+(not under `/data`):
 ```http
-POST /{base_path}/_batch
+POST /api/v1/batch
 ```
+
+Each operation specifies an `action` (`create`, `update`, or `delete`), the
+target `object`, and the relevant `data` / `id`. A field value of
+`{ "$ref": <earlier op index> }` resolves to the id created by an earlier
+operation in the same batch — useful for inserting a parent and its children
+together (master-detail).
 
 **Request:**
 ```http
-POST /api/v1/data/_batch
+POST /api/v1/batch
 Authorization: Bearer <token>
 Content-Type: application/json
 
 {
   "operations": [
     {
-      "method": "POST",
-      "path": "/account",
-      "body": { "name": "Company A", "industry": "Tech" }
+      "action": "create",
+      "object": "account",
+      "data": { "name": "Company A", "industry": "Tech" }
     },
     {
-      "method": "PATCH",
-      "path": "/account/acc_123",
-      "body": { "status": "active" }
+      "action": "update",
+      "object": "account",
+      "id": "acc_123",
+      "data": { "status": "active" }
     },
     {
-      "method": "DELETE",
-      "path": "/account/acc_456"
+      "action": "delete",
+      "object": "account",
+      "id": "acc_456"
     }
   ]
 }
 ```
 
-**Response:**
+**Response:** an ordered `results` array mirroring the input operations:
 ```json
 {
-  "success": true,
   "results": [
-    {
-      "success": true,
-      "status": 201,
-      "data": { "id": "acc_789", "name": "Company A" }
-    },
-    {
-      "success": true,
-      "status": 200,
-      "data": { "id": "acc_123", "status": "active" }
-    },
-    {
-      "success": true,
-      "status": 200,
-      "data": { "id": "acc_456", "deleted": true }
-    }
+    { "id": "acc_789", "name": "Company A" },
+    { "id": "acc_123", "status": "active" },
+    { "id": "acc_456", "deleted": true }
   ]
 }
 ```
 
-**Limits:**
-- Maximum batch size: 50 operations (from `limits.max_batch_size`)
-- Operations are executed sequentially
-- Failure of one operation doesn't stop others (non-transactional by default)
-
-**Transactional batch:**
-```json
-{
-  "operations": [...],
-  "atomic": true
-}
-```
-If `atomic: true`, all operations execute in a transaction. If any fails, all are rolled back.
+**Behavior:**
+- Maximum batch size: 200 operations by default (configurable via `maxBatchSize`)
+- The entire batch runs inside **one engine transaction** — if any operation
+  fails, all are rolled back (commit-all-or-nothing)
+- Returns HTTP 501 if the underlying runtime does not support transactions
 
 ## Metadata API
 
@@ -683,9 +669,13 @@ Retrieve object schemas and configuration.
 
 **Request:**
 ```http
-GET /api/v1/meta/objects
+GET /api/v1/meta/object
 Authorization: Bearer <token>
 ```
+
+The metadata API is keyed by metadata **type** — `GET /api/v1/meta/{type}`
+lists items of that type. Types are singular (`object`, `view`, `app`, …), so
+objects are listed at `/api/v1/meta/object`.
 
 **Response:**
 ```json
@@ -715,7 +705,7 @@ Authorization: Bearer <token>
 
 **Request:**
 ```http
-GET /api/v1/meta/objects/account
+GET /api/v1/meta/object/account
 Authorization: Bearer <token>
 ```
 
@@ -758,7 +748,7 @@ Authorization: Bearer <token>
     "enable": {
       "trackHistory": true,
       "apiEnabled": true,
-      "softDelete": true
+      "trash": true
     }
   }
 }
@@ -838,7 +828,15 @@ ETag: "abc123def456"
 
 ## Rate Limiting
 
-Requests include rate limit headers:
+<Callout type="info">
+ObjectStack ships a token-bucket `RateLimiter` primitive
+(`@objectstack/runtime`), but emission of the `X-RateLimit-*` response headers
+and the `429` envelope below is deployment-specific and not wired into the
+default REST response path. Treat the headers and response shape here as the
+intended contract.
+</Callout>
+
+When enabled, responses include rate limit headers:
 
 ```http
 HTTP/1.1 200 OK
@@ -856,18 +854,13 @@ X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1705324800
 
 {
-  "success": false,
-  "error": {
-    "code": "RATE_LIMITED",
-    "message": "Rate limit exceeded",
-    "retry_after": 45,
-    "limit": 1000,
-    "window": "1m"
-  }
+  "error": "Rate limit exceeded",
+  "code": "THROTTLED",
+  "retry_after": 45
 }
 ```
 
-See [Error Handling](/docs/transport/error-handling) for more details.
+See [Error Handling](/docs/protocol/objectos/error-handling) for more details.
 
 ## Best Practices
 
@@ -882,7 +875,7 @@ GET /api/data/account
 GET /api/data/account?select=id,name,status
 ```
 
-### Use Includes for Relations
+### Use Expand for Relations
 ❌ **Bad:** N+1 queries
 ```javascript
 const tasks = await fetch('/api/data/task');
@@ -891,9 +884,9 @@ for (const task of tasks.data) {
 }
 ```
 
-✅ **Good:** Single query with includes
+✅ **Good:** Single query with `expand`
 ```javascript
-const tasks = await fetch('/api/data/task?include=assignee');
+const tasks = await fetch('/api/data/task?expand=assignee');
 ```
 
 ### Respect Rate Limits
@@ -914,9 +907,9 @@ if (remaining < 10) {
 const response = await fetch('/api/data/task', { method: 'POST', body: data });
 const result = await response.json();
 
-if (!result.success) {
-  if (result.error.code === 'VALIDATION_ERROR') {
-    result.error.fields.forEach(field => {
+if (!response.ok) {
+  if (result.code === 'VALIDATION_FAILED') {
+    result.fields.forEach(field => {
       showFieldError(field.field, field.message);
     });
   }
@@ -930,12 +923,12 @@ if (!result.success) {
     icon={<Zap />}
     title="Real-Time Protocols"
     description="Learn WebSocket subscriptions and event streaming"
-    href="/docs/transport/realtime"
+    href="/docs/protocol/objectos/realtime-protocol"
   />
   <Card
     icon={<AlertCircle />}
     title="Error Handling"
     description="Master error codes and debugging strategies"
-    href="/docs/transport/error-handling"
+    href="/docs/protocol/objectos/error-handling"
   />
 </Cards>

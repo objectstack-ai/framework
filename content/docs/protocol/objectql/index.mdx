@@ -86,9 +86,9 @@ name: customer
 label: Customer
 icon: standard:account
 enable:
-  audit: true              # Track field history
-  full_text_search: true   # Global search
-  api: true                # REST/GraphQL endpoints
+  trackHistory: true       # Track field history
+  searchable: true         # Global search indexing
+  apiEnabled: true         # Expose object via automatic APIs
 fields:
   company_name:
     type: text
@@ -103,7 +103,7 @@ fields:
 
 **What you get automatically:**
 - Database table/collection created
-- REST API endpoints: `GET/POST/PUT/DELETE /api/customer`
+- REST API endpoints: `GET/POST/PUT/DELETE /api/v1/data/customer`
 - Admin UI with list view and form
 - Full-text search index
 - Field history tracking
@@ -121,22 +121,22 @@ ObjectQL provides 20+ field types that encode business semantics:
 | `currency` | Money with exchange rates | `{amount: 1000, currency: 'USD'}` |
 | `address` | Geocoding & distance | `{street, city, lat, lng}` |
 
-See [Types Reference](/docs/protocols/objectql/types) for complete list.
+See [Types Reference](/docs/protocol/objectql/types) for complete list.
 
 ### 3. Query Language: Database-Agnostic AST
 
 Queries are expressed as **Abstract Syntax Trees (AST)**, not SQL strings:
 
 ```typescript
-// TypeScript Query
-const query: Query = {
+// TypeScript Query (QuerySchema)
+const query: QueryAST = {
   object: 'customer',
-  filters: [
-    ['industry', '=', 'tech'],
-    ['annual_revenue', '>', 1000000]
-  ],
+  where: {
+    industry: 'tech',
+    annual_revenue: { $gt: 1000000 }
+  },
   fields: ['company_name', 'industry', 'owner.name'],
-  sort: [{ field: 'created_at', order: 'desc' }],
+  orderBy: [{ field: 'created_at', order: 'desc' }],
   limit: 10
 };
 ```
@@ -214,7 +214,7 @@ datasource: postgres_main
 fields:
   customer_id:
     type: lookup
-    reference_to: customer  # Also in PostgreSQL
+    reference: customer  # Also in PostgreSQL
 
 # product.object.yml
 name: product
@@ -227,8 +227,8 @@ fields:
 **Result:** One query API works across all databases:
 ```typescript
 // Same code, different databases
-const orders = await ObjectQL.query({ object: 'order' });
-const products = await ObjectQL.query({ object: 'product' });
+const orders = await engine.find('order');
+const products = await engine.find('product');
 ```
 
 ### Schema Evolution
@@ -249,46 +249,38 @@ UPDATE customer SET credit_score = 0 WHERE credit_score IS NULL;
 fields:
   credit_score:
     type: number
-    default_value: 0
-    migration:
-      backfill: true  # Automatically backfill existing records
+    defaultValue: 0
 ```
 
 ```bash
-# Deploy (zero downtime)
-objectstack deploy --migrate
+# Publish the updated metadata
+os publish
 ```
 
 **What happens:**
-1. ObjectQL analyzes schema diff
-2. Generates database-specific migration
-3. Applies changes online (no downtime)
-4. Backfills data in background
-5. Updates API/UI automatically
+1. ObjectQL analyzes the schema diff between the published artifact and the running registry
+2. The driver reconciles the underlying table/collection for the new column
+3. New records pick up `defaultValue` automatically
 
 ### Offline-First Mobile
 
 **Challenge:** Field sales app needs to work offline.
 
-**ObjectQL Solution:**
-```yaml
-# Same object definition
-name: opportunity
-enable:
-  offline_sync: true  # Enable offline support
-```
+<Callout type="warn">
+  Offline sync (on-device SQLite mirror + conflict resolution) is **not yet
+  implemented** — there is no `offline_sync` capability in the object schema and
+  no bundled SQLite driver. The example below illustrates the intended direction,
+  not a shipping feature.
+</Callout>
 
-**Runtime:**
-- **Server:** PostgreSQL (production database)
-- **Mobile:** SQLite (on-device database)
-- **Sync:** Conflict resolution built into protocol
+**Intended ObjectQL Solution:** because objects are defined once and the same
+`engine.find()` query AST runs against any driver, the same `opportunity`
+definition could one day target a server datasource and an on-device store:
 
-**Code is identical:**
 ```typescript
-// Works online or offline
-const opportunities = await ObjectQL.query({
-  object: 'opportunity',
-  filters: [['owner_id', '=', currentUser.id]]
+// The same query AST runs against whatever driver is configured
+const opportunities = await engine.find('opportunity', {
+  where: { owner_id: currentUser.id }
 });
 ```
 
@@ -328,7 +320,7 @@ ObjectQL analyzes queries and applies database-specific optimizations:
 // This query
 const query = {
   object: 'customer',
-  filters: [['industry', '=', 'tech']],
+  where: { industry: 'tech' },
   fields: ['company_name']
 };
 
@@ -354,31 +346,31 @@ const query = { object: 'account' };
 // ObjectQL applies permissions
 const securedQuery = {
   object: 'account',
-  filters: [
-    ...query.filters,
-    ['owner_id', '=', currentUser.id]  // Row-level security
-  ],
-  fields: query.fields.filter(f => 
+  where: {
+    ...query.where,
+    owner_id: currentUser.id  // Row-level security
+  },
+  fields: query.fields.filter(f =>
     currentUser.hasFieldAccess('account', f)  // Field-level security
   )
 };
 ```
 
-See [Security Protocol](/docs/protocols/objectql/security) for details.
+See [Security Protocol](/docs/protocol/objectql/security) for details.
 
 ## Learning Path
 
 **Start Here:**
-1. [Schema Definition](/docs/protocols/objectql/schema) - Learn to define objects and fields
-2. [Type System](/docs/protocols/objectql/types) - Understand field types and relationships
+1. [Schema Definition](/docs/protocol/objectql/schema) - Learn to define objects and fields
+2. [Type System](/docs/protocol/objectql/types) - Understand field types and relationships
 
 **Intermediate:**
-3. [Query Syntax](/docs/protocols/objectql/query-syntax) - Master the query language
-4. [Security](/docs/protocols/objectql/security) - Implement access control
+3. [Query Syntax](/docs/protocol/objectql/query-syntax) - Master the query language
+4. [Security](/docs/protocol/objectql/security) - Implement access control
 
 **Advanced:**
-5. [Data driver contracts](/docs/specifications/data/architecture) - Build custom database drivers
-6. [Analytics Protocol](/docs/specifications/data/analytics-protocol) - OLAP queries
+5. [Data Engine contract](/docs/guides/contracts/data-engine) - Build custom database drivers
+6. [Analytics Datasets](/docs/guides/analytics-datasets) - OLAP queries
 
 ## Technical References
 
@@ -391,17 +383,17 @@ See [Security Protocol](/docs/protocols/objectql/security) for details.
 <Cards>
   <Card
     title="Schema Definition"
-    href="/docs/protocols/objectql/schema"
+    href="/docs/protocol/objectql/schema"
     description="Learn the .object.yml specification and field configuration"
   />
   <Card
     title="Type System"
-    href="/docs/protocols/objectql/types"
+    href="/docs/protocol/objectql/types"
     description="Master scalars, relationships, formulas, and computed fields"
   />
   <Card
     title="Query Syntax"
-    href="/docs/protocols/objectql/query-syntax"
+    href="/docs/protocol/objectql/query-syntax"
     description="Write database-agnostic queries with filters, joins, and aggregations"
   />
 </Cards>

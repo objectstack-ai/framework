@@ -230,7 +230,7 @@ ObjectStack uses standard HTTP status codes:
 ```
 
 **How to fix:**
-- Check field constraints in object schema (`GET /api/meta/objects/{object}`)
+- Check field constraints in object schema (`GET /api/v1/meta/object/{object}`)
 - Validate input client-side before submission
 - Show field-specific errors in UI
 
@@ -859,7 +859,7 @@ try {
 **Good:**
 ```javascript
 try {
-  const response = await fetch('/api/data/task');
+  const response = await fetch('/api/v1/data/task');
   const data = await response.json();
   
   if (!data.success) {
@@ -997,7 +997,7 @@ error_budget:
 
 **Bad:**
 ```json
-// Attacker probes: DELETE /api/data/account/acc_123
+// Attacker probes: DELETE /api/v1/data/account/acc_123
 {
   "error": {
     "code": "FORBIDDEN",
