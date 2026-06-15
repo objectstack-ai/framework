@@ -16,7 +16,7 @@
 import { Environment } from '@marcbachmann/cel-js';
 import type { Expression } from '@objectstack/spec';
 
-import { buildScope, registerStdLib } from './stdlib';
+import { buildScope, registerNumericCoercions, registerStdLib } from './stdlib';
 import type { DialectEngine, EvalContext, EvalResult } from './types';
 
 /**
@@ -38,7 +38,7 @@ function buildEnv(now: () => Date): Environment {
     enableOptionalTypes: true,
     limits: DEFAULT_LIMITS,
   });
-  return registerStdLib(env, now);
+  return registerNumericCoercions(registerStdLib(env, now));
 }
 
 /** Coerce cel-js's BigInt-flavored return into spec-friendly JS values. */

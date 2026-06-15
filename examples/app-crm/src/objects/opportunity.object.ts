@@ -45,11 +45,7 @@ export const Opportunity = ObjectSchema.create({
     }),
     expected_revenue: Field.formula({
       label: 'Expected Revenue',
-      // NOTE: the divisor is the float literal `100.0`, not `100`. cel-js has no
-      // `double <op> int` arithmetic overload, so `<currency/number field> / 100`
-      // faults at runtime and the formula silently evaluates to null. Using a
-      // float literal keeps both operands `double`. See objectstack-formula skill.
-      expression: cel`(record.amount == null ? 0.0 : record.amount) * (record.probability == null ? 0.0 : record.probability) / 100.0`,
+      expression: cel`(record.amount == null ? 0 : record.amount) * (record.probability == null ? 0 : record.probability) / 100`,
     }),
     close_date: Field.date({
       label: 'Close Date',

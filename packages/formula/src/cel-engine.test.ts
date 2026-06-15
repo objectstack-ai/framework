@@ -164,6 +164,64 @@ describe('celEngine', () => {
     });
   });
 
+  // #1928 — cel-js ships no `double <op> int` arithmetic overload, so a field
+  // number (double) combined with a bare integer literal faulted `no such
+  // overload` and the formula silently evaluated to null. registerNumericCoercions
+  // closes the gap; these are the everyday formula shapes that were broken.
+  describe('mixed double/int arithmetic overloads (#1928)', () => {
+    it('divides a currency field by an int literal (expected_revenue shape)', () => {
+      const r = celEngine.evaluate(
+        cel('record.amount * record.probability / 100'),
+        { record: { amount: 120000, probability: 70 } },
+      );
+      expect(r).toEqual({ ok: true, value: 84000 });
+    });
+
+    it('divides a field by an int literal', () => {
+      const r = celEngine.evaluate(cel('record.amount / 100'), {
+        record: { amount: 120000 },
+      });
+      expect(r).toEqual({ ok: true, value: 1200 });
+    });
+
+    it('handles *, +, -, % between a field and an int literal', () => {
+      expect(celEngine.evaluate(cel('record.x * 2'), { record: { x: 5.5 } }))
+        .toEqual({ ok: true, value: 11 });
+      expect(celEngine.evaluate(cel('record.x + 1'), { record: { x: 2.5 } }))
+        .toEqual({ ok: true, value: 3.5 });
+      expect(celEngine.evaluate(cel('record.x - 100'), { record: { x: 250 } }))
+        .toEqual({ ok: true, value: 150 });
+      expect(celEngine.evaluate(cel('record.x % 7'), { record: { x: 20 } }))
+        .toEqual({ ok: true, value: 6 });
+    });
+
+    it('handles the int-literal on the left (int op double)', () => {
+      const r = celEngine.evaluate(cel('100 - record.x'), {
+        record: { x: 40 },
+      });
+      expect(r).toEqual({ ok: true, value: 60 });
+    });
+
+    it('leaves pure int/int arithmetic as integer division (7 / 2 == 3)', () => {
+      const r = celEngine.evaluate(cel('7 / 2'), {});
+      expect(r).toEqual({ ok: true, value: 3 });
+    });
+
+    it('still evaluates double/double field arithmetic', () => {
+      const r = celEngine.evaluate(cel('record.a / record.b'), {
+        record: { a: 10, b: 4 },
+      });
+      expect(r).toEqual({ ok: true, value: 2.5 });
+    });
+
+    it('composes with string-field hydration (currency string + int literal)', () => {
+      const r = celEngine.evaluate(cel('record.amount + 1'), {
+        record: { amount: '120000.00' },
+      });
+      expect(r).toEqual({ ok: true, value: 120001 });
+    });
+  });
+
   // ADR-0032 §1c — string-serialized date/datetime fields (#1530). Field.date
   // serializes to "YYYY-MM-DD" and Field.datetime to a full ISO string; cel-js
   // compares those raw strings against the google.protobuf.Timestamp returned by

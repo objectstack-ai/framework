@@ -105,6 +105,38 @@ export function registerStdLib(
 }
 
 /**
+ * Register mixed `double <op> int` / `int <op> double` arithmetic overloads.
+ *
+ * cel-js types a record field number as `double` and a bare integer literal as
+ * `int`, and ships overloads only for matching pairs (`double op double`,
+ * `int op int`). So a formula as ordinary as `record.amount / 100` or
+ * `record.price * 2` faults at runtime (`no such overload: dyn<double> / int`);
+ * the engine catches the fault and the formula silently evaluates to `null`
+ * (#1928). Authors then have to know the cel-js quirk and write `/ 100.0`.
+ *
+ * We close the gap by registering the missing mixed overloads. The result is
+ * always computed as a JS `double`, matching CEL's promotion rule for mixed
+ * numeric arithmetic. Pure `int op int` is untouched, so integer division
+ * (`7 / 2 == 3`) keeps its semantics — these overloads only fire when the two
+ * operands are genuinely a `double` and an `int`.
+ */
+export function registerNumericCoercions(env: Environment): Environment {
+  const ops: Record<string, (a: number, b: number) => number> = {
+    '+': (a, b) => a + b,
+    '-': (a, b) => a - b,
+    '*': (a, b) => a * b,
+    '/': (a, b) => a / b,
+    '%': (a, b) => a % b,
+  };
+  for (const [op, fn] of Object.entries(ops)) {
+    const impl = (a: unknown, b: unknown) => fn(Number(a), Number(b));
+    env.registerOperator(`double ${op} int`, impl);
+    env.registerOperator(`int ${op} double`, impl);
+  }
+  return env;
+}
+
+/**
  * Build the variable scope for a single evaluation. Absent fields are simply
  * not bound — CEL macros (`has(record.foo)`) handle missing-key safely.
  */
