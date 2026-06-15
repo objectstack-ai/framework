@@ -30,7 +30,26 @@ export const actionForm = defineForm({
       fields: [
         { field: 'target', visibleOn: "data.type != 'script'", helpText: 'URL, flow name, or API endpoint to call' },
         { field: 'method', visibleOn: "data.type == 'api'", helpText: 'HTTP method (GET, POST, PUT, DELETE)' },
-        { field: 'body', widget: 'code', visibleOn: "data.type == 'script'", helpText: 'JavaScript code to execute' },
+        {
+          field: 'body',
+          type: 'composite',
+          visibleOn: "data.type == 'script'",
+          helpText: 'Either an L1 expression or an L2 sandboxed JS body',
+          // Mirrors hook.form.ts: `body` is a discriminated union
+          // (HookBodySchema) on `language`, not a bare string. A flat
+          // `widget: 'code'` fed the whole object to the editor and rendered
+          // "[object Object]". Render the union as language + source (+ the
+          // L2-only capability/timeout knobs).
+          fields: [
+            { field: 'language', type: 'select', required: true, helpText: 'expression = pure formula; js = sandboxed JavaScript', options: [
+              { label: 'Expression (L1)', value: 'expression' },
+              { label: 'JavaScript (L2 sandboxed)', value: 'js' },
+            ] },
+            { field: 'source', type: 'code', language: 'javascript', required: true, helpText: 'Function body source — no top-level imports' },
+            { field: 'capabilities', type: 'tags', helpText: 'Allowed ctx APIs (api.read, api.write, crypto.uuid, log, …)' },
+            { field: 'timeoutMs', type: 'number', helpText: 'Per-invocation timeout (ms)' },
+          ],
+        },
         { field: 'params', type: 'repeater', helpText: 'User input parameters (show form before executing)' },
         { field: 'confirmText', helpText: 'Confirmation message (e.g., "Are you sure?")' },
         { field: 'successMessage', helpText: 'Success message after completion' },
