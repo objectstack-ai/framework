@@ -14,8 +14,8 @@
     "@nestjs/core": "^11.1.19"
   },
   "devDependencies": {
-    "@nestjs/common": "^11.1.24",
-    "@nestjs/core": "^11.1.24",
+    "@nestjs/common": "^11.1.26",
+    "@nestjs/core": "^11.1.26",
     "@objectstack/runtime": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
