@@ -1,0 +1,74 @@
+---
+title: Doc
+description: Doc protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Package Documentation Metadata Protocol (ADR-0046)
+
+One `doc` item per Markdown file under the package's flat `src/docs/`
+
+directory (no subdirectories — flatness is the contract that keeps
+
+cross-references stable). The CLI compiles each file into this shape at
+
+build time; TS-first stacks may also declare items inline via
+
+`defineStack(\{ docs: [...] \})`.
+
+Identity model: `name` = filename stem (lowercase snake_case). A namespace
+
+prefix (`crm_lead_guide`) is a *recommended convention*, no longer required:
+
+per ADR-0048, single-doc resolution is package-scoped (`getItem('doc', name,
+
+packageId)` via `?package=` on the detail route), so two packages may ship a
+
+doc with the same bare name and each resolves within its own package — just
+
+like `page`/`dashboard`/`report`. The prefix stays useful for readable,
+
+globally-unique filenames but is not load-bearing for uniqueness.
+
+Docs are inert data: the kernel registers them without parsing
+
+`content`, and they participate in no runtime behavior. Renderers
+
+resolve relative links between docs (`[guide](./crm_lead_guide.md)`)
+
+by stripping `./` and `.md` to obtain the target doc name.
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/doc.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { Doc } from '@objectstack/spec/system';
+import type { Doc } from '@objectstack/spec/system';
+
+// Validate data
+const result = Doc.parse(data);
+```
+
+---
+
+## Doc
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Doc name (= filename stem, snake_case; namespace prefix recommended, not required) |
+| **label** | `string` | optional | Display title; defaults to the first `#` heading, then the name |
+| **description** | `string` | optional | One-line summary for listings; from frontmatter `description:` |
+| **content** | `string` | ✅ | Raw Markdown content (CommonMark + GFM) |
+| **order** | `number` | optional | Sort key within a book group (ADR-0046 §6) |
+| **group** | `string` | optional | Explicit book-group key (ADR-0046 §6); rules usually suffice |
+| **translations** | `Record<string, Object>` | optional | Per-locale `{label?,description?,content}` variants; the base doc is the fallback |
+
+
+---
+

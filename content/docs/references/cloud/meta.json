@@ -1,21 +1,18 @@
 {
   "title": "Cloud Protocol",
   "pages": [
-    "---Environments---",
+    "app-store",
+    "developer-portal",
     "environment",
     "environment-artifact",
     "environment-package",
-    "provisioning",
-    "tenant",
-    "---Marketplace & Distribution---",
     "marketplace",
     "marketplace-admin",
-    "app-store",
-    "developer-portal",
-    "---Packages---",
     "package",
     "package-version",
+    "plugin-security",
+    "provisioning",
     "template-manifest",
-    "plugin-security"
+    "tenant"
   ]
 }
