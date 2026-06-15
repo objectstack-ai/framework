@@ -29,9 +29,9 @@ const result = AuditPolicy.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **logRetentionDays** | `number` | ✅ |  |
-| **sensitiveFields** | `string[]` | ✅ | Fields to redact in logs (e.g. password, ssn) |
-| **captureRead** | `boolean` | ✅ | Log read access (High volume!) |
+| **logRetentionDays** | `number` | ✅ | [EXPERIMENTAL — not enforced] Days to retain audit logs |
+| **sensitiveFields** | `string[]` | ✅ | [EXPERIMENTAL — not enforced] Fields to redact in logs (e.g. password, ssn) |
+| **captureRead** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Log read access (High volume!) |
 
 
 ---
@@ -42,9 +42,9 @@ const result = AuditPolicy.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **trustedRanges** | `string[]` | ✅ | CIDR ranges allowed to access (e.g. 10.0.0.0/8) |
-| **blockUnknown** | `boolean` | ✅ | Block all IPs not in trusted ranges |
-| **vpnRequired** | `boolean` | ✅ |  |
+| **trustedRanges** | `string[]` | ✅ | [EXPERIMENTAL — not enforced] CIDR ranges allowed to access (e.g. 10.0.0.0/8) |
+| **blockUnknown** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Block all IPs not in trusted ranges |
+| **vpnRequired** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require VPN to access |
 
 
 ---
@@ -55,13 +55,13 @@ const result = AuditPolicy.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **minLength** | `number` | ✅ |  |
-| **requireUppercase** | `boolean` | ✅ |  |
-| **requireLowercase** | `boolean` | ✅ |  |
-| **requireNumbers** | `boolean` | ✅ |  |
-| **requireSymbols** | `boolean` | ✅ |  |
-| **expirationDays** | `number` | optional | Force password change every X days |
-| **historyCount** | `number` | ✅ | Prevent reusing last X passwords |
+| **minLength** | `number` | ✅ | [EXPERIMENTAL — not enforced] Minimum password length |
+| **requireUppercase** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require an uppercase letter |
+| **requireLowercase** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require a lowercase letter |
+| **requireNumbers** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require a number |
+| **requireSymbols** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require a symbol |
+| **expirationDays** | `number` | optional | [EXPERIMENTAL — not enforced] Force password change every X days |
+| **historyCount** | `number` | ✅ | [EXPERIMENTAL — not enforced] Prevent reusing last X passwords |
 
 
 ---
@@ -77,8 +77,8 @@ const result = AuditPolicy.parse(data);
 | **network** | `Object` | optional |  |
 | **session** | `Object` | optional |  |
 | **audit** | `Object` | optional |  |
-| **isDefault** | `boolean` | ✅ | Apply to all users by default |
-| **assignedProfiles** | `string[]` | optional | Apply to specific profiles |
+| **isDefault** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Apply to all users by default |
+| **assignedProfiles** | `string[]` | optional | [EXPERIMENTAL — not enforced] Apply to specific profiles |
 
 
 ---
@@ -89,9 +89,9 @@ const result = AuditPolicy.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **idleTimeout** | `number` | ✅ | Minutes before idle session logout |
-| **absoluteTimeout** | `number` | ✅ | Max session duration (minutes) |
-| **forceMfa** | `boolean` | ✅ | Require 2FA for all users |
+| **idleTimeout** | `number` | ✅ | [EXPERIMENTAL — not enforced] Minutes before idle session logout |
+| **absoluteTimeout** | `number` | ✅ | [EXPERIMENTAL — not enforced] Max session duration (minutes) |
+| **forceMfa** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Require 2FA for all users |
 
 
 ---
