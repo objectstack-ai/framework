@@ -263,6 +263,16 @@ export function evaluateValidationRules(
   // Merged view used by predicate rules: prior state overlaid with the PATCH,
   // so a rule referencing an unchanged field still sees its persisted value.
   const merged: Record<string, unknown> = { ...(previous ?? {}), ...data };
+  // #1871 — on INSERT, a field omitted entirely from the payload is absent from
+  // the record, so a `record.x == null` predicate sees a missing CEL key (which
+  // does not equal null) and silently can't match. Default declared-but-absent
+  // fields to null so an omitted optional reads as null — matching an explicit
+  // `null` and the UPDATE path (where the prior record already supplies them).
+  if (mode === 'insert' && fields) {
+    for (const name of Object.keys(fields)) {
+      if (!(name in merged)) merged[name] = null;
+    }
+  }
   const ctx: RuleContext = { data, merged, previous, mode, logger: opts.logger };
 
   const errors: FieldValidationError[] = [];
