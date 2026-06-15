@@ -24,10 +24,10 @@
     "nanoid": "^5.1.11"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "mongodb-memory-server": "^11.2.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "keywords": [
     "objectstack",
