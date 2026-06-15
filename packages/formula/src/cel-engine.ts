@@ -146,12 +146,19 @@ export const celEngine: DialectEngine = {
       // type-checking; the function is never actually called.
       const env = buildEnv(() => new Date(0));
       const compiled = env.parse(source);
-      // Surface check errors eagerly.
-      const checkErrors = compiled.check?.();
-      if (checkErrors && Array.isArray(checkErrors) && checkErrors.length > 0) {
+      // Surface check errors eagerly. cel-js's `check()` returns a
+      // `TypeCheckResult` object (`{ valid, type?, error? }`) — NOT an array —
+      // so the type fault (including `found no matching overload for 'PRIOR(dyn)'`
+      // when a condition calls an UNKNOWN function) only surfaces when we read
+      // `valid === false`. The previous `Array.isArray(...)` guard never matched
+      // an object, so unknown-function predicates type-checked clean and were
+      // silently accepted by `objectstack build` / `registerFlow`, then no-op'd
+      // the flow at runtime (#1877). Reading the documented shape closes that.
+      const checkResult = compiled.check?.();
+      if (checkResult && checkResult.valid === false) {
         return {
           ok: false,
-          error: { kind: 'type', message: checkErrors.join('; ') },
+          error: { kind: 'type', message: checkResult.error?.message ?? 'expression failed type checking' },
         };
       }
       return { ok: true, value: compiled.ast };
