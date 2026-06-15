@@ -101,11 +101,11 @@
   },
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.50",
-    "@oclif/plugin-plugins": "^5.4.73",
-    "@types/node": "^25.9.2",
+    "@oclif/plugin-plugins": "^5.4.74",
+    "@types/node": "^25.9.3",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "repository": {
     "type": "git",

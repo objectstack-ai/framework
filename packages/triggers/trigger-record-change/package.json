@@ -23,9 +23,9 @@
   "devDependencies": {
     "@objectstack/objectql": "workspace:*",
     "@objectstack/service-automation": "workspace:*",
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "keywords": [
     "objectstack",

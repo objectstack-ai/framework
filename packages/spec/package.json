@@ -203,12 +203,12 @@
   ],
   "author": "ObjectStack",
   "devDependencies": {
-    "@types/node": "^25.9.2",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@types/node": "^25.9.3",
+    "@vitest/coverage-v8": "^4.1.9",
     "ai": "^6.0.205",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "zod": "^4.4.3"
