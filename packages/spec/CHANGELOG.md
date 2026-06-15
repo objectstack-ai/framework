@@ -1,5 +1,23 @@
 # @objectstack/spec
 
+## 9.6.0
+
+### Minor Changes
+
+- 71578f2: feat(book): documentation navigation as a `book` element — spine + derived membership (ADR-0046 §6)
+
+  Adds the `book` metadata element: a navigation **spine** (ordered groups + `audience` + identity) whose membership is **derived** by rule (`include` glob/tag) plus optional per-doc `order`/`group`, never a central array. This keeps AI authoring create-and-forget (no central-array read-modify-write) and runtime overlay merge-safe (RFC 7396 treats arrays atomically).
+
+  - `BookSchema` + `resolveBookTree()` derived-membership resolver + `defineBook()` + additive `doc.order`/`doc.group`.
+  - Register `book` as a render-time metadata type (`allowOrgOverride: true`); wire it through the runtime type enumerations (PLURAL_TO_SINGULAR, engine registration, artifact field map, type-schema map).
+  - REST `GET /meta/book/:name/tree` resolves the tree; read-layer `audience` gating (`public` ≡ anonymous; `org`/`{profile}` require sign-in).
+
+### Patch Changes
+
+- d1e930a: feat(spec): model action-param translations in TranslationData (`_actions.params`) so action param label/helpText/placeholder/options can be localized via the keys+bundles path. Additive and optional — existing bundles unaffected.
+- 5e3a301: fix(spec): surface hook `retryPolicy` and `timeout` in the Studio hook designer form (Execution section), completing schema coverage.
+- 5db2742: chore(spec): mark every PolicySchema property `[EXPERIMENTAL — not enforced]` (ADR-0049, #1882). PolicySchema (password/network/session/audit + `forceMfa`, IP allow-list, retention) is parsed but has no runtime consumer — `better-auth` runs hardcoded defaults. The per-property markers make the no-op explicit in the generated reference docs (previously `forceMfa` read "Require 2FA for all users" with no caveat — a false-compliance signal) and to the spec-liveness gate, which now classifies them `experimental` rather than `dead`. Description-only; no behaviour change.
+
 ## 9.5.1
 
 ### Patch Changes

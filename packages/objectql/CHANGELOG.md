@@ -1,5 +1,54 @@
 # @objectstack/objectql
 
+## 9.6.0
+
+### Minor Changes
+
+- 71578f2: feat(book): documentation navigation as a `book` element — spine + derived membership (ADR-0046 §6)
+
+  Adds the `book` metadata element: a navigation **spine** (ordered groups + `audience` + identity) whose membership is **derived** by rule (`include` glob/tag) plus optional per-doc `order`/`group`, never a central array. This keeps AI authoring create-and-forget (no central-array read-modify-write) and runtime overlay merge-safe (RFC 7396 treats arrays atomically).
+
+  - `BookSchema` + `resolveBookTree()` derived-membership resolver + `defineBook()` + additive `doc.order`/`doc.group`.
+  - Register `book` as a render-time metadata type (`allowOrgOverride: true`); wire it through the runtime type enumerations (PLURAL_TO_SINGULAR, engine registration, artifact field map, type-schema map).
+  - REST `GET /meta/book/:name/tree` resolves the tree; read-layer `audience` gating (`public` ≡ anonymous; `org`/`{profile}` require sign-in).
+
+### Patch Changes
+
+- b04b7e3: fix(objectql): validate a declared required `organization_id`/`tenant_id` instead of silently skipping it by name (#1592)
+
+  `validateRecord` skipped required-checks for any field literally named
+  `organization_id` / `tenant_id`. That's correct only for the engine-INJECTED
+  tenant column (already marked `system: true`, skipped via provenance). A
+  genuinely DECLARED required business field with that name — e.g. `sys_team`'s
+  `organization_id` lookup, on a `managedBy: 'better-auth'` table where the column
+  is NOT injected — was silently bypassed and reached the driver as NULL (a DB
+  constraint error instead of a clean `400 required`). Removed the two names from
+  the by-name skip set; injected columns remain skipped via `def.system` /
+  `def.readonly`.
+
+- d13df3f: fix(objectql): `record.<field> == null` validation fires on insert when the field is omitted (#1871)
+
+  A `script` / `cross_field` validation predicate like `record.due_date == null`
+  did not fire on **insert** when the optional field was omitted entirely from the
+  payload — the CEL `record` scope lacked the key, so `record.x == null` saw a
+  missing key (not null) and silently couldn't match. It worked on update (the
+  prior record supplies the field) and when the field was explicitly `null`.
+
+  Fix: on insert, default declared-but-absent schema fields to `null` in the rule
+  evaluation scope, so an omitted optional reads as `null` — matching an explicit
+  `null` and the update path.
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [71578f2]
+- Updated dependencies [bb00a50]
+- Updated dependencies [5e3a301]
+- Updated dependencies [5db2742]
+  - @objectstack/spec@9.6.0
+  - @objectstack/formula@9.6.0
+  - @objectstack/core@9.6.0
+  - @objectstack/metadata-core@9.6.0
+  - @objectstack/types@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes
