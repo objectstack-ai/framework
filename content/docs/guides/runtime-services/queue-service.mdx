@@ -23,6 +23,5 @@ services.queue.purgeFailed?(messageId: string): Promise<void>
 
 ## Typical Errors
 
-- `QUEUE_NOT_FOUND`
-- `QUEUE_HANDLER_ERROR`
-- `QUEUE_MESSAGE_NOT_DLQ` (for replay/purgeFailed)
+- `MESSAGE_NOT_FOUND` — `replay`/`purgeFailed` called with an unknown message id.
+- `INVALID_STATE` — `replay`/`purgeFailed` called on a message that is not in the `dlq` or `failed` state.

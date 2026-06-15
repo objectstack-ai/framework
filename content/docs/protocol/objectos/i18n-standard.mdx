@@ -9,12 +9,15 @@ import { Globe, Languages, Calendar, Hash, FileText, MapPin } from 'lucide-react
 
 <Callout type="warn">
 **Protocol spec, partial implementation.** The runtime i18n service
-(`@objectstack/service-i18n`) implements translation bundles, locale resolution,
-ICU MessageFormat, and number/date formatting — see the
-[service README](/packages/services/service-i18n/README.md) for the current API.
-The nested config shapes shown below (e.g. `i18n.translationService.provider`,
-auto-translate hooks) describe target behaviour and are not yet codified as
-top-level `defineStack` keys. Treat the snippets as design intent.
+(`@objectstack/service-i18n`) currently implements translation bundles
+(`loadTranslations` / `getTranslations`), locale listing, fallback-locale
+resolution, and `{{param}}` interpolation via the `II18nService` contract
+(`t(key, locale, params)`) — see `packages/services/service-i18n` for the
+current API. The number/date/relative-time/currency formatting helpers, the
+`plural()` helper, ICU MessageFormat parsing, `setUserLocale`, and the nested
+config shapes shown below (e.g. `i18n.translationService.provider`,
+auto-translate hooks) describe **target behaviour** and are not yet implemented.
+Treat those snippets as design intent.
 </Callout>
 
 ObjectOS provides **built-in internationalization** that enables applications to support multiple languages, locales, and regional formats without external libraries or complex configuration.
@@ -44,13 +47,15 @@ pluralize('item', 5);
 ObjectOS provides a **unified i18n API** with batteries included:
 
 ```typescript
-// Single API for all i18n needs
-const { t, formatNumber, formatDate, plural } = context.i18n;
+// Today: translation + interpolation via the II18nService contract
+const i18n = kernel.getService('i18n');
 
-t('messages.welcome', { name: 'John' });  // Translation
-formatNumber(1234.56);                    // Locale-aware number formatting
-formatDate(new Date(), 'medium');         // Locale-aware date formatting
-plural('item', 5);                        // Pluralization
+i18n.t('messages.welcome', 'en', { name: 'John' }); // Translation + interpolation
+
+// Design intent (not yet implemented): unified locale-aware formatting helpers
+//   formatNumber(1234.56)        — locale-aware number formatting
+//   formatDate(new Date(), 'medium') — locale-aware date formatting
+//   plural('item', 5)            — pluralization
 ```
 
 **Benefits:**
@@ -282,67 +287,75 @@ my-plugin/
 
 ### Basic Translation
 
+The contract is `t(key, locale, params?)` — the target locale is always passed
+explicitly, and the key itself is returned when no translation is found (there
+is no `defaultValue` option).
+
 ```typescript
-// Get translation for current locale
-const message = context.i18n.t('account.welcome', { name: 'John' });
+const i18n = kernel.getService('i18n');
+
+// Translate a key for a given locale, with {{param}} interpolation
+const message = i18n.t('account.welcome', 'en', { name: 'John' });
 // en: "Welcome, John!"
-// de: "Willkommen, John!"
+// de (locale 'de'): "Willkommen, John!"
 
-// Get translation with namespace
-const fieldLabel = context.i18n.t('account.fields.name');
-// en: "Account Name"
-// de: "Kontoname"
+// Dot-notation resolves nested keys
+const fieldLabel = i18n.t('account.fields.name', 'de');
+// "Kontoname"
 
-// Provide default if translation missing
-const label = context.i18n.t('account.fields.unknown', {
-  defaultValue: 'Unknown Field',
-});
+// Missing keys fall back to the fallbackLocale, then return the key string
+const label = i18n.t('account.fields.unknown', 'en');
+// "account.fields.unknown"
 ```
 
 ### Pluralization
 
-```typescript
-// Automatic plural handling
-const message = context.i18n.t('account.itemCount', { count: 1 });
-// en: "1 item"
+<Callout type="warn">
+**Design intent.** Automatic CLDR plural selection (the `key` / `key_plural`
+convention) is not yet implemented by the file adapter — `t()` performs only
+`{{param}}` interpolation. To pluralize today, set `messageFormat: 'icu'` and
+author ICU MessageFormat strings (see
+[Use ICU MessageFormat](#4-use-icu-messageformat-for-complex-messages) below),
+or select the form in application code.
+</Callout>
 
-const message = context.i18n.t('account.itemCount', { count: 5 });
-// en: "5 items"
-// de: "5 Artikel"
+```typescript
+// Target behaviour (not yet wired into the file adapter):
+i18n.t('account.itemCount', 'en', { count: 1 }); // "1 item"
+i18n.t('account.itemCount', 'en', { count: 5 }); // "5 items"
 ```
 
-**Plural Forms:**
+**Planned plural forms:**
 - English: `key`, `key_plural`
 - Other languages may have more forms (e.g., Polish has 5)
 
-ObjectOS uses **Unicode CLDR plural rules** to select correct form.
+The intent is to use **Unicode CLDR plural rules** to select the correct form.
 
 ### Context-Based Translation
 
 ```typescript
-// Different translations based on context
-const deleteButton = context.i18n.t('account.delete');
+// Distinct keys for distinct contexts — both resolved with t(key, locale)
+const deleteButton = i18n.t('account.delete', 'en');
 // "Delete"
 
-const deleteConfirmation = context.i18n.t('account.delete_confirm', {
+const deleteConfirmation = i18n.t('account.delete_confirm', 'en', {
   name: 'Acme Corp',
 });
 // "Are you sure you want to delete Acme Corp?"
 ```
 
-### Fallback Translation
-
-```typescript
-// Try multiple keys, use first found
-const message = context.i18n.t([
-  'account.customMessage',    // Try custom first
-  'common.defaultMessage',    // Fallback to common
-], { defaultValue: 'No translation found' });
-```
-
 ## Date and Time Formatting
 
-ObjectOS provides **locale-aware date/time formatting** using Unicode CLDR data.
+<Callout type="warn">
+**Design intent — not yet implemented.** The `formatDate`, `formatTime`,
+`formatDateTime`, and `formatRelativeTime` methods are **not** part of the
+current `II18nService` contract (`packages/spec/src/contracts/i18n-service.ts`)
+and have no runtime implementation in `@objectstack/service-i18n`. The examples
+below describe the planned locale-aware formatting API; until it ships, use the
+platform `Intl.DateTimeFormat` / `Intl.RelativeTimeFormat` APIs directly.
+</Callout>
+
+The planned API provides **locale-aware date/time formatting** using Unicode CLDR data.
 
 ### Date Formatting
 
@@ -437,7 +450,14 @@ context.i18n.formatDateTime(date, 'medium', {
 
 ## Number Formatting
 
-ObjectOS provides **locale-aware number formatting** for decimals, currency, and percentages.
+<Callout type="warn">
+**Design intent — not yet implemented.** `formatNumber`, `formatCurrency`, and
+`formatPercent` are **not** part of the current `II18nService` contract and have
+no runtime implementation. The examples below describe the planned API; until it
+ships, use `Intl.NumberFormat` directly.
+</Callout>
+
+The planned API provides **locale-aware number formatting** for decimals, currency, and percentages.
 
 ### Decimal Numbers
 
@@ -526,17 +546,24 @@ context.i18n.formatNumber(smallNumber, {
 Plugins register translation bundles in their manifest:
 
 ```typescript
-// plugin.manifest.ts
-export default definePlugin({
+// plugin.manifest.ts — a plugin manifest validated by `ManifestSchema`
+// from `@objectstack/spec/kernel` (there is no `definePlugin()` helper).
+// Translation files are registered under `contributes.translations` as
+// { locale, path } entries (see packages/spec/src/kernel/manifest.zod.ts).
+const manifest = {
+  id: 'com.mycompany.crm',
   name: '@mycompany/crm',
-  
-  metadata: {
-    // Translation files
+  version: '1.0.0',
+
+  contributes: {
     translations: [
-      'i18n/**/*.json',
+      { locale: 'en', path: 'i18n/en/account.json' },
+      { locale: 'de', path: 'i18n/de/account.json' },
     ],
   },
-});
+};
+
+export default manifest;
 ```
 
 ### Translation File Registration
@@ -557,13 +584,16 @@ export default definePlugin({
 ### Using Plugin Translations
 
 ```typescript
-// In plugin code
-const label = context.i18n.t('crm.account.fields.name');
-// en: "Account Name"
-// de: "Kontoname"
+// In plugin code — resolve the i18n service from the kernel/context,
+// then pass the target locale explicitly: t(key, locale, params?)
+const i18n = ctx.getService('i18n');
 
-// In other plugins (cross-plugin translation access)
-const label = context.i18n.t('crm.account.welcome');
+const label = i18n.t('crm.account.fields.name', 'en');
+// en: "Account Name"
+// de (locale 'de'): "Kontoname"
+
+// Cross-plugin translation access — keys from any installed plugin resolve
+const welcome = i18n.t('crm.account.welcome', 'en');
 // Works if @mycompany/crm plugin is installed
 ```
 
@@ -610,22 +640,11 @@ export const Account = ObjectSchema.create({
 }
 ```
 
-**ObjectQL automatically resolves translations** when rendering:
-
-```typescript
-// Get object metadata with translations
-const objectMeta = await ObjectQL.getMetadata('account', {
-  locale: context.locale,
-});
-
-console.log(objectMeta.label);
-// en: "Account"
-// de: "Konto"
-
-console.log(objectMeta.fields.name.label);
-// en: "Account Name"
-// de: "Kontoname"
-```
+**ObjectUI resolves these label keys against the i18n service** when rendering,
+so a field whose `label` is `'account.fields.name'` displays "Account Name" in
+`en` and "Kontoname" in `de`. The raw label value stored on the metadata is the
+translation key; the rendered locale is supplied by the request's resolved
+locale.
 
 ## ObjectUI Integration
 
@@ -682,63 +701,55 @@ export default defineView({
 
 ## Dynamic Locale Switching
 
-Users can change locale **without reloading** the page:
+<Callout type="info">
+The i18n service resolves translations per call — `t(key, locale, params)` takes
+the target locale as an explicit argument. The persisted user-locale preference
+and a UI "switch locale without reload" flow are design intent, not yet exposed
+as service methods (there is no `setUserLocale` or `context.ui.reload`).
+</Callout>
 
-### Server-Side
-
-```typescript
-// Update user locale preference
-await context.i18n.setUserLocale('de');
-
-// Next request automatically uses new locale
-const message = context.i18n.t('welcome');
-// "Willkommen!" (German)
-```
-
-### Client-Side (ObjectUI)
+The `II18nService` contract translates against whatever locale you pass in, so
+"switching" a locale means resolving the same keys against a different locale
+code:
 
 ```typescript
-// ObjectUI locale switcher component
-export default defineAction({
-  name: 'switch_locale',
-  type: 'custom',
-  
-  handler: async ({ context, value }) => {
-    // Update user preference
-    await context.i18n.setUserLocale(value);
-    
-    // Reload UI with new locale
-    await context.ui.reload();
-  },
-});
+const i18n = kernel.getService('i18n');
+
+// Resolve the same key against different locales
+i18n.t('messages.welcome', 'en'); // "Welcome!"
+i18n.t('messages.welcome', 'de'); // "Willkommen!"
 ```
+
+The locale a request renders in comes from the application's locale-resolution
+chain (user preference → tenant default → Accept-Language → system default);
+persisting a user's choice is left to the host application.
 
 ## Translation Management
 
 ### CLI Tools
 
+The `os` CLI ships two i18n commands: `extract` scaffolds per-locale translation
+skeletons from your stack config, and `check` reports coverage / missing keys.
+
 ```bash
-# Extract translation keys from code
-objectstack i18n extract --output i18n/keys.json
+# Scaffold per-locale translation skeletons from the stack config
+os i18n extract --locales=zh-CN,ja-JP --out=./src/translations
 
-# Validate translations (check for missing keys)
-objectstack i18n validate
+# Print the skeletons as JSON instead of writing files
+os i18n extract --json
 
-# Merge translations (combine multiple files)
-objectstack i18n merge --input i18n/en/*.json --output i18n/en.json
+# Detect missing translation keys across all configured locales
+os i18n check
 
-# Export translations (for translators)
-objectstack i18n export --format xlsx --output translations.xlsx
-
-# Import translations
-objectstack i18n import translations.xlsx
+# Fail CI when any locale falls below a coverage threshold
+os i18n check --strict --threshold=95
 ```
 
 ### Translation Coverage
 
 ```bash
 # Check translation coverage
-objectstack i18n coverage
+os i18n check
 
 Output:
   en: 100% (450/450 keys)
@@ -869,18 +880,24 @@ export default defineStack({
     
     // Fallback chain
     fallbackLocale: 'en',
-    
-    // Load translations on demand?
+
+    // File organization: 'bundled' | 'per_locale' | 'per_namespace' (default 'per_locale')
+    fileOrganization: 'per_locale',
+
+    // Message format: 'simple' {variable} interpolation (default) | 'icu' MessageFormat
+    messageFormat: 'simple',
+
+    // Load translations on demand? (default false)
     lazyLoad: true,
-    
-    // Cache translations?
+
+    // Cache translations? (default true)
     cache: true,
-    
-    // Translation service
-    translationService: {
-      provider: 'google-translate',
-      apiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
-    },
+
+    // Translation service — design intent, not yet a recognized config key
+    // translationService: {
+    //   provider: 'google-translate',
+    //   apiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
+    // },
   },
 });
 ```
@@ -888,12 +905,15 @@ export default defineStack({
 ## Summary
 
 ObjectOS i18n provides:
-- **Automatic locale resolution** with fallback chain
-- **Translation bundles** in JSON format with namespaces
-- **Locale-aware formatting** for dates, times, numbers, and currency
+- **Translation bundles** in JSON format with object-first namespaces
+- **Fallback-locale resolution** for missing keys
+- **`{{param}}` interpolation** via `t(key, locale, params)`
 - **Plugin integration** for modular translation management
-- **ObjectQL/ObjectUI integration** for automatic metadata translation
-- **Dynamic locale switching** without page reload
-- **Translation management tools** for extraction, validation, and coverage
+- **ObjectUI integration** for automatic metadata-label translation
+- **Translation management tools** — `os i18n extract` and `os i18n check`
 
-**Result:** Build globally-ready applications without wrestling with i18n libraries. Support 50+ languages with less than 100 lines of configuration.
+Planned (design intent, not yet implemented): locale-aware date/number/currency
+formatting helpers, CLDR pluralization, persisted user-locale switching, and
+translation-service auto-translate hooks.
+
+**Result:** Build globally-ready applications without wrestling with i18n libraries.

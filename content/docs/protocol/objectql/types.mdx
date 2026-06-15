@@ -44,7 +44,7 @@ revenue:
   <Card
     icon={<Link />}
     title="Relationship Types"
-    description="Lookups, master-detail, polymorphic references"
+    description="Lookups, master-detail, hierarchical (tree) references"
   />
   <Card
     icon={<Calculator />}
@@ -54,7 +54,7 @@ revenue:
   <Card
     icon={<Database />}
     title="Complex Types"
-    description="JSON, arrays, geolocation, file attachments"
+    description="JSON, tags, geolocation, file attachments"
   />
 </Cards>
 
@@ -100,8 +100,7 @@ Multi-line plain text.
 description:
   type: textarea
   label: Description
-  max_length: 5000
-  rows: 10
+  maxLength: 5000
 ```
 
 **Database mapping:**
@@ -127,18 +126,11 @@ Rich text with HTML markup.
 bio:
   type: html
   label: Biography
-  sanitize: true  # Remove dangerous tags
-  allowed_tags: [p, br, strong, em, ul, li]
 ```
 
 **Database mapping:**
 - PostgreSQL: `TEXT`
 - MongoDB: `String`
-
-**Sanitization:**
-- Removes `<script>`, `<iframe>`, `onclick` handlers
-- Prevents XSS attacks
-- Configurable allowed tags
 
 **UI rendering:**
 ```html
@@ -188,7 +180,6 @@ URL with protocol validation.
 website:
   type: url
   label: Website
-  protocols: [http, https]
 ```
 
 **Validation:**
@@ -211,7 +202,6 @@ phone:
   type: phone
   label: Phone Number
   format: international  # E.164 format
-  region: US
 ```
 
 **Storage format:** E.164 (`+12025551234`)
@@ -234,16 +224,16 @@ General-purpose numeric field.
 quantity:
   type: number
   label: Quantity
-  min_value: 0
-  max_value: 9999
+  min: 0
+  max: 9999
   scale: 0  # Integer
-  default_value: 1
+  defaultValue: 1
 ```
 
 **Configuration:**
 - `scale`: Decimal places (0 = integer)
 - `precision`: Total digits
-- `min_value`/`max_value`: Range validation
+- `min`/`max`: Range validation
 
 **Database mapping:**
 - PostgreSQL: `NUMERIC(precision, scale)`
@@ -263,15 +253,16 @@ Money amount with currency code.
 annual_revenue:
   type: currency
   label: Annual Revenue
-  scale: 2
-  precision: 18
-  default_currency: USD
+  currencyConfig:
+    precision: 2
+    currencyMode: fixed
+    defaultCurrency: USD
 ```
 
 **Storage:**
 ```json
 {
-  "amount": 1234.56,
+  "value": 1234.56,
   "currency": "USD"
 }
 ```
@@ -284,7 +275,7 @@ annual_revenue:
 
 **Database mapping:**
 - PostgreSQL: `NUMERIC(18,2)` + `VARCHAR(3)` or `JSONB`
-- MongoDB: `{ amount: Decimal128, currency: String }`
+- MongoDB: `{ value: Decimal128, currency: String }`
 
 ---
 
@@ -296,8 +287,8 @@ discount_rate:
   type: percent
   label: Discount
   scale: 2
-  min_value: 0
-  max_value: 100
+  min: 0
+  max: 100
 ```
 
 **Display:** `25.5%` (automatically adds % symbol)
@@ -320,8 +311,6 @@ Calendar date (no time component).
 birth_date:
   type: date
   label: Date of Birth
-  min_value: "1900-01-01"
-  max_value: "{{TODAY()}}"
 ```
 
 **Storage format:** ISO 8601 (`2024-01-15`)
@@ -344,15 +333,9 @@ Date and time with timezone.
 meeting_time:
   type: datetime
   label: Meeting Time
-  timezone: user  # Store in user's timezone
 ```
 
 **Storage format:** ISO 8601 with timezone (`2024-01-15T14:30:00Z`)
-
-**Timezone handling:**
-- `utc`: Store as UTC
-- `user`: Store in user's timezone
-- `fixed`: Store in specific timezone
 
 **Database mapping:**
 - PostgreSQL: `TIMESTAMP WITH TIME ZONE`
@@ -367,7 +350,7 @@ Time of day (no date component).
 business_hours_start:
   type: time
   label: Business Hours Start
-  default_value: "09:00:00"
+  defaultValue: "09:00:00"
 ```
 
 **Storage format:** `HH:MM:SS`
@@ -388,7 +371,7 @@ True/false value.
 is_active:
   type: boolean
   label: Active
-  default_value: true
+  defaultValue: true
 ```
 
 **Storage:**
@@ -408,19 +391,19 @@ is_active:
 
 ---
 
-#### `checkbox`
-Boolean displayed as checkbox.
+#### `toggle`
+Boolean displayed as a toggle switch.
 
 ```yaml
 email_opt_in:
-  type: checkbox
+  type: toggle
   label: Subscribe to Newsletter
   defaultValue: false
 ```
 
 **Difference from `boolean`:**
-- Always renders as checkbox (not dropdown)
-- Typically used for consent, preferences
+- Always renders as a toggle switch (not a dropdown)
+- Typically used for consent, preferences, on/off settings
 
 ---
 
@@ -437,19 +420,15 @@ priority:
     - value: low
       label: Low
       color: green
-      icon: arrow-down
     - value: medium
       label: Medium
       color: yellow
-      icon: minus
     - value: high
       label: High
       color: orange
-      icon: arrow-up
     - value: critical
       label: Critical
       color: red
-      icon: alert
   defaultValue: medium
   required: true
 ```
@@ -459,14 +438,6 @@ priority:
 **Database mapping:**
 - PostgreSQL: `VARCHAR` or `ENUM`
 - MongoDB: `String`
-
-**Dynamic options:**
-```yaml
-country:
-  type: select
-  options_source: api
-  options_endpoint: /api/countries
-```
 
 **Use cases:**
 - Status, stage, priority
@@ -508,7 +479,6 @@ contact_method:
     - { value: email, label: Email }
     - { value: phone, label: Phone }
     - { value: sms, label: SMS }
-  orientation: horizontal  # or vertical
 ```
 
 **Difference from `select`:**
@@ -599,46 +569,36 @@ name: order_line_item
 fields:
   order_id:
     type: master_detail
-    reference_to: order
+    reference: order
 ```
 
 ---
 
-### `polymorphic`
-Reference to multiple object types.
+### `tree`
+Hierarchical reference for parent-child trees.
 
 ```yaml
 parent:
-  type: polymorphic
-  label: Related To
-  reference: [account, contact, opportunity]
+  type: tree
+  label: Parent
+  reference: category
 ```
 
-**Storage:**
-```json
-{
-  "id": "123",
-  "_type": "account"
-}
-```
-
-**Query:**
-```typescript
-const activity = await ObjectQL.findOne('activity', id, {
-  expand: ['parent']  // Resolves based on _type
-});
-
-// activity.parent = { id: '123', _type: 'account', company_name: 'Acme' }
-```
-
-**Database mapping:**
-- PostgreSQL: Two columns `parent_id` + `parent_type`
-- MongoDB: `{ id: String, _type: String }`
+**Storage:** Stores the `id` of the referenced parent record.
 
 **Use cases:**
-- Activity feeds (related to Account OR Contact)
-- Attachments (attach to any object)
-- Comments (comment on any entity)
+- Category / folder hierarchies
+- Org charts
+- Any self-referential tree
+
+<Callout type="warn">
+A single `polymorphic` field type (one field that can point at several different
+object types, e.g. Account *or* Contact) is **not currently a built-in field
+type**. The `FieldType` enum exposes `lookup`, `master_detail`, and `tree`; the
+`reference` property accepts a single target object name, not a list. Model
+"related to any object" use cases (activity feeds, attachments, comments) with
+separate lookups or an application-level type discriminator.
+</Callout>
 
 ---
 
@@ -651,16 +611,20 @@ Calculated field based on other fields.
 total_price:
   type: formula
   label: Total Price
-  expression: "quantity * unit_price"
-  # dataType: currency
-  # virtual: true  # Not stored, calculated on read
+  expression: "record.quantity * record.unit_price"
 ```
 
-**Formula syntax:**
-- **Arithmetic:** `+`, `-`, `*`, `/`, `^`
-- **Comparison:** `=`, `!=`, `>`, `<`, `>=`, `<=`
-- **Logical:** `AND`, `OR`, `NOT`
-- **Functions:** `IF()`, `SUM()`, `MIN()`, `MAX()`, `LEN()`, `UPPER()`, etc.
+Formula expressions use **CEL** (Common Expression Language). Fields on the
+current record are referenced via the `record.` scope. CEL syntax differs from
+spreadsheet/Salesforce formula languages:
+
+- **Arithmetic:** `+`, `-`, `*`, `/`, `%`
+- **Comparison:** `==`, `!=`, `>`, `<`, `>=`, `<=`
+- **Logical:** `&&`, `||`, `!`
+- **Conditional:** ternary `cond ? a : b` (there is no `IF()` function)
+- **Functions:** `today()`, `daysFromNow()`, `daysBetween()`, `len()`, `size()`,
+  `upper()`, `lower()`, `trim()`, `contains()`, `startsWith()`, `coalesce()`,
+  `min()`, `max()`, `abs()`, `round()`, and more (see the formula reference).
 
 **Examples:**
 
@@ -668,35 +632,23 @@ total_price:
 # Simple calculation
 discount_amount:
   type: formula
-  expression: "price * (discount_rate / 100)"
-  # dataType: currency
+  expression: "record.price * (record.discount_rate / 100)"
 
-# Conditional logic
+# Conditional logic (CEL ternary)
 status_label:
   type: formula
-  expression: "IF(is_active, 'Active', 'Inactive')"
-  # dataType: text
+  expression: "record.is_active ? 'Active' : 'Inactive'"
 
-# Cross-object formula (via lookup)
+# Cross-object formula (via expanded lookup)
 account_revenue_tier:
   type: formula
-  expression: "IF(account.annual_revenue > 1000000, 'Enterprise', 'SMB')"
-  # dataType: text
+  expression: "record.account.annual_revenue > 1000000 ? 'Enterprise' : 'SMB'"
 
 # Date calculation
 days_until_due:
   type: formula
-  expression: "due_date - TODAY()"
-  # dataType: number
+  expression: "daysBetween(today(), record.due_date)"
 ```
-
-**Storage options:**
-- `virtual: true`: Calculate on every read (default)
-- `virtual: false`: Store value, recalculate on write
-
-**Performance:**
-- Virtual formulas: No storage cost, query-time calculation
-- Stored formulas: Faster reads, slower writes
 
 ---
 
@@ -719,7 +671,6 @@ total_opportunity_value:
     object: opportunity
     field: amount
     function: sum
-  # filters: [['stage', 'in', ['Prospecting', 'Qualification', 'Proposal']]]
 ```
 
 **Summary Types:**
@@ -730,9 +681,8 @@ total_opportunity_value:
 - `avg`: Average value
 
 **Requirements:**
-- Must have master-detail relationship
-- Only available on master side
-- Filters apply to child records
+- Aggregates a child object that references this object (via its `lookup`/`master_detail` field)
+- Set `relationshipField` only when the child has more than one reference back to this object
 
 **Database implementation:**
 - Materialized view (PostgreSQL)
@@ -753,8 +703,7 @@ Auto-incrementing unique identifier.
 case_number:
   type: autonumber
   label: Case Number
-  format: "CASE-{0000}"
-  # start: 1
+  autonumberFormat: "CASE-{0000}"
 ```
 
 **Example values:** `CASE-0001`, `CASE-0002`, ...
@@ -769,7 +718,7 @@ case_number:
 ```yaml
 invoice_number:
   type: autonumber
-  format: "INV-{YYYY}-{0000}"
+  autonumberFormat: "INV-{YYYY}-{0000}"
   # Generates: INV-2024-0001, INV-2024-0002, ...
 ```
 
@@ -788,15 +737,6 @@ Unstructured JSON data.
 metadata:
   type: json
   label: Metadata
-  schema:  # Optional JSON Schema validation
-    type: object
-    properties:
-      color:
-        type: string
-      size:
-        type: string
-      weight:
-        type: number
 ```
 
 **Storage:**
@@ -822,29 +762,24 @@ const products = await ObjectQL.query({
 
 ---
 
-### `array`
-Ordered list of values.
+### `tags`
+Simple list of free-form string tags.
 
 ```yaml
 tags:
-  type: array
+  type: tags
   label: Tags
-  item_type: text
-  max_items: 10
 ```
+
+<Callout>
+There is no generic `array` field type. To store multiple values, use `tags`
+(free-form strings), `multiselect` (multiple choices from `options`), or set
+`multiple: true` on a scalar/`lookup` field to store an array of that type.
+</Callout>
 
 **Storage:**
 - PostgreSQL: `TEXT[]` or `JSONB`
 - MongoDB: `[String]`
-
-**Query:**
-```typescript
-// Contains check
-filters: [['tags', 'contains', 'important']]
-
-// Array length
-filters: [['tags.length', '>', 3]]
-```
 
 ---
 
@@ -855,7 +790,7 @@ Structured address with geocoding.
 billing_address:
   type: address
   label: Billing Address
-  geocode: true  # Auto-geocode on save
+  allowGeocoding: true  # Allow address-to-coordinate conversion
 ```
 
 **Structure:**
@@ -864,18 +799,12 @@ billing_address:
   "street": "123 Main St",
   "city": "San Francisco",
   "state": "CA",
-  "postal_code": "94105",
+  "postalCode": "94105",
   "country": "USA",
-  "latitude": 37.7749,
-  "longitude": -122.4194
+  "countryCode": "US",
+  "formatted": "123 Main St, San Francisco, CA 94105"
 }
 ```
-
-**Features:**
-- Auto-complete from Google Maps API
-- Geocoding (address → lat/lng)
-- Reverse geocoding (lat/lng → address)
-- Distance calculations
 
 **Database mapping:**
 - PostgreSQL: `JSONB` or composite type
@@ -924,9 +853,10 @@ File attachment reference.
 avatar:
   type: file
   label: Profile Picture
-  accept: [image/png, image/jpeg]
-  max_size: 5242880  # 5MB
-  storage: s3
+  fileAttachmentConfig:
+    allowedMimeTypes: [image/png, image/jpeg]
+    maxSize: 5242880  # 5MB
+    storageProvider: s3
 ```
 
 **Storage:**
@@ -960,16 +890,21 @@ Image file with transformations.
 product_image:
   type: image
   label: Product Image
-  transformations:
-    thumbnail: { width: 150, height: 150, crop: center }
-    large: { width: 1200, height: 800, crop: fit }
+  fileAttachmentConfig:
+    allowedMimeTypes: [image/png, image/jpeg, image/webp]
+    imageValidation:
+      maxWidth: 4096
+      maxHeight: 4096
+      generateThumbnails: true
+      thumbnailSizes:
+        - { name: thumbnail, width: 150, height: 150, crop: true }
+        - { name: large, width: 1200, height: 800, crop: false }
 ```
 
 **Features:**
-- Automatic image resizing
-- Format conversion (JPEG, PNG, WebP)
-- Lazy loading support
-- Responsive srcset generation
+- Image dimension validation (`minWidth`/`maxWidth`/`minHeight`/`maxHeight`, `aspectRatio`)
+- Thumbnail generation (`generateThumbnails`, `thumbnailSizes`)
+- EXIF handling (`preserveMetadata`, `autoRotate`)
 
 ---
 
@@ -989,44 +924,36 @@ How types convert between databases:
 | `lookup` | `UUID` + FK | `ObjectId` | `String` |
 | `formula` | `GENERATED` | Virtual | Computed |
 | `json` | `JSONB` | `Object` | `String` (JSON) |
-| `array` | `TEXT[]` | `Array` | `String` (JSON) |
 | `location` | `POINT` | `GeoJSON` | `String` (JSON) |
 
-## Custom Types
+## Sensitive Data: Masking & Encryption
 
-Define reusable custom types:
+There is no user-defined "custom type" registry. Instead, sensitive-data behavior
+is configured directly on a field via the `maskingRule` and `encryptionConfig`
+properties (and the `secret` type for reversible encrypted-at-rest values).
 
-```typescript
-// objectstack.config.ts
-export default {
-  types: {
-    social_security: {
-      base: 'text',
-      pattern: /^\d{3}-\d{2}-\d{4}$/,
-      format: (value) => value.replace(/(\d{3})(\d{2})(\d{4})/, '$1-$2-$3'),
-      mask: '***-**-####',  // Show only last 4 digits
-    },
-    
-    credit_card: {
-      base: 'text',
-      pattern: /^\d{13,19}$/,
-      encrypt: true,  // PCI compliance
-      tokenize: true,  // Store token, not actual number
-    }
-  }
-};
-```
-
-**Usage:**
 ```yaml
+# PII masking — show only the last 4 digits to most roles
 ssn:
-  type: social_security
+  type: text
   label: Social Security Number
+  maskingRule:
+    field: ssn
+    strategy: partial
+    pattern: "\\d{3}-\\d{2}-(\\d{4})"
+    exemptRoles: [compliance_officer]
 
+# Field-level encryption (PCI/HIPAA/GDPR)
 card_number:
-  type: credit_card
+  type: text
   label: Credit Card
+  encryptionConfig:
+    enabled: true
+    algorithm: aes-256-gcm
 ```
+
+For reversible secrets (API keys, DB passwords) use the dedicated `secret` field
+type, which encrypts on write and masks on read.
 
 ## Type Selection Guide
 
@@ -1042,7 +969,7 @@ card_number:
 - General purpose → `number`
 - Money → `currency`
 - Percentage → `percent`
-- Unique ID → `auto_number`
+- Unique ID → `autonumber`
 
 **For dates:**
 - Date only → `date`
@@ -1051,14 +978,14 @@ card_number:
 
 **For selections:**
 - Fixed options → `select`
-- Multiple selections → `multi_select`
+- Multiple selections → `multiselect`
 - 2-5 visible options → `radio`
-- Yes/No → `boolean` or `checkbox`
+- Yes/No → `boolean` or `toggle`
 
 **For relationships:**
 - Loose reference → `lookup`
 - Parent-child → `master_detail`
-- Multiple types → `polymorphic`
+- Self-referential hierarchy → `tree`
 
 **For calculations:**
 - Derived value → `formula`
@@ -1066,7 +993,7 @@ card_number:
 
 **For complex data:**
 - Flexible schema → `json`
-- List of items → `array`
+- List of tags → `tags` (or `multiple: true`)
 - Geographic data → `location` or `address`
 - File upload → `file` or `image`
 
@@ -1075,17 +1002,17 @@ card_number:
 <Cards>
   <Card
     title="Schema Definition"
-    href="/docs/protocols/objectql/schema"
+    href="/docs/protocol/objectql/schema"
     description="Learn how to define objects and configure fields"
   />
   <Card
     title="Query Syntax"
-    href="/docs/protocols/objectql/query-syntax"
+    href="/docs/protocol/objectql/query-syntax"
     description="Query data with filters, joins, and aggregations"
   />
   <Card
     title="Security"
-    href="/docs/protocols/objectql/security"
+    href="/docs/protocol/objectql/security"
     description="Implement access control and data security"
   />
 </Cards>

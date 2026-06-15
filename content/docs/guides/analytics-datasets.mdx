@@ -167,15 +167,21 @@ measure values by hand:
 
 ## Migrating from inline queries
 
-ADR-0021's terminal state is **one** author-facing shape. The migration runs in
-two steps so it can be verified safely:
+ADR-0021's terminal state is **one** author-facing shape, and the cutover is now
+complete: `report`, `dashboard` widgets, and list-view charts are all
+dataset-bound today (`ReportSchema`, `DashboardWidgetSchema`,
+`ListChartConfigSchema` in `packages/spec/src/ui`). The migration ran in two
+steps so it could be verified safely:
 
-1. **Dual-form (additive).** A report/widget keeps its legacy inline query AND
-   gains a `dataset` binding. A read-only reconciliation harness asserts both
-   forms return identical numbers (the financial-correctness gate).
-2. **Single-form (terminal).** Once every surface reconciles and `grep` shows no
-   inline residue, the inline query fields and `ListChartConfigSchema` are
-   removed and the union collapses to the single dataset shape.
+1. **Dual-form (additive).** A report/widget kept its legacy inline query AND
+   gained a `dataset` binding. A read-only reconciliation harness asserted both
+   forms returned identical numbers (the financial-correctness gate).
+2. **Single-form (terminal).** Once every surface reconciled, the inline query
+   fields (`objectName`/`columns`/`groupings` on reports, `valueField`/`aggregate`
+   on widgets, `xAxisField`/`yAxisFields`/`aggregation` on list charts) were
+   removed and each schema collapsed to the single dataset shape. The
+   presentation schemas themselves were kept — only their inline query fields
+   went away.
 
 Author new analytics directly in dataset form; reach for a **named** dataset when
 a metric is shared or must be certified, and an inline anonymous dataset for a

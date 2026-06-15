@@ -48,7 +48,7 @@ OS_DATABASE_DRIVER=sqlite
 OS_ARTIFACT_PATH=./dist/objectstack.json
 
 # Auth, required outside dev
-AUTH_SECRET=<random 32-byte secret>
+OS_AUTH_SECRET=<random 32-byte secret>
 ```
 
 ObjectStack-owned variables use the `OS_` prefix. The old project-scoped names
@@ -61,7 +61,7 @@ are not aliases in current docs or examples.
 From the framework repo:
 
 ```bash
-PORT=3000 pnpm dev
+OS_PORT=3000 pnpm dev
 # showcase example, persistent state, console at /_console
 
 pnpm dev:crm -- --fresh -p 38421
@@ -73,7 +73,7 @@ From a generated app:
 ```bash
 os dev
 os start
-os serve --artifact ./dist/objectstack.json
+OS_ARTIFACT_PATH=./dist/objectstack.json os serve
 ```
 
 The CLI forwards the active environment through `OS_ENVIRONMENT_ID` and, when

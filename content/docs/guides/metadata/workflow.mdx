@@ -29,13 +29,17 @@ export const dealClosedWon: Flow = {
   label: 'Deal Closed Won',
   type: 'record_change',
   status: 'active',
-  trigger: {
-    objectName: 'opportunity',
-    operations: ['update'],
-    condition: "record.stage == 'closed_won' && previous.stage != 'closed_won'",
-  },
   nodes: [
-    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'start',
+      type: 'start',
+      label: 'Start',
+      config: {
+        triggerType: 'record-after-update',
+        objectName: 'opportunity',
+        condition: "record.stage == 'closed_won' && previous.stage != 'closed_won'",
+      },
+    },
     { id: 'set_closed_date', type: 'update_record', label: 'Set Closed Date' },
     { id: 'notify_sales', type: 'notify', label: 'Notify Sales' },
     { id: 'end', type: 'end', label: 'End' },
@@ -106,7 +110,7 @@ Approvals are Flow nodes:
   label: 'Manager Approval',
   config: {
     approvers: [{ type: 'user', value: '${record.owner_manager_id}' }],
-    behavior: 'all',
+    behavior: 'unanimous',
     approvalStatusField: 'approval_status',
     lockRecord: true,
   },

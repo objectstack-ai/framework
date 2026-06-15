@@ -9,6 +9,11 @@ A **Dashboard** defines an analytics page with chart widgets, key metrics, and d
 
 ## Basic Structure
 
+Every widget binds to a **dataset** (the semantic layer, ADR-0021) and selects
+the dataset's `dimensions` and `values` by name. The dataset owns the base
+object, joins, and certified measures, so the same numbers stay consistent
+across every dashboard and report.
+
 ```typescript
 const salesDashboard = {
   name: 'sales_overview',
@@ -24,29 +29,29 @@ const salesDashboard = {
 
   widgets: [
     {
+      id: 'total_revenue',
       title: 'Total Revenue',
       type: 'metric',
-      object: 'opportunity',
-      valueField: 'amount',
-      aggregate: 'sum',
+      dataset: 'sales',
+      values: ['revenue'],
       layout: { x: 0, y: 0, w: 3, h: 2 },
     },
     {
-      title: 'Pipeline by Stage',
+      id: 'revenue_by_region',
+      title: 'Revenue by Region',
       type: 'bar',
-      object: 'opportunity',
-      categoryField: 'stage',
-      valueField: 'amount',
-      aggregate: 'sum',
+      dataset: 'sales',
+      dimensions: ['region'],
+      values: ['revenue'],
       layout: { x: 3, y: 0, w: 6, h: 4 },
     },
     {
-      title: 'Win Rate',
+      id: 'deals_by_month',
+      title: 'Deals by Month',
       type: 'pie',
-      object: 'opportunity',
-      categoryField: 'status',
-      valueField: 'id',
-      aggregate: 'count',
+      dataset: 'sales',
+      dimensions: ['close_month'],
+      values: ['deal_count'],
       layout: { x: 9, y: 0, w: 3, h: 4 },
     },
   ],
@@ -67,17 +72,18 @@ const salesDashboard = {
 
 ## Widgets
 
-Each widget defines a data visualization:
+Each widget defines a data visualization. A widget binds to a `dataset` and
+selects `dimensions` (X / group / split) and `values` (the measures to plot):
 
 ```typescript
 {
+  id: 'monthly_revenue',
   title: 'Monthly Revenue',
   type: 'line',
-  object: 'invoice',
-  categoryField: 'invoice_date',
-  valueField: 'total',
-  aggregate: 'sum',
-  filter: { field: 'status', operator: 'eq', value: 'paid' },
+  dataset: 'invoicing',
+  dimensions: ['invoice_month'],
+  values: ['paid_total'],
+  filter: { status: 'paid' },
   layout: { x: 0, y: 0, w: 6, h: 4 },
 }
 ```
@@ -86,32 +92,32 @@ Each widget defines a data visualization:
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `title` | `string` | ✅ | Widget display title |
-| `type` | `ChartType` | ✅ | Visualization type (see below) |
-| `object` | `string` | ✅ | Source object name |
-| `categoryField` | `string` | optional | Field for categories/X-axis |
-| `valueField` | `string` | optional | Field for values/Y-axis |
-| `aggregate` | `enum` | optional | Aggregation function |
-| `filter` | `FilterCondition` | optional | Data filter criteria |
+| `id` | `string` | ✅ | Unique widget id (`snake_case`) |
+| `dataset` | `string` | ✅ | Dataset name to bind |
+| `values` | `string[]` | ✅ | Measure names (at least one) |
+| `dimensions` | `string[]` | optional | Dimension names — X / group / split |
+| `type` | `ChartType` | optional | Visualization type (default `metric`, see below) |
+| `title` | `string` | optional | Widget display title |
+| `description` | `string` | optional | Text shown below the title |
+| `filter` | `FilterCondition` | optional | Presentation-scope filter (`runtimeFilter`) |
 | `layout` | `object` | ✅ | Grid position and size |
 | `chartConfig` | `object` | optional | Advanced chart configuration |
+| `colorVariant` | `enum` | optional | KPI/card accent color |
+| `compareTo` | `enum \| object` | optional | Period-over-period comparison window |
 | `options` | `object` | optional | Additional display options |
 | `responsive` | `object` | optional | Responsive behavior |
 
-## Dataset-Bound Widgets
+## Datasets
 
-Dashboards support two additive query shapes:
+Every widget binds to a **dataset** — the single semantic layer (ADR-0021).
+A dataset defines the base object, allowed relationship joins, reusable
+dimensions, certified measures, and intrinsic filters once; dashboards and
+reports then reference the same names so "revenue", "pipeline", or "win rate"
+stay consistent across surfaces.
 
-- **Inline widgets** use `object`, `categoryField`, `valueField`, `aggregate`,
-  and `filter` directly on the widget.
-- **Dataset-bound widgets** use the semantic-layer `dataset` plus named
-  `dimensions` and `values`.
-
-Prefer dataset-bound widgets for shared business metrics. A dataset defines
-the base object, allowed relationship joins, reusable dimensions, certified
-measures, and intrinsic filters once; dashboards and reports then reference
-the same names so "revenue", "pipeline", or "win rate" stay consistent across
-surfaces.
+> The legacy inline-query shape (`object` + `categoryField` + `valueField` +
+> `aggregate` directly on the widget) was removed in the ADR-0021 single-form
+> cutover. Define a dataset and bind widgets to it instead.
 
 ```typescript
 import { defineDataset } from '@objectstack/spec/ui';
@@ -148,19 +154,15 @@ export const salesDashboard = {
 };
 ```
 
-Dataset-bound widgets require at least one `values` entry. Do not also set
-`object`, `valueField`, or `aggregate` unless you are intentionally keeping an
-inline widget. Studio's Dashboard Widget Inspector can author the dataset,
-dimensions, and values per widget; curated metadata-admin forms preserve any
-server-only fields that are not exposed by the current inspector, so saving a
-dashboard from Studio should not strip newer protocol fields.
+Each widget requires a `dataset` and at least one `values` entry. The widget's
+`dimensions` and `values` must reference names declared on the bound dataset.
 
 At runtime, dataset queries are executed through the analytics service. When
 `@objectstack/plugin-security` is registered, analytics auto-bridges to
 `security.getReadFilter(object, context)` and applies the caller's RLS scope to
 the base object and joined objects.
 
-ObjectUI currently renders object-backed and dataset-backed metric, chart,
+ObjectUI currently renders dataset-backed metric, chart,
 table/list, pivot, funnel, and gauge-style widgets with type-aware cells,
 field/option labels, date bucketing, numeric/currency formatting, and
 drill-down affordances. Use declarative drill-down settings and preserve raw
@@ -178,12 +180,18 @@ group keys so the generated filter can navigate to the underlying records.
 | `scatter` | Scatter plot | Correlation |
 | `radar` | Radar chart | Multi-dimensional comparison |
 | `funnel` | Funnel chart | Conversion stages |
-| `gauge` | Gauge/speedometer | Progress toward goal |
-| `heatmap` | Heat map | Density visualization |
+| `gauge` | Gauge (single value) | Progress toward goal |
 | `treemap` | Tree map | Hierarchical proportions |
 | `table` | Data table widget | Detailed records |
+| `pivot` | Pivot table | Cross-tab summaries |
+
+Additional types: `horizontal-bar`, `column`, `donut`, `sankey`, `solid-gauge`,
+`kpi`, and `bullet`. The default type is `metric`.
 
 ### Aggregation Functions
+
+Aggregation is declared on the dataset's **measures** (via `aggregate`), not on
+the widget. Supported functions:
 
 | Function | Description |
 | :--- | :--- |
@@ -192,6 +200,9 @@ group keys so the generated filter can navigate to the underlying records.
 | `avg` | Average values |
 | `min` | Minimum value |
 | `max` | Maximum value |
+| `count_distinct` | Count unique values |
+| `array_agg` | Aggregate values into an array |
+| `string_agg` | Concatenate values |
 
 ### Widget Layout
 
@@ -250,6 +261,30 @@ globalFilters: [
 
 ## Complete Example
 
+First define the dataset the widgets bind to:
+
+```typescript
+import { defineDataset } from '@objectstack/spec/ui';
+
+export const projectTasksDataset = defineDataset({
+  name: 'project_tasks',
+  label: 'Project Tasks',
+  object: 'project_task',
+  dimensions: [
+    { name: 'status', field: 'status', type: 'string' },
+    { name: 'priority', field: 'priority', type: 'string' },
+    { name: 'completed_month', field: 'completed_at', type: 'date', dateGranularity: 'month' },
+  ],
+  measures: [
+    { name: 'open_count', aggregate: 'count', filter: { status: { $ne: 'done' } } },
+    { name: 'done_count', aggregate: 'count', filter: { status: 'done' } },
+    { name: 'task_count', aggregate: 'count' },
+  ],
+});
+```
+
+Then bind the dashboard widgets to it:
+
 ```typescript
 const projectDashboard = {
   name: 'project_overview',
@@ -270,48 +305,46 @@ const projectDashboard = {
 
   widgets: [
     {
+      id: 'open_tasks',
       title: 'Open Tasks',
       type: 'metric',
-      object: 'project_task',
-      valueField: 'id',
-      aggregate: 'count',
-      filter: { field: 'status', operator: 'neq', value: 'done' },
+      dataset: 'project_tasks',
+      values: ['open_count'],
       layout: { x: 0, y: 0, w: 3, h: 2 },
     },
     {
+      id: 'completed_this_week',
       title: 'Completed This Week',
       type: 'metric',
-      object: 'project_task',
-      valueField: 'id',
-      aggregate: 'count',
-      filter: { field: 'status', operator: 'eq', value: 'done' },
+      dataset: 'project_tasks',
+      values: ['done_count'],
       layout: { x: 3, y: 0, w: 3, h: 2 },
     },
     {
+      id: 'tasks_by_status',
       title: 'Tasks by Status',
       type: 'pie',
-      object: 'project_task',
-      categoryField: 'status',
-      valueField: 'id',
-      aggregate: 'count',
+      dataset: 'project_tasks',
+      dimensions: ['status'],
+      values: ['task_count'],
       layout: { x: 6, y: 0, w: 3, h: 4 },
     },
     {
+      id: 'tasks_by_priority',
       title: 'Tasks by Priority',
       type: 'bar',
-      object: 'project_task',
-      categoryField: 'priority',
-      valueField: 'id',
-      aggregate: 'count',
+      dataset: 'project_tasks',
+      dimensions: ['priority'],
+      values: ['task_count'],
       layout: { x: 9, y: 0, w: 3, h: 4 },
     },
     {
+      id: 'completion_trend',
       title: 'Completion Trend',
       type: 'line',
-      object: 'project_task',
-      categoryField: 'completed_at',
-      valueField: 'id',
-      aggregate: 'count',
+      dataset: 'project_tasks',
+      dimensions: ['completed_month'],
+      values: ['task_count'],
       layout: { x: 0, y: 4, w: 12, h: 4 },
     },
   ],

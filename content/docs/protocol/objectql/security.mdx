@@ -7,7 +7,7 @@ import { Shield, Lock, Users, Eye } from 'lucide-react';
 
 # Security Protocol
 
-ObjectQL implements a **multi-layered security model** that enforces access control at the data layer, before queries execute. Security is declarative—defined in configuration, not scattered in application code.
+ObjectStack implements a **multi-layered security model** that enforces access control at the data layer, before queries execute. Security is declarative—defined as metadata (permission sets, row-level policies, sharing rules), not scattered in application code.
 
 ## Security Philosophy
 
@@ -19,29 +19,28 @@ app.get('/api/accounts', (req, res) => {
   if (!req.user.hasPermission('read_account')) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  
+
   // Easy to forget row-level filtering
   const accounts = await db.query('SELECT * FROM account');
   res.json(accounts);
 });
 ```
 
-**ObjectQL approach:**
-```yaml
-# Security as configuration (enforced automatically)
-name: account
-permissions:
-  read:
-    - role: sales_rep
-      filters:
-        - ['owner_id', '=', '{{CURRENT_USER_ID}}']
+**ObjectStack approach:**
+```typescript
+// Security as metadata (enforced automatically)
+// permission set: sales_rep grants read on account
+// row-level policy filters by ownership
+
+const accounts = await dataEngine.find('account');
+// USING (owner_id = current_user.id) injected by the RLS compiler
 ```
 
-```typescript
-// Security enforced automatically
-const accounts = await ObjectQL.query({ object: 'account' });
-// WHERE owner_id = current_user_id (injected by ObjectQL)
-```
+The model is composed of three distinct metadata types (see `packages/spec/src/security` and `packages/spec/src/identity`):
+
+- **Permission Set** (`permission` / `profile` metadata) — the CRUD/FLS grant. A *profile* is a permission set with `isProfile: true`.
+- **Role** (`role` metadata) — the reporting hierarchy used for ownership-based visibility roll-up.
+- **Sharing Rule** + **Organization-Wide Defaults (OWD)** — broaden the baseline visibility set for an object.
 
 ---
 
@@ -50,23 +49,23 @@ const accounts = await ObjectQL.query({ object: 'account' });
 <Cards>
   <Card
     icon={<Shield />}
-    title="Object-Level Security (ACL)"
-    description="Who can Create, Read, Update, Delete which objects"
+    title="Object-Level Security (CRUD)"
+    description="Who can Create, Read, Edit, Delete which objects (allowCreate/allowRead/allowEdit/allowDelete)"
   />
   <Card
     icon={<Lock />}
     title="Field-Level Security"
-    description="Control access to individual fields (e.g., hide salary from non-managers)"
+    description="Per-field readable/editable flags (e.g., hide salary from non-managers)"
   />
   <Card
     icon={<Users />}
     title="Row-Level Security"
-    description="Filter which records users can see (e.g., see only own accounts)"
+    description="Filter which records users can see via USING/CHECK policies (e.g., see only own accounts)"
   />
   <Card
     icon={<Eye />}
-    title="Data Masking"
-    description="Obfuscate sensitive data (e.g., show last 4 digits of SSN)"
+    title="Masking & Encryption"
+    description="Mask or encrypt sensitive field values at rest and on read"
   />
 </Cards>
 
@@ -74,47 +73,54 @@ const accounts = await ObjectQL.query({ object: 'account' });
 
 ## 1. Object-Level Security (CRUD Permissions)
 
-### Basic ACL
+Object permissions live inside a **permission set**. Each entry in the `objects` map keys an object name to a boolean grant. The full `ObjectPermissionSchema` is defined in `packages/spec/src/security/permission.zod.ts`.
+
+### Basic Permission Set
 
 ```yaml
-# account.object.yml
-name: account
-permissions:
-  create:
-    - role: sales_rep
-    - role: account_manager
-  
-  read:
-    - role: sales_rep
-    - role: account_manager
-    - role: executive
-  
-  update:
-    - role: account_manager
-  
-  delete:
-    - role: admin
+# sales_rep.permission.yml
+name: sales_rep            # lowercase snake_case, required
+label: Sales Representative
+isProfile: false           # set true to make this a base profile
+objects:
+  account:
+    allowCreate: true
+    allowRead: true
+    allowEdit: false
+    allowDelete: false
+  opportunity:
+    allowCreate: true
+    allowRead: true
+    allowEdit: true
+    allowDelete: false
 ```
 
-**Behavior:**
-- **Sales Rep:** Can create and read accounts
-- **Account Manager:** Can create, read, and update accounts
-- **Executive:** Can read accounts (read-only)
-- **Admin:** Full access (CRUD)
+Beyond the four CRUD flags, the schema also exposes lifecycle and super-user grants:
+
+| Flag | Meaning |
+| --- | --- |
+| `allowCreate` / `allowRead` / `allowEdit` / `allowDelete` | Standard CRUD |
+| `allowTransfer` | Change record ownership |
+| `allowRestore` | Restore from trash (undelete) |
+| `allowPurge` | Permanently delete (hard delete / GDPR) |
+| `viewAllRecords` | Read every record, bypassing sharing & ownership |
+| `modifyAllRecords` | Write every record, bypassing sharing & ownership |
+
+> Permission sets are layered: a user has exactly one **profile** (`isProfile: true`) plus zero or more add-on permission sets. Grants are additive (a `true` anywhere wins).
 
 ### Permission Check Flow
 
 ```
-User requests: GET /api/account/123
+User requests: GET /api/v1/data/account/123
     ↓
-1. Check Object-Level Permission
-   ✓ User has 'read' on 'account'?
+1. Object-Level Permission
+   ✓ Does the user's effective permission set grant allowRead on 'account'?
     ↓
-2. Apply Row-Level Filters
-   ✓ User can see record 123?
+2. Row-Level Security (RLS)
+   ✓ Does a USING policy admit record 123?  (unless viewAllRecords)
     ↓
-3. Apply Field-Level Security
-   ✓ Remove restricted fields
+3. Field-Level Security (FLS)
+   ✓ Strip fields whose FieldPermission.readable is false
     ↓
 Return filtered result
 ```
@@ -123,237 +129,172 @@ Return filtered result
 
 ## 2. Row-Level Security
 
+Row-level filtering is expressed as **RLS policies** (`RowLevelSecurityPolicySchema` in `packages/spec/src/security/rls.zod.ts`). Policies carry a SQL-like `using` clause (for SELECT/UPDATE/DELETE) and/or a `check` clause (for INSERT/UPDATE). Multiple policies for one object are combined with OR (most-permissive wins). Available context variables include `current_user.id`, `current_user.organization_id`, `current_user.role`, `current_user.department`, plus any custom user field.
+
+Policies can be attached to a permission set via its `rowLevelSecurity` array, or registered as standalone metadata.
+
 ### Owner-Based Access
 
 ```yaml
-# Only see records you own
-name: opportunity
-permissions:
-  read:
-    - role: sales_rep
-      filters:
-        - ['owner_id', '=', '{{CURRENT_USER_ID}}']
+rowLevelSecurity:
+  - name: opportunity_owner_access
+    object: opportunity
+    operation: select
+    using: 'owner_id = current_user.id'
 ```
 
-**Runtime behavior:**
 ```typescript
-// User queries opportunities
-const opportunities = await ObjectQL.query({ object: 'opportunity' });
-
-// ObjectQL injects filter automatically:
-// WHERE owner_id = 'user_123'
+// At runtime the RLS compiler injects:
+// WHERE owner_id = '<current_user_id>'
+const opportunities = await dataEngine.find('opportunity');
 ```
 
-### Team-Based Access
+### Tenant Isolation
+
+`organization_id` maps to `ExecutionContext.tenantId`. To enforce multi-tenant isolation, define a policy with both `using` and `check`:
 
 ```yaml
-# See records owned by your team
-name: account
-permissions:
-  read:
-    - role: sales_rep
-      filters:
-        - ['owner.team_id', '=', '{{CURRENT_USER.team_id}}']
+rowLevelSecurity:
+  - name: account_tenant_isolation
+    object: account
+    operation: all
+    using: 'organization_id = current_user.organization_id'
+    check: 'organization_id = current_user.organization_id'
 ```
 
-### Territory-Based Access
+The `RLS` helper factory exports `RLS.tenantPolicy(object)` / `RLS.ownerPolicy(object)` / `RLS.rolePolicy(...)` to generate these.
+
+### Role-Scoped Access
+
+`roles` restricts a policy to specific roles; omit it to apply to everyone (except `bypassRoles`):
 
 ```yaml
-# See accounts in your territory
-name: account
-permissions:
-  read:
-    - role: sales_rep
-      filters:
-        - ['territory_id', 'in', '{{CURRENT_USER.territory_ids}}']
+rowLevelSecurity:
+  - name: manager_team_access
+    object: task
+    operation: select
+    using: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)'
+    roles: [manager, director]
 ```
 
-### Hierarchical Access
+### Regional / Territory Access
 
 ```yaml
-# Managers see their records + subordinates' records
-name: opportunity
-permissions:
-  read:
-    - role: sales_manager
-      filters:
-        - ['or',
-            ['owner_id', '=', '{{CURRENT_USER_ID}}'],
-            ['owner.manager_id', '=', '{{CURRENT_USER_ID}}']
-          ]
+rowLevelSecurity:
+  - name: regional_sales_access
+    object: account
+    operation: select
+    using: 'region = current_user.region OR region IS NULL'
+    roles: [sales_rep]
 ```
 
-### Multi-Tenant Isolation
+### Time-Based Access
 
 ```yaml
-# Strict tenant isolation
-name: customer
-tenant_scope: true  # Auto-inject tenant filter
-permissions:
-  read:
-    - role: user
-      filters:
-        - ['tenant_id', '=', '{{CURRENT_TENANT_ID}}']
+rowLevelSecurity:
+  - name: active_records_only
+    object: contract
+    operation: select
+    using: "status = 'active' AND start_date <= NOW() AND end_date >= NOW()"
 ```
 
-**Guarantee:** User in Tenant A **cannot** access Tenant B's data, even with direct API calls or SQL injection attempts.
-
-### Conditional Filters
-
-```yaml
-# Different filters for different roles
-name: account
-permissions:
-  read:
-    # Sales reps: Own accounts only
-    - role: sales_rep
-      filters:
-        - ['owner_id', '=', '{{CURRENT_USER_ID}}']
-    
-    # Managers: Team accounts
-    - role: manager
-      filters:
-        - ['owner.team_id', '=', '{{CURRENT_USER.team_id}}']
-    
-    # Executives: All accounts
-    - role: executive
-      filters: []  # No restrictions
-```
+> RLS conditions are compiled to parameterized queries. The default policy when no rule matches is **deny** (`RLSConfigSchema.defaultPolicy`).
 
 ---
 
 ## 3. Field-Level Security
 
-### Hide Sensitive Fields
+Field permissions are a map on the permission set keyed by `<object>.<field>`, each with two boolean flags (`FieldPermissionSchema`):
 
 ```yaml
-name: user
+# sales_rep.permission.yml (continued)
 fields:
-  salary:
-    type: currency
-    label: Salary
-    visibility:
-      read:
-        - role: hr_manager
-        - role: executive
-      update:
-        - role: hr_manager
-  
-  ssn:
-    type: text
-    label: Social Security Number
-    visibility:
-      read:
-        - role: hr_admin
-      update:
-        - role: hr_admin
+  user.salary:
+    readable: false
+    editable: false
+  user.ssn:
+    readable: false
+    editable: false
+```
+
+```yaml
+# hr_manager.permission.yml
+fields:
+  user.salary:
+    readable: true
+    editable: true
 ```
 
 **Behavior:**
 ```typescript
-// Sales manager queries user
-const user = await ObjectQL.findOne('user', '123');
+// Sales rep reads a user — salary/ssn stripped (readable: false)
+const u = await dataEngine.findOne('user', { where: { id: '123' } });
+// { id: '123', name: 'John Doe', email: 'john@example.com' }
 
-// Result (salary/ssn stripped):
-// {
-//   id: '123',
-//   name: 'John Doe',
-//   email: 'john@example.com'
-//   // salary: REMOVED
-//   // ssn: REMOVED
-// }
-
-// HR manager queries same user
-const user = await ObjectQL.findOne('user', '123');
-
-// Result (salary visible):
-// {
-//   id: '123',
-//   name: 'John Doe',
-//   email: 'john@example.com',
-//   salary: { amount: 120000, currency: 'USD' }
-//   // ssn: STILL REMOVED (not hr_admin)
-// }
+// HR manager (different permission set) reads the same user — salary visible
+const u2 = await dataEngine.findOne('user', { where: { id: '123' } });
+// { id: '123', name: 'John Doe', email: '…', salary: 120000 }
 ```
 
-### Field-Level Permissions Reference
+### Field Permission Reference
 
 ```yaml
 fields:
-  field_name:
-    visibility:
-      read: [role1, role2]       # Who can see the field
-      update: [role1]            # Who can modify the field
-      create: [role1, role2]     # Who can set on creation
+  <object>.<field>:
+    readable: true | false   # default true  — can see the field
+    editable: true | false   # default false — can modify the field
 ```
 
-### Computed Field Security
-
-```yaml
-fields:
-  commission_rate:
-    type: percent
-    label: Commission Rate
-    visibility:
-      read: [sales_manager, hr_admin]
-  
-  total_commission:
-    type: formula
-    formula: "total_sales * commission_rate"
-    # Visibility inherited from commission_rate
-    # Users who can't see commission_rate can't see this
-```
+> There is no separate `create` flag for fields. `editable` governs both create-time and update-time writes; read stripping is governed by `readable`.
 
 ---
 
 ## 4. Data Masking
 
+Masking is configured **on the field** via `maskingRule` (`MaskingRuleSchema` in `packages/spec/src/system/masking.zod.ts`). The strategy enum is one of: `redact`, `partial`, `hash`, `tokenize`, `randomize`, `nullify`, `substitute`.
+
 ### Partial Masking
 
 ```yaml
+# user.object.yml
 fields:
   ssn:
     type: text
     label: SSN
-    masking:
-      mode: partial
-      visible_chars: 4
-      position: end
-      mask_char: '*'
+    maskingRule:
+      field: ssn
+      strategy: partial
+      pattern: '\d{5}$'        # regex selecting the visible portion
+      preserveFormat: true
+      preserveLength: true
+      exemptRoles: [hr_admin]  # roles that see the unmasked value
 ```
 
-**Display:**
-- **Actual value:** `123-45-6789`
-- **Masked value:** `***-**-6789`
-
-### Full Masking
+### Full Redaction
 
 ```yaml
 fields:
   credit_card:
     type: text
     label: Credit Card
-    masking:
-      mode: full
-      mask_char: '*'
+    maskingRule:
+      field: credit_card
+      strategy: redact
 ```
 
-**Display:**
-- **Actual value:** `4111111111111111`
-- **Masked value:** `****************`
+### Role-Scoped Masking
 
-### Conditional Masking
+`roles` lists the roles that see the *masked* value; `exemptRoles` lists those that see the original:
 
 ```yaml
 fields:
   salary:
     type: currency
     label: Salary
-    masking:
-      # Show full value to HR, masked to others
-      roles_with_access: [hr_manager, hr_admin]
-      mode: partial
-      mask_char: 'X'
+    maskingRule:
+      field: salary
+      strategy: partial
+      exemptRoles: [hr_manager, hr_admin]
 ```
 
 ### Hash Masking
@@ -363,521 +304,147 @@ fields:
   email:
     type: email
     label: Email
-    masking:
-      mode: hash
-      algorithm: sha256
-      # Returns: 5d41402abc4b2a76b9719d911017c592
+    maskingRule:
+      field: email
+      strategy: hash
 ```
 
 ---
 
-## 5. Advanced Security Patterns
+## 5. Sharing Rules & Organization-Wide Defaults
 
-### Sharing Rules
-
-Grant additional access beyond base permissions:
+The baseline visibility of an object is set by its **Organization-Wide Default (OWD)** — the `sharingModel` field on the object (`packages/spec/src/data/object.zod.ts`), one of `private`, `read`, `read_write`, `full`. **Sharing rules** then grant *additional* access on top of that baseline.
 
 ```yaml
+# account.object.yml
 name: account
-permissions:
-  read:
-    - role: sales_rep
-      filters: [['owner_id', '=', '{{CURRENT_USER_ID}}']]
-
-sharing_rules:
-  # Share enterprise accounts with all sales reps
-  - name: share_enterprise_accounts
-    criteria:
-      - ['account_type', '=', 'Enterprise']
-    access_level: read
-    shared_with:
-      - role: sales_rep
+sharingModel: private   # owner-only by default
 ```
 
-**Effect:** Sales reps see:
-1. Their own accounts (base permission)
-2. All enterprise accounts (sharing rule)
+### Criteria-Based Sharing
 
-### Record-Level Sharing
+Share records whose fields match a CEL predicate (`CriteriaSharingRuleSchema` in `packages/spec/src/security/sharing.zod.ts`):
 
 ```yaml
-# Manual sharing via junction object
-name: account_share
-fields:
-  account_id:
-    type: lookup
-    reference_to: account
-  
-  user_id:
-    type: lookup
-    reference_to: user
-  
-  access_level:
-    type: select
-    options: [read, write]
+# share_enterprise_accounts.sharing.yml
+name: share_enterprise_accounts
+type: criteria
+object: account
+accessLevel: read           # read | edit | full
+condition: 'record.account_type == "Enterprise"'
+sharedWith:
+  type: role                # user | group | role | role_and_subordinates | guest
+  value: sales_rep
 ```
 
-**Query with sharing:**
-```typescript
-const accounts = await ObjectQL.query({
-  object: 'account',
-  // User sees:
-  // 1. Own accounts (owner_id = user)
-  // 2. Shared accounts (via account_share)
-});
-```
+### Owner-Based Sharing
 
-### Time-Based Access
+Share records owned by one group/role with another (`OwnerSharingRuleSchema`):
 
 ```yaml
-permissions:
-  read:
-    - role: contractor
-      filters:
-        - ['contract_start', '<=', '{{TODAY()}}']
-        - ['contract_end', '>=', '{{TODAY()}}']
+name: share_west_region
+type: owner
+object: account
+accessLevel: edit
+ownedBy:
+  type: role
+  value: west_region_reps
+sharedWith:
+  type: role
+  value: west_region_managers
 ```
 
-**Effect:** Contractors only see data during contract period.
+> `accessLevel` is one of `read`, `edit`, or `full`. `full` additionally grants transfer/share/delete.
 
-### IP-Based Restrictions
+### Public Share Links
 
-```yaml
-permissions:
-  read:
-    - role: user
-      ip_whitelist:
-        - 192.168.1.0/24
-        - 10.0.0.0/8
-```
-
-### Device-Based Access
+For "anyone with the link" style external sharing, an object opts in via `publicSharing` (see `packages/plugins/plugin-sharing/src/share-link-service.ts`):
 
 ```yaml
-permissions:
-  update:
-    - role: user
-      require_mfa: true  # Require multi-factor authentication
-      allowed_devices: [desktop, mobile_app]
-      # Block: web_browser on mobile
+name: proposal
+publicSharing:
+  enabled: true
+  allowedAudiences: [link_only]
+  allowedPermissions: [view]
+  redactFields: [internal_notes]
+  maxExpiryDays: 30
 ```
 
 ---
 
-## 6. Permission Evaluation
+## 6. Field-Level Encryption
 
-### Priority Rules
-
-When multiple permission rules match:
-
-1. **Most specific wins**
-   - Field-level > Object-level > Global
-   
-2. **Deny overrides allow**
-   - Explicit deny > Explicit allow
-
-3. **Role hierarchy**
-   - Admin > Manager > User
-
-**Example:**
-```yaml
-# Global default: No access
-default_access: none
-
-# Object level: Sales can read
-permissions:
-  read: [sales_rep]
-
-# Field level: Salary hidden
-fields:
-  salary:
-    visibility:
-      read: [hr_manager]
-
-# Result for sales_rep:
-# - Can read account (object-level)
-# - Cannot see salary (field-level override)
-```
-
-### Permission Functions
-
-```yaml
-filters:
-  # Current user
-  - ['owner_id', '=', '{{CURRENT_USER_ID}}']
-  
-  # Current user's team
-  - ['team_id', '=', '{{CURRENT_USER.team_id}}']
-  
-  # Current tenant
-  - ['tenant_id', '=', '{{CURRENT_TENANT_ID}}']
-  
-  # Current date/time
-  - ['created_at', '>', '{{TODAY() - 30}}']
-  
-  # User attributes
-  - ['territory', 'in', '{{CURRENT_USER.territories}}']
-```
-
----
-
-## 7. Security Auditing
-
-### Audit Log
-
-Track all data access:
-
-```yaml
-name: account
-enable:
-  audit: true  # Enable audit logging
-  audit_fields: [owner_id, annual_revenue, status]
-```
-
-**Audit log captures:**
-- **Who:** User ID, role, IP address
-- **What:** Object, record ID, fields changed
-- **When:** Timestamp
-- **How:** Old value → New value
-
-**Example log:**
-```json
-{
-  "timestamp": "2024-01-15T14:30:00Z",
-  "user_id": "user_123",
-  "user_role": "sales_rep",
-  "action": "update",
-  "object": "account",
-  "record_id": "acc_456",
-  "changes": {
-    "annual_revenue": {
-      "old": 1000000,
-      "new": 1500000
-    }
-  },
-  "ip_address": "192.168.1.100"
-}
-```
-
-### Access Logs
-
-Log all query attempts:
-
-```yaml
-name: account
-enable:
-  access_log: true
-```
-
-**Captures:**
-- Failed permission checks (security violations)
-- Successful queries (for compliance)
-- Export operations (GDPR requirements)
-
----
-
-## 8. Data Encryption
-
-### At-Rest Encryption
+Sensitive fields can be encrypted at rest via `encryptionConfig` (`EncryptionConfigSchema` in `packages/spec/src/system/encryption.zod.ts`). Supported algorithms are `aes-256-gcm` (default), `aes-256-cbc`, and `chacha20-poly1305`. Keys are held by a key-management provider (`local`, `aws-kms`, `azure-key-vault`, `gcp-kms`, `hashicorp-vault`).
 
 ```yaml
 fields:
   ssn:
     type: text
     label: SSN
-    encrypt: true
-    encryption_key: ssn_master_key
+    encryptionConfig:
+      enabled: true
+      algorithm: aes-256-gcm
+      scope: field           # field | record | table | database
+      keyManagement:
+        provider: aws-kms
+        keyId: ssn-master-key
+        rotationPolicy:
+          enabled: true
+          frequencyDays: 90
 ```
 
-**Storage:**
-- Database stores encrypted value
-- Application decrypts on read (if user has permission)
-- Encryption key stored in secure vault (not in database)
+Set `deterministicEncryption: true` to allow equality queries on the ciphertext, or `searchableEncryption: true` for search support.
 
-### In-Transit Encryption
+> **Secret fields.** For reversible secrets (DB passwords, API keys, tokens) the field `type: secret` round-trips through the registered secret provider — encrypted on write, decrypted on read. See `packages/spec/src/data/field.zod.ts`.
 
-All ObjectQL communication uses TLS 1.3:
-- API requests: HTTPS
-- Database connections: SSL/TLS
-- Internal services: mTLS (mutual TLS)
+---
 
-### Field-Level Encryption
+## 7. Auditing & Field History
+
+Object- and field-level history is opt-in metadata, not a free-form `enable.audit` block.
+
+- **Field history** — set `trackHistory: true` on the object (`ObjectCapabilities` in `object.zod.ts`) to record per-field changes.
+- **Per-field audit trail** — set `auditTrail: true` on an individual field to track every change with user and timestamp.
+- **RLS audit** — RLS policy evaluations can be logged via `RLSAuditConfigSchema` (`enabled`, `logLevel`, `destination`, `retentionDays`, …). The recorded event shape is `RLSAuditEventSchema` (timestamp, userId, operation, object, policyName, granted, evaluationDurationMs).
 
 ```yaml
+# account.object.yml
+name: account
+trackHistory: true
+
 fields:
-  credit_card:
-    type: text
-    encrypt: true
-    encryption_algorithm: AES-256-GCM
-    key_rotation: 90  # Rotate key every 90 days
+  annual_revenue:
+    type: currency
+    auditTrail: true
 ```
 
 ---
 
-## 9. Compliance Features
+## 8. Best Practices
 
-### GDPR: Right to be Forgotten
-
-```yaml
-name: customer
-enable:
-  gdpr_erasure: true
-  
-fields:
-  email:
-    pii: true  # Mark as personally identifiable
-  
-  name:
-    pii: true
-```
-
-**Erasure request:**
-```typescript
-await ObjectQL.gdprErase('customer', 'customer_123');
-
-// Result:
-// - PII fields set to null
-// - Audit log preserved (who requested, when)
-// - Related records handled per cascade rules
-```
-
-### HIPAA: PHI Protection
+### Principle of Least Privilege
 
 ```yaml
-name: patient
-compliance: hipaa
-
-fields:
-  medical_record_number:
-    type: text
-    phi: true  # Protected Health Information
-    encrypt: true
-    audit: true
+# Restrictive profile: read only what you own
+name: account_owner
+isProfile: true
+objects:
+  account:
+    allowRead: true
+rowLevelSecurity:
+  - name: account_owner_access
+    object: account
+    operation: select
+    using: 'owner_id = current_user.id'
 ```
 
-**Automatic enforcement:**
-- Encryption at rest
-- Access logging
-- Minimum necessary principle (field-level security)
-- Audit trail
+### Defense in Depth
 
-### SOC 2: Access Controls
+Combine OWD (`sharingModel: private`), an RLS `using` policy, FLS (`readable: false`) on sensitive fields, and `encryptionConfig` for data at rest.
 
-```yaml
-name: financial_record
-compliance: soc2
+### Security by Default
 
-permissions:
-  read:
-    - role: accountant
-      require_mfa: true
-      session_timeout: 900  # 15 minutes
-      ip_whitelist: [corporate_network]
-```
-
----
-
-## 10. Security Testing
-
-### Permission Dry Run
-
-```typescript
-// Check if user can access before querying
-const canAccess = await ObjectQL.checkPermission({
-  user: currentUser,
-  action: 'read',
-  object: 'account',
-  record_id: 'acc_123'
-});
-
-if (!canAccess) {
-  // Show error message, don't attempt query
-}
-```
-
-### Security Assertions
-
-```typescript
-// In tests
-await expect(
-  ObjectQL.query({
-    object: 'salary_data',
-    user: salesRepUser
-  })
-).toThrow(PermissionError);
-```
-
-### Penetration Testing
-
-ObjectQL provides security test helpers:
-
-```typescript
-// Test all permission combinations
-await ObjectQL.testSuite.runSecurityTests({
-  objects: ['account', 'opportunity', 'contact'],
-  users: [admin, manager, salesRep, guest],
-  scenarios: ['create', 'read', 'update', 'delete']
-});
-
-// Report:
-// ✓ Admin: Full access to all objects
-// ✓ Manager: Read access to team accounts
-// ✗ Sales Rep: SECURITY ISSUE - Can read salary field
-// ✓ Guest: No access (as expected)
-```
-
----
-
-## Real-World Examples
-
-### SaaS Multi-Tenancy
-
-```yaml
-name: customer
-tenant_scope: true
-
-permissions:
-  read:
-    - role: user
-      filters:
-        - ['tenant_id', '=', '{{CURRENT_TENANT_ID}}']
-        - ['or',
-            ['owner_id', '=', '{{CURRENT_USER_ID}}'],
-            ['shared_with', 'contains', '{{CURRENT_USER_ID}}']
-          ]
-```
-
-### Healthcare: Patient Records
-
-```yaml
-name: patient_record
-compliance: hipaa
-
-permissions:
-  read:
-    # Doctors: Own patients
-    - role: doctor
-      filters:
-        - ['assigned_doctor_id', '=', '{{CURRENT_USER_ID}}']
-    
-    # Nurses: Same department
-    - role: nurse
-      filters:
-        - ['department_id', '=', '{{CURRENT_USER.department_id}}']
-    
-    # Patient: Own record only
-    - role: patient
-      filters:
-        - ['patient_id', '=', '{{CURRENT_USER.patient_id}}']
-
-fields:
-  diagnosis:
-    visibility:
-      read: [doctor, nurse]  # Hidden from patient
-  
-  treatment_notes:
-    visibility:
-      read: [doctor]  # Hidden from nurse and patient
-```
-
-### Banking: Transaction Security
-
-```yaml
-name: transaction
-compliance: pci_dss
-
-permissions:
-  read:
-    - role: account_holder
-      filters:
-        - ['account.owner_id', '=', '{{CURRENT_USER_ID}}']
-      require_mfa: true
-  
-  update:
-    - role: admin
-      require_approval: true  # Transactions require 2-person approval
-
-fields:
-  card_number:
-    type: text
-    encrypt: true
-    masking:
-      mode: partial
-      visible_chars: 4
-      position: end
-  
-  cvv:
-    type: text
-    encrypt: true
-    masking:
-      mode: full
-```
-
----
-
-## Best Practices
-
-### 1. Principle of Least Privilege
-
-```yaml
-# ❌ Bad: Grant broad access by default
-permissions:
-  read: [user]  # All users can read everything
-
-# ✅ Good: Restrict by default, grant explicitly
-permissions:
-  read:
-    - role: account_owner
-      filters: [['owner_id', '=', '{{CURRENT_USER_ID}}']]
-```
-
-### 2. Defense in Depth
-
-```yaml
-# Multiple security layers
-permissions:
-  read:
-    - role: user
-      filters: [['owner_id', '=', '{{CURRENT_USER_ID}}']]
-      require_mfa: true
-      ip_whitelist: [corporate_network]
-
-fields:
-  sensitive_data:
-    encrypt: true
-    masking: { mode: partial }
-    audit: true
-```
-
-### 3. Security by Default
-
-```yaml
-# Auto-inject security fields
-name: project
-fields:
-  owner_id:
-    type: lookup
-    reference_to: user
-    default_value: '{{CURRENT_USER_ID}}'  # Auto-assign owner
-    
-  tenant_id:
-    type: lookup
-    reference_to: tenant
-    default_value: '{{CURRENT_TENANT_ID}}'  # Auto-assign tenant
-```
-
-### 4. Regular Audits
-
-```bash
-# Generate security report
-objectstack security:audit
-
-# Output:
-# Objects with no permissions: 3
-# Users with admin access: 5
-# Unencrypted PII fields: 2
-# Shared records: 42
-```
+Leave registry-level `systemFields` injection enabled (the object default) so multi-tenant objects auto-stamp `organization_id` on create, and use field `defaultValue` to seed ownership fields — so records are never left unscoped. (`owner`/`audit` injection keys on `systemFields` are reserved for future expansion; only `tenant` is active today — see `packages/spec/src/data/object.zod.ts`.)
 
 ---
 
@@ -886,17 +453,17 @@ objectstack security:audit
 <Cards>
   <Card
     title="Schema Definition"
-    href="/docs/protocols/objectql/schema"
+    href="/docs/protocol/objectql/schema"
     description="Learn to define objects and fields"
   />
   <Card
     title="Query Syntax"
-    href="/docs/protocols/objectql/query-syntax"
+    href="/docs/protocol/objectql/query-syntax"
     description="Master database-agnostic queries"
   />
   <Card
     title="Type System"
-    href="/docs/protocols/objectql/types"
+    href="/docs/protocol/objectql/types"
     description="Understand all field types"
   />
 </Cards>

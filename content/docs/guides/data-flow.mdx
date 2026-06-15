@@ -67,7 +67,7 @@ How a GET request for a single record flows through the system.
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant API as REST / GraphQL
+    participant API as REST API
     participant Auth as Auth Middleware
     participant K as Kernel
     participant Sec as Security
@@ -96,7 +96,7 @@ sequenceDiagram
 
     QE-->>K: DataRecord
 
-    K->>H: afterRead hooks
+    K->>H: afterFindOne hooks
     H-->>K: Transformed record
 
     K->>Sec: applyFieldSecurity(record, user)
@@ -142,7 +142,7 @@ sequenceDiagram
 
     V-->>K: ✓ Valid data
 
-    K->>BH: beforeCreate hooks
+    K->>BH: beforeInsert hooks
     Note over BH: Transform data, enforce rules,<br/>set defaults, check permissions
 
     alt Hook Throws Error
@@ -158,7 +158,7 @@ sequenceDiagram
     DB-->>D: Inserted row with ID
     D-->>K: DataRecord { id: 'tsk_456', ... }
 
-    K->>AH: afterCreate hooks
+    K->>AH: afterInsert hooks
     Note over AH: Send notifications,<br/>update counters,<br/>trigger workflows
 
     K->>EB: emit('task.created', record)
@@ -191,7 +191,7 @@ flowchart LR
     subgraph "Runtime"
         C -->|"bundle"| G[Manifest]
         G -->|"load"| H[Schema Registry]
-        H -->|"serve"| I["GET /api/v1/meta/objects"]
+        H -->|"serve"| I["GET /api/v1/meta/object"]
         I -->|"discover"| J[Client SDK]
         J -->|"generate"| K[Typed Client]
     end
@@ -203,7 +203,7 @@ flowchart LR
 | TypeScript Types | Plugin developers | Type-safe access to object definitions |
 | Manifest | Kernel | Runtime metadata for query validation and execution |
 | Metadata API | Client SDK | Dynamic object/field discovery |
-| Typed Client | Frontend apps | `client.task.create({ title: '...' })` |
+| Typed Client | Frontend apps | `client.data.create('task', { title: '...' })` |
 
 ---
 
@@ -290,40 +290,29 @@ The precise order in which hooks fire during each operation.
 
 ```mermaid
 flowchart TD
-    subgraph "Create Operation"
-        C1[beforeValidate] --> C2[validate]
-        C2 --> C3[afterValidate]
-        C3 --> C4[beforeCreate]
-        C4 --> C5["DB INSERT"]
-        C5 --> C6[afterCreate]
-        C6 --> C7[afterCommit]
+    subgraph "Insert Operation"
+        C4[beforeInsert] --> C5["DB INSERT"]
+        C5 --> C6[afterInsert]
     end
 
     subgraph "Update Operation"
-        U1[beforeValidate] --> U2[validate]
-        U2 --> U3[afterValidate]
-        U3 --> U4[beforeUpdate]
-        U4 --> U5["DB UPDATE"]
+        U4[beforeUpdate] --> U5["DB UPDATE"]
         U5 --> U6[afterUpdate]
-        U6 --> U7[afterCommit]
     end
 
     subgraph "Delete Operation"
         D1[beforeDelete] --> D2["DB DELETE"]
         D2 --> D3[afterDelete]
-        D3 --> D4[afterCommit]
     end
 ```
 
-| Hook | Phase | Can Modify Data? | Can Abort? |
+The lifecycle events are defined by the `HookEvent` enum. Reads also have hooks: `beforeFind/afterFind`, `beforeFindOne/afterFindOne`, `beforeCount/afterCount`, and `beforeAggregate/afterAggregate`. Bulk writes add `beforeUpdateMany/afterUpdateMany` and `beforeDeleteMany/afterDeleteMany`.
+
+| Hook | Phase | Can Modify? | Can Abort? |
 |:---|:---|:---|:---|
-| `beforeValidate` | Pre-validation | ✅ Yes | ✅ Yes |
-| `validate` | Validation | ❌ No | ✅ Yes |
-| `afterValidate` | Post-validation | ✅ Yes | ✅ Yes |
-| `beforeCreate/Update` | Pre-persist | ✅ Yes | ✅ Yes |
-| `afterCreate/Update/Delete` | Post-persist | ❌ No (record is saved) | ❌ No |
-| `afterCommit` | Post-transaction | ❌ No | ❌ No |
+| `beforeInsert/Update/Delete` | Pre-persist | ✅ Yes (mutate `input`) | ✅ Yes (throw with `onError: 'abort'`) |
+| `afterInsert/Update/Delete` | Post-persist | ✅ Yes (mutate `result`) | ❌ No (record is saved) |
 
 <Callout type="tip">
-**Side Effects:** Place side effects (emails, notifications, external API calls) in `afterCommit` hooks. These run after the database transaction is committed, so you won't send a notification for a record that was rolled back.
+**Side Effects:** Place side effects (emails, notifications, external API calls) in `after*` hooks. Set `async: true` so they run fire-and-forget without blocking the operation, and use `onError: 'log'` so a failing side effect doesn't roll back the write.
 </Callout>

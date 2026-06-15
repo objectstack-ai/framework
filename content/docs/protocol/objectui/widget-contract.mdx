@@ -6,7 +6,12 @@ description: Standard props, events, and lifecycle for ObjectUI components
 import { Component, Zap, Code, Check, AlertCircle, Globe } from 'lucide-react';
 
 
-The **Widget Contract** defines the standard interface that all ObjectUI components must implement. This contract ensures consistency across renderers and enables components to be composed, configured, and extended predictably.
+The **Widget Contract** defines the standard interface that custom ObjectUI field widgets implement. This contract ensures consistency across renderers and lets custom widgets integrate predictably with the rest of the UI system.
+
+The contract has two halves, both defined in `packages/spec/src/ui/widget.zod.ts`:
+
+- **`FieldWidgetProps`** — the props every field widget receives at render time.
+- **`WidgetManifest`** — the static declaration that registers a custom widget (its supported field types, lifecycle hooks, events, configurable properties, and how its code is loaded).
 
 ## Philosophy: Props Down, Events Up
 
@@ -18,844 +23,304 @@ ObjectUI follows React's unidirectional data flow pattern:
 │  (Form, Section, Container)         │
 └─────────────┬───────────────────────┘
               │
-              │ Props ↓ (data, config, callbacks)
+              │ Props ↓ (value, field, record, options)
               │
 ┌─────────────▼───────────────────────┐
-│       Child Component               │
-│  (TextField, Select, Button)        │
+│       Field Widget                  │
+│  (TextField, Select, Lookup)        │
 └─────────────┬───────────────────────┘
               │
-              │ Events ↑ (onChange, onClick, onBlur)
+              │ onChange ↑ (new value)
               │
 ┌─────────────▼───────────────────────┐
 │         Parent Component            │
-│  (Updates state, triggers actions)  │
+│  (Updates record state)             │
 └─────────────────────────────────────┘
 ```
 
 **Key Principles:**
-- **Props are immutable:** Components receive props, never modify them
-- **Events are declarative:** Components emit events, parent handles them
-- **State is lifted:** Form state lives in parent, not in field components
+- **Props are immutable:** Widgets receive props, never modify them.
+- **Value changes flow up:** A widget calls `onChange(newValue)`; the parent owns the record state.
+- **State is lifted:** Record/form state lives in the parent, not inside field widgets.
 
-## Standard Component Props
+## Field Widget Props
 
-Every ObjectUI component receives a standard set of base props.
-
-### BaseComponentProps
+Every field widget receives a standard set of props. This is the contract that custom field components and plugin UI extensions implement — the source of truth is `FieldWidgetPropsSchema` in `packages/spec/src/ui/widget.zod.ts`.
 
 ```typescript
-interface BaseComponentProps {
-  // Identification
-  id: string;                    // Unique component ID
-  name: string;                  // Field name (for form submission)
-  
-  // Display
-  label?: string;                // Display label
-  placeholder?: string;          // Placeholder text
-  helpText?: string;             // Helper text below field
-  tooltip?: string;              // Tooltip on hover
-  icon?: string;                 // Lucide icon name
-  
-  // State
-  value?: any;                   // Current value
-  defaultValue?: any;            // Initial value
-  disabled?: boolean;            // Disabled state
-  readonly?: boolean;            // Read-only state
-  required?: boolean;            // Required field marker
-  
-  // Validation
-  error?: string;                // Error message
-  warning?: string;              // Warning message
-  valid?: boolean;               // Validation state
-  
-  // Layout
-  className?: string;            // CSS classes
-  style?: CSSProperties;         // Inline styles
-  span?: number;                 // Grid column span (1-12)
-  hidden?: boolean;              // Visibility
-  
-  // Accessibility
-  ariaLabel?: string;            // ARIA label
-  ariaDescribedBy?: string;      // ARIA description
-  tabIndex?: number;             // Tab order
-  
-  // Events
-  onChange?: (value: any) => void;
-  onBlur?: () => void;
-  onFocus?: () => void;
-  onClick?: () => void;
-}
-```
+interface FieldWidgetProps {
+  // Current field value. Type depends on the field type.
+  value: unknown;
 
-### Example: TextField Component
+  // Callback to update the field value. Call when user interaction changes it.
+  onChange: (newValue: unknown) => void;
 
-```yaml
-# YAML Configuration
-field:
-  name: customer_email
-  type: email
-  label: Email Address
-  placeholder: you@company.com
-  helpText: We'll never share your email
-  required: true
-  icon: mail
-```
+  // Read-only mode flag. When true, display the value but don't allow editing.
+  readonly: boolean;
 
-**Rendered as (React):**
-```tsx
-<TextField
-  id="field_customer_email"
-  name="customer_email"
-  type="email"
-  label="Email Address"
-  placeholder="you@company.com"
-  helpText="We'll never share your email"
-  required={true}
-  icon="mail"
-  value={formData.customer_email}
-  error={errors.customer_email}
-  onChange={(value) => setFormData({ ...formData, customer_email: value })}
-  onBlur={() => validateField('customer_email')}
-/>
-```
+  // Required field flag. Indicate the required state visually and validate accordingly.
+  required: boolean;
 
-## Field-Specific Props
-
-Different field types have specialized props.
-
-### TextField Props
-
-```typescript
-interface TextFieldProps extends BaseComponentProps {
-  type: 'text' | 'email' | 'tel' | 'url' | 'password';
-  maxLength?: number;           // Character limit
-  minLength?: number;           // Minimum characters
-  pattern?: string;             // Regex validation pattern
-  autocomplete?: string;        // Browser autocomplete hint
-  spellcheck?: boolean;         // Enable spell check
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: company_name
-  type: text
-  maxLength: 100
-  autocomplete: organization
-  spellcheck: true
-```
-
-### TextArea Props
-
-```typescript
-interface TextAreaProps extends BaseComponentProps {
-  rows?: number;                // Visible rows
-  maxLength?: number;           // Character limit
-  resize?: 'none' | 'vertical' | 'horizontal' | 'both';
-  autoGrow?: boolean;           // Auto-expand on content
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: description
-  type: textarea
-  rows: 5
-  maxLength: 1000
-  autoGrow: true
-  resize: vertical
-```
-
-### Select Props
-
-```typescript
-interface SelectProps extends BaseComponentProps {
-  options: Option[];            // Available options
-  multiple?: boolean;           // Multi-select
-  searchable?: boolean;         // Filterable options
-  clearable?: boolean;          // Show clear button
-  placeholder?: string;         // Placeholder when empty
-  
-  // Async options
-  optionsSource?: string;       // URL to fetch options
-  optionsDependsOn?: string[];  // Refresh when these fields change
-}
-
-interface Option {
-  value: string | number;
-  label: string;
-  icon?: string;
-  disabled?: boolean;
-  group?: string;               // Option group
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: country
-  type: select
-  options:
-    - { value: US, label: United States, icon: flag-us }
-    - { value: CA, label: Canada, icon: flag-ca }
-    - { value: UK, label: United Kingdom, icon: flag-gb }
-  searchable: true
-  clearable: true
-```
-
-### Lookup Props (Reference Field)
-
-```typescript
-interface LookupProps extends BaseComponentProps {
-  object: string;               // Target object name
-  displayField: string;         // Field to display (e.g., 'name')
-  searchFields: string[];       // Fields to search
-  filters?: FilterExpression;   // Pre-filter options
-  multiple?: boolean;           // Multi-select
-  createNew?: boolean;          // Allow creating new records
-  
-  // Modal configuration
-  modalTitle?: string;
-  modalColumns?: string[];      // Columns to show in picker modal
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: account_id
-  type: lookup
-  object: account
-  displayField: name
-  searchFields: [name, email, phone]
-  filters:
-    status: active
-  createNew: true
-  modalTitle: Select Account
-  modalColumns: [name, industry, city]
-```
-
-### Boolean Props (Checkbox/Toggle)
-
-```typescript
-interface BooleanProps extends BaseComponentProps {
-  variant: 'checkbox' | 'toggle' | 'switch';
-  labelPosition?: 'left' | 'right';
-  trueLabel?: string;           // Label when true (for toggles)
-  falseLabel?: string;          // Label when false
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: email_notifications
-  type: boolean
-  variant: toggle
-  trueLabel: Enabled
-  falseLabel: Disabled
-  labelPosition: right
-```
-
-### Date/DateTime Props
-
-```typescript
-interface DateProps extends BaseComponentProps {
-  type: 'date' | 'datetime' | 'time';
-  format?: string;              // Display format (e.g., 'MM/DD/YYYY')
-  min?: string;                 // Minimum date
-  max?: string;                 // Maximum date
-  disabledDates?: string[];     // Specific disabled dates
-  showTime?: boolean;           // Include time picker (for datetime)
-  timeFormat?: '12h' | '24h';   // Time format
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: meeting_date
-  type: datetime
-  format: MM/DD/YYYY hh:mm A
-  min: today
-  showTime: true
-  timeFormat: 12h
-```
-
-### Number/Currency Props
-
-```typescript
-interface NumberProps extends BaseComponentProps {
-  type: 'number' | 'currency' | 'percent';
-  min?: number;                 // Minimum value
-  max?: number;                 // Maximum value
-  step?: number;                // Increment step
-  precision?: number;           // Decimal places
-  
-  // Currency-specific
-  currency?: string;            // ISO currency code (USD, EUR)
-  currencyDisplay?: 'symbol' | 'code' | 'name';
-  
-  // Percent-specific
-  percentPrecision?: number;    // Decimal places for percent
-}
-```
-
-**Example:**
-```yaml
-field:
-  name: unit_price
-  type: currency
-  currency: USD
-  min: 0
-  precision: 2
-  currencyDisplay: symbol
-```
-
-## Standard Events
-
-All components emit standard lifecycle and interaction events.
-
-### Core Events
-
-```typescript
-interface ComponentEvents {
-  // Value changes
-  onChange: (value: any, context: EventContext) => void;
-  onInput: (value: any) => void;  // Real-time input (every keystroke)
-  
-  // Focus events
-  onFocus: (context: EventContext) => void;
-  onBlur: (context: EventContext) => void;
-  
-  // Interaction events
-  onClick: (context: EventContext) => void;
-  onDoubleClick: (context: EventContext) => void;
-  
-  // Validation events
-  onValidate: (value: any) => ValidationResult;
-  onError: (error: ValidationError) => void;
-  
-  // Lifecycle events
-  onMount: () => void;
-  onUnmount: () => void;
-}
-
-interface EventContext {
-  fieldName: string;
-  value: any;
-  previousValue: any;
-  formData: Record<string, any>;
-  metadata: Record<string, any>;
-}
-```
-
-### Event Examples
-
-**onChange: Field Value Changed**
-```yaml
-field:
-  name: quantity
-  type: number
-  onChange:
-    - action: calculate_total
-      formula: quantity * unit_price
-      targetField: total_price
-```
-
-**onBlur: Field Loses Focus**
-```yaml
-field:
-  name: email
-  type: email
-  onBlur:
-    - action: validate_email
-    - action: check_duplicates
-      endpoint: /api/customers/check-email
-```
-
-**Conditional Logic on Change**
-```yaml
-field:
-  name: shipping_required
-  type: boolean
-  onChange:
-    - when: { value: true }
-      show: [shipping_address, shipping_method]
-    - when: { value: false }
-      hide: [shipping_address, shipping_method]
-      clear: [shipping_address, shipping_method]
-```
-
-## Validation Contract
-
-Components support declarative validation rules.
-
-### Built-in Validators
-
-```typescript
-interface FieldValidation {
-  // Presence
-  required?: boolean | string;   // true or custom error message
-  
-  // String validation
-  minLength?: number;
-  maxLength?: number;
-  pattern?: RegExp;
-  email?: boolean;
-  url?: boolean;
-  
-  // Number validation
-  min?: number;
-  max?: number;
-  integer?: boolean;
-  positive?: boolean;
-  
-  // Async validation
-  asyncValidator?: {
-    endpoint: string;
-    debounce?: number;          // Debounce delay (ms)
-  };
-  
-  // Custom validation
-  custom?: (value: any, formData: any) => ValidationResult;
-}
-
-interface ValidationResult {
-  valid: boolean;
+  // Validation error message to display, when present.
   error?: string;
-  warning?: string;
+
+  // Complete field definition from the schema (type, constraints, options, etc.).
+  field: Field;
+
+  // The complete record being edited — useful for cross-field logic.
+  record?: Record<string, unknown>;
+
+  // Custom options passed to the widget (themes, behaviors, etc.).
+  options?: Record<string, unknown>;
 }
 ```
 
-### Validation Examples
+### Example: Custom Widget Implementation
 
-**Required Field**
-```yaml
-field:
-  name: customer_name
-  type: text
-  required: Customer name is required
-```
+A custom widget is a React component that consumes `FieldWidgetProps`:
 
-**Pattern Validation**
-```yaml
-field:
-  name: phone
-  type: tel
-  pattern: ^\+?[1-9]\d{1,14}$
-  patternMessage: Please enter a valid phone number (E.164 format)
-```
+```tsx
+import type { FieldWidgetProps } from '@objectstack/spec/ui';
 
-**Async Validation (Check Uniqueness)**
-```yaml
-field:
-  name: username
-  type: text
-  asyncValidator:
-    endpoint: /api/users/check-username
-    debounce: 500  # Wait 500ms after typing stops
-    errorMessage: Username already taken
-```
-
-**Cross-Field Validation**
-```yaml
-field:
-  name: password_confirm
-  type: password
-  custom:
-    validate: password_confirm === password
-    errorMessage: Passwords must match
-```
-
-## Rendering Contract
-
-Renderers must implement specific methods to paint components.
-
-### Renderer Interface
-
-```typescript
-interface ObjectUIRenderer {
-  // Core rendering
-  renderField(field: FieldDefinition): ReactNode;
-  renderSection(section: SectionDefinition): ReactNode;
-  renderForm(form: FormDefinition): ReactNode;
-  
-  // Component registry
-  registerComponent(type: string, component: ComponentClass): void;
-  getComponent(type: string): ComponentClass | undefined;
-  
-  // Lifecycle hooks
-  beforeRender(definition: ComponentDefinition): void;
-  afterRender(element: ReactNode): void;
-  
-  // Error handling
-  renderError(error: Error, definition: ComponentDefinition): ReactNode;
-  renderFallback(type: string): ReactNode;  // Unknown component type
-}
-```
-
-### Component Registration
-
-Custom components can be registered with the renderer:
-
-```typescript
-// Define custom component
-const CustomRatingField: React.FC<BaseComponentProps> = ({ value, onChange }) => {
+function CustomRatingField({ value, onChange, readonly, required, error }: FieldWidgetProps) {
   return (
-    <div className="rating-field">
-      {[1, 2, 3, 4, 5].map(star => (
+    <div className="rating-field" aria-invalid={!!error}>
+      {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          filled={value >= star}
-          onClick={() => onChange(star)}
+          filled={Number(value) >= star}
+          onClick={() => !readonly && onChange(star)}
         />
       ))}
+      {error && <span className="error">{error}</span>}
     </div>
   );
-};
-
-// Register with renderer
-renderer.registerComponent('rating', CustomRatingField);
-```
-
-**Use in Layout:**
-```yaml
-field:
-  name: customer_satisfaction
-  type: rating  # ← Custom type
-  label: How satisfied are you?
-  min: 1
-  max: 5
-```
-
-## Theme Contract
-
-Components must support theme customization.
-
-### Theme Props
-
-```typescript
-interface ThemeProps {
-  // Colors
-  colorScheme?: 'light' | 'dark' | 'auto';
-  primaryColor?: string;
-  secondaryColor?: string;
-  errorColor?: string;
-  warningColor?: string;
-  successColor?: string;
-  
-  // Typography
-  fontFamily?: string;
-  fontSize?: 'small' | 'medium' | 'large';
-  
-  // Spacing
-  density?: 'compact' | 'default' | 'spacious';
-  
-  // Borders
-  borderRadius?: number;        // px
-  borderStyle?: 'solid' | 'dashed' | 'none';
-  
-  // Variants
-  variant?: 'outlined' | 'filled' | 'standard';
 }
 ```
 
-### Theme Example
+## Field Types
+
+Each field declares a `type`. The renderer auto-infers a widget from the type; a custom `widget` name on the field view overrides that inference. The full set of field types is defined by the `FieldType` enum in `packages/spec/src/data/field.zod.ts`:
+
+| Group | Types |
+|-------|-------|
+| Text | `text`, `textarea`, `email`, `url`, `phone`, `password`, `secret` |
+| Rich content | `markdown`, `html`, `richtext`, `code` |
+| Numbers | `number`, `currency`, `percent`, `slider`, `progress`, `rating` |
+| Date & time | `date`, `datetime`, `time` |
+| Logic | `boolean`, `toggle` |
+| Selection | `select`, `multiselect`, `radio`, `checkboxes`, `tags` |
+| Relational | `lookup`, `master_detail`, `tree` |
+| Media | `image`, `file`, `avatar`, `video`, `audio`, `signature`, `qrcode` |
+| Calculated/system | `formula`, `summary`, `autonumber` |
+| Embedded | `composite`, `repeater`, `record`, `json` |
+| Enhanced | `location`, `address`, `color` |
+| AI/ML | `vector` |
+
+<Callout type="info">
+  Phone numbers use the `phone` field type (there is no `tel` type). Multi-select
+  uses `multiselect`; a checkbox group uses `checkboxes`.
+</Callout>
+
+### Overriding the Inferred Widget
+
+In a view, the field `type` auto-infers the widget. Set an explicit `widget` only when inference is insufficient (see `FormFieldSchema` in `packages/spec/src/ui/view.zod.ts`):
 
 ```yaml
-theme:
-  colorScheme: light
-  primaryColor: '#3B82F6'
-  errorColor: '#EF4444'
-  fontFamily: Inter, sans-serif
-  fontSize: medium
-  density: default
-  borderRadius: 8
-  variant: outlined
-
 fields:
-  - name: email
-    type: email
-    # Inherits theme automatically
+  - field: description
+  # Custom widget override
+  - field: priority
+    widget: rating
 ```
 
-## Accessibility Contract
+## Widget Manifest
 
-All components must meet WCAG 2.1 AA standards.
-
-### Required Accessibility Features
+A custom widget is registered through a **Widget Manifest** (`WidgetManifestSchema`). The manifest declares the widget's identity, the field types it supports, its lifecycle and events, its configurable properties, and how its code is loaded.
 
 ```typescript
-interface A11yProps {
-  // ARIA attributes
-  role?: string;                // ARIA role
-  ariaLabel?: string;           // Accessible label
-  ariaDescribedBy?: string;     // ID of description element
-  ariaLive?: 'polite' | 'assertive' | 'off';
-  ariaAtomic?: boolean;
-  
-  // Keyboard navigation
-  tabIndex?: number;            // Tab order (-1 = not tabbable)
-  onKeyDown?: (e: KeyboardEvent) => void;
-  onKeyUp?: (e: KeyboardEvent) => void;
-  
-  // Focus management
-  autoFocus?: boolean;          // Auto-focus on mount
-  focusOnError?: boolean;       // Focus when error occurs
-}
-```
+interface WidgetManifest {
+  name: string;                 // snake_case identifier
+  label: string;                // Display name
+  description?: string;
+  version?: string;             // semver
+  author?: string;
+  icon?: string;
+  fieldTypes?: string[];        // Supported field types, e.g. ['date', 'datetime']
+  category?: 'input' | 'display' | 'picker' | 'editor' | 'custom'; // default: 'custom'
 
-### Accessibility Example
+  lifecycle?: WidgetLifecycle;  // Lifecycle hooks
+  events?: WidgetEvent[];       // Custom events emitted
+  properties?: WidgetProperty[]; // Configurable properties
+  implementation?: WidgetSource; // How to load the widget code
 
-```yaml
-field:
-  name: credit_card
-  type: text
-  label: Credit Card Number
-  ariaLabel: Credit card number, 16 digits
-  ariaDescribedBy: credit_card_help
-  helpText:
-    id: credit_card_help
-    text: Enter 16-digit card number without spaces
-  autocomplete: cc-number
-  inputMode: numeric
-```
-
-**Keyboard Support (Required):**
-- **Tab:** Move to next field
-- **Shift+Tab:** Move to previous field
-- **Enter:** Submit form (on last field)
-- **Escape:** Cancel/clear (if applicable)
-- **Arrow keys:** Navigate options (Select, Radio)
-- **Space:** Toggle (Checkbox, Toggle)
-
-## Performance Contract
-
-Components should optimize rendering and minimize re-renders.
-
-### Optimization Guidelines
-
-```typescript
-interface PerformanceProps {
-  // Lazy loading
-  lazy?: boolean;               // Defer rendering until visible
-  lazyPlaceholder?: ReactNode;  // Show while loading
-  
-  // Memoization
-  memoize?: boolean;            // Cache rendered output
-  memoizeKey?: string[];        // Re-render only when these props change
-  
-  // Virtualization
-  virtualScroll?: boolean;      // Use virtual scrolling for long lists
-  itemHeight?: number;          // Fixed item height (for virtual scroll)
-  
-  // Debouncing
-  debounce?: number;            // Debounce onChange events (ms)
-  throttle?: number;            // Throttle onChange events (ms)
-}
-```
-
-**Example: Large Select with Virtual Scrolling**
-```yaml
-field:
-  name: product_id
-  type: select
-  optionsSource: /api/products  # 10,000 products
-  virtualScroll: true
-  itemHeight: 40
-  searchable: true
-  debounce: 300  # Debounce search input
-```
-
-## Error Handling Contract
-
-Components must gracefully handle errors and edge cases.
-
-### Error States
-
-```typescript
-interface ErrorHandling {
-  // Validation errors
-  error?: string;               // Error message
-  errorPosition?: 'top' | 'bottom' | 'inline';
-  
-  // Loading states
-  loading?: boolean;            // Show loading indicator
-  loadingText?: string;         // Loading message
-  
-  // Empty states
-  empty?: boolean;              // No data available
-  emptyText?: string;           // Empty state message
-  emptyAction?: Action;         // Call-to-action when empty
-  
-  // Error recovery
-  retry?: () => void;           // Retry failed action
-  fallback?: any;               // Fallback value on error
-}
-```
-
-**Example: Lookup with Error Handling**
-```yaml
-field:
-  name: manager_id
-  type: lookup
-  object: user
-  displayField: name
-  optionsSource: /api/users/managers
-  loading: true
-  loadingText: Loading managers...
-  emptyText: No managers found
-  emptyAction:
-    type: standard_new
-    label: Create Manager
-  retry: true  # Show retry button on fetch error
-```
-
-## Component Lifecycle
-
-Components go through a standard lifecycle.
-
-### Lifecycle Phases
-
-```
-1. Initialize
-   ↓
-2. Mount (render for first time)
-   ↓
-3. Update (props/state change)
-   ↓
-4. Validate (on blur or submit)
-   ↓
-5. Unmount (cleanup)
-```
-
-### Lifecycle Hooks
-
-```typescript
-interface LifecycleHooks {
-  onInit?: () => void;          // Before first render
-  onMount?: () => void;         // After first render
-  onUpdate?: (prevProps: Props) => void;  // After props change
-  onValidate?: () => ValidationResult;    // On validation
-  onUnmount?: () => void;       // Before component removed
+  dependencies?: { name: string; version?: string; url?: string }[];
+  aria?: AriaProps;             // ARIA accessibility attributes
+  performance?: PerformanceConfig;
 }
 ```
 
 **Example:**
 ```yaml
-field:
-  name: email
-  type: email
-  lifecycle:
-    onMount:
-      - action: fetch_user_email
-        endpoint: /api/user/email
-    onBlur:
-      - action: validate_email
-      - action: check_duplicates
-    onUnmount:
-      - action: save_draft
+name: custom_date_picker
+label: Custom Date Picker
+version: 1.0.0
+author: Acme Inc
+fieldTypes: [date, datetime]
+category: picker
+implementation:
+  type: npm
+  packageName: '@acme/custom-date-picker'
+  version: 1.0.0
 ```
 
-## Widget Types Reference
+### Widget Source
 
-### Input Widgets
-
-| Type | Props | Events | Example |
-|------|-------|--------|---------|
-| `text` | maxLength, pattern | onChange, onBlur | Name, Title |
-| `textarea` | rows, maxLength | onChange, onInput | Description |
-| `email` | pattern | onChange, onBlur | Email Address |
-| `tel` | pattern | onChange | Phone Number |
-| `url` | pattern | onChange | Website |
-| `password` | minLength | onChange | Password |
-
-### Selection Widgets
-
-| Type | Props | Events | Example |
-|------|-------|--------|---------|
-| `select` | options, multiple | onChange | Country, Status |
-| `radio` | options | onChange | Gender, Size |
-| `checkbox` | - | onChange | Accept Terms |
-| `toggle` | trueLabel, falseLabel | onChange | Enable Feature |
-| `lookup` | object, displayField | onChange, onSearch | Account, Contact |
-
-### Date/Time Widgets
-
-| Type | Props | Events | Example |
-|------|-------|--------|---------|
-| `date` | min, max | onChange | Birth Date |
-| `datetime` | showTime | onChange | Appointment |
-| `time` | format | onChange | Meeting Time |
-| `daterange` | - | onChange | Start/End Date |
-
-### Numeric Widgets
-
-| Type | Props | Events | Example |
-|------|-------|--------|---------|
-| `number` | min, max, step | onChange | Quantity, Age |
-| `currency` | currency, precision | onChange | Price, Revenue |
-| `percent` | precision | onChange | Discount, Tax |
-| `slider` | min, max, step | onChange | Volume, Rating |
-
-### Rich Content Widgets
-
-| Type | Props | Events | Example |
-|------|-------|--------|---------|
-| `richtext` | toolbar, plugins | onChange | Description |
-| `markdown` | preview | onChange | Documentation |
-| `code` | language, theme | onChange | API Key, JSON |
-| `file` | accept, maxSize | onUpload | Attachment |
-
-## Real-World Example: Complete Form Field
+`implementation` is a discriminated union on `type` that tells the host how to load the widget code:
 
 ```yaml
-field:
-  # Identification
-  name: customer_email
-  type: email
-  
-  # Display
-  label: Email Address
-  placeholder: you@company.com
-  helpText: We'll use this for account notifications
-  icon: mail
-  
-  # Validation
-  required: Email is required
-  pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
-  patternMessage: Please enter a valid email address
-  asyncValidator:
-    endpoint: /api/customers/check-email
-    debounce: 500
-    errorMessage: This email is already registered
-  
-  # Layout
-  span: 6
-  
-  # Behavior
-  autocomplete: email
-  spellcheck: false
-  
-  # Events
-  onChange:
-    - action: validate_email
-  onBlur:
-    - action: check_duplicates
-    - action: format_email
-      transform: toLowerCase
-  
-  # Accessibility
-  ariaLabel: Customer email address
-  tabIndex: 1
-  
-  # Performance
-  debounce: 300
+# NPM package
+implementation:
+  type: npm
+  packageName: '@acme/widgets'
+  version: latest
+  exportName: DatePicker   # optional named export
+
+# Module Federation remote
+implementation:
+  type: remote
+  url: https://cdn.example.com/remoteEntry.js
+  moduleName: ./DatePicker
+  scope: acme_widgets
+
+# Inline code
+implementation:
+  type: inline
+  code: |
+    return value ? new Date(value).toLocaleDateString() : '';
 ```
+
+## Lifecycle Hooks
+
+Widget lifecycle hooks are defined on the manifest as **code-body strings** (not function references). They follow `WidgetLifecycleSchema`:
+
+```typescript
+interface WidgetLifecycle {
+  onMount?: string;     // Initialization when the widget mounts
+  onUpdate?: string;    // Runs when props change (receives prevProps)
+  onUnmount?: string;   // Cleanup before the widget unmounts
+  onValidate?: string;  // Custom validation; return an error message or null
+  onFocus?: string;     // Runs on focus
+  onBlur?: string;      // Runs on blur
+  onError?: string;     // Error handling
+}
+```
+
+**Example:**
+```yaml
+lifecycle:
+  onMount: "initializeDatePicker(); loadOptions();"
+  onUpdate: "if (prevProps.value !== props.value) { updateDisplay() }"
+  onValidate: "return value && value.length >= 10 ? null : 'Minimum 10 characters'"
+  onUnmount: "destroyDatePicker(); cancelPendingRequests();"
+```
+
+## Custom Events
+
+A widget can declare custom events it emits via `WidgetEventSchema`:
+
+```typescript
+interface WidgetEvent {
+  name: string;                          // lowercase, dash-separated, e.g. 'value-change'
+  label?: string;
+  description?: string;
+  bubbles?: boolean;                     // default false
+  cancelable?: boolean;                  // default false
+  payload?: Record<string, unknown>;     // payload shape
+}
+```
+
+**Example:**
+```yaml
+events:
+  - name: search-complete
+    label: Search Complete
+    bubbles: true
+    payload:
+      query: string
+      results: object
+```
+
+## Configurable Properties
+
+A widget exposes configuration knobs through `WidgetPropertySchema`. These describe the options a builder can set when placing the widget:
+
+```typescript
+interface WidgetProperty {
+  name: string;          // camelCase
+  label?: string;
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object' | 'function' | 'any';
+  required?: boolean;    // default false
+  default?: unknown;
+  description?: string;
+  validation?: Record<string, unknown>; // min/max, regex, enum, etc.
+  category?: string;     // for grouping in the builder UI
+}
+```
+
+**Example:**
+```yaml
+properties:
+  - name: maxLength
+    label: Maximum Length
+    type: number
+    required: false
+    default: 100
+    description: Maximum input length
+    category: validation
+```
+
+## Accessibility
+
+A widget manifest carries ARIA metadata through the shared `AriaProps` schema (`packages/spec/src/ui/i18n.zod.ts`). The supported attributes are intentionally minimal:
+
+```typescript
+interface AriaProps {
+  ariaLabel?: string;       // Accessible label for screen readers
+  ariaDescribedBy?: string; // ID of an element that describes this widget
+  role?: string;            // WAI-ARIA role override
+}
+```
+
+**Example:**
+```yaml
+aria:
+  ariaLabel: Credit card number, 16 digits
+  ariaDescribedBy: credit_card_help
+  role: textbox
+```
+
+## Performance
+
+Performance tuning is supplied through the shared `PerformanceConfig` schema (`packages/spec/src/ui/responsive.zod.ts`) on the manifest's `performance` field. Use it for options such as virtualization and lazy rendering for widgets that handle large datasets.
+
+## Theme
+
+ObjectUI theming is defined by `ThemeSchema` in `packages/spec/src/ui/theme.zod.ts`. A theme requires a `name`, `label`, and `colors` palette. The `mode` is one of `light`, `dark`, or `auto`, and `density` is one of `compact`, `regular`, or `spacious`. `borderRadius` is a scale object (`none`/`sm`/`base`/`md`/`lg`/...), not a single token:
+
+```yaml
+name: corporate
+label: Corporate
+mode: light
+density: regular
+colors:
+  # ColorPalette configuration
+borderRadius:
+  base: 0.25rem
+  md: 0.375rem
+```
+
+Widgets inherit the active theme automatically; they do not each carry a full set of color/typography props.
 
 ## What's Next?
 
@@ -863,20 +328,18 @@ field:
   <Card
     icon={<Zap />}
     title="Action Protocol"
-    href="/docs/protocols/objectui/actions"
+    href="/docs/protocol/objectui/actions"
     description="Define buttons, triggers, and navigation flows"
   />
   <Card
     icon={<Code />}
-    title="Custom Components"
-    href="/docs/guides/custom-components"
-    description="Build and register your own widgets"
+    title="Plugin Development"
+    href="/docs/guides/plugin-development"
+    description="Build and register your own widgets and extensions"
   />
 </Cards>
 
 ## Related Resources
 
-- [FormView Reference](/docs/references/ui/FormView) - Form configuration API
-- [Field Types Reference](/docs/references/ui/fields) - Complete field type catalog
-- [Validation Guide](/docs/guides/validation) - Validation patterns and examples
-- [Accessibility Guide](/docs/guides/accessibility) - WCAG compliance checklist
+- [Component Reference](/docs/references/ui/component) - UI component configuration API
+- [Layout DSL](/docs/protocol/objectui/layout-dsl) - Composing views and pages

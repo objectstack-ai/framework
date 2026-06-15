@@ -9,7 +9,7 @@ ObjectStack uses a structured error system with **9 error categories** and **41+
 
 <Callout type="info">
 **Source:** `packages/spec/src/api/errors.zod.ts`  
-**Import:** `import { StandardErrorCodeSchema, ErrorCategorySchema, ErrorResponseSchema } from '@objectstack/spec/api'`
+**Import:** `import { StandardErrorCode, ErrorCategory, ErrorResponseSchema } from '@objectstack/spec/api'`
 </Callout>
 
 ---
@@ -63,7 +63,7 @@ ObjectStack uses a structured error system with **9 error categories** and **41+
 
 ### `invalid_field`
 **Cause:** A field name in the request does not exist on the target object.  
-**Fix:** Check the object schema for valid field names. Use `objectstack explain <object>` to see available fields.  
+**Fix:** Check the object schema for valid field names. Use `os meta get object <name>` to inspect the object's fields.  
 **Retry:** `no_retry`
 
 ### `missing_required_field`
@@ -210,7 +210,7 @@ ObjectStack uses a structured error system with **9 error categories** and **41+
 
 ### `object_not_found`
 **Cause:** The specified object (table/entity) does not exist in the schema.  
-**Fix:** Check the object name. Use `objectstack explain` to list available objects.  
+**Fix:** Check the object name. Use `os meta list object` to list available objects.  
 **Retry:** `no_retry`
 
 ### `record_not_found`
@@ -372,10 +372,11 @@ interface EnhancedApiError {
 
 ```typescript
 interface FieldError {
-  field: string;    // Field name that has the error
-  message: string;  // Human-readable error for this field
-  code?: string;    // Field-level error code
-  value?: unknown;  // The invalid value (if safe to include)
+  field: string;            // Field path (supports dot notation)
+  code: StandardErrorCode;  // Field-level error code
+  message: string;          // Human-readable error for this field
+  value?: unknown;          // The invalid value (if safe to include)
+  constraint?: unknown;     // The constraint that was violated (e.g., max length)
 }
 ```
 

@@ -7,7 +7,11 @@ import { Zap, Radio, Activity, Bell, Users, Gauge, AlertCircle } from 'lucide-re
 
 # Real-Time Protocols
 
-The **Real-Time Protocol** enables live data synchronization between clients and servers using WebSocket connections and Server-Sent Events (SSE). Get instant updates when data changes without polling.
+The **Real-Time Protocol** describes how live data synchronization is intended to work between clients and servers. Get instant updates when data changes without polling.
+
+<Callout type="warn">
+  **Implementation status (v1):** The shipping realtime service is an **in-memory pub/sub adapter** (`@objectstack/service-realtime`, `InMemoryRealtimeAdapter`) plus a **long-polling** client (`RealtimeAPI` in `@objectstack/client`). The `IRealtimeService` contract reserves an optional `handleUpgrade()` for a WebSocket handshake, but **no WebSocket (`/ws`) or SSE (`/api/v1/stream`) transport is wired up yet** — those sections below document the planned wire protocol, not a deployed endpoint. The in-memory adapter is **single-instance only** (v1 deployment contract); a Redis-backed adapter for multi-node HA is a post-GA fast-follow. Treat the WebSocket/SSE message formats, connection limits, and debug endpoints in this page as a forward-looking design spec until that transport lands.
+</Callout>
 
 ## Why Real-Time Matters
 
@@ -98,7 +102,7 @@ ObjectStack supports two real-time protocols:
 
 ### Connection Endpoint
 
-Get WebSocket URL from discovery:
+The discovery endpoint advertises the realtime route when the realtime service is registered:
 
 ```http
 GET /.well-known/objectstack
@@ -107,10 +111,16 @@ GET /.well-known/objectstack
 ```json
 {
   "routes": {
-    "realtime": "wss://api.acme.com/ws"
+    "data": "/api/v1/data",
+    "metadata": "/api/v1/meta",
+    "realtime": "/api/v1/realtime"
   }
 }
 ```
+
+<Callout type="info">
+  The discovery `routes.realtime` value is an HTTP path (`/api/v1/realtime`), not a `wss://` URL. A WebSocket upgrade endpoint is part of the planned transport (`IRealtimeService.handleUpgrade()`) and is not yet served.
+</Callout>
 
 ### Establishing Connection
 
@@ -603,10 +613,14 @@ Real-time subscriptions respect object-level and row-level permissions:
 
 ### Connection Limits
 
-Each WebSocket connection consumes server resources:
+Each connection consumes server resources.
 
-**Per-user limits:**
-- Maximum concurrent WebSocket connections: 5
+<Callout type="warn">
+  The per-user connection/subscription limits below (concurrent connections, subscriptions per connection, subscriptions per user) are **not implemented**. The only cap enforced today is a process-wide safety backstop on total active subscriptions in `InMemoryRealtimeAdapter` (`DEFAULT_MAX_SUBSCRIPTIONS = 50_000`, configurable via `maxSubscriptions`; `0` opts out). Per-user quotas are part of the planned WebSocket transport.
+</Callout>
+
+**Planned per-user limits:**
+- Maximum concurrent connections: 5
 - Maximum subscriptions per connection: 50
 - Maximum subscriptions per user: 100
 
@@ -795,7 +809,11 @@ ws.send = (data) => {
 
 ### Server-Side Events
 
-Request server event log:
+<Callout type="warn">
+  The `/api/v1/realtime/events` event-log endpoint shown below is **not implemented** — there is no delivery-log route in the realtime service today. This is part of the planned transport tooling.
+</Callout>
+
+Request server event log (planned):
 
 ```http
 GET /api/v1/realtime/events?subscription_id=sub_1&limit=100
@@ -1008,14 +1026,14 @@ WebSocket messages are rate-limited:
 <Cards>
   <Card
     icon={<Radio />}
-    title="HTTP API"
+    title="HTTP Protocol"
     description="Learn REST endpoint conventions and CRUD operations"
-    href="/docs/transport/http-api"
+    href="/docs/protocol/objectos/http-protocol"
   />
   <Card
     icon={<AlertCircle />}
     title="Error Handling"
     description="Master error codes and debugging strategies"
-    href="/docs/transport/error-handling"
+    href="/docs/protocol/objectos/error-handling"
   />
 </Cards>

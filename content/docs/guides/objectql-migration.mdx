@@ -117,15 +117,15 @@ const objects = convertIntrospectedSchemaToObjects(schema, {
 
 ### MetadataRegistry → MetadataFacade
 
-If you were using `MetadataRegistry` from `@objectql/types`, the upstream equivalent is `MetadataFacade`. The key difference is that `MetadataFacade` methods are **async** (returns `Promise`):
+If you were using `MetadataRegistry` from `@objectql/types`, the upstream equivalent is `MetadataFacade`. There are two differences: `MetadataFacade` is constructed over a `SchemaRegistry` instance, and its methods are **async** (returns `Promise`):
 
 ```diff
 - import { MetadataRegistry } from '@objectql/types';
 - const registry = new MetadataRegistry();
 - registry.register('object', myObject);
 - const obj = registry.get('object', 'account');
-+ import { MetadataFacade } from '@objectstack/objectql';
-+ const facade = new MetadataFacade();
++ import { MetadataFacade, SchemaRegistry } from '@objectstack/objectql';
++ const facade = new MetadataFacade(new SchemaRegistry());
 + await facade.register('object', 'account', myObject);
 + const obj = await facade.get('object', 'account');
 ```

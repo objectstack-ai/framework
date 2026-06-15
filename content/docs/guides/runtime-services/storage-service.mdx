@@ -33,7 +33,12 @@ services.storage.abortChunkedUpload?(uploadId: string): Promise<void>
 
 ## Typical Errors
 
-- `FILE_NOT_FOUND`
-- `PERMISSION_DENIED`
-- `INVALID_CONTENT_TYPE`
-- `UPLOAD_SESSION_NOT_FOUND`
+Storage methods reject with a plain `Error` carrying a descriptive message — the
+built-in adapters do not attach a stable error `code`. Common cases include:
+
+- File not found on `download` / `getInfo` — the local adapter surfaces the underlying filesystem `ENOENT` error; reference/mock adapters reject with a `File not found: <key>` message.
+- Invalid or expired upload session on the chunked methods (e.g. `Upload session "<id>" not found`).
+- Path-traversal / invalid key rejection from the local adapter (e.g. `path traversal not allowed`).
+
+A request that fails an upstream permission check surfaces the framework-wide
+`PERMISSION_DENIED` error from the security layer (`code: 'PERMISSION_DENIED'`), not the storage adapter.

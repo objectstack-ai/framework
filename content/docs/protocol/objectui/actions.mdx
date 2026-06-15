@@ -6,7 +6,9 @@ description: Buttons, triggers, navigation, and user interaction definitions
 import { MousePointer, Zap, ExternalLink, Workflow, GitBranch, Play, Component, Layout } from 'lucide-react';
 
 
-The **Action Protocol** specifies how user interactions (button clicks, menu selections, gestures) trigger business logic, navigation, or external integrations. Actions are the "verbs" of ObjectUI—they make things happen.
+The **Action Protocol** specifies how user interactions (button clicks, menu selections) trigger business logic, navigation, or external integrations. Actions are the "verbs" of ObjectUI—they make things happen.
+
+The canonical schema is `ActionSchema` in `@objectstack/spec` (`packages/spec/src/ui/action.zod.ts`). Everything on this page maps directly to that Zod schema.
 
 ## Philosophy: Declarative Interactions
 
@@ -22,1031 +24,360 @@ Instead of writing `onClick` handlers in JavaScript, you declare what should hap
 }}>Save</Button>
 
 # ✅ Declarative (ObjectUI)
-action:
-  type: standard_save
-  label: Save
-  onSuccess:
-    - navigate: /customers
+name: save_customer
+label: Save
+type: api
+target: /api/v1/data/customer
+method: POST
+refreshAfter: true
 ```
 
 **Benefits:**
 - **No code:** Business analysts configure actions
-- **Type-safe:** Actions validated against schema
+- **Type-safe:** Actions validated against `ActionSchema`
 - **Testable:** Actions are data, can be unit tested
 - **Auditable:** See what actions users can perform
 
 ## Action Types
 
-ObjectUI defines several categories of actions.
+The `type` field selects how an action is dispatched. The complete enum is **`script`, `url`, `modal`, `flow`, `api`, `form`** — there are no other types. `type` defaults to `script` when omitted.
 
-### Standard Actions
+| Type | Behavior | `target` required? |
+| --- | --- | --- |
+| `script` | Run an inline `body` (CEL expression or sandboxed JS), or a registered handler named by `target`. | No (prefer `body`) |
+| `url` | Navigate to a URL. | Yes |
+| `flow` | Invoke a Screen/automation Flow by name. | Yes |
+| `modal` | Open a modal/page by name. | Yes |
+| `api` | Call an API endpoint (`method` defaults to `POST`). | Yes |
+| `form` | Open a FormView by name, routed to `/console/forms/:name`. | Yes |
 
-Built-in CRUD operations that require no configuration:
+`target` is the canonical binding for every non-`script` type. The deprecated `execute` field is auto-migrated to `target` during parsing.
 
-```yaml
-actions:
-  - type: standard_new
-    label: New Customer
-    object: customer
-  
-  - type: standard_edit
-    label: Edit
-    recordId: '{recordId}'
-  
-  - type: standard_delete
-    label: Delete
-    recordId: '{recordId}'
-    confirm: true  # Show confirmation dialog
-  
-  - type: standard_save
-    label: Save
-    validate: true  # Run validation before saving
-  
-  - type: standard_cancel
-    label: Cancel
-    confirmIfDirty: true  # Warn if unsaved changes
-```
+### Script Actions
 
-**Standard Actions Available:**
-- `standard_new` - Create new record
-- `standard_edit` - Edit existing record
-- `standard_delete` - Delete record
-- `standard_save` - Save current form
-- `standard_cancel` - Cancel and return
-- `standard_clone` - Clone record
-- `standard_refresh` - Reload data
-- `standard_export` - Export to CSV/Excel
-- `standard_print` - Print view
-
-### Navigation Actions
-
-Navigate to different pages or external URLs:
+Run logic with no server round trip via `body` (an L1 CEL expression or L2 sandboxed JS). `body` is only meaningful when `type` is `script`.
 
 ```yaml
-actions:
-  - type: navigate
-    label: View Dashboard
-    target: /dashboards/sales_overview
-  
-  - type: navigate
-    label: View Customer
-    target: /customers/{customer_id}  # Dynamic parameter
-  
-  - type: navigate
-    label: External Link
-    target: https://example.com
-    openInNewTab: true
-  
-  - type: navigate_back
-    label: Go Back
-    fallback: /customers  # If no history, go here
+name: greet_user
+label: Greet
+type: script
+body:
+  language: expression
+  source: '"Hello, " + ctx.user.name'
 ```
+
+```yaml
+name: stamp_now
+label: Stamp Timestamp
+type: script
+body:
+  language: js
+  source: |
+    return { stamped_at: new Date().toISOString() };
+```
+
+### URL Actions
+
+Navigate to an internal route or external URL. `target` supports `${param.X}` and `${ctx.X}` interpolation (renderers `encodeURIComponent` interpolated values before substituting them into query positions).
+
+```yaml
+name: view_dashboard
+label: View Dashboard
+type: url
+target: /_console/dashboards/sales_overview
+
+name: link_social
+label: Connect Account
+type: url
+target: '/api/v1/auth/sign-in/social?provider=${param.provider}&callbackURL=${ctx.origin}/_console/apps/account/sys_account'
+```
+
+To open the result in a new tab, set `opensInNewTab: true` (the renderer pre-opens the tab synchronously so popup blockers don't fire). `newTabUrl` provides a zero-roundtrip new-tab target template supporting the `{recordId}` placeholder.
 
 ### Flow Actions
 
-Launch Screen Flows (multi-step wizards):
+Invoke a Flow by name. Collect inputs with `params`:
 
 ```yaml
-actions:
-  - type: flow
-    label: Approve Request
-    flow: approval_wizard
-    input:
-      recordId: '{recordId}'
-      approver: '{currentUserId}'
-    onComplete:
-      - action: refresh
-      - action: toast
-        message: Request approved successfully
+name: approve_request
+label: Approve Request
+type: flow
+target: approval_wizard
+params:
+  - { name: approver, field: approver }
+refreshAfter: true
 ```
 
 ### API Actions
 
-Call custom REST endpoints:
+Call an endpoint. `method` defaults to `POST`; use `PATCH`/`PUT`/`DELETE` for other verbs.
 
 ```yaml
-actions:
-  - type: api
-    label: Sync with ERP
-    method: POST
-    endpoint: /api/integrations/erp/sync
-    params:
-      customerId: '{recordId}'
-    headers:
-      X-Custom-Header: value
-    onSuccess:
-      - action: toast
-        message: Sync completed successfully
-        variant: success
-    onError:
-      - action: toast
-        message: Sync failed: {error}
-        variant: error
+name: sync_with_erp
+label: Sync with ERP
+type: api
+target: /api/integrations/erp/sync
+method: POST
+params:
+  - { name: customer_id, field: id, defaultFromRow: true }
+successMessage: Sync completed successfully
+refreshAfter: true
 ```
 
-### Workflow Actions
+**Request body shaping:**
+- `bodyShape` — `'flat'` (default) sends collected params at the top level; `{ wrap: 'data' }` nests user params under that key.
+- `bodyExtra` — constant fields merged into the request, applied last so they always win (e.g. `bodyExtra: { resend: true }`).
+- `recordIdParam` / `recordIdField` — inject the current row id (or another row field) into a body key when the action runs from a `list_item` location.
 
-Trigger server-side workflows:
+### Form Actions
+
+Open a FormView by name. The renderer routes to `/console/forms/:name`:
 
 ```yaml
-actions:
-  - type: workflow
-    label: Send Reminder
-    workflow: send_customer_reminder
-    input:
-      customerId: '{recordId}'
-      reminderType: payment_due
-    async: true  # Don't wait for completion
+name: quick_edit
+label: Quick Edit
+type: form
+target: customer_quick_edit
 ```
 
 ### Modal Actions
 
-Open modals (dialogs) with embedded content:
+Open a modal/page by name:
 
 ```yaml
-actions:
-  - type: modal
-    label: Quick Edit
-    title: Edit Customer
-    content:
-      type: form
-      object: customer
-      recordId: '{recordId}'
-      fields: [name, email, phone]
-    size: medium
-    actions:
-      - type: standard_save
-        label: Save
-        closeOnSuccess: true
-      - type: standard_cancel
-        label: Cancel
-```
-
-### Bulk Actions
-
-Operate on multiple selected records:
-
-```yaml
-# In ListView
-actions:
-  - type: bulk_update
-    label: Update Status
-    availableWhen: rowsSelected
-    fields:
-      - name: status
-        type: select
-        options: [active, inactive, pending]
-    onSuccess:
-      - action: refresh
-  
-  - type: bulk_delete
-    label: Delete Selected
-    availableWhen: rowsSelected
-    confirm:
-      title: Delete {count} records?
-      message: This action cannot be undone
-      confirmLabel: Delete
-      cancelLabel: Cancel
-```
-
-### Custom Actions
-
-Execute custom JavaScript (renderer-side):
-
-```yaml
-actions:
-  - type: custom
-    label: Calculate Discount
-    handler: calculateDiscount  # Function registered in renderer
-    params:
-      quantity: '{quantity}'
-      unitPrice: '{unit_price}'
+name: edit_customer
+label: Edit Customer
+type: modal
+target: customer_edit_modal
 ```
 
 ## Action Configuration
 
-### Basic Action Properties
+### Action Properties
+
+`ActionSchema` defines the following fields:
 
 ```typescript
 interface Action {
   // Identification
-  type: ActionType;
-  name?: string;                // Unique name
-  label: string;                // Button text
-  
+  name: string;                 // Machine name, lowercase snake_case (required)
+  label: string;                // Display label (required, i18n)
+  objectName?: string;          // Owning object; auto-merged by defineStack()
+
   // Display
-  icon?: string;                // Lucide icon
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  size?: 'small' | 'medium' | 'large';
-  
-  // Visibility & State
-  visible?: VisibilityRule;     // When to show
-  disabled?: DisabledRule;      // When to disable
-  availableWhen?: Condition;    // Conditional availability
-  
-  // Confirmation
-  confirm?: boolean | ConfirmDialog;
-  
-  // Execution
-  onBefore?: Action[];          // Run before main action
-  onSuccess?: Action[];         // Run on success
-  onError?: Action[];           // Run on error
-  onFinally?: Action[];         // Run always (cleanup)
+  icon?: string;                // Lucide icon name
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
+  component?: 'action:button' | 'action:icon' | 'action:menu' | 'action:group';
+  locations?: ActionLocation[]; // Where the action surfaces
+
+  // Behavior
+  type?: 'script' | 'url' | 'modal' | 'flow' | 'api' | 'form'; // default 'script'
+  target?: string;              // URL / script / flow / modal / endpoint
+  body?: HookBody;              // Inline logic for type: 'script'
+  params?: ActionParam[];       // Inputs collected before execution
+  method?: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; // for type: 'api'
+
+  // UX
+  confirmText?: string;         // Confirmation message before execution
+  successMessage?: string;      // Toast shown after success
+  refreshAfter?: boolean;       // Reload the view after execution (default false)
+  resultDialog?: ResultDialog;  // One-shot reveal of API response values
+  shortcut?: string;            // Keyboard shortcut, e.g. "Ctrl+S"
+
+  // Access
+  visible?: ExpressionInput;    // Visibility predicate (CEL)
+  disabled?: boolean | ExpressionInput; // Disabled when TRUE (CEL)
+
+  // Bulk
+  bulkEnabled?: boolean;        // Apply to multiple selected records
+
+  // AI (ADR-0011)
+  ai?: ActionAi;                // Opt-in AI tool exposure
+
+  // Misc
+  timeout?: number;             // Max execution time (ms)
+  aria?: AriaProps;             // Accessibility attributes
 }
 ```
 
-### Visibility Rules
+<Callout type="info">
+Action `name` is the configuration ID and **must** be lowercase `snake_case` (`approve_request`, not `approveRequest` or `Approve Request`). JavaScript function names referenced by `body`/`target` may still use camelCase.
+</Callout>
 
-Control when actions appear:
+### Action Locations
 
-```yaml
-actions:
-  # Show only if status is 'draft'
-  - type: standard_edit
-    label: Edit
-    visible:
-      field: status
-      value: draft
-  
-  # Show only if user has permission
-  - type: standard_delete
-    label: Delete
-    visible:
-      permission: delete_customers
-  
-  # Show based on multiple conditions
-  - type: workflow
-    label: Approve
-    visible:
-      and:
-        - { field: status, value: pending }
-        - { permission: approve_requests }
-        - { field: amount, operator: '<', value: 10000 }
-```
+The `locations` array declares where an action surfaces. The canonical enum (`ACTION_LOCATIONS`) is:
 
-### Disabled Rules
-
-Disable actions based on conditions:
+| Location | Where it renders |
+| --- | --- |
+| `list_toolbar` | Header/toolbar of a list view (bulk actions, "New", export) |
+| `list_item` | Per-row action on a list/grid row |
+| `record_header` | Primary actions in the record-detail title bar |
+| `record_more` | Overflow ("More" / ⋯) menu on a record |
+| `record_related` | Actions on a related-list section inside a record |
+| `record_section` | Actions inside a body section/tab of a record |
+| `global_nav` | Global navigation / command-palette actions |
 
 ```yaml
-actions:
-  # Disable if form is invalid
-  - type: standard_save
-    label: Save
-    disabled:
-      formInvalid: true
-  
-  # Disable if record has children
-  - type: standard_delete
-    label: Delete
-    disabled:
-      field: has_open_orders
-      value: true
-    disabledTooltip: Cannot delete customer with open orders
-  
-  # Disable based on field value
-  - type: workflow
-    label: Ship Order
-    disabled:
-      or:
-        - { field: status, operator: '!=', value: paid }
-        - { field: inventory_available, value: false }
+name: export_customers
+label: Export
+icon: download
+type: api
+target: /api/customers/export
+locations: [list_toolbar]
 ```
 
-## Confirmation Dialogs
+### Visibility & Disabled Rules
 
-Show confirmation before destructive actions.
-
-### Simple Confirmation
+`visible` and `disabled` are **CEL** predicates (not declarative `{ field, value }` objects). `disabled` may also be a plain boolean.
 
 ```yaml
-action:
-  type: standard_delete
-  label: Delete Customer
-  confirm: true  # Default confirmation
+# Show only while the record is a draft
+name: edit_draft
+label: Edit
+type: form
+target: customer_form
+visible: "record.status == 'draft'"
+
+# Disable while the order is unpaid
+name: ship_order
+label: Ship Order
+type: api
+target: /api/orders/ship
+disabled: "record.status != 'paid'"
 ```
 
-**Renders:**
-```
-┌─────────────────────────────────┐
-│ Confirm Delete                  │
-├─────────────────────────────────┤
-│ Are you sure you want to        │
-│ delete this customer?           │
-│                                 │
-│       [Cancel]  [Delete]        │
-└─────────────────────────────────┘
-```
+## Confirmation & Feedback
 
-### Custom Confirmation
+Actions express confirmation and feedback through dedicated string fields — there is no nested confirm-dialog object with `requireTyping`/`confirmLabel`.
 
 ```yaml
-action:
-  type: bulk_delete
-  label: Delete Selected
-  confirm:
-    title: Delete {count} customers?
-    message: |
-      This will permanently delete {count} customers
-      and all related records. This action cannot
-      be undone.
-    icon: alert-triangle
-    variant: danger
-    confirmLabel: Yes, Delete
-    cancelLabel: Cancel
-    requireTyping: DELETE  # User must type "DELETE" to confirm
+name: delete_customer
+label: Delete Customer
+type: api
+method: DELETE
+target: /api/v1/data/customer
+mode: delete
+variant: danger
+confirmText: Are you sure you want to delete this customer? This cannot be undone.
+successMessage: Customer deleted.
+refreshAfter: true
 ```
 
-## Parameter Binding
+- `confirmText` — message shown in a confirm dialog before the action runs.
+- `successMessage` — toast shown after a successful run.
+- `refreshAfter` — reload the current view after success.
+- `mode` — a semantic hint (`create` / `edit` / `delete` / `custom`) the UI uses to pick confirm copy and default variants.
 
-Actions can reference form data and context variables.
+### Result Dialog (one-shot reveals)
 
-### Variable Syntax
+For API actions that return a value the user must copy **now** (a freshly minted secret, TOTP URI, or backup codes), `resultDialog` renders the response in an acknowledge-only dialog instead of a toast:
 
 ```yaml
-action:
-  type: api
-  endpoint: /api/customers/{customer_id}/send-email
-  params:
-    # Field values
-    email: '{email}'
-    name: '{name}'
-    
-    # System variables
-    currentUser: '{$userId}'
-    timestamp: '{$now}'
-    
-    # Computed values
-    fullName: '{first_name} {last_name}'
-    
-    # Nested fields
-    billingCity: '{billing_address.city}'
-```
-
-### Available Variables
-
-```typescript
-// Form field values
-{fieldName}                     // e.g., {customer_name}
-
-// System variables
-{$userId}                       // Current user ID
-{$userName}                     // Current user name
-{$userEmail}                    // Current user email
-{$now}                          // Current timestamp
-{$recordId}                     // Current record ID
-{$objectName}                   // Current object name
-
-// Context variables (ListView)
-{$selectedRows}                 // Selected row IDs
-{$selectedCount}                // Count of selected rows
-{$filteredCount}                // Count after filters
-
-// Context variables (FormView)
-{$isNew}                        // True if creating new record
-{$isEditing}                    // True if editing existing
-{$isDirty}                      // True if form has unsaved changes
-{$isValid}                      // True if form passes validation
-```
-
-## Action Chains
-
-Execute multiple actions in sequence or parallel.
-
-### Sequential Actions
-
-```yaml
-action:
-  type: standard_save
-  label: Save & Send Email
-  onSuccess:
-    - action: api
-      type: api
-      endpoint: /api/send-welcome-email
-      params:
-        customerId: '{recordId}'
-    
-    - action: navigate
-      type: navigate
-      target: /customers/{recordId}
-    
-    - action: toast
-      type: toast
-      message: Customer saved and email sent
-      variant: success
-```
-
-### Parallel Actions
-
-```yaml
-action:
-  type: standard_save
-  label: Save
-  onSuccess:
-    parallel: true  # Execute in parallel
-    actions:
-      - type: api
-        endpoint: /api/analytics/track
-        params:
-          event: customer_created
-      
-      - type: api
-        endpoint: /api/crm/sync
-        params:
-          recordId: '{recordId}'
-      
-      - type: workflow
-        workflow: send_notifications
-        input:
-          recordId: '{recordId}'
-```
-
-### Conditional Chains
-
-```yaml
-action:
-  type: standard_save
-  label: Save
-  onSuccess:
-    - when: { field: send_email, value: true }
-      action:
-        type: api
-        endpoint: /api/send-email
-    
-    - when: { field: amount, operator: '>', value: 10000 }
-      action:
-        type: workflow
-        workflow: high_value_alert
-```
-
-## Action Placement
-
-Actions can appear in different UI locations.
-
-### Form Actions
-
-Buttons in form header or footer:
-
-```yaml
-form:
-  object: customer
-  actions:
-    placement: footer  # or 'header' | 'both'
-    align: right       # or 'left' | 'center' | 'space-between'
-    actions:
-      - type: standard_save
-        label: Save
-        variant: primary
-      - type: standard_cancel
-        label: Cancel
-        variant: secondary
-```
-
-### Row Actions
-
-Actions in list view rows:
-
-```yaml
-listView:
-  object: customer
-  rowActions:
-    - type: standard_edit
-      label: Edit
-      icon: edit
-    
-    - type: standard_delete
-      label: Delete
-      icon: trash
-      confirm: true
-    
-    - type: separator  # Visual separator
-    
-    - type: api
-      label: Send Email
-      icon: mail
-      endpoint: /api/customers/{id}/send-email
-```
-
-### Dropdown Menu Actions
-
-Group actions in a dropdown:
-
-```yaml
-actions:
-  - type: menu
-    label: More Actions
-    icon: more-vertical
-    items:
-      - type: standard_clone
-        label: Clone Customer
-      - type: api
-        label: Export to PDF
-        endpoint: /api/customers/{id}/export-pdf
-      - type: separator
-      - type: workflow
-        label: Merge Duplicate
-        workflow: merge_customers
-```
-
-### Bulk Actions (List View)
-
-Actions that operate on selected rows:
-
-```yaml
-listView:
-  object: customer
-  bulkActions:
-    - type: bulk_update
-      label: Change Status
-      icon: edit
-      fields:
-        - name: status
-          type: select
-          options: [active, inactive]
-    
-    - type: bulk_delete
-      label: Delete
-      icon: trash
-      confirm: true
-```
-
-### Quick Actions (Record Page)
-
-Floating action buttons:
-
-```yaml
-page:
-  object: customer
-  quickActions:
-    - type: api
-      label: Call Customer
-      icon: phone
-      endpoint: /api/telephony/call
-      params:
-        phone: '{phone}'
-    
-    - type: navigate
-      label: View Map
-      icon: map
-      target: https://maps.google.com?q={address}
-      openInNewTab: true
-```
-
-## Navigation Patterns
-
-### Internal Navigation
-
-```yaml
-# Navigate to object list
-action:
-  type: navigate
-  target: /customers
-
-# Navigate to specific record
-action:
-  type: navigate
-  target: /customers/{customer_id}
-
-# Navigate to related record
-action:
-  type: navigate
-  target: /accounts/{account_id}
-  params:
-    recordId: '{account_id}'
-
-# Navigate to dashboard
-action:
-  type: navigate
-  target: /dashboards/sales_overview
-```
-
-### External Navigation
-
-```yaml
-# Open external URL
-action:
-  type: navigate
-  label: View Website
-  target: https://{website}
-  openInNewTab: true
-
-# Deep link to external app
-action:
-  type: navigate
-  label: Open in Slack
-  target: slack://channel?id={slack_channel_id}
-
-# Email link
-action:
-  type: navigate
-  label: Send Email
-  target: mailto:{email}?subject=Hello&body=Message
-```
-
-### Contextual Navigation
-
-```yaml
-# Navigate with state
-action:
-  type: navigate
-  target: /orders/new
-  state:
-    customerId: '{customer_id}'
-    prefillData:
-      shipping_address: '{address}'
-
-# Navigate and replace history
-action:
-  type: navigate
-  target: /customers
-  replace: true  # Don't add to history stack
-```
-
-## Integration Actions
-
-### Webhook Actions
-
-Trigger external webhooks:
-
-```yaml
-action:
-  type: webhook
-  label: Notify Slack
-  url: https://hooks.slack.com/services/XXX/YYY/ZZZ
-  method: POST
-  headers:
-    Content-Type: application/json
-  body:
-    text: "New customer: {name}"
-    channel: "#sales"
-```
-
-### OAuth Actions
-
-Initiate OAuth flows:
-
-```yaml
-action:
-  type: oauth
-  label: Connect Google Calendar
-  provider: google
-  scopes:
-    - https://www.googleapis.com/auth/calendar
-  onSuccess:
-    - action: toast
-      message: Google Calendar connected
-```
-
-### File Upload Actions
-
-Upload files to external storage:
-
-```yaml
-action:
-  type: file_upload
-  label: Upload Attachment
-  accept: .pdf,.docx,.xlsx
-  maxSize: 10485760  # 10MB
-  storage: s3
-  bucket: customer-documents
-  path: customers/{customer_id}/
-  onSuccess:
-    - action: update_field
-      field: attachment_url
-      value: '{uploadedUrl}'
-```
-
-## State Management Actions
-
-### Update Field Values
-
-```yaml
-action:
-  type: update_field
-  field: total_price
-  value: '{quantity} * {unit_price}'
-
-# Multiple fields
-action:
-  type: update_fields
+name: create_oauth_application
+label: Register OAuth Application
+type: api
+method: POST
+target: /api/v1/auth/sys-oauth-application/register
+resultDialog:
+  title: Application Registered
+  acknowledge: I have saved the secret
   fields:
-    status: completed
-    completed_at: '{$now}'
-    completed_by: '{$userId}'
+    - { path: client.client_id, label: Client ID, format: text }
+    - { path: client.client_secret, label: Client Secret, format: secret }
 ```
 
-### Clear Fields
+Each `fields[].path` is a dot path into `result.data`. The per-field `format` (`qrcode`, `code-list`, `secret`, `text`, `json`) controls rendering.
+
+## Action Parameters
+
+`params` declares inputs collected from the user before execution. Each entry is an `ActionParam` with two modes:
+
+1. **Field-backed (preferred)** — reference an object field with `field`; the runtime resolves label, type, validation, and options from object metadata. Cross-object references use `objectOverride`.
+2. **Inline** — declare `name`, `label`, `type`, etc. directly when no matching field exists.
+
+`name` is required unless `field` is provided (in which case `name` defaults to the field name and is used as the request-body key).
 
 ```yaml
-action:
-  type: clear_fields
-  fields: [shipping_address, shipping_method]
+params:
+  # Field-backed: inherits everything from customer.email
+  - field: email
 
-# Clear with condition
-action:
-  type: clear_fields
-  when: { field: shipping_required, value: false }
-  fields: [shipping_address]
+  # Field-backed, pre-filled from the selected row
+  - { field: client_id, defaultFromRow: true, required: true }
+
+  # Inline select with explicit options
+  - name: priority
+    label: Priority
+    type: select
+    required: true
+    options:
+      - { label: Low, value: low }
+      - { label: High, value: high }
 ```
 
-### Show/Hide Fields
+`ActionParam` fields: `name`, `field`, `objectOverride`, `label`, `type`, `required` (default `false`), `options`, `placeholder`, `helpText`, `defaultValue`, `defaultFromRow`.
+
+## AI Tool Exposure (ADR-0011)
+
+An action can be exposed as an AI-callable tool. Exposure is **opt-in and default off** — set `ai.exposed: true`, which then **requires** `ai.description` (≥ 40 chars, the LLM-facing contract).
 
 ```yaml
-action:
-  type: show_fields
-  fields: [billing_address, payment_method]
-
-action:
-  type: hide_fields
-  fields: [internal_notes, api_key]
+name: merge_duplicate_customers
+label: Merge Duplicates
+type: api
+target: /api/customers/merge
+ai:
+  exposed: true
+  description: Merge two duplicate customer records into one, keeping the primary record's identity and reparenting all related records.
+  category: action
+  requiresConfirmation: true
 ```
 
-### Toggle Sections
-
-```yaml
-action:
-  type: toggle_section
-  section: advanced_settings
-```
-
-## Feedback Actions
-
-### Toast Notifications
-
-```yaml
-action:
-  type: toast
-  message: Customer saved successfully
-  variant: success  # or 'error' | 'warning' | 'info'
-  duration: 3000    # milliseconds
-  position: top-right
-
-# With action button
-action:
-  type: toast
-  message: Draft saved
-  variant: info
-  action:
-    label: View
-    onClick:
-      type: navigate
-      target: /customers/{recordId}
-```
-
-### Alert Dialogs
-
-```yaml
-action:
-  type: alert
-  title: Error
-  message: Failed to save customer
-  variant: error
-  buttons:
-    - label: Retry
-      action:
-        type: standard_save
-    - label: Cancel
-```
-
-### Progress Indicators
-
-```yaml
-action:
-  type: api
-  label: Generate Report
-  endpoint: /api/reports/generate
-  showProgress: true
-  progressMessage: Generating report...
-  onProgress:
-    - action: update_progress
-      percent: '{progress}'
-```
+- `category` — overrides the derived tool category (`data`, `action`, `flow`, `integration`, `vector_search`, `analytics`, `utility`).
+- `paramHints` — per-parameter hints (keyed by param name or `recordId`) that tighten the JSON Schema the model sees without changing UI metadata.
+- `outputSchema` — JSON Schema for the return value, enabling structured tool chaining.
+- `requiresConfirmation` — override the human-in-the-loop gate for AI invocations.
 
 ## Real-World Examples
 
-### Approve/Reject Workflow
+### Disable / Enable via API
 
 ```yaml
-actions:
-  - type: workflow
-    label: Approve
-    icon: check-circle
-    variant: primary
-    workflow: approval_flow
-    input:
-      recordId: '{recordId}'
-      decision: approved
-      comments: '{approval_comments}'
-    confirm:
-      title: Approve this request?
-      message: This will notify the requestor
-    onSuccess:
-      - action: toast
-        message: Request approved
-        variant: success
-      - action: navigate
-        target: /requests
-  
-  - type: workflow
-    label: Reject
-    icon: x-circle
-    variant: danger
-    workflow: approval_flow
-    input:
-      recordId: '{recordId}'
-      decision: rejected
-      comments: '{rejection_reason}'
-    confirm:
-      title: Reject this request?
-      message: Please provide a reason in the comments
-      requireField: rejection_reason
-    onSuccess:
-      - action: toast
-        message: Request rejected
-        variant: warning
-      - action: navigate
-        target: /requests
+- name: disable_oauth_application
+  label: Disable OAuth Application
+  icon: pause-circle
+  variant: secondary
+  mode: custom
+  locations: [list_item, record_header]
+  type: api
+  method: POST
+  target: /api/v1/auth/admin/oauth2/toggle-disabled
+  confirmText: Disable this OAuth application? Existing integrations will stop working immediately.
+  params:
+    - { name: client_id, field: client_id, defaultFromRow: true, required: true }
 ```
 
-### Send Email with Template
+### Create via API with secret reveal
 
 ```yaml
-action:
-  type: modal
-  label: Send Email
-  icon: mail
-  title: Send Email to Customer
-  content:
-    type: form
+- name: rotate_client_secret
+  label: Rotate Client Secret
+  icon: refresh-cw
+  variant: secondary
+  mode: custom
+  locations: [record_header, record_more]
+  type: api
+  method: POST
+  target: /api/v1/auth/sys-oauth-application/rotate-secret
+  confirmText: Rotate this application's client secret? The current secret stops working immediately.
+  params:
+    - { name: client_id, field: client_id, defaultFromRow: true, required: true }
+  resultDialog:
+    title: New Client Secret
+    acknowledge: I have saved this
     fields:
-      - name: template
-        type: select
-        label: Email Template
-        options:
-          - { value: welcome, label: Welcome Email }
-          - { value: invoice, label: Invoice Email }
-          - { value: reminder, label: Payment Reminder }
-      - name: subject
-        type: text
-        label: Subject
-        value: '{template.subject}'
-      - name: body
-        type: richtext
-        label: Message
-        value: '{template.body}'
-  actions:
-    - type: api
-      label: Send
-      variant: primary
-      endpoint: /api/emails/send
-      method: POST
-      params:
-        to: '{email}'
-        subject: '{subject}'
-        body: '{body}'
-        customerId: '{recordId}'
-      onSuccess:
-        - action: toast
-          message: Email sent successfully
-        - action: close_modal
-    - type: standard_cancel
-      label: Cancel
-```
-
-### Multi-Step Data Migration
-
-```yaml
-action:
-  type: flow
-  label: Migrate Data
-  icon: database
-  flow: data_migration_wizard
-  steps:
-    - name: select_source
-      title: Select Source
-      fields:
-        - source_type
-        - connection_string
-    
-    - name: field_mapping
-      title: Map Fields
-      component: field_mapper
-      props:
-        sourceFields: '{sourceFields}'
-        targetObject: customer
-    
-    - name: validation
-      title: Validate Data
-      component: migration_validator
-      props:
-        mapping: '{fieldMapping}'
-    
-    - name: execute
-      title: Execute Migration
-      component: migration_progress
-      onExecute:
-        type: api
-        endpoint: /api/migrations/execute
-        method: POST
-        params:
-          mapping: '{fieldMapping}'
-        async: true
-  onComplete:
-    - action: navigate
-      target: /migrations/{migrationId}
-```
-
-### Export with Options
-
-```yaml
-action:
-  type: modal
-  label: Export
-  icon: download
-  title: Export Customers
-  content:
-    type: form
-    fields:
-      - name: format
-        type: select
-        label: Format
-        options: [CSV, Excel, PDF]
-        default: CSV
-      - name: includeFields
-        type: multiselect
-        label: Fields to Include
-        options: [name, email, phone, address, status]
-      - name: filterBy
-        type: select
-        label: Filter
-        options:
-          - { value: all, label: All Customers }
-          - { value: active, label: Active Only }
-          - { value: selected, label: Selected Rows Only }
-  actions:
-    - type: api
-      label: Export
-      variant: primary
-      endpoint: /api/customers/export
-      method: POST
-      params:
-        format: '{format}'
-        fields: '{includeFields}'
-        filter: '{filterBy}'
-        selectedIds: '{$selectedRows}'
-      onSuccess:
-        - action: download
-          url: '{exportUrl}'
-        - action: toast
-          message: Export started. Download will begin shortly.
-        - action: close_modal
-```
-
-## Action Schema Reference
-
-```typescript
-interface Action {
-  // Core
-  type: ActionType;
-  name?: string;
-  label: string;
-  
-  // Display
-  icon?: string;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
-  size?: 'small' | 'medium' | 'large';
-  fullWidth?: boolean;
-  
-  // State
-  visible?: VisibilityRule;
-  disabled?: DisabledRule;
-  loading?: boolean;
-  
-  // Execution
-  confirm?: boolean | ConfirmConfig;
-  async?: boolean;
-  debounce?: number;
-  
-  // Callbacks
-  onBefore?: Action[];
-  onSuccess?: Action[];
-  onError?: Action[];
-  onFinally?: Action[];
-  
-  // Type-specific props
-  [key: string]: any;
-}
-
-type ActionType =
-  | 'standard_new' | 'standard_edit' | 'standard_delete'
-  | 'standard_save' | 'standard_cancel' | 'standard_clone'
-  | 'navigate' | 'navigate_back'
-  | 'flow' | 'api' | 'workflow'
-  | 'modal' | 'toast' | 'alert'
-  | 'bulk_update' | 'bulk_delete'
-  | 'update_field' | 'clear_fields' | 'show_fields' | 'hide_fields'
-  | 'webhook' | 'oauth' | 'file_upload'
-  | 'custom';
+      - { path: client_secret, label: Client Secret, format: secret }
 ```
 
 ## What's Next?
@@ -1055,20 +386,20 @@ type ActionType =
   <Card
     icon={<Layout />}
     title="Layout DSL"
-    href="/docs/protocols/objectui/layout-dsl"
+    href="/docs/protocol/objectui/layout-dsl"
     description="Learn how to structure pages and sections"
   />
   <Card
     icon={<Component />}
     title="Widget Contract"
-    href="/docs/protocols/objectui/widget-contract"
+    href="/docs/protocol/objectui/widget-contract"
     description="Understand component props and events"
   />
 </Cards>
 
 ## Related Resources
 
-- [FormView Actions](/docs/references/ui/FormView#actions) - Form-specific actions
-- [ListView Actions](/docs/references/ui/ListView#actions) - List view actions
-- [Flow Builder](/docs/guides/flow-builder) - Build multi-step flows
-- [Workflow Engine](/docs/protocols/objectos/workflows) - Server-side automation
+- [Action Reference](/docs/references/ui/action) - Auto-generated `ActionSchema` reference
+- [View Reference](/docs/references/ui/view) - List and form view metadata
+- [Hook Bodies](/docs/guides/hook-bodies) - Authoring `body` expressions and sandboxed JS
+- [Flow Builder](/docs/references/studio/flow-builder) - Build multi-step flows

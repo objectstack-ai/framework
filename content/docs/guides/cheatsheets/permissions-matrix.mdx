@@ -15,69 +15,72 @@ This page provides a comprehensive visual reference for ObjectStack's security m
 
 ## 1. Permission Types
 
-ObjectStack defines six core permission types for object access:
+ObjectStack's `ObjectPermission` schema defines these boolean flags for object access (CRUD + lifecycle + VAMA super-user grants):
 
-| Permission | Code | Description | Grants |
+| Permission | Flag | Description | Grants |
 |:---|:---|:---|:---|
-| **Read** | `read` | View records owned by the user or shared with them | View own records |
-| **Create** | `create` | Create new records | Insert records |
-| **Update** | `update` | Modify records owned by the user or shared with them | Edit own records |
-| **Delete** | `delete` | Remove records owned by the user or shared with them | Delete own records |
-| **View All** | `viewAll` | View all records regardless of ownership or sharing | Read all records |
-| **Modify All** | `modifyAll` | Create, update, and delete all records | Full object access |
+| **Read** | `allowRead` | View records owned by the user or shared with them | View own records |
+| **Create** | `allowCreate` | Create new records | Insert records |
+| **Edit** | `allowEdit` | Modify records owned by the user or shared with them | Edit own records |
+| **Delete** | `allowDelete` | Remove records owned by the user or shared with them | Delete own records |
+| **Transfer** | `allowTransfer` | Change record ownership | Reassign owner |
+| **Restore** | `allowRestore` | Undelete from trash | Recover soft-deleted records |
+| **Purge** | `allowPurge` | Permanently (hard) delete | GDPR / compliance erase |
+| **View All** | `viewAllRecords` | View all records regardless of ownership or sharing | Read all records (bypass sharing) |
+| **Modify All** | `modifyAllRecords` | Edit/delete all records regardless of ownership | Full object access (bypass sharing) |
 
 <Callout type="tip">
-**Permission Hierarchy:** `modifyAll` implies `viewAll`, which implies `read`. You don't need to explicitly grant lower permissions when a higher one is set.
+**Super-user bypass:** When `modifyAllRecords` is set it satisfies write checks (`allowEdit`/`allowDelete`) on any record; `viewAllRecords` (or `modifyAllRecords`) satisfies `allowRead` on any record — both bypass ownership and sharing. See `packages/plugins/plugin-security/src/permission-evaluator.ts`.
 </Callout>
 
 ---
 
-## 2. Object × Profile Permission Matrix
+## 2. Object × Permission-Set Matrix
 
-This matrix shows which permissions each security profile receives on each object. Use this as a template for your own configuration.
+A profile (a `PermissionSet` with `isProfile: true`) is the primary functional definition of a user; add-on permission sets layer extra capabilities on top. This matrix shows which object permissions each set receives. Use it as a template for your own configuration.
 
 ### Example: CRM Application
 
 | Object | System Admin | Sales Manager | Sales Rep | Marketing | Read Only |
 |:---|:---|:---|:---|:---|:---|
-| `account` | `modifyAll` | `viewAll` | `read` `create` `update` | `read` | `read` |
-| `contact` | `modifyAll` | `viewAll` | `read` `create` `update` | `read` `create` | `read` |
-| `opportunity` | `modifyAll` | `modifyAll` | `read` `create` `update` | `read` | `read` |
-| `task` | `modifyAll` | `viewAll` | `read` `create` `update` `delete` | `read` `create` | `read` |
-| `report` | `modifyAll` | `read` `create` | `read` | `read` `create` | `read` |
-| `user` | `modifyAll` | `read` | `read` | `read` | `read` |
-| `audit_log` | `viewAll` | — | — | — | — |
+| `account` | `modifyAllRecords` | `viewAllRecords` | `allowRead` `allowCreate` `allowEdit` | `allowRead` | `allowRead` |
+| `contact` | `modifyAllRecords` | `viewAllRecords` | `allowRead` `allowCreate` `allowEdit` | `allowRead` `allowCreate` | `allowRead` |
+| `opportunity` | `modifyAllRecords` | `modifyAllRecords` | `allowRead` `allowCreate` `allowEdit` | `allowRead` | `allowRead` |
+| `task` | `modifyAllRecords` | `viewAllRecords` | `allowRead` `allowCreate` `allowEdit` `allowDelete` | `allowRead` `allowCreate` | `allowRead` |
+| `report` | `modifyAllRecords` | `allowRead` `allowCreate` | `allowRead` | `allowRead` `allowCreate` | `allowRead` |
+| `user` | `modifyAllRecords` | `allowRead` | `allowRead` | `allowRead` | `allowRead` |
+| `audit_log` | `viewAllRecords` | — | — | — | — |
 
 ### Configuration Example
 
 ```typescript
-import { defineStack } from '@objectstack/core';
+import { defineStack } from '@objectstack/spec';
 
 export default defineStack({
-  security: {
-    profiles: [
-      {
-        name: 'sales_rep',
-        label: 'Sales Representative',
-        objectPermissions: {
-          account:     { read: true, create: true, update: true, delete: false, viewAll: false, modifyAll: false },
-          contact:     { read: true, create: true, update: true, delete: false, viewAll: false, modifyAll: false },
-          opportunity: { read: true, create: true, update: true, delete: false, viewAll: false, modifyAll: false },
-          task:        { read: true, create: true, update: true, delete: true,  viewAll: false, modifyAll: false },
-        },
+  permissions: [
+    {
+      name: 'sales_rep',
+      label: 'Sales Representative',
+      isProfile: true,
+      objects: {
+        account:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+        contact:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+        opportunity: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+        task:        { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
       },
-      {
-        name: 'sales_manager',
-        label: 'Sales Manager',
-        objectPermissions: {
-          account:     { read: true, create: true, update: true, delete: true, viewAll: true,  modifyAll: false },
-          contact:     { read: true, create: true, update: true, delete: true, viewAll: true,  modifyAll: false },
-          opportunity: { read: true, create: true, update: true, delete: true, viewAll: true,  modifyAll: true  },
-          task:        { read: true, create: true, update: true, delete: true, viewAll: true,  modifyAll: false },
-        },
+    },
+    {
+      name: 'sales_manager',
+      label: 'Sales Manager',
+      isProfile: true,
+      objects: {
+        account:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true },
+        contact:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true },
+        opportunity: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true },
+        task:        { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true },
       },
-    ],
-  },
+    },
+  ],
 });
 ```
 
@@ -98,21 +101,24 @@ Field-level security controls visibility and editability of individual fields pe
 
 ### FLS States
 
-| State | Can Read? | Can Write? | API Behavior |
+| State | `readable` | `editable` | API Behavior |
 |:---|:---|:---|:---|
-| **Visible, Editable** | ✅ Yes | ✅ Yes | Field is included in read and accepted in write |
-| **Visible, Read-Only** | ✅ Yes | ❌ No | Field is included in read, silently ignored in write |
-| **Hidden** | ❌ No | ❌ No | Field is excluded from read and rejected in write |
+| **Visible, Editable** | `true` | `true` | Field is included in read and accepted in write |
+| **Visible, Read-Only** | `true` | `false` | Field is included in read; a write attempt to it is rejected with a `PermissionDeniedError` (403) |
+| **Hidden** | `false` | `false` | Field is stripped from read; a write attempt to it is rejected with a `PermissionDeniedError` (403) |
 
 ### Configuration Example
 
 ```typescript
 {
   name: 'sales_rep',
-  fieldPermissions: {
-    'account.revenue':       { visible: true,  editable: false },
-    'contact.ssn':           { visible: false, editable: false },
-    'opportunity.margin':    { visible: false, editable: false },
+  isProfile: true,
+  objects: { /* ... */ },
+  // Field-level security — keys are `<object>.<field>`
+  fields: {
+    'account.revenue':    { readable: true,  editable: false },
+    'contact.ssn':        { readable: false, editable: false },
+    'opportunity.margin': { readable: false, editable: false },
   },
 }
 ```
@@ -121,44 +127,41 @@ Field-level security controls visibility and editability of individual fields pe
 
 ## 4. Sharing Rule Types
 
-Sharing rules extend access beyond ownership and role hierarchy.
+Sharing rules extend access beyond ownership and role hierarchy. The declarative `SharingRule` schema is a discriminated union with two `type` values — `owner` and `criteria`. Manual and territory sharing are separate mechanisms (see notes below the table).
 
-| Rule Type | Description | Example |
-|:---|:---|:---|
-| **Owner-Based** | Share records based on the record owner's role or group | All accounts owned by "West Region" team are shared with "Sales Directors" |
-| **Criteria-Based** | Share records matching specific field conditions | All opportunities with `amount > 100000` are shared with "VP Sales" |
-| **Territory-Based** | Share records based on geographic or logical territories | All accounts in "California" territory are shared with "West Coast Team" |
-| **Manual** | Individual record sharing granted by the owner or admin | User shares a specific account with a colleague |
-| **Apex/Hook** | Programmatic sharing via hooks or custom logic | Share project records with all team members on creation |
+| Mechanism | `type` | Description | Example |
+|:---|:---|:---|:---|
+| **Owner-Based** | `owner` | Share records owned by a specific group/role with another recipient | All accounts owned by "West Region" team are shared with "Sales Directors" |
+| **Criteria-Based** | `criteria` | Share records matching a CEL predicate over field values | All opportunities where `record.amount > 100000` are shared with "VP Sales" |
+
+<Callout type="info">
+**Beyond declarative rules:** Two other sharing mechanisms exist but are **not** `SharingRule` types. **Manual sharing** is a runtime grant — `sys_record_share` rows created with `source: 'manual'` (see `packages/plugins/plugin-sharing/src/sharing-service.ts`). **Territories** are a separate matrix model (`TerritorySchema` in `packages/spec/src/security/territory.zod.ts`) with their own account/opportunity/case access levels, parallel to the role hierarchy. Owner/criteria rules are re-evaluated on insert/update via internal sharing rule hooks.
+</Callout>
 
 ### Configuration Example
 
 ```typescript
 {
-  sharing: {
-    rules: [
-      {
-        name: 'high_value_opps_to_vp',
-        object: 'opportunity',
-        type: 'criteria',
-        criteria: {
-          field: 'amount',
-          operator: 'gte',
-          value: 100000,
-        },
-        sharedWith: { role: 'vp_sales' },
-        accessLevel: 'read',
-      },
-      {
-        name: 'west_accounts_to_directors',
-        object: 'account',
-        type: 'owner',
-        ownerRole: 'west_region_rep',
-        sharedWith: { role: 'sales_director' },
-        accessLevel: 'readWrite',
-      },
-    ],
-  },
+  sharingRules: [
+    {
+      name: 'high_value_opps_to_vp',
+      object: 'opportunity',
+      type: 'criteria',
+      // condition is a CEL predicate over the record
+      condition: 'record.amount > 100000',
+      sharedWith: { type: 'role', value: 'vp_sales' },
+      accessLevel: 'read',
+    },
+    {
+      name: 'west_accounts_to_directors',
+      object: 'account',
+      type: 'owner',
+      // records owned by this group/role are the source set
+      ownedBy: { type: 'role', value: 'west_region_rep' },
+      sharedWith: { type: 'role', value: 'sales_director' },
+      accessLevel: 'edit',
+    },
+  ],
 }
 ```
 
@@ -166,29 +169,32 @@ Sharing rules extend access beyond ownership and role hierarchy.
 
 ## 5. Organization-Wide Defaults (OWD)
 
-OWD sets the baseline access level for each object across the entire organization.
+OWD sets the baseline access level for each object across the entire organization. The baseline is declared per object via the `sharingModel` field on the object definition (`packages/spec/src/data/object.zod.ts`).
 
-| Default | Read Access | Write Access | Use When |
-|:---|:---|:---|:---|
-| **Public Read/Write** | All users | All users | Low-sensitivity data (e.g., tasks, wiki pages) |
-| **Public Read Only** | All users | Owner + shared | Moderate sensitivity (e.g., accounts, contacts) |
-| **Private** | Owner + shared | Owner + shared | High sensitivity (e.g., opportunities, HR records) |
-| **Controlled by Parent** | Inherits from parent | Inherits from parent | Child objects in master-detail relationships |
+| Default | `sharingModel` | Read Access | Write Access | Use When |
+|:---|:---|:---|:---|:---|
+| **Public Read/Write** | `read_write` | All users | All users | Low-sensitivity data (e.g., tasks, wiki pages) |
+| **Public Read Only** | `read` | All users | Owner + shared | Moderate sensitivity (e.g., accounts, contacts) |
+| **Private** | `private` | Owner + shared | Owner + shared | High sensitivity (e.g., opportunities, HR records) |
+| **Full Access** | `full` | All users | All users (incl. transfer/share) | Fully collaborative data |
+
+<Callout type="info">
+A standalone `OWDModel` enum also exists (`packages/spec/src/security/sharing.zod.ts`) with the values `private`, `public_read`, `public_read_write`, and `controlled_by_parent` — the last is for child objects in master-detail relationships, where access is derived from the parent record. Note the per-object `sharingModel` field (`read`/`read_write`) and `OWDModel` (`public_read`/`public_read_write`) use different value spellings.
+</Callout>
 
 ### Configuration Example
 
 ```typescript
-{
-  security: {
-    organizationDefaults: {
-      account:     'publicReadOnly',
-      contact:     'publicReadOnly',
-      opportunity: 'private',
-      task:        'publicReadWrite',
-      hr_record:   'private',
-    },
+// OWD is declared on each object, not as a central map.
+defineStack({
+  objects: {
+    account:     { sharingModel: 'read' /* ...fields */ },
+    contact:     { sharingModel: 'read' },
+    opportunity: { sharingModel: 'private' },
+    task:        { sharingModel: 'read_write' },
+    hr_record:   { sharingModel: 'private' },
   },
-}
+});
 ```
 
 <Callout type="info">
@@ -257,18 +263,16 @@ graph TD
 ### Configuration Example
 
 ```typescript
-{
-  security: {
-    roles: [
-      { name: 'ceo', label: 'CEO', parent: null },
-      { name: 'vp_sales', label: 'VP Sales', parent: 'ceo' },
-      { name: 'vp_marketing', label: 'VP Marketing', parent: 'ceo' },
-      { name: 'director_east', label: 'Director - East', parent: 'vp_sales' },
-      { name: 'director_west', label: 'Director - West', parent: 'vp_sales' },
-      { name: 'sales_rep', label: 'Sales Representative', parent: 'director_east' },
-    ],
-  },
-}
+defineStack({
+  roles: [
+    { name: 'ceo', label: 'CEO' }, // root role: omit `parent`
+    { name: 'vp_sales', label: 'VP Sales', parent: 'ceo' },
+    { name: 'vp_marketing', label: 'VP Marketing', parent: 'ceo' },
+    { name: 'director_east', label: 'Director - East', parent: 'vp_sales' },
+    { name: 'director_west', label: 'Director - West', parent: 'vp_sales' },
+    { name: 'sales_rep', label: 'Sales Representative', parent: 'director_east' },
+  ],
+});
 ```
 
 ---

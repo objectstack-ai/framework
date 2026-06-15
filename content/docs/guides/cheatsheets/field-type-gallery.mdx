@@ -9,7 +9,7 @@ ObjectStack provides **48 field types** covering every data modeling need — fr
 
 <Callout type="info">
 **Source:** `packages/spec/src/data/field.zod.ts`  
-**Import:** `import { FieldTypeSchema, FieldSchema } from '@objectstack/spec/data'`
+**Import:** `import { FieldType, FieldSchema } from '@objectstack/spec/data'`
 </Callout>
 
 ---
@@ -24,7 +24,7 @@ Single-line plain text input.
 | `maxLength` | `number` | — | Maximum character length |
 | `minLength` | `number` | — | Minimum character length |
 | `format` | `string` | — | Validation format pattern |
-| `caseSensitive` | `boolean` | `true` | Case-sensitive uniqueness checks |
+| `caseSensitive` | `boolean` | — | Whether text comparisons are case-sensitive |
 
 ```typescript
 { name: 'first_name', label: 'First Name', type: 'text', maxLength: 100 }
@@ -77,10 +77,17 @@ Phone number field.
 ```
 
 ### `password`
-Masked password input (stored encrypted).
+Masked password input (stored as a one-way hash, owned by the auth subsystem). For reversible encrypted-at-rest secrets (API keys, tokens), use the `secret` type instead.
 
 ```typescript
 { name: 'password', label: 'Password', type: 'password', required: true }
+```
+
+### `secret`
+Reversible, encrypted-at-rest value (DB password, API key, token). Unlike `password` (a one-way hash), a `secret` is encrypted on write via the registered crypto provider, stored as an opaque ref on the row, and masked on read. Fail-closed: with no provider configured, writes throw rather than persist cleartext.
+
+```typescript
+{ name: 'api_key', label: 'API Key', type: 'secret' }
 ```
 
 ---
@@ -295,8 +302,8 @@ Reference to a record in another object (foreign key).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target object name (snake_case) |
-| `referenceFilters` | `object` | — | Filters to restrict available options |
-| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'restrict'` | Behavior when referenced record is deleted |
+| `referenceFilters` | `string[]` | — | Filters applied to lookup dialogs (e.g. `"active = true"`) |
+| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'set_null'` | Behavior when referenced record is deleted |
 
 ```typescript
 { name: 'assigned_to', label: 'Assigned To', type: 'lookup', reference: 'user' }
@@ -308,10 +315,10 @@ Parent-child relationship (cascading delete by default).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target (master) object name |
-| `referenceFilters` | `object` | — | Filters to restrict available options |
+| `referenceFilters` | `string[]` | — | Filters applied to lookup dialogs (e.g. `"active = true"`) |
 | `writeRequiresMasterRead` | `boolean` | — | Require read access on master to write detail |
-| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'cascade'` | Behavior when parent is deleted |
-| `inlineEdit` | `boolean` | `false` | Render child records inline on the parent create/edit form |
+| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'cascade'` | Behavior when parent is deleted (master-detail cascades unless set to `restrict`) |
+| `inlineEdit` | `boolean \| 'grid' \| 'form'` | — | Edit child records inline on the parent create/edit form (`true` = auto-pick, `'grid'`, or `'form'`) |
 | `inlineColumns` | `array` | — | Optional explicit inline grid columns |
 | `inlineAmountField` | `string` | — | Numeric child field used for the inline running total |
 
@@ -460,6 +467,33 @@ Auto-incrementing number with format template.
 
 ---
 
+## Embedded Structured Types
+
+These types store structured values as JSON on the parent row — no separate table or foreign key.
+
+### `composite`
+Single embedded sub-object with declared sub-fields (similar to a Strapi component / ACF group).
+
+```typescript
+{ name: 'dimensions', label: 'Dimensions', type: 'composite' }
+```
+
+### `repeater`
+Repeating embedded sub-object array with declared sub-fields (similar to a Strapi repeatable component / ACF repeater).
+
+```typescript
+{ name: 'line_items', label: 'Line Items', type: 'repeater' }
+```
+
+### `record`
+Name-keyed map of embedded sub-objects (`Record<string, SubObject>`). Insertion order is display order. Used for collections where each item has a stable machine name. See ADR-0007.
+
+```typescript
+{ name: 'settings', label: 'Settings', type: 'record' }
+```
+
+---
+
 ## Enhanced Types
 
 ### `location`
@@ -479,7 +513,7 @@ Structured postal address.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `addressFormat` | `string` | — | Country-specific address format |
+| `addressFormat` | `'us' \| 'uk' \| 'international'` | — | Address format template |
 
 ```typescript
 { name: 'billing_address', label: 'Billing Address', type: 'address' }
@@ -510,7 +544,7 @@ Color picker with format options.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `colorFormat` | `string` | — | Color format (`hex`, `rgb`, `hsl`) |
+| `colorFormat` | `'hex' \| 'rgb' \| 'rgba' \| 'hsl'` | — | Color value format |
 | `allowAlpha` | `boolean` | — | Allow alpha transparency |
 | `presetColors` | `string[]` | — | Preset color palette |
 
@@ -557,9 +591,9 @@ QR/barcode generator and scanner.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `barcodeFormat` | `string` | — | Barcode format type |
-| `qrErrorCorrection` | `string` | — | QR error correction level |
-| `displayValue` | `boolean` | — | Display decoded value |
+| `barcodeFormat` | `'qr' \| 'ean13' \| 'ean8' \| 'code128' \| 'code39' \| 'upca' \| 'upce'` | — | Barcode format type |
+| `qrErrorCorrection` | `'L' \| 'M' \| 'Q' \| 'H'` | — | QR error correction level (only when `barcodeFormat` is `'qr'`) |
+| `displayValue` | `boolean` | — | Display human-readable value below barcode/QR code |
 | `allowScanning` | `boolean` | — | Enable camera scanning |
 
 ```typescript
@@ -618,7 +652,7 @@ These properties are available on **all** field types:
 | `unique` | `boolean` | `false` | Enforce uniqueness |
 | `multiple` | `boolean` | `false` | Allow array of values |
 | `searchable` | `boolean` | `false` | Include in search index |
-| `sortable` | `boolean` | — | Allow sorting by this field |
+| `sortable` | `boolean` | `true` | Allow sorting by this field |
 | `hidden` | `boolean` | `false` | Hide from default views |
 | `readonly` | `boolean` | `false` | Prevent user edits |
 | `index` | `boolean` | `false` | Create database index |
@@ -629,7 +663,7 @@ These properties are available on **all** field types:
 | `trackFeedHistory` | `boolean` | — | Track changes in activity feed |
 | `encryptionConfig` | `object` | — | Field-level encryption settings |
 | `maskingRule` | `object` | — | Data masking configuration |
-| `dependencies` | `object` | — | Dependent field configuration |
+| `dependencies` | `string[]` | — | Names of fields this field depends on (formulas, visibility rules, etc.) |
 | `dataQuality` | `object` | — | Data quality validation rules |
 | `visibleWhen` | `Expression` | — | Show field only when predicate is true |
 | `readonlyWhen` | `Expression` | — | Make field read-only when predicate is true |
@@ -650,7 +684,8 @@ Is it text?
 ├── Email address → email
 ├── URL → url
 ├── Phone number → phone
-├── Secret value → password
+├── Login password (one-way hash) → password
+├── Reversible secret (API key/token) → secret
 └── Source code → code
 
 Is it a number?
@@ -685,6 +720,11 @@ Is it computed?
 ├── Formula calculation → formula
 ├── Roll-up summary → summary
 └── Auto-incrementing ID → autonumber
+
+Is it embedded structured data (stored as JSON, no separate table)?
+├── Single embedded sub-object → composite
+├── Repeating embedded array → repeater
+└── Name-keyed map of sub-objects → record
 
 Is it specialized?
 ├── Geographic location → location

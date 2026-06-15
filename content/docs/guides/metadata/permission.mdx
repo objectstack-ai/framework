@@ -43,10 +43,8 @@ const salesUserPermission = {
   },
 
   fields: {
-    account: {
-      annual_revenue: { readable: true, editable: false },
-      internal_notes: { readable: false, editable: false },
-    },
+    'account.annual_revenue': { readable: true, editable: false },
+    'account.internal_notes': { readable: false, editable: false },
   },
 
   tabPermissions: {
@@ -65,10 +63,10 @@ const salesUserPermission = {
 | `label` | `string` | optional | Display label |
 | `isProfile` | `boolean` | optional | Is this a user profile (vs. permission set) |
 | `objects` | `Record<string, ObjectPermission>` | ✅ | Object-level permissions |
-| `fields` | `Record<string, Record<string, FieldPermission>>` | optional | Field-level security |
+| `fields` | `Record<string, FieldPermission>` | optional | Field-level security, keyed by `'object.field'` |
 | `systemPermissions` | `string[]` | optional | System-level capabilities |
 | `tabPermissions` | `Record<string, TabVisibility>` | optional | Tab/app visibility |
-| `rowLevelSecurity` | `RLSPolicy[]` | optional | Row-level security policies |
+| `rowLevelSecurity` | `RowLevelSecurityPolicy[]` | optional | Row-level security policies |
 | `contextVariables` | `Record<string, any>` | optional | RLS context variables |
 
 ## Object Permissions
@@ -109,16 +107,12 @@ Control visibility and editability of individual fields:
 
 ```typescript
 fields: {
-  // Object name → Field name → Permission
-  account: {
-    annual_revenue: { readable: true, editable: false },  // Read-only
-    internal_notes: { readable: false, editable: false },  // Hidden
-    name: { readable: true, editable: true },              // Full access
-  },
-  contact: {
-    ssn: { readable: false, editable: false },             // Restricted
-    salary: { readable: true, editable: false },           // Read-only
-  },
+  // Keyed by 'object.field' → Permission
+  'account.annual_revenue': { readable: true, editable: false },  // Read-only
+  'account.internal_notes': { readable: false, editable: false }, // Hidden
+  'account.name': { readable: true, editable: true },             // Full access
+  'contact.ssn': { readable: false, editable: false },            // Restricted
+  'contact.salary': { readable: true, editable: false },          // Read-only
 }
 ```
 
@@ -175,27 +169,34 @@ rowLevelSecurity: [
   {
     name: 'own_records_only',
     object: 'opportunity',
-    condition: "owner = {$currentUser.id}",
+    operation: 'select',
+    using: "owner_id = current_user.id",
   },
   {
     name: 'same_department',
     object: 'account',
-    condition: "department = {$currentUser.department}",
+    operation: 'select',
+    using: "department = current_user.department",
   },
 ]
 ```
 
 ### Context Variables
 
-Provide dynamic values for RLS policies:
+Provide custom context values that RLS conditions can reference (in addition to
+the built-in `current_user.*` variables):
 
 ```typescript
 contextVariables: {
-  region: '{$currentUser.region}',
-  department: '{$currentUser.department}',
-  role: '{$currentUser.role}',
+  allowed_regions: ['US', 'EU'],
+  access_level: 2,
+  custom_attribute: 'value',
 }
 ```
+
+The built-in context variables available in RLS `using`/`check` clauses include
+`current_user.id`, `current_user.organization_id`, `current_user.department`,
+`current_user.role`, and `current_user.region`.
 
 ## Profile vs. Permission Set
 
@@ -249,13 +250,9 @@ const salesManagerPermission = {
   },
 
   fields: {
-    account: {
-      annual_revenue: { readable: true, editable: true },
-      internal_rating: { readable: true, editable: true },
-    },
-    contact: {
-      salary: { readable: true, editable: false },
-    },
+    'account.annual_revenue': { readable: true, editable: true },
+    'account.internal_rating': { readable: true, editable: true },
+    'contact.salary': { readable: true, editable: false },
   },
 
   tabPermissions: {
@@ -273,7 +270,8 @@ const salesManagerPermission = {
     {
       name: 'team_accounts',
       object: 'account',
-      condition: "team = {$currentUser.team}",
+      operation: 'select',
+      using: "team = current_user.team",
     },
   ],
 };

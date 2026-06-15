@@ -45,9 +45,9 @@ const approvalFlow = {
     },
     {
       id: 'request_approval',
-      type: 'screen',
+      type: 'approval',
       label: 'Manager Approval',
-      config: { screenType: 'approval' },
+      config: { approvers: [{ type: 'role', value: 'manager' }] },
     },
     { id: 'end', type: 'end', label: 'End' },
   ],
@@ -69,11 +69,11 @@ const approvalFlow = {
 | `name` | `string` | ✅ | Machine name (`snake_case`) |
 | `label` | `string` | ✅ | Display label |
 | `description` | `string` | optional | Flow description |
-| `version` | `number` | ✅ | Version number |
-| `status` | `enum` | ✅ | `'draft'`, `'active'`, `'obsolete'`, `'invalid'` |
+| `version` | `number` | optional | Version number (defaults to `1`) |
+| `status` | `enum` | optional | `'draft'`, `'active'`, `'obsolete'`, `'invalid'` (defaults to `'draft'`) |
 | `type` | `FlowType` | ✅ | Flow trigger type (see below) |
-| `template` | `boolean` | ✅ | Is this a reusable subflow template |
-| `runAs` | `enum` | ✅ | `'system'` or `'user'` execution context |
+| `template` | `boolean` | optional | Is this a reusable subflow template (defaults to `false`) |
+| `runAs` | `enum` | optional | `'system'` or `'user'` execution context (defaults to `'user'`) |
 | `variables` | `FlowVariable[]` | optional | Input/output variables |
 | `nodes` | `FlowNode[]` | ✅ | Flow nodes |
 | `edges` | `FlowEdge[]` | ✅ | Connections between nodes |
@@ -108,8 +108,8 @@ Each node performs a specific action in the flow.
 | `update_record` | Update existing records |
 | `delete_record` | Delete records |
 | `get_record` | Query records |
-| `http_request` | Make an HTTP API call |
-| `script` | Execute custom JavaScript |
+| `http` | Make an HTTP API call (the deprecated alias `http_request` still resolves to this) |
+| `script` | Run a custom script action (dispatched by `config.actionType`) |
 | `screen` | Display a user form/screen (durable pause) |
 | `wait` | Pause for a timer or named signal (durable pause; timers auto-resume) |
 | `subflow` | Invoke another flow — a pause inside the child suspends both runs as a linked chain |
@@ -148,8 +148,8 @@ Each node performs a specific action in the flow.
   label: 'Check Status',
   config: {
     conditions: [
-      { label: 'Approved', expression: "status = 'approved'" },
-      { label: 'Rejected', expression: "status = 'rejected'" },
+      { label: 'Approved', expression: "status == 'approved'" },
+      { label: 'Rejected', expression: "status == 'rejected'" },
     ],
   },
 }
@@ -178,7 +178,7 @@ Each node performs a specific action in the flow.
 ```typescript
 {
   id: 'notify_slack',
-  type: 'http_request',
+  type: 'http',
   label: 'Send Slack Notification',
   config: {
     url: 'https://hooks.slack.com/services/...',
@@ -190,16 +190,18 @@ Each node performs a specific action in the flow.
 
 **Script:**
 
+The built-in `script` executor dispatches on `config.actionType` (e.g. `email`)
+rather than evaluating an arbitrary JavaScript string:
+
 ```typescript
 {
-  id: 'calculate',
+  id: 'send_welcome',
   type: 'script',
-  label: 'Calculate Discount',
+  label: 'Send Welcome Email',
   config: {
-    code: `
-      const discount = input.amount > 1000 ? 0.1 : 0.05;
-      return { discount_rate: discount };
-    `,
+    actionType: 'email',
+    template: 'welcome',
+    recipients: '{record.email}',
   },
 }
 ```
@@ -424,7 +426,7 @@ Edges connect nodes and define the execution path:
   source: 'check_status',
   target: 'send_email',
   type: 'default',
-  condition: "status = 'approved'",
+  condition: "status == 'approved'",
   label: 'Approved',
 }
 ```
@@ -434,7 +436,7 @@ Edges connect nodes and define the execution path:
 | `id` | `string` | ✅ | Unique edge identifier |
 | `source` | `string` | ✅ | Source node ID |
 | `target` | `string` | ✅ | Target node ID |
-| `type` | `enum` | ✅ | `'default'` (success) or `'fault'` (error) |
+| `type` | `enum` | optional | `'default'` (success), `'fault'` (error), `'conditional'` (expression-guarded), or `'back'` (declared back-edge, ADR-0044); defaults to `'default'` |
 | `condition` | `string` | optional | Boolean expression for branching |
 | `label` | `string` | optional | Label displayed on the connector |
 

@@ -1,6 +1,6 @@
 ---
 title: services.data
-description: CRUD runtime helper API for records (`get`, `list`, `create`, `update`, `delete`).
+description: CRUD runtime helper API for records (`get`, `find`, `create`, `update`, `delete`).
 ---
 
 # `services.data`
@@ -12,7 +12,7 @@ description: CRUD runtime helper API for records (`get`, `list`, `create`, `upda
 
 ```ts
 services.data.get<T = any>(object: string, id: string): Promise<GetDataResult<T>>
-services.data.list<T = any>(object: string, options?: ListDataOptions): Promise<PaginatedResult<T>>
+services.data.find<T = any>(object: string, options?: QueryOptions | QueryOptionsV2): Promise<PaginatedResult<T>>
 services.data.create<T = any>(object: string, data: Partial<T>): Promise<CreateDataResult<T>>
 services.data.update<T = any>(object: string, id: string, data: Partial<T>): Promise<UpdateDataResult<T>>
 services.data.delete(object: string, id: string): Promise<DeleteDataResult>
@@ -23,12 +23,12 @@ services.data.delete(object: string, id: string): Promise<DeleteDataResult>
 - `object`: short object name (for example `task`, `account`)
 - `id`: record ID for single-record operations
 - `data`: partial payload for create/update
-- `options` (`list`): filters, sorting, pagination (`top`, `skip`, `filter`, `sort`, `select`)
+- `options` (`find`): filters, sorting, pagination (`top`, `skip`, `filter`, `sort`, `select`)
 
 ## Returns
 
 - `get`: single record payload
-- `list`: list payload + pagination metadata
+- `find`: list payload + pagination metadata
 - `create`/`update`: mutated record payload
 - `delete`: success marker / deleted ID payload
 
@@ -42,7 +42,7 @@ services.data.delete(object: string, id: string): Promise<DeleteDataResult>
 
 ```ts
 const contact = await services.data.get('contact', ctx.input.contact_id);
-const orders = await services.data.list('sales_order', {
+const orders = await services.data.find('sales_order', {
   filter: { contact_id: contact.id },
   sort: [{ field: 'created_at', order: 'desc' }],
   top: 20,

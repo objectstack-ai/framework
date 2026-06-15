@@ -19,22 +19,36 @@ Every error response from ObjectStack follows this shape:
 
 ```typescript
 interface ErrorResponse {
+  success: false;        // Always false for error responses
   error: {
-    code: string;        // Machine-readable error code
+    code: string;        // Machine-readable error code (e.g. "validation_error")
     message: string;     // Human-readable message
-    status: number;      // HTTP status code
-    details?: Array<{
-      field?: string;    // Field name (for validation errors)
+    category?: string;   // Error category (e.g. "validation", "authorization")
+    httpStatus?: number; // HTTP status code
+    retryable?: boolean; // Whether the request can be retried
+    retryStrategy?: string;
+    retryAfter?: number; // Seconds to wait before retrying (rate limits)
+    fieldErrors?: Array<{
+      field: string;     // Field path (supports dot notation)
+      code: string;      // Per-field error code (e.g. "invalid_format")
       message: string;   // Detail message
-      code: string;      // Detail error code
+      value?: unknown;   // The invalid value that was provided
+      constraint?: unknown;
     }>;
+    details?: unknown;   // Additional error context
+    requestId?: string;  // Request ID for tracking
   };
-  meta: {
-    requestId: string;   // Unique request identifier
-    timestamp: string;   // ISO 8601 timestamp
+  meta?: {
+    requestId?: string;  // Unique request identifier
+    timestamp?: string;  // ISO 8601 timestamp
+    traceId?: string;
   };
 }
 ```
+
+<Callout type="warning">
+Error `code` values are lowercase snake_case (`validation_error`, `permission_denied`, `rate_limit_exceeded`, `resource_not_found`) — see the [Error Catalog](/docs/guides/cheatsheets/error-catalog) for the full list.
+</Callout>
 
 ---
 
@@ -48,42 +62,46 @@ import type { ErrorResponse } from '@objectstack/spec/api';
 class ObjectStackError extends Error {
   code: string;
   status: number;
+  retryAfter?: number;
+  fieldErrors: ErrorResponse['error']['fieldErrors'];
   details: ErrorResponse['error']['details'];
-  requestId: string;
+  requestId?: string;
 
   constructor(response: ErrorResponse) {
     super(response.error.message);
     this.name = 'ObjectStackError';
     this.code = response.error.code;
-    this.status = response.error.status;
+    this.status = response.error.httpStatus ?? 0;
+    this.retryAfter = response.error.retryAfter;
+    this.fieldErrors = response.error.fieldErrors;
     this.details = response.error.details;
-    this.requestId = response.meta.requestId;
+    this.requestId = response.error.requestId ?? response.meta?.requestId;
   }
 
   get isValidation(): boolean {
-    return this.code === 'VALIDATION_ERROR';
+    return this.code === 'validation_error';
   }
 
   get isNotFound(): boolean {
-    return this.code === 'NOT_FOUND';
+    return this.code === 'resource_not_found' || this.code === 'record_not_found';
   }
 
   get isPermission(): boolean {
-    return this.code === 'PERMISSION_DENIED';
+    return this.code === 'permission_denied';
   }
 
   get isRateLimit(): boolean {
-    return this.code === 'RATE_LIMITED';
+    return this.code === 'rate_limit_exceeded';
   }
 
   get isServerError(): boolean {
     return this.status >= 500;
   }
 
-  /** Extract field-level errors as a map */
-  get fieldErrors(): Record<string, string> {
+  /** Extract field-level errors as a map of field path → message */
+  get fieldErrorMap(): Record<string, string> {
     const errors: Record<string, string> = {};
-    for (const detail of this.details ?? []) {
+    for (const detail of this.fieldErrors ?? []) {
       if (detail.field) {
         errors[detail.field] = detail.message;
       }
@@ -128,7 +146,7 @@ function TaskForm() {
 
         if (error.isValidation) {
           // Map field errors directly to form state
-          setErrors(error.fieldErrors);
+          setErrors(error.fieldErrorMap);
           return;
         }
 
@@ -181,10 +199,13 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   } catch (networkError) {
     // No response at all — network failure
     throw new ObjectStackError({
+      success: false,
+      // NETWORK_ERROR is a client-synthesized code — the server never
+      // emits it, since a network failure means no response was received.
       error: {
         code: 'NETWORK_ERROR',
         message: 'Unable to reach the server. Check your connection.',
-        status: 0,
+        httpStatus: 0,
       },
       meta: {
         requestId: 'local',
@@ -213,7 +234,7 @@ Not all errors should be retried. Use this decision matrix:
 | Authentication errors | 401 | ⚠️ Once | Refresh token, then retry |
 | Permission errors | 403 | ❌ No | Show access denied message |
 | Not found | 404 | ❌ No | Show not found message |
-| Rate limited | 429 | ✅ Yes | Wait for `resetAt`, then retry |
+| Rate limited | 429 | ✅ Yes | Wait for `retryAfter` seconds, then retry |
 | Server errors | 500 | ✅ Yes | Exponential backoff |
 | Network errors | 0 | ✅ Yes | Exponential backoff |
 
@@ -237,10 +258,16 @@ async function withRetry<T>(
           throw error;
         }
 
-        // Rate limited: wait for the reset time
-        if (error.isRateLimit && error.details?.[0]) {
-          const resetAt = new Date((error.details[0] as any).resetAt).getTime();
-          const waitMs = Math.max(resetAt - Date.now(), 1000);
+        // Rate limited: honor the server's retry hint.
+        // `retryAfter` is in seconds; some responses instead carry an
+        // absolute `details.resetAt` timestamp.
+        if (error.isRateLimit) {
+          const resetAt = (error.details as any)?.resetAt;
+          const waitMs = error.retryAfter != null
+            ? error.retryAfter * 1000
+            : resetAt
+              ? Math.max(new Date(resetAt).getTime() - Date.now(), 1000)
+              : baseDelay;
           await sleep(waitMs);
           continue;
         }
@@ -331,19 +358,19 @@ function showErrorToast(error: ObjectStackError) {
 
 function getToastConfig(error: ObjectStackError) {
   switch (error.code) {
-    case 'VALIDATION_ERROR':
+    case 'validation_error':
       return {
         type: 'warning' as const,
-        message: `Please fix ${Object.keys(error.fieldErrors).length} field error(s)`,
+        message: `Please fix ${Object.keys(error.fieldErrorMap).length} field error(s)`,
         duration: 5000,
       };
-    case 'PERMISSION_DENIED':
+    case 'permission_denied':
       return {
         type: 'error' as const,
         message: 'You don\'t have permission to perform this action',
         duration: 4000,
       };
-    case 'RATE_LIMITED':
+    case 'rate_limit_exceeded':
       return {
         type: 'warning' as const,
         message: 'Too many requests. Please wait a moment.',

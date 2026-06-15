@@ -8,8 +8,8 @@ description: Reference for the Storage Service contract — file upload, downloa
 The Storage Service provides a unified interface for **file management** — uploading, downloading, and organizing files across different storage backends (local filesystem, S3, GCS, Azure Blob).
 
 <Callout type="info">
-**Source:** `packages/spec/src/system/contracts/storage-service.ts`  
-**Token:** `STORAGE_SERVICE`
+**Source:** `packages/spec/src/contracts/storage-service.ts`  
+**Service name:** `'file-storage'` — resolve via `kernel.getService('file-storage')`.
 </Callout>
 
 ---
@@ -19,25 +19,42 @@ The Storage Service provides a unified interface for **file management** — upl
 ```typescript
 export interface IStorageService {
   // Core Operations
-  upload(file: StorageUploadInput): Promise<StorageFile>;
-  download(path: string): Promise<StorageDownloadResult>;
-  delete(path: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-  getInfo(path: string): Promise<StorageFile | null>;
+  upload(key: string, data: Buffer | ReadableStream, options?: StorageUploadOptions): Promise<void>;
+  download(key: string): Promise<Buffer>;
+  delete(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  getInfo(key: string): Promise<StorageFileInfo>;
 
-  // Listing
-  list(prefix?: string, options?: ListOptions): Promise<StorageFile[]>;
+  // Listing (optional — adapter may not implement)
+  list?(prefix: string): Promise<StorageFileInfo[]>;
 
-  // URLs
-  getSignedUrl(path: string, options?: SignedUrlOptions): Promise<string>;
-  getPublicUrl(path: string): string;
+  // Signed URL (optional)
+  getSignedUrl?(key: string, expiresIn: number): Promise<string>;
 
-  // Bulk Operations
-  deleteMany(paths: string[]): Promise<BulkDeleteResult>;
-  copy(source: string, destination: string): Promise<StorageFile>;
-  move(source: string, destination: string): Promise<StorageFile>;
+  // Presigned browser-direct upload / download (optional)
+  getPresignedUpload?(
+    key: string,
+    expiresIn: number,
+    options?: StorageUploadOptions,
+  ): Promise<PresignedUploadDescriptor>;
+  getPresignedDownload?(key: string, expiresIn: number): Promise<PresignedDownloadDescriptor>;
+
+  // Chunked / multipart upload (optional)
+  initiateChunkedUpload?(key: string, options?: StorageUploadOptions): Promise<string>;
+  uploadChunk?(uploadId: string, partNumber: number, data: Buffer): Promise<string>;
+  completeChunkedUpload?(
+    uploadId: string,
+    parts: Array<{ partNumber: number; eTag: string }>,
+  ): Promise<string>;
+  abortChunkedUpload?(uploadId: string): Promise<void>;
 }
 ```
+
+<Callout type="warn">
+Only `upload`, `download`, `delete`, `exists`, and `getInfo` are required. Listing,
+signed/presigned URLs, and chunked upload are optional — call them only after checking
+the method exists on the active adapter (the local and S3 adapters implement them).
+</Callout>
 
 ---
 
@@ -45,37 +62,43 @@ export interface IStorageService {
 
 ### upload
 
-Uploads a file to storage. Returns metadata about the stored file.
+Uploads a file to storage. The key is passed as the first argument and the
+content as the second; the call resolves to `void`. Use `getInfo()` afterwards
+to read back stored metadata.
 
 ```typescript
-const file = await storageService.upload({
-  path: 'attachments/tasks/tsk_01HQ4A7B/document.pdf',
-  content: fileBuffer,
-  contentType: 'application/pdf',
-  metadata: {
-    objectType: 'task',
-    recordId: 'tsk_01HQ4A7B9D3F5G8J2K4L',
-    uploadedBy: 'usr_01HQ3V5K8N2M4P6R7T9W',
+await storageService.upload(
+  'attachments/tasks/tsk_01HQ4A7B/document.pdf',
+  fileBuffer,
+  {
+    contentType: 'application/pdf',
+    acl: 'private',
+    metadata: {
+      objectType: 'task',
+      recordId: 'tsk_01HQ4A7B9D3F5G8J2K4L',
+      uploadedBy: 'usr_01HQ3V5K8N2M4P6R7T9W',
+    },
   },
-});
+);
 
-console.log(file.path);     // "attachments/tasks/tsk_01HQ4A7B/document.pdf"
-console.log(file.size);     // 245760
-console.log(file.url);      // "https://storage.example.com/..."
+const info = await storageService.getInfo(
+  'attachments/tasks/tsk_01HQ4A7B/document.pdf',
+);
+console.log(info.key);   // "attachments/tasks/tsk_01HQ4A7B/document.pdf"
+console.log(info.size);  // 245760
 ```
 
 ### download
 
-Downloads a file and returns its content with metadata.
+Downloads a file and returns its content as a `Buffer`. Use `getInfo()` for
+content type and size.
 
 ```typescript
-const result = await storageService.download(
+const content = await storageService.download(
   'attachments/tasks/tsk_01HQ4A7B/document.pdf'
 );
 
-console.log(result.content);     // Buffer
-console.log(result.contentType); // "application/pdf"
-console.log(result.size);        // 245760
+console.log(content.length);     // 245760 (Buffer)
 ```
 
 ### delete
@@ -106,27 +129,14 @@ const info = await storageService.getInfo(
   'attachments/tasks/tsk_01HQ4A7B/document.pdf'
 );
 
-if (info) {
-  console.log(info.size);        // 245760
-  console.log(info.contentType); // "application/pdf"
-  console.log(info.createdAt);   // "2025-01-20T10:30:00.000Z"
-  console.log(info.metadata);    // { objectType: 'task', ... }
-}
+console.log(info.key);          // "attachments/tasks/tsk_01HQ4A7B/document.pdf"
+console.log(info.size);         // 245760
+console.log(info.contentType);  // "application/pdf"
+console.log(info.lastModified); // Date
+console.log(info.metadata);     // { objectType: 'task', ... }
 ```
 
 ---
-
-## StorageUploadInput
-
-```typescript
-export interface StorageUploadInput {
-  path: string;
-  content: Buffer | ReadableStream | Uint8Array;
-  contentType: string;
-  metadata?: Record<string, string>;
-  options?: StorageUploadOptions;
-}
-```
 
 ## StorageUploadOptions
 
@@ -134,34 +144,20 @@ Configuration options for upload behavior.
 
 ```typescript
 export interface StorageUploadOptions {
-  // Access control
-  visibility?: 'public' | 'private';
-
-  // Overwrite behavior
-  overwrite?: boolean;
-
-  // Size limits
-  maxSize?: number;
-
-  // Allowed content types
-  allowedTypes?: string[];
-
-  // Cache control
-  cacheControl?: string;
-
-  // Server-side encryption
-  encryption?: 'aes256' | 'kms';
+  /** MIME content type */
+  contentType?: string;
+  /** Custom metadata key-value pairs */
+  metadata?: Record<string, string>;
+  /** Access control level */
+  acl?: 'private' | 'public-read';
 }
 ```
 
 | Option | Type | Default | Description |
 |:---|:---|:---|:---|
-| `visibility` | `string` | `'private'` | File access level |
-| `overwrite` | `boolean` | `false` | Replace existing file at same path |
-| `maxSize` | `number` | `10485760` | Maximum file size in bytes (default: 10MB) |
-| `allowedTypes` | `string[]` | `[]` | Restrict content types (empty = allow all) |
-| `cacheControl` | `string` | — | HTTP Cache-Control header for served files |
-| `encryption` | `string` | — | Server-side encryption algorithm |
+| `contentType` | `string` | — | MIME content type stored with the object |
+| `metadata` | `Record<string, string>` | — | Custom metadata key-value pairs |
+| `acl` | `'private' \| 'public-read'` | — | Access control level |
 
 <Callout type="tip">
 **File Path Convention:** Use the pattern `{category}/{object}/{record_id}/{filename}` for organized storage. Example: `attachments/task/tsk_01HQ4A7B/report.pdf`.
@@ -173,17 +169,18 @@ export interface StorageUploadOptions {
 
 ### list
 
-Lists files with an optional prefix filter and pagination.
+Lists files under a key prefix. This method is optional — verify the active
+adapter implements it before calling. It takes a single `prefix` argument
+(no pagination options) and returns `StorageFileInfo[]`.
 
 ```typescript
 // List all attachments for a task
-const files = await storageService.list(
-  'attachments/tasks/tsk_01HQ4A7B/',
-  { limit: 50, cursor: undefined }
-);
+const files = await storageService.list?.(
+  'attachments/tasks/tsk_01HQ4A7B/'
+) ?? [];
 
 for (const file of files) {
-  console.log(`${file.path} (${file.size} bytes)`);
+  console.log(`${file.key} (${file.size} bytes)`);
 }
 ```
 
@@ -193,105 +190,91 @@ for (const file of files) {
 
 ### getSignedUrl
 
-Generates a temporary signed URL for private file access.
+Generates a temporary signed URL for private file access. Optional — verify the
+active adapter implements it. Takes the key and an `expiresIn` value (seconds)
+as positional arguments.
 
 ```typescript
-const url = await storageService.getSignedUrl(
+const url = await storageService.getSignedUrl?.(
   'attachments/tasks/tsk_01HQ4A7B/document.pdf',
-  {
-    expiresIn: 3600,     // 1 hour
-    method: 'GET',
-  }
+  3600, // 1 hour
 );
 // "https://storage.example.com/...?signature=abc&expires=..."
 ```
 
-### getPublicUrl
+### getPresignedUpload / getPresignedDownload
 
-Returns the permanent public URL for files with `visibility: 'public'`.
+For browser-direct uploads, optional adapters expose presigned descriptors.
+`getPresignedUpload(key, expiresIn, options?)` returns a `PresignedUploadDescriptor`
+the client SDK posts the bytes to; `getPresignedDownload(key, expiresIn)` returns
+a `PresignedDownloadDescriptor`.
 
 ```typescript
-const url = storageService.getPublicUrl('assets/logo.png');
-// "https://storage.example.com/assets/logo.png"
+const upload = await storageService.getPresignedUpload?.(
+  'attachments/tasks/tsk_01HQ4A7B/document.pdf',
+  3600,
+  { contentType: 'application/pdf' },
+);
+// { uploadUrl, method: 'PUT', headers?, expiresIn, downloadUrl? }
 ```
 
 ---
 
-## SignedUrlOptions
+## Descriptor Types
 
 ```typescript
-export interface SignedUrlOptions {
-  expiresIn: number;              // Seconds until URL expires
-  method?: 'GET' | 'PUT';        // HTTP method the URL is valid for
-  contentType?: string;           // Required content type for PUT URLs
-  responseDisposition?: string;   // Content-Disposition header override
+export interface PresignedUploadDescriptor {
+  uploadUrl: string;
+  method: 'PUT' | 'POST';
+  headers?: Record<string, string>;
+  expiresIn: number;
+  downloadUrl?: string;
+}
+
+export interface PresignedDownloadDescriptor {
+  downloadUrl: string;
+  expiresIn: number;
 }
 ```
 
 ---
 
-## Bulk Operations
+## Chunked Upload
 
-### deleteMany
-
-Deletes multiple files in a single operation.
+S3-compatible adapters support multipart (chunked) uploads for large files. All
+chunked methods are optional. ETags from `uploadChunk` must be collected and
+passed to `completeChunkedUpload` in order.
 
 ```typescript
-const result = await storageService.deleteMany([
-  'attachments/tasks/tsk_01HQ4A7B/doc1.pdf',
-  'attachments/tasks/tsk_01HQ4A7B/doc2.pdf',
-  'attachments/tasks/tsk_01HQ4A7B/image.png',
+const uploadId = await storageService.initiateChunkedUpload?.(
+  'attachments/tasks/tsk_01HQ4A7B/large-video.mp4',
+  { contentType: 'video/mp4' },
+);
+
+const eTag1 = await storageService.uploadChunk?.(uploadId, 1, chunk1);
+const eTag2 = await storageService.uploadChunk?.(uploadId, 2, chunk2);
+
+const key = await storageService.completeChunkedUpload?.(uploadId, [
+  { partNumber: 1, eTag: eTag1 },
+  { partNumber: 2, eTag: eTag2 },
 ]);
 
-console.log(result.deleted);  // 3
-console.log(result.errors);   // []
-```
-
-### copy / move
-
-```typescript
-// Copy a file to a new location
-const copied = await storageService.copy(
-  'templates/report.pdf',
-  'attachments/tasks/tsk_01HQ4A7B/report.pdf'
-);
-
-// Move a file (copy + delete original)
-const moved = await storageService.move(
-  'uploads/temp/file.pdf',
-  'attachments/tasks/tsk_01HQ4A7B/file.pdf'
-);
+// On failure, release uploaded parts:
+// await storageService.abortChunkedUpload?.(uploadId);
 ```
 
 ---
 
-## StorageFile
+## StorageFileInfo
 
-The return type for file metadata.
+The return type for file metadata (`getInfo`, `list`).
 
 ```typescript
-export interface StorageFile {
-  path: string;
-  url: string;
+export interface StorageFileInfo {
+  key: string;
   size: number;
-  contentType: string;
-  visibility: 'public' | 'private';
-  createdAt: string;
-  updatedAt: string;
+  contentType?: string;
+  lastModified: Date;
   metadata?: Record<string, string>;
-  etag?: string;
 }
 ```
-
----
-
-## Error Codes
-
-| Code | Description |
-|:---|:---|
-| `FILE_NOT_FOUND` | No file exists at the specified path |
-| `FILE_TOO_LARGE` | File exceeds the configured `maxSize` |
-| `INVALID_TYPE` | Content type is not in `allowedTypes` |
-| `FILE_EXISTS` | File already exists and `overwrite` is false |
-| `STORAGE_FULL` | Storage quota has been exceeded |
-| `PERMISSION_DENIED` | User lacks access to the file or bucket |
