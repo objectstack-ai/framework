@@ -1,5 +1,42 @@
 # @objectstack/runtime
 
+## 9.6.0
+
+### Patch Changes
+
+- 71578f2: feat(book): documentation navigation as a `book` element — spine + derived membership (ADR-0046 §6)
+
+  Adds the `book` metadata element: a navigation **spine** (ordered groups + `audience` + identity) whose membership is **derived** by rule (`include` glob/tag) plus optional per-doc `order`/`group`, never a central array. This keeps AI authoring create-and-forget (no central-array read-modify-write) and runtime overlay merge-safe (RFC 7396 treats arrays atomically).
+
+  - `BookSchema` + `resolveBookTree()` derived-membership resolver + `defineBook()` + additive `doc.order`/`doc.group`.
+  - Register `book` as a render-time metadata type (`allowOrgOverride: true`); wire it through the runtime type enumerations (PLURAL_TO_SINGULAR, engine registration, artifact field map, type-schema map).
+  - REST `GET /meta/book/:name/tree` resolves the tree; read-layer `audience` gating (`public` ≡ anonymous; `org`/`{profile}` require sign-in).
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [1b82b64]
+- Updated dependencies [71578f2]
+- Updated dependencies [bb00a50]
+- Updated dependencies [5e3a301]
+- Updated dependencies [5db2742]
+- Updated dependencies [b04b7e3]
+- Updated dependencies [d13df3f]
+  - @objectstack/spec@9.6.0
+  - @objectstack/plugin-auth@9.6.0
+  - @objectstack/objectql@9.6.0
+  - @objectstack/rest@9.6.0
+  - @objectstack/formula@9.6.0
+  - @objectstack/core@9.6.0
+  - @objectstack/metadata@9.6.0
+  - @objectstack/observability@9.6.0
+  - @objectstack/driver-memory@9.6.0
+  - @objectstack/driver-sql@9.6.0
+  - @objectstack/driver-sqlite-wasm@9.6.0
+  - @objectstack/plugin-org-scoping@9.6.0
+  - @objectstack/plugin-security@9.6.0
+  - @objectstack/service-cluster@9.6.0
+  - @objectstack/service-i18n@9.6.0
+  - @objectstack/types@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes

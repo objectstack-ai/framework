@@ -1,5 +1,97 @@
 # @objectstack/service-automation
 
+## 9.6.0
+
+### Minor Changes
+
+- 6c82aa0: fix(automation): `create_record` outputVariable exposes the created record so `{var.id}` resolves (#1873)
+
+  A `create_record` node stored only the created record's **id string** in its
+  `outputVariable`, so a later node referencing `{var.id}` (or any `{var.<field>}`)
+  traversed into a string and resolved to empty — the created record was
+  effectively unreferenceable downstream. `get_record` already stores the record
+  object (that's why `{rec.field}` works there); `create_record` now matches.
+
+  Behavior change: `outputVariable` holds the created **record** (an object with
+  `id` + fields), not the bare id. Reference the id explicitly as `{var.id}`. A
+  bare `{var}` that previously yielded the id now yields the record — update such
+  references to `{var.id}` (the in-repo `app-todo` create-task flow was updated).
+  When the driver returns a bare id, it's wrapped as `{ id }` so `{var.id}` still works.
+
+- dc8b2de: feat(automation): resolve & validate `script`-node callables; first-class function registration (#1870)
+
+  A flow `script` node that pointed at an unregistered callable (or declared no
+  `actionType`/`function` at all) built fine and silently did nothing at runtime.
+  Two changes close that gap:
+
+  - **Loud runtime resolution.** The built-in `script` executor now resolves its
+    target in order — built-in side-effect (`email`/`slack`) → a registered
+    function (`config.function`, or a bare `config.actionType` that matches no
+    built-in) → otherwise **fail the step loudly**. The old `(no-op handler)`
+    success path is gone, so an unwired callable can no longer quietly skip.
+  - **First-class registration path.** `AutomationEngine.setFunctionResolver()` /
+    `resolveFunction()` bridge flow nodes to the host function registry. The
+    automation plugin wires it to ObjectQL's `resolveFunction` (populated from
+    `bundle.functions` / `defineStack({ functions })`), so an authored package can
+    register a function and call it from a `script` node:
+    `{ type: 'script', config: { function: 'my_fn', inputs: { … } } }`.
+  - **Build-time structural check.** `objectstack build` now flags a `script` node
+    that declares neither `actionType` nor `function` (the `actionType: undefined`
+    repro). Function _existence_ is verified at runtime — functions are code, not
+    serialized into the artifact.
+
+- 1402be0: feat(automation): script-node `outputVariable` + interpolated inputs — the pure-function pattern (#1870)
+
+  A flow `function` (script node) is a PURE compute step: it receives `ctx.input`
+  and RETURNS a value. Two additions make the value usable on the flow graph
+  without giving functions raw data access (which would hide I/O from the graph
+  and bypass governance):
+
+  - `config.outputVariable` exposes the function's return value as a flow variable,
+    so a later declarative node persists it (`update_record fields: { x: '{ai.x}' }`).
+  - `config.inputs` are now interpolated against the live flow variables, so a
+    function can consume a prior node's output (`inputs: { id: '{record.id}' }`).
+
+  Data writes stay declarative (visible, governed, build-checkable); data-lifecycle
+  side effects belong in L2 hooks (which get `ctx.api`), not flow functions.
+
+### Patch Changes
+
+- b0df09c: fix(automation): record-change flows see multi-lookup fields + support array-index interpolation (#1872)
+
+  A `multiple: true` lookup is an array column the data driver may not echo back
+  on create, so it was absent from the after-create record a record-change flow
+  saw — `record.target_channels != null` was false and `{rec.target_channels.0}`
+  resolved empty. Two fixes:
+
+  - **trigger-record-change**: `buildContext` now reads the lifecycle hook's
+    `input.data` (the actual key objectql uses for insert/update; it had been
+    reading a non-existent `input.doc`) and overlays the after-row on it, so fields
+    the driver didn't return stay visible to the flow's condition + interpolation.
+  - **service-automation**: `{var.path.N}` numeric segments now index into arrays,
+    so a multi-value lookup can be referenced positionally (`{record.channels.0}`).
+
+- ab942f2: feat(automation): accept `functionName` alias + `invoke_function` marker on script nodes (#1870 DX)
+
+  AI-authored templates commonly emit `config: { actionType: 'invoke_function', functionName: 'my_fn' }`,
+  but the runtime only read `config.function`. Now:
+
+  - `config.functionName` is accepted as an alias for `config.function` (runtime + build).
+  - `actionType: 'invoke_function'` is treated as a MARKER ("call the named function") — the
+    name comes from `function`/`functionName`, not from actionType itself; it no longer
+    tries to resolve a function literally named `invoke_function`.
+  - `objectstack build` errors on `actionType: 'invoke_function'` with no `function`/`functionName`
+    (it names no callable) instead of letting it fail at runtime.
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [71578f2]
+- Updated dependencies [bb00a50]
+- Updated dependencies [5e3a301]
+- Updated dependencies [5db2742]
+  - @objectstack/spec@9.6.0
+  - @objectstack/formula@9.6.0
+  - @objectstack/core@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # @objectstack/plugin-trigger-record-change
 
+## 9.6.0
+
+### Patch Changes
+
+- b0df09c: fix(automation): record-change flows see multi-lookup fields + support array-index interpolation (#1872)
+
+  A `multiple: true` lookup is an array column the data driver may not echo back
+  on create, so it was absent from the after-create record a record-change flow
+  saw — `record.target_channels != null` was false and `{rec.target_channels.0}`
+  resolved empty. Two fixes:
+
+  - **trigger-record-change**: `buildContext` now reads the lifecycle hook's
+    `input.data` (the actual key objectql uses for insert/update; it had been
+    reading a non-existent `input.doc`) and overlays the after-row on it, so fields
+    the driver didn't return stay visible to the flow's condition + interpolation.
+  - **service-automation**: `{var.path.N}` numeric segments now index into arrays,
+    so a multi-value lookup can be referenced positionally (`{record.channels.0}`).
+
+- Updated dependencies [d1e930a]
+- Updated dependencies [71578f2]
+- Updated dependencies [5e3a301]
+- Updated dependencies [5db2742]
+  - @objectstack/spec@9.6.0
+  - @objectstack/core@9.6.0
+
 ## 9.5.1
 
 ### Patch Changes
