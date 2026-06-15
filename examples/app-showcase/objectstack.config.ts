@@ -24,6 +24,7 @@ import { allWebhooks } from './src/webhooks/index.js';
 import { allJobs } from './src/jobs/index.js';
 import { allEmails } from './src/emails/index.js';
 import { ShowcaseAssistantAgent, ProjectOpsSkill } from './src/agents/index.js';
+import { allBooks } from './src/books/index.js';
 import {
   allRoles,
   allPermissionSets,
@@ -143,6 +144,7 @@ export default defineStack({
   views: [TaskViews, ProjectViews],
   pages: [ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage],
   dashboards: [ChartGalleryDashboard],
+  books: allBooks,
   datasets: [ShowcaseTaskDataset, ShowcaseProjectDataset],
   reports: allReports,
   actions: allActions,
