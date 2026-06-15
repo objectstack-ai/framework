@@ -21,7 +21,8 @@
  *  - date / datetime: must be ISO-parsable
  *
  * System-injected fields (`id`, `created_at`, `created_by`,
- * `updated_at`, `updated_by`, `organization_id`) are never validated
+ * `updated_at`, `updated_by`, and provenance-flagged `system`/`readonly`
+ * columns such as an injected `organization_id`) are never validated
  * here — the engine and the audit plugin manage them.
  *
  * On failure, a `ValidationError` is thrown with `.fields[]` holding
@@ -30,9 +31,16 @@
  * the UI can highlight the specific input.
  */
 
+// Lifecycle columns the engine always owns and the client never supplies. These
+// are skipped by NAME because they are not author-declared business fields.
+// NOTE: `organization_id` / `tenant_id` are intentionally NOT here (#1592) — the
+// engine-injected tenant column is marked `system: true` and skipped via
+// provenance below, while a genuinely DECLARED required `organization_id`
+// business field (e.g. `sys_team`, a `managedBy: 'better-auth'` table where the
+// column is not injected) must get a normal required-check instead of silently
+// passing NULL through to the driver.
 const SKIP_FIELDS = new Set<string>([
   'id', 'created_at', 'created_by', 'updated_at', 'updated_by',
-  'organization_id', 'tenant_id',
 ]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
