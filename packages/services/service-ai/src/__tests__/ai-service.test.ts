@@ -1099,7 +1099,7 @@ describe('AIServicePlugin', () => {
     const ctx = createMockContext();
 
     const oldEnv = { ...process.env };
-    process.env.AI_GATEWAY_MODEL = 'openai/gpt-5.5';
+    process.env.AI_GATEWAY_MODEL = 'anthropic/claude-haiku-4.5';
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
