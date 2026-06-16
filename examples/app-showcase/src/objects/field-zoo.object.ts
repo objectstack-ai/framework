@@ -121,13 +121,13 @@ export const FieldZoo = ObjectSchema.create({
     f_code: Field.code('json', { label: 'Code Editor' }),
     f_json: Field.json({ label: 'JSON' }),
     f_color: Field.color({ label: 'Color' }),
-    f_rating: Field.rating(5, { label: 'Rating' }),
+    f_rating: { type: 'rating', label: 'Rating', max: 5 },
     f_slider: Field.slider({ label: 'Slider', min: 0, max: 100, step: 5 }),
     f_signature: Field.signature({ label: 'Signature' }),
     f_qrcode: Field.qrcode({ label: 'QR / Barcode' }),
     f_progress: { type: 'progress', label: 'Progress', min: 0, max: 100 },
 
     // ── AI / ML ──────────────────────────────────────────────────────────
-    f_vector: Field.vector(1536, { label: 'Embedding Vector' }),
+    f_vector: { type: 'vector', label: 'Embedding Vector', dimensions: 1536 },
   },
 });
