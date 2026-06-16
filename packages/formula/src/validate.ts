@@ -17,7 +17,7 @@
  * This validator detects that specific mistake and returns the exact fix.
  */
 
-import { celEngine, detectBareReference } from './cel-engine';
+import { celEngine, firstUndeclaredReference } from './cel-engine';
 import { templateEngine } from './template-engine';
 
 export type FieldRole = 'predicate' | 'value' | 'template';
@@ -46,9 +46,11 @@ export interface ExprSchemaHint {
    *                    it MUST be written `record.amount`. We flag bare refs.
    *  - `'flattened'` → the record's own fields are spread to top-level alongside
    *                    flow variables (flow / automation conditions), so bare
-   *                    `status` is correct. We do NOT flag bare refs here — flow
-   *                    variables are not schema-knowable, so a bare identifier
-   *                    can't be soundly told apart from a typo. (Default.)
+   *                    `status` is correct and is NOT an error. Flow variables
+   *                    are not schema-knowable, so a non-field bare identifier
+   *                    can't be soundly told apart from a typo — but when one is
+   *                    a near-miss of a known field we emit a non-blocking
+   *                    did-you-mean *warning*. (Default.)
    */
   scope?: 'record' | 'flattened';
 }
@@ -63,6 +65,13 @@ export interface ExprValidationError {
 export interface ExprValidationResult {
   ok: boolean;
   errors: ExprValidationError[];
+  /**
+   * Non-blocking advisories (#1928 tier 3): a likely-typo'd field reference in a
+   * flattened flow condition. Never affects `ok` — callers surface these without
+   * failing the build, since a bare identifier there may legitimately be a flow
+   * variable.
+   */
+  warnings: ExprValidationError[];
 }
 
 /** A bare `{x}` that is NOT part of a `{{x}}` mustache hole. */
@@ -149,14 +158,15 @@ export function validateExpression(
 ): ExprValidationResult {
   const { dialect, source } = toSource(input);
   const errors: ExprValidationError[] = [];
-  if (!source.trim()) return { ok: true, errors };
+  const warnings: ExprValidationError[] = [];
+  if (!source.trim()) return { ok: true, errors, warnings };
 
   if (role === 'template') {
     // Templates must be the `template` dialect (or untyped string). Reject a
     // CEL envelope mistakenly placed in a text field.
     if (dialect && dialect !== 'template') {
       errors.push({ source, message: `expected a text template but got a \`${dialect}\` expression.` });
-      return { ok: false, errors };
+      return { ok: false, errors, warnings };
     }
     const compiled = templateEngine.compile(source);
     if (!compiled.ok) {
@@ -165,13 +175,13 @@ export function validateExpression(
     // A single `{x}` in a template is the legacy/deprecated form (ADR-0032 §3).
     const hint = SINGLE_BRACE_RE.test(source) ? bracesHintForTemplate(source) : null;
     if (hint) errors.push({ source, message: hint });
-    return { ok: errors.length === 0, errors };
+    return { ok: errors.length === 0, errors, warnings };
   }
 
   // predicate | value → CEL
   if (dialect && dialect !== 'cel') {
     errors.push({ source, message: `expected a CEL expression but got a \`${dialect}\` dialect.` });
-    return { ok: false, errors };
+    return { ok: false, errors, warnings };
   }
   const compiled = celEngine.compile(source);
   if (!compiled.ok) {
@@ -184,11 +194,10 @@ export function validateExpression(
     });
   } else {
     checkFieldExistence(source, schema, errors);
-    // In a `record`-scoped site a bare top-level identifier is a silent bug —
-    // it must be `record.<field>` (#1928). Only flagged here; flow/automation
-    // conditions (`scope: 'flattened'`, the default) legitimately use bare refs.
     if (schema?.scope === 'record') {
-      const bare = detectBareReference(source);
+      // In a `record`-scoped site a bare top-level identifier is a silent bug —
+      // it must be `record.<field>` (#1928). Hard error.
+      const bare = firstUndeclaredReference(source);
       if (bare) {
         errors.push({
           source,
@@ -198,9 +207,28 @@ export function validateExpression(
             `expression silently evaluates to null. Write \`record.${bare}\`.`,
         });
       }
+    } else if (schema?.fields && schema.fields.length > 0) {
+      // Flattened flow/automation condition: the record's fields ARE bound at
+      // top-level, so a bare ref is normally correct. But a *non-field* bare
+      // identifier is either a flow variable or a typo. When it is a near-miss
+      // of a known field, warn (did-you-mean) WITHOUT failing the build —
+      // a genuine flow variable won't be edit-distance-close to a field. (#1928)
+      const unknown = firstUndeclaredReference(source, schema.fields);
+      if (unknown) {
+        const suggestion = nearest(unknown, schema.fields);
+        if (suggestion) {
+          warnings.push({
+            source,
+            message:
+              `\`${unknown}\` is not a field of \`${schema.objectName ?? 'the trigger object'}\` — ` +
+              `did you mean \`${suggestion}\`? (flow conditions reference fields bare, e.g. \`${suggestion} == …\`). ` +
+              `If \`${unknown}\` is a flow variable this is safe to ignore.`,
+          });
+        }
+      }
     }
   }
-  return { ok: errors.length === 0, errors };
+  return { ok: errors.length === 0, errors, warnings };
 }
 
 function bracesHintForTemplate(source: string): string {

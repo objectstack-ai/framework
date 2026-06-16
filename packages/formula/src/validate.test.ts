@@ -119,6 +119,40 @@ describe('validateExpression (ADR-0032)', () => {
     });
   });
 
+  // #1928 tier 3 — flattened flow conditions reference fields bare, so a bare
+  // ref is not an error. A bare NON-field that is a near-miss of a known field
+  // is a likely typo → non-blocking warning (ok stays true).
+  describe('flow-condition typo warnings (#1928 tier 3)', () => {
+    const fields = ['stage', 'amount', 'status'] as const;
+
+    it('warns (does not error) on a likely field typo in a flattened condition', () => {
+      const r = validateExpression('predicate', 'stagee == "closed_won"', { objectName: 'crm_opportunity', fields, scope: 'flattened' });
+      expect(r.ok).toBe(true);
+      expect(r.errors).toHaveLength(0);
+      expect(r.warnings).toHaveLength(1);
+      expect(r.warnings[0].message).toMatch(/`stagee` is not a field/);
+      expect(r.warnings[0].message).toMatch(/did you mean `stage`/);
+    });
+
+    it('does not warn on a correct bare field reference', () => {
+      const r = validateExpression('predicate', 'stage == "closed_won" && previous.stage != "closed_won"', { objectName: 'crm_opportunity', fields, scope: 'flattened' });
+      expect(r.ok).toBe(true);
+      expect(r.warnings).toHaveLength(0);
+    });
+
+    it('does not warn on a flow variable that is far from any field name', () => {
+      const r = validateExpression('predicate', 'expiring_deals.length > 0', { objectName: 'crm_opportunity', fields, scope: 'flattened' });
+      expect(r.ok).toBe(true);
+      expect(r.warnings).toHaveLength(0);
+    });
+
+    it('emits no warnings without a field list (nothing to compare against)', () => {
+      const r = validateExpression('predicate', 'stagee == "x"', { scope: 'flattened' });
+      expect(r.ok).toBe(true);
+      expect(r.warnings).toHaveLength(0);
+    });
+  });
+
   describe('introspection', () => {
     it('reports the dialect + scope for a field role', () => {
       expect(expectedDialect('predicate')).toBe('cel');
