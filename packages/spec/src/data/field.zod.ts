@@ -468,7 +468,13 @@ export const FieldSchema = lazySchema(() => z.object({
   // Currency field config
   currencyConfig: CurrencyConfigSchema.optional().describe('Configuration for currency field type'),
 
-  // Vector field config
+  // Vector field — flat dimensionality (the live authoring path).
+  // The renderer reads this flat sibling (objectui VectorField.tsx:11); the
+  // nested `vectorConfig` below is retained for back-compat but is a runtime
+  // no-op (no vector-index DDL consumes it).
+  dimensions: z.number().int().min(1).max(10000).optional().describe('Vector dimensionality (e.g., 1536 for OpenAI embeddings)'),
+
+  // Vector field config (DEAD — kept for back-compat; set the flat `dimensions` sibling instead)
   vectorConfig: VectorConfigSchema.optional().describe('Configuration for vector field type (AI/ML embeddings)'),
 
   // File attachment field config
@@ -671,10 +677,10 @@ export const Field = {
     ...config 
   } as const),
   
-  rating: (maxRating: number = 5, config: FieldInput = {}) => ({ 
-    type: 'rating', 
-    maxRating,
-    ...config 
+  rating: (max: number = 5, config: FieldInput = {}) => ({
+    type: 'rating',
+    max,
+    ...config
   } as const),
   
   signature: (config: FieldInput = {}) => ({ 
@@ -697,15 +703,9 @@ export const Field = {
     ...config 
   } as const),
   
-  vector: (dimensions: number, config: FieldInput = {}) => ({ 
-    type: 'vector', 
-    vectorConfig: {
-      dimensions,
-      distanceMetric: 'cosine' as const,
-      normalized: false,
-      indexed: true,
-      ...config.vectorConfig
-    },
-    ...config 
+  vector: (dimensions: number, config: FieldInput = {}) => ({
+    type: 'vector',
+    dimensions,
+    ...config
   } as const),
 };

@@ -187,6 +187,10 @@
       "evidence": "objectui: packages/fields/src/index.tsx:469 reads currencyConfig.defaultCurrency",
       "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
+    "dimensions": {
+      "status": "live",
+      "note": "vector field — objectui VectorField.tsx:11 reads the flat `dimensions` prop. The live authoring path (cf. dead `vectorConfig`); `Field.vector(n)` emits this."
+    },
     "vectorConfig": {
       "status": "dead",
       "evidence": "nested config — renderers read flat dimensions; no consumer, no vector-index DDL",

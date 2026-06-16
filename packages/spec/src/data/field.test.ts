@@ -581,7 +581,8 @@ describe('Field Factory Helpers', () => {
       });
 
       expect(ratingField.type).toBe('rating');
-      expect(ratingField.maxRating).toBe(10);
+      // Builder emits the live `max` prop (RatingField reads `max`, not `maxRating`).
+      expect(ratingField.max).toBe(10);
     });
 
     it('should create signature field', () => {
@@ -823,10 +824,10 @@ describe('Field Factory Helpers', () => {
       expect(vectorField.type).toBe('vector');
       expect(vectorField.name).toBe('embedding');
       expect(vectorField.label).toBe('Text Embedding');
-      expect(vectorField.vectorConfig?.dimensions).toBe(1536);
-      expect(vectorField.vectorConfig?.distanceMetric).toBe('cosine');
-      expect(vectorField.vectorConfig?.normalized).toBe(false);
-      expect(vectorField.vectorConfig?.indexed).toBe(true);
+      // Builder emits the live flat `dimensions` prop (renderer reads it);
+      // it no longer synthesizes the dead `vectorConfig` block.
+      expect(vectorField.dimensions).toBe(1536);
+      expect((vectorField as Record<string, unknown>).vectorConfig).toBeUndefined();
     });
 
     it('should create vector field with custom config', () => {
