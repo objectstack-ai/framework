@@ -156,7 +156,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
 
       // L2 scripts: wrap as async IIFE and use side-channel + asyncified pump.
       // Each pump iteration:
-      //   1. yield to the host event loop (lets asyncified host calls resolve)
+      //   1. yield to the host event loop (lets host promises settle)
       //   2. drain QuickJS pending jobs (advances the .then chain)
       //   3. read __result/__error from the VM
       const wrapped = args.origin.kind === 'hook'
@@ -179,9 +179,20 @@ export class QuickJSScriptRunner implements ScriptRunner {
       }
       evalRes.value.dispose();
 
+      // Drive the script's async continuations to completion. Each iteration
+      // yields to the host event loop (so in-flight host promises settle and
+      // resolve their VM-side deferred handles) and then drains the QuickJS job
+      // queue. The ONLY bound on how long we wait is the deadline: a slow but
+      // progressing script — many sequential host writes, or one write that
+      // synchronously drives a downstream record-change automation — must be
+      // allowed to finish within its timeout, and a stuck / never-settling host
+      // call is cut off here (the QuickJS interrupt handler can't fire while we
+      // are parked on a host promise, so this deadline check is the backstop).
+      // The previous fixed `pumps < 1000` cap fired in ~tens of ms on legitimate
+      // work and surfaced as "did not resolve after 1000 pump iterations".
       let pumps = 0;
-      while (pumps < 1000) {
-        // Yield to host event loop so any in-flight asyncified host promises resolve.
+      for (;;) {
+        // Yield to host event loop so any in-flight host promises resolve.
         await new Promise<void>((resolve) => setImmediate(resolve));
 
         const pending = runtime.executePendingJobs();
@@ -210,14 +221,11 @@ export class QuickJSScriptRunner implements ScriptRunner {
 
         if (Date.now() > deadline) {
           throw new SandboxError(
-            `${args.origin.kind} '${args.origin.name}' exceeded timeout of ${args.timeoutMs}ms`,
+            `${args.origin.kind} '${args.origin.name}' exceeded timeout of ${args.timeoutMs}ms (after ${pumps} pump iterations)`,
           );
         }
         pumps++;
       }
-      throw new SandboxError(
-        `${args.origin.kind} '${args.origin.name}' did not resolve after ${pumps} pump iterations`,
-      );
     } finally {
       // newAsyncContext() owns its WASM module; disposing the context disposes
       // the runtime + module together.
@@ -230,8 +238,9 @@ export class QuickJSScriptRunner implements ScriptRunner {
    * the body declared it; missing methods throw at call-time inside the VM
    * with a clear diagnostic.
    *
-   * Host API methods are installed via {@link QuickJSAsyncContext.newAsyncifiedFunction}
-   * so they may return Promises (real ObjectQL `find/count/insert/...` are async).
+   * Host API methods are installed as deferred-promise functions (see
+   * {@link installApiMethod}) so they may return Promises (real ObjectQL
+   * `find/count/insert/...` are async) without asyncify's single-unwind limit.
    */
   private installCtx(
     vm: QuickJSAsyncContext,
@@ -320,11 +329,25 @@ export class QuickJSScriptRunner implements ScriptRunner {
 }
 
 /**
- * Asyncified host-bound API method.
+ * Host-bound API method, exposed to the VM as an async function.
  *
- * Awaits Promise return values from the host implementation and marshals the
- * resolved value back into the VM. Capability check happens at call time and
- * surfaces inside the VM as a thrown error with a clear diagnostic.
+ * IMPORTANT: this deliberately does NOT use `newAsyncifiedFunction`. Asyncify
+ * unwinds the WASM stack while a host call is in flight, and the engine forbids
+ * one asyncified call from running while another is unwound ("the stack cannot
+ * be unwound twice"). A script that awaits two host calls in sequence — e.g. the
+ * real `lead_apply_convert` action doing `findOne()` then `update()` — trips
+ * exactly that: the second call is driven from a resumed continuation inside
+ * `executePendingJobs` (a non-async frame), which corrupted the wasm heap
+ * (`memory access out of bounds` / `p->ref_count == 0`) and, when it limped
+ * along, blew the pump budget ("did not resolve after 1000 pump iterations").
+ *
+ * Instead we hand the VM a real QuickJS promise (a deferred) and settle it from
+ * the host event loop. Sequential `await`s are then ordinary promises with no
+ * stack unwinding, so any number of host calls compose safely; the pump loop in
+ * {@link QuickJSScriptRunner.execute} drains the resulting jobs.
+ *
+ * The capability check runs synchronously at call time and surfaces inside the
+ * VM as a thrown error with a clear diagnostic.
  */
 function installApiMethod(
   vm: QuickJSAsyncContext,
@@ -336,7 +359,9 @@ function installApiMethod(
   required: HookBodyCapability,
   origin: ScriptOrigin,
 ): void {
-  const fn = vm.newAsyncifiedFunction(method, async (...argHandles) => {
+  const fn = vm.newFunction(method, (...argHandles) => {
+    // Capability gate — throw synchronously so the VM sees a normal exception at
+    // the call site (mirrors ctx.log / ctx.crypto gating).
     if (!caps.has(required)) {
       throw new SandboxError(
         `capability '${required}' not granted to ${origin.kind} '${origin.name}' (called ctx.api.object('${objectName}').${method})`,
@@ -346,14 +371,37 @@ function installApiMethod(
     if (!apiAny || typeof apiAny.object !== 'function') {
       throw new SandboxError(`ctx.api unavailable in ${origin.kind} '${origin.name}'`);
     }
+    // Dump args now, while the handles are alive — they are freed when this
+    // function returns, long before the async work below runs.
     const args = argHandles.map((h) => vm.dump(h));
-    const proxy = (apiAny.object as (n: string) => Record<string, unknown>)(objectName);
-    const m = proxy[method] as ((...a: unknown[]) => unknown) | undefined;
-    if (typeof m !== 'function') {
-      throw new SandboxError(`ctx.api.object('${objectName}').${method} not implemented`);
-    }
-    const ret = await Promise.resolve(m.apply(proxy, args));
-    return jsonToHandle(vm, ret);
+
+    const deferred = vm.newPromise();
+    void (async () => {
+      try {
+        const proxy = (apiAny.object as (n: string) => Record<string, unknown>)(objectName);
+        const m = proxy[method] as ((...a: unknown[]) => unknown) | undefined;
+        if (typeof m !== 'function') {
+          throw new SandboxError(`ctx.api.object('${objectName}').${method} not implemented`);
+        }
+        const ret = await Promise.resolve(m.apply(proxy, args));
+        if (!vm.alive) return; // VM disposed (e.g. timed out) before we settled.
+        const h = jsonToHandle(vm, ret);
+        deferred.resolve(h);
+        h.dispose();
+      } catch (err) {
+        if (!vm.alive) return;
+        const errH =
+          err instanceof Error
+            ? vm.newError({ name: err.name || 'Error', message: err.message })
+            : vm.newError({ name: 'Error', message: String(err) });
+        deferred.reject(errH);
+        errH.dispose();
+      }
+    })();
+    // The pump loop is the sole driver of executePendingJobs, so the resolution
+    // propagates into the VM on a subsequent pump iteration — no nudge here, to
+    // avoid any re-entrant executePendingJobs.
+    return deferred.handle;
   });
   vm.setProp(parent, method, fn);
   fn.dispose();

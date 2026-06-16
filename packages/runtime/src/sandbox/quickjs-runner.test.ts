@@ -212,3 +212,103 @@ describe('QuickJSScriptRunner — async host APIs', () => {
     expect(r.mutatedInput).toMatchObject({ raw: 'abc-9', normalized: 'ABC-9' });
   });
 });
+
+describe('QuickJSScriptRunner — long-running async host work (pump budget)', () => {
+  // Regression: an action's single `ctx.api.update(...)` can synchronously drive
+  // a large amount of awaited host work — e.g. a record-change flow that the
+  // engine runs inline inside the afterUpdate hook chain (see tianshun-mtc
+  // `lead_apply_convert` → `lead_convert_approval`). From the sandbox's view
+  // that is ONE asyncified host call that takes many event-loop turns to settle.
+  //
+  // The pump loop must bound that wait by the configured `timeoutMs`, NOT by a
+  // fixed iteration count: a legitimately-progressing call that needs >1000
+  // event-loop turns but finishes well within the timeout must still resolve.
+  // The old fixed `pumps < 1000` cap fired in ~tens of ms and surfaced as
+  // "did not resolve after 1000 pump iterations" — the exact production error.
+
+  it('resolves an action whose host call settles after >1000 event-loop turns', async () => {
+    const TURNS = 1500; // comfortably exceeds the old 1000-pump cap
+    let observed = 0;
+    const api = {
+      object: () => ({
+        // One asyncified host call that internally needs many macrotask turns
+        // before its promise settles — mirrors a CRUD write that synchronously
+        // runs a long downstream automation.
+        update: async () => {
+          for (let i = 0; i < TURNS; i++) {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+          }
+          observed = TURNS;
+          return { ok: true };
+        },
+      }),
+    };
+
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: "return await ctx.api.object('wid').update({ id: 'x', status: 'pending' });",
+        capabilities: ['api.write'],
+        timeoutMs: 30000,
+      },
+      ctx({ api }),
+      actionOpts,
+    );
+
+    expect(r.value).toEqual({ ok: true });
+    expect(observed).toBe(TURNS);
+  }, 40000);
+
+  it('resolves an action that makes >1000 sequential host calls', async () => {
+    const N = 1500;
+    let calls = 0;
+    const api = {
+      object: () => ({
+        update: async () => {
+          calls++;
+          return { i: calls };
+        },
+      }),
+    };
+
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: `
+          const o = ctx.api.object('wid');
+          for (let i = 0; i < ${N}; i++) { await o.update({ id: 'x', i }); }
+          return { calls: ${N} };
+        `,
+        capabilities: ['api.write'],
+        timeoutMs: 30000,
+      },
+      ctx({ api }),
+      actionOpts,
+    );
+
+    expect(r.value).toEqual({ calls: N });
+    expect(calls).toBe(N);
+  }, 40000);
+
+  it('still enforces the timeout on a host call that never settles', async () => {
+    const api = {
+      object: () => ({
+        // Never resolves — must be killed by the deadline, not hang forever.
+        update: () => new Promise<never>(() => {}),
+      }),
+    };
+
+    await expect(
+      runner.runScript(
+        {
+          language: 'js',
+          source: "return await ctx.api.object('wid').update({ id: 'x' });",
+          capabilities: ['api.write'],
+          timeoutMs: 300,
+        },
+        ctx({ api }),
+        actionOpts,
+      ),
+    ).rejects.toThrow(/timeout/i);
+  }, 10000);
+});
