@@ -199,23 +199,6 @@ export const PartitioningConfigSchema = lazySchema(() => z.object({
 }));
 
 /**
- * Change Data Capture (CDC) Configuration Schema
- * Enables real-time data streaming to external systems
- * 
- * @example Stream all changes to Kafka
- * {
- *   enabled: true,
- *   events: ['insert', 'update', 'delete'],
- *   destination: 'kafka://events.objectstack'
- * }
- */
-export const CDCConfigSchema = lazySchema(() => z.object({
-  enabled: z.boolean().describe('Enable Change Data Capture'),
-  events: z.array(z.enum(['insert', 'update', 'delete'])).describe('Event types to capture'),
-  destination: z.string().describe('Destination endpoint (e.g., "kafka://topic", "webhook://url")'),
-}));
-
-/**
  * Object Field Group Schema — MVP (data-layer protocol)
  * 
  * Declares the set of logical field groups for an object. A group bundles
@@ -514,9 +497,6 @@ const ObjectSchemaBase = z.object({
   // Partitioning strategy
   partitioning: PartitioningConfigSchema.optional().describe('Table partitioning configuration for performance'),
   
-  // Change Data Capture
-  cdc: CDCConfigSchema.optional().describe('Change Data Capture (CDC) configuration for real-time data streaming'),
-  
   /**
    * Logic & Validation (Co-located)
    * Best Practice: Define rules close to data.
@@ -606,9 +586,6 @@ const ObjectSchemaBase = z.object({
    * System Capabilities 
    */
   enable: ObjectCapabilities.optional().describe('Enabled system features modules'),
-
-  /** Record Types */
-  recordTypes: z.array(z.string()).optional().describe('Record type names for this object'),
 
   /** Sharing Model */
   sharingModel: z.enum(['private', 'read', 'read_write', 'full']).optional().describe('Default sharing model'),
@@ -882,7 +859,6 @@ export type TenancyConfig = z.infer<typeof TenancyConfigSchema>;
 export type SoftDeleteConfig = z.infer<typeof SoftDeleteConfigSchema>;
 export type VersioningConfig = z.infer<typeof VersioningConfigSchema>;
 export type PartitioningConfig = z.infer<typeof PartitioningConfigSchema>;
-export type CDCConfig = z.infer<typeof CDCConfigSchema>;
 
 /**
  * Resolved CRUD affordance matrix for an object — what generic

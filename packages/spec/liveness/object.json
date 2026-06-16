@@ -181,10 +181,6 @@
       "status": "dead",
       "evidence": "aspirational; no runtime"
     },
-    "cdc": {
-      "status": "dead",
-      "evidence": "aspirational; no runtime"
-    },
     "softDelete": {
       "status": "dead",
       "evidence": "no runtime; duplicates the (also dead) enable.trash"
@@ -192,10 +188,6 @@
     "search": {
       "status": "dead",
       "evidence": "SearchConfigSchema — no runtime; duplicates enable.searchable"
-    },
-    "recordTypes": {
-      "status": "dead",
-      "evidence": "elaborate docstring, unimplemented"
     },
     "defaultDetailForm": {
       "status": "dead",
