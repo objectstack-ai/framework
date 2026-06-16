@@ -179,8 +179,6 @@ export class RecordChangeTrigger implements FlowTrigger {
                   { ...(inputDoc ?? {}), ...after }
                 : inputDoc ?? (previous && typeof previous === 'object' ? previous : {});
 
-        // eslint-disable-next-line no-console
-        console.log('[dbg-bc] ctx.input=', JSON.stringify(ctx.input), 'after=', JSON.stringify(after), 'record=', JSON.stringify(record));
         const session = (ctx.session ?? {}) as { userId?: string };
 
         return {
