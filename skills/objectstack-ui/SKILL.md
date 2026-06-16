@@ -688,9 +688,55 @@ navigation: [
 A platform-level "Documentation" portal (browse/search all docs by
 package) is a later, additive concern — author-side, nothing to model now.
 
-> **Dynamic content.** Don't try to embed a live component (a flow
-> diagram, a record table) in a doc — there is no inline SDUI. Link to the
-> metadata by URL; the platform renders the live view, the doc points at it.
+> **Live instances vs. structural views.** For a *live, interactive
+> instance* — a dashboard, a report, a record table — **don't embed it**:
+> link to it by URL and let the platform render it (one source, never a
+> stale copy). But for *structural metadata that no single screen shows as
+> one picture* — a state machine, a flow, a permission matrix — embed a
+> read-only view inline with a `metadata` fence (below).
+
+### Inline metadata views — the `metadata` fence (ADR-0051)
+
+A reader who can't open Studio (a business user, a PM, an auditor) can't
+see the *whole shape* of a process or the *full* set of legal state
+transitions from a running screen. A `metadata` fenced block embeds a
+**live, read-only** view of one metadata item, resolved from the *current*
+metadata at render time — change the rule and the diagram follows, it is
+never a screenshot. The body is flat `key: value` **data, not code**, so it
+stays inside the §3.4 trust boundary (it compiles to the read-only
+`element:metadata_viewer` component — the same one a page can render).
+
+Three view kinds:
+
+| `type` | renders | required | optional |
+| :--- | :--- | :--- | :--- |
+| `state_machine` | a record's lifecycle transition graph (from a `state_machine` validation rule) | `object` + `name` (the rule) | `detail`, `mode` |
+| `flow` | a flow's steps; `detail: business` (default) folds purely technical nodes | `name` | `detail` (`business`\|`technical`), `mode` |
+| `permission` | a permission set's object-level C/R/U/D matrix | `name` | `mode` |
+
+````md
+Tasks move across the board only by these rules:
+
+```metadata
+type: state_machine
+object: crm_task
+name: crm_task_status_flow
+```
+````
+
+`os build` lints every fence: `type` must be one of the three (typo →
+did-you-mean), `name` is required, `state_machine` also needs `object`, and
+the referenced object-rule / flow / permission set **must exist in this
+package** — a dead same-package reference fails the build (same posture as
+a broken link). At render time a missing or forbidden reference degrades to
+a placeholder, never a crash.
+
+Scope is deliberately narrow: **only** `state_machine`, `flow`,
+`permission`. Embedding an `object` (data model) or an arbitrary SDUI
+component is **not** supported. **`permission` caveat:** the matrix is not
+yet projected to the reader's own permissions (ADR-0051 P3) — do not place a
+`permission` embed in a doc reachable by less-privileged or anonymous
+readers until that lands.
 
 ### Example
 
