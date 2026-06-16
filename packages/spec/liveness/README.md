@@ -1,101 +1,97 @@
 # Spec liveness ledger
 
 For a metadata-driven platform, **the spec is the product surface**: authors write
-metadata against these Zod schemas. A property that is parsed but has no runtime
-consumer is a silent no-op — and for a *security* property, a silent no-op is
-**false compliance** (e.g. `forceMfa: true` accepted and ignored). The
-metadata-liveness audits (`docs/audits/2026-06-*-property-liveness.md`) found that
-large swaths of the declared surface are DEAD.
+metadata against these schemas. A property that is parsed but has no runtime consumer
+is a silent no-op — and for a *security* property, a silent no-op is **false
+compliance** (e.g. `forceMfa: true` accepted and ignored). The metadata-liveness audits
+(`docs/audits/2026-06-*-property-liveness.md`) found that large swaths of the declared
+surface are DEAD.
 
-This ledger makes that classification **explicit and regression-proof**: in a
-*governed* category, every authorable property must declare a liveness status with
-evidence, or CI fails (the ratchet — you can't add new undeclared surface).
+This ledger makes that classification **explicit and regression-proof**: every property
+of a governed metadata type must declare a liveness status with evidence, or CI fails
+(the ratchet — you can't add new undeclared surface).
+
+## Source of truth = the metadata-type registry
+
+The gate reads `BUILTIN_METADATA_TYPE_SCHEMAS` (`packages/spec/src/kernel/metadata-type-schemas.ts`)
+via `listMetadataTypeSchemaTypes()` / `getMetadataTypeSchema()` — **the same registry the
+runtime `/api/v1/meta/types/:type` endpoint and the Studio metadata-admin forms use**,
+i.e. exactly the set of *authorable* metadata types. It walks each type's Zod schema
+directly (not `z.toJSONSchema`, which throws on `object`/`action`).
+
+This matters: the older gate read the generated `json-schema/` directory, which omits
+most top-level authorable types (object/field/flow/action/...) — so it was blind to the
+core surface. The registry is complete.
 
 ## Status vocabulary
 
 | Status | Meaning |
 |---|---|
-| `live` | Has a runtime consumer. Cite it in `evidence` (`file:line`, or a test). |
-| `experimental` / `planned` | Declared, intentionally not enforced yet. Also recognised from a spec `.describe()` marker like `[EXPERIMENTAL — not enforced]`. |
-| `dead` | Parsed, no consumer. Tracked for **enforce-or-remove** (cite the audit/grep). |
-| `internal` *(schema-level)* | Not authorable metadata (runtime result/DTO, context, enum). Exempt. |
+| `live` | Has a runtime consumer. Cite it in `evidence` (`file:line`; objectui-repo paths as prose to avoid false stale-flags). |
+| `experimental` / `planned` | Declared, intentionally not enforced yet. Also read from a spec `.describe()` marker like `[EXPERIMENTAL — not enforced]`. |
+| `dead` | Parsed, no consumer. Tracked for **enforce-or-remove** (ADR-0049). |
 
-Resolution order per property: **ledger entry → spec `.describe()` marker → UNCLASSIFIED**.
-A schema-level `"_schema": "<status>"` applies to all its properties (used for
-wholesale-dead subtrees like `PasswordPolicy`, or `internal` runtime types).
-Caveat: a `_schema`-classified schema also absorbs *new* properties at that status,
-so the ratchet does not flag additions to a wholesale-dead/internal subtree — only
-additions to per-property schemas (the mixed ones like `ObjectPermission`,
-`PermissionSet`). Use `_schema` only for subtrees that are genuinely all-one-status.
+Resolution per property: **ledger entry → spec `.describe()` marker → UNCLASSIFIED**.
+Framework provenance/lock fields (`_lock*`, `_provenance`, `_packageId/Version`,
+`protection` — ADR-0010) are auto-classified `live`.
 
-## Two governance modes
+## Granularity — drill one level
 
-A category's ledger picks how the gate scopes it:
+A property is classified at the top level by default. A **container** property (object /
+record / array-of-object) may be drilled one level via `"children"` to keep sub-properties
+distinguishable — e.g. `permission.objects.allowCreate` (live) vs `allowTransfer` (experimental),
+or `flow.errorHandling.fallbackNodeId` (dead) vs the rest (live). Drill only where the
+audit gives divergent sub-statuses; otherwise the top-level entry covers the whole subtree.
 
-- **default** — *every* authorable object schema in the category must be classified
-  (`"_schema": "internal"` exempts non-authorable ones). Right for clean,
-  fully-authorable categories: `security`, `identity`.
-- **allowlist** (`"mode": "allowlist"` + `"governed": ["Agent","Tool","Skill"]`) —
-  only the named schemas are checked; the rest of the category is out of scope.
-  Right for categories dominated by protocol/engine/runtime DTOs where the
-  authorable types are a small subset: `ai` (Agent/Tool/Skill among embedder/
-  knowledge/model DTOs). A `governed` name that no longer resolves to a schema is
-  reported (catches renames that would silently drop coverage).
-
-## Framework fields (auto-classified)
-
-The ADR-0010 provenance/lock overlay fields — `_lock`, `_lockReason`, `_lockSource`,
-`_lockDocsUrl`, `_provenance`, `_packageId`, `_packageVersion`, `protection` — appear
-on every authorable type and are system-stamped, not type-specific surface. The gate
-auto-classifies them `live`, so ledgers don't repeat them.
-
-## Files
-
-- `<category>.json` — the ledger for a governed category (`security`, `identity`, `ai`).
-- `../scripts/liveness/check-liveness.mjs` — the gate. Reads the generated
-  `packages/spec/json-schema/<category>/*.json`, resolves each authorable
-  property's status, and exits non-zero on any UNCLASSIFIED property.
-
-## Usage
-
-```bash
-pnpm --filter @objectstack/spec gen:schema          # produce json-schema/ (the source of truth)
-pnpm --filter @objectstack/spec check:liveness      # run the gate
-node packages/spec/scripts/liveness/check-liveness.mjs --dump security   # inventory a category (seeding aid)
+```jsonc
+// packages/spec/liveness/permission.json
+{ "type": "permission", "props": {
+  "name":  { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts" },
+  "objects": { "children": {
+    "allowCreate": { "status": "live", "evidence": "permission-evaluator.ts:8" }
+    // allowTransfer/Restore/Purge omitted → resolved 'experimental' via spec marker
+  } }
+} }
 ```
 
-CI: `.github/workflows/spec-liveness-check.yml` runs the gate on PRs touching
-`packages/spec/**`.
+## Files & usage
 
-## Rolling out the next category
+- `<type>.json` — the ledger for a governed metadata type.
+- `../scripts/liveness/check-liveness.mts` — the gate (tsx; imports the registry).
 
-Governed categories are listed in `GOVERNED` at the top of `check-liveness.mjs`,
-rolled out **highest-risk-first**. To add one (e.g. `automation`, `ui`, `data`):
+```bash
+pnpm --filter @objectstack/spec check:liveness               # run the gate
+tsx packages/spec/scripts/liveness/check-liveness.mts --dump field   # inventory a type (seeding aid)
+```
 
-1. `--dump <category>` to inventory its authorable properties. **The json-schema
-   categories do NOT map to "authorable types"** — most (`data`, `automation`, `ui`,
-   `kernel`) are dominated by ObjectQL/engine/protocol DTOs, and some authorable
-   types live elsewhere (Agent/Tool/Skill in `ai`, Dataset in `ui`). Decide the
-   handful of authorable schemas and use **allowlist mode** unless the whole
-   category is authorable.
-2. Seed `<category>.json` from that category's liveness audit (file:line evidence)
-   and targeted greps for anything the audit didn't cover. **Classify only with
-   evidence** — `live` needs a cited consumer; `dead` needs a confirmed absence.
-3. Add the category to `GOVERNED` and confirm the gate is green.
+CI: `.github/workflows/spec-liveness-check.yml` runs on PRs touching `packages/spec/**`.
 
-## Current state
+## Adding a type
 
-| Category | Mode | Properties | Notes |
-|---|---|---|---|
-| `security` | default | 93 (26 live / 1 exp / 66 dead)* | ~71% parsed-but-unenforced; enforce-or-remove worklist |
-| `identity` | default | 4 (3 live / 1 dead) | `Role` authorable; rest internal (SCIM/auth runtime) |
-| `ai` | allowlist | 63 (46 live / 5 exp / 12 dead) | Agent/Tool/Skill; `Tool` is write-only, agent access-control dead |
+The governed set is `GOVERNED` at the top of `check-liveness.mts`. To add a type:
 
-\* security numbers shift to 26 / 35 / 32 once the PolicySchema experimental
-markers (ADR-0049 #1882) land.
+1. `--dump <type>` to inventory its properties (containers auto-expand so you can see
+   drill-down candidates).
+2. Seed `<type>.json` from that type's liveness audit (file:line evidence) + targeted
+   greps. **Classify only with evidence** — `live` needs a cited consumer; `dead` needs a
+   confirmed absence.
+3. Add the type to `GOVERNED`; confirm the gate is green.
 
-The `dead` entries are the cross-category enforce-or-remove worklist (ADR-0049).
-Highest-signal: the destructive `ObjectPermission.allow{Transfer,Restore,Purge}`
-(ungated), the entirely-dead `Policy` tree, and **agent `access`/`permissions`/
-`visibility`** — "who can chat with this agent" is a no-op (the chat route hardcodes
-`['ai:chat','ai:agents']`).
+## Current state — 10 governed types (~295 properties)
+
+| Type | live | exp | dead | Notes |
+|---|---|---|---|---|
+| object | 31 | – | 17 | `enable`/ObjectCapabilities + versioning/partitioning/cdc tier dead; `apiEnabled` unenforced |
+| field | 34 | – | 39 | ~half dead — aspirational enhanced-type + governance config; naming-drift props server-live/client-snake |
+| flow | 29 | 1 | 7 | `runAs` experimental (unenforced identity switch); status/active gate nothing; FlowNodeAction enum out of sync |
+| action | 26 | – | 5 | `disabled` CEL ignored (renderers read non-spec `enabled`); type:'form'/shortcut/bulkEnabled dead |
+| hook | 11 | – | 2 | model-healthy — near-total liveness; only label/description dead |
+| permission | 23 | 3 | 2 | CRUD/FLS/RLS live; allow{Transfer,Restore,Purge} experimental; isProfile/contextVariables dead |
+| role | 3 | – | 1 | `parent` dead (org hierarchy uses sys_department) |
+| agent | 18 | 4 | 5 | access/permissions/visibility dead (chat route hardcodes perms); autonomy experimental |
+| tool | 13 | 1 | 5 | write-only metadata; runtime uses a parallel AIToolDefinition |
+| skill | 15 | – | 2 | triggerPhrases dead (no matcher); permissions dead |
+
+The `dead` set across types is the enforce-or-remove worklist (ADR-0049). Not yet governed
+(rollout): view, page, dashboard, app, report, dataset, job, datasource, translation,
+email_template, doc, book, validation, seed.

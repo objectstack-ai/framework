@@ -192,7 +192,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check:liveness": "node scripts/liveness/check-liveness.mjs"
+    "check:liveness": "tsx scripts/liveness/check-liveness.mts"
   },
   "keywords": [
     "objectstack",

@@ -1,0 +1,10 @@
+{
+  "type": "role",
+  "_note": "RoleSchema. Seeded from docs/audits/2026-06-security-identity-property-liveness.md.",
+  "props": {
+    "name": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:113", "note": "sys_role.name reused as a permission-set name." },
+    "label": { "status": "live", "note": "display (admin nav/forms, security-plugin.ts:153)." },
+    "description": { "status": "live", "note": "display." },
+    "parent": { "status": "dead", "evidence": "no consumer (grep); org hierarchy walks sys_department.parent_department_id via department-graph.ts, not sys_role.parent", "note": "'Reports To' rollup unimplemented — removal candidate (ADR-0049)." }
+  }
+}

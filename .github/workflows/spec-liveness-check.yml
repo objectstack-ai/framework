@@ -2,10 +2,10 @@ name: Spec Liveness Check
 
 # For a metadata-driven platform the spec is the product surface — a parsed-but-
 # unenforced property is a silent no-op (and, for security props, false compliance).
-# This gate requires every authorable property in a GOVERNED category to declare a
-# liveness status with evidence in packages/spec/liveness/<category>.json. A new
-# unclassified property fails the check (the ratchet: no new undeclared surface).
-# Governed categories are rolled out highest-risk-first; see packages/spec/liveness/README.md.
+# This gate reads the metadata-type registry (the authorable types) and requires every
+# property of a GOVERNED type to declare a liveness status with evidence in
+# packages/spec/liveness/<type>.json. A new unclassified property fails the check (the
+# ratchet: no new undeclared surface). See packages/spec/liveness/README.md.
 
 on:
   pull_request:
@@ -35,8 +35,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate JSON schemas
-        run: pnpm --filter @objectstack/spec gen:schema
-
       - name: Check spec liveness
-        run: node packages/spec/scripts/liveness/check-liveness.mjs
+        run: pnpm --filter @objectstack/spec check:liveness
