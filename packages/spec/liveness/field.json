@@ -161,20 +161,23 @@
       "note": "DANGEROUS — advertises custom physical columns the driver never honors."
     },
     "searchable": {
-      "status": "dead",
-      "evidence": "field-level — no DDL/query consumer; search is object-level / view searchableFields"
+      "status": "live",
+      "evidence": "objectui: packages/plugin-dashboard/src/WidgetConfigPanel.tsx:458",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "index": {
       "status": "dead",
       "evidence": "field-level — driver reads object indexes[] (sql-driver.ts:1252); field bool unused"
     },
     "externalId": {
-      "status": "dead",
-      "evidence": "field-level — upsert keys off dataset-level externalId (seed-loader.ts:175)"
+      "status": "live",
+      "evidence": "objectui: apps/console/src/utils/metadataConverters.ts:125 reads field.externalId",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "currencyConfig": {
-      "status": "dead",
-      "evidence": "nested config — renderers read flat currency/precision (CurrencyField.tsx:40); no currencyConfig consumer"
+      "status": "live",
+      "evidence": "objectui: packages/fields/src/index.tsx:469 reads currencyConfig.defaultCurrency",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "vectorConfig": {
       "status": "dead",
@@ -193,28 +196,34 @@
       "evidence": "no consumer"
     },
     "inlineTitle": {
-      "status": "dead",
-      "evidence": "master-detail explicit override — auto-derivation works (deriveMasterDetail.ts); overrides unread"
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/providers/MetadataProvider.tsx + plugin-form/deriveMasterDetail.ts",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "inlineColumns": {
-      "status": "dead",
-      "evidence": "master-detail explicit override — unread"
+      "status": "live",
+      "evidence": "objectui: packages/plugin-form/src/deriveMasterDetail.ts + app-shell/MetadataProvider.tsx",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "inlineAmountField": {
-      "status": "dead",
-      "evidence": "master-detail explicit override — unread"
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/providers/MetadataProvider.tsx",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "relatedList": {
-      "status": "dead",
-      "evidence": "detail-page related lists come from view metadata, not FieldSchema"
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/RecordDetailView.tsx + utils/deriveRelatedLists.ts",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "relatedListTitle": {
-      "status": "dead",
-      "evidence": "master-detail explicit override — unread"
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/RecordDetailView.tsx + utils/deriveRelatedLists.ts",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     },
     "relatedListColumns": {
-      "status": "dead",
-      "evidence": "master-detail explicit override — unread"
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/utils/deriveRelatedLists.ts + views/RecordDetailView.tsx",
+      "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
     }
   }
 }
