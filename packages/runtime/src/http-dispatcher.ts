@@ -2836,7 +2836,21 @@ export class HttpDispatcher {
         });
         // Engine for fetching the shared record + token probes — the same
         // per-env ObjectQL the shareLinks service is bound to.
-        const getEngine = () => this.resolveService('objectql', context.environmentId);
+        const getEngine = async (): Promise<any> => {
+            // Read objectql from the request's RESOLVED (per-env) kernel — the
+            // same engine SharingServicePlugin bound the shareLinks service to,
+            // so the shared record + messages live in the SAME store as
+            // sys_share_link. `resolveService('objectql', env)` can hand back a
+            // different (host/scoped) engine that lacks the per-env rows.
+            try {
+                const k: any = this.kernel;
+                const e = typeof k?.getServiceAsync === 'function'
+                    ? await k.getServiceAsync('objectql')
+                    : k?.getService?.('objectql');
+                if (e) return e;
+            } catch { /* fall through to scoped resolution */ }
+            return this.resolveService('objectql', context.environmentId);
+        };
         const asArray = (rows: any): any[] => (Array.isArray(rows) ? rows : Array.isArray(rows?.value) ? rows.value : []);
         const applyRedaction = (record: any, redactFields: string[]): any => {
             if (!record || typeof record !== 'object' || redactFields.length === 0) return record;
