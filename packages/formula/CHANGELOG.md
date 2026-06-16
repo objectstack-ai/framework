@@ -1,5 +1,64 @@
 # @objectstack/formula
 
+## 9.7.0
+
+### Minor Changes
+
+- ff0a87a: feat(validate): flag bare field references in record-scoped CEL sites at build time
+
+  > **Heads-up for downstream:** this adds a NEW build-time error. A `Field.formula`
+  > or validation predicate that references a field bare (`amount` instead of
+  > `record.amount`) now fails `objectstack compile`. These expressions were already
+  > silently broken at runtime (they evaluated to `null` / never fired), so this is a
+  > fix that surfaces a latent bug — but a stack carrying one will go from
+  > "builds, silently wrong" to "fails the build" on upgrade. The error message
+  > states the exact correction (`write record.<field>`).
+
+  A `Field.formula` and an object validation predicate evaluate against the
+  `record` namespace only — there is no field flattening — so a bare top-level
+  identifier (`amount`, `status`) resolves to nothing and the expression silently
+  evaluates to `null` / never fires. This is the silent-at-runtime class behind
+  the broken example-crm formulas (#1927) and is exactly what AI authors get wrong.
+
+  `validateExpression` now takes an evaluation `scope` and, for `scope: 'record'`,
+  reports a bare reference with the corrective form (`write record.<field>`). The
+  check is schema-free and acts only on cel-js's `Unknown variable` fault, so it
+  cannot false-positive on arithmetic/comparison/null-guard type overloads. Flow
+  and automation conditions keep the default `scope: 'flattened'` — the record's
+  fields ARE spread to top-level there (alongside flow variables), so bare refs
+  are correct and are NOT flagged. `objectstack compile` wires `record` scope for
+  field formulas and validation predicates; flow conditions stay flattened.
+
+### Patch Changes
+
+- 82c7438: fix(formula): register mixed `double <op> int` arithmetic overloads so number-field formulas compute
+
+  cel-js types a record field number as `double` and a bare integer literal as
+  `int`, and ships overloads only for matching numeric pairs. So an everyday
+  formula like `record.amount / 100` or `record.price * 2` faulted at runtime
+  (`no such overload: dyn<double> / int`); the engine caught the fault and the
+  formula silently evaluated to `null` — passing build, empty at runtime (#1928).
+
+  The CEL engine now registers the missing `double <op> int` / `int <op> double`
+  overloads for `+ - * / %`, computing the result as a `double` (CEL's mixed-numeric
+  promotion). Pure `int op int` is untouched, so integer division (`7 / 2 == 3`)
+  keeps its semantics — the overloads fire only when the operands are genuinely a
+  `double` and an `int`. Authors no longer need the `/ 100.0` float-literal workaround.
+
+- 417b6ac: feat(validate): advisory did-you-mean warnings for likely field typos in flow conditions
+
+  Adds a non-blocking warning channel to build-time expression validation (#1928
+  tier 3). Flow / automation conditions flatten the record's fields to top-level,
+  so a bare `status` is correct — but a bare NON-field identifier is either a flow
+  variable or a typo. When it is a near-miss of a known field (edit distance), the
+  build now emits a `did you mean \`status\`?`warning instead of staying silent,
+WITHOUT failing the build (a genuine flow variable won't be close to a field
+name, so it stays quiet).`ExprValidationResult`gains a`warnings`array and`ExprIssue`a`severity`; `objectstack compile` prints warnings and only fails on
+  errors. This closes the silent-skip gap for misspelled trigger-condition fields
+  (the #1877 family) without the false-positive risk of a hard gate.
+
+  - @objectstack/spec@9.7.0
+
 ## 9.6.0
 
 ### Patch Changes

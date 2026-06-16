@@ -1,5 +1,12 @@
 # @objectstack/plugin-trigger-schedule
 
+## 9.7.0
+
+### Patch Changes
+
+- @objectstack/spec@9.7.0
+- @objectstack/core@9.7.0
+
 ## 9.6.0
 
 ### Patch Changes

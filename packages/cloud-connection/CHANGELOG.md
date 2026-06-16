@@ -1,5 +1,14 @@
 # @objectstack/cloud-connection
 
+## 9.7.0
+
+### Patch Changes
+
+- @objectstack/runtime@9.7.0
+- @objectstack/spec@9.7.0
+- @objectstack/core@9.7.0
+- @objectstack/types@9.7.0
+
 ## 9.6.0
 
 ### Patch Changes
