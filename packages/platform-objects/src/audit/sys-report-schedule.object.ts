@@ -9,10 +9,11 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * the reports plugin can deliver "daily pipeline digest" / "weekly
  * lead summary" without a separate workflow.
  *
- * Scheduling: MVP supports `interval_minutes` only (1440 = daily,
- * 10080 = weekly). The `cron_expression` field is reserved for the
- * follow-up that wires `CronJobAdapter` — when present and the
- * adapter is available, it wins over `interval_minutes`.
+ * Scheduling: `interval_minutes` (1440 = daily, 10080 = weekly) or a
+ * `cron_expression`. When a `cron_expression` is set it wins over
+ * `interval_minutes` and is evaluated in `timezone` (default UTC) via
+ * croner — so "every weekday 09:00 local" is expressible. `next_run_at`
+ * is computed from whichever applies.
  *
  * Delivery: when the master dispatch job ticks (every minute by
  * default), every schedule with `next_run_at <= now` is loaded,
