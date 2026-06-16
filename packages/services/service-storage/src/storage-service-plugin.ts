@@ -14,6 +14,10 @@ import type { S3StorageAdapterOptions } from './s3-storage-adapter.js';
 import { StorageMetadataStore } from './metadata-store.js';
 import { registerStorageRoutes } from './storage-routes.js';
 import { SystemFile, SystemUploadSession } from './objects/index.js';
+// ADR-0052 §3 ownership: `sys_attachment` (a file↔record link) belongs with the
+// storage domain, not the audit/compliance ledger. Definition stays in
+// platform-objects; storage now contributes (registers) it instead of audit.
+import { SysAttachment } from '@objectstack/platform-objects/audit';
 import { SwappableStorageService } from './swappable-storage-service.js';
 
 /**
@@ -170,7 +174,7 @@ export class StorageServicePlugin implements Plugin {
         version: '1.0.0',
         type: 'plugin',
         scope: 'system',
-        objects: [SystemFile, SystemUploadSession],
+        objects: [SystemFile, SystemUploadSession, SysAttachment],
       });
     } catch {
       // manifest service may not be available in all environments

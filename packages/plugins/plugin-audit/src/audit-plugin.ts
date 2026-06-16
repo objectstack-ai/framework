@@ -3,12 +3,12 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import { SysAuditLog, SysActivity, SysComment } from './objects/index.js';
-// Registered here but still owned by platform-objects (the plugin contributes
-// them to the kernel without owning the definition yet):
-//   - sys_notification — reworked by ADR-0030 messaging (notification→event).
-//   - sys_attachment    — a file↔record link belonging with service-storage's
-//     sys_file; moves in the storage-domain decomposition, not this audit move.
-import { SysNotification, SysAttachment } from '@objectstack/platform-objects/audit';
+// `sys_notification` is contributed here but owned by platform-objects; it is
+// being reworked by ADR-0030 messaging (notification→event), so it stays put
+// until that migration lands. `sys_attachment` moved to @objectstack/service-
+// storage (ADR-0052 §3 ownership: a file↔record link belongs with storage, not
+// the compliance ledger).
+import { SysNotification } from '@objectstack/platform-objects/audit';
 import { installAuditWriters, type MessagingEmitSurface } from './audit-writers.js';
 
 /**
@@ -37,7 +37,7 @@ export class AuditPlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysAuditLog, SysActivity, SysComment, SysAttachment, SysNotification],
+      objects: [SysAuditLog, SysActivity, SysComment, SysNotification],
       // ADR-0029 D7 — contribute the Audit Logs entry into the Setup app's
       // `group_diagnostics` slot. The plugin owns sys_audit_log (K2).
       navigationContributions: [

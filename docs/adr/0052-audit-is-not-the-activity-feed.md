@@ -281,10 +281,13 @@ rather than written twice.
   human-readable summaries. Smallest change, biggest daily payoff, no migration —
   it only improves the *render* of rows the writer already emits. **This ADR
   ships P0a.**
-- **P0b — ownership, no behavior change.** Move `sys_attachment` → storage,
-  `sys_notification` → messaging (code already concedes these). Make
-  "collaboration/activity is a platform primitive" an explicit capability rather
-  than an audit side-effect; keep it default-available so no UI regresses.
+- **P0b — ownership, no behavior change.** ✅ `sys_attachment` registration moved
+  `plugin-audit` → `service-storage` (both always-on, so it stays available; the
+  definition stays in `platform-objects`). `sys_notification` is **deferred** — it
+  is mid-migration to an event model (`metadata/.../migrate-sys-notification-to-event.ts`,
+  ADR-0030), so moving it now would collide with that in-flight work. Still TODO:
+  make "collaboration/activity is a platform primitive" an explicit capability
+  rather than an audit side-effect; keep it default-available so no UI regresses.
 - **P1 — kill the split-brain + milestone templates (§5b.2).** Choose the
   canonical collaboration backend (§5), migrate/alias `sys_comment`, repoint
   ChatterPanel, surface reactions/threads. Add declarative object-level milestone
