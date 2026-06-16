@@ -32,7 +32,20 @@
         "crossTenantAccess": { "status": "dead", "evidence": "inert" }
       }
     },
-    "enable": { "status": "dead", "evidence": "ObjectCapabilities block (trackHistory/searchable/apiEnabled/apiMethods/files/feeds/activities/trash/mru/clone) — all 10 flags have zero behavior-changing readers", "note": "apiEnabled/apiMethods NOT enforced by REST — false sense of security (ADR-0049-class)." },
+    "enable": {
+      "children": {
+        "apiEnabled": { "status": "live", "evidence": "packages/rest/src/rest-server.ts", "note": "enforced by enforceApiAccess on the REST data surface (ADR-0049 #1889) — apiEnabled:false → 404." },
+        "apiMethods": { "status": "live", "evidence": "packages/rest/src/rest-server.ts", "note": "enforced by enforceApiAccess — operations outside the whitelist → 405." },
+        "trackHistory": { "status": "dead", "evidence": "no behavior-changing reader (database-loader.trackHistory is a separate ctor option)" },
+        "searchable": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "files": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "feeds": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "activities": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "trash": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "mru": { "status": "dead", "evidence": "no behavior-changing reader" },
+        "clone": { "status": "dead", "evidence": "no behavior-changing reader" }
+      }
+    },
     "versioning": { "status": "dead", "evidence": "aspirational; no runtime" },
     "partitioning": { "status": "dead", "evidence": "aspirational; no runtime" },
     "cdc": { "status": "dead", "evidence": "aspirational; no runtime" },

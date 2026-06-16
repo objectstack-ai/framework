@@ -1799,3 +1799,101 @@ describe('filterAppForUser — ADR-0045 hidden-app gate', () => {
     ).toBe('production_management');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Object API exposure — enable.apiEnabled / enable.apiMethods (ADR-0049 #1889)
+// ---------------------------------------------------------------------------
+
+describe('RestServer — object API exposure (apiEnabled / apiMethods)', () => {
+  function makeRes() {
+    const res: any = { statusCode: 200, body: undefined };
+    res.status = vi.fn((c: number) => { res.statusCode = c; return res; });
+    res.json = vi.fn((b: any) => { res.body = b; return res; });
+    res.setHeader = vi.fn(); res.write = vi.fn(); res.end = vi.fn();
+    return res;
+  }
+  // Build a server with one object whose `enable` block is under test.
+  function setup(enable: any | undefined) {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    protocol.batchData = vi.fn().mockResolvedValue({});
+    protocol.createManyData = vi.fn().mockResolvedValue([]);
+    protocol.updateManyData = vi.fn().mockResolvedValue([]);
+    protocol.deleteManyData = vi.fn().mockResolvedValue([]);
+    protocol.getMetaItems = vi.fn().mockResolvedValue(
+      enable === undefined
+        ? [{ name: 'widget' }]
+        : [{ name: 'widget', enable }],
+    );
+    const rest = new RestServer(server as any, protocol as any, { api: { requireAuth: false } } as any);
+    rest.registerRoutes();
+    return { rest, protocol };
+  }
+  async function invoke(rest: any, method: string, path: string, params: any, body?: any) {
+    const route = rest.getRoutes().find((r: any) => r.method === method && r.path === path);
+    if (!route) throw new Error(`route not found: ${method} ${path}`);
+    const res = makeRes();
+    await route.handler({ method, params, query: {}, body: body ?? {} }, res);
+    return res;
+  }
+  const LIST = '/api/v1/data/:object';
+  const BY_ID = '/api/v1/data/:object/:id';
+
+  it('apiEnabled:false → 404 on list, and the data engine is never called', async () => {
+    const { rest, protocol } = setup({ apiEnabled: false });
+    const res = await invoke(rest, 'GET', LIST, { object: 'widget' });
+    expect(res.statusCode).toBe(404);
+    expect(res.body.code).toBe('OBJECT_API_DISABLED');
+    expect(protocol.findData).not.toHaveBeenCalled();
+  });
+
+  it('apiEnabled:false → 404 on create (write blocked too)', async () => {
+    const { rest, protocol } = setup({ apiEnabled: false });
+    const res = await invoke(rest, 'POST', LIST, { object: 'widget' }, { a: 1 });
+    expect(res.statusCode).toBe(404);
+    expect(protocol.createData).not.toHaveBeenCalled();
+  });
+
+  it('apiMethods whitelist → disallowed op returns 405', async () => {
+    const { rest, protocol } = setup({ apiMethods: ['get', 'list'] });
+    const res = await invoke(rest, 'POST', LIST, { object: 'widget' }, { a: 1 });
+    expect(res.statusCode).toBe(405);
+    expect(res.body.code).toBe('OBJECT_API_METHOD_NOT_ALLOWED');
+    expect(res.body.allowed).toEqual(['get', 'list']);
+    expect(protocol.createData).not.toHaveBeenCalled();
+  });
+
+  it('apiMethods whitelist → allowed op passes through to the engine', async () => {
+    const { rest, protocol } = setup({ apiMethods: ['get', 'list'] });
+    const res = await invoke(rest, 'GET', LIST, { object: 'widget' });
+    expect(res.statusCode).toBe(200);
+    expect(protocol.findData).toHaveBeenCalledTimes(1);
+  });
+
+  it('default object (no enable block) is unaffected — no regression', async () => {
+    const { rest, protocol } = setup(undefined);
+    const res = await invoke(rest, 'GET', LIST, { object: 'widget' });
+    expect(res.statusCode).toBe(200);
+    expect(protocol.findData).toHaveBeenCalledTimes(1);
+  });
+
+  it('apiEnabled:true explicit → passes', async () => {
+    const { rest, protocol } = setup({ apiEnabled: true });
+    await invoke(rest, 'GET', BY_ID, { object: 'widget', id: '1' });
+    expect(protocol.getData).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown object (not in metadata) is not blocked by the guard', async () => {
+    const { rest, protocol } = setup({ apiEnabled: false }); // only 'widget' is hidden
+    const res = await invoke(rest, 'GET', LIST, { object: 'other' });
+    expect(res.statusCode).toBe(200);
+    expect(protocol.findData).toHaveBeenCalledTimes(1);
+  });
+
+  it('apiEnabled:false also blocks bulk createMany', async () => {
+    const { rest, protocol } = setup({ apiEnabled: false });
+    const res = await invoke(rest, 'POST', '/api/v1/data/:object/createMany', { object: 'widget' }, []);
+    expect(res.statusCode).toBe(404);
+    expect(protocol.createManyData).not.toHaveBeenCalled();
+  });
+});
