@@ -437,10 +437,12 @@ export class SqlDriver implements IDataDriver {
       return [];
     }
 
-    if (this.isSqlite) {
-      for (const row of results) {
-        this.formatOutput(object, row);
-      }
+    // formatOutput is dialect-agnostic for `Field.date` (ADR-0053 Phase 1);
+    // its json/boolean deserialisation stays SQLite-gated internally. Run it
+    // for every dialect so reads match `findOne` and date columns come back
+    // as `YYYY-MM-DD`.
+    for (const row of results) {
+      this.formatOutput(object, row);
     }
     return results;
   }
@@ -1494,6 +1496,31 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Collapse a `Field.date` value to a timezone-naive `YYYY-MM-DD`
+   * calendar-day string (ADR-0053 Phase 1). A `Date` collapses to its UTC
+   * calendar day; a string keeps its leading date and drops any time
+   * component. Anything else (and `null`/`undefined`) passes through
+   * unchanged. This is the single source of truth for date-only truncation,
+   * shared by the filter (`coerceFilterValue`), write (`formatInput`) and
+   * read (`formatOutput`) paths so all three agree on what a date *is*.
+   */
+  protected toDateOnly(value: any): any {
+    if (value == null) return value;
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return value;
+      const y = value.getUTCFullYear();
+      const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(value.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+    }
+    return value;
+  }
+
+  /**
    * Normalise a filter value for a single column so the comparison the
    * driver sends to SQLite matches the on-disk representation.
    *
@@ -1540,18 +1567,8 @@ export class SqlDriver implements IDataDriver {
       return ms == null ? value : ms;
     }
 
-    // Field.date — normalise to YYYY-MM-DD.
-    if (value instanceof Date) {
-      const y = value.getUTCFullYear();
-      const m = String(value.getUTCMonth() + 1).padStart(2, '0');
-      const d = String(value.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
-    }
-    return value;
+    // Field.date — normalise the comparand to YYYY-MM-DD (ADR-0053 Phase 1).
+    return this.toDateOnly(value);
   }
 
   protected applyFilters(builder: Knex.QueryBuilder, filters: any) {
@@ -1983,6 +2000,25 @@ export class SqlDriver implements IDataDriver {
       }
     }
 
+    // ADR-0053 Phase 1: a `Field.date` is a timezone-naive calendar day, not
+    // an instant. Collapse any `Date` or full-ISO value to `YYYY-MM-DD` before
+    // it hits the wire so storage matches the date-only contract the filter
+    // layer (`coerceFilterValue`) already enforces — the write/filter
+    // asymmetry was the root cause of the silent date-equality miss.
+    // `Field.datetime` is untouched (it keeps full-instant semantics).
+    const dateFields = this.dateFields[object];
+    if (dateFields && dateFields.size > 0 && copy && typeof copy === 'object') {
+      for (const field of dateFields) {
+        const v = copy[field];
+        if (v == null) continue;
+        const normalized = this.toDateOnly(v);
+        if (normalized !== v) {
+          if (!copied) { copy = { ...copy }; copied = true; }
+          copy[field] = normalized;
+        }
+      }
+    }
+
     if (!this.isSqlite) return copy;
 
     const fields = this.jsonFields[object];
@@ -2021,6 +2057,20 @@ export class SqlDriver implements IDataDriver {
             data[field] = Boolean(data[field]);
           }
         }
+      }
+    }
+
+    // ADR-0053 Phase 1: present `Field.date` as a timezone-naive `YYYY-MM-DD`
+    // string, slicing any stored time component. This transparently repairs
+    // legacy rows written as a full timestamp before this normalization, so
+    // date-equality works without a data migration. Runs for every dialect.
+    const dateFields = this.dateFields[object];
+    if (dateFields && dateFields.size > 0) {
+      for (const field of dateFields) {
+        const v = data[field];
+        if (v == null) continue;
+        const normalized = this.toDateOnly(v);
+        if (normalized !== v) data[field] = normalized;
       }
     }
 
