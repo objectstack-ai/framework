@@ -44,8 +44,52 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
         // Human-input nodes suspend the flow awaiting input.
         supportsPause: true, isAsync: true,
       }),
-      async execute(node, _variables, _context) {
+      async execute(node, variables, context) {
         const cfg = (node.config ?? {}) as Record<string, unknown>;
+        // `{var}` tokens in screen config resolve against the live flow
+        // variables here (the engine does NOT pre-interpolate node config) — so
+        // a step's title/description/field-default/object-form-default can pull
+        // from prior nodes (e.g. `{lead_record.company}`, `{account_id}`).
+        const interp = (v: unknown): string | undefined => {
+          if (v == null) return undefined;
+          const r = interpolate(v, variables, context);
+          return r == null ? undefined : String(r);
+        };
+
+        // ── Object-form screen (master-detail wizards) ──────────────────────
+        // When the step names an `objectName`, render that object's FULL
+        // create/edit form — including any inline master-detail child grids —
+        // instead of a flat field list. The client persists the record (and its
+        // children, atomically) and resumes the run with the new id bound to
+        // `idVariable`, so a later step can reference it (e.g. an Opportunity
+        // step prefilling its `account` FK from the Customer step's new id).
+        const objectName =
+          typeof cfg.objectName === 'string' && cfg.objectName.trim() ? cfg.objectName.trim() : undefined;
+        if (objectName) {
+          const defaults =
+            cfg.defaults && typeof cfg.defaults === 'object'
+              ? (interpolate(cfg.defaults, variables, context) as Record<string, unknown>)
+              : undefined;
+          const idVariable =
+            typeof cfg.idVariable === 'string' && cfg.idVariable.trim() ? cfg.idVariable.trim() : undefined;
+          return {
+            success: true,
+            suspend: true,
+            screen: {
+              nodeId: node.id,
+              kind: 'object-form',
+              title: interp(cfg.title) ?? node.label ?? objectName,
+              description: interp(cfg.description),
+              objectName,
+              mode: cfg.mode === 'edit' ? 'edit' : 'create',
+              recordId: cfg.recordId != null ? interp(cfg.recordId) : undefined,
+              defaults,
+              idVariable,
+              fields: [],
+            },
+          };
+        }
+
         const rawFields = Array.isArray(cfg.fields) ? (cfg.fields as Array<Record<string, unknown>>) : [];
         const hasFields = rawFields.length > 0;
         // Suspend to collect input when the screen declares fields, or opts in
@@ -60,7 +104,7 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
           type: f.type != null ? String(f.type) : undefined,
           required: f.required === true,
           options: Array.isArray(f.options) ? (f.options as Array<{ value: unknown; label: string }>) : undefined,
-          defaultValue: f.defaultValue,
+          defaultValue: f.defaultValue !== undefined ? interpolate(f.defaultValue, variables, context) : undefined,
           placeholder: f.placeholder != null ? String(f.placeholder) : undefined,
         })).filter((f) => f.name.length > 0);
         return {
@@ -68,8 +112,8 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
           suspend: true,
           screen: {
             nodeId: node.id,
-            title: (cfg.title as string | undefined) ?? node.label ?? 'Input',
-            description: cfg.description as string | undefined,
+            title: interp(cfg.title) ?? node.label ?? 'Input',
+            description: interp(cfg.description),
             fields,
           },
         };

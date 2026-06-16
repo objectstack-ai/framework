@@ -78,6 +78,14 @@ export const Opportunity = ObjectSchema.create({
     renewal_of: Field.lookup('crm_opportunity', {
       label: 'Renewal Of',
     }),
+    // Roll-up of the opportunity's product line items — recomputed server-side
+    // as lines are inserted/updated/deleted (child FK auto-detected:
+    // crm_opportunity_line_item.opportunity). The line-item grid also shows a
+    // live running total during entry (inlineAmountField: 'amount').
+    line_total: Field.summary({
+      label: 'Products Total',
+      summaryOperations: { object: 'crm_opportunity_line_item', field: 'amount', function: 'sum' },
+    }),
   },
 
   validations: [
