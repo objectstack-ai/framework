@@ -50,6 +50,12 @@ export const Opportunity = ObjectSchema.create({
     close_date: Field.date({
       label: 'Close Date',
     }),
+    // Exercises the newly-registered `daysBetween` stdlib function — the canonical
+    // "days remaining" formula (negative once the close date has passed).
+    days_to_close: Field.formula({
+      label: 'Days to Close',
+      expression: cel`record.close_date == null ? 0 : daysBetween(today(), record.close_date)`,
+    }),
     discount_percent: Field.percent({
       label: 'Discount %',
       defaultValue: 0,
