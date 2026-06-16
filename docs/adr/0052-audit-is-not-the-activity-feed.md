@@ -178,12 +178,31 @@ timeline. But weighing it against the implementation reality reversed that lean:
 | threads/mentions/reactions | ✅ fields already declared (`parent_id`, `reply_count`, `mentions`, `reactions`) | ✅ (but unreachable) |
 
 Picking the durable, default, UI-wired system reaches "one backend" **now**, at
-near-zero risk. `service-feed`'s only real edge — one unified *typed* stream —
-is obtained on the chosen family by treating **`sys_activity` as the unified
-typed timeline** (its `type` enum already carries the event kinds; extend it to
-`email | call | event | note` as needed). The two remaining UI niceties
-(reactions, threaded replies) are a render of fields `sys_comment` **already**
-has — an objectui enhancement, not a backend change.
+near-zero risk. `service-feed`'s only real edge — one unified *typed* stream — is
+obtained on the chosen family by treating **`sys_activity` as the unified
+timeline base** — the **ActivityPointer** model (cf. Dataverse `ActivityPointer`
+→ `Email`/`PhoneCall`/`Appointment` subtypes; Salesforce ActivityTimeline →
+`EmailMessage`/`Task`/`Event`):
+
+- **`type` stays domain-NEUTRAL** — the platform-produced verbs (`created`,
+  `updated`, `commented`, `completed`, …). It is **not** extended with one
+  vertical's vocabulary (`email`/`call`/`meeting`); every domain has its own
+  (`interview`, `site_visit`, `inspection`, …) and a closed enum would be an
+  endless treadmill. Domain kind rides in `metadata.kind`.
+- **Rich communication entities are their own tables** — an email belongs in
+  `sys_email` (already exists), a call/meeting in a task/activity object — never
+  crammed into a generic activity blob (they have structured headers, threading,
+  attachments, mutable delivery status that must be queryable).
+- **`sys_activity` carries a structured pointer to that source entity** via
+  `source_object` / `source_id` (added in this PR) — distinct from
+  `object_name`/`record_id` (the *regarding* record). The timeline drills from a
+  one-line summary to the full email/call record, and apps can query "all
+  activities sourced from `sys_email`". This is the queryable equivalent of an id
+  buried in `metadata`.
+
+The two remaining UI niceties (reactions, threaded replies) are a render of
+fields `sys_comment` **already** has — an objectui enhancement, not a backend
+change.
 
 Rejected alternative — invest in `service-feed`: building a DB adapter + mounting
 the REST route + repointing ChatterPanel + migrating `sys_comment` rows is weeks
