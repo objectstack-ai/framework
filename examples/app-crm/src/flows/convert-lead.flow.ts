@@ -3,64 +3,65 @@
 import { defineFlow } from '@objectstack/spec';
 
 /**
- * Convert Lead to Opportunity — Screen Flow
+ * Convert Lead → Customer + Opportunity — Master-Detail Screen Flow
  *
- * A user-triggered wizard that walks a sales rep through converting a
- * qualified lead into an Opportunity record. Demonstrates every key
- * screen-flow node type:
+ * A user-triggered wizard that walks a sales rep through converting a qualified
+ * lead into a full Account + Opportunity. Unlike a flat field-list wizard, each
+ * step renders the target object's COMPLETE create form via an `object-form`
+ * screen node (`config.objectName`): the client renders the real ObjectForm —
+ * including inline master-detail child grids — persists the record (and its
+ * children, atomically), and resumes the run with the new record's id bound to
+ * `config.idVariable`.
  *
  *   start → get_lead → decision (already converted?)
- *     → already_converted_screen (abort path)
- *     → screen_qualify   (collect opportunity details from rep)
- *     → screen_confirm   (review + confirm before writing)
- *     → create_opp       (create crm_opportunity)
- *     → update_lead      (mark lead as converted)
- *     → screen_success   (celebrate + navigate)
+ *     → screen_already_converted (abort path)
+ *     → screen_account       (Step 1 — full Customer form → account_id)
+ *     → screen_opportunity   (Step 2 — full Opportunity form WITH product
+ *                             line-items grid, prefilled account → opportunity_id)
+ *     → update_lead          (mark converted + link account & opportunity)
  *     → end
  */
 export const ConvertLeadScreenFlow = defineFlow({
   name: 'crm_convert_lead_wizard',
-  label: 'Convert Lead to Opportunity',
+  label: 'Convert Lead to Customer + Opportunity',
   description:
-    'Screen flow wizard that converts a qualified CRM lead into an Opportunity, marks the lead as converted, and links the two records.',
+    'Screen-flow wizard that walks the rep through a full Customer form then a full Opportunity form (with product line items), creates both, and marks the lead converted.',
   type: 'screen',
   status: 'active',
   runAs: 'user',
 
   variables: [
-    // ── inputs (from action trigger) ───────────────────────────────────
-    { name: 'recordId',          type: 'text',    isInput: true,  isOutput: false },
-    // ── screen-collected inputs (filled by wizard steps) ──────────────
-    // Marked isInput:true so the trigger API can pre-populate them for
-    // automated testing or when the Studio wizard submits all values at once.
-    { name: 'opp_name',          type: 'text',    isInput: true,  isOutput: false },
-    { name: 'opp_account',       type: 'text',    isInput: true,  isOutput: false },
-    { name: 'opp_amount',        type: 'number',  isInput: true,  isOutput: false },
-    { name: 'opp_close_date',    type: 'date',    isInput: true,  isOutput: false },
-    { name: 'opp_stage',         type: 'text',    isInput: true,  isOutput: false },
-    // ── intermediate (populated at runtime) ───────────────────────────
-    { name: 'lead_record',       type: 'object',  isInput: false, isOutput: false },
-    // ── outputs ───────────────────────────────────────────────────────
-    { name: 'opportunity_id',    type: 'text',    isInput: false, isOutput: true  },
+    // ── input (from the action trigger) ───────────────────────────────────
+    { name: 'recordId',       type: 'text',   isInput: true,  isOutput: false },
+    // ── intermediate (populated at runtime) ───────────────────────────────
+    { name: 'lead_record',    type: 'object', isInput: false, isOutput: false },
+    // ── produced by the object-form steps (the saved record ids) ──────────
+    // `isInput: true` lets the trigger API pre-populate them for automated
+    // testing; at runtime each is bound by its step's `idVariable` on resume.
+    { name: 'account_id',     type: 'text',   isInput: true,  isOutput: true  },
+    { name: 'opportunity_id', type: 'text',   isInput: true,  isOutput: true  },
   ],
 
   nodes: [
-    // ── 1. Start ──────────────────────────────────────────────────────
+    // ── 1. Start ──────────────────────────────────────────────────────────
     { id: 'start', type: 'start', label: 'Start' },
 
-    // ── 2. Load the lead record ───────────────────────────────────────
+    // ── 2. Load the lead record ───────────────────────────────────────────
     {
       id: 'get_lead',
       type: 'get_record',
       label: 'Load Lead',
       config: {
         objectName: 'crm_lead',
-        recordId: '{recordId}',
+        // get_record filters via `filter` (it ignores a bare `recordId`), so
+        // load THIS lead by id — otherwise findOne with an empty filter returns
+        // the first lead in the table.
+        filter: { id: '{recordId}' },
         outputVariable: 'lead_record',
       },
     },
 
-    // ── 3. Guard: already converted? ──────────────────────────────────
+    // ── 3. Guard: already converted? ──────────────────────────────────────
     {
       id: 'check_converted',
       type: 'decision',
@@ -73,102 +74,60 @@ export const ConvertLeadScreenFlow = defineFlow({
       },
     },
 
-    // ── 3a. Already-converted abort screen ────────────────────────────
+    // ── 3a. Already-converted abort screen ────────────────────────────────
     {
       id: 'screen_already_converted',
       type: 'screen',
       label: 'Already Converted',
       config: {
-        message: 'This lead has already been converted to an opportunity.',
-        buttons: [
-          { label: 'Close', action: 'finish' },
-        ],
+        waitForInput: true,
+        title: 'Already Converted',
+        description: 'This lead has already been converted to an opportunity.',
       },
     },
 
-    // ── 4. Screen 1: Collect qualification + opportunity details ───────
+    // ── 4. Step 1 — full Customer (Account) form ──────────────────────────
+    // `objectName` ⇒ object-form screen: the client renders the real
+    // crm_account create form, persists it, and resumes with the new id under
+    // `account_id`.
     {
-      id: 'screen_qualify',
+      id: 'screen_account',
       type: 'screen',
-      label: 'Opportunity Details',
+      label: 'Customer',
       config: {
-        fields: [
-          {
-            name: 'opp_name',
-            label: 'Opportunity Name',
-            type: 'text',
-            required: true,
-            defaultValue: '{lead_record.name}',
-            helpText: 'Descriptive name for the new opportunity',
-          },
-          {
-            name: 'opp_account',
-            label: 'Account',
-            type: 'lookup',
-            object: 'crm_account',
-            required: false,
-            defaultValue: '{lead_record.account}',
-            helpText: 'The account this opportunity belongs to',
-          },
-          {
-            name: 'opp_amount',
-            label: 'Estimated Value ($)',
-            type: 'number',
-            required: false,
-            min: 0,
-          },
-          {
-            name: 'opp_close_date',
-            label: 'Expected Close Date',
-            type: 'date',
-            required: false,
-          },
-          {
-            name: 'opp_stage',
-            label: 'Stage',
-            type: 'select',
-            required: true,
-            options: ['prospecting', 'qualification', 'proposal', 'closed_won', 'closed_lost'],
-            defaultValue: 'qualification',
-          },
-        ],
+        objectName: 'crm_account',
+        idVariable: 'account_id',
+        title: 'Step 1 of 2 · Customer',
+        description: 'Review and complete the customer record carried over from the lead.',
+        defaults: {
+          name: '{lead_record.company}',
+        },
       },
     },
 
-    // ── 5. Screen 2: Confirm before write ─────────────────────────────
+    // ── 5. Step 2 — full Opportunity form WITH product line items ──────────
+    // crm_opportunity_line_item.opportunity declares inlineEdit: 'grid', so the
+    // standard Opportunity form (and therefore this step) renders an editable
+    // product line-item grid below the header — the master-detail entry the
+    // user asked for. The account FK is prefilled with Step 1's new id.
     {
-      id: 'screen_confirm',
+      id: 'screen_opportunity',
       type: 'screen',
-      label: 'Confirm Conversion',
-      config: {
-        message: 'Create opportunity "{opp_name}" for lead "{lead_record.name}"?\n\nStage: {opp_stage} · Amount: ${opp_amount} · Close: {opp_close_date}',
-        buttons: [
-          { label: 'Convert', action: 'next' },
-          { label: 'Back',    action: 'back' },
-          { label: 'Cancel',  action: 'finish' },
-        ],
-      },
-    },
-
-    // ── 6. Create the Opportunity ─────────────────────────────────────
-    {
-      id: 'create_opp',
-      type: 'create_record',
-      label: 'Create Opportunity',
+      label: 'Opportunity',
       config: {
         objectName: 'crm_opportunity',
-        fields: {
-          name:       '{opp_name}',
-          account:    '{opp_account}',
-          amount:     '{opp_amount}',
-          close_date: '{opp_close_date}',
-          stage:      '{opp_stage}',
+        idVariable: 'opportunity_id',
+        title: 'Step 2 of 2 · Opportunity',
+        description: 'Add the opportunity and its product line items. Saved together in one transaction.',
+        defaults: {
+          name: '{lead_record.name}',
+          account: '{account_id}',
+          stage: 'qualification',
         },
-        outputVariable: 'opportunity_id',
       },
     },
 
-    // ── 7. Mark the lead as converted ─────────────────────────────────
+    // ── 6. Mark the lead converted + link both new records ────────────────
     {
       id: 'update_lead',
       type: 'update_record',
@@ -177,47 +136,28 @@ export const ConvertLeadScreenFlow = defineFlow({
         objectName: 'crm_lead',
         filter: { id: '{recordId}' },
         fields: {
-          status:                  'converted',
-          converted_opportunity:   '{opportunity_id}',
-          is_closed:               true,
+          status:                'converted',
+          account:               '{account_id}',
+          converted_opportunity: '{opportunity_id}',
         },
       },
     },
 
-    // ── 8. Success screen ─────────────────────────────────────────────
-    {
-      id: 'screen_success',
-      type: 'screen',
-      label: 'Conversion Complete',
-      config: {
-        message: '✅ Lead converted! Opportunity "{opp_name}" has been created.',
-        buttons: [
-          { label: 'View Opportunity', action: 'navigate', target: '/crm_opportunity/{opportunity_id}' },
-          { label: 'Done',             action: 'finish' },
-        ],
-      },
-    },
-
-    // ── 9. End ────────────────────────────────────────────────────────
+    // ── 7. End ────────────────────────────────────────────────────────────
     { id: 'end', type: 'end', label: 'End' },
   ],
 
   edges: [
-    { id: 'e1',  source: 'start',                    target: 'get_lead',                  type: 'default' },
-    { id: 'e2',  source: 'get_lead',                 target: 'check_converted',            type: 'default' },
+    { id: 'e1',  source: 'start',                    target: 'get_lead',                 type: 'default' },
+    { id: 'e2',  source: 'get_lead',                 target: 'check_converted',          type: 'default' },
     // guard branches
-    { id: 'e3a', source: 'check_converted',          target: 'screen_already_converted',   type: 'default', condition: "lead_record.status == 'converted'", label: 'Yes' },
-    { id: 'e3b', source: 'check_converted',          target: 'screen_qualify',             type: 'default', label: 'No' },
-    { id: 'e3c', source: 'screen_already_converted', target: 'end',                        type: 'default' },
-    // main path
-    { id: 'e4',  source: 'screen_qualify',           target: 'screen_confirm',             type: 'default' },
-    // "Convert" proceeds to create the record; "Back" is handled client-side
-    // by the screen-flow runner's history stack — no server back-edge needed
-    // (a back-edge would create a cycle and fail DAG validation).
-    { id: 'e5',  source: 'screen_confirm',           target: 'create_opp',                 type: 'default' },
-    { id: 'e7',  source: 'create_opp',               target: 'update_lead',                type: 'default' },
-    { id: 'e8',  source: 'update_lead',              target: 'screen_success',             type: 'default' },
-    { id: 'e9',  source: 'screen_success',           target: 'end',                        type: 'default' },
+    { id: 'e3a', source: 'check_converted',          target: 'screen_already_converted', type: 'default', condition: "lead_record.status == 'converted'", label: 'Yes' },
+    { id: 'e3b', source: 'check_converted',          target: 'screen_account',           type: 'default', label: 'No' },
+    { id: 'e3c', source: 'screen_already_converted', target: 'end',                      type: 'default' },
+    // main path — full Customer form → full Opportunity form → link
+    { id: 'e4',  source: 'screen_account',           target: 'screen_opportunity',       type: 'default' },
+    { id: 'e5',  source: 'screen_opportunity',       target: 'update_lead',              type: 'default' },
+    { id: 'e6',  source: 'update_lead',              target: 'end',                      type: 'default' },
   ],
 
   errorHandling: {

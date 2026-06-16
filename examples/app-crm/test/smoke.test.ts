@@ -11,9 +11,16 @@ describe('app-crm minimal metadata bundle', () => {
     expect(stack.manifest.type).toBe('app');
   });
 
-  it('registers the 5 core objects', () => {
+  it('registers the 6 core objects', () => {
     const names = (stack.objects ?? []).map((o) => o.name).sort();
-    expect(names).toEqual(['crm_account', 'crm_activity', 'crm_contact', 'crm_lead', 'crm_opportunity']);
+    expect(names).toEqual([
+      'crm_account',
+      'crm_activity',
+      'crm_contact',
+      'crm_lead',
+      'crm_opportunity',
+      'crm_opportunity_line_item',
+    ]);
   });
 
   it('registers exactly one app, one dashboard, one hook, and at least 4 flows', () => {

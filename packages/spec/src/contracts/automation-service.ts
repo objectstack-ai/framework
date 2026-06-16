@@ -64,6 +64,31 @@ export interface ScreenSpec {
     title?: string;
     description?: string;
     fields: ScreenFieldSpec[];
+    /**
+     * Rendering kind. `'fields'` (default) renders the flat {@link fields} list.
+     * `'object-form'` renders an object's full create/edit form — including any
+     * inline master-detail child grids (`subforms`) — so a screen-flow wizard
+     * can walk the user through one full object form per step (e.g. lead
+     * conversion: a Customer step, then an Opportunity-with-line-items step).
+     * The client renders the object form; on save it persists the record (and
+     * its children, atomically) itself, then resumes the run with the new
+     * record's id bound to {@link idVariable}.
+     */
+    kind?: 'fields' | 'object-form';
+    /** Object whose form to render (object-form screens). */
+    objectName?: string;
+    /** Form mode for an object-form screen — defaults to `'create'`. */
+    mode?: 'create' | 'edit';
+    /** Record id to edit (object-form screens in `'edit'` mode). */
+    recordId?: string;
+    /** Prefilled field values for the object form (already interpolated). */
+    defaults?: Record<string, unknown>;
+    /**
+     * Flow variable that receives the saved record's id when the client resumes
+     * the run — so a later step can reference it (e.g. the Opportunity form
+     * prefilling its `account` FK with the id created by the Customer step).
+     */
+    idVariable?: string;
 }
 
 /**
