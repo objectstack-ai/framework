@@ -737,6 +737,67 @@ export class RestServer {
     }
 
     /**
+     * Enforce object-level API exposure (ObjectSchema `enable.apiEnabled` /
+     * `enable.apiMethods`) on the REST data surface — the *external* API boundary
+     * only. Internal callers (hooks, flows, raw objectql) are unaffected, which is
+     * the point: `apiEnabled` controls automatic API exposure, not data access.
+     *
+     * - `enable.apiEnabled === false` → object hidden from the API (404, so its
+     *   existence isn't revealed).
+     * - `enable.apiMethods` (non-empty whitelist) → unlisted operations rejected (405).
+     *
+     * Default-allow: objects with no `enable` block (or `apiEnabled` unset/true and
+     * no `apiMethods` whitelist) behave exactly as before — no regression. Unknown
+     * objects fall through to the normal 404 path. A metadata-read failure does not
+     * block (the data call itself needs the same metadata and will surface the
+     * error). Returns `true` when the request was blocked (response already sent).
+     *
+     * See ADR-0049 (#1889): shipping a non-enforcing `apiEnabled` is false security.
+     */
+    private async enforceApiAccess(
+        req: any,
+        res: any,
+        p: ObjectStackProtocol,
+        environmentId: string | undefined,
+        operation: string,
+    ): Promise<boolean> {
+        const objectName = req?.params?.object;
+        if (!objectName) return false;
+        let enable: any;
+        try {
+            const r: any = await (p as any).getMetaItems?.({
+                type: 'object',
+                ...(environmentId ? { environmentId } : {}),
+            });
+            const items: any[] = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
+            const obj = items.find((o: any) => o?.name === objectName);
+            if (!obj) return false; // unknown object → let the data path 404
+            enable = obj.enable;
+        } catch {
+            return false; // metadata unavailable → don't block (data call needs it too)
+        }
+        if (!enable) return false;
+        if (enable.apiEnabled === false) {
+            res.status(404).json({
+                error: `Object '${objectName}' is not exposed via the API`,
+                code: 'OBJECT_API_DISABLED',
+                object: objectName,
+            });
+            return true;
+        }
+        if (Array.isArray(enable.apiMethods) && enable.apiMethods.length > 0 && !enable.apiMethods.includes(operation)) {
+            res.status(405).json({
+                error: `API operation '${operation}' is not allowed on object '${objectName}'`,
+                code: 'OBJECT_API_METHOD_NOT_ALLOWED',
+                object: objectName,
+                allowed: enable.apiMethods,
+            });
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Resolve the request's execution context (RBAC/RLS/FLS) by looking up
      * the better-auth session via the project's `auth` service. Returns
      * `undefined` for anonymous requests so callers can pass `context` as-is
@@ -2646,6 +2707,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'list')) return;
                         const result = await p.findData({
                             object: req.params.object,
                             query: req.query,
@@ -2682,6 +2744,7 @@ export class RestServer {
                         const { select, expand } = req.query || {};
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'get')) return;
                         const result = await p.getData({
                             object: req.params.object,
                             id: req.params.id,
@@ -2715,6 +2778,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'create')) return;
                         const result = await p.createData({
                             object: req.params.object,
                             data: req.body,
@@ -2749,6 +2813,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'list')) return;
                         const result = await p.findData({
                             object: req.params.object,
                             query: req.body || {},
@@ -2798,6 +2863,7 @@ export class RestServer {
                             const { expectedVersion: _drop, ...rest } = data as any;
                             data = rest;
                         }
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'update')) return;
                         const result = await p.updateData({
                             object: req.params.object,
                             id: req.params.id,
@@ -2840,6 +2906,7 @@ export class RestServer {
                             ? (req.query as any).expectedVersion
                             : undefined;
                         const expectedVersion = queryVersion ?? ifMatchHeader;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'delete')) return;
                         const result = await p.deleteData({
                             object: req.params.object,
                             id: req.params.id,
@@ -2932,6 +2999,7 @@ export class RestServer {
                         res.status(400).json({ code: 'INVALID_REQUEST', error: 'object is required' });
                         return;
                     }
+                    if (await this.enforceApiAccess(req, res, p, environmentId, 'import')) return;
                     const body = req.body ?? {};
                     const dryRun = body.dryRun === true;
                     const mapping: Record<string, string> = body.mapping ?? {};
@@ -3037,6 +3105,7 @@ export class RestServer {
                         res.status(400).json({ code: 'INVALID_REQUEST', error: 'object is required' });
                         return;
                     }
+                    if (await this.enforceApiAccess(req, res, p, environmentId, 'export')) return;
                     const q = req.query ?? {};
                     const format = (String(q.format ?? 'csv')).toLowerCase() === 'json' ? 'json' : 'csv';
                     const HARD_CAP = 50_000;
@@ -4750,6 +4819,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'bulk')) return;
                         const result = await p.batchData!({
                             object: req.params.object,
                             request: req.body,
@@ -4780,6 +4850,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'create')) return;
                         const result = await p.createManyData!({
                             object: req.params.object,
                             records: req.body || [],
@@ -4810,6 +4881,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'update')) return;
                         const result = await p.updateManyData!({
                             object: req.params.object,
                             ...req.body,
@@ -4840,6 +4912,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(environmentId, req);
                         const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
+                        if (await this.enforceApiAccess(req, res, p, environmentId, 'delete')) return;
                         const result = await p.deleteManyData!({
                             object: req.params.object,
                             ...req.body,
