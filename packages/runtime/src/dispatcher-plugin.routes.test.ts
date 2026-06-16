@@ -14,11 +14,14 @@ import { createDispatcherPlugin } from './dispatcher-plugin.js';
 
 function makeFakeServer() {
   const routes: string[] = [];
-  const rec = (verb: string) => (path: string, _handler: unknown) => {
+  const handlers: Record<string, (req: any, res: any) => any> = {};
+  const rec = (verb: string) => (path: string, handler: any) => {
     routes.push(`${verb} ${path}`);
+    handlers[`${verb} ${path}`] = handler;
   };
   return {
     routes,
+    handlers,
     server: {
       get: rec('GET'),
       post: rec('POST'),
@@ -71,5 +74,26 @@ describe('createDispatcherPlugin — HTTP route registration', () => {
 
     expect(routes).toContain('POST /v2/mcp');
     expect(routes).toContain('POST /v2/keys');
+  });
+
+  // cloud#152: discovery reflects mutable runtime config (e.g. routes.mcp toggles
+  // with OS_MCP_SERVER_ENABLED). It must be served Cache-Control: no-store so an
+  // edge/CDN never serves a stale payload after the config changes.
+  it('serves both discovery routes with Cache-Control: no-store', async () => {
+    const { server, handlers } = makeFakeServer();
+    const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });
+    await plugin.start?.(makeCtx(server));
+
+    for (const route of ['GET /.well-known/objectstack', 'GET /api/v1/discovery']) {
+      const handler = handlers[route];
+      expect(handler, `${route} should be registered`).toBeTypeOf('function');
+      const headers: Record<string, string> = {};
+      const res: any = {
+        header: (k: string, v: string) => { headers[k] = v; },
+        json: () => {},
+      };
+      await handler({}, res);
+      expect(headers['Cache-Control'], `${route} Cache-Control`).toBe('no-store');
+    }
   });
 });

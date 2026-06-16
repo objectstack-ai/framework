@@ -452,6 +452,14 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                         res.header(k, v);
                     }
                 }
+                // Discovery reflects MUTABLE runtime config (which routes/services
+                // are live — e.g. `mcp` only when OS_MCP_SERVER_ENABLED=true). It
+                // must never be cached by an edge/CDN, or a config change (enable
+                // MCP) leaves clients reading a stale payload that still says the
+                // route is absent — the Integrations UI then shows "MCP not
+                // enabled" against a live server (cloud#152). The body is computed
+                // fresh per request; the only staleness is the HTTP cache layer.
+                res.header('Cache-Control', 'no-store');
                 res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
             });
 
@@ -462,6 +470,9 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                         res.header(k, v);
                     }
                 }
+                // See the .well-known handler above: discovery must not be cached
+                // (mutable runtime config; cloud#152 stale `routes.mcp`).
+                res.header('Cache-Control', 'no-store');
                 res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
             });
 
