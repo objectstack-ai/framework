@@ -191,5 +191,46 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
       });
       expect(issues).toHaveLength(0);
     });
+
+    // #1928 tier 3 — a likely field typo in a flow condition is a non-blocking warning.
+    it('warns (severity=warning) on a likely field typo in a flow condition', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'crm_opportunity', fields: { stage: { type: 'select' }, amount: { type: 'currency' } } }],
+        flows: [{
+          name: 'opp_won',
+          nodes: [
+            { id: 'start', type: 'start', config: { objectName: 'crm_opportunity', condition: 'stagee == "closed_won"' } },
+          ],
+          edges: [],
+        }],
+      });
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warning');
+      expect(issues[0].message).toMatch(/did you mean `stage`/);
+    });
+
+    it('does not warn when the bare ref is far from any field (likely a flow variable)', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'crm_opportunity', fields: { stage: { type: 'select' } } }],
+        flows: [{
+          name: 'renewal',
+          nodes: [{ id: 'start', type: 'start', config: { objectName: 'crm_opportunity' } }],
+          edges: [{ id: 'e1', source: 'start', target: 'end', condition: 'expiring_deals.length > 0' }],
+        }],
+      });
+      expect(issues).toHaveLength(0);
+    });
+
+    it('tags record-scoped bare-ref issues as errors', () => {
+      const issues = validateStackExpressions({
+        objects: [{
+          name: 'crm_lead',
+          fields: { lead_score: { type: 'number' } },
+          validations: [{ name: 'r', expression: 'lead_score > 100' }],
+        }],
+      });
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('error');
+    });
   });
 });

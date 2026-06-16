@@ -135,18 +135,28 @@ export default class Compile extends Command {
       //     located, corrective message instead of a silent runtime `false`.
       if (!flags.json) printStep('Validating expressions (ADR-0032)...');
       const exprIssues = validateStackExpressions(result.data as Record<string, unknown>);
-      if (exprIssues.length > 0) {
+      const exprErrors = exprIssues.filter((i) => i.severity !== 'warning');
+      const exprWarnings = exprIssues.filter((i) => i.severity === 'warning');
+      if (exprErrors.length > 0) {
         if (flags.json) {
-          console.log(JSON.stringify({ success: false, error: 'expression validation failed', issues: exprIssues }));
+          console.log(JSON.stringify({ success: false, error: 'expression validation failed', issues: exprErrors, warnings: exprWarnings }));
           this.exit(1);
         }
         console.log('');
-        printError(`Expression validation failed (${exprIssues.length} issue${exprIssues.length > 1 ? 's' : ''})`);
-        for (const i of exprIssues.slice(0, 50)) {
+        printError(`Expression validation failed (${exprErrors.length} issue${exprErrors.length > 1 ? 's' : ''})`);
+        for (const i of exprErrors.slice(0, 50)) {
           console.log(`  • ${i.where}: ${i.message}`);
           console.log(`      source: \`${i.source}\``);
         }
         this.exit(1);
+      }
+      // Advisory expression warnings (#1928 tier 3) — surfaced, never fatal.
+      if (exprWarnings.length > 0 && !flags.json) {
+        printWarning(`Expression warnings (${exprWarnings.length})`);
+        for (const i of exprWarnings.slice(0, 50)) {
+          console.log(`  • ${i.where}: ${i.message}`);
+          console.log(`      source: \`${i.source}\``);
+        }
       }
 
       // 3c. Widget-binding diagnostics (issues #1719/#1721) — semantic checks

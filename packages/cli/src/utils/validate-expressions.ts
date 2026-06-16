@@ -20,6 +20,12 @@ export interface ExprIssue {
   where: string;
   message: string;
   source: string;
+  /**
+   * `error` fails the build (e.g. a bare ref in a record-scoped formula). `warning`
+   * is advisory and never fails it (e.g. a possible field typo in a flattened flow
+   * condition, which might be a flow variable). Absent ⇒ treat as `error`.
+   */
+  severity?: 'error' | 'warning';
 }
 
 type AnyRec = Record<string, unknown>;
@@ -67,7 +73,8 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
     const fields = objectName ? fieldIndex.get(objectName) : undefined;
     const res = validateExpression('predicate', raw as string | { dialect?: string; source?: string },
       objectName ? { objectName, fields, scope } : { scope });
-    for (const e of res.errors) issues.push({ where, message: e.message, source: e.source });
+    for (const e of res.errors) issues.push({ where, message: e.message, source: e.source, severity: 'error' });
+    for (const w of res.warnings) issues.push({ where, message: w.message, source: w.source, severity: 'warning' });
   };
 
   // ── Flows ──────────────────────────────────────────────────────────
@@ -146,9 +153,9 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
         // `record`-scoped — `record.<field>`, never bare — so flag bare refs (#1928).
         const res = validateExpression('value', f.formula as string | { dialect?: string; source?: string },
           objectName ? { objectName, fields: fieldIndex.get(objectName), scope: 'record' } : { scope: 'record' });
-        for (const e of res.errors) {
-          issues.push({ where: `object '${objectName}' · field '${(f.name as string) ?? '?'}' formula`, message: e.message, source: e.source });
-        }
+        const fieldWhere = `object '${objectName}' · field '${(f.name as string) ?? '?'}' formula`;
+        for (const e of res.errors) issues.push({ where: fieldWhere, message: e.message, source: e.source, severity: 'error' });
+        for (const w of res.warnings) issues.push({ where: fieldWhere, message: w.message, source: w.source, severity: 'warning' });
       }
     }
   }

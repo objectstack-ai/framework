@@ -60,9 +60,7 @@ const SCOPE_ROOTS = [
  * bare field references. It reuses the real stdlib so function calls don't fault;
  * only undeclared *variables* do. Built once — `parse`/`check` do not mutate it.
  */
-let scopedEnv: Environment | undefined;
-function getScopedEnv(): Environment {
-  if (scopedEnv) return scopedEnv;
+function buildScopedEnv(knownFields: readonly string[]): Environment {
   const env = new Environment({
     unlistedVariablesAreDyn: false,
     enableOptionalTypes: true,
@@ -72,9 +70,19 @@ function getScopedEnv(): Environment {
   for (const root of SCOPE_ROOTS) {
     try { env.registerVariable(root, 'map'); } catch { /* duplicate — ignore */ }
   }
-  scopedEnv = env;
+  // `knownFields` are declared as `dyn` so they (and member/arith/compare on
+  // them) never fault — only a genuinely-undeclared top-level identifier does.
+  // Empty for a record-scope site (any bare field is a bug); the trigger
+  // object's fields for a flattened flow condition (only a NON-field bare ref —
+  // a typo or flow variable — is then interesting).
+  for (const field of knownFields) {
+    try { env.registerVariable(field, 'dyn'); } catch { /* duplicate / reserved — ignore */ }
+  }
   return env;
 }
+
+// Roots-only env reused for the common record-scope check (no per-call rebuild).
+let recordScopeEnv: Environment | undefined;
 
 /**
  * In a `record`-scoped CEL site — a `Field.formula` or an object validation
@@ -89,10 +97,16 @@ function getScopedEnv(): Environment {
  * automation conditions, where the record's fields ARE flattened to top-level
  * and bare references are correct.
  */
-export function detectBareReference(source: string): string | null {
+export function firstUndeclaredReference(
+  source: string,
+  knownFields: readonly string[] = [],
+): string | null {
   if (typeof source !== 'string' || !source.trim()) return null;
   try {
-    const result = getScopedEnv().parse(source).check?.() as
+    const env = knownFields.length === 0
+      ? (recordScopeEnv ??= buildScopedEnv([]))
+      : buildScopedEnv(knownFields);
+    const result = env.parse(source).check?.() as
       | { valid: boolean; error?: { message?: string } }
       | undefined;
     if (result && result.valid === false) {
@@ -104,6 +118,11 @@ export function detectBareReference(source: string): string | null {
     // helper only reports the undeclared-variable case.
   }
   return null;
+}
+
+/** @deprecated use {@link firstUndeclaredReference} with no fields. */
+export function detectBareReference(source: string): string | null {
+  return firstUndeclaredReference(source);
 }
 
 /** Coerce cel-js's BigInt-flavored return into spec-friendly JS values. */
