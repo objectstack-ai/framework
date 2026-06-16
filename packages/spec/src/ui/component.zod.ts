@@ -217,6 +217,33 @@ export const ElementImagePropsSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * Read-only, synthesized view of a metadata item, embedded inline in content
+ * (ADR-0051). This is the *inline form* of ADR-0046 §3.5 ("derived content is
+ * rendered, never written") and the component a ` ```metadata ` doc fence
+ * compiles to. Because it renders the platform's *own* metadata via the
+ * platform's *own* viewer, it carries no expressions or actions — it stays on
+ * the data side of the §3.4 trust boundary and is safe to embed in inert docs
+ * (`embeddableInDoc`). The view is resolved live at read time, then projected
+ * to the reader's permissions automatically (see `detail` for the distinct,
+ * author-controlled altitude projection). `object` embeds are deferred
+ * (ADR-0051 §5).
+ */
+export const ElementMetadataViewerPropsSchema = lazySchema(() => z.object({
+  type: z.enum(['state_machine', 'flow', 'permission'])
+    .describe('Metadata view kind (ADR-0051): state_machine | flow | permission'),
+  name: z.string()
+    .describe('Target metadata item name; resolved package-scoped (ADR-0048), then dependencies (ADR-0046 §3.3)'),
+  object: z.string().optional()
+    .describe('Owning object — required for object-scoped kinds: state_machine is a rule ON an object (ADR-0020), permission renders a matrix FOR one; omit for top-level flow'),
+  mode: z.enum(['diagram', 'matrix', 'summary']).optional()
+    .describe('Render form; defaults per type (diagram for flow/state_machine, matrix for permission)'),
+  detail: z.enum(['business', 'technical']).optional().default('business')
+    .describe('Authoring altitude (ADR-0051 §3.4): business collapses technical flow nodes to business steps + approvals. NOT access (cf. book.audience); permission projection is automatic and render-time, never set here'),
+  /** ARIA accessibility */
+  aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+}));
+
+/**
  * ----------------------------------------------------------------------
  * 4. Interactive Element Components (Phase B — Element Library)
  * ----------------------------------------------------------------------
@@ -311,6 +338,7 @@ export const ComponentPropsMap = {
   'element:text': ElementTextPropsSchema,
   'element:number': ElementNumberPropsSchema,
   'element:image': ElementImagePropsSchema,
+  'element:metadata_viewer': ElementMetadataViewerPropsSchema, // ADR-0051: inline read-only metadata view (embeddableInDoc)
   'element:divider': EmptyProps,
 
   // Interactive Elements
