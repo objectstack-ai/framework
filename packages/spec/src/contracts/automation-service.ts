@@ -119,6 +119,14 @@ export interface AutomationResult {
      * `signal.variables`.
      */
     screen?: ScreenSpec;
+    /**
+     * Friendly terminal messages copied from the flow definition
+     * (`flow.successMessage` / `flow.errorMessage`) so a screen-flow runner can
+     * show a meaningful toast instead of a generic "Done" / the raw error.
+     * `successMessage` is set on terminal success, `errorMessage` on failure.
+     */
+    successMessage?: string;
+    errorMessage?: string;
 }
 
 /** Signal payload used to resume a paused run (ADR-0019). */

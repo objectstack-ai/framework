@@ -30,6 +30,11 @@ export const ConvertLeadScreenFlow = defineFlow({
   status: 'active',
   runAs: 'user',
 
+  // Friendly terminal toasts — the flow-runner shows these instead of a generic
+  // "Done" / the raw error when the wizard finishes.
+  successMessage: '🎉 Lead converted — customer and opportunity created.',
+  errorMessage: 'Lead conversion did not finish — review the lead and try again.',
+
   variables: [
     // ── input (from the action trigger) ───────────────────────────────────
     { name: 'recordId',       type: 'text',   isInput: true,  isOutput: false },
