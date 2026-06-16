@@ -316,6 +316,10 @@ export const ActionSchema = lazySchema(() => z.object({
   // set a friendly failure toast instead of surfacing the raw error string.
   errorMessage: I18nLabelSchema.optional().describe('Error message to show when the action fails (overrides the raw error).'),
   refreshAfter: z.boolean().default(false).describe('Refresh view after execution'),
+  // Single-record update actions only. When true, the runtime captures the
+  // record's prior field values and offers an "Undo" affordance on the success
+  // toast (backed by the client UndoManager) to restore them.
+  undoable: z.boolean().optional().describe('Offer an Undo affordance after this single-record update action succeeds.'),
 
   /**
    * Result Dialog — describe how to render the API response on success.

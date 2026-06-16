@@ -16,4 +16,9 @@ export const ConvertLeadAction: UI.Action = {
   target: 'crm_convert_lead_wizard',
   locations: ['list_item', 'record_header', 'record_more'],
   recordIdParam: 'recordId',
+  // Conditional visibility (CEL): hide the action once the lead is already
+  // converted — so the button disappears rather than the user clicking it and
+  // hitting the flow's "already converted" guard screen. The flow keeps that
+  // guard as a server-side backstop.
+  visible: 'record.status != "converted"',
 };
