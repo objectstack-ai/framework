@@ -81,7 +81,7 @@ describe('hookBodyRunnerFactory', () => {
       events: ['afterInsert'],
       body: {
         language: 'js',
-        source: 'return { opportunity_count: ctx.api.object("opportunity").count() };',
+        source: 'return { opportunity_count: await ctx.api.object("opportunity").count() };',
         capabilities: ['api.read'],
       },
     } as any);
