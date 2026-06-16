@@ -1524,11 +1524,11 @@ export default class Serve extends Command {
           export: 'RealtimeServicePlugin',
           nameMatch: ['service-realtime', 'RealtimeServicePlugin'],
         },
-        feed: {
-          pkg: '@objectstack/service-feed',
-          export: 'FeedServicePlugin',
-          nameMatch: ['service-feed', 'FeedServicePlugin'],
-        },
+        // `feed` removed (ADR-0052 §5): `sys_comment`/`sys_activity` (durable,
+        // default-loaded, UI-wired) is the canonical record collaboration +
+        // timeline backend. `@objectstack/service-feed` was an in-memory,
+        // non-durable, UI-unconsumed parallel implementation — retired to end
+        // the split-brain. The unified typed timeline lives on `sys_activity`.
         mcp: {
           pkg: '@objectstack/mcp',
           export: 'MCPServerPlugin',

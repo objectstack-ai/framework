@@ -78,7 +78,6 @@
     "@objectstack/service-automation": "workspace:*",
     "@objectstack/service-cache": "workspace:*",
     "@objectstack/service-datasource": "workspace:*",
-    "@objectstack/service-feed": "workspace:*",
     "@objectstack/service-job": "workspace:*",
     "@objectstack/service-messaging": "workspace:*",
     "@objectstack/service-package": "workspace:*",

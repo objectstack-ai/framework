@@ -15,8 +15,8 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *   2. Files can be moved between buckets / storage tiers without breaking links.
  *   3. Lifecycle status (uploading → committed → deleted) can be tracked.
  *
- * Belongs to `@objectstack/service-storage` per the
- * "protocol + service ownership" pattern used by `service-feed`.
+ * Belongs to `@objectstack/service-storage` per the platform's
+ * "protocol + service ownership" pattern.
  */
 export const SystemFile = ObjectSchema.create({
   name: 'sys_file',

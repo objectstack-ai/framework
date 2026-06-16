@@ -161,39 +161,44 @@ boundary — which is only possible once mutable co-tenants (`sys_comment`) leav
 Audit **remains a default platform capability**: compliance is foundational,
 durable, and HA-safe. It just stops being the dumping ground.
 
-## 5. Collaboration / activity: one backend, and the `ALWAYS_ON` question
+## 5. Collaboration / activity: one backend — **DECIDED: `sys_comment`**
 
-There are two implementations; we must converge to one. The recommended target
-is **`service-feed`'s model** — a single unified, *typed* timeline
-(`FeedItemType` already enumerates `comment | field_change | task | event |
-email | call | note | …`), with reactions, mentions, threaded replies, and
-record subscriptions — because it is the right long-term shape (a business event
-stream, not a CRUD log). But it is **not shippable as-is**, and therefore **must
-not be added to `ALWAYS_ON_CAPABILITIES` today**. Admission criteria
-(`ALWAYS_ON` = foundational **and** durable/HA-safe **and** actually consumed):
+There were two implementations; we converge to one. **Decision: `sys_comment` /
+`sys_activity` is canonical; `@objectstack/service-feed` is retired.**
 
-1. **Durable adapter.** `service-feed` currently ships an in-memory,
-   single-instance, non-durable adapter ("v1: single-instance only; data lost on
-   restart"). A DB-backed adapter is a precondition for default-on.
-2. **REST surface mounted.** The nested `/api/v1/data/{object}/{recordId}/feed`
-   contract (`feed-api.zod.ts`) returns `404` — the route is unimplemented in
-   the rest server. Mount it.
-3. **UI consumes the service.** The console **ChatterPanel** is hard-wired to
-   `sys_comment` / `sys_activity` / `sys_user`. Point it at `IFeedService`.
-4. **Migration / aliasing.** `sys_comment` rows (DB-backed, in use) must be
-   migrated or aliased onto the canonical store so no comment is lost and
-   `thread_id = {object}:{recordId}` continues to resolve.
+The originally-recommended target was `service-feed`'s single unified *typed*
+timeline. But weighing it against the implementation reality reversed that lean:
 
-Until 1–4 land, the **DB-backed `sys_comment` + `sys_activity` remain the
-canonical, default-available collaboration surface** (they already work), and
-the short-term, highest-ROI UI win is to render the `reactions` / `parent_id`
-fields `sys_comment` **already declares** — no `feed` flag required.
+| | `sys_comment` / `sys_activity` (chosen) | `service-feed` (retired) |
+|---|---|---|
+| Durability | ✅ DB-backed | ❌ in-memory only ("v1: single-instance; data lost on restart") |
+| Default-loaded | ✅ (via audit slate) | ❌ opt-in capability |
+| UI consumes it | ✅ ChatterPanel reads/writes it | ❌ never consumed (enabling `feed` was a verified no-op) |
+| REST | ✅ generic data API | ❌ nested `/data/{obj}/{id}/feed` route unmounted (404) |
+| threads/mentions/reactions | ✅ fields already declared (`parent_id`, `reply_count`, `mentions`, `reactions`) | ✅ (but unreachable) |
 
-> Counter-option: make **`sys_comment`** the canonical model and retire
-> `service-feed` into it (it already has `thread_id`, `parent_id`, `reply_count`,
-> `mentions`, `reactions`). Cheaper, durable today, but keeps three separate
-> objects instead of one unified typed feed. Decision deferred to the build spec;
-> either way, **the terminal state is one backend, not two.**
+Picking the durable, default, UI-wired system reaches "one backend" **now**, at
+near-zero risk. `service-feed`'s only real edge — one unified *typed* stream —
+is obtained on the chosen family by treating **`sys_activity` as the unified
+typed timeline** (its `type` enum already carries the event kinds; extend it to
+`email | call | event | note` as needed). The two remaining UI niceties
+(reactions, threaded replies) are a render of fields `sys_comment` **already**
+has — an objectui enhancement, not a backend change.
+
+Rejected alternative — invest in `service-feed`: building a DB adapter + mounting
+the REST route + repointing ChatterPanel + migrating `sys_comment` rows is weeks
+of cross-repo work to **duplicate a system that already works durably**. That is
+the split-brain this ADR exists to end, not extend.
+
+> Superseded note (kept for history): an earlier draft deferred this to a build
+> spec and leaned toward `service-feed`. Implementation reality (in-memory,
+> UI-unused, REST-unmounted) decided it the other way.
+
+The terminal state is **one backend, not two** — now realized: `service-feed`'s
+runtime (the package + the `feed` capability) is removed; `sys_comment` /
+`sys_activity` stand alone. (The vestigial spec *contracts* — `feed.zod` /
+`feed-api.zod` / `IFeedService` — are a separate type-surface cleanup, since they
+are woven into `component.zod` / `protocol.zod` / objectql; tracked as follow-up.)
 
 ## 5b. Declarative activity — the platform generates it, apps don't code it
 
