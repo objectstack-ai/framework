@@ -40,6 +40,9 @@ export const Task = ObjectSchema.create({
     status: Field.select({
       label: 'Status',
       required: true,
+      // ADR-0052 §5b — declarative activity. Status changes auto-appear on the
+      // record timeline as "Status: To Do → In Progress" with zero hook code.
+      trackHistory: true,
       options: [
         { label: 'Backlog', value: 'backlog', default: true, color: '#94A3B8' },
         { label: 'To Do', value: 'todo', color: '#3B82F6' },
@@ -50,6 +53,7 @@ export const Task = ObjectSchema.create({
     }),
     priority: Field.select({
       label: 'Priority',
+      trackHistory: true,
       options: [
         { label: 'Low', value: 'low', color: '#94A3B8' },
         { label: 'Medium', value: 'medium', default: true, color: '#3B82F6' },
