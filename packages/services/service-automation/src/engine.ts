@@ -1287,7 +1287,9 @@ export class AutomationEngine implements IAutomationService {
                     await this.bubbleToParent(run, output);
                 }
 
-                return { success: true, output, durationMs };
+                // Surface the flow's friendly completion message so a screen-flow
+                // runner shows it instead of a generic "Done".
+                return { success: true, output, durationMs, successMessage: flow.successMessage };
             } catch (err: unknown) {
                 // Re-suspended at a downstream node: persist a fresh continuation.
                 if (isSuspendSignal(err)) {
@@ -1341,7 +1343,9 @@ export class AutomationEngine implements IAutomationService {
                 if (!skipBubble) {
                     await this.failAncestors(run.context, errorMessage);
                 }
-                return { success: false, error: errorMessage, durationMs };
+                // Surface the flow's friendly error message (the raw error stays
+                // in `error` for logs/diagnostics).
+                return { success: false, error: errorMessage, durationMs, errorMessage: flow.errorMessage };
             }
         } finally {
             this.resuming.delete(runId);

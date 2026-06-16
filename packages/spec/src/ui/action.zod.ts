@@ -312,6 +312,9 @@ export const ActionSchema = lazySchema(() => z.object({
   /** UX Behavior */
   confirmText: I18nLabelSchema.optional().describe('Confirmation message before execution'),
   successMessage: I18nLabelSchema.optional().describe('Success message to show after execution'),
+  // Runtime (ActionRunner) already honours this — declared here so authors can
+  // set a friendly failure toast instead of surfacing the raw error string.
+  errorMessage: I18nLabelSchema.optional().describe('Error message to show when the action fails (overrides the raw error).'),
   refreshAfter: z.boolean().default(false).describe('Refresh view after execution'),
 
   /**

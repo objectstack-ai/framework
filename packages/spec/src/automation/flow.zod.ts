@@ -234,7 +234,17 @@ export const FlowSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Machine name'),
   label: z.string().describe('Flow label'),
   description: z.string().optional(),
-  
+
+  /**
+   * Terminal messages for `screen`-flow runs. When the run reaches a terminal
+   * state, the UI flow-runner shows `successMessage` instead of a generic
+   * "Done" toast, and `errorMessage` instead of the raw error. Both are
+   * surfaced on the terminal {@link AutomationResult} (`successMessage` /
+   * `errorMessage`). Plain strings; `{var}` is NOT interpolated here.
+   */
+  successMessage: z.string().optional().describe('Toast shown when a screen flow completes (defaults to a generic "Done").'),
+  errorMessage: z.string().optional().describe('Toast shown when a screen flow fails (defaults to the raw error).'),
+
   /** Metadata & Versioning */
   version: z.number().int().default(1).describe('Version number'),
   status: z.enum(['draft', 'active', 'obsolete', 'invalid']).default('draft').describe('Deployment status'),
