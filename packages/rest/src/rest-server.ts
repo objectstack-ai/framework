@@ -48,6 +48,20 @@ function isMetaEnvelope(value: any): boolean {
  * returns a misleading 404.
  */
 export function mapDataError(error: any, object?: string): { status: number; body: Record<string, unknown> } {
+    // Referential-integrity restrict on delete → 409 with the dependent count.
+    // Surfaced FIRST so the structured fields survive the generic catch-alls.
+    if (error?.code === 'DELETE_RESTRICTED') {
+        return {
+            status: 409,
+            body: {
+                error: error?.message ?? 'Cannot delete: dependent records exist',
+                code: 'DELETE_RESTRICTED',
+                ...(error?.dependentObject ? { dependentObject: error.dependentObject } : {}),
+                ...(typeof error?.dependentCount === 'number' ? { dependentCount: error.dependentCount } : {}),
+                ...(object ? { object } : {}),
+            },
+        };
+    }
     // Optimistic-Concurrency-Control mismatch → 409 with current state.
     // Surfaced FIRST so the structured fields (`currentVersion`,
     // `currentRecord`) are preserved instead of being squashed into the
@@ -2931,53 +2945,18 @@ export class RestServer {
     
     /**
      * Register object-specific action endpoints that don't fit the
-     * generic CRUD shape. These are domain operations (Salesforce
-     * convertLead, etc.) where the protocol implementation does its own
-     * multi-record orchestration and we just need a thin HTTP route.
+     * generic CRUD shape — domain operations where the protocol does its
+     * own orchestration and we just need a thin HTTP route.
      *
-     * POST {basePath}/data/lead/:id/convert — M10.6 lead conversion.
+     * POST {basePath}/data/:object/:id/clone — record clone (gated by
+     * `enable.clone`). This is object-agnostic by design: it works for any
+     * authored object regardless of namespace, unlike a hardcoded
+     * per-object route would.
      */
     private registerDataActionEndpoints(basePath: string): void {
         const isScoped = basePath.includes('/environments/:environmentId');
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-
-        // POST /data/lead/:id/convert
-        this.routeManager.register({
-            method: 'POST',
-            path: `${dataPath}/lead/:id/convert`,
-            handler: async (req: any, res: any) => {
-                try {
-                    const environmentId = isScoped ? req.params?.environmentId : undefined;
-                    const p = await this.resolveProtocol(environmentId, req);
-                    const context = await this.resolveExecCtx(environmentId, req);
-                    if (this.enforceAuth(req, res, context)) return;
-                    const convertLead = (p as any).convertLead;
-                    if (typeof convertLead !== 'function') {
-                        res.status(501).json({ code: 'NOT_IMPLEMENTED', error: 'Lead convert not supported by this protocol' });
-                        return;
-                    }
-                    const body = req.body ?? {};
-                    const result = await convertLead.call(p, {
-                        leadId: req.params.id,
-                        accountId: body.accountId,
-                        contactId: body.contactId,
-                        createOpportunity: body.createOpportunity,
-                        opportunity: body.opportunity,
-                        convertedStatus: body.convertedStatus,
-                        ...(context ? { context } : {}),
-                    });
-                    res.json(result);
-                } catch (error: any) {
-                    logError('[REST] Unhandled error:', error);
-                    sendError(res, error, 'lead');
-                }
-            },
-            metadata: {
-                summary: 'Convert a Lead into Account + Contact (+ optional Opportunity)',
-                tags: ['data', 'lead'],
-            },
-        });
 
         // POST /data/:object/:id/clone — duplicate a record (gated by the
         // object's `enable.clone` capability, default on). Optional JSON body

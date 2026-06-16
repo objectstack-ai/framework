@@ -2210,7 +2210,10 @@ export class ObjectQL implements IDataEngine {
    *   - `set_null` → clear the foreign key,
    *   - `restrict` → refuse the delete when dependents exist.
    * `master_detail` defaults to `cascade` (the parent owns the child
-   * lifecycle); `lookup` defaults to `set_null`. Only runs for single-id
+   * lifecycle); `lookup` defaults to `set_null` — except a `set_null` default
+   * on a REQUIRED lookup escalates to `restrict` (you can't null a NOT NULL
+   * FK; restricting with a clear dependent-count message beats a misleading
+   * "<field> is required" 400 from the child). Only runs for single-id
    * deletes — multi/predicate deletes skip cascade (logged).
    */
   private async cascadeDeleteRelations(
@@ -2243,10 +2246,23 @@ export class ObjectQL implements IDataEngine {
         // child FK is typically required, so set_null would be invalid). Only
         // an explicit `restrict` deviates. A plain lookup honors its
         // configured deleteBehavior (default set_null).
-        const behavior: string =
+        let behavior: string =
           fdef.type === 'master_detail'
             ? (fdef.deleteBehavior === 'restrict' ? 'restrict' : 'cascade')
             : (fdef.deleteBehavior || 'set_null');
+
+        // A REQUIRED foreign key cannot be nulled — set_null would issue an
+        // UPDATE clearing the FK, which the child's required-field validator
+        // rejects with a misleading "<field> is required" 400 (the field isn't
+        // even on the object being deleted). That's a contradiction, not the
+        // author's intent: a required FK means the child can't exist detached,
+        // so deleting the parent must be RESTRICTed (SQL's default for a
+        // NOT NULL FK). Authors who want the children gone set
+        // deleteBehavior:'cascade' explicitly. This only escalates the
+        // *defaulted* set_null; an explicit cascade/restrict is untouched.
+        if (behavior === 'set_null' && fdef.required === true) {
+          behavior = 'restrict';
+        }
 
         let dependents: any[];
         try {
@@ -2257,9 +2273,19 @@ export class ObjectQL implements IDataEngine {
         if (!dependents || dependents.length === 0) continue;
 
         if (behavior === 'restrict') {
-          throw new Error(
-            `Cannot delete ${object} (${id}): ${dependents.length} dependent ${childName} record(s) via ${fieldName}`,
+          const reason = fdef.deleteBehavior !== 'restrict' && fdef.required === true
+            ? ` (${fieldName} is required, so it cannot be cleared)`
+            : '';
+          const err: any = new Error(
+            `Cannot delete ${object} (${id}): ${dependents.length} dependent ${childName} record(s) reference it via ${fieldName}${reason}. ` +
+            `Delete or reassign them first, or set deleteBehavior:'cascade' on ${childName}.${fieldName}.`,
           );
+          err.code = 'DELETE_RESTRICTED';
+          err.status = 409;
+          err.object = object;
+          err.dependentObject = childName;
+          err.dependentCount = dependents.length;
+          throw err;
         }
 
         for (const dep of dependents) {
