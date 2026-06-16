@@ -64,7 +64,8 @@ export const DocSchema = lazySchema(() => z.object({
   /**
    * Optional sort key within a book group (ADR-0046 §6.2.1). A scalar, so it
    * three-way-merges cleanly under overlay — unlike a central nav array. Absent
-   * ⇒ sorts after ordered siblings, then alphabetically by label.
+   * ⇒ treated as 0 by the resolver (sorts among 0-keyed siblings), then
+   * alphabetically by label.
    */
   order: z.number().optional().describe('Sort key within a book group (ADR-0046 §6)'),
 
