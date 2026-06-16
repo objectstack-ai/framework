@@ -2978,6 +2978,59 @@ export class RestServer {
                 tags: ['data', 'lead'],
             },
         });
+
+        // POST /data/:object/:id/clone — duplicate a record (gated by the
+        // object's `enable.clone` capability, default on). Optional JSON body
+        // `{ overrides?: {...} }` (or a bare field map) is applied on top of
+        // the copied values, e.g. to set a new name or clear a unique field.
+        // Distinct path segment (`/clone`) keeps it clear of the greedy
+        // `/data/:object/:id` matchers.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/:object/:id/clone`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    if (await this.enforceApiAccess(req, res, p, environmentId, 'create')) return;
+                    const cloneData = (p as any).cloneData;
+                    if (typeof cloneData !== 'function') {
+                        res.status(501).json({ code: 'NOT_IMPLEMENTED', error: 'Clone not supported by this protocol' });
+                        return;
+                    }
+                    const body = req.body ?? {};
+                    // Accept both `{ overrides: {...} }` and a bare field map so
+                    // callers can POST overrides directly without nesting.
+                    const overrides = (body && typeof body === 'object' && 'overrides' in body)
+                        ? body.overrides
+                        : body;
+                    const result = await cloneData.call(p, {
+                        object: req.params.object,
+                        id: req.params.id,
+                        ...(overrides && typeof overrides === 'object' ? { overrides } : {}),
+                        ...(environmentId ? { environmentId } : {}),
+                        ...(context ? { context } : {}),
+                    });
+                    res.status(201).json(result);
+                } catch (error: any) {
+                    // Clone's domain errors (CLONE_DISABLED/RECORD_NOT_FOUND)
+                    // carry an explicit `.status`; fall back to mapDataError for
+                    // driver/validation faults. Only log genuine server faults.
+                    const status = typeof error?.status === 'number'
+                        ? error.status
+                        : mapDataError(error, req.params?.object).status;
+                    if (!isExpectedDataStatus(status) && error?.code !== 'VALIDATION_FAILED') logError('[REST] Unhandled error:', error);
+                    sendError(res, error, req.params?.object);
+                }
+            },
+            metadata: {
+                summary: 'Clone a record (gated by enable.clone)',
+                tags: ['data', 'clone'],
+            },
+        });
+
         // POST /data/:object/import  — bulk CSV/JSON ingestion (M10.9)
         //
         // Body shapes:

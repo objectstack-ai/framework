@@ -408,6 +408,13 @@ function normaliseVersionToken(v: unknown): string | null {
     return s;
 }
 
+// Lifecycle columns the engine always owns; the clone path drops them by NAME
+// so the insert re-stamps fresh values instead of copying the source's. Mirrors
+// record-validator's SKIP_FIELDS (system-injected, never author-supplied).
+const CLONE_STRIP_FIELDS: readonly string[] = [
+    'id', 'created_at', 'created_by', 'updated_at', 'updated_by',
+];
+
 /**
  * Service Configuration for Discovery
  * Maps service names to their routes and plugin providers
@@ -2233,6 +2240,83 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             object: request.object,
             id: result.id,
             record: result
+        };
+    }
+
+    /**
+     * Clone a record — read the source, drop engine-owned columns, and
+     * insert a fresh copy. Gated by the object's `enable.clone` capability
+     * (default `true`; only an explicit `enable.clone === false` disables it).
+     *
+     * Shallow by design: it duplicates the record's own scalar/business field
+     * values, not its related child records. The insert path re-stamps audit
+     * columns, regenerates `autonumber` fields, and recomputes derived
+     * (`formula`/`summary`) fields, so the copy is a valid new row rather than
+     * a byte-identical twin. Caller-supplied `overrides` are applied last and
+     * win over the copied values — the natural place to set a new `name`,
+     * clear a unique field, or reset status before insert.
+     */
+    async cloneData(request: { object: string, id: string, overrides?: Record<string, any>, context?: any }) {
+        const schema: any = this.engine.registry.getObject(request.object);
+        if (!schema) {
+            const err: any = new Error(`Object '${request.object}' not found`);
+            err.code = 'OBJECT_NOT_FOUND';
+            err.status = 404;
+            err.object = request.object;
+            throw err;
+        }
+        // `enable.clone` defaults to true in the spec; treat an absent block /
+        // absent flag as enabled and only block on an explicit `false`.
+        if (schema.enable?.clone === false) {
+            const err: any = new Error(`Cloning is disabled for object '${request.object}'`);
+            err.code = 'CLONE_DISABLED';
+            err.status = 403;
+            err.object = request.object;
+            throw err;
+        }
+
+        const ctx = request.context;
+        const ctxOpt = ctx !== undefined ? { context: ctx } : undefined;
+
+        const source = await this.engine.findOne(
+            request.object,
+            { where: { id: request.id }, ...(ctxOpt as any) } as any,
+        );
+        if (!source) {
+            const err: any = new Error(`Record ${request.id} not found in ${request.object}`);
+            err.code = 'RECORD_NOT_FOUND';
+            err.status = 404;
+            err.object = request.object;
+            throw err;
+        }
+
+        // Copy the source, then strip the columns the engine owns so the insert
+        // path re-derives them rather than carrying the source's values over.
+        const data: Record<string, any> = { ...source };
+        for (const f of CLONE_STRIP_FIELDS) delete data[f];
+        const fields: Record<string, any> = schema.fields || {};
+        for (const [name, def] of Object.entries(fields)) {
+            if (!def) continue;
+            // Engine-/automation-owned values: injected system/audit columns,
+            // engine-generated autonumbers, and computed formula/summary fields.
+            if ((def as any).system === true
+                || (def as any).type === 'autonumber'
+                || (def as any).type === 'formula'
+                || (def as any).type === 'summary') {
+                delete data[name];
+            }
+        }
+        // Caller overrides win (new name, cleared unique field, reset status…).
+        if (request.overrides && typeof request.overrides === 'object') {
+            Object.assign(data, request.overrides);
+        }
+
+        const result = await this.engine.insert(request.object, data, ctxOpt as any);
+        return {
+            object: request.object,
+            id: result.id,
+            sourceId: request.id,
+            record: result,
         };
     }
 

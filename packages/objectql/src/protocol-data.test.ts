@@ -361,4 +361,131 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
             expect(mockEngine.delete).toHaveBeenCalledOnce();
         });
     });
+
+    // ═══════════════════════════════════════════════════════════════
+    // cloneData — duplicate a record, gated by enable.clone
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('cloneData', () => {
+        // A richer engine mock: cloneData reads registry.getObject for the
+        // schema (enable.clone + field defs), findOne for the source row, and
+        // insert for the copy.
+        function makeProtocol(opts: {
+            schema?: any;
+            source?: any;
+        } = {}) {
+            const insert = vi.fn(async (_obj: string, data: any) => ({ id: 'new-id', ...data }));
+            const findOne = vi.fn().mockResolvedValue(
+                opts.source === undefined
+                    ? { id: 'src-1', name: 'Acme', amount: 100 }
+                    : opts.source,
+            );
+            const engine: any = {
+                findOne,
+                insert,
+                registry: {
+                    getObject: vi.fn().mockReturnValue(
+                        opts.schema === undefined
+                            ? { name: 'account', fields: { name: { type: 'text' }, amount: { type: 'number' } } }
+                            : opts.schema,
+                    ),
+                },
+            };
+            return { protocol: new ObjectStackProtocolImplementation(engine), engine, insert, findOne };
+        }
+
+        it('copies business fields and strips engine-owned audit/id columns', async () => {
+            const { protocol, insert } = makeProtocol({
+                source: {
+                    id: 'src-1', name: 'Acme', amount: 100,
+                    created_at: 'x', created_by: 'u1', updated_at: 'y', updated_by: 'u1',
+                },
+            });
+            const result = await protocol.cloneData({ object: 'account', id: 'src-1' });
+
+            const [, inserted] = insert.mock.calls[0];
+            expect(inserted).toEqual({ name: 'Acme', amount: 100 });
+            expect(inserted).not.toHaveProperty('id');
+            expect(inserted).not.toHaveProperty('created_at');
+            expect(inserted).not.toHaveProperty('updated_by');
+            expect(result).toMatchObject({ object: 'account', id: 'new-id', sourceId: 'src-1' });
+        });
+
+        it('drops autonumber / formula / summary / system fields so they re-derive', async () => {
+            const { protocol, insert } = makeProtocol({
+                schema: {
+                    name: 'ticket',
+                    fields: {
+                        name: { type: 'text' },
+                        ref: { type: 'autonumber' },
+                        total: { type: 'formula' },
+                        rollup: { type: 'summary' },
+                        organization_id: { type: 'text', system: true },
+                    },
+                },
+                source: {
+                    id: 'src-1', name: 'Bug', ref: 'TKT-0001',
+                    total: 42, rollup: 7, organization_id: 'org-9',
+                },
+            });
+            await protocol.cloneData({ object: 'ticket', id: 'src-1' });
+
+            const [, inserted] = insert.mock.calls[0];
+            expect(inserted).toEqual({ name: 'Bug' });
+        });
+
+        it('applies caller overrides last (they win over copied values)', async () => {
+            const { protocol, insert } = makeProtocol({
+                source: { id: 'src-1', name: 'Acme', amount: 100 },
+            });
+            await protocol.cloneData({
+                object: 'account',
+                id: 'src-1',
+                overrides: { name: 'Acme (Copy)', amount: 0 },
+            });
+            const [, inserted] = insert.mock.calls[0];
+            expect(inserted).toEqual({ name: 'Acme (Copy)', amount: 0 });
+        });
+
+        it('forwards context to findOne and insert', async () => {
+            const { protocol, insert, findOne } = makeProtocol();
+            const ctx = { userId: 'u1' };
+            await protocol.cloneData({ object: 'account', id: 'src-1', context: ctx });
+            expect(findOne).toHaveBeenCalledWith('account', expect.objectContaining({ context: ctx }));
+            expect(insert).toHaveBeenCalledWith('account', expect.anything(), { context: ctx });
+        });
+
+        it('rejects with 403 CLONE_DISABLED when enable.clone === false', async () => {
+            const { protocol, insert } = makeProtocol({
+                schema: { name: 'account', enable: { clone: false }, fields: {} },
+            });
+            await expect(
+                protocol.cloneData({ object: 'account', id: 'src-1' }),
+            ).rejects.toMatchObject({ code: 'CLONE_DISABLED', status: 403 });
+            expect(insert).not.toHaveBeenCalled();
+        });
+
+        it('allows clone when enable block is absent (default-on)', async () => {
+            const { protocol, insert } = makeProtocol({
+                schema: { name: 'account', fields: { name: { type: 'text' } } },
+            });
+            await protocol.cloneData({ object: 'account', id: 'src-1' });
+            expect(insert).toHaveBeenCalledOnce();
+        });
+
+        it('rejects with 404 RECORD_NOT_FOUND when the source is missing', async () => {
+            const { protocol, insert } = makeProtocol({ source: null });
+            await expect(
+                protocol.cloneData({ object: 'account', id: 'nope' }),
+            ).rejects.toMatchObject({ code: 'RECORD_NOT_FOUND', status: 404 });
+            expect(insert).not.toHaveBeenCalled();
+        });
+
+        it('rejects with 404 OBJECT_NOT_FOUND for an unknown object', async () => {
+            const { protocol } = makeProtocol({ schema: null });
+            await expect(
+                protocol.cloneData({ object: 'ghost', id: 'src-1' }),
+            ).rejects.toMatchObject({ code: 'OBJECT_NOT_FOUND', status: 404 });
+        });
+    });
 });

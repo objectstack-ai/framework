@@ -168,8 +168,9 @@
           "evidence": "no behavior-changing reader"
         },
         "clone": {
-          "status": "dead",
-          "evidence": "no behavior-changing reader"
+          "status": "live",
+          "evidence": "packages/objectql/src/protocol.ts:2259",
+          "note": "cloneData() gates on schema.enable.clone (explicit false ⇒ 403 CLONE_DISABLED); exposed at POST /data/:object/:id/clone (rest-server.ts registerDataActionEndpoints)."
         }
       }
     },

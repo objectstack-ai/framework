@@ -40,6 +40,7 @@ function createMockProtocol() {
     findData: vi.fn().mockResolvedValue([]),
     getData: vi.fn().mockResolvedValue({}),
     createData: vi.fn().mockResolvedValue({ id: '1' }),
+    cloneData: vi.fn().mockResolvedValue({ object: 'account', id: '2', sourceId: '1', record: { id: '2' } }),
     updateData: vi.fn().mockResolvedValue({}),
     deleteData: vi.fn().mockResolvedValue({ success: true }),
     batchData: undefined as any,
@@ -496,6 +497,79 @@ describe('RestServer', () => {
       // Should NOT have expand or select keys in the call
       const callArg = protocol.getData.mock.calls[protocol.getData.mock.calls.length - 1][0];
       expect(callArg).toEqual({ object: 'contact', id: 'c_1' });
+    });
+  });
+
+  describe('clone route — POST /data/:object/:id/clone', () => {
+    function cloneRoute(rest: any) {
+      return rest
+        .getRoutes()
+        .find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/:object/:id/clone');
+    }
+    const mockRes = () => ({ json: vi.fn(), status: vi.fn().mockReturnThis() });
+
+    it('registers the clone route alongside CRUD', () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      expect(cloneRoute(rest)).toBeDefined();
+    });
+
+    it('forwards object/id and nested overrides to protocol.cloneData and responds 201', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      const route = cloneRoute(rest);
+
+      const req = { params: { object: 'account', id: 'a1' }, body: { overrides: { name: 'Copy' } } };
+      const res = mockRes();
+      await route!.handler(req, res);
+
+      expect(protocol.cloneData).toHaveBeenCalledWith(
+        expect.objectContaining({ object: 'account', id: 'a1', overrides: { name: 'Copy' } }),
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('treats a bare body (no `overrides` key) as the override map', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      const route = cloneRoute(rest);
+
+      const req = { params: { object: 'account', id: 'a1' }, body: { name: 'Bare' } };
+      const res = mockRes();
+      await route!.handler(req, res);
+
+      expect(protocol.cloneData).toHaveBeenCalledWith(
+        expect.objectContaining({ object: 'account', id: 'a1', overrides: { name: 'Bare' } }),
+      );
+    });
+
+    it('maps a CLONE_DISABLED protocol error to 403', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      const route = cloneRoute(rest);
+
+      protocol.cloneData.mockRejectedValueOnce(
+        Object.assign(new Error('Cloning is disabled'), { code: 'CLONE_DISABLED', status: 403 }),
+      );
+      const req = { params: { object: 'account', id: 'a1' }, body: {} };
+      const res = mockRes();
+      await route!.handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'CLONE_DISABLED' }));
+    });
+
+    it('returns 501 when the protocol does not implement cloneData', async () => {
+      const noClone = { ...protocol, cloneData: undefined };
+      const rest = new RestServer(server as any, noClone as any);
+      rest.registerRoutes();
+      const route = cloneRoute(rest);
+
+      const req = { params: { object: 'account', id: 'a1' }, body: {} };
+      const res = mockRes();
+      await route!.handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(501);
     });
   });
 
