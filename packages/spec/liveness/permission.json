@@ -2,42 +2,126 @@
   "type": "permission",
   "_note": "PermissionSetSchema (also aliased as `profile`). Seeded from docs/audits/2026-06-security-identity-property-liveness.md. CRUD/FLS/RLS enforced via plugin-security; destructive ops + isProfile/contextVariables dead. allowTransfer/Restore/Purge are marker-driven experimental (spec `[EXPERIMENTAL — not enforced]`).",
   "props": {
-    "name": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts", "note": "registration/assignment key." },
-    "label": { "status": "live", "note": "display metadata." },
-    "isProfile": { "status": "dead", "evidence": "audit: profile-vs-permset never gates anything" },
+    "name": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts",
+      "note": "registration/assignment key."
+    },
+    "label": {
+      "status": "live",
+      "note": "display metadata."
+    },
+    "isProfile": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/PermissionPreview.tsx:92 (!!d.isProfile)",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
     "objects": {
       "children": {
-        "allowCreate": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
-        "allowRead": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
-        "allowEdit": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
-        "allowDelete": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8" },
-        "viewAllRecords": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:64" },
-        "modifyAllRecords": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:60" }
+        "allowCreate": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8"
+        },
+        "allowRead": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8"
+        },
+        "allowEdit": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8"
+        },
+        "allowDelete": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:8"
+        },
+        "viewAllRecords": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:64"
+        },
+        "modifyAllRecords": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:60"
+        }
       }
     },
     "fields": {
       "children": {
-        "readable": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts", "note": "FLS read-mask." },
-        "editable": { "status": "live", "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts", "note": "FLS write-deny." }
+        "readable": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts",
+          "note": "FLS read-mask."
+        },
+        "editable": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts",
+          "note": "FLS write-deny."
+        }
       }
     },
-    "systemPermissions": { "status": "live", "evidence": "packages/plugins/plugin-hono-server/src/hono-plugin.ts", "note": "PARTIAL — app-entry/nav visibility only, not a general capability gate." },
-    "tabPermissions": { "status": "live", "note": "PARTIAL — only 'hidden' is read." },
+    "systemPermissions": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-hono-server/src/hono-plugin.ts",
+      "note": "PARTIAL — app-entry/nav visibility only, not a general capability gate."
+    },
+    "tabPermissions": {
+      "status": "live",
+      "note": "PARTIAL — only 'hidden' is read."
+    },
     "rowLevelSecurity": {
       "children": {
-        "name": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
-        "label": { "status": "live", "note": "display." },
-        "description": { "status": "live", "note": "display." },
-        "object": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
-        "operation": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
-        "using": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "compiled into find + analytics SQL." },
-        "check": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
-        "roles": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "flat match — no subordinate rollup." },
-        "enabled": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts" },
-        "priority": { "status": "live", "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts", "note": "ordering." },
-        "tags": { "status": "live", "note": "organizational." }
+        "name": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
+        },
+        "label": {
+          "status": "live",
+          "note": "display."
+        },
+        "description": {
+          "status": "live",
+          "note": "display."
+        },
+        "object": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
+        },
+        "operation": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
+        },
+        "using": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts",
+          "note": "compiled into find + analytics SQL."
+        },
+        "check": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
+        },
+        "roles": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts",
+          "note": "flat match — no subordinate rollup."
+        },
+        "enabled": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
+        },
+        "priority": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts",
+          "note": "ordering."
+        },
+        "tags": {
+          "status": "live",
+          "note": "organizational."
+        }
       }
     },
-    "contextVariables": { "status": "dead", "evidence": "rls-compiler.ts never reads it", "note": "RLS uses only current_user.* built-ins." }
+    "contextVariables": {
+      "status": "dead",
+      "evidence": "rls-compiler.ts never reads it",
+      "note": "RLS uses only current_user.* built-ins."
+    }
   }
 }

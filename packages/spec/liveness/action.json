@@ -2,36 +2,140 @@
   "type": "action",
   "_note": "ActionSchema. Seeded from docs/audits/2026-06-actionschema-property-liveness.md. Renderers live in objectui (evidence cited as prose, not framework paths); framework-side: service-ai action-tools, runtime body-runner/http-dispatcher. Containers (params/resultDialog/ai/aria) classified at top level — no divergent sub-statuses in the audit.",
   "props": {
-    "name": { "status": "live", "evidence": "objectui action renderers + runtime dispatcher" },
-    "label": { "status": "live", "note": "display." },
-    "objectName": { "status": "live", "evidence": "packages/services/service-ai/src/tools/action-tools.ts:535", "note": "action dispatch + AI bridge." },
-    "icon": { "status": "live", "note": "objectui renderers." },
-    "locations": { "status": "live", "note": "objectui — where the action is surfaced." },
-    "component": { "status": "live", "note": "objectui visual component override." },
-    "type": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts", "note": "api/script/flow wired; url thinner; modal PARTIAL (maps to serverActionHandler, not a real modal); form DEAD (no consumer)." },
-    "target": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts", "note": "URL/script/flow/endpoint + ${param}/${ctx} interpolation." },
-    "body": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts", "note": "server script (L1/L2) via engine.executeAction→body-runner." },
-    "execute": { "status": "dead", "evidence": "@deprecated — auto-migrated to target" },
-    "params": { "status": "live", "evidence": "packages/services/service-ai/src/tools/action-tools.ts", "note": "field/objectOverride/defaultFromRow/options/placeholder/helpText/defaultValue/required all consumed." },
-    "variant": { "status": "live", "note": "objectui button styling." },
-    "confirmText": { "status": "live", "note": "objectui confirm dialog." },
-    "successMessage": { "status": "live", "note": "objectui toast." },
-    "refreshAfter": { "status": "live", "note": "objectui post-action refresh." },
-    "resultDialog": { "status": "live", "note": "objectui one-shot result reveal {title,description,acknowledge,format,fields}." },
-    "visible": { "status": "live", "note": "objectui — CEL, fail-closed." },
-    "disabled": { "status": "dead", "evidence": "primary renderers read a non-spec `enabled` (action-button.tsx:56,116) and invert it; CEL-predicate form has zero consumers; only boolean honored in detail/quick-action toolbars", "note": "ADR-0049-style naming drift — wire the CEL form or rename." },
-    "shortcut": { "status": "dead", "evidence": "ActionEngine registers it but no keydown listener pumps events — never fires" },
-    "bulkEnabled": { "status": "dead", "evidence": "engine has executeBulk but no spec-driven view path calls it" },
-    "ai": { "status": "live", "evidence": "packages/services/service-ai/src/tools/action-tools.ts", "note": "full AI bridge (exposed/description/category/paramHints/outputSchema/requiresConfirmation)." },
-    "recordIdParam": { "status": "live", "note": "objectui + dispatcher." },
-    "recordIdField": { "status": "live", "note": "objectui + dispatcher." },
-    "bodyShape": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts", "note": "{wrap} request shaping." },
-    "method": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts" },
-    "bodyExtra": { "status": "live", "evidence": "packages/runtime/src/http-dispatcher.ts" },
-    "mode": { "status": "live", "note": "PARTIAL — read only by the AI HITL heuristic (action-tools.ts), never by the UI." },
-    "opensInNewTab": { "status": "live", "note": "objectui." },
-    "newTabUrl": { "status": "live", "note": "objectui." },
-    "timeout": { "status": "dead", "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer" },
-    "aria": { "status": "live", "note": "PARTIAL — honored by a few objectui renderers, not the core action buttons/menus." }
+    "name": {
+      "status": "live",
+      "evidence": "objectui action renderers + runtime dispatcher"
+    },
+    "label": {
+      "status": "live",
+      "note": "display."
+    },
+    "objectName": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/tools/action-tools.ts:535",
+      "note": "action dispatch + AI bridge."
+    },
+    "icon": {
+      "status": "live",
+      "note": "objectui renderers."
+    },
+    "locations": {
+      "status": "live",
+      "note": "objectui — where the action is surfaced."
+    },
+    "component": {
+      "status": "live",
+      "note": "objectui visual component override."
+    },
+    "type": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts",
+      "note": "api/script/flow wired; url thinner; modal PARTIAL (maps to serverActionHandler, not a real modal); form DEAD (no consumer)."
+    },
+    "target": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts",
+      "note": "URL/script/flow/endpoint + ${param}/${ctx} interpolation."
+    },
+    "body": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts",
+      "note": "server script (L1/L2) via engine.executeAction→body-runner."
+    },
+    "execute": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ActionPreview.tsx:154",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "params": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/tools/action-tools.ts",
+      "note": "field/objectOverride/defaultFromRow/options/placeholder/helpText/defaultValue/required all consumed."
+    },
+    "variant": {
+      "status": "live",
+      "note": "objectui button styling."
+    },
+    "confirmText": {
+      "status": "live",
+      "note": "objectui confirm dialog."
+    },
+    "successMessage": {
+      "status": "live",
+      "note": "objectui toast."
+    },
+    "refreshAfter": {
+      "status": "live",
+      "note": "objectui post-action refresh."
+    },
+    "resultDialog": {
+      "status": "live",
+      "note": "objectui one-shot result reveal {title,description,acknowledge,format,fields}."
+    },
+    "visible": {
+      "status": "live",
+      "note": "objectui — CEL, fail-closed."
+    },
+    "disabled": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ActionPreview.tsx:169",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "shortcut": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ActionPreview.tsx:158",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "bulkEnabled": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ActionPreview.tsx:159",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "ai": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/tools/action-tools.ts",
+      "note": "full AI bridge (exposed/description/category/paramHints/outputSchema/requiresConfirmation)."
+    },
+    "recordIdParam": {
+      "status": "live",
+      "note": "objectui + dispatcher."
+    },
+    "recordIdField": {
+      "status": "live",
+      "note": "objectui + dispatcher."
+    },
+    "bodyShape": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts",
+      "note": "{wrap} request shaping."
+    },
+    "method": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts"
+    },
+    "bodyExtra": {
+      "status": "live",
+      "evidence": "packages/runtime/src/http-dispatcher.ts"
+    },
+    "mode": {
+      "status": "live",
+      "note": "PARTIAL — read only by the AI HITL heuristic (action-tools.ts), never by the UI."
+    },
+    "opensInNewTab": {
+      "status": "live",
+      "note": "objectui."
+    },
+    "newTabUrl": {
+      "status": "live",
+      "note": "objectui."
+    },
+    "timeout": {
+      "status": "dead",
+      "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer"
+    },
+    "aria": {
+      "status": "live",
+      "note": "PARTIAL — honored by a few objectui renderers, not the core action buttons/menus."
+    }
   }
 }

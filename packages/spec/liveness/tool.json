@@ -2,16 +2,58 @@
   "type": "tool",
   "_note": "ToolSchema. Seeded from docs/audits/2026-06-toolschema-property-liveness.md. Tool metadata is WRITE-ONLY (projected one-way for Studio; runtime uses a separate AIToolDefinition). LIVE props are live via that same-named surface, not metadata read-back.",
   "props": {
-    "name": { "status": "live", "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46", "note": "selection + LLM function key." },
-    "label": { "status": "live", "note": "display." },
-    "description": { "status": "live", "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46", "note": "sent to the LLM." },
-    "parameters": { "status": "live", "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46", "note": "LLM function schema." },
-    "objectName": { "status": "live", "evidence": "packages/services/service-ai/src/tools/action-tools.ts:535", "note": "action-tool dispatch." },
-    "outputSchema": { "status": "experimental", "evidence": "packages/services/service-ai/src/tools/action-tools.ts:437", "note": "keys folded into description only; no validation exists." },
-    "category": { "status": "dead", "evidence": "listing/preview tag only; enum drift vs AIToolDefinition free-string" },
-    "requiresConfirmation": { "status": "dead", "evidence": "packages/services/service-ai/src/tools/action-tools.ts:239", "note": "HITL re-derives from action.ai.requiresConfirmation; never read off the def." },
-    "permissions": { "status": "dead", "evidence": "tool.form.ts only; not on AIToolDefinition, no consumer" },
-    "active": { "status": "dead", "evidence": "never set by any registration path" },
-    "builtIn": { "status": "dead", "evidence": "never set by any registration path" }
+    "name": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46",
+      "note": "selection + LLM function key."
+    },
+    "label": {
+      "status": "live",
+      "note": "display."
+    },
+    "description": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46",
+      "note": "sent to the LLM."
+    },
+    "parameters": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/adapters/vercel-adapter.ts:46",
+      "note": "LLM function schema."
+    },
+    "objectName": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/tools/action-tools.ts:535",
+      "note": "action-tool dispatch."
+    },
+    "outputSchema": {
+      "status": "experimental",
+      "evidence": "packages/services/service-ai/src/tools/action-tools.ts:437",
+      "note": "keys folded into description only; no validation exists."
+    },
+    "category": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ToolPreview.tsx:99",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "requiresConfirmation": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ToolPreview.tsx:101",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "permissions": {
+      "status": "dead",
+      "evidence": "tool.form.ts only; not on AIToolDefinition, no consumer"
+    },
+    "active": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ToolPreview.tsx:102",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "builtIn": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/ToolPreview.tsx:103",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    }
   }
 }

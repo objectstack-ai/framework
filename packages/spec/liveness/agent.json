@@ -2,24 +2,96 @@
   "type": "agent",
   "_note": "AgentSchema. Seeded from docs/audits/2026-06-agentschema-property-liveness.md. agent-runtime.ts is the runtime consumer; AgentPreview is display-only.",
   "props": {
-    "name": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts" },
-    "label": { "status": "live", "note": "display/core." },
-    "avatar": { "status": "live", "note": "display." },
-    "role": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "persona → system prompt." },
-    "instructions": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "system prompt." },
-    "model": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts:264", "note": "PARTIAL — model/temperature/maxTokens applied; model.provider + topP DEAD." },
-    "skills": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "Agent→Skill→Tool." },
-    "tools": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "legacy direct-tool fallback." },
-    "active": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "gates listing + 403 on chat." },
-    "planning": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "PARTIAL — only planning.maxIterations live; strategy/allowReplan DEAD." },
-    "access": { "status": "live", "evidence": "packages/services/service-ai/src/routes/agent-access.ts:50", "note": "evaluateAgentAccess() — allow-list by userId/role; enforced at the chat route (agent-routes.ts:151). #1884 (landed after the 2026-06 audit, which still listed it dead)." },
-    "permissions": { "status": "live", "evidence": "packages/services/service-ai/src/routes/agent-access.ts:50", "note": "evaluateAgentAccess() — caller must hold ALL required permissions/roles; enforced at the chat route. #1884." },
-    "visibility": { "status": "experimental", "evidence": "packages/services/service-ai/src/routes/agent-access.ts:41", "note": "intentionally NOT enforced — the chat-access evaluator excludes it and the GET /ai/agents list route does not filter by visibility. Needs owner/org semantics before it can gate listing." },
-    "tenantId": { "status": "dead", "evidence": "no runtime reader" },
-    "knowledge": { "status": "dead", "evidence": "no runtime reader; AgentPreview reads knowledge.sources but spec defines {topics,indexes}", "note": "shape drift; RAG via service-knowledge." },
-    "lifecycle": { "status": "experimental", "evidence": "no runtime reader (StateMachine)", "note": "aspirational autonomy." },
-    "memory": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational autonomy." },
-    "guardrails": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational — real limits via quota service." },
-    "structuredOutput": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational." }
+    "name": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts"
+    },
+    "label": {
+      "status": "live",
+      "note": "display/core."
+    },
+    "avatar": {
+      "status": "live",
+      "note": "display."
+    },
+    "role": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "persona → system prompt."
+    },
+    "instructions": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "system prompt."
+    },
+    "model": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts:264",
+      "note": "PARTIAL — model/temperature/maxTokens applied; model.provider + topP DEAD."
+    },
+    "skills": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "Agent→Skill→Tool."
+    },
+    "tools": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "legacy direct-tool fallback."
+    },
+    "active": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "gates listing + 403 on chat."
+    },
+    "planning": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/agent-runtime.ts",
+      "note": "PARTIAL — only planning.maxIterations live; strategy/allowReplan DEAD."
+    },
+    "access": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/routes/agent-access.ts:50",
+      "note": "evaluateAgentAccess() — allow-list by userId/role; enforced at the chat route (agent-routes.ts:151). #1884 (landed after the 2026-06 audit, which still listed it dead)."
+    },
+    "permissions": {
+      "status": "live",
+      "evidence": "packages/services/service-ai/src/routes/agent-access.ts:50",
+      "note": "evaluateAgentAccess() — caller must hold ALL required permissions/roles; enforced at the chat route. #1884."
+    },
+    "visibility": {
+      "status": "experimental",
+      "evidence": "packages/services/service-ai/src/routes/agent-access.ts:41",
+      "note": "intentionally NOT enforced — the chat-access evaluator excludes it and the GET /ai/agents list route does not filter by visibility. Needs owner/org semantics before it can gate listing."
+    },
+    "tenantId": {
+      "status": "dead",
+      "evidence": "no runtime reader"
+    },
+    "knowledge": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/AgentPreview.tsx:69 (d.knowledge; KnowledgeSummary renders sources/indexes)",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "lifecycle": {
+      "status": "experimental",
+      "evidence": "no runtime reader (StateMachine)",
+      "note": "aspirational autonomy."
+    },
+    "memory": {
+      "status": "experimental",
+      "evidence": "no runtime reader",
+      "note": "aspirational autonomy."
+    },
+    "guardrails": {
+      "status": "experimental",
+      "evidence": "no runtime reader",
+      "note": "aspirational — real limits via quota service."
+    },
+    "structuredOutput": {
+      "status": "experimental",
+      "evidence": "no runtime reader",
+      "note": "aspirational."
+    }
   }
 }

@@ -2,40 +2,132 @@
   "type": "flow",
   "_note": "FlowSchema. Seeded from docs/audits/2026-06-flowschema-property-liveness.md. Consumers: service-automation engine + node executors. runAs is marker-driven experimental (spec). status/active gate nothing (engine uses an in-memory flowEnabled map via toggleFlow).",
   "props": {
-    "name": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-    "label": { "status": "live", "note": "display." },
-    "description": { "status": "dead", "evidence": "no reader either layer" },
-    "version": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-    "status": { "status": "dead", "evidence": "engine gates on its in-memory flowEnabled map (toggleFlow), not on status", "note": "collapse with active (ADR-0049 recommendation)." },
-    "active": { "status": "dead", "evidence": "spec-flagged Deprecated; redundant with status; engine uses flowEnabled" },
-    "template": { "status": "dead", "evidence": "no reader either layer" },
-    "type": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts:637", "note": "flow.type==='schedule'/'api' drives trigger dispatch." },
-    "variables": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts", "note": "{name,isInput,isOutput} wired." },
-    "edges": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts", "note": "{source,target,condition(CEL),label} wired." },
+    "name": {
+      "status": "live",
+      "evidence": "packages/services/service-automation/src/engine.ts"
+    },
+    "label": {
+      "status": "live",
+      "note": "display."
+    },
+    "description": {
+      "status": "dead",
+      "evidence": "no reader either layer"
+    },
+    "version": {
+      "status": "live",
+      "evidence": "packages/services/service-automation/src/engine.ts"
+    },
+    "status": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/FlowPreview.tsx:105",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "active": {
+      "status": "live",
+      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/FlowPreview.tsx:105",
+      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+    },
+    "template": {
+      "status": "dead",
+      "evidence": "no reader either layer"
+    },
+    "type": {
+      "status": "live",
+      "evidence": "packages/services/service-automation/src/engine.ts:637",
+      "note": "flow.type==='schedule'/'api' drives trigger dispatch."
+    },
+    "variables": {
+      "status": "live",
+      "evidence": "packages/services/service-automation/src/engine.ts",
+      "note": "{name,isInput,isOutput} wired."
+    },
+    "edges": {
+      "status": "live",
+      "evidence": "packages/services/service-automation/src/engine.ts",
+      "note": "{source,target,condition(CEL),label} wired."
+    },
     "nodes": {
       "children": {
-        "id": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "type": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts", "note": "open string vs live executor registry (ADR-0018); FlowNodeAction enum is out of sync." },
-        "label": { "status": "live", "note": "designer/display." },
-        "config": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "connectorConfig": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "position": { "status": "live", "note": "designer canvas layout (no engine consumer)." },
-        "timeoutMs": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "inputSchema": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts", "note": "runtime-validated." },
-        "outputSchema": { "status": "dead", "evidence": "declared, never validated" },
-        "waitEventConfig": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "boundaryConfig": { "status": "dead", "evidence": "drives the dead boundary_event node (BPMN import/export-only, no executor)" }
+        "id": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "type": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts",
+          "note": "open string vs live executor registry (ADR-0018); FlowNodeAction enum is out of sync."
+        },
+        "label": {
+          "status": "live",
+          "note": "designer/display."
+        },
+        "config": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "connectorConfig": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "position": {
+          "status": "live",
+          "note": "designer canvas layout (no engine consumer)."
+        },
+        "timeoutMs": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "inputSchema": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts",
+          "note": "runtime-validated."
+        },
+        "outputSchema": {
+          "status": "dead",
+          "evidence": "declared, never validated"
+        },
+        "waitEventConfig": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "boundaryConfig": {
+          "status": "live",
+          "evidence": "objectui: packages/app-shell/src/views/metadata-admin/inspectors/flow-node-config.ts:480",
+          "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+        }
       }
     },
     "errorHandling": {
       "children": {
-        "strategy": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "maxRetries": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "retryDelayMs": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "backoffMultiplier": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "maxRetryDelayMs": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "jitter": { "status": "live", "evidence": "packages/services/service-automation/src/engine.ts" },
-        "fallbackNodeId": { "status": "dead", "evidence": "engine uses per-node fault edges, not this" }
+        "strategy": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "maxRetries": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "retryDelayMs": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "backoffMultiplier": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "maxRetryDelayMs": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "jitter": {
+          "status": "live",
+          "evidence": "packages/services/service-automation/src/engine.ts"
+        },
+        "fallbackNodeId": {
+          "status": "dead",
+          "evidence": "engine uses per-node fault edges, not this"
+        }
       }
     }
   }
