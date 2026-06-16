@@ -458,39 +458,15 @@ export const FieldSchema = lazySchema(() => z.object({
   }).optional().describe('Roll-up summary definition. The engine recomputes the value when child records are inserted/updated/deleted.'),
 
   /** Enhanced Field Type Configurations */
-  // Code field config
+  // Pruned 2026-06 — per-type *display* knobs that were dead in both layers (no
+  // runtime reader; renderers ignore them). See
+  // docs/audits/2026-06-dead-surface-disposition-plan.md (P2 field prune): code
+  // theme/lineNumbers, rating allowHalf, location displayMap/allowGeocoding, address
+  // addressFormat, color colorFormat/allowAlpha/presetColors, slider showValue/marks,
+  // barcode/qr barcodeFormat/qrErrorCorrection/displayValue/allowScanning.
   language: z.string().optional().describe('Programming language for syntax highlighting (e.g., javascript, python, sql)'),
-  theme: z.string().optional().describe('Code editor theme (e.g., dark, light, monokai)'),
-  lineNumbers: z.boolean().optional().describe('Show line numbers in code editor'),
-  
-  // Rating field config
   maxRating: z.number().optional().describe('Maximum rating value (default: 5)'),
-  allowHalf: z.boolean().optional().describe('Allow half-star ratings'),
-  
-  // Location field config
-  displayMap: z.boolean().optional().describe('Display map widget for location field'),
-  allowGeocoding: z.boolean().optional().describe('Allow address-to-coordinate conversion'),
-  
-  // Address field config
-  addressFormat: z.enum(['us', 'uk', 'international']).optional().describe('Address format template'),
-  
-  // Color field config
-  colorFormat: z.enum(['hex', 'rgb', 'rgba', 'hsl']).optional().describe('Color value format'),
-  allowAlpha: z.boolean().optional().describe('Allow transparency/alpha channel'),
-  presetColors: z.array(z.string()).optional().describe('Preset color options'),
-  
-  // Slider field config
   step: z.number().optional().describe('Step increment for slider (default: 1)'),
-  showValue: z.boolean().optional().describe('Display current value on slider'),
-  marks: z.record(z.string(), z.string()).optional().describe('Custom marks/labels at specific values (e.g., {0: "Low", 50: "Medium", 100: "High"})'),
-  
-  // QR Code / Barcode field config
-  // Note: qrErrorCorrection is only applicable when barcodeFormat='qr'
-  // Runtime validation should enforce this constraint
-  barcodeFormat: z.enum(['qr', 'ean13', 'ean8', 'code128', 'code39', 'upca', 'upce']).optional().describe('Barcode format type'),
-  qrErrorCorrection: z.enum(['L', 'M', 'Q', 'H']).optional().describe('QR code error correction level (L=7%, M=15%, Q=25%, H=30%). Only applicable when barcodeFormat is "qr"'),
-  displayValue: z.boolean().optional().describe('Display human-readable value below barcode/QR code'),
-  allowScanning: z.boolean().optional().describe('Enable camera scanning for barcode/QR code input'),
 
   // Currency field config
   currencyConfig: CurrencyConfigSchema.optional().describe('Configuration for currency field type'),

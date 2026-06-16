@@ -532,24 +532,19 @@ describe('Field Factory Helpers', () => {
     it('should create location field with config', () => {
       const locationField = Field.location({
         label: 'Office Location',
-        displayMap: true,
-        allowGeocoding: true,
       });
-      
+
       expect(locationField.type).toBe('location');
       expect(locationField.label).toBe('Office Location');
-      expect(locationField.displayMap).toBe(true);
     });
 
     it('should create address field with format', () => {
       const addressField = Field.address({
         label: 'Mailing Address',
-        addressFormat: 'us',
         required: true,
       });
-      
+
       expect(addressField.type).toBe('address');
-      expect(addressField.addressFormat).toBe('us');
       expect(addressField.required).toBe(true);
     });
 
@@ -566,37 +561,28 @@ describe('Field Factory Helpers', () => {
     it('should create code field with language', () => {
       const codeField = Field.code('javascript', {
         label: 'Script',
-        lineNumbers: true,
-        theme: 'dark',
       });
-      
+
       expect(codeField.type).toBe('code');
       expect(codeField.language).toBe('javascript');
-      expect(codeField.lineNumbers).toBe(true);
     });
 
     it('should create color field with format', () => {
       const colorField = Field.color({
         label: 'Brand Color',
-        colorFormat: 'hex',
-        allowAlpha: false,
-        presetColors: ['#FF0000', '#00FF00', '#0000FF'],
       });
-      
+
       expect(colorField.type).toBe('color');
-      expect(colorField.colorFormat).toBe('hex');
-      expect(colorField.presetColors).toHaveLength(3);
+      expect(colorField.label).toBe('Brand Color');
     });
 
     it('should create rating field with max rating', () => {
       const ratingField = Field.rating(10, {
         label: 'Customer Satisfaction',
-        allowHalf: true,
       });
-      
+
       expect(ratingField.type).toBe('rating');
       expect(ratingField.maxRating).toBe(10);
-      expect(ratingField.allowHalf).toBe(true);
     });
 
     it('should create signature field', () => {
@@ -616,34 +602,22 @@ describe('Field Factory Helpers', () => {
         max: 100,
         step: 5,
         defaultValue: 50,
-        showValue: true,
-        marks: { '0': 'Silent', '50': 'Medium', '100': 'Loud' },
       });
-      
+
       expect(sliderField.type).toBe('slider');
       expect(sliderField.label).toBe('Volume');
       expect(sliderField.min).toBe(0);
       expect(sliderField.max).toBe(100);
       expect(sliderField.step).toBe(5);
-      expect(sliderField.showValue).toBe(true);
-      expect(sliderField.marks).toEqual({ '0': 'Silent', '50': 'Medium', '100': 'Loud' });
     });
 
     it('should create qrcode field with barcode format', () => {
       const qrcodeField = Field.qrcode({
         label: 'Product Barcode',
-        barcodeFormat: 'qr',
-        qrErrorCorrection: 'M',
-        displayValue: true,
-        allowScanning: true,
       });
-      
+
       expect(qrcodeField.type).toBe('qrcode');
       expect(qrcodeField.label).toBe('Product Barcode');
-      expect(qrcodeField.barcodeFormat).toBe('qr');
-      expect(qrcodeField.qrErrorCorrection).toBe('M');
-      expect(qrcodeField.displayValue).toBe(true);
-      expect(qrcodeField.allowScanning).toBe(true);
     });
   });
 

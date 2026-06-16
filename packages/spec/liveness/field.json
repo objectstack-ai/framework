@@ -2,78 +2,247 @@
   "type": "field",
   "_note": "FieldSchema (flat — all field-type configs are top-level optional props). Seeded from docs/audits/2026-06-fieldschema-property-liveness.md. ~half dead. Nested config objects (currencyConfig/vectorConfig/fileAttachmentConfig/encryptionConfig/maskingRule/cached/dataQuality) are wholly dead → classified at top level. Naming-drift props are server-live but client-snake. Framework evidence cited with paths; objectui-renderer evidence as prose.",
   "props": {
-    "name": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "label": { "status": "live", "note": "renderers." },
-    "type": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "description": { "status": "live", "note": "display." },
-    "format": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "required": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts" },
-    "multiple": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "defaultValue": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "min": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts" },
-    "max": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts" },
-    "options": { "status": "live", "note": "select options {label,value,color,default} — renderers + validation." },
-    "deleteBehavior": { "status": "live", "evidence": "packages/objectql/src/engine.ts", "note": "reference cascade/restrict." },
-    "expression": { "status": "live", "evidence": "packages/objectql/src/engine.ts", "note": "formula." },
-    "summaryOperations": { "status": "live", "evidence": "packages/objectql/src/engine.ts", "note": "rollup {object,field,function,relationshipField}." },
-    "requiredWhen": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts", "note": "CEL." },
-    "readonlyWhen": { "status": "live", "note": "renderer CEL." },
-    "visibleWhen": { "status": "live", "note": "renderer CEL." },
-    "conditionalRequired": { "status": "live", "note": "deprecated alias of requiredWhen — plan removal." },
-    "readonly": { "status": "live", "note": "renderer." },
-    "hidden": { "status": "live", "note": "renderer." },
-    "system": { "status": "live", "evidence": "packages/objectql/src/engine.ts" },
-    "sortable": { "status": "live", "note": "grid." },
-    "inlineEdit": { "status": "live", "note": "grid inline editing." },
-    "language": { "status": "live", "note": "code field — CodeField.tsx:13 (only language is live; theme/lineNumbers dead)." },
-    "step": { "status": "live", "note": "slider — SliderField.tsx (min/max/step live)." },
-    "group": { "status": "live", "note": "field group/layout (renderer)." },
-    "inlineHelpText": { "status": "live", "note": "display help (renderer)." },
-    "unique": { "status": "live", "evidence": "packages/plugins/driver-sql/src/sql-driver.ts:1853", "note": "CAVEAT — DDL-only; NOT validated on the write path (violations surface as raw driver errors)." },
-    "precision": { "status": "live", "note": "CAVEAT — UI display formatting only; DDL never sizes (maps to float). (NumberField.tsx:16)." },
-    "scale": { "status": "live", "note": "CAVEAT — grid formatting only; DDL never sizes." },
-    "reference": { "status": "live", "evidence": "packages/objectql/src/engine.ts:1672", "note": "CAVEAT — $expand/cascade/seed live; FK DDL reads reference_to (unmapped from reference)." },
-    "autonumberFormat": { "status": "live", "evidence": "packages/objectql/src/engine.ts:765", "note": "CAVEAT — runtime sequence formatting live; UI AutoNumberField ignores it." },
-    "maxLength": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts:127", "note": "CAVEAT — server validation honors camelCase, but the client form reads snake_case max_length." },
-    "minLength": { "status": "live", "evidence": "packages/objectql/src/validation/record-validator.ts:130", "note": "CAVEAT — server camel; client form reads min_length." },
-    "referenceFilters": { "status": "dead", "evidence": "lookup dialog reads lookup_filters (LookupField.tsx:171) — entirely dead as authored (naming drift)" },
-    "maxRating": { "status": "dead", "evidence": "RatingField reads `max` (RatingField.tsx:13) — dead + redundant with max" },
-    "columnName": { "status": "dead", "evidence": "resolveColumnName (spec system-names.ts:182) has ZERO call sites; SQL driver hardcodes column = field key", "note": "DANGEROUS — advertises custom physical columns the driver never honors." },
-    "searchable": { "status": "dead", "evidence": "field-level — no DDL/query consumer; search is object-level / view searchableFields" },
-    "index": { "status": "dead", "evidence": "field-level — driver reads object indexes[] (sql-driver.ts:1252); field bool unused" },
-    "externalId": { "status": "dead", "evidence": "field-level — upsert keys off dataset-level externalId (seed-loader.ts:175)" },
-    "currencyConfig": { "status": "dead", "evidence": "nested config — renderers read flat currency/precision (CurrencyField.tsx:40); no currencyConfig consumer" },
-    "vectorConfig": { "status": "dead", "evidence": "nested config — renderers read flat dimensions; no consumer, no vector-index DDL" },
-    "fileAttachmentConfig": { "status": "dead", "evidence": "nested config — renderers read flat multiple/accept/maxSize (FileField.tsx:16); no size/type/virus enforcement in write path" },
-    "encryptionConfig": { "status": "dead", "evidence": "no consumer; the only at-rest protection is the separate type:'secret' channel (engine.ts encryptSecretFields)" },
-    "maskingRule": { "status": "dead", "evidence": "no consumer" },
-    "auditTrail": { "status": "dead", "evidence": "no consumer (aspirational governance)" },
-    "dataQuality": { "status": "dead", "evidence": "no consumer (aspirational governance)" },
-    "cached": { "status": "dead", "evidence": "no consumer" },
-    "dependencies": { "status": "dead", "evidence": "no consumer" },
-    "trackFeedHistory": { "status": "dead", "evidence": "no consumer" },
-    "caseSensitive": { "status": "dead", "evidence": "no consumer" },
-    "writeRequiresMasterRead": { "status": "dead", "evidence": "no consumer (governance)" },
-    "theme": { "status": "dead", "evidence": "code field — only language is live" },
-    "lineNumbers": { "status": "dead", "evidence": "code field — only language is live" },
-    "allowHalf": { "status": "dead", "evidence": "rating — unread" },
-    "displayMap": { "status": "dead", "evidence": "location — unread" },
-    "allowGeocoding": { "status": "dead", "evidence": "location — unread" },
-    "addressFormat": { "status": "dead", "evidence": "address — unread" },
-    "colorFormat": { "status": "dead", "evidence": "color — ColorField uses a fixed hex input" },
-    "allowAlpha": { "status": "dead", "evidence": "color — unread" },
-    "presetColors": { "status": "dead", "evidence": "color — unread" },
-    "showValue": { "status": "dead", "evidence": "slider — unread" },
-    "marks": { "status": "dead", "evidence": "slider — unread" },
-    "barcodeFormat": { "status": "dead", "evidence": "barcode/qr — unread" },
-    "qrErrorCorrection": { "status": "dead", "evidence": "barcode/qr — unread" },
-    "displayValue": { "status": "dead", "evidence": "barcode/qr — unread" },
-    "allowScanning": { "status": "dead", "evidence": "barcode/qr — unread" },
-    "inlineTitle": { "status": "dead", "evidence": "master-detail explicit override — auto-derivation works (deriveMasterDetail.ts); overrides unread" },
-    "inlineColumns": { "status": "dead", "evidence": "master-detail explicit override — unread" },
-    "inlineAmountField": { "status": "dead", "evidence": "master-detail explicit override — unread" },
-    "relatedList": { "status": "dead", "evidence": "detail-page related lists come from view metadata, not FieldSchema" },
-    "relatedListTitle": { "status": "dead", "evidence": "master-detail explicit override — unread" },
-    "relatedListColumns": { "status": "dead", "evidence": "master-detail explicit override — unread" }
+    "name": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "label": {
+      "status": "live",
+      "note": "renderers."
+    },
+    "type": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "description": {
+      "status": "live",
+      "note": "display."
+    },
+    "format": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "required": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts"
+    },
+    "multiple": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "defaultValue": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "min": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts"
+    },
+    "max": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts"
+    },
+    "options": {
+      "status": "live",
+      "note": "select options {label,value,color,default} — renderers + validation."
+    },
+    "deleteBehavior": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts",
+      "note": "reference cascade/restrict."
+    },
+    "expression": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts",
+      "note": "formula."
+    },
+    "summaryOperations": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts",
+      "note": "rollup {object,field,function,relationshipField}."
+    },
+    "requiredWhen": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts",
+      "note": "CEL."
+    },
+    "readonlyWhen": {
+      "status": "live",
+      "note": "renderer CEL."
+    },
+    "visibleWhen": {
+      "status": "live",
+      "note": "renderer CEL."
+    },
+    "conditionalRequired": {
+      "status": "live",
+      "note": "deprecated alias of requiredWhen — plan removal."
+    },
+    "readonly": {
+      "status": "live",
+      "note": "renderer."
+    },
+    "hidden": {
+      "status": "live",
+      "note": "renderer."
+    },
+    "system": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts"
+    },
+    "sortable": {
+      "status": "live",
+      "note": "grid."
+    },
+    "inlineEdit": {
+      "status": "live",
+      "note": "grid inline editing."
+    },
+    "language": {
+      "status": "live",
+      "note": "code field — CodeField.tsx:13 (only language is live; theme/lineNumbers dead)."
+    },
+    "step": {
+      "status": "live",
+      "note": "slider — SliderField.tsx (min/max/step live)."
+    },
+    "group": {
+      "status": "live",
+      "note": "field group/layout (renderer)."
+    },
+    "inlineHelpText": {
+      "status": "live",
+      "note": "display help (renderer)."
+    },
+    "unique": {
+      "status": "live",
+      "evidence": "packages/plugins/driver-sql/src/sql-driver.ts:1853",
+      "note": "CAVEAT — DDL-only; NOT validated on the write path (violations surface as raw driver errors)."
+    },
+    "precision": {
+      "status": "live",
+      "note": "CAVEAT — UI display formatting only; DDL never sizes (maps to float). (NumberField.tsx:16)."
+    },
+    "scale": {
+      "status": "live",
+      "note": "CAVEAT — grid formatting only; DDL never sizes."
+    },
+    "reference": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts:1672",
+      "note": "CAVEAT — $expand/cascade/seed live; FK DDL reads reference_to (unmapped from reference)."
+    },
+    "autonumberFormat": {
+      "status": "live",
+      "evidence": "packages/objectql/src/engine.ts:765",
+      "note": "CAVEAT — runtime sequence formatting live; UI AutoNumberField ignores it."
+    },
+    "maxLength": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts:127",
+      "note": "CAVEAT — server validation honors camelCase, but the client form reads snake_case max_length."
+    },
+    "minLength": {
+      "status": "live",
+      "evidence": "packages/objectql/src/validation/record-validator.ts:130",
+      "note": "CAVEAT — server camel; client form reads min_length."
+    },
+    "referenceFilters": {
+      "status": "dead",
+      "evidence": "lookup dialog reads lookup_filters (LookupField.tsx:171) — entirely dead as authored (naming drift)"
+    },
+    "maxRating": {
+      "status": "dead",
+      "evidence": "RatingField reads `max` (RatingField.tsx:13) — dead + redundant with max"
+    },
+    "columnName": {
+      "status": "dead",
+      "evidence": "resolveColumnName (spec system-names.ts:182) has ZERO call sites; SQL driver hardcodes column = field key",
+      "note": "DANGEROUS — advertises custom physical columns the driver never honors."
+    },
+    "searchable": {
+      "status": "dead",
+      "evidence": "field-level — no DDL/query consumer; search is object-level / view searchableFields"
+    },
+    "index": {
+      "status": "dead",
+      "evidence": "field-level — driver reads object indexes[] (sql-driver.ts:1252); field bool unused"
+    },
+    "externalId": {
+      "status": "dead",
+      "evidence": "field-level — upsert keys off dataset-level externalId (seed-loader.ts:175)"
+    },
+    "currencyConfig": {
+      "status": "dead",
+      "evidence": "nested config — renderers read flat currency/precision (CurrencyField.tsx:40); no currencyConfig consumer"
+    },
+    "vectorConfig": {
+      "status": "dead",
+      "evidence": "nested config — renderers read flat dimensions; no consumer, no vector-index DDL"
+    },
+    "fileAttachmentConfig": {
+      "status": "dead",
+      "evidence": "nested config — renderers read flat multiple/accept/maxSize (FileField.tsx:16); no size/type/virus enforcement in write path"
+    },
+    "encryptionConfig": {
+      "status": "dead",
+      "evidence": "no consumer; the only at-rest protection is the separate type:'secret' channel (engine.ts encryptSecretFields)"
+    },
+    "maskingRule": {
+      "status": "dead",
+      "evidence": "no consumer"
+    },
+    "auditTrail": {
+      "status": "dead",
+      "evidence": "no consumer (aspirational governance)"
+    },
+    "dataQuality": {
+      "status": "dead",
+      "evidence": "no consumer (aspirational governance)"
+    },
+    "cached": {
+      "status": "dead",
+      "evidence": "no consumer"
+    },
+    "dependencies": {
+      "status": "dead",
+      "evidence": "no consumer"
+    },
+    "trackFeedHistory": {
+      "status": "dead",
+      "evidence": "no consumer"
+    },
+    "caseSensitive": {
+      "status": "dead",
+      "evidence": "no consumer"
+    },
+    "writeRequiresMasterRead": {
+      "status": "dead",
+      "evidence": "no consumer (governance)"
+    },
+    "inlineTitle": {
+      "status": "dead",
+      "evidence": "master-detail explicit override — auto-derivation works (deriveMasterDetail.ts); overrides unread"
+    },
+    "inlineColumns": {
+      "status": "dead",
+      "evidence": "master-detail explicit override — unread"
+    },
+    "inlineAmountField": {
+      "status": "dead",
+      "evidence": "master-detail explicit override — unread"
+    },
+    "relatedList": {
+      "status": "dead",
+      "evidence": "detail-page related lists come from view metadata, not FieldSchema"
+    },
+    "relatedListTitle": {
+      "status": "dead",
+      "evidence": "master-detail explicit override — unread"
+    },
+    "relatedListColumns": {
+      "status": "dead",
+      "evidence": "master-detail explicit override — unread"
+    }
   }
 }
