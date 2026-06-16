@@ -179,3 +179,156 @@ rendering.
    Rejected as a complete fix: it helps the formula path but not the
    write/filter asymmetry, and it bakes in UTC midnight (Phase 2's tz-aware
    `today()` supersedes it).
+
+---
+
+## Phase 2 — Detailed Design (implementation plan)
+
+> **Status:** Phase 1 landed in `@objectstack/driver-sql` (PR #1968) — `Field.date`
+> is now a tz-naive `YYYY-MM-DD` string at the write/read boundary. This section
+> details Phase 2 (the reference-timezone model) for review. It is the plan, not
+> yet a commitment to ship; each slice below is independently revertable and gated
+> behind "reference timezone unset → UTC" (today's behavior).
+
+### Reframe: two axes, two sources, two risk profiles
+
+ADR-0053's "timezone model" is, in the code, **two distinct concerns** that must
+be solved separately. Conflating them in one change is the chief risk of Phase 2.
+
+| Axis | Question it answers | Source | Boundary |
+|------|--------------------|--------|----------|
+| **Compute-tz** | "what calendar day is it / which bucket does this fall in?" — `today()`/`daysFromNow()`, analytics bucketing, cron day-boundaries | the **execution context** (user / org / job) | threaded *into* evaluation |
+| **Render-tz** | "show this UTC instant in the viewer's zone" — `datetime` display | the **viewer** | applied at the *presentation* boundary; storage stays UTC |
+
+Everything below is organized along this split.
+
+### The reference-timezone resolver
+
+A single resolver computes the active timezone for an execution context, with this
+precedence:
+
+| Layer | Stored where | Read path |
+|-------|--------------|-----------|
+| User override | `sys-user-preference` (`key='timezone'`) — today a generic k/v store that the engine never reads (`sys-user-preference.object.ts`) | by `(user_id, key)` |
+| Org default | a **`tenant`-scoped settings manifest** (new; e.g. `localization`/`timezone`) | `service-settings` — tenant scope is keyed by `ExecutionContext.tenantId` = `activeOrganizationId`, which **is** the org under one-org-per-environment (ADR-0002), so no new scope or schema migration is needed. The settings reactive client (`settings-service.ts` `createClient`) gives a cheap in-memory snapshot. |
+| Fallback | — | `'UTC'` (flag-off default; identical to today) |
+
+**Where it resolves — one chokepoint.** Fold the resolution into
+`resolveExecutionContext` (`runtime/.../resolve-execution-context.ts`), which already
+queries `sys_member` / permission-sets per request; reading one user-pref + one
+settings snapshot there is consistent and benefits from any future caching. Add
+**`timezone?: string` to `ExecutionContextSchema`** (`spec/.../execution-context.zod.ts`).
+The timezone is then resolved **once per request** and rides the existing context
+plumbing to every consumer. This is the *only* new data Phase 2 introduces.
+
+**Three execution branches** (the resolver's input differs by entry path):
+
+| Entry path | Identity available today | TZ source |
+|------------|--------------------------|-----------|
+| Interactive HTTP | `userId` + `tenantId` (resolved from session) | user override → org default → UTC |
+| Scheduled job / cron | none — runs `isSystem`, handler gets only `{ jobId, data }` | the **job's own `timezone` field** (`sys_job.timezone`, already wired through croner) |
+| Flow / record-change trigger | `userId` only (`AutomationContext` — `automation-service.ts`) | needs a `timezone` added to `AutomationContext`; org default |
+
+### The shared DST-safe primitive
+
+Phase 2 invents **no** new timezone math. The DST-correct pattern already exists and
+is proven in `service-messaging`'s `preference-resolver.ts` (`wallClockInTz` /
+`minutesOfDayInTz`), which uses `Intl.DateTimeFormat({ timeZone }).formatToParts()`.
+Extract it once — `partsInTz(instant, tz) → { y, m, d, … }` and
+`calendarDayUtc(instant, tz) → Date` — into a shared util consumed by formula,
+analytics, and rendering. Same single-source-of-truth discipline as Phase 1's
+`toDateOnly()` helper. **Never** hand-roll offset arithmetic (breaks across DST).
+
+### The three decisions
+
+**D1 — `today()`/`daysFromNow()`/`daysAgo()` return a `Date` at *UTC-midnight of the
+reference-tz calendar day*** — `new Date(Date.UTC(y, m, d))` where `(y,m,d)` are the
+calendar parts computed in the reference tz. **Not** a date-only string; **not**
+"local-midnight-as-instant".
+
+This is forced by how comparison actually works. `record.due_date == today()` never
+compares a string to `today()`: when cel-js faults on `string <op> Timestamp`,
+`hydrateOverloadStrings` (`cel-engine.ts`) rehydrates the date-only field string via
+`Date.parse("2026-06-15")` = **UTC midnight**. So the field side is *always* a
+UTC-midnight `Date` at compare time. For `today()` to compare cleanly it must also be
+a UTC-midnight `Date` of the same calendar day. The driver filter path agrees
+(`coerceFilterValue`/`toDateOnly` does `getUTC*` on a `Date`), and Phase 1 stores the
+UTC calendar day. UTC-midnight-of-the-reference-tz-day is the *one* representation
+consistent with all three boundaries (CEL hydration, driver filter, Phase-1 storage).
+
+> **The trap:** representing `today()` as the reference-tz *local* midnight as an
+> instant (e.g. `2026-06-15T07:00:00Z` for `America/Los_Angeles`) re-introduces the
+> exact tz-shifted instant this ADR removes, and it would **not** equal the
+> UTC-midnight-hydrated field — the silent-miss bug returns.
+
+Bonus: making `daysFromNow(n)`/`daysAgo(n)` compute `calendarDay ± n → UTC-midnight`
+**also fixes the "keeps wall-clock time" defect** (`stdlib.ts:36`) for free. The
+`now() + duration("Nh")` escape hatch remains for genuine sub-day instants.
+
+**D2 — tz-aware analytics buckets in-memory (JS), uniformly; do not emit
+dialect-specific `date_trunc … AT TIME ZONE`.** Keep DB-side bucketing only for the
+UTC/no-tz fast path. `date_trunc(… AT TIME ZONE tz)` is Postgres-only; SQLite has no
+timezone database and MySQL needs tz tables loaded — splitting behavior by dialect
+yields *different bucket boundaries on different drivers for the same data* (a
+correctness landmine the sqlite-heavy test matrix wouldn't catch). The two existing
+UTC-hardcoded JS bucketers (`service-analytics` `preview-evaluator.ts` `bucketDate`,
+`dimension-labels.ts` `formatDateBucket`) swap `getUTC*` for the shared `partsInTz`
+util — correct on every dialect, same DST-safe code as D1. The seam is ready:
+`dataset-executor.ts` already carries a `timezone` field (hard-coded `'UTC'`).
+*Accepted cost:* when tz ≠ UTC the GROUP BY can't be pushed down, so wide
+aggregations pull more rows. Mitigate by keeping the DB-side UTC fast path when the
+reference tz is unset or `'UTC'`, still pushing the date-range *filter* to the DB and
+only bucketing in memory, and revisiting a Postgres-only pushdown later if a real
+workload needs it. Ship correct-and-uniform first.
+
+**D3 — wire report schedules onto the existing `CronJobAdapter`; do not delete the
+fields.** `sys-report-schedule.object.ts` documents `cron_expression` as "reserved
+for the next milestone when a cron-capable scheduler adapter is available, it wins
+over `interval_minutes`" — that adapter now exists (`service-job` `cron-job-adapter.ts`,
+croner + per-job `timezone`, already wired for `sys_job`). `report-service.ts`
+`advanceSchedule` still reads only `interval_minutes` and ignores both
+`cron_expression` and `timezone`. When `cron_expression` is present, schedule via
+croner with the timezone; keep `interval_minutes` as the tz-agnostic fallback. This
+flips two author-facing-but-runtime-dead fields to **live** in one move — the
+*enforce* resolution the spec-liveness gate wants (record this PR as ledger
+evidence). Report schedules run `SYSTEM_CTX`, so their tz source is the schedule's
+own `timezone` field (same model as `sys_job`) — self-contained, off the resolver's
+critical path.
+
+### Critical blind spot to fix regardless of tz
+
+`applyFormulaPlan` (`objectql` `engine.ts`, called from `find`/`findOne`) evaluates
+read-time formula fields with **only `{ record }`** — no `now`, no `execCtx`, no
+timezone. Today that means `today()` inside a formula field uses real wall-clock UTC.
+`find`/`findOne` already hold `opCtx.context` (the `ExecutionContext`); thread
+`{ now: nowSnap, timezone, user, org }` through — mirroring `applyFieldDefaults`,
+which already does this correctly. Worth doing on its own (pinned `now` for
+determinism + computed fields can reference user/org), independent of timezone.
+
+### Implementation map
+
+| Slice | Touch points (file) | Axis | Risk |
+|-------|---------------------|------|------|
+| 1. Resolver + `ExecutionContext.timezone` | `resolve-execution-context.ts`, `execution-context.zod.ts`, new settings manifest | plumbing | none (default UTC) |
+| 2. `applyFormulaPlan` context threading | `objectql/engine.ts` | compute | low |
+| 3. tz-aware `today()`/`daysFromNow()`/`daysAgo()` + shared `partsInTz` util | `formula/stdlib.ts`, `cel-engine.ts`, `formula/types.ts` | compute | behind flag |
+| 4. Render-tz in template formatters + email path | `formula/template-engine.ts` (date/datetime formatters already take `locale` → add `timeZone`); `plugin-email` rendering currently bypasses the formatter pipeline and needs routing through it | render | low blast radius (one centralized formatter) + one outlier |
+| 5. Analytics bucket tz | `service-analytics` `preview-evaluator.ts`, `dimension-labels.ts`, `dataset-executor.ts` | compute | highest (dialect — see D2) |
+| 6. Report schedule → croner+tz | `plugin-reports/report-service.ts` | compute | low; doubles as liveness cleanup |
+
+Cron day-boundaries (`sys_job`) need **no change** — already tz-wired via croner.
+
+### Open prerequisites
+
+- **Confirm cel-js supports `duration()` + Timestamp arithmetic** (the documented
+  `now() + duration("Nh")` escape hatch). No `duration` usage exists in the formula
+  package today; if unsupported this is a small prerequisite patch.
+- **Email rendering is architectural, not a parameter.** `plugin-email` renders via a
+  naive `String()` path with no formatter/locale/tz; routing it through the formula
+  template engine (or porting the formatters) is the real cost in slice 4.
+
+### Rollback
+
+Every slice is feature-flaggable behind "reference timezone unset → UTC". With no org
+reference timezone configured, the resolver returns `'UTC'` and all compute/render
+paths are byte-for-byte today's behavior — the safe default and the rollback target.
