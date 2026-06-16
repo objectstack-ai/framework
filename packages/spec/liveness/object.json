@@ -18,6 +18,7 @@
     "external": { "status": "live", "evidence": "packages/runtime/src/external-validation-plugin.ts", "note": "remote table + write gate." },
     "indexes": { "status": "live", "evidence": "packages/plugins/driver-sql/src/sql-driver.ts:1181", "note": "DDL." },
     "validations": { "status": "live", "evidence": "packages/objectql/src/validation/rule-validator.ts:154", "note": "incl. state_machine." },
+    "activityMilestones": { "status": "live", "evidence": "packages/plugins/plugin-audit/src/audit-writers.ts", "note": "ADR-0052 §5b.2 — audit-writer matchMilestone() emits a templated activity row when a watched field transitions into the configured value." },
     "actions": { "status": "live", "evidence": "packages/runtime/src/app-plugin.ts:929", "note": "served on /meta/objects/:name." },
     "managedBy": { "status": "live", "evidence": "packages/objectql/src/registry.ts:208", "note": "default perms; ui crudAffordances." },
     "userActions": { "status": "live", "note": "objectui ObjectGrid per-object CRUD." },

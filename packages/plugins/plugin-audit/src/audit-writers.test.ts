@@ -25,7 +25,10 @@ interface CapturedRow {
  *   `engine.getSchema(name)` returns after `applySystemFields` has (or has
  *   not) injected `organization_id`.
  */
-function makeEngine(schemas: Record<string, string[] | Record<string, any>>) {
+function makeEngine(
+  schemas: Record<string, string[] | Record<string, any>>,
+  objectDefs: Record<string, any> = {},
+) {
   const hooks = new Map<string, Array<(ctx: any) => any>>();
   const created: CapturedRow[] = [];
 
@@ -49,7 +52,7 @@ function makeEngine(schemas: Record<string, string[] | Record<string, any>>) {
       const fieldMap = Array.isArray(fields)
         ? Object.fromEntries(fields.map((f) => [f, { type: 'text' }]))
         : fields;
-      return { name, fields: fieldMap };
+      return { name, fields: fieldMap, ...(objectDefs[name] || {}) };
     },
     registerHook(event: string, fn: (ctx: any) => any) {
       const list = hooks.get(event) ?? [];
@@ -175,5 +178,70 @@ describe('audit writers — declarative trackHistory activity (ADR-0052 §5b)', 
 
     const activity = created.find((c) => c.object === 'sys_activity');
     expect(activity?.row.summary).toBe('Updated crm_opportunity "Acme Renewal"');
+  });
+});
+
+describe('audit writers — declarative milestones (ADR-0052 §5b.2)', () => {
+  const FIELDS = {
+    id: { type: 'text' },
+    name: { type: 'text', label: 'Name' },
+    stage: {
+      type: 'select',
+      label: 'Stage',
+      trackHistory: true,
+      options: [
+        { value: 'negotiation', label: 'Negotiation' },
+        { value: 'closed_won', label: 'Closed Won' },
+      ],
+    },
+  };
+  const SCHEMA = {
+    sys_audit_log: SINGLE_TENANT.sys_audit_log,
+    sys_activity: SINGLE_TENANT.sys_activity,
+    crm_opportunity: FIELDS,
+  };
+  // Object-level milestone: when stage enters closed_won → "Deal won: {name}".
+  const OBJECT_DEFS = {
+    crm_opportunity: {
+      activityMilestones: [
+        { field: 'stage', value: 'closed_won', summary: 'Deal won: {name}', type: 'completed' },
+      ],
+    },
+  };
+
+  it('emits the interpolated milestone summary (precedence over field-change) on transition', async () => {
+    const { engine, fire, created } = makeEngine(SCHEMA, OBJECT_DEFS);
+    installAuditWriters(engine as any, 'test.audit');
+
+    await fire('afterUpdate', {
+      object: 'crm_opportunity',
+      input: { id: 'opp-1', stage: 'closed_won' },
+      result: { id: 'opp-1', name: 'Acme Renewal', stage: 'closed_won' },
+      __previous: { id: 'opp-1', name: 'Acme Renewal', stage: 'negotiation' },
+      session: {},
+    });
+
+    const activity = created.find((c) => c.object === 'sys_activity');
+    // Milestone summary wins over the "Stage: Negotiation → Closed Won" diff.
+    expect(activity?.row.summary).toBe('Deal won: Acme Renewal');
+    expect(activity?.row.type).toBe('completed');
+  });
+
+  it('does not fire the milestone when the field does not transition into the value', async () => {
+    const { engine, fire, created } = makeEngine(SCHEMA, OBJECT_DEFS);
+    installAuditWriters(engine as any, 'test.audit');
+
+    await fire('afterUpdate', {
+      object: 'crm_opportunity',
+      input: { id: 'opp-1', stage: 'negotiation' },
+      result: { id: 'opp-1', name: 'Acme Renewal', stage: 'negotiation' },
+      __previous: { id: 'opp-1', name: 'Acme Renewal', stage: 'proposal' },
+      session: {},
+    });
+
+    const activity = created.find((c) => c.object === 'sys_activity');
+    // Falls back to the field-change render (trackHistory), not the milestone.
+    // `proposal` has no option entry here → raw value; `negotiation` → its label.
+    expect(activity?.row.summary).toBe('Stage: proposal → Negotiation');
   });
 });

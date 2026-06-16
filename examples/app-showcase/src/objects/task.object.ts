@@ -85,6 +85,13 @@ export const Task = ObjectSchema.create({
     sync_error: Field.textarea({ label: 'Sync Error' }),
   },
 
+  // ADR-0052 §5b.2 — declarative semantic milestone. When status enters `done`,
+  // the platform emits "✅ Task completed: <title>" on the timeline (taking
+  // precedence over the raw "Status: In Review → Done" diff) — zero hook code.
+  activityMilestones: [
+    { field: 'status', value: 'done', summary: '✅ Task completed: {title}', type: 'completed' },
+  ],
+
   validations: [
     {
       type: 'state_machine' as const,

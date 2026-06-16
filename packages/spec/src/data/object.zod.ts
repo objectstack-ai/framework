@@ -68,7 +68,7 @@ export const ObjectCapabilities = z.object({
   
   /** Enable standard Activity suite (Tasks, Calendars, Events) */
   activities: z.boolean().default(false).describe('Enable standard tasks and events tracking'),
-  
+
   /** Enable Recycle Bin / Soft Delete */
   trash: z.boolean().default(true).describe('Enable soft-delete with restore capability'),
 
@@ -522,6 +522,23 @@ const ObjectSchemaBase = z.object({
    * Best Practice: Define rules close to data.
    */
   validations: z.array(ValidationRuleSchema).optional().describe('Object-level validation rules'),
+
+  /**
+   * Declarative semantic activity milestones (ADR-0052 §5b.2). When a watched
+   * field transitions INTO `value`, the platform emits a templated activity-row
+   * on the record timeline — no `*.hook.ts` / `*.flow.ts`. Complements field-level
+   * `trackHistory` (which renders raw "Field: old → new"): use milestones for
+   * business-meaningful events ("Deal won", "Task completed"). `summary` supports
+   * `{field}` tokens interpolated from the record; the milestone summary takes
+   * precedence over the field-change summary for the same update. Consumed by
+   * `@objectstack/plugin-audit` audit-writers (enforce-or-remove, ADR-0049).
+   */
+  activityMilestones: z.array(z.object({
+    field: z.string().describe('Field to watch (typically a status/stage select).'),
+    value: z.string().describe('The value the field must transition INTO to fire the milestone.'),
+    summary: z.string().describe('Activity summary template; {field} tokens interpolate the record value. e.g. "Deal won: {name}".'),
+    type: z.string().optional().describe('Activity type for the emitted row (default "completed").'),
+  })).optional().describe('Declarative semantic activity milestones — emit a templated timeline row when a field transitions into a value, no hook code (ADR-0052 §5b.2).'),
 
   // ADR-0020: record state machines are not a separate `stateMachines` map —
   // each lifecycle is a `state_machine` rule in `validations` above (one rule

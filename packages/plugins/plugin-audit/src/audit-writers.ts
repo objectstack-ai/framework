@@ -173,6 +173,39 @@ function renderTrackedChangeSummary(
 }
 
 /**
+ * ADR-0052 §5b.2 — declarative semantic milestones. If a watched field
+ * transitioned INTO a configured `value` on this update (before ≠ value, after =
+ * value), return the interpolated summary (and optional activity type). `{token}`
+ * in the template is replaced by the record's field value, resolving select
+ * option labels when possible. Returns null when no milestone fired (needs the
+ * `before` snapshot to detect a transition). Takes precedence over the raw
+ * field-change summary.
+ */
+function matchMilestone(
+  objectDef: any,
+  fields: Record<string, any> | null,
+  before: Record<string, any> | null,
+  after: Record<string, any> | null,
+): { summary: string; type?: string } | null {
+  const milestones =
+    objectDef && Array.isArray(objectDef.activityMilestones) ? objectDef.activityMilestones : null;
+  if (!milestones || !after || !before) return null;
+  for (const m of milestones) {
+    if (!m || typeof m.field !== 'string' || typeof m.summary !== 'string') continue;
+    if (after[m.field] === m.value && before[m.field] !== m.value) {
+      const summary = m.summary.replace(/\{(\w+)\}/g, (_match: string, key: string) => {
+        const v = after[key];
+        if (v === null || v === undefined || v === '') return '';
+        const field = fields ? fields[key] : undefined;
+        return field ? displayFieldValue(field, v) : String(v);
+      });
+      return { summary, type: typeof m.type === 'string' ? m.type : undefined };
+    }
+  }
+  return null;
+}
+
+/**
  * Install audit + activity writers on the given engine. Idempotent per
  * `packageId` — calling twice with the same id replaces the previous
  * registration.
@@ -238,6 +271,21 @@ export function installAuditWriters(
     }
     fieldDefsCache.set(objectName, defs);
     return defs;
+  };
+
+  // Cached full object definition (for ADR-0052 §5b.2 activityMilestones —
+  // object-level metadata, not just fields).
+  const objectDefCache = new Map<string, any>();
+  const getObjectDef = (objectName: string): any => {
+    if (objectDefCache.has(objectName)) return objectDefCache.get(objectName);
+    let def: any = null;
+    try {
+      def = typeof (engine as any).getSchema === 'function' ? (engine as any).getSchema(objectName) : null;
+    } catch {
+      /* ignore — best-effort */
+    }
+    objectDefCache.set(objectName, def);
+    return def;
   };
 
   /**
@@ -361,20 +409,28 @@ export function installAuditWriters(
 
     const label = recordLabel(after ?? before, recordId ?? '');
     let summary: string;
+    let activityType: string = activityTypeFor(action);
     if (action === 'create') {
       summary = `Created ${ctx.object} "${label}"`;
     } else if (action === 'delete') {
       summary = `Deleted ${ctx.object} "${label}"`;
     } else {
-      // ADR-0052 §5b: if any changed field declares `trackHistory: true`, render
-      // the diff legibly ("Stage: Proposal → Closed Won"); else generic text.
-      summary =
-        renderTrackedChangeSummary(getFieldDefs(ctx.object), oldValue, newValue) ??
-        `Updated ${ctx.object} "${label}"`;
+      // ADR-0052 §5b — declarative activity, precedence: a configured semantic
+      // milestone (§5b.2) wins; else a tracked field-change diff ("Stage:
+      // Proposal → Closed Won", §5b.1); else the generic fallback.
+      const milestone = matchMilestone(getObjectDef(ctx.object), getFieldDefs(ctx.object), before, after);
+      if (milestone) {
+        summary = milestone.summary;
+        if (milestone.type) activityType = milestone.type;
+      } else {
+        summary =
+          renderTrackedChangeSummary(getFieldDefs(ctx.object), oldValue, newValue) ??
+          `Updated ${ctx.object} "${label}"`;
+      }
     }
 
     const activityRow: Record<string, any> = {
-      type: activityTypeFor(action),
+      type: activityType,
       // Explicit ISO timestamp — `defaultValue: 'NOW()'` on the column
       // isn't resolved by every driver and would otherwise leak the
       // literal string "NOW()" into the row.
