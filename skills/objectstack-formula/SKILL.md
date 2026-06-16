@@ -126,24 +126,59 @@ in `coalesce(..., '')`.
 Registered automatically. Source:
 [`packages/formula/src/stdlib.ts`](../../packages/formula/src/stdlib.ts).
 
+The canonical list is `CEL_STDLIB_FUNCTIONS` in
+[`packages/formula/src/validate.ts`](../../packages/formula/src/validate.ts) — a
+test asserts every entry resolves at runtime, so this table stays in sync with it.
+
+**Dates**
+
 | Function | Returns | Notes |
 |:---|:---|:---|
-| `now()` | timestamp | Pinned per evaluation run; deterministic in build |
-| `today()` | timestamp | UTC start-of-day |
-| `daysFromNow(n)` | timestamp | `today() + n*24h` |
-| `daysAgo(n)` | timestamp | `today() - n*24h` |
+| `now()` | timestamp | Current instant. Pinned per evaluation run; deterministic in build |
+| `today()` | timestamp | UTC **start-of-day** (midnight) |
+| `daysFromNow(n)` | timestamp | `now()` + `n` days — **keeps the current time-of-day** (NOT midnight) |
+| `daysAgo(n)` | timestamp | `now()` − `n` days — keeps the current time-of-day |
+| `daysBetween(a, b)` | int | Whole days from `a` to `b` (negative if `b` precedes `a`). `daysBetween(today(), record.due)` = days remaining |
+| `date(s)` / `datetime(s)` | timestamp | Parse an ISO date / date-time string to a timestamp |
+
+**Numbers**
+
+| Function | Returns | Notes |
+|:---|:---|:---|
+| `abs(x)` | double | Absolute value |
+| `round(x)` | int | Round to the nearest integer |
+| `min(a, b)` / `max(a, b)` | dyn | Smaller / larger operand (numeric comparison) |
+
+**Strings**
+
+| Function | Returns | Notes |
+|:---|:---|:---|
+| `upper(s)` / `lower(s)` | string | Case conversion |
+| `trim(s)` | string | Strip surrounding whitespace (`''` for null) |
+| `contains(s, sub)` | bool | Substring test |
+| `startsWith(s, p)` / `endsWith(s, p)` | bool | Prefix / suffix test |
+| `matches(s, re)` | bool | Regex test |
+| `joinNonEmpty(list, sep)` | string | Join, dropping null/empty entries |
+
+**Collections / null-ish**
+
+| Function | Returns | Notes |
+|:---|:---|:---|
 | `isBlank(v)` | bool | true for `null`, `undefined`, `''`, `[]` |
+| `isEmpty(v)` | bool | true for `null`, `undefined`, empty string / list / map |
 | `coalesce(v, fallback)` | dyn | `v` when non-null, else `fallback` |
+| `len(v)` | int | Length of a string / list / map |
+
+Plus CEL built-ins: `has(x)`, `size(x)`, `int(x)`, `string(x)`, `bool(x)`,
+`double(x)`, `timestamp(s)`, `duration(s)`.
 
 If you need a helper that doesn't exist, prefer adding it to the stdlib
 (small, pure, dependency-free) over inlining a complex CEL expression.
 
-> **Only the stdlib above + CEL built-ins (`has`, `size`, `contains`,
-> `startsWith`, `endsWith`, `matches`, `min`, `max`, …) are callable.** An
-> UNKNOWN function — `PRIOR()`, a legacy `ISBLANK()`, a typo'd `isBlnk()` — now
-> **fails `objectstack build`** with a "no matching overload" type error (#1877),
-> rather than silently no-op'ing the predicate at run time. Use `previous.x`
-> (not `PRIOR()`), `isBlank()` (not `ISBLANK()`).
+> **Only the functions above are callable.** An UNKNOWN function — `PRIOR()`, a
+> legacy `ISBLANK()`, a typo'd `isBlnk()` — **fails `objectstack build`** with a
+> "no matching overload" type error (#1877), rather than silently no-op'ing the
+> predicate at run time. Use `previous.x` (not `PRIOR()`), `isBlank()` (not `ISBLANK()`).
 
 ---
 

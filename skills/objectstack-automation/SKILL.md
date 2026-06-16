@@ -39,7 +39,7 @@ pipelines.
 > envelope evaluated by `@objectstack/formula`. Use the `P\`...\`` and
 > `cel\`...\`` tagged templates from `@objectstack/spec`. See the
 > **objectstack-formula** skill for the full CEL contract, stdlib
-> (`now()`, `today()`, `daysFromNow(n)`, `isBlank(v)`, `coalesce(v, fb)`),
+> (`now()`, `today()`, `daysFromNow(n)`, `daysBetween(a, b)`, `isBlank(v)`, `coalesce(v, fb)`),
 > and the legacy → CEL translation table.
 
 ---
@@ -537,9 +537,22 @@ them right the first time:
 8. **Time-relative rules ("alert N days before a date") are SCHEDULE flows, not
    record-change date-equality.** `record.end_date == daysFromNow(60)` on a
    `record-*` trigger only fires if the record happens to be written on that exact
-   day — unattended rules never run.
-   ✅ A daily `schedule` flow whose `get_record` filters `end_date` BETWEEN
-   `{TODAY()}` and `{TODAY() + N}`, then loops over the results.
+   day — unattended rules never run. **And date EQUALITY never matches anyway**: a
+   `date` field carries a time component, so `field == daysFromNow(N)` (or
+   `{ $in: [daysFromNow(N), …] }`) compares two differently-timed timestamps and
+   silently returns nothing (build warns `flow-date-equality-filter`).
+   ✅ A daily `schedule` flow whose `get_record` filters each tier as a one-day
+   **window** (`$gte`/`$lt`), never an equality:
+   ```ts
+   filter: { status: 'active', $or: [
+     { end_date: { $gte: cel`daysFromNow(7)`,  $lt: cel`daysFromNow(8)`  } },
+     { end_date: { $gte: cel`daysFromNow(30)`, $lt: cel`daysFromNow(31)` } },
+     { end_date: { $gte: cel`daysFromNow(60)`, $lt: cel`daysFromNow(61)` } },
+   ] }
+   ```
+   Abutting windows tile the timeline so each record matches exactly one tier —
+   fires once, idempotent, no guard field. For "days remaining" in the message,
+   `daysBetween(today(), record.end_date)`.
 
 9. **`script` nodes must name a callable.** Set `config.actionType` to a built-in
    side-effect (`email` / `slack`) **or** `config.function` to a function
@@ -573,8 +586,9 @@ them right the first time:
    that's an L2 **hook** (objectstack-data) — hooks get `ctx.api`; flow functions don't.
 
 10. **Conditions are bare CEL — only the stdlib is callable.** `now()`,
-    `today()`, `daysFromNow(n)`, `daysAgo(n)`, `isBlank(v)`, `coalesce(a, b)`,
-    `trim(s)`, plus CEL built-ins (`has`, `size`, `contains`, `startsWith`, …).
+    `today()`, `daysFromNow(n)`, `daysAgo(n)`, `daysBetween(a, b)`, `isBlank(v)`,
+    `coalesce(a, b)`, `abs/round/min/max`, `upper/lower/contains/matches`, plus CEL
+    built-ins (`has`, `size`, `int`, `string`, …) — see **objectstack-formula** for the full table.
     An UNKNOWN function (`PRIOR()`, a typo'd name) **fails the build**. And never
     wrap a field reference in `{…}` inside a condition — that's a template brace
     and fails as CEL: write `record.x`, not `{record.x}`.
