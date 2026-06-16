@@ -50,6 +50,28 @@ describe('collectDocsFromSrc (ADR-0046 §3.2)', () => {
     expect(plain.description).toBeUndefined(); // absent → omitted, not ''
   });
 
+  it('reads frontmatter `order:` as a number and ignores non-numeric values', () => {
+    write('crm_a.md', '---\norder: 3\n---\n\n# A');
+    write('crm_b.md', '---\norder: not-a-number\n---\n\n# B');
+    write('crm_c.md', '---\norder: 0\n---\n\n# C');
+    const { docs, issues } = collectDocsFromSrc(configPath);
+    expect(issues).toHaveLength(0);
+    expect(docs.find((d) => d.name === 'crm_a')!.order).toBe(3); // parsed to number
+    expect(docs.find((d) => d.name === 'crm_b')!.order).toBeUndefined(); // NaN → dropped
+    expect(docs.find((d) => d.name === 'crm_c')!.order).toBe(0); // zero is a valid order
+  });
+
+  it('reads frontmatter `group:` as a string; absent leaves order/group undefined', () => {
+    write('crm_grouped.md', '---\ngroup: crm_admin\n---\n\n# Grouped');
+    write('crm_bare.md', '# Bare\n\nNo frontmatter.');
+    const { docs, issues } = collectDocsFromSrc(configPath);
+    expect(issues).toHaveLength(0);
+    expect(docs.find((d) => d.name === 'crm_grouped')!.group).toBe('crm_admin');
+    const bare = docs.find((d) => d.name === 'crm_bare')!;
+    expect(bare.order).toBeUndefined();
+    expect(bare.group).toBeUndefined();
+  });
+
   it('errors on subdirectories — flatness is the contract', () => {
     fs.mkdirSync(path.join(docsDir, 'user'));
     write('crm_index.md', '# x');

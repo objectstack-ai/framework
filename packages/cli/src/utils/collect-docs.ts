@@ -38,6 +38,13 @@ export interface DocItem {
   description?: string;
   content: string;
   /**
+   * Sort key + explicit book-group placement (ADR-0046 §6), read from
+   * frontmatter `order:`/`group:`. The book resolver honors both; absent
+   * leaves them out so the schema defaults apply.
+   */
+  order?: number;
+  group?: string;
+  /**
    * Per-locale variants (ADR-0046 i18n), compiled from sibling
    * `<name>.<locale>.md` files. The base file is the default + fallback.
    */
@@ -68,19 +75,30 @@ function frontmatterScalar(block: string, key: string): string | undefined {
 }
 
 /**
- * Strip a leading `---` frontmatter block; extract `title:` and
- * `description:` if present (both optional, single-line scalars).
+ * Strip a leading `---` frontmatter block; extract `title:`, `description:`,
+ * `order:`, and `group:` if present (all optional, single-line scalars).
+ * `order:` is parsed to a number and dropped when non-numeric.
  */
-function parseFrontmatter(raw: string): { title?: string; description?: string; body: string } {
+function parseFrontmatter(raw: string): {
+  title?: string;
+  description?: string;
+  order?: number;
+  group?: string;
+  body: string;
+} {
   if (!raw.startsWith('---\n') && !raw.startsWith('---\r\n')) return { body: raw };
   const end = raw.indexOf('\n---', 3);
   if (end === -1) return { body: raw };
   const block = raw.slice(raw.indexOf('\n') + 1, end);
   const bodyStart = raw.indexOf('\n', end + 1);
   const body = bodyStart === -1 ? '' : raw.slice(bodyStart + 1);
+  const orderRaw = frontmatterScalar(block, 'order');
+  const order = orderRaw !== undefined ? Number(orderRaw) : undefined;
   return {
     title: frontmatterScalar(block, 'title'),
     description: frontmatterScalar(block, 'description'),
+    ...(order !== undefined && !Number.isNaN(order) ? { order } : {}),
+    group: frontmatterScalar(block, 'group'),
     body,
   };
 }
@@ -126,7 +144,7 @@ export function collectDocsFromSrc(configPath: string): { docs: DocItem[]; issue
 
     const stem = entry.name.slice(0, -3);
     const raw = fs.readFileSync(path.join(docsDir, entry.name), 'utf-8');
-    const { title, description, body } = parseFrontmatter(raw);
+    const { title, description, order, group, body } = parseFrontmatter(raw);
 
     // Locale variant `<base>.<locale>.md` (ADR-0046 i18n) — checked before the
     // bare-name rule, since a variant stem legitimately contains a dot.
@@ -156,6 +174,8 @@ export function collectDocsFromSrc(configPath: string): { docs: DocItem[]; issue
       label: title ?? firstHeading(body),
       ...(description ? { description } : {}),
       content: body,
+      ...(order !== undefined ? { order } : {}),
+      ...(group ? { group } : {}),
     });
   }
 
