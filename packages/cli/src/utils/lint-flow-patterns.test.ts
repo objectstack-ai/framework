@@ -5,6 +5,7 @@ import {
   lintFlowPatterns,
   FLOW_TIME_RELATIVE_ANTIPATTERN,
   FLOW_DATE_EQUALITY_FILTER,
+  FLOW_PHANTOM_AGGREGATION,
   FLOW_DOUBLE_BRACE_INTERP,
   FLOW_BARE_DOLLAR_REF,
 } from './lint-flow-patterns.js';
@@ -107,6 +108,36 @@ describe('lintFlowPatterns — date-equality in query filter (#1874)', () => {
       expect(lintFlowPatterns(filterFlow({ status: 'active', id: '{record.id}' }))).toHaveLength(0);
       expect(lintFlowPatterns(filterFlow({ amount: { $eq: CEL('record.threshold') } }))).toHaveLength(0);
     });
+  });
+});
+
+describe('lintFlowPatterns — phantom aggregation capability (#1870)', () => {
+  const scriptNode = (config: Record<string, unknown>) => ({
+    flows: [{
+      name: 'rollup',
+      nodes: [
+        { id: 'start', type: 'start', config: {} },
+        { id: 'sum', type: 'script', config },
+      ],
+      edges: [],
+    }],
+  });
+
+  it('flags `aggregations` on a script node (publication_rollup bug)', () => {
+    const fnds = lintFlowPatterns(scriptNode({ aggregations: { total: { sum: 'amount' } } }));
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_PHANTOM_AGGREGATION);
+    expect(fnds[0].hint).toMatch(/Field\.summary/);
+  });
+
+  it('flags groupBy / rollup / aggregate / having too', () => {
+    for (const key of ['groupBy', 'rollup', 'aggregate', 'having']) {
+      expect(lintFlowPatterns(scriptNode({ [key]: {} })).map((f) => f.rule)).toContain(FLOW_PHANTOM_AGGREGATION);
+    }
+  });
+
+  it('does NOT flag an ordinary script/function node', () => {
+    expect(lintFlowPatterns(scriptNode({ function: 'helpdesk.triage', inputs: { x: 1 } }))).toHaveLength(0);
   });
 });
 

@@ -47,8 +47,17 @@ const DATE_EQ = new RegExp(
 
 export const FLOW_TIME_RELATIVE_ANTIPATTERN = 'flow-time-relative-antipattern';
 export const FLOW_DATE_EQUALITY_FILTER = 'flow-date-equality-filter';
+export const FLOW_PHANTOM_AGGREGATION = 'flow-phantom-aggregation';
 export const FLOW_DOUBLE_BRACE_INTERP = 'flow-double-brace-interpolation';
 export const FLOW_BARE_DOLLAR_REF = 'flow-bare-dollar-reference';
+
+/**
+ * Node-config keys that name a capability the automation engine does NOT have.
+ * There is no aggregate node, so a `script`/`loop`/… node carrying these keys is
+ * silently ignored — the node runs and computes nothing (templates #1870,
+ * `publication_rollup`). Aggregation belongs in the data layer, not a flow.
+ */
+const PHANTOM_AGG_KEYS = new Set(['aggregations', 'aggregate', 'groupBy', 'rollup', 'having']);
 
 /** If `v` is a CEL expression whose source calls a time function, return that source. */
 function celTimeSource(v: unknown): string | null {
@@ -179,6 +188,24 @@ export function lintFlowPatterns(stack: AnyRec): FlowLintFinding[] {
       //      nothing; the robust shape is a `$gte`/`$lt` day window.
       const cfg = (node.config ?? {}) as AnyRec;
       if (cfg.filter) scanFilterForDateEquality(cfg.filter, `${nodeWhere} filter`, findings);
+
+      // (a3) #1870 — a node-config key naming a non-existent capability (there is
+      //      no aggregate node) is silently ignored at runtime, so the node
+      //      computes nothing. Point the author at the data-layer equivalent.
+      for (const key of Object.keys(cfg)) {
+        if (PHANTOM_AGG_KEYS.has(key)) {
+          findings.push({
+            where: nodeWhere,
+            message:
+              `node config has \`${key}\` — the automation engine has no aggregate node, so \`${key}\` is ` +
+              `silently ignored and this node computes nothing at runtime.`,
+            hint:
+              `Aggregation belongs in the data layer: use \`Field.summary\` for a cross-object rollup ` +
+              `(sum/count of children), or \`Field.formula\` for a per-record computed value. (#1870)`,
+            rule: FLOW_PHANTOM_AGGREGATION,
+          });
+        }
+      }
 
       const strings: string[] = [];
       collectTemplateStrings(node.config, undefined, strings);
