@@ -3448,6 +3448,7 @@ export class RestServer {
             for (const view of views ?? []) {
                 if (!view || typeof view !== 'object') continue;
                 const candidates: Array<{ form: any; key?: string }> = [];
+                // Authoring/nested shape (defineView): { form, formViews: { key: {...} } }.
                 if (view.form && view.form.sharing) candidates.push({ form: view.form });
                 const formViews = view.formViews;
                 if (formViews && typeof formViews === 'object') {
@@ -3456,6 +3457,14 @@ export class RestServer {
                             candidates.push({ form: fv as any, key });
                         }
                     }
+                }
+                // Flattened registered shape (getMetaItems → one item per view:
+                // { name, object, viewKind:'form', config:{ data, sections, sharing } }).
+                // A form view carries its sharing under `config`; without this branch
+                // public-form resolution silently fails for the standard view metadata.
+                if (view.viewKind === 'form' && view.config && typeof view.config === 'object'
+                    && (view.config as any).sharing) {
+                    candidates.push({ form: view.config, key: view.name });
                 }
                 for (const c of candidates) {
                     const sharing = c.form?.sharing;
