@@ -128,6 +128,36 @@ export const SysActivity = ObjectSchema.create({
       group: 'Target',
     }),
 
+    // ── Source pointer (ADR-0052 §5 — ActivityPointer model) ─────────
+    // `object_name`/`record_id` say WHICH record this activity belongs to (the
+    // "regarding" record, e.g. the contact). `source_object`/`source_id` point
+    // to the RICH ENTITY this activity was derived from — the email row in
+    // `sys_email`, the call/meeting in a task object, the `sys_comment` — so the
+    // timeline can drill from a one-line summary to the full record. This is the
+    // queryable, structured equivalent of cramming an id into `metadata`
+    // (cf. Dataverse ActivityPointer → Email/PhoneCall/Appointment subtypes,
+    // Salesforce ActivityTimeline → EmailMessage/Task/Event). Optional: most
+    // CRUD activities have no distinct source (the record IS the source).
+    source_object: Field.text({
+      label: 'Source Object',
+      required: false,
+      readonly: true,
+      searchable: true,
+      maxLength: 255,
+      description: 'Object name of the rich source entity this activity was derived from (e.g. "sys_email"). Null when the activity is about the target record itself.',
+      group: 'Target',
+    }),
+
+    source_id: Field.text({
+      label: 'Source ID',
+      required: false,
+      readonly: true,
+      searchable: true,
+      maxLength: 255,
+      description: 'Record id of the rich source entity (paired with source_object) — lets the timeline drill to the full email/call/meeting record.',
+      group: 'Target',
+    }),
+
     url: Field.url({
       label: 'URL',
       required: false,
