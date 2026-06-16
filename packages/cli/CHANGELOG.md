@@ -1,5 +1,70 @@
 # @objectstack/cli
 
+## 9.9.0
+
+### Minor Changes
+
+- 97ecfdd: feat(cli): lint `metadata` doc embeds (ADR-0051 P1) — validate every `metadata` fence body shape (type ∈ state_machine | flow | permission with did-you-mean, required name, object required for state_machine) and its same-package reference liveness (the referenced object + state_machine rule / flow / permission set must exist in the stack). A dead same-package reference is a build error, matching `docs/broken-link`.
+- 90108e0: feat(cli): liveness author-warning lint — close the spec-liveness loop on the author side.
+
+  The liveness ledgers already classify every authorable property live/experimental/dead with evidence, and the CI gate enforces classification _completeness_ — but that knowledge never reached the person (very often an AI) writing the metadata. The new `compile` lint (`lint-liveness-properties.ts`) reads the ledgers and emits an advisory **warning** when an authored object/field sets a property that is misleading at runtime — e.g. `object.enable.feeds` (no feed runtime; comments live on sys_comment), `object.versioning` (no versioning engine), `field.columnName` (driver ignores it; column == field key), `field.maxRating`/`vectorConfig` (renderer reads a different key) — each with a corrective hint toward the supported alternative. Never fails the build (advisory only), consistent with the existing flow anti-pattern lint.
+
+  Signal-over-noise by design: warnings are **opt-in per ledger entry** via a new `authorWarn`/`authorHint` annotation (plus `experimental` entries warn by default). Booleans warn only when set truthy, and only `default(false)` flags are marked, so schema defaults (`enable.trash`, `enable.searchable`) never trip it. Coverage grows by annotating more ledger entries, not by changing lint code; today it covers `object` (incl. `enable.*`) and `field`.
+
+  - `@objectstack/spec`: ledger entries gain optional `authorWarn`/`authorHint`; `liveness/` is now shipped in the package `files` so the CLI can read it. Seeded annotations on the misleading object capability flags + aspirational blocks and the misleading dead field props. No schema/runtime change.
+
+### Patch Changes
+
+- Updated dependencies [44c5348]
+- Updated dependencies [796f0d6]
+- Updated dependencies [d5774b5]
+- Updated dependencies [90108e0]
+- Updated dependencies [6bec07e]
+  - @objectstack/objectql@9.9.0
+  - @objectstack/rest@9.9.0
+  - @objectstack/driver-sql@9.9.0
+  - @objectstack/spec@9.9.0
+  - @objectstack/service-automation@9.9.0
+  - @objectstack/client@9.9.0
+  - @objectstack/plugin-sharing@9.9.0
+  - @objectstack/runtime@9.9.0
+  - @objectstack/trigger-record-change@9.9.0
+  - @objectstack/driver-sqlite-wasm@9.9.0
+  - @objectstack/service-datasource@9.9.0
+  - @objectstack/account@9.9.0
+  - @objectstack/setup@9.9.0
+  - @objectstack/studio@9.9.0
+  - @objectstack/core@9.9.0
+  - @objectstack/formula@9.9.0
+  - @objectstack/mcp@9.9.0
+  - @objectstack/observability@9.9.0
+  - @objectstack/platform-objects@9.9.0
+  - @objectstack/driver-memory@9.9.0
+  - @objectstack/driver-mongodb@9.9.0
+  - @objectstack/plugin-approvals@9.9.0
+  - @objectstack/plugin-audit@9.9.0
+  - @objectstack/plugin-auth@9.9.0
+  - @objectstack/plugin-email@9.9.0
+  - @objectstack/plugin-hono-server@9.9.0
+  - @objectstack/plugin-org-scoping@9.9.0
+  - @objectstack/plugin-reports@9.9.0
+  - @objectstack/plugin-security@9.9.0
+  - @objectstack/plugin-webhooks@9.9.0
+  - @objectstack/service-ai@9.9.0
+  - @objectstack/service-analytics@9.9.0
+  - @objectstack/service-cache@9.9.0
+  - @objectstack/service-job@9.9.0
+  - @objectstack/service-messaging@9.9.0
+  - @objectstack/service-package@9.9.0
+  - @objectstack/service-queue@9.9.0
+  - @objectstack/service-realtime@9.9.0
+  - @objectstack/service-settings@9.9.0
+  - @objectstack/service-storage@9.9.0
+  - @objectstack/trigger-api@9.9.0
+  - @objectstack/trigger-schedule@9.9.0
+  - @objectstack/types@9.9.0
+  - @objectstack/console@9.9.0
+
 ## 9.8.0
 
 ### Minor Changes
