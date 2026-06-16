@@ -38,7 +38,7 @@ const ledgerRoot = join(specRoot, 'liveness');
 
 // Categories whose authorable schemas must be fully classified. Extend
 // highest-risk-first as each category's ledger is seeded from its audit.
-const GOVERNED = ['security', 'identity'];
+const GOVERNED = ['security', 'identity', 'ai'];
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -49,6 +49,16 @@ const MARKER_RE = {
   experimental: /\[experimental|not enforced|aspirational/i,
   planned: /\[planned|not yet implemented|coming soon/i,
 };
+
+// Framework-managed provenance/lock overlay fields (ADR-0010 + metadata
+// provenance stamping). These appear on EVERY authorable metadata type, are
+// system-stamped (not type-specific authorable surface), and are consumed by the
+// overlay/lock loader. Auto-classified `live` so each category's ledger doesn't
+// have to repeat them.
+const FRAMEWORK_FIELDS = new Set([
+  '_lock', '_lockReason', '_lockSource', '_lockDocsUrl',
+  '_provenance', '_packageId', '_packageVersion', 'protection',
+]);
 
 function loadSchemas(category) {
   const dir = join(schemaRoot, category);
@@ -98,13 +108,30 @@ const report = { categories: {}, totals: { classified: 0, unclassified: 0, bySta
 
 for (const category of GOVERNED) {
   const ledger = loadLedger(category) || { schemas: {} };
+  // Two governance modes:
+  //  - default: every authorable object schema in the category must be classified
+  //    (`internal` exempts non-authorable ones). Right for clean, fully-authorable
+  //    categories (security, identity).
+  //  - allowlist (`"mode":"allowlist"` + `"governed":[...]`): only the named schemas
+  //    are checked; the rest of the category is out of scope. Right for categories
+  //    dominated by protocol/engine DTOs where the authorable types are a small
+  //    subset (ai: Agent/Tool/Skill among embedder/knowledge/model DTOs).
+  const allowlist = ledger.mode === 'allowlist' ? new Set(ledger.governed || []) : null;
   const cat = { classified: 0, unclassified: 0, byStatus: {} };
+  const seen = new Set();
   for (const { name, schema } of loadSchemas(category)) {
+    if (allowlist && !allowlist.has(name)) continue; // allowlist: skip un-governed schemas
+    seen.add(name);
     const props = topProps(schema);
     if (props.length === 0) continue; // enums / scalars carry no authorable props
     const entry = ledger.schemas[name] || {};
     if (entry._schema === 'internal') continue; // exempt: not authorable
     for (const { key, description } of props) {
+      if (FRAMEWORK_FIELDS.has(key)) { // ADR-0010 provenance/lock — auto-live
+        cat.classified++; cat.byStatus.live = (cat.byStatus.live || 0) + 1;
+        report.totals.byStatus.live = (report.totals.byStatus.live || 0) + 1;
+        continue;
+      }
       const led = entry.props && entry.props[key];
       const status = (led && led.status) || entry._schema || markerStatus(description);
       if (!status) {
@@ -119,6 +146,16 @@ for (const category of GOVERNED) {
       if (status === 'live' && led && led.evidence) {
         const file = String(led.evidence).split(':')[0];
         if (/\//.test(file) && !existsSync(join(repoRoot, file))) report.staleEvidence.push(`${category}/${name}.${key} → ${led.evidence}`);
+      }
+    }
+  }
+  // allowlist sanity: a governed schema name that no longer exists is a typo or a
+  // rename that silently drops coverage — surface it as unclassified.
+  if (allowlist) {
+    for (const want of allowlist) {
+      if (!seen.has(want)) {
+        cat.unclassified++;
+        report.unclassified.push(`${category}/${want} (governed schema not found — renamed or removed?)`);
       }
     }
   }
