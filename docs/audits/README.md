@@ -59,6 +59,9 @@ dataset `filter`/`format`/`derived`/`dateGranularity`; skill `triggerConditions`
 - **Healthiest** (near-total liveness, model schemas): **hook**, **validation**.
 - **Worst**: **policy** (100% dead), **portal** (100% dead), **tool** (write-only).
 
+## Disposition plan
+- [`2026-06-dead-surface-disposition-plan.md`](./2026-06-dead-surface-disposition-plan.md) — turns the spec-liveness gate's 89 `dead` properties (10 governed types) into an executable decision: **prune / wire-rename / enforce-or-prune / objectui**, priority-ordered. Headline: ~64 are prune candidates (aspirational/duplicate/display with no roadmap).
+
 ## Suggested ADRs
 1. **Security enforcement** (cluster #1) — highest priority; either enforce or remove every parsed-but-unenforced security prop.
 2. **Finish ADR-0021** (cluster #2) — migrate chart/dashboard/report renderers + Studio off the legacy inline shape.
