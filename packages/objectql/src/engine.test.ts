@@ -511,6 +511,65 @@ describe('ObjectQL Engine', () => {
             expect(result[0].response_rate).toBe(70);
         });
 
+        it('evaluates read-time formula fields with execution-context user/org (#1979)', async () => {
+            // Regression: applyFormulaPlan used to pass only `{ record }`, so a
+            // computed field referencing the caller (`os.user.id` / `os.org.id`)
+            // faulted and fell back to null. The context now threads through.
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'memo',
+                fields: {
+                    id: { type: 'text' },
+                    body: { type: 'text' },
+                    author_ref: {
+                        type: 'formula',
+                        expression: { dialect: 'cel', source: 'os.user.id' },
+                    },
+                    org_ref: {
+                        type: 'formula',
+                        expression: { dialect: 'cel', source: 'os.org.id' },
+                    },
+                },
+            } as any);
+
+            vi.mocked(mockDriver.find).mockResolvedValueOnce([
+                { id: 'm1', body: 'hello' },
+                { id: 'm2', body: 'world' },
+            ]);
+
+            const result = await engine.find(
+                'memo',
+                { fields: ['id', 'author_ref', 'org_ref'] } as any,
+                { context: { userId: 'u-42', tenantId: 'org-7', roles: ['admin'] } as any },
+            );
+
+            expect(result.map((r: any) => r.author_ref)).toEqual(['u-42', 'u-42']);
+            expect(result.map((r: any) => r.org_ref)).toEqual(['org-7', 'org-7']);
+        });
+
+        it('pins `now` once per find so every row sees the same instant (#1979)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'ping',
+                fields: {
+                    id: { type: 'text' },
+                    ts: {
+                        type: 'formula',
+                        expression: { dialect: 'cel', source: 'now()' },
+                    },
+                },
+            } as any);
+
+            vi.mocked(mockDriver.find).mockResolvedValueOnce([
+                { id: 'a' }, { id: 'b' }, { id: 'c' },
+            ]);
+
+            const result = await engine.find('ping', { fields: ['id', 'ts'] } as any);
+
+            // Determinism: a single operation snapshots one `now`, shared across
+            // every row — not a fresh wall-clock read per evaluation.
+            expect(result[0].ts).toEqual(result[1].ts);
+            expect(result[1].ts).toEqual(result[2].ts);
+        });
+
         it('should handle null values gracefully during expand', async () => {
             vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
                 if (name === 'task') return {

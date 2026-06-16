@@ -85,12 +85,35 @@ function planFormulaProjection(
   return { plan };
 }
 
-function applyFormulaPlan(plan: FormulaPlanEntry[], records: any[]): void {
+/**
+ * Evaluate read-time formula virtual fields against the raw rows.
+ *
+ * The eval context mirrors `applyFieldDefaults` so formula and default
+ * expressions see the same shape: a `now` pinned ONCE per operation (every row
+ * and every formula field in one `find()` observes the same instant —
+ * determinism, and no per-eval `new Date()` drift), plus `os.user` / `os.org`
+ * resolved from the execution context (so a computed field can reference the
+ * caller, e.g. `os.user.id`). Previously this passed only `{ record }`, so
+ * `now()`/`today()` ran against live wall-clock and user/org were unreachable.
+ *
+ * (ADR-0053 Phase 2 will additionally thread `timezone` here once
+ * `ExecutionContext.timezone` exists — see #1980; this change is independent
+ * of timezone.)
+ */
+function applyFormulaPlan(
+  plan: FormulaPlanEntry[],
+  records: any[],
+  execCtx?: ExecutionContext,
+  nowSnapshot?: Date,
+): void {
   if (!plan.length) return;
+  const now = nowSnapshot ?? new Date();
+  const user = execCtx?.userId ? { id: String(execCtx.userId), role: execCtx?.roles?.[0] } : undefined;
+  const org = execCtx?.tenantId ? { id: String(execCtx.tenantId) } : undefined;
   for (const rec of records) {
     if (rec == null) continue;
     for (const fp of plan) {
-      const r = ExpressionEngine.evaluate(fp.expression, { record: rec });
+      const r = ExpressionEngine.evaluate(fp.expression, { now, user, org, record: rec });
       rec[fp.name] = r.ok ? r.value : null;
     }
   }
@@ -1866,7 +1889,7 @@ export class ObjectQL implements IDataEngine {
           let result = await driver.find(object, hookContext.input.ast as QueryAST, hookContext.input.options as any);
 
           // Post-process: evaluate formula virtual fields against the raw rows
-          if (Array.isArray(result)) applyFormulaPlan(_findFormula.plan, result);
+          if (Array.isArray(result)) applyFormulaPlan(_findFormula.plan, result, opCtx.context);
 
           // Post-process: expand related records if expand is requested
           if (ast.expand && Object.keys(ast.expand).length > 0 && Array.isArray(result)) {
@@ -1932,7 +1955,7 @@ export class ObjectQL implements IDataEngine {
       let result = await driver.findOne(objectName, opCtx.ast as QueryAST, findOneOpts);
 
       // Post-process: evaluate formula virtual fields against the raw row
-      if (result != null) applyFormulaPlan(_findOneFormula.plan, [result]);
+      if (result != null) applyFormulaPlan(_findOneFormula.plan, [result], opCtx.context);
 
       // Post-process: expand related records if expand is requested
       if (ast.expand && Object.keys(ast.expand).length > 0 && result != null) {
