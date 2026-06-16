@@ -1,5 +1,14 @@
 # @objectstack/service-settings
 
+## 9.7.0
+
+### Patch Changes
+
+- @objectstack/spec@9.7.0
+- @objectstack/core@9.7.0
+- @objectstack/types@9.7.0
+- @objectstack/platform-objects@9.7.0
+
 ## 9.6.0
 
 ### Patch Changes

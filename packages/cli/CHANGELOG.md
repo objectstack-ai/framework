@@ -1,5 +1,97 @@
 # @objectstack/cli
 
+## 9.7.0
+
+### Minor Changes
+
+- ff0a87a: feat(validate): flag bare field references in record-scoped CEL sites at build time
+
+  > **Heads-up for downstream:** this adds a NEW build-time error. A `Field.formula`
+  > or validation predicate that references a field bare (`amount` instead of
+  > `record.amount`) now fails `objectstack compile`. These expressions were already
+  > silently broken at runtime (they evaluated to `null` / never fired), so this is a
+  > fix that surfaces a latent bug — but a stack carrying one will go from
+  > "builds, silently wrong" to "fails the build" on upgrade. The error message
+  > states the exact correction (`write record.<field>`).
+
+  A `Field.formula` and an object validation predicate evaluate against the
+  `record` namespace only — there is no field flattening — so a bare top-level
+  identifier (`amount`, `status`) resolves to nothing and the expression silently
+  evaluates to `null` / never fires. This is the silent-at-runtime class behind
+  the broken example-crm formulas (#1927) and is exactly what AI authors get wrong.
+
+  `validateExpression` now takes an evaluation `scope` and, for `scope: 'record'`,
+  reports a bare reference with the corrective form (`write record.<field>`). The
+  check is schema-free and acts only on cel-js's `Unknown variable` fault, so it
+  cannot false-positive on arithmetic/comparison/null-guard type overloads. Flow
+  and automation conditions keep the default `scope: 'flattened'` — the record's
+  fields ARE spread to top-level there (alongside flow variables), so bare refs
+  are correct and are NOT flagged. `objectstack compile` wires `record` scope for
+  field formulas and validation predicates; flow conditions stay flattened.
+
+### Patch Changes
+
+- 417b6ac: feat(validate): advisory did-you-mean warnings for likely field typos in flow conditions
+
+  Adds a non-blocking warning channel to build-time expression validation (#1928
+  tier 3). Flow / automation conditions flatten the record's fields to top-level,
+  so a bare `status` is correct — but a bare NON-field identifier is either a flow
+  variable or a typo. When it is a near-miss of a known field (edit distance), the
+  build now emits a `did you mean \`status\`?`warning instead of staying silent,
+WITHOUT failing the build (a genuine flow variable won't be close to a field
+name, so it stays quiet).`ExprValidationResult`gains a`warnings`array and`ExprIssue`a`severity`; `objectstack compile` prints warnings and only fails on
+  errors. This closes the silent-skip gap for misspelled trigger-condition fields
+  (the #1877 family) without the false-positive risk of a hard gate.
+
+- Updated dependencies [82c7438]
+- Updated dependencies [417b6ac]
+- Updated dependencies [ff0a87a]
+  - @objectstack/formula@9.7.0
+  - @objectstack/objectql@9.7.0
+  - @objectstack/plugin-approvals@9.7.0
+  - @objectstack/runtime@9.7.0
+  - @objectstack/service-ai@9.7.0
+  - @objectstack/service-automation@9.7.0
+  - @objectstack/client@9.7.0
+  - @objectstack/plugin-sharing@9.7.0
+  - @objectstack/trigger-record-change@9.7.0
+  - @objectstack/spec@9.7.0
+  - @objectstack/console@9.7.0
+  - @objectstack/core@9.7.0
+  - @objectstack/types@9.7.0
+  - @objectstack/observability@9.7.0
+  - @objectstack/platform-objects@9.7.0
+  - @objectstack/studio@9.7.0
+  - @objectstack/setup@9.7.0
+  - @objectstack/rest@9.7.0
+  - @objectstack/driver-memory@9.7.0
+  - @objectstack/driver-sql@9.7.0
+  - @objectstack/driver-mongodb@9.7.0
+  - @objectstack/driver-sqlite-wasm@9.7.0
+  - @objectstack/plugin-audit@9.7.0
+  - @objectstack/plugin-auth@9.7.0
+  - @objectstack/plugin-email@9.7.0
+  - @objectstack/plugin-hono-server@9.7.0
+  - @objectstack/mcp@9.7.0
+  - @objectstack/plugin-org-scoping@9.7.0
+  - @objectstack/plugin-reports@9.7.0
+  - @objectstack/plugin-security@9.7.0
+  - @objectstack/plugin-webhooks@9.7.0
+  - @objectstack/trigger-api@9.7.0
+  - @objectstack/trigger-schedule@9.7.0
+  - @objectstack/service-analytics@9.7.0
+  - @objectstack/service-cache@9.7.0
+  - @objectstack/service-datasource@9.7.0
+  - @objectstack/service-feed@9.7.0
+  - @objectstack/service-job@9.7.0
+  - @objectstack/service-messaging@9.7.0
+  - @objectstack/service-package@9.7.0
+  - @objectstack/service-queue@9.7.0
+  - @objectstack/service-realtime@9.7.0
+  - @objectstack/service-settings@9.7.0
+  - @objectstack/service-storage@9.7.0
+  - @objectstack/account@9.7.0
+
 ## 9.6.0
 
 ### Patch Changes
