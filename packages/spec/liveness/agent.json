@@ -1,0 +1,25 @@
+{
+  "type": "agent",
+  "_note": "AgentSchema. Seeded from docs/audits/2026-06-agentschema-property-liveness.md. agent-runtime.ts is the runtime consumer; AgentPreview is display-only.",
+  "props": {
+    "name": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts" },
+    "label": { "status": "live", "note": "display/core." },
+    "avatar": { "status": "live", "note": "display." },
+    "role": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "persona → system prompt." },
+    "instructions": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "system prompt." },
+    "model": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts:264", "note": "PARTIAL — model/temperature/maxTokens applied; model.provider + topP DEAD." },
+    "skills": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "Agent→Skill→Tool." },
+    "tools": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "legacy direct-tool fallback." },
+    "active": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "gates listing + 403 on chat." },
+    "planning": { "status": "live", "evidence": "packages/services/service-ai/src/agent-runtime.ts", "note": "PARTIAL — only planning.maxIterations live; strategy/allowReplan DEAD." },
+    "access": { "status": "dead", "evidence": "packages/services/service-ai/src/routes/agent-routes.ts:109", "note": "chat route hardcodes ['ai:chat','ai:agents'] — 'who can chat' is a no-op. ADR-0049 #1884." },
+    "permissions": { "status": "dead", "evidence": "packages/services/service-ai/src/routes/agent-routes.ts:109", "note": "display-only; not enforced." },
+    "visibility": { "status": "dead", "evidence": "no runtime reader", "note": "defaults 'organization' but gates nothing." },
+    "tenantId": { "status": "dead", "evidence": "no runtime reader" },
+    "knowledge": { "status": "dead", "evidence": "no runtime reader; AgentPreview reads knowledge.sources but spec defines {topics,indexes}", "note": "shape drift; RAG via service-knowledge." },
+    "lifecycle": { "status": "experimental", "evidence": "no runtime reader (StateMachine)", "note": "aspirational autonomy." },
+    "memory": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational autonomy." },
+    "guardrails": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational — real limits via quota service." },
+    "structuredOutput": { "status": "experimental", "evidence": "no runtime reader", "note": "aspirational." }
+  }
+}

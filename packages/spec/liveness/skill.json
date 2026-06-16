@@ -1,0 +1,15 @@
+{
+  "type": "skill",
+  "_note": "SkillSchema. Seeded from docs/audits/2026-06-skillschema-property-liveness.md. skill-registry.ts + agent-runtime.ts are the runtime consumers.",
+  "props": {
+    "name": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts" },
+    "label": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:247", "note": "injected into the agent system prompt." },
+    "description": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:247", "note": "injected into prompt." },
+    "instructions": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:247", "note": "injected into prompt." },
+    "tools": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:206", "note": "tool-contribution path incl. action_* wildcard." },
+    "triggerConditions": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:153", "note": "THE activation gate — AND of {field,operator,value}." },
+    "active": { "status": "live", "evidence": "packages/services/service-ai/src/skill-registry.ts:93", "note": "inactive skills dropped." },
+    "triggerPhrases": { "status": "dead", "evidence": "no intent/phrase matcher; only the slash-command palette summary (toSummary)", "note": "intent routing unimplemented." },
+    "permissions": { "status": "dead", "evidence": "no code restricts a skill by skill.permissions; naming drift (preview calls it requiredPermissions)" }
+  }
+}
