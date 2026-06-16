@@ -245,6 +245,53 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('execution context via the trailing options arg (read methods)', () => {
+        // Regression: reads took context inside the query while writes took it in
+        // a trailing options arg — so `find(obj, q, { context })` silently dropped
+        // the context (e.g. an intended isSystem bypass), a real source of
+        // "empty result once scoping was added" bugs. Reads now ALSO accept the
+        // trailing options.context, aligning with insert/update. `tenantId` is a
+        // convenient observable: buildDriverOptions forwards it to the driver.
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} });
+        });
+
+        const lastFindOpts = () => (mockDriver.find as any).mock.calls.at(-1)?.[2];
+
+        it('find: context from the trailing options arg reaches the driver', async () => {
+            await engine.find('task', { filters: [] }, { context: { tenantId: 't-opts' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 't-opts' });
+        });
+
+        it('find: context inside the query still works (legacy form)', async () => {
+            await engine.find('task', { filters: [], context: { tenantId: 't-query' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 't-query' });
+        });
+
+        it('find: when both are given, the trailing options.context wins', async () => {
+            await engine.find(
+                'task',
+                { context: { tenantId: 't-query' } as any },
+                { context: { tenantId: 't-opts' } as any },
+            );
+            expect(lastFindOpts()).toMatchObject({ tenantId: 't-opts' });
+        });
+
+        it('findOne accepts context via the trailing options arg', async () => {
+            (mockDriver.findOne as any).mockResolvedValue({ id: '1' });
+            await engine.findOne('task', { filters: [] }, { context: { tenantId: 't-fo' } as any });
+            expect((mockDriver.findOne as any).mock.calls.at(-1)?.[2]).toMatchObject({ tenantId: 't-fo' });
+        });
+
+        it('count accepts context via the trailing options arg', async () => {
+            (mockDriver.count as any).mockResolvedValue(0);
+            await engine.count('task', {}, { context: { tenantId: 't-cnt' } as any });
+            expect((mockDriver.count as any).mock.calls.at(-1)?.[2]).toMatchObject({ tenantId: 't-cnt' });
+        });
+    });
+
     describe('Update hooks — previous-record snapshot', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);

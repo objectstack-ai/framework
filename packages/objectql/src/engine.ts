@@ -136,6 +136,34 @@ export interface OperationContext {
 }
 
 /**
+ * Trailing options for the READ methods (find / findOne / count / aggregate).
+ *
+ * Historically the read methods took their execution context INSIDE the query
+ * (`query.context`), while the WRITE methods (insert / update) took it in a
+ * trailing `options.context`. That split was a footgun: the same `{ context }`
+ * object is correct as the 3rd arg to `insert` but was SILENTLY DROPPED as the
+ * 3rd arg to `find` — a class of bugs where an intended `isSystem` bypass just
+ * vanished (e.g. control-plane reads coming back empty once org-scoping hooks
+ * were added). We now ALSO accept `context` via this trailing options arg on the
+ * read methods, so "execution context goes in the trailing options argument" is
+ * one rule across reads and writes. `query.context` remains supported; when both
+ * are given, `options.context` wins (it is the explicit channel).
+ */
+export interface EngineReadOptions {
+  context?: ExecutionContext;
+}
+
+/** Merge read-path execution context from the query and the trailing options. */
+function mergeReadContext(
+  fromQuery?: ExecutionContext,
+  fromOptions?: ExecutionContext,
+): ExecutionContext | undefined {
+  if (fromOptions == null) return fromQuery;
+  if (fromQuery == null) return fromOptions;
+  return { ...fromQuery, ...fromOptions };
+}
+
+/**
  * Engine Middleware (Onion model)
  */
 export type EngineMiddleware = (
@@ -1766,7 +1794,7 @@ export class ObjectQL implements IDataEngine {
   // Data Access Methods (IDataEngine Interface)
   // ============================================
 
-  async find(object: string, query?: EngineQueryOptions): Promise<any[]> {
+  async find(object: string, query?: EngineQueryOptions, options?: EngineReadOptions): Promise<any[]> {
     object = this.resolveObjectName(object);
     this.logger.debug('Find operation starting', { object, query });
     const driver = this.getDriver(object);
@@ -1818,7 +1846,7 @@ export class ObjectQL implements IDataEngine {
       operation: 'find',
       ast,
       options: query,
-      context: query?.context,
+      context: mergeReadContext(query?.context, options?.context),
     };
 
     await this.executeWithMiddleware(opCtx, async () => {
@@ -1864,7 +1892,7 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result as any[];
   }
 
-  async findOne(objectName: string, query?: EngineQueryOptions): Promise<any> {
+  async findOne(objectName: string, query?: EngineQueryOptions, options?: EngineReadOptions): Promise<any> {
     objectName = this.resolveObjectName(objectName);
     this.logger.debug('FindOne operation', { objectName });
     const driver = this.getDriver(objectName);
@@ -1896,7 +1924,7 @@ export class ObjectQL implements IDataEngine {
       operation: 'findOne',
       ast,
       options: query,
-      context: query?.context,
+      context: mergeReadContext(query?.context, options?.context),
     };
 
     await this.executeWithMiddleware(opCtx, async () => {
@@ -2341,7 +2369,7 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result;
   }
 
-  async count(object: string, query?: EngineCountOptions): Promise<number> {
+  async count(object: string, query?: EngineCountOptions, options?: EngineReadOptions): Promise<number> {
      object = this.resolveObjectName(object);
      const driver = this.getDriver(object);
 
@@ -2349,7 +2377,7 @@ export class ObjectQL implements IDataEngine {
        object,
        operation: 'count',
        options: query,
-       context: query?.context,
+       context: mergeReadContext(query?.context, options?.context),
      };
 
      await this.executeWithMiddleware(opCtx, async () => {
@@ -2366,7 +2394,7 @@ export class ObjectQL implements IDataEngine {
      return opCtx.result as number;
   }
 
-  async aggregate(object: string, query: EngineAggregateOptions): Promise<any[]> {
+  async aggregate(object: string, query: EngineAggregateOptions, options?: EngineReadOptions): Promise<any[]> {
       object = this.resolveObjectName(object);
       const driver = this.getDriver(object);
       this.logger.debug(`Aggregate on ${object} using ${driver.name}`, query);
@@ -2375,7 +2403,7 @@ export class ObjectQL implements IDataEngine {
         object,
         operation: 'aggregate',
         options: query,
-        context: query?.context,
+        context: mergeReadContext(query?.context, options?.context),
       };
 
       await this.executeWithMiddleware(opCtx, async () => {
