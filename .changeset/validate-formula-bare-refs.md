@@ -1,9 +1,17 @@
 ---
-"@objectstack/formula": patch
-"@objectstack/cli": patch
+"@objectstack/formula": minor
+"@objectstack/cli": minor
 ---
 
 feat(validate): flag bare field references in record-scoped CEL sites at build time
+
+> **Heads-up for downstream:** this adds a NEW build-time error. A `Field.formula`
+> or validation predicate that references a field bare (`amount` instead of
+> `record.amount`) now fails `objectstack compile`. These expressions were already
+> silently broken at runtime (they evaluated to `null` / never fired), so this is a
+> fix that surfaces a latent bug — but a stack carrying one will go from
+> "builds, silently wrong" to "fails the build" on upgrade. The error message
+> states the exact correction (`write record.<field>`).
 
 A `Field.formula` and an object validation predicate evaluate against the
 `record` namespace only — there is no field flattening — so a bare top-level
