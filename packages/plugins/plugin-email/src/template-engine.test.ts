@@ -67,6 +67,18 @@ describe('template-engine', () => {
       it('renders a missing formatted value as empty (never "undefined")', () => {
         expect(renderTemplate('{{ missing | datetime }}', {})).toBe('');
       });
+
+      // Regression: the placeholder matcher must stay linear. CodeQL flagged a
+      // polynomial-ReDoS on inputs like `{{{{.` + many tabs; the brace-free
+      // `[^{}]*` capture removes the backtracking. Pathological input resolves
+      // fast and is left verbatim (not a valid path[+formatter] hole).
+      it('handles pathological brace/whitespace input without backtracking', () => {
+        const evil = '{{{{.' + '\t'.repeat(50_000);
+        const start = Date.now();
+        const out = renderTemplate(evil + '}}', {});
+        expect(Date.now() - start).toBeLessThan(1000);
+        expect(typeof out).toBe('string');
+      });
     });
   });
 

@@ -25,16 +25,43 @@
 
 import { formatValue } from '@objectstack/formula';
 
-// 1=open(`{{`|`{{{`) 2=path 3=formatter(opt) 4=arg(opt) 5=close(`}}`|`}}}`).
-// `[^'}]*?` is brace/quote-free, so it cannot run past the closing braces —
-// the matcher stays linear (no ReDoS).
-const PLACEHOLDER =
-  /(\{\{\{?)\s*([\w.]+)(?:\s*\|\s*(\w+)(?:\s*:\s*'?([^'}]*?)'?)?)?\s*(\}\}\}?)/g;
+// Match a hole: open braces, a BRACE-FREE inner body, close braces. Capturing
+// the inner with `[^{}]*` (a single star over a negated class — no nested
+// quantifier, no overlapping `\s*` groups) keeps the matcher strictly linear:
+// it can never backtrack into a polynomial-ReDoS shape. The inner body is then
+// parsed with plain string ops (`parseHole`) instead of a complex pattern.
+// 1=open(`{{`|`{{{`)  2=inner  3=close(`}}`|`}}}`).
+const PLACEHOLDER = /(\{\{\{?)([^{}]*)(\}\}\}?)/g;
 
 /** Locale + reference timezone for hole formatters (ADR-0053 Phase 2). */
 export interface RenderOptions {
   locale?: string;
   timeZone?: string;
+}
+
+// A hole body is a dotted path with an optional `| formatter[:arg]`. Validated
+// against small, already-extracted strings (bounded input → no ReDoS).
+const PATH_RE = /^[\w.]+$/;
+const FILTER_RE = /^(\w+)(?::\s*'?([^']*?)'?)?$/;
+
+interface ParsedHole {
+  path: string;
+  formatter?: string;
+  arg?: string;
+}
+
+/** Parse a hole's inner body into a path + optional formatter. Null if malformed. */
+function parseHole(inner: string): ParsedHole | null {
+  const pipe = inner.indexOf('|');
+  if (pipe === -1) {
+    const path = inner.trim();
+    return PATH_RE.test(path) ? { path } : null;
+  }
+  const path = inner.slice(0, pipe).trim();
+  if (!PATH_RE.test(path)) return null;
+  const m = FILTER_RE.exec(inner.slice(pipe + 1).trim());
+  if (!m) return null;
+  return { path, formatter: m[1], arg: m[2] };
 }
 
 function lookup(data: Record<string, any>, path: string): unknown {
@@ -70,14 +97,19 @@ export function renderTemplate(
   if (!template) return '';
   return template.replace(
     PLACEHOLDER,
-    (_match, open: string, path: string, fname: string | undefined, farg: string | undefined, close: string) => {
+    (match: string, open: string, inner: string, close: string) => {
+      const parsed = parseHole(inner);
+      if (!parsed) return match; // not a path[+formatter] hole — leave verbatim
       const isUnescaped = open === '{{{' && close === '}}}';
-      const raw = lookup(data, path);
+      const raw = lookup(data, parsed.path);
       let str: string;
-      if (fname) {
+      if (parsed.formatter) {
         // Formatted holes render '' for a missing value (the formula formatters
         // treat null as empty), so they never emit "undefined".
-        const formatted = formatValue(fname, raw, farg, { locale: opts.locale, timeZone: opts.timeZone });
+        const formatted = formatValue(parsed.formatter, raw, parsed.arg, {
+          locale: opts.locale,
+          timeZone: opts.timeZone,
+        });
         str = formatted !== undefined
           ? formatted
           : raw == null ? '' : (typeof raw === 'string' ? raw : String(raw)); // unknown formatter → raw
