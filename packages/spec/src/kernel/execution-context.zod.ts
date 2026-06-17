@@ -27,10 +27,18 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
 
   /**
    * Active reference timezone (IANA name, e.g. `America/New_York`), resolved
-   * once per request as user-preference → org default → `UTC` (ADR-0053
-   * Phase 2). When unset, consumers treat it as `UTC` — today's behavior.
+   * once per request from the `localization` settings (platform default →
+   * global → tenant; ADR-0053 Phase 2). When unset, consumers treat it as
+   * `UTC` — today's behavior.
    */
   timezone: z.string().optional(),
+
+  /**
+   * Active locale (BCP-47, e.g. `en-US`), resolved from the `localization`
+   * settings alongside `timezone`. Drives message catalogs and number/date
+   * formatting. When unset, consumers treat it as `en-US`.
+   */
+  locale: z.string().optional(),
 
   /** User role names (resolved from Member + Role) */
   roles: z.array(z.string()).default([]),

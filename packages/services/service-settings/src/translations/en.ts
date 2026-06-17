@@ -72,6 +72,27 @@ export const en: TranslationData = {
       },
     },
 
+    localization: {
+      title: 'Localization',
+      description: 'Default timezone, language, currency, and date/number formats.',
+      groups: {
+        region: { title: 'Region' },
+        formats: { title: 'Formats' },
+        finance: { title: 'Finance' },
+      },
+      keys: {
+        timezone: { label: 'Default timezone', help: 'IANA zone for today()/daysFromNow, analytics date buckets, and rendered datetimes.' },
+        locale: { label: 'Default language', help: 'BCP-47 locale for message catalogs and number/date formatting.' },
+        default_country: { label: 'Default country', help: 'ISO 3166-1 alpha-2 code (e.g. US, GB, CN).' },
+        date_format: { label: 'Date format' },
+        time_format: { label: 'Time format', options: { '24h': '24-hour (14:30)', '12h': '12-hour (2:30 PM)' } },
+        number_format: { label: 'Number format' },
+        first_day_of_week: { label: 'First day of week', options: { monday: 'Monday (ISO)', sunday: 'Sunday', saturday: 'Saturday' } },
+        currency: { label: 'Default currency' },
+        fiscal_year_start: { label: 'Fiscal year start' },
+      },
+    },
+
     auth: {
       title: 'Authentication',
       description: 'Sign-in, registration, and built-in auth feature controls.',

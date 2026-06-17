@@ -68,6 +68,27 @@ export const zhCN: TranslationData = {
       },
     },
 
+    localization: {
+      title: '本地化',
+      description: '默认时区、语言、货币及日期/数字格式。',
+      groups: {
+        region: { title: '区域' },
+        formats: { title: '格式' },
+        finance: { title: '财务' },
+      },
+      keys: {
+        timezone: { label: '默认时区', help: '用于 today()/daysFromNow、分析日期分桶和 datetime 渲染的 IANA 时区。' },
+        locale: { label: '默认语言', help: '用于消息文案和数字/日期格式的 BCP-47 语言。' },
+        default_country: { label: '默认国家/地区', help: 'ISO 3166-1 二位代码(如 US、GB、CN)。' },
+        date_format: { label: '日期格式' },
+        time_format: { label: '时间格式', options: { '24h': '24 小时制(14:30)', '12h': '12 小时制(2:30 PM)' } },
+        number_format: { label: '数字格式' },
+        first_day_of_week: { label: '每周起始日', options: { monday: '周一(ISO)', sunday: '周日', saturday: '周六' } },
+        currency: { label: '默认货币' },
+        fiscal_year_start: { label: '财年起始月' },
+      },
+    },
+
     auth: {
       title: '认证',
       description: '登录、注册以及内置认证功能的控制项。',

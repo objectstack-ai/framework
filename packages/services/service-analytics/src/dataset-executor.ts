@@ -214,6 +214,7 @@ export class DatasetExecutor {
         dimensions,
         where: baseFilter,
         selection,
+        contextTimezone: context?.timezone,
       }), context);
     } else {
       result = { rows: [], fields: [] };
@@ -224,6 +225,7 @@ export class DatasetExecutor {
       const mFilter = combineFilters(baseFilter, compiled.measureFilters[m]);
       const sub = await this.service.query(this.buildQuery(compiled, {
         measures: [m], dimensions, where: mFilter, selection,
+        contextTimezone: context?.timezone,
       }), context);
       result.rows = mergeByDimensions(result.rows, sub.rows, dimensions, [m]);
       result.fields.push({ name: m, type: 'number' });
@@ -255,13 +257,16 @@ export class DatasetExecutor {
       dimensions: string[];
       where?: FilterCondition;
       selection: DatasetSelection;
+      contextTimezone?: string;
     },
   ): AnalyticsQuery {
     const q: AnalyticsQuery = {
       cube: compiled.cube.name,
       measures: opts.measures,
       dimensions: opts.dimensions,
-      timezone: opts.selection.timezone ?? 'UTC',
+      // Precedence: explicit selection tz → request's reference tz
+      // (ExecutionContext.timezone, ADR-0053 Phase 2) → UTC.
+      timezone: opts.selection.timezone ?? opts.contextTimezone ?? 'UTC',
     };
     if (opts.where) q.where = opts.where as Record<string, unknown>;
     // Bucket selected date dimensions that declare an explicit `dateGranularity`
@@ -314,7 +319,7 @@ export class DatasetExecutor {
       dimensions,
       where: baseFilter as Record<string, unknown> | undefined,
       timeDimensions: shiftedTd,
-      timezone: selection.timezone ?? 'UTC',
+      timezone: selection.timezone ?? context?.timezone ?? 'UTC',
     }, context);
     // Rename measure columns to `<measure>__compare` so they merge alongside primary.
     return sub.rows.map((row) => {

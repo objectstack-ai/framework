@@ -84,35 +84,57 @@ function coerceTimeZone(value: unknown): string | undefined {
   return s && isValidTimeZone(s) ? s : undefined;
 }
 
+/** Coerce a stored locale value to a non-empty BCP-47-ish string, or undefined. */
+function coerceLocale(value: unknown): string | undefined {
+  const s = typeof value === 'string' ? value.trim() : value != null ? String(value).trim() : '';
+  return s || undefined;
+}
+
 /**
- * Resolve the active reference timezone for an authenticated context
- * (ADR-0053 Phase 2): user preference → org default → `UTC`.
+ * Resolve the workspace localization defaults onto the ExecutionContext
+ * (ADR-0053 Phase 2): reference `timezone` and `locale`.
  *
- * - User override: `sys_user_preference` row `(user_id, key='timezone')`.
- * - Org default: the tenant-scoped `sys_setting` `(namespace='localization',
- *   key='timezone', scope='tenant')` — one org per physical tenant (ADR-0002),
- *   so the row needs no tenant_id filter.
+ * Canonical path is the `localization` SettingsManifest via the `settings`
+ * service, whose cascade is platform default → global → tenant (ADR-0002: one
+ * org per physical tenant; per-user overrides are intentionally out of scope
+ * for v1). When the settings service or its namespace is unavailable (e.g. a
+ * minimal deployment), fall back to a direct tenant-scoped `sys_setting` read,
+ * then to the built-ins `UTC` / `en-US`.
  *
- * Pure plumbing: nothing downstream reads `ctx.timezone` yet, so an absent
- * value resolves to `UTC` and preserves today's behavior. Every read is
- * defensive (via `tryFind`) and an invalid zone falls through — timezone
- * resolution never blocks auth.
+ * Every read is defensive — localization never blocks auth, and an invalid
+ * zone falls through to the built-in.
  */
-async function resolveTimezone(ql: any, userId: string): Promise<string> {
-  const prefRows = await tryFind(ql, 'sys_user_preference', { user_id: userId, key: 'timezone' }, 1);
-  const userTz = coerceTimeZone(prefRows[0]?.value);
-  if (userTz) return userTz;
+async function resolveLocalization(
+  opts: ResolveOptions,
+  ql: any,
+  sctx: { tenantId?: string; userId?: string },
+): Promise<{ timezone: string; locale: string }> {
+  // 1. Canonical — the `localization` manifest via the settings service.
+  try {
+    const settings: any = await opts.getService('settings');
+    if (settings && typeof settings.get === 'function') {
+      const [tzRes, localeRes] = await Promise.all([
+        settings.get('localization', 'timezone', sctx).catch(() => undefined),
+        settings.get('localization', 'locale', sctx).catch(() => undefined),
+      ]);
+      const tz = coerceTimeZone(tzRes?.value);
+      const locale = coerceLocale(localeRes?.value);
+      // A resolved value (incl. the manifest default) means the namespace is
+      // live — trust it and skip the legacy direct read.
+      if (tz || locale) return { timezone: tz ?? 'UTC', locale: locale ?? 'en-US' };
+    }
+  } catch {
+    // settings service unavailable → fall through to the direct read
+  }
 
-  const settingRows = await tryFind(
-    ql,
-    'sys_setting',
-    { namespace: 'localization', key: 'timezone', scope: 'tenant' },
-    1,
-  );
-  const orgTz = coerceTimeZone(settingRows[0]?.value);
-  if (orgTz) return orgTz;
-
-  return 'UTC';
+  // 2. Fallback — direct tenant-scoped `sys_setting` rows (no settings service
+  //    registered, or namespace not loaded).
+  const tzRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'timezone', scope: 'tenant' }, 1);
+  const localeRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'locale', scope: 'tenant' }, 1);
+  return {
+    timezone: coerceTimeZone(tzRows[0]?.value) ?? 'UTC',
+    locale: coerceLocale(localeRows[0]?.value) ?? 'en-US',
+  };
 }
 
 /**
@@ -310,10 +332,13 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
     }
   }
 
-  // 4. Reference timezone (ADR-0053 Phase 2) — resolved once per request and
-  //    carried on the context. No consumer reads it yet; absent config → 'UTC'
-  //    keeps current behavior.
-  ctx.timezone = await resolveTimezone(ql, userId);
+  // 4. Localization (ADR-0053 Phase 2) — reference timezone + locale resolved
+  //    once per request from the `localization` settings and carried on the
+  //    context. Consumers: formula today()/datetime, analytics date buckets,
+  //    email rendering. Absent config → UTC / en-US keeps current behavior.
+  const localization = await resolveLocalization(opts, ql, { tenantId, userId });
+  ctx.timezone = localization.timezone;
+  ctx.locale = localization.locale;
 
   return ctx;
 }
