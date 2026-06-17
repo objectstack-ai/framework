@@ -1,5 +1,13 @@
 # @objectstack/service-automation
 
+## 9.9.1
+
+### Patch Changes
+
+- @objectstack/spec@9.9.1
+- @objectstack/core@9.9.1
+- @objectstack/formula@9.9.1
+
 ## 9.9.0
 
 ### Minor Changes

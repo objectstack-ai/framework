@@ -1,5 +1,11 @@
 # @objectstack/nestjs
 
+## 9.9.1
+
+### Patch Changes
+
+- @objectstack/runtime@9.9.1
+
 ## 9.9.0
 
 ### Patch Changes

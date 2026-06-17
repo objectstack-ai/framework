@@ -1,5 +1,7 @@
 # @objectstack/spec
 
+## 9.9.1
+
 ## 9.9.0
 
 ### Minor Changes

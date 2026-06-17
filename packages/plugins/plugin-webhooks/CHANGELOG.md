@@ -1,5 +1,13 @@
 # @objectstack/plugin-webhooks
 
+## 9.9.1
+
+### Patch Changes
+
+- @objectstack/spec@9.9.1
+- @objectstack/core@9.9.1
+- @objectstack/service-messaging@9.9.1
+
 ## 9.9.0
 
 ### Patch Changes

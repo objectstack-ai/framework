@@ -1,5 +1,11 @@
 # @objectstack/console
 
+## 9.9.1
+
+### Patch Changes
+
+- 4f5c9c3: fix form
+
 ## 9.9.0
 
 ### Minor Changes

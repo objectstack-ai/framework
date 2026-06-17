@@ -1,5 +1,15 @@
 # @objectstack/example-showcase
 
+## 0.1.22
+
+### Patch Changes
+
+- @objectstack/spec@9.9.1
+- @objectstack/cloud-connection@9.9.1
+- @objectstack/runtime@9.9.1
+- @objectstack/connector-rest@9.9.1
+- @objectstack/connector-slack@9.9.1
+
 ## 0.1.21
 
 ### Patch Changes
