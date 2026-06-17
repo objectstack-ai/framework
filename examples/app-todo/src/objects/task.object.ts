@@ -73,8 +73,10 @@ export const Task = ObjectSchema.create({
       readonly: true,
     }),
     
-    // Assignment
-    owner: Field.lookup('user', {
+    // Assignment — the platform user object is `sys_user` (better-auth managed);
+    // `user` is not a registered object/table, so the old reference resolved to
+    // a non-existent `user` table at seed/lookup time ("no such table: user").
+    owner: Field.lookup('sys_user', {
       label: 'Assigned To',
     }),
     
