@@ -63,7 +63,11 @@ export const WarnOverBudgetHook = {
   label: 'Warn On Over-Budget Project',
   object: 'showcase_project',
   events: ['afterUpdate'] as LifecycleEvent[],
-  condition: "record.spent > record.budget",
+  // Guard with has(): an afterUpdate fired by a partial write (e.g. the
+  // task-rollup that only touches task_count) carries a record WITHOUT
+  // spent/budget, and CEL throws "No such key" on a bare `record.spent`.
+  // has() is the missing-key-safe macro — the hook simply skips those.
+  condition: "has(record.spent) && has(record.budget) && record.spent > record.budget",
   body: {
     language: 'js' as const,
     source: "var r = ctx.result || ctx.input || {}; if (typeof ctx.log === 'function') ctx.log('project over budget: ' + (r.name || r.id || 'unknown') + ' (' + r.spent + ' / ' + r.budget + ')');",

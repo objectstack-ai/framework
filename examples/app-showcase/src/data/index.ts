@@ -8,6 +8,7 @@ import { Task } from '../objects/task.object.js';
 import { Category } from '../objects/category.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
 import { Product } from '../objects/invoice.object.js';
+import { FieldZoo } from '../objects/field-zoo.object.js';
 
 /**
  * Seed data sized to "feed every view": every Kanban column is populated,
@@ -100,4 +101,46 @@ const memberships = defineSeed(ProjectMembership, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships];
+// Field Zoo specimens — one record per "look" exercising EVERY input-able
+// field type with a real value. This is both a demo (the gallery finally
+// renders populated) and a regression guard: the seed inserts at boot, so a
+// field type that can't persist (e.g. the array-serialization / `time` bugs
+// found here) makes the app fail to start instead of silently shipping broken.
+// Relational/computed fields (lookup/master_detail/tree/record-map, formula/
+// summary/autonumber) resolve or generate at runtime. `f_master_detail` is the
+// owning Project; `f_lookup` the Account — referenced by their seed externalId.
+const fieldZoo = defineSeed(FieldZoo, {
+  mode: 'upsert',
+  externalId: 'name',
+  records: [
+    {
+      name: 'Specimen — Full',
+      f_textarea: 'Line one\nLine two', f_email: 'zoo@example.com', f_url: 'https://objectstack.ai',
+      // NOTE: `f_secret` (encryption-at-rest) is intentionally omitted — the
+      // seed path has no CryptoProvider, so a secret value is (correctly)
+      // refused fail-closed. The field type is still covered by the schema.
+      f_phone: '+1 555 010 2030', f_password: 'hunter2',
+      f_markdown: '# Heading\n\n- a\n- b', f_html: '<b>bold</b> & <i>italic</i>', f_richtext: '<p>Rich <strong>text</strong></p>',
+      f_number: 420, f_currency: 1299.95, f_percent: 75,
+      f_date: '2026-06-17', f_datetime: '2026-06-17T14:30:00Z', f_time: '14:30',
+      f_boolean: true, f_toggle: true,
+      f_select: 'high', f_multiselect: ['red', 'green'], f_radio: 'yes', f_checkboxes: ['email', 'push'], f_tags: ['alpha', 'beta'],
+      f_lookup: 'Northwind', f_master_detail: 'Website Relaunch',
+      f_location: { lat: 47.6062, lng: -122.3321 }, f_address: { street: '1 Main St', city: 'Seattle', state: 'WA', postal_code: '98101', country: 'US' },
+      f_code: '{\n  "ok": true\n}', f_json: { nested: { k: 'v' }, list: [1, 2, 3] }, f_color: '#2563EB',
+      f_rating: 4, f_slider: 60, f_progress: 80,
+      f_composite: { width: 10, height: 20 }, f_repeater: [{ label: 'one', qty: 1 }, { label: 'two', qty: 2 }],
+      f_record: { primary: { name: 'A', score: 9 }, backup: { name: 'B', score: 7 } },
+      f_vector: [0.12, 0.34, 0.56, 0.78],
+    },
+    {
+      name: 'Specimen — Minimal',
+      f_number: 7, f_select: 'low', f_radio: 'no', f_time: '09:05:30',
+      f_multiselect: ['blue'], f_checkboxes: ['sms'], f_tags: [],
+      f_boolean: false, f_rating: 2, f_slider: 0, f_progress: 0,
+      f_master_detail: 'Data Platform',
+    },
+  ],
+});
+
+export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships, fieldZoo];
