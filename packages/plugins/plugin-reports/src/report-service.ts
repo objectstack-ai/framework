@@ -11,6 +11,7 @@ import type {
   ScheduleReportInput,
   SharingExecutionContext,
 } from '@objectstack/spec/contracts';
+import { Cron } from 'croner';
 
 /**
  * Narrow engine surface — keeps the service testable without booting
@@ -342,14 +343,27 @@ export class ReportService implements IReportService {
 
     const now = this.clock.now();
     const interval = input.intervalMinutes ?? DEFAULT_INTERVAL_MIN;
-    const nextRun = new Date(now.getTime() + interval * 60_000).toISOString();
+    const cron = input.cronExpression?.trim() || null;
+    if (cron) {
+      // Validate eagerly so an author gets a clear error at schedule time
+      // instead of a schedule that silently falls back to interval on sweep.
+      try {
+        new Cron(cron, { timezone: input.timezone || 'UTC' });
+      } catch (err) {
+        throw new Error(`VALIDATION_FAILED: invalid cron_expression '${cron}': ${(err as Error).message}`);
+      }
+    }
+    const nextRun = this.nextRunAt(
+      { cron_expression: cron, interval_minutes: interval, timezone: input.timezone ?? 'UTC' },
+      now,
+    ).toISOString();
     const id = uid('rsch');
     const row: any = {
       id,
       report_id: input.reportId,
       name: input.name ?? null,
       interval_minutes: interval,
-      cron_expression: input.cronExpression ?? null,
+      cron_expression: cron,
       timezone: input.timezone ?? 'UTC',
       active: input.active !== false,
       recipients: input.recipients.join(','),
@@ -459,9 +473,36 @@ export class ReportService implements IReportService {
     return { fired, failed, skipped };
   }
 
-  private async advanceSchedule(schedule: ReportSchedule, ranAt: string): Promise<void> {
+  /**
+   * Compute the next fire time for a schedule. A `cron_expression` wins over
+   * `interval_minutes` (the documented `sys_report_schedule` contract) and is
+   * evaluated in the schedule's `timezone` (default UTC) via croner — the same
+   * library the job scheduler uses. Falls back to `from + interval_minutes` for
+   * interval schedules, and also if a cron expression is invalid or has no
+   * future occurrence (logged; never throws into the sweep). `from` is the
+   * reference instant (the injected clock), so `today()`-style boundaries honor
+   * the test clock.
+   */
+  private nextRunAt(
+    schedule: { cron_expression?: string | null; interval_minutes?: number | null; timezone?: string | null },
+    from: Date,
+  ): Date {
+    const cron = (schedule.cron_expression ?? '').trim();
+    if (cron) {
+      try {
+        const next = new Cron(cron, { timezone: schedule.timezone || 'UTC' }).nextRun(from);
+        if (next) return next;
+        this.logger.warn?.(`ReportService: cron '${cron}' has no next occurrence; falling back to interval`);
+      } catch (err) {
+        this.logger.warn?.(`ReportService: invalid cron '${cron}'; falling back to interval`, err);
+      }
+    }
     const interval = schedule.interval_minutes ?? DEFAULT_INTERVAL_MIN;
-    const nextRun = new Date(this.clock.now().getTime() + interval * 60_000).toISOString();
+    return new Date(from.getTime() + interval * 60_000);
+  }
+
+  private async advanceSchedule(schedule: ReportSchedule, ranAt: string): Promise<void> {
+    const nextRun = this.nextRunAt(schedule, this.clock.now()).toISOString();
     await this.engine.update('sys_report_schedule', {
       id: schedule.id,
       next_run_at: nextRun,

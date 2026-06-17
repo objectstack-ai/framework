@@ -237,6 +237,49 @@ describe('ReportService', () => {
     expect(s.recipients).toBe('x@t');
   });
 
+  it('scheduleReport: cron_expression drives next_run_at and overrides interval (#1983)', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    // now = 2026-01-15T10:00:00Z (past 09:00); daily-9am cron → tomorrow 09:00Z.
+    const s = await svc.scheduleReport({
+      reportId: r.id, recipients: ['x@t'], intervalMinutes: 60, cronExpression: '0 9 * * *',
+    }, CTX);
+    expect(s.cron_expression).toBe('0 9 * * *');
+    expect(s.next_run_at).toBe('2026-01-16T09:00:00.000Z');
+    // …not the interval's now + 60m.
+    expect(s.next_run_at).not.toBe(new Date(now.getTime() + 60 * 60_000).toISOString());
+  });
+
+  it('scheduleReport: cron honors the schedule timezone (#1983)', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    // 09:00 America/New_York (UTC-5 in January) = 14:00Z; now=05:00 ET → same day.
+    const s = await svc.scheduleReport({
+      reportId: r.id, recipients: ['x@t'], cronExpression: '0 9 * * *', timezone: 'America/New_York',
+    }, CTX);
+    expect(s.next_run_at).toBe('2026-01-15T14:00:00.000Z');
+  });
+
+  it('scheduleReport: rejects an invalid cron_expression (#1983)', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await expect(svc.scheduleReport({
+      reportId: r.id, recipients: ['x@t'], cronExpression: 'not a cron',
+    }, CTX)).rejects.toThrow(/VALIDATION_FAILED/);
+  });
+
+  it('dispatchDue: advances a cron schedule to the next cron occurrence (#1983)', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({
+      reportId: r.id, recipients: ['x@t'], cronExpression: '0 9 * * *', format: 'csv',
+    }, CTX);
+    // Force due, then dispatch at `now`.
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1000).toISOString();
+    const result = await svc.dispatchDue();
+    expect(result.fired).toBe(1);
+    const advanced = engine._tables['sys_report_schedule'][0];
+    expect(advanced.last_status).toBe('ok');
+    // Advanced via cron (tomorrow 09:00Z), not now + interval.
+    expect(advanced.next_run_at).toBe('2026-01-16T09:00:00.000Z');
+  });
+
   it('listSchedules + unscheduleReport', async () => {
     const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
     const s = await svc.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
