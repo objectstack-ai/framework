@@ -34,6 +34,23 @@ const SEQUENCES_TABLE = '_objectstack_sequences';
  */
 const GLOBAL_TENANT = '__global__';
 
+/**
+ * Field types whose value is an array or object and must be stored as a JSON
+ * column (and JSON-(de)serialized at the driver boundary). SINGLE SOURCE for
+ * both the DDL column-type switch and `isJsonField` so the two can't drift —
+ * the drift between them is exactly what let array-valued fields (multiselect/
+ * checkboxes/tags/repeater/vector) reach the SQLite binder un-serialized and
+ * crash with "SQLite3 can only bind numbers, strings, bigints, buffers, and
+ * null" (#field-zoo). `image`/`file`/`avatar` hold structured upload metadata;
+ * `composite`/`address`/`location` are objects; the rest are arrays.
+ */
+const JSON_COLUMN_TYPES = new Set<string>([
+  'json', 'object', 'array',
+  'image', 'file', 'avatar',
+  'location', 'address', 'composite',
+  'multiselect', 'checkboxes', 'tags', 'repeater', 'vector',
+]);
+
 // ── Introspection Types ──────────────────────────────────────────────────────
 
 export interface IntrospectedColumn {
@@ -1845,6 +1862,13 @@ export class SqlDriver implements IDataDriver {
       case 'file':
       case 'avatar':
       case 'location':
+      case 'address':
+      case 'composite':
+      case 'multiselect':
+      case 'checkboxes':
+      case 'tags':
+      case 'repeater':
+      case 'vector':
         col = table.json(name);
         break;
       case 'lookup':
@@ -1976,7 +2000,7 @@ export class SqlDriver implements IDataDriver {
   }
 
   protected isJsonField(type: string, field: any): boolean {
-    return ['json', 'object', 'array', 'image', 'file', 'avatar', 'location'].includes(type) || field.multiple;
+    return JSON_COLUMN_TYPES.has(type) || !!field.multiple;
   }
 
   // ── SQLite serialisation ────────────────────────────────────────────────────
@@ -2022,12 +2046,25 @@ export class SqlDriver implements IDataDriver {
     if (!this.isSqlite) return copy;
 
     const fields = this.jsonFields[object];
-    if (!fields || fields.length === 0) return copy;
+    if (fields && fields.length > 0) {
+      if (!copied) { copy = { ...copy }; copied = true; }
+      for (const field of fields) {
+        if (copy[field] !== undefined && typeof copy[field] === 'object' && copy[field] !== null) {
+          copy[field] = JSON.stringify(copy[field]);
+        }
+      }
+    }
 
-    if (!copied) { copy = { ...copy }; copied = true; }
-    for (const field of fields) {
-      if (copy[field] !== undefined && typeof copy[field] === 'object' && copy[field] !== null) {
-        copy[field] = JSON.stringify(copy[field]);
+    // Safety net: better-sqlite3 can only bind numbers/strings/bigints/buffers/
+    // null. Any value still an array or plain object here (a field type not
+    // classified as JSON, a `Field.multiple` we didn't catch, or an ad-hoc
+    // payload) would otherwise throw a raw TypeError mid-insert. Serialize it
+    // to JSON so the write degrades to a stored string instead of a 500.
+    for (const key of Object.keys(copy)) {
+      const v = copy[key];
+      if (v !== null && typeof v === 'object' && !(v instanceof Date) && !Buffer.isBuffer(v)) {
+        if (!copied) { copy = { ...copy }; copied = true; }
+        copy[key] = JSON.stringify(v);
       }
     }
     return copy;

@@ -65,6 +65,7 @@ export interface FieldValidationError {
     | 'invalid_number'
     | 'invalid_boolean'
     | 'invalid_date'
+    | 'invalid_time'
     | 'invalid_option'
     // Object-level validation rules (ADR-0020, see rule-validator.ts)
     | 'invalid_transition'
@@ -173,10 +174,29 @@ function validateOne(name: string, def: FieldDef, value: unknown): FieldValidati
   }
 
   // ── date/datetime ───────────────────────────────────────────────
-  if (t === 'date' || t === 'datetime' || t === 'time') {
+  if (t === 'date' || t === 'datetime') {
     if (value instanceof Date) return null;
     if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) return null;
     return { field: name, code: 'invalid_date', message: `${name} must be a valid ${t} (ISO-8601)` };
+  }
+
+  // ── time (time-of-day) ──────────────────────────────────────────
+  // A `Field.time` is a wall-clock time, NOT an instant — `Date.parse('14:30')`
+  // is NaN, so reusing the date branch rejected every valid time. Accept
+  // `HH:MM`, `HH:MM:SS`, optional fractional seconds and an optional Z/offset;
+  // also accept a Date or a full ISO datetime (callers that send a timestamp
+  // for a time field).
+  if (t === 'time') {
+    if (value instanceof Date) return null;
+    if (typeof value === 'string') {
+      const timeOfDay = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?$/;
+      // Accept a valid time-of-day, OR a full datetime that carries a real date
+      // component. NOT a bare `Date.parse` check — `Date.parse('14:60')` returns
+      // a (bogus) number in Node, which would let malformed times through.
+      const hasDate = /\d{4}-\d{2}-\d{2}/.test(value);
+      if (timeOfDay.test(value.trim()) || (hasDate && !Number.isNaN(Date.parse(value)))) return null;
+    }
+    return { field: name, code: 'invalid_time', message: `${name} must be a valid time (HH:MM or HH:MM:SS)` };
   }
 
   // ── select / multiselect / radio ────────────────────────────────
