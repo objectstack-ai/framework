@@ -485,6 +485,43 @@ describe('defineStack', () => {
     expect(() => defineStack(config, { strict: true })).not.toThrow();
   });
 
+  it('should detect permission/profile granting on an undefined object in strict mode', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'crm_lead', fields: { email: { type: 'email' } } },
+      ],
+      permissions: [
+        {
+          name: 'guest_portal',
+          isProfile: true,
+          // BUG: the object is `crm_lead`, not the short `lead` — the short name
+          // exists nowhere, so this grant silently applies to nothing (and the
+          // anonymous permission path denies the write). Must fail loudly.
+          objects: { lead: { allowCreate: true } },
+        },
+      ],
+    };
+    expect(() => defineStack(config, { strict: true })).toThrow("object 'lead'");
+  });
+
+  it('should pass strict mode when a permission grants on a defined (full-name) object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'crm_lead', fields: { email: { type: 'email' } } },
+      ],
+      permissions: [
+        {
+          name: 'guest_portal',
+          isProfile: true,
+          objects: { crm_lead: { allowCreate: true } },
+        },
+      ],
+    };
+    expect(() => defineStack(config, { strict: true })).not.toThrow();
+  });
+
   it('should skip cross-reference validation when no objects are defined', () => {
     const config = {
       manifest: baseManifest,

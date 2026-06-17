@@ -583,6 +583,29 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
     }
   }
 
+  // Validate permission-set / profile object grants → object references.
+  // A grant keyed by an object that isn't declared (e.g. a short `lead` instead
+  // of the namespaced `crm_lead`) silently applies to NOTHING: the
+  // authenticated path may namespace-resolve it, but the anonymous /
+  // explicit-permission-set path does not — so the grant is simply lost (e.g. a
+  // public Web-to-Lead INSERT is denied for "roles []"). Fail loudly at build
+  // time. (`validateNamespacePrefix`'s doc already assumes this check lives here.)
+  if (config.permissions) {
+    for (const perm of config.permissions) {
+      const grants = (perm as { objects?: Record<string, unknown> }).objects;
+      if (grants && typeof grants === 'object') {
+        for (const objName of Object.keys(grants)) {
+          if (!objectNames.has(objName)) {
+            errors.push(
+              `Permission '${(perm as { name?: string }).name ?? '(unnamed)'}' grants on object ` +
+                `'${objName}' which is not defined in objects.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   // Validate app navigation → object/dashboard/page/report references
   if (config.apps) {
     const dashboardNames = new Set<string>();
