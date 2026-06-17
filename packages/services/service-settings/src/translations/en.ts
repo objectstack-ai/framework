@@ -72,6 +72,31 @@ export const en: TranslationData = {
       },
     },
 
+    company: {
+      title: 'Company',
+      description: 'Legal entity identity — registered name, address, tax IDs, and primary contact.',
+      groups: {
+        identity: { title: 'Identity' },
+        address: { title: 'Registered address' },
+        contact: { title: 'Contact' },
+      },
+      keys: {
+        legal_name: { label: 'Legal name', help: 'Registered legal name (may differ from the workspace name).' },
+        registration_number: { label: 'Registration number', help: 'Company registration / incorporation number (e.g. EIN).' },
+        tax_id: { label: 'Tax / VAT ID', help: 'Shown on invoices (e.g. VAT, GST, ABN).' },
+        address_line1: { label: 'Address line 1' },
+        address_line2: { label: 'Address line 2' },
+        city: { label: 'City' },
+        state: { label: 'State / Province' },
+        postal_code: { label: 'Postal code' },
+        country: { label: 'Country', help: 'ISO 3166-1 alpha-2 code (e.g. US, GB, CN).' },
+        phone: { label: 'Phone', help: 'E.164 recommended, e.g. +1 415 555 0100.' },
+        website: { label: 'Website', help: 'Example: https://example.com' },
+        primary_contact_name: { label: 'Primary contact name' },
+        primary_contact_email: { label: 'Primary contact email', help: 'Example: ops@example.com' },
+      },
+    },
+
     localization: {
       title: 'Localization',
       description: 'Default timezone, language, currency, and date/number formats.',

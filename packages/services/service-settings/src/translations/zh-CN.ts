@@ -68,6 +68,31 @@ export const zhCN: TranslationData = {
       },
     },
 
+    company: {
+      title: '公司',
+      description: '法律实体信息——注册名称、地址、税号及主要联系人。',
+      groups: {
+        identity: { title: '主体信息' },
+        address: { title: '注册地址' },
+        contact: { title: '联系方式' },
+      },
+      keys: {
+        legal_name: { label: '法定名称', help: '注册的法定名称(可能与工作区名称不同)。' },
+        registration_number: { label: '注册号', help: '公司注册/工商登记号(如 EIN、统一社会信用代码)。' },
+        tax_id: { label: '税号 / VAT', help: '发票上显示的税务标识(如 VAT、GST、ABN)。' },
+        address_line1: { label: '地址行 1' },
+        address_line2: { label: '地址行 2' },
+        city: { label: '城市' },
+        state: { label: '省/州' },
+        postal_code: { label: '邮政编码' },
+        country: { label: '国家/地区', help: 'ISO 3166-1 二位代码(如 US、GB、CN)。' },
+        phone: { label: '电话', help: '建议 E.164 格式,如 +86 21 5555 0100。' },
+        website: { label: '网站', help: '示例:https://example.com' },
+        primary_contact_name: { label: '主要联系人' },
+        primary_contact_email: { label: '主要联系人邮箱', help: '示例:ops@example.com' },
+      },
+    },
+
     localization: {
       title: '本地化',
       description: '默认时区、语言、货币及日期/数字格式。',

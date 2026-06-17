@@ -13,6 +13,7 @@ export {
 } from './ai.manifest.js';
 export { knowledgeSettingsManifest, knowledgeTestActionHandler } from './knowledge.manifest.js';
 export { localizationSettingsManifest } from './localization.manifest.js';
+export { companySettingsManifest } from './company.manifest.js';
 
 import { authSettingsManifest } from './auth.manifest.js';
 import { mailSettingsManifest } from './mail.manifest.js';
@@ -22,10 +23,12 @@ import { storageSettingsManifest } from './storage.manifest.js';
 import { aiSettingsManifest } from './ai.manifest.js';
 import { knowledgeSettingsManifest } from './knowledge.manifest.js';
 import { localizationSettingsManifest } from './localization.manifest.js';
+import { companySettingsManifest } from './company.manifest.js';
 
 /** Convenience aggregate — pass to `SettingsServicePlugin({ manifests })`. */
 export const builtinSettingsManifests = [
   brandingSettingsManifest,
+  companySettingsManifest,
   localizationSettingsManifest,
   authSettingsManifest,
   mailSettingsManifest,
