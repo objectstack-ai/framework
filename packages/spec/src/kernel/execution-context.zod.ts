@@ -24,7 +24,14 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
   
   /** Current organization/tenant ID (resolved from session.activeOrganizationId) */
   tenantId: z.string().optional(),
-  
+
+  /**
+   * Active reference timezone (IANA name, e.g. `America/New_York`), resolved
+   * once per request as user-preference → org default → `UTC` (ADR-0053
+   * Phase 2). When unset, consumers treat it as `UTC` — today's behavior.
+   */
+  timezone: z.string().optional(),
+
   /** User role names (resolved from Member + Role) */
   roles: z.array(z.string()).default([]),
   
