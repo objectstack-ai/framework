@@ -68,6 +68,53 @@ async function tryFind(ql: any, object: string, where: any, limit = 100): Promis
   }
 }
 
+/** True for a valid IANA timezone name (e.g. `America/New_York`, `UTC`). */
+function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Coerce a stored preference/setting value to a valid IANA zone, or undefined. */
+function coerceTimeZone(value: unknown): string | undefined {
+  const s = typeof value === 'string' ? value.trim() : value != null ? String(value).trim() : '';
+  return s && isValidTimeZone(s) ? s : undefined;
+}
+
+/**
+ * Resolve the active reference timezone for an authenticated context
+ * (ADR-0053 Phase 2): user preference → org default → `UTC`.
+ *
+ * - User override: `sys_user_preference` row `(user_id, key='timezone')`.
+ * - Org default: the tenant-scoped `sys_setting` `(namespace='localization',
+ *   key='timezone', scope='tenant')` — one org per physical tenant (ADR-0002),
+ *   so the row needs no tenant_id filter.
+ *
+ * Pure plumbing: nothing downstream reads `ctx.timezone` yet, so an absent
+ * value resolves to `UTC` and preserves today's behavior. Every read is
+ * defensive (via `tryFind`) and an invalid zone falls through — timezone
+ * resolution never blocks auth.
+ */
+async function resolveTimezone(ql: any, userId: string): Promise<string> {
+  const prefRows = await tryFind(ql, 'sys_user_preference', { user_id: userId, key: 'timezone' }, 1);
+  const userTz = coerceTimeZone(prefRows[0]?.value);
+  if (userTz) return userTz;
+
+  const settingRows = await tryFind(
+    ql,
+    'sys_setting',
+    { namespace: 'localization', key: 'timezone', scope: 'tenant' },
+    1,
+  );
+  const orgTz = coerceTimeZone(settingRows[0]?.value);
+  if (orgTz) return orgTz;
+
+  return 'UTC';
+}
+
 /**
  * Resolve the {@link ExecutionContext} for an inbound request.
  *
@@ -262,6 +309,11 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
       ctx.tabPermissions = mergedTabs;
     }
   }
+
+  // 4. Reference timezone (ADR-0053 Phase 2) — resolved once per request and
+  //    carried on the context. No consumer reads it yet; absent config → 'UTC'
+  //    keeps current behavior.
+  ctx.timezone = await resolveTimezone(ql, userId);
 
   return ctx;
 }

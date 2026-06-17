@@ -141,3 +141,78 @@ describe('resolveExecutionContext — API key verify path', () => {
     expect(ctx.userId).toBeUndefined();
   });
 });
+
+/**
+ * Reference-timezone resolution (ADR-0053 Phase 2, #1978): user preference →
+ * org default → UTC. Authenticate via API key so a userId is present, then
+ * seed `sys_user_preference` / `sys_setting` and assert `ctx.timezone`.
+ */
+describe('resolveExecutionContext — reference timezone (#1978)', () => {
+  const RAW = 'osk_tz';
+  const apiKeyRows = [{ id: 'k1', key: hashApiKey(RAW), revoked: false, user_id: 'u1', expires_at: FUTURE }];
+
+  function makeTzOpts({ prefs = [], settings = [] }: { prefs?: any[]; settings?: any[] }) {
+    const tables: Record<string, any[]> = {
+      sys_api_key: apiKeyRows,
+      sys_user_preference: prefs,
+      sys_setting: settings,
+    };
+    const ql = {
+      async find(object: string, opts: any) {
+        const rows = tables[object] ?? [];
+        const where = opts?.where ?? {};
+        return rows.filter((row) => {
+          for (const [k, v] of Object.entries(where)) {
+            if (v !== null && typeof v === 'object') continue; // skip $in/operators
+            if (row[k] !== v) return false;
+          }
+          return true;
+        });
+      },
+    };
+    return {
+      getService: async () => undefined,
+      getQl: async () => ql,
+      request: { headers: { 'x-api-key': RAW } },
+    };
+  }
+
+  it('prefers the user preference over the org default', async () => {
+    const ctx = await resolveExecutionContext(makeTzOpts({
+      prefs: [{ user_id: 'u1', key: 'timezone', value: 'America/New_York' }],
+      settings: [{ namespace: 'localization', key: 'timezone', scope: 'tenant', value: 'Europe/Paris' }],
+    }));
+    expect(ctx.userId).toBe('u1');
+    expect(ctx.timezone).toBe('America/New_York');
+  });
+
+  it('falls back to the tenant-scoped org default when no user preference', async () => {
+    const ctx = await resolveExecutionContext(makeTzOpts({
+      settings: [{ namespace: 'localization', key: 'timezone', scope: 'tenant', value: 'Europe/Paris' }],
+    }));
+    expect(ctx.timezone).toBe('Europe/Paris');
+  });
+
+  it('defaults to UTC when neither is set', async () => {
+    const ctx = await resolveExecutionContext(makeTzOpts({}));
+    expect(ctx.timezone).toBe('UTC');
+  });
+
+  it('ignores an invalid zone and continues down the chain', async () => {
+    const ctx = await resolveExecutionContext(makeTzOpts({
+      prefs: [{ user_id: 'u1', key: 'timezone', value: 'Not/AZone' }],
+      settings: [{ namespace: 'localization', key: 'timezone', scope: 'tenant', value: 'Asia/Tokyo' }],
+    }));
+    expect(ctx.timezone).toBe('Asia/Tokyo');
+  });
+
+  it('leaves timezone unset for anonymous requests', async () => {
+    const ctx = await resolveExecutionContext({
+      getService: async () => undefined,
+      getQl: async () => ({ async find() { return []; } }),
+      request: { headers: {} },
+    });
+    expect(ctx.userId).toBeUndefined();
+    expect(ctx.timezone).toBeUndefined();
+  });
+});
