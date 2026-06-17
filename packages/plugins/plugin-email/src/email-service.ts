@@ -95,6 +95,48 @@ export function normalizeMessage(
   return msg;
 }
 
+/** Split a persisted comma-separated address column back into a list. */
+function splitAddresses(v: unknown): string[] {
+  if (v == null) return [];
+  return String(v)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Reconstruct a NormalizedEmailMessage from a persisted `sys_email` row
+ * (the outbox-drain path). Addresses are already canonicalized at insert
+ * time, so this re-splits the stored columns rather than re-validating.
+ * Throws when the row lacks the minimum fields needed to send.
+ */
+export function rowToNormalized(row: Record<string, any>): NormalizedEmailMessage {
+  const to = splitAddresses(row.to_addresses);
+  if (to.length === 0) throw new Error('VALIDATION_FAILED: row has no to_addresses');
+  const from = String(row.from_address ?? '').trim();
+  if (!from) throw new Error('VALIDATION_FAILED: row has no from_address');
+  const subject = String(row.subject ?? '').trim();
+  if (!subject) throw new Error('VALIDATION_FAILED: row has no subject');
+  const text = row.body_text;
+  const html = row.body_html;
+  if ((text == null || text === '') && (html == null || html === '')) {
+    throw new Error('VALIDATION_FAILED: row has neither body_text nor body_html');
+  }
+  const msg: NormalizedEmailMessage = {
+    to,
+    from,
+    subject,
+    ...(text != null && text !== '' ? { text: String(text) } : {}),
+    ...(html != null && html !== '' ? { html: String(html) } : {}),
+  };
+  const cc = splitAddresses(row.cc_addresses);
+  if (cc.length > 0) msg.cc = cc;
+  const bcc = splitAddresses(row.bcc_addresses);
+  if (bcc.length > 0) msg.bcc = bcc;
+  if (row.reply_to) msg.replyTo = String(row.reply_to);
+  return msg;
+}
+
 /**
  * Development transport — never actually sends. Logs to the provided
  * logger and returns a synthetic Message-ID. Useful for local dev,
@@ -186,8 +228,22 @@ export interface EmailServiceOptions {
  *      id when persistence is disabled).
  */
 export class EmailService implements IEmailService {
+  /**
+   * Row ids the service is itself delivering (via `send()`). The
+   * EmailServicePlugin's sys_email afterInsert drain hook consults this
+   * set and skips these rows, so a service-originated `queued` insert is
+   * delivered exactly once (by `send()`) — never double-sent by the hook.
+   * App-originated raw inserts are absent here, so the hook handles them.
+   */
+  private readonly managedRowIds = new Set<string>();
+
   constructor(public options: EmailServiceOptions) {
     if (!options.transport) throw new Error('EmailService: transport is required');
+  }
+
+  /** True when this row id is currently being delivered by `send()`. */
+  isServiceManaged(id: string): boolean {
+    return this.managedRowIds.has(id);
   }
 
   /** Wire (or replace) the template loader after construction. */
@@ -242,17 +298,37 @@ export class EmailService implements IEmailService {
       attempt_count: 0,
     };
 
-    let persistedId: string | undefined;
-    if (this.options.persistence) {
-      try {
-        const res = await this.options.persistence.insert(baseRow);
-        persistedId = typeof res === 'string' ? res : res?.id ?? id;
-      } catch (err: any) {
-        this.options.logger?.warn('EmailService: sys_email persist failed (non-fatal)', { error: err?.message });
+    // Reserve the row id BEFORE persistence.insert so the drain hook
+    // (which fires synchronously inside that insert) sees it as managed
+    // and skips it — `send()` owns this row's delivery.
+    this.managedRowIds.add(id);
+    try {
+      let persistedId: string | undefined;
+      if (this.options.persistence) {
+        try {
+          const res = await this.options.persistence.insert(baseRow);
+          persistedId = typeof res === 'string' ? res : res?.id ?? id;
+          if (persistedId !== id) this.managedRowIds.add(persistedId);
+        } catch (err: any) {
+          this.options.logger?.warn('EmailService: sys_email persist failed (non-fatal)', { error: err?.message });
+        }
       }
+      const rowId = persistedId ?? id;
+      return await this.deliverNormalized(rowId, normalized);
+    } finally {
+      this.managedRowIds.delete(id);
     }
-    const rowId = persistedId ?? id;
+  }
 
+  /**
+   * Deliver a normalized message through the transport (with retry) and
+   * finalize the persisted `sys_email` row (`sent` + message_id + sent_at,
+   * or `failed` + error). Shared by `send()` and `deliverPersistedRow()`.
+   */
+  private async deliverNormalized(
+    rowId: string,
+    normalized: NormalizedEmailMessage,
+  ): Promise<SendEmailResult> {
     const maxAttempts = (this.options.retries ?? 0) + 1;
     let lastError: any;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -282,6 +358,29 @@ export class EmailService implements IEmailService {
       attempt_count: maxAttempts,
     });
     return { id: rowId, status: 'failed', error: errMessage };
+  }
+
+  /**
+   * Deliver an ALREADY-PERSISTED `sys_email` row (the outbox-drain path).
+   *
+   * An app (e.g. a sandboxed action that can only `api.write`, never reach
+   * the email service) inserts a `sys_email` row as `status:'queued'`; the
+   * plugin's afterInsert hook calls this to actually transmit it. Unlike
+   * `send()`, this does NOT insert a new row — it reconstructs the message
+   * from the row columns and finalizes that same row in place.
+   */
+  async deliverPersistedRow(row: Record<string, any>): Promise<SendEmailResult> {
+    const rowId = String(row?.id ?? '');
+    if (!rowId) throw new Error('deliverPersistedRow: row.id is required');
+    let normalized: NormalizedEmailMessage;
+    try {
+      normalized = rowToNormalized(row);
+    } catch (err: any) {
+      const errMessage = String(err?.message ?? err ?? 'invalid row').slice(0, 1000);
+      await this.updateRow(rowId, { status: 'failed', error: errMessage, attempt_count: 0 });
+      return { id: rowId, status: 'failed', error: errMessage };
+    }
+    return this.deliverNormalized(rowId, normalized);
   }
 
   private async updateRow(id: string, patch: Record<string, any>): Promise<void> {

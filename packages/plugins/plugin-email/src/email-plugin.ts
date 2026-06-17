@@ -271,6 +271,65 @@ export class EmailServicePlugin implements Plugin {
       this.service.setTemplateLoader(templateLoader);
       ctx.logger.info('EmailServicePlugin: sys_email persistence + template loader enabled');
 
+      // ── sys_email OUTBOX DRAIN (afterInsert) ─────────────────────────
+      // Apps that can only `api.write` (e.g. sandboxed action bodies, which
+      // expose no `api.email`) cannot reach the email service directly — the
+      // only thing they CAN do is INSERT a sys_email row. Treat such a row,
+      // inserted as `status:'queued'` with no `message_id`, as an outbox
+      // entry: deliver it through the live transport, then finalize the SAME
+      // row in place (`sent`/`failed`). Without this, those rows sat at
+      // `queued` forever (declared-but-never-delivered).
+      //
+      // Rows that the service's own `send()` inserts are marked managed (see
+      // EmailService.isServiceManaged) and skipped here, so they are
+      // delivered exactly once by `send()` — never double-sent by the hook.
+      if (persistence && typeof (engine as any).registerHook === 'function') {
+        const svc = this.service;
+        const DRAIN_PKG = 'com.objectstack.service.email.drain';
+        if (typeof (engine as any).unregisterHooksByPackage === 'function') {
+          (engine as any).unregisterHooksByPackage(DRAIN_PKG);
+        }
+        (engine as any).registerHook(
+          'afterInsert',
+          async (hookCtx: any) => {
+            try {
+              if (hookCtx?.object !== 'sys_email') return;
+              const row = hookCtx?.result;
+              if (!row || typeof row !== 'object') return;
+              if (row.status !== 'queued' || row.message_id) return;
+              const rowId = row.id != null ? String(row.id) : '';
+              if (!rowId || svc.isServiceManaged(rowId)) return;
+              // Defer past the current insert op: transport.send is network
+              // I/O and must not run inside the insert's transaction, and the
+              // row must be committed before we update it. Re-read under
+              // system context to get the full row + re-check it is still an
+              // undelivered queued entry (idempotent against concurrent drains).
+              setTimeout(() => {
+                void (async () => {
+                  try {
+                    const rows = await (engine as any).find('sys_email', {
+                      where: { id: rowId },
+                      limit: 1,
+                      context: SYSTEM_CTX,
+                    });
+                    const fresh = Array.isArray(rows) ? rows[0] : (rows as any)?.data?.[0];
+                    const target = fresh ?? row;
+                    if (target.status !== 'queued' || target.message_id) return;
+                    await svc.deliverPersistedRow(target);
+                  } catch (err: any) {
+                    ctx.logger.warn(`EmailServicePlugin: outbox drain failed for ${rowId}: ${err?.message ?? err}`);
+                  }
+                })();
+              }, 0);
+            } catch (err: any) {
+              ctx.logger.warn(`EmailServicePlugin: outbox drain hook error: ${err?.message ?? err}`);
+            }
+          },
+          { packageId: DRAIN_PKG },
+        );
+        ctx.logger.info('EmailServicePlugin: sys_email outbox drain hook installed');
+      }
+
       // Bind 'email.send.async' queue subscriber for durable, retry-on-failure delivery.
       // Producers: `queue.publish('email.send.async', sendInput, { maxAttempts: 5, backoff: {...} })`
       // The queue handles retry / DLQ via sys_job_queue.
