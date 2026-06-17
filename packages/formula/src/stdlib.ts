@@ -15,6 +15,40 @@ import type { Environment } from '@marcbachmann/cel-js';
 
 import type { EvalContext } from './types';
 
+/**
+ * Calendar-day parts (y/m/d) of an instant *as seen in a timezone*
+ * (ADR-0053 Phase 2). Uses `Intl.DateTimeFormat` so DST transitions are
+ * handled correctly — never hand-rolled offset math. An unknown zone throws,
+ * which the caller treats as a fall-through to UTC.
+ */
+function partsInTz(d: Date, tz: string): { y: number; m: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  return { y: get('year'), m: get('month'), day: get('day') };
+}
+
+/**
+ * The calendar day of an instant *in a reference timezone*, expressed as a
+ * UTC-midnight `Date` (ADR-0053 Phase 2, decision D1). This is the one
+ * representation consistent with how `Field.date` strings hydrate (UTC
+ * midnight), how the SQL driver normalizes date filters, and how Phase 1
+ * stores dates — so `record.date == today()` compares cleanly. Falls back to
+ * the UTC calendar day for `UTC` or an invalid zone.
+ */
+function calendarDayUtc(d: Date, tz: string): Date {
+  if (tz && tz !== 'UTC') {
+    try {
+      const { y, m, day } = partsInTz(d, tz);
+      return new Date(Date.UTC(y, m - 1, day));
+    } catch {
+      // unknown zone → fall through to UTC
+    }
+  }
+  return startOfDayUtc(d);
+}
+
 /** Truncate a Date to start-of-day in UTC. */
 function startOfDayUtc(d: Date): Date {
   const out = new Date(d.getTime());
@@ -50,20 +84,25 @@ function addDaysUtc(d: Date, n: number): Date {
 export function registerStdLib(
   env: Environment,
   now: () => Date,
+  timezone = 'UTC',
 ): Environment {
+  // `today()` / `daysFromNow()` / `daysAgo()` are calendar-day functions: they
+  // resolve to the reference-tz calendar day expressed as a UTC-midnight Date
+  // (ADR-0053 Phase 2 D1), never an instant carrying wall-clock time. For a
+  // genuine sub-day offset use `now() + duration("Nh")`.
   return env
     .registerFunction('now(): google.protobuf.Timestamp', () => now())
     .registerFunction(
       'today(): google.protobuf.Timestamp',
-      () => startOfDayUtc(now()),
+      () => calendarDayUtc(now(), timezone),
     )
     .registerFunction(
       'daysFromNow(int): google.protobuf.Timestamp',
-      (n: bigint | number) => addDaysUtc(now(), Number(n)),
+      (n: bigint | number) => addDaysUtc(calendarDayUtc(now(), timezone), Number(n)),
     )
     .registerFunction(
       'daysAgo(int): google.protobuf.Timestamp',
-      (n: bigint | number) => addDaysUtc(now(), -Number(n)),
+      (n: bigint | number) => addDaysUtc(calendarDayUtc(now(), timezone), -Number(n)),
     )
     // Returns true when `value` is null, undefined, empty string, or empty list.
     // Matches the intent of legacy `ISBLANK()` while staying CEL-idiomatic.

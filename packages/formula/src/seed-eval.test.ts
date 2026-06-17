@@ -23,7 +23,9 @@ describe('resolveSeed', () => {
     const pinned = new Date('2026-01-15T10:00:00Z');
     const r = resolveSeed(cel('daysFromNow(30)'), { now: pinned });
     expect(r.ok).toBe(true);
-    if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-02-14T10:00:00.000Z');
+    // Calendar-day semantics (ADR-0053 D1): the calendar day 30 days out, at
+    // midnight — the wall-clock time of `now` is dropped.
+    if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-02-14T00:00:00.000Z');
   });
 
   it('walks arrays', () => {
@@ -77,7 +79,9 @@ describe('resolveSeed', () => {
       { now: pinned },
     );
     expect(r.ok).toBe(true);
+    // The pinned now's calendar day is honored (Jun 1 + 30d = Jul 1); the time
+    // is dropped — daysFromNow is a calendar-day function (ADR-0053 D1).
     if (r.ok)
-      expect((r.value.close_date as Date).toISOString()).toBe('2026-07-01T12:00:00.000Z');
+      expect((r.value.close_date as Date).toISOString()).toBe('2026-07-01T00:00:00.000Z');
   });
 });

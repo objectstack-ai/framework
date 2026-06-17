@@ -108,12 +108,13 @@ function applyFormulaPlan(
 ): void {
   if (!plan.length) return;
   const now = nowSnapshot ?? new Date();
+  const timezone = execCtx?.timezone;
   const user = execCtx?.userId ? { id: String(execCtx.userId), role: execCtx?.roles?.[0] } : undefined;
   const org = execCtx?.tenantId ? { id: String(execCtx.tenantId) } : undefined;
   for (const rec of records) {
     if (rec == null) continue;
     for (const fp of plan) {
-      const r = ExpressionEngine.evaluate(fp.expression, { now, user, org, record: rec });
+      const r = ExpressionEngine.evaluate(fp.expression, { now, timezone, user, org, record: rec });
       rec[fp.name] = r.ok ? r.value : null;
     }
   }
@@ -761,6 +762,7 @@ export class ObjectQL implements IDataEngine {
       if (typeof dv === 'object' && dv !== null && (dv as any).dialect && typeof (dv as any).source === 'string') {
         const result = ExpressionEngine.evaluate(dv as any, {
           now,
+          timezone: execCtx?.timezone,
           user: execCtx?.userId ? { id: String(execCtx.userId), role: execCtx?.roles?.[0] } : undefined,
           org: execCtx?.tenantId ? { id: String(execCtx.tenantId) } : undefined,
           record: out,

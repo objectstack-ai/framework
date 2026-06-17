@@ -23,6 +23,12 @@ import type { Expression } from '@objectstack/spec';
 export interface EvalContext {
   /** Logical "now" snapshot — pinned per evaluation run for determinism. */
   now?: Date;
+  /**
+   * Reference timezone (IANA name, e.g. `America/New_York`) for calendar-day
+   * functions `today()` / `daysFromNow()` / `daysAgo()` (ADR-0053 Phase 2).
+   * Defaults to `UTC` when unset.
+   */
+  timezone?: string;
   /** Current authenticated subject (hook / action / view contexts). */
   user?: {
     id: string;

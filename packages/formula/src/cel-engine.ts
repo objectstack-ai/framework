@@ -32,13 +32,13 @@ export const DEFAULT_LIMITS = {
   maxCallArguments: 16,
 } as const;
 
-function buildEnv(now: () => Date): Environment {
+function buildEnv(now: () => Date, timezone = 'UTC'): Environment {
   const env = new Environment({
     unlistedVariablesAreDyn: true,
     enableOptionalTypes: true,
     limits: DEFAULT_LIMITS,
   });
-  return registerNumericCoercions(registerStdLib(env, now));
+  return registerNumericCoercions(registerStdLib(env, now, timezone));
 }
 
 /**
@@ -272,7 +272,7 @@ export const celEngine: DialectEngine = {
 
     const now = () => ctx.now ?? new Date();
     try {
-      const env = buildEnv(now);
+      const env = buildEnv(now, ctx.timezone ?? 'UTC');
       const scope = buildScope(ctx);
       try {
         const raw = env.evaluate(source, scope);

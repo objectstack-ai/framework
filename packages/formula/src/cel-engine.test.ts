@@ -40,11 +40,28 @@ describe('celEngine', () => {
     if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-01-15T00:00:00.000Z');
   });
 
-  it('daysFromNow(n) advances by n days from pinned now', () => {
+  it('daysFromNow(n) returns the calendar day n days out, at midnight (ADR-0053 D1)', () => {
+    // Calendar-day semantics: the wall-clock time of `now` is dropped, so
+    // `record.date == daysFromNow(n)` matches in-memory (the defect-3 fix).
     const pinned = new Date('2026-01-15T10:00:00Z');
     const r = celEngine.evaluate(cel('daysFromNow(30)'), { now: pinned });
     expect(r.ok).toBe(true);
-    if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-02-14T10:00:00.000Z');
+    if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-02-14T00:00:00.000Z');
+  });
+
+  it('today()/daysFromNow()/daysAgo() resolve the calendar day in the reference timezone', () => {
+    // 2026-01-15T02:00Z is still Jan 14 in America/New_York (UTC-5).
+    const pinned = new Date('2026-01-15T02:00:00Z');
+    const tz = 'America/New_York';
+    const today = celEngine.evaluate(cel('today()'), { now: pinned, timezone: tz });
+    expect(today.ok && (today.value as Date).toISOString()).toBe('2026-01-14T00:00:00.000Z');
+    const tomorrow = celEngine.evaluate(cel('daysFromNow(1)'), { now: pinned, timezone: tz });
+    expect(tomorrow.ok && (tomorrow.value as Date).toISOString()).toBe('2026-01-15T00:00:00.000Z');
+    const yesterday = celEngine.evaluate(cel('daysAgo(1)'), { now: pinned, timezone: tz });
+    expect(yesterday.ok && (yesterday.value as Date).toISOString()).toBe('2026-01-13T00:00:00.000Z');
+    // Default (UTC) sees Jan 15.
+    const utc = celEngine.evaluate(cel('today()'), { now: pinned });
+    expect(utc.ok && (utc.value as Date).toISOString()).toBe('2026-01-15T00:00:00.000Z');
   });
 
   it('classifies parse errors with kind=parse', () => {
