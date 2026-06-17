@@ -6,6 +6,7 @@ import {
   LogTransport,
   formatAddress,
   normalizeMessage,
+  rowToNormalized,
   type EmailPersistence,
 } from './email-service.js';
 
@@ -138,5 +139,81 @@ describe('EmailService', () => {
     const res = await svc.send({ to: 'a@b.com', subject: 'Hi', text: 'x' });
     expect(res.status).toBe('sent');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('persist failed'), expect.any(Object));
+  });
+
+  // ── Outbox-drain support (sys_email afterInsert) ───────────────────
+  it('marks its own row managed during send() so the drain hook skips it', async () => {
+    // The persistence.insert callback fires at exactly the moment the
+    // afterInsert drain hook would fire — assert the row is flagged managed
+    // there, and unflagged once send() resolves.
+    let managedAtInsert: boolean | undefined;
+    let insertedId: string | undefined;
+    const transport = { send: vi.fn(async () => ({ messageId: '<m@x>' })) };
+    let svc!: EmailService;
+    const persistence: EmailPersistence = {
+      async insert(row) {
+        insertedId = String(row.id);
+        managedAtInsert = svc.isServiceManaged(insertedId);
+        return { id: row.id };
+      },
+      async update() { /* noop */ },
+    };
+    svc = new EmailService({ transport, defaultFrom: 'no@reply.com', persistence });
+    const res = await svc.send({ to: 'a@b.com', subject: 'Hi', text: 'x' });
+    expect(res.status).toBe('sent');
+    expect(managedAtInsert).toBe(true);                 // hook would skip it
+    expect(svc.isServiceManaged(insertedId!)).toBe(false); // cleared after send
+  });
+
+  it('deliverPersistedRow delivers an existing row WITHOUT inserting a new one', async () => {
+    const transport = { send: vi.fn(async () => ({ messageId: '<drained@x>' })) };
+    const { p, rows } = makePersistence();
+    const insertSpy = vi.spyOn(p, 'insert');
+    const svc = new EmailService({ transport, persistence: p });
+    // Simulate an app-inserted outbox row.
+    const row = {
+      id: 'row-1', status: 'queued', from_address: 'no@reply.com',
+      to_addresses: 'a@b.com, c@d.com', subject: 'Drain me', body_text: 'hello',
+    };
+    rows.set(row.id, { ...row });
+    const res = await svc.deliverPersistedRow(row);
+    expect(res).toMatchObject({ id: 'row-1', status: 'sent', messageId: '<drained@x>' });
+    expect(transport.send).toHaveBeenCalledTimes(1);
+    expect(transport.send).toHaveBeenCalledWith(expect.objectContaining({
+      to: ['a@b.com', 'c@d.com'], from: 'no@reply.com', subject: 'Drain me', text: 'hello',
+    }));
+    expect(insertSpy).not.toHaveBeenCalled();           // never inserts a 2nd row
+    expect(rows.get('row-1')).toMatchObject({ status: 'sent', message_id: '<drained@x>' });
+  });
+
+  it('deliverPersistedRow marks the row failed when it lacks a body', async () => {
+    const transport = { send: vi.fn(async () => ({ messageId: '<x>' })) };
+    const { p, rows } = makePersistence();
+    const svc = new EmailService({ transport, persistence: p });
+    rows.set('row-2', { id: 'row-2', status: 'queued', from_address: 'a@b.com', to_addresses: 'c@d.com', subject: 'No body' });
+    const res = await svc.deliverPersistedRow({ id: 'row-2', from_address: 'a@b.com', to_addresses: 'c@d.com', subject: 'No body' });
+    expect(res.status).toBe('failed');
+    expect(transport.send).not.toHaveBeenCalled();
+    expect(rows.get('row-2')).toMatchObject({ status: 'failed' });
+  });
+});
+
+describe('rowToNormalized', () => {
+  it('reconstructs a message from persisted columns', () => {
+    const msg = rowToNormalized({
+      to_addresses: 'a@b.com, "B" <b@c.com>', from_address: 'no@reply.com',
+      subject: 'Hi', body_text: 'text', body_html: '<p>html</p>',
+      cc_addresses: 'cc@x.com', bcc_addresses: 'bcc@x.com', reply_to: 'r@x.com',
+    });
+    expect(msg).toEqual({
+      to: ['a@b.com', '"B" <b@c.com>'], from: 'no@reply.com', subject: 'Hi',
+      text: 'text', html: '<p>html</p>', cc: ['cc@x.com'], bcc: ['bcc@x.com'], replyTo: 'r@x.com',
+    });
+  });
+  it('throws on missing to/from/subject/body', () => {
+    expect(() => rowToNormalized({ from_address: 'a@b.com', subject: 'x', body_text: 'y' })).toThrow(/to_addresses/);
+    expect(() => rowToNormalized({ to_addresses: 'a@b.com', subject: 'x', body_text: 'y' })).toThrow(/from_address/);
+    expect(() => rowToNormalized({ to_addresses: 'a@b.com', from_address: 'c@d.com', body_text: 'y' })).toThrow(/subject/);
+    expect(() => rowToNormalized({ to_addresses: 'a@b.com', from_address: 'c@d.com', subject: 'x' })).toThrow(/body/);
   });
 });
