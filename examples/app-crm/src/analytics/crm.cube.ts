@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Cube } from '@objectstack/spec';
+import type { Cube } from '@objectstack/spec/data';
 
 /**
  * Opportunity Pipeline Cube — revenue metrics broken down by stage,

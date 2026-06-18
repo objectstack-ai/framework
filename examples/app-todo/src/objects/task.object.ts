@@ -157,8 +157,6 @@ export const Task = ObjectSchema.create({
     
     category_color: Field.color({
       label: 'Category Color',
-      colorFormat: 'hex',
-      presetColors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'],
     }),
   },
   

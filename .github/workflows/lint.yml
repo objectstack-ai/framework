@@ -46,5 +46,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
+      - name: Type check (@objectstack/spec)
         run: pnpm --filter @objectstack/spec exec tsc --noEmit
+
+      # Example apps are AI-authoring reference templates; a red typecheck is a
+      # bad signal to copy from. tsup transpiles them without a full typecheck,
+      # so build alone will not catch type drift — typecheck them explicitly.
+      # They import from built workspace packages, so the packages must be built
+      # first for cross-package type resolution to succeed.
+      - name: Build workspace packages
+        run: pnpm exec turbo run build --filter='./packages/*'
+
+      - name: Type check example apps
+        run: pnpm --filter './examples/*' run typecheck

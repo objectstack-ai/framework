@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { UI } from '@objectstack/spec';
+import type * as UI from '@objectstack/spec/ui';
 
 /**
  * Example report — total opportunity amount grouped by stage.
@@ -11,7 +11,7 @@ import type { UI } from '@objectstack/spec';
  * its "grouped by stage" label), so both forms compute the same number and the
  * reconciliation harness can verify them.
  */
-export const SalesByStageReport: UI.Report = {
+export const SalesByStageReport: UI.ReportInput = {
   name: 'crm_sales_by_stage',
   label: 'Sales by Stage',
   description: 'Total opportunity amount grouped by sales stage.',

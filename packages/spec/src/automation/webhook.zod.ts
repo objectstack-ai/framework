@@ -141,4 +141,6 @@ export const WebhookReceiverSchema = lazySchema(() => z.object({
 }));
 
 export type Webhook = z.infer<typeof WebhookSchema>;
+/** Authoring input for {@link Webhook} — defaulted fields are optional. */
+export type WebhookInput = z.input<typeof WebhookSchema>;
 export type WebhookReceiver = z.infer<typeof WebhookReceiverSchema>;

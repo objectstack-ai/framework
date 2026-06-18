@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { UI } from '@objectstack/spec';
+import type * as UI from '@objectstack/spec/ui';
 
 /**
  * Example custom page — a CRM landing page.

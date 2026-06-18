@@ -257,4 +257,6 @@ export const DatasourceSchema = lazySchema(() => z.object({
 }));
 
 export type Datasource = z.infer<typeof DatasourceSchema>;
+/** Authoring input for {@link Datasource} — defaulted fields are optional. */
+export type DatasourceInput = z.input<typeof DatasourceSchema>;
 export type DatasourceCapabilitiesType = z.infer<typeof DatasourceCapabilities>;

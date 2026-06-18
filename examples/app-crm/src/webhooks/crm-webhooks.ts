@@ -1,11 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Webhook } from '@objectstack/spec';
+import type { WebhookInput } from '@objectstack/spec/automation';
 
 /**
  * Notify external CRM bus whenever an opportunity is created or updated.
  */
-export const OpportunityChangedWebhook: Webhook = {
+export const OpportunityChangedWebhook: WebhookInput = {
   name: 'crm_opportunity_changed',
   label: 'Opportunity Created / Updated',
   object: 'crm_opportunity',
@@ -37,7 +37,7 @@ export const OpportunityChangedWebhook: Webhook = {
 /**
  * Notify Slack channel when a deal is won.
  */
-export const DealWonSlackWebhook: Webhook = {
+export const DealWonSlackWebhook: WebhookInput = {
   name: 'crm_deal_won_slack',
   label: 'Deal Won → Slack',
   object: 'crm_opportunity',

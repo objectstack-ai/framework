@@ -628,3 +628,5 @@ export const ConnectorSchema = lazySchema(() => z.object({
 }));
 
 export type Connector = z.infer<typeof ConnectorSchema>;
+/** Authoring input for {@link Connector} — defaulted fields are optional. */
+export type ConnectorInput = z.input<typeof ConnectorSchema>;

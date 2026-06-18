@@ -43,3 +43,5 @@ export const RoleSchema = lazySchema(() => z.object({
 }));
 
 export type Role = z.infer<typeof RoleSchema>;
+/** Authoring input for {@link Role} — defaulted fields are optional. */
+export type RoleInput = z.input<typeof RoleSchema>;

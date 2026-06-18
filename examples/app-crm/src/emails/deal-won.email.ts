@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { EmailTemplateDefinition } from '@objectstack/spec/system';
+import type { EmailTemplateDefinitionInput } from '@objectstack/spec/system';
 
 /**
  * Sent when an opportunity moves to Closed Won.
  * Referenced by the `notify_owner_deal_won` workflow action.
  */
-export const DealWonEmail: EmailTemplateDefinition = {
+export const DealWonEmail: EmailTemplateDefinitionInput = {
   name: 'crm.deal_won',
   label: 'Deal Won — Owner Congrats',
   category: 'workflow',

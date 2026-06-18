@@ -42,7 +42,6 @@ export const DealManagementSkill = defineSkill({
 export const SalesAssistantAgent = defineAgent({
   name: 'crm_sales_assistant',
   label: 'Sales Assistant',
-  description: 'AI assistant that helps sales reps manage their pipeline.',
   role: 'You are a helpful sales operations assistant for a CRM system.',
   instructions:
     'Help sales reps find contacts, update opportunities, and summarise their pipeline. Always be concise and ask before making destructive changes.',

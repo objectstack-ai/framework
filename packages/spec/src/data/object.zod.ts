@@ -999,3 +999,5 @@ export const ObjectExtensionSchema = lazySchema(() => z.object({
 }));
 
 export type ObjectExtension = z.infer<typeof ObjectExtensionSchema>;
+/** Authoring input for {@link ObjectExtension} — defaulted fields are optional. */
+export type ObjectExtensionInput = z.input<typeof ObjectExtensionSchema>;

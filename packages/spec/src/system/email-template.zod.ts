@@ -133,3 +133,5 @@ function EmailAddressInlineSchema() {
 }
 
 export type EmailTemplateDefinition = z.infer<typeof EmailTemplateDefinitionSchema>;
+/** Authoring input for {@link EmailTemplateDefinition} — defaulted fields are optional. */
+export type EmailTemplateDefinitionInput = z.input<typeof EmailTemplateDefinitionSchema>;

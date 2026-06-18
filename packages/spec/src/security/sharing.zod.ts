@@ -108,5 +108,7 @@ export const SharingRuleSchema = lazySchema(() => z.discriminatedUnion('type', [
 ]));
 
 export type SharingRule = z.infer<typeof SharingRuleSchema>;
+/** Authoring input for {@link SharingRule} — defaulted fields are optional. */
+export type SharingRuleInput = z.input<typeof SharingRuleSchema>;
 export type CriteriaSharingRule = z.infer<typeof CriteriaSharingRuleSchema>;
 export type OwnerSharingRule = z.infer<typeof OwnerSharingRuleSchema>;
