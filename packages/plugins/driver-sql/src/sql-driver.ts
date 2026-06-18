@@ -1614,12 +1614,44 @@ export class SqlDriver implements IDataDriver {
     };
 
     if (isDatetime) {
+      // Only SQLite stores `Field.datetime` as an INTEGER epoch (better-sqlite3
+      // binds a JS `Date` as `.getTime()`); there the ISO/text comparand MUST be
+      // coerced to epoch ms or it collapses to a TEXT-vs-INTEGER affinity compare
+      // that never matches. Postgres/MySQL map datetime to a native TIMESTAMP
+      // (see `defineColumn` → `table.timestamp`), where Knex binds an ISO string
+      // or `Date` correctly — coercing to an epoch integer there would compare an
+      // INTEGER against a TIMESTAMP and break the query. So gate on dialect.
+      if (!this.isSqlite) return value;
       const ms = toMs(value);
       return ms == null ? value : ms;
     }
 
     // Field.date — normalise the comparand to YYYY-MM-DD (ADR-0053 Phase 1).
     return this.toDateOnly(value);
+  }
+
+  /**
+   * Public, dialect-correct temporal filter-value coercion for callers that
+   * build SQL *outside* the normal `find()`/`applyFilters()` path — chiefly the
+   * analytics native-SQL strategy, which compiles a raw `SELECT … WHERE col >= $N`
+   * and binds the value directly, bypassing `coerceFilterValue`.
+   *
+   * Given a logical object (table) name, a field name and a filter value
+   * (typically an ISO date/datetime string from a dashboard relative-date
+   * token like `{12_months_ago}`), this returns the value in the column's
+   * on-disk storage form:
+   *   - SQLite `Field.datetime` → epoch milliseconds (INTEGER), so the
+   *     comparison matches the stored integer rather than failing a
+   *     TEXT-vs-INTEGER affinity compare.
+   *   - `Field.date` (any dialect)   → `YYYY-MM-DD` text.
+   *   - Native-timestamp dialects / non-temporal fields → value unchanged.
+   *
+   * This is a thin, intentionally narrow wrapper over the same `coerceFilterValue`
+   * the driver already uses, so there is exactly one source of truth for the
+   * storage convention and the analytics path can never drift from CRUD.
+   */
+  public temporalFilterValue(objectName: string, field: string, value: any): any {
+    return this.coerceFilterValue(objectName, field, value);
   }
 
   protected applyFilters(builder: Knex.QueryBuilder, filters: any) {

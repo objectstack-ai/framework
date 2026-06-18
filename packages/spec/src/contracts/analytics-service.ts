@@ -292,6 +292,36 @@ export interface StrategyContext {
      * Cube definitions that pre-date datasets).
      */
     getAllowedRelationships?(cubeName: string): Set<string> | undefined;
+
+    /**
+     * Coerce a filter comparand to the storage form of a temporal column on the
+     * object backing the query, so a relative-date / ISO-string value (e.g. the
+     * `{12_months_ago}` dashboard token expanded to `"2025-06-18"`) compares
+     * correctly against the column on the active driver.
+     *
+     * Why this exists: `NativeSQLStrategy` compiles a raw `SELECT … WHERE col >= $N`
+     * and binds the value directly, bypassing the driver's own CRUD coercion. Under
+     * the better-sqlite3 driver a `Field.datetime` column is stored as an INTEGER
+     * epoch (ms), so `col >= '2025-06-18'` is a TEXT-vs-INTEGER affinity compare
+     * that is *always false* → empty result (the silent "No rows" bug). This hook
+     * lets the strategy ask the driver for the storage-correct value instead.
+     *
+     * Driver/dialect correctness lives entirely behind this hook (single source of
+     * truth = the driver):
+     *   - SQLite `Field.datetime`           → epoch milliseconds (number).
+     *   - `Field.date` (any dialect)        → `YYYY-MM-DD` text.
+     *   - native-timestamp dialects (Postgres/MySQL) and non-temporal fields →
+     *     the value is returned UNCHANGED, so the already-correct text/timestamp
+     *     comparison is preserved and Postgres is never given an epoch integer.
+     *
+     * When the hook is absent (legacy wiring, non-SQL drivers) the strategy binds
+     * the value as-is — exactly today's behaviour — so it is purely additive.
+     *
+     * @param objectName Logical object / table backing the cube.
+     * @param fieldName  Bare column name the filter targets.
+     * @param value      The stringified comparand from the normalized filter.
+     */
+    coerceTemporalFilterValue?(objectName: string, fieldName: string, value: unknown): unknown;
 }
 
 /**

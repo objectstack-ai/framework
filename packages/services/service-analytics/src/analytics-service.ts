@@ -108,6 +108,15 @@ export interface AnalyticsServiceConfig {
    */
   getAllowedRelationships?: (cubeName: string) => Set<string> | undefined;
   /**
+   * Coerce a filter comparand to a temporal column's storage form so a
+   * relative-date / ISO-string value compares correctly on the active driver
+   * (SQLite `Field.datetime` → epoch ms; `Field.date` / native timestamp →
+   * unchanged). Threaded into the StrategyContext and consulted by
+   * `NativeSQLStrategy` when binding filter values. See the contract docs on
+   * `StrategyContext.coerceTemporalFilterValue` for the full rationale.
+   */
+  coerceTemporalFilterValue?: (objectName: string, fieldName: string, value: unknown) => unknown;
+  /**
    * ADR-0021 — optional object-graph resolver used when compiling datasets:
    * `(baseObject, relationshipName) => relatedObjectName | undefined`. When
    * provided, `queryDataset` validates that every declared `include` exists.
@@ -221,6 +230,7 @@ export class AnalyticsService implements IAnalyticsService {
       getAllowedRelationships: (cubeName: string) =>
         this.datasetRegistry.get(cubeName)?.allowedRelationships
         ?? config.getAllowedRelationships?.(cubeName),
+      coerceTemporalFilterValue: config.coerceTemporalFilterValue,
     };
 
     // Build strategy chain (built-in + custom, sorted by priority)
