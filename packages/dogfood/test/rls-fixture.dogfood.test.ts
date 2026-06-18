@@ -19,8 +19,8 @@
 //     the gate can actually go red.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { bootDogfoodStack, type DogfoodStack } from '../src/harness.js';
-import { runRlsProofs, formatRlsReport, type RlsReport } from '../src/rls.js';
+import { bootStack, type VerifyStack } from '@objectstack/verify';
+import { runRlsProofs, formatRlsReport, type RlsReport } from '@objectstack/verify';
 import {
   rlsFixtureStack,
   ownerScopedMemberSet,
@@ -31,13 +31,13 @@ import {
 describe('objectstack verify RLS: owner-isolated fixture (#1994 hard gate)', () => {
   // ── GREEN: the gate that must stay consistent ──────────────────────────────
   describe('owner-scoped member set (all ops)', () => {
-    let stack: DogfoodStack;
+    let stack: VerifyStack;
     let report: RlsReport;
     let adminToken: string;
     let memberToken: string;
 
     beforeAll(async () => {
-      stack = await bootDogfoodStack(rlsFixtureStack, {
+      stack = await bootStack(rlsFixtureStack, {
         security: rlsFixtureSecurity(ownerScopedMemberSet),
       });
       adminToken = await stack.signIn();
@@ -80,11 +80,11 @@ describe('objectstack verify RLS: owner-isolated fixture (#1994 hard gate)', () 
 
   // ── RED: proof the gate can go red on the #1994 hole class ──────────────────
   describe('read-only-scoped member set (select only) — #1994 hole reproduced', () => {
-    let stack: DogfoodStack;
+    let stack: VerifyStack;
     let report: RlsReport;
 
     beforeAll(async () => {
-      stack = await bootDogfoodStack(rlsFixtureStack, {
+      stack = await bootStack(rlsFixtureStack, {
         security: rlsFixtureSecurity(readOnlyScopedMemberSet),
       });
       const adminToken = await stack.signIn();

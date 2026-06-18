@@ -27,15 +27,15 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crmStack from '@objectstack/example-crm';
-import { bootDogfoodStack, type DogfoodStack } from '../src/harness.js';
-import { runRlsProofs, formatRlsReport, type RlsReport } from '../src/rls.js';
+import { bootStack, type VerifyStack } from '@objectstack/verify';
+import { runRlsProofs, formatRlsReport, type RlsReport } from '@objectstack/verify';
 
 describe('objectstack verify RLS: CRM multi-tenant (#1994 org-scoped)', () => {
-  let stack: DogfoodStack;
+  let stack: VerifyStack;
   let report: RlsReport;
 
   beforeAll(async () => {
-    stack = await bootDogfoodStack(crmStack as never, { multiTenant: true });
+    stack = await bootStack(crmStack as never, { multiTenant: true });
     const adminToken = await stack.signIn();
     const memberToken = await stack.signUp('member-mt@verify.test');
     report = await runRlsProofs(stack, adminToken, memberToken, crmStack);

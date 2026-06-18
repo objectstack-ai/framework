@@ -10,7 +10,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crmStack from '@objectstack/example-crm';
-import { bootDogfoodStack, type DogfoodStack } from '../src/harness.js';
+import { bootStack, type VerifyStack } from '@objectstack/verify';
 
 // 03:00 UTC on 2024-03-01 is still 2024-02-29 (19:00) in America/Los_Angeles
 // (PST = UTC-8, before DST). So a *day* bucket labels this instant 2024-03-01
@@ -29,11 +29,11 @@ const leadByDay = {
 };
 
 describe('dogfood: org timezone drives analytics date bucketing (#1982/#2018)', () => {
-  let stack: DogfoodStack;
+  let stack: VerifyStack;
   let token: string;
 
   beforeAll(async () => {
-    stack = await bootDogfoodStack(crmStack);
+    stack = await bootStack(crmStack);
 
     // Deterministic fixture: N leads pinned to the tz-boundary instant, inserted
     // as system so the write path's defaults/validation don't fight the setup.

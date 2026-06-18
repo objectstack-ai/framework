@@ -23,7 +23,13 @@ sockets, CI-stable). Tests act as a browser client would: sign in, hit
 
 ## Layout
 
-- `src/harness.ts` — `bootDogfoodStack(config)` → `{ kernel, api, raw, signIn, apiAs, stop }`.
+The in-process harness + auto-derived verifiers (`bootStack`, `runCrudVerification`,
+`runRlsProofs`) now live in the published **[`@objectstack/verify`](../verify)**
+package — point it at any app. This package is the framework's own consumer: it
+holds the **hand-written golden tests** that pin specific historical regressions
+the generic verifier cannot auto-derive.
+
+- depends on `@objectstack/verify` for `bootStack(config)` → `{ kernel, api, raw, signIn, signUp, apiAs, stop }`.
 - `test/*.dogfood.test.ts` — golden flows. Each should assert on **observable
   output** (a number, a bucket label, a row count), not just "no error".
 
@@ -31,7 +37,7 @@ sockets, CI-stable). Tests act as a browser client would: sign in, hit
 
 1. Pick a real user flow that a static test can't cover (it spans engine +
    service + HTTP, or depends on seeded/written data).
-2. `bootDogfoodStack(<appConfig>)`, `signIn()`, drive it via `api()/apiAs()`.
+2. `bootStack(<appConfig>)`, `signIn()`, drive it via `api()/apiAs()`.
 3. Assert on the concrete result.
 4. **Prove it catches the bug**: temporarily revert the relevant fix and confirm
    the test goes red. A green-on-the-bug test is not a gate.
@@ -67,7 +73,7 @@ The binding policy — every authorable+live primitive must carry a runtime proo
 
 The capability matrix above proves *data* round-trips. The authorization
 dimension proves a record the caller must not touch stays untouched. The
-app-agnostic invariant (`src/rls.ts`, `runRlsProofs`):
+app-agnostic invariant (`runRlsProofs`, from `@objectstack/verify`):
 
 > **A user who cannot READ a record must not be able to WRITE it.**
 
@@ -87,9 +93,10 @@ changed. Verdicts: `rls-consistent` (can't read **and** can't write — good),
 `rls-hole` (can't read **yet** wrote — the #1994 bug), `member-visible`
 (member *can* read it — inconclusive, not a cross-owner scenario).
 
-`auto-verify-rls.dogfood.test.ts` runs this over the example apps, but they boot
-**single-tenant**, where every object comes back `member-visible` — so the
-by-id-write path is never actually exercised. Two ways to create real isolation:
+`objectstack verify <app> --rls` runs this over any app in CI, but the example
+apps boot **single-tenant**, where every object comes back `member-visible` — so
+the by-id-write path is never actually exercised. Two ways to create real
+isolation, both pinned as golden tests here:
 
 ### 1. Owner-scoped fixture — `test/rls-fixture.dogfood.test.ts` (hard gate)
 
@@ -98,11 +105,11 @@ permission set carries `RLS.ownerPolicy('rls_note', 'created_by')`. The predicat
 is `created_by = current_user.id` — keyed on the column the engine stamps on
 every record and referencing `current_user.id`, **not**
 `current_user.organization_id`, so it survives single-tenant policy stripping. A
-fresh member genuinely can't read the admin's note. `bootDogfoodStack` takes a
+fresh member genuinely can't read the admin's note. `bootStack` takes a
 `security:` override so the fixture's permission set is the member's fallback:
 
 ```ts
-bootDogfoodStack(rlsFixtureStack, { security: rlsFixtureSecurity(ownerScopedMemberSet) })
+bootStack(rlsFixtureStack, { security: rlsFixtureSecurity(ownerScopedMemberSet) })
 ```
 
 - **Green gate** (owner policy on `all` ops) → `rls-consistent`. Safe *only*
@@ -139,7 +146,7 @@ Faithful fix — boot multi-tenant so `@objectstack/plugin-org-scoping` register
 before `SecurityPlugin` and the `organization_id` policies apply:
 
 ```ts
-bootDogfoodStack(crmStack, { multiTenant: true })
+bootStack(crmStack, { multiTenant: true })
 ```
 
 The dev admin is bound to the seeded default org; a fresh `signUp` member is not,

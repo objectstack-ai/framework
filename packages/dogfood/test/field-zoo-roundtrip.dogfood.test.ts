@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import showcaseStack from '@objectstack/example-showcase';
 import { SECRET_MASK } from '@objectstack/objectql';
-import { bootDogfoodStack, type DogfoodStack } from '../src/harness.js';
+import { bootStack, type VerifyStack } from '@objectstack/verify';
 
 // A field-type coverage entry. `write` is the value POSTed; `expect` describes
 // how the value must come back. `equal` = exact (or set-equal for arrays);
@@ -113,11 +113,11 @@ const MATRIX: FieldCase[] = [
 ];
 
 describe('dogfood: field-type capability matrix round-trips over HTTP (#2004)', () => {
-  let stack: DogfoodStack;
+  let stack: VerifyStack;
   let record: Record<string, unknown>;
 
   beforeAll(async () => {
-    stack = await bootDogfoodStack(showcaseStack);
+    stack = await bootStack(showcaseStack);
     const token = await stack.signIn();
 
     // Build the create body from every entry that carries a `write` value

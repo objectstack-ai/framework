@@ -1,19 +1,24 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// Dogfood boot harness.
+// @objectstack/verify — boot harness.
 //
 // Boots a real ObjectStack app **in-process** against an in-memory SQLite
 // database, wired with the same service plugins `objectstack dev` loads, and
 // exposes the live HTTP surface via Hono's request-injection (no port, no
-// sockets — CI-stable). Tests then exercise the app exactly as a browser
+// sockets — CI-stable). A verifier then exercises the app exactly as a browser
 // client would: sign in, hit `/api/v1/...`, assert on real responses.
 //
-// Why this exists: the bucketing regression fixed in #2018 passed every static
-// gate (build, 900+ unit tests, spec-liveness, CodeQL) because each layer was
-// individually correct and individually mocked — the break only appeared when
-// the real engine + strategy + settings + REST context ran together. Unit
-// tests that mock the protocol/server (e.g. rest.test.ts) cannot catch that.
-// This harness runs the integrated stack so they can.
+// Why in-process + real HTTP: a whole class of regressions only surfaces when
+// the real engine + strategies + services + REST context run together — each
+// layer can be individually correct (and individually mocked in unit tests) yet
+// break at the seams (e.g. timezone date-bucketing across analytics strategy,
+// in-memory aggregation, and the REST execution context). This harness runs the
+// integrated stack so those breaks are observable.
+//
+// Posture: development / in-memory. `NODE_ENV` is forced to `development` so the
+// auth plugin's dev-admin bootstrap provisions a known, loginable admin (mirrors
+// `objectstack dev`). This is a verification harness — it never touches a real
+// database or production data.
 
 import { ObjectKernel, AppPlugin, DriverPlugin, createDispatcherPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
@@ -34,8 +39,9 @@ interface InjectableApp {
 const API_PREFIX = '/api/v1';
 const DEFAULT_ADMIN_EMAIL = 'admin@objectos.ai';
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
+const DEFAULT_AUTH_SECRET = 'objectstack-verify-secret';
 
-export interface DogfoodStack {
+export interface VerifyStack {
   /** The booted kernel — for direct service calls when bypassing HTTP is intentional. */
   kernel: ObjectKernel;
   /** Inject an HTTP request through the real Hono app (no socket). Path is relative to `/api/v1`. */
@@ -57,10 +63,12 @@ export interface DogfoodStack {
 export interface BootOptions {
   /** Override the dev admin credentials the harness signs in with. */
   admin?: { email: string; password: string };
+  /** Override the auth signing secret. Defaults to a fixed in-process dev secret. */
+  authSecret?: string;
   /**
    * Override the SecurityPlugin instance. Pass a `new SecurityPlugin({...})`
    * to carry a custom `fallbackPermissionSet` / extra permission sets — this
-   * is how the owner-isolated RLS fixture makes a fresh member fall back to a
+   * is how an owner-isolated RLS fixture makes a fresh member fall back to a
    * permission set that carries `RLS.ownerPolicy(...)` instead of the broad-read
    * `member_default`. Defaults to a vanilla `new SecurityPlugin()`.
    */
@@ -71,23 +79,23 @@ export interface BootOptions {
    * the default permission sets actually apply (SecurityPlugin probes the
    * `org-scoping` service once at start and otherwise STRIPS them — see
    * `collectRLSPolicies`). This exercises the org-scoped isolation real apps
-   * (e.g. hotcrm) rely on, rather than the single-tenant default where every
-   * tenant policy is stripped and a member sees every row. Default `false`.
+   * rely on, rather than the single-tenant default where every tenant policy is
+   * stripped and a member sees every row. Default `false`.
    */
   multiTenant?: boolean;
 }
 
 /**
- * Boot an app config in-process and return a live dogfood stack.
+ * Boot an app config in-process and return a live verification stack.
  *
  * `NODE_ENV` is forced to `development` so the auth plugin's dev-admin
  * bootstrap provisions a known, loginable admin (mirrors `objectstack dev`).
  */
-export async function bootDogfoodStack(
+export async function bootStack(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: any,
   opts: BootOptions = {},
-): Promise<DogfoodStack> {
+): Promise<VerifyStack> {
   process.env.NODE_ENV = 'development';
 
   const kernel = new ObjectKernel();
@@ -107,12 +115,12 @@ export async function bootDogfoodStack(
   // Service plugins `objectstack dev` auto-loads for an app of this shape.
   await kernel.use(new SettingsServicePlugin());
   await kernel.use(new AnalyticsServicePlugin());
-  await kernel.use(new AuthPlugin({ secret: 'dogfood-regression-secret' }));
+  await kernel.use(new AuthPlugin({ secret: opts.authSecret ?? DEFAULT_AUTH_SECRET }));
 
   // Multi-tenant: org-scoping MUST register BEFORE SecurityPlugin — the latter
   // probes the `org-scoping` service exactly once at start and caches it, then
   // keeps (vs strips) the wildcard `organization_id` RLS policies accordingly.
-  // Mirrors `plugin-dev`'s ordering for `OS_MULTI_ORG_ENABLED`.
+  // Mirrors the CLI's ordering for `OS_MULTI_ORG_ENABLED`.
   if (opts.multiTenant) {
     const { OrgScopingPlugin } = await import('@objectstack/plugin-org-scoping');
     await kernel.use(new OrgScopingPlugin());
@@ -148,7 +156,15 @@ export async function bootDogfoodStack(
   );
   const app = httpServer.getRawApp();
 
-  const raw = (path: string, init?: RequestInit) => app.request(path, init);
+  // Same-origin loopback base for request-injection. A *ported* localhost origin
+  // matches better-auth's default dev trusted-origins set (`http://localhost:*`),
+  // so the in-process dev-admin sign-in passes the CSRF origin check regardless
+  // of runtime (a bare `node` CLI vs a test runner) or ambient CORS env. A
+  // path-only inject yields `http://localhost` (no port), which does NOT match
+  // the `:*` wildcard and gets a 403. Routing is by path; the host:port only
+  // shapes `new URL(request.url).origin`, which the auth layer reads.
+  const ORIGIN = 'http://localhost:3000';
+  const raw = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init);
   const api = (path: string, init?: RequestInit) => raw(`${API_PREFIX}${path}`, init);
 
   const admin = opts.admin ?? { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD };
@@ -163,10 +179,10 @@ export async function bootDogfoodStack(
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
-      throw new Error(`dogfood signIn failed: ${res.status} ${await res.text()}`);
+      throw new Error(`verify signIn failed: ${res.status} ${await res.text()}`);
     }
     const data = (await res.json()) as { token?: string };
-    if (!data.token) throw new Error('dogfood signIn: no token in response');
+    if (!data.token) throw new Error('verify signIn: no token in response');
     return data.token;
   };
 
@@ -181,10 +197,10 @@ export async function bootDogfoodStack(
       body: JSON.stringify({ email, password, name: name ?? email.split('@')[0] }),
     });
     if (!res.ok) {
-      throw new Error(`dogfood signUp failed: ${res.status} ${await res.text()}`);
+      throw new Error(`verify signUp failed: ${res.status} ${await res.text()}`);
     }
     const data = (await res.json()) as { token?: string };
-    if (!data.token) throw new Error('dogfood signUp: no token in response');
+    if (!data.token) throw new Error('verify signUp: no token in response');
     return data.token;
   };
 

@@ -80,7 +80,8 @@
       "@objectstack/account",
       "create-objectstack",
       "objectstack-vscode",
-      "@objectstack/connector-openapi"
+      "@objectstack/connector-openapi",
+      "@objectstack/verify"
     ]
   ],
   "linked": [],
