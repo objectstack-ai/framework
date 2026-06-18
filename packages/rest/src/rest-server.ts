@@ -541,6 +541,7 @@ export class RestServer {
     private sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -558,6 +559,7 @@ export class RestServer {
         sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -574,6 +576,7 @@ export class RestServer {
         this.sharingRulesServiceProvider = sharingRulesServiceProvider;
         this.i18nServiceProvider = i18nServiceProvider;
         this.analyticsServiceProvider = analyticsServiceProvider;
+        this.settingsServiceProvider = settingsServiceProvider;
     }
 
     /**
@@ -1021,6 +1024,31 @@ export class RestServer {
                     }
                 } catch { /* fall back to self-only */ }
             }
+            // Reference timezone + locale for date rendering and analytics date
+            // bucketing (ADR-0053 Phase 2 / localization manifest #2006). Resolved
+            // through the `settings` service so the 4-tier cascade — including the
+            // env override `OS_LOCALIZATION_TIMEZONE` — is honoured; `sys_setting`
+            // rows alone would miss the env/global tiers. Best-effort: any failure
+            // leaves the engine's UTC default. Mirrors the dispatcher path's
+            // `resolveLocalization` (runtime/security/resolve-execution-context.ts).
+            let timezone: string | undefined;
+            let locale: string | undefined;
+            try {
+                const settings = this.settingsServiceProvider
+                    ? await this.settingsServiceProvider(environmentId).catch(() => undefined)
+                    : undefined;
+                if (settings && typeof settings.get === 'function') {
+                    const sctx = { tenantId, userId };
+                    const [tzRes, localeRes] = await Promise.all([
+                        settings.get('localization', 'timezone', sctx).catch(() => undefined),
+                        settings.get('localization', 'locale', sctx).catch(() => undefined),
+                    ]);
+                    const tzVal = tzRes?.value;
+                    const localeVal = localeRes?.value;
+                    if (typeof tzVal === 'string' && tzVal.trim()) timezone = tzVal.trim();
+                    if (typeof localeVal === 'string' && localeVal.trim()) locale = localeVal.trim();
+                }
+            } catch { /* best-effort — fall back to engine UTC default */ }
             return {
                 userId,
                 tenantId,
@@ -1029,6 +1057,8 @@ export class RestServer {
                 systemPermissions,
                 isSystem: false,
                 org_user_ids,
+                ...(timezone ? { timezone } : {}),
+                ...(locale ? { locale } : {}),
             } as any;
         } catch {
             return undefined;

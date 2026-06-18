@@ -158,3 +158,37 @@ describe('bucketDateValue', () => {
     });
   });
 });
+
+describe('count-all `*` sentinel (regression #1982)', () => {
+  // The Cube `count` measure and a dataset `count` with no field compile to
+  // `sql: '*'`. The in-memory count branch treated `'*'` as a column name and
+  // counted non-null of a non-existent property → 0 for every bucket. The
+  // driver's `COUNT(*)` masked it; the tz≠UTC date-bucket path (which always
+  // runs in-memory) surfaced it as a 0-count bucket with a correct label.
+  const evts = [
+    { closed_at: '2024-03-01T03:00:00.000Z' }, // NY: 02-29
+    { closed_at: '2024-03-01T07:00:00.000Z' }, // NY: 03-01
+    { closed_at: '2024-03-01T09:00:00.000Z' }, // NY: 03-01
+  ];
+
+  it("counts all rows for a fieldless / `'*'` count, ungrouped", () => {
+    const out = applyInMemoryAggregation(evts, {
+      aggregations: [{ function: 'count', field: '*', alias: 'n' }],
+    });
+    expect(out).toEqual([{ n: 3 }]);
+  });
+
+  it("counts rows per tz bucket for a `'*'` count (was 0 before the fix)", () => {
+    const ast = {
+      groupBy: [{ field: 'closed_at', dateGranularity: 'day' as const }],
+      aggregations: [{ function: 'count', field: '*', alias: 'n' }],
+    };
+    const ny = applyInMemoryAggregation(evts, ast, 'America/New_York').sort(
+      (a, b) => String(a.closed_at).localeCompare(String(b.closed_at)),
+    );
+    expect(ny).toEqual([
+      { closed_at: '2024-02-29', n: 1 },
+      { closed_at: '2024-03-01', n: 2 },
+    ]);
+  });
+});
