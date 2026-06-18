@@ -106,6 +106,61 @@ jobs:
           path: packages/spec/coverage/
           retention-days: 30
 
+  dogfood:
+    name: Dogfood Regression Gate
+    needs: filter
+    if: needs.filter.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Verify pnpm version
+        run: pnpm --version
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-v3-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-v3-
+
+      - name: Setup Turbo cache
+        uses: actions/cache@v5
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ github.job }}-${{ github.ref_name }}-
+            ${{ runner.os }}-turbo-${{ github.job }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Boots real example apps in-process (in-memory SQLite) and exercises them
+      # through the real HTTP + service stack — catches runtime regressions that
+      # build / unit tests / spec-liveness pass over (e.g. the #2018 tz-bucketing
+      # break, which was green on every static gate).
+      - name: Boot example apps and exercise real user flows
+        run: pnpm turbo run test --filter=@objectstack/dogfood
+
   build-core:
     name: Build Core
     needs: filter

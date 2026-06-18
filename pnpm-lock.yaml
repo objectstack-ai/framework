@@ -812,6 +812,55 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/dogfood:
+    dependencies:
+      '@objectstack/core':
+        specifier: workspace:*
+        version: link:../core
+      '@objectstack/driver-sqlite-wasm':
+        specifier: workspace:*
+        version: link:../plugins/driver-sqlite-wasm
+      '@objectstack/example-crm':
+        specifier: workspace:*
+        version: link:../../examples/app-crm
+      '@objectstack/objectql':
+        specifier: workspace:*
+        version: link:../objectql
+      '@objectstack/plugin-auth':
+        specifier: workspace:*
+        version: link:../plugins/plugin-auth
+      '@objectstack/plugin-hono-server':
+        specifier: workspace:*
+        version: link:../plugins/plugin-hono-server
+      '@objectstack/plugin-security':
+        specifier: workspace:*
+        version: link:../plugins/plugin-security
+      '@objectstack/rest':
+        specifier: workspace:*
+        version: link:../rest
+      '@objectstack/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@objectstack/service-analytics':
+        specifier: workspace:*
+        version: link:../services/service-analytics
+      '@objectstack/service-settings':
+        specifier: workspace:*
+        version: link:../services/service-settings
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../spec
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.2)(msw@2.14.6(@types/node@25.9.3)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
   packages/formula:
     dependencies:
       '@marcbachmann/cel-js':

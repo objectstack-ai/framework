@@ -1,0 +1,30 @@
+{
+  "name": "@objectstack/dogfood",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Dogfood regression gate — boots real example apps in-process and exercises them through the real HTTP/service stack, catching runtime regressions that static checks (build, unit tests, spec liveness) miss.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/runtime": "workspace:*",
+    "@objectstack/objectql": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/driver-sqlite-wasm": "workspace:*",
+    "@objectstack/plugin-hono-server": "workspace:*",
+    "@objectstack/rest": "workspace:*",
+    "@objectstack/plugin-auth": "workspace:*",
+    "@objectstack/plugin-security": "workspace:*",
+    "@objectstack/service-settings": "workspace:*",
+    "@objectstack/service-analytics": "workspace:*",
+    "@objectstack/example-crm": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
