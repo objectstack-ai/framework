@@ -5,7 +5,7 @@ import type { IHttpServer, IDataEngine } from '@objectstack/spec/contracts';
 import type { SettingsManifest } from '@objectstack/spec/system';
 import { SettingsService } from './settings-service.js';
 import type { ICryptoProvider } from '@objectstack/spec/contracts';
-import type { SettingsAuditSink, SettingsAuditWriter, SettingsEngine, SettingsSecretStore } from './settings-service.types.js';
+import type { SettingsAuditWriter, SettingsEngine, SettingsSecretStore } from './settings-service.types.js';
 import type { CryptoAdapter } from './crypto-adapter.js';
 import { LocalCryptoProvider } from './local-crypto-provider.js';
 import { registerSettingsRoutes } from './settings-routes.js';
@@ -174,7 +174,7 @@ export class SettingsServicePlugin implements Plugin {
         // its narrow, bundled signature.
         this.service!.bindEngine(
           wrapEngineAsSettingsEngine(engine),
-          this.buildAuditSink(ctx, engine),
+          undefined,
           {
             secretStore: this.buildSecretStore(engine),
             auditWriter: this.buildAuditWriter(ctx, engine),
@@ -203,33 +203,6 @@ export class SettingsServicePlugin implements Plugin {
         'SettingsServicePlugin: REST routes registered at ' + (this.opts.basePath ?? '/api/settings'),
       );
     });
-  }
-
-  /** Glue an `engine.insert('sys_audit_log', …)` audit sink. */
-  private buildAuditSink(ctx: PluginContext, engine: IDataEngine): SettingsAuditSink {
-    return {
-      record: async (entry) => {
-        try {
-          await (engine as any).insert?.('sys_audit_log', {
-            actor_id: entry.userId ?? null,
-            entity_type: 'sys_setting',
-            entity_id: `${entry.namespace}.${entry.key}`,
-            action: entry.action,
-            payload: {
-              namespace: entry.namespace,
-              key: entry.key,
-              scope: entry.scope,
-              encrypted: entry.encrypted,
-              digest: entry.valueDigest,
-            },
-            request_id: entry.requestId ?? null,
-            occurred_at: new Date().toISOString(),
-          });
-        } catch (err: any) {
-          ctx.logger?.warn?.('SettingsServicePlugin: audit record failed: ' + (err?.message ?? err));
-        }
-      },
-    };
   }
 
   /**
