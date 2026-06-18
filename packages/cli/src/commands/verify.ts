@@ -58,20 +58,33 @@ export default class Verify extends Command {
       String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !==
         'false';
 
-    const stack = await bootStack(config, { multiTenant });
-
+    // Data fidelity runs on its own pristine stack.
     let crud: VerifyReport;
-    let rls: RlsReport | undefined;
-    try {
-      const adminToken = await stack.signIn();
-      crud = await runCrudVerification(stack, adminToken, config);
-
-      if (flags.rls) {
-        const memberToken = await stack.signUp('verify-member@objectstack.test');
-        rls = await runRlsProofs(stack, adminToken, memberToken, config);
+    {
+      const stack = await bootStack(config, { multiTenant });
+      try {
+        const adminToken = await stack.signIn();
+        crud = await runCrudVerification(stack, adminToken, config);
+      } finally {
+        await stack.stop();
       }
-    } finally {
-      await stack.stop();
+    }
+
+    // The RLS proofs run on a SEPARATE, fresh stack. Reusing the fidelity stack
+    // would let the RLS phase's admin-creates collide with the rows the fidelity
+    // phase already wrote on unique-constrained fields (e.g. a unique `sku` or
+    // `account_number`) — a 409 that silently skips the object instead of
+    // proving its authorization.
+    let rls: RlsReport | undefined;
+    if (flags.rls) {
+      const rlsStack = await bootStack(config, { multiTenant });
+      try {
+        const adminToken = await rlsStack.signIn();
+        const memberToken = await rlsStack.signUp('verify-member@objectstack.test');
+        rls = await runRlsProofs(rlsStack, adminToken, memberToken, config);
+      } finally {
+        await rlsStack.stop();
+      }
     }
 
     // Failure contract: a "real" runtime break the app's author must see.

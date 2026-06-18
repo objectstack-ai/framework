@@ -100,3 +100,17 @@ isolation policies actually apply.
 
 `bootStack` options: `admin`, `authSecret`, `security` (a custom `SecurityPlugin`
 for owner-scoped fixtures), `multiTenant`.
+
+## Known limitations
+
+- **Intentional write-transforms read back as fidelity gaps.** The fidelity
+  check asserts an *exact* round-trip, so a field normalized on write — an
+  `uppercase`/`trim` hook, a canonicalizing formula — is reported as a
+  `fidelity-gaps` mismatch (e.g. `sku`: wrote `"abc-1"` → read `"ABC-1"`) and
+  fails the run, even though the app behaves as designed. The report shows the
+  exact `wrote → read` diff so it's diagnosable; letting an app declare such
+  fields so the verifier can allow them is a planned enhancement.
+- **The auto-derived sweep is coarser than a hand-written matrix.** It exercises
+  one synthesized record per object and skips fields it can't synthesize
+  (required lookups / master-detail, media, computed). It's a broad runtime
+  smoke test, not a substitute for targeted golden tests of specific behavior.
