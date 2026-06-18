@@ -47,14 +47,14 @@ const MATRIX: FieldCase[] = [
   { field: 'f_number', type: 'number', check: { kind: 'equal', write: 42 } },
   { field: 'f_currency', type: 'currency', check: { kind: 'equal', write: 1234.56 } },
   { field: 'f_percent', type: 'percent', check: { kind: 'equal', write: 75 } },
-  { field: 'f_rating', type: 'rating', check: { kind: 'equal', write: 4 }, xfail: true },
-  { field: 'f_slider', type: 'slider', check: { kind: 'equal', write: 25 }, xfail: true },
+  { field: 'f_rating', type: 'rating', check: { kind: 'equal', write: 4 } },
+  { field: 'f_slider', type: 'slider', check: { kind: 'equal', write: 25 } },
   // temporal — f_time is a #2004 fix (time-of-day)
   { field: 'f_date', type: 'date', check: { kind: 'equal', write: '2024-03-15' } },
   { field: 'f_time', type: 'time', check: { kind: 'equal', write: '14:30:00' } },
   // logic
   { field: 'f_boolean', type: 'boolean', check: { kind: 'equal', write: true } },
-  { field: 'f_toggle', type: 'toggle', check: { kind: 'equal', write: true }, xfail: true },
+  { field: 'f_toggle', type: 'toggle', check: { kind: 'equal', write: true } },
   // scalar selection
   { field: 'f_select', type: 'select', check: { kind: 'equal', write: 'high' } },
   { field: 'f_radio', type: 'radio', check: { kind: 'equal', write: 'yes' } },
