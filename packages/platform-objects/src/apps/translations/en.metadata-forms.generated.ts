@@ -554,6 +554,10 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
         label: "Chart",
         description: "Chart-specific configuration."
       },
+      end_user_controls: {
+        label: "End-user controls",
+        description: "What end users can do on this view — quick filters, filter tabs, visualization switching (ADR-0047, Airtable Interface parity)."
+      },
       navigation_sharing: {
         label: "Navigation & sharing",
         description: "Where this view appears and who can see it."
@@ -636,6 +640,28 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       },
       chart: {
         label: "Chart"
+      },
+      userFilters: {
+        label: "User Filters",
+        helpText: "Quick-filter bar: element style (dropdown / tabs / toggle) + exposed fields or tab presets"
+      },
+      tabs: {
+        label: "Tabs",
+        helpText: "In-view filter tabs — each tab applies its own filter rules"
+      },
+      appearance: {
+        label: "Appearance",
+        helpText: "allowedVisualizations: which renderers users may switch between"
+      },
+      userActions: {
+        label: "User Actions",
+        helpText: "Toolbar toggles: sort / search / filter / row height"
+      },
+      addRecord: {
+        label: "Add Record"
+      },
+      showRecordCount: {
+        label: "Show Record Count"
       },
       navigation: {
         label: "Navigation"
