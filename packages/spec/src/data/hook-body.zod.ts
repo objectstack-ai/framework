@@ -10,6 +10,10 @@ import { z } from 'zod';
  *
  * - `api.read`   — `ctx.api.object(...).find / findOne / count / aggregate`
  * - `api.write`  — `ctx.api.object(...).insert / update / delete`
+ * - `api.transaction` — `ctx.api.transaction(async () => { … })` — runs the
+ *   callback's `ctx.api` writes/reads inside one driver transaction, committed
+ *   on return and rolled back if the callback throws. Requires `api.write`
+ *   alongside it to be useful (the transaction body still needs write access).
  * - `crypto.uuid` — `ctx.crypto.randomUUID()`
  * - `crypto.hash` — `ctx.crypto.hash(algo, data)`
  * - `log`        — `ctx.log.info / warn / error`
@@ -20,6 +24,7 @@ import { z } from 'zod';
 export const HookBodyCapability = z.enum([
   'api.read',
   'api.write',
+  'api.transaction',
   'crypto.uuid',
   'crypto.hash',
   'log',

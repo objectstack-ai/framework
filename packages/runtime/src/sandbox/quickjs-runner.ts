@@ -132,8 +132,15 @@ export class QuickJSScriptRunner implements ScriptRunner {
     const deadline = start + args.timeoutMs;
     runtime.setInterruptHandler(() => Date.now() > deadline);
 
+    // Shared, per-invocation transaction state. `ctx.api.transaction(fn)` opens
+    // it (routing subsequent ctx.api ops through the tx-scoped context) and
+    // closes it on commit/rollback. The execute() finally consults it to roll
+    // back a transaction the body left open (threw mid-tx, or timed out before
+    // its commit/rollback settled).
+    const txState: TxState = { api: null, handle: null, open: false };
+
     try {
-      this.installCtx(vm, args.ctx, new Set(args.capabilities), args.origin);
+      this.installCtx(vm, args.ctx, new Set(args.capabilities), args.origin, txState);
 
       // L1 expressions are pure-sync: evaluate and read __result.
       if (args.isExpression) {
@@ -227,6 +234,23 @@ export class QuickJSScriptRunner implements ScriptRunner {
         pumps++;
       }
     } finally {
+      // If the body left a transaction open — it threw between begin and
+      // commit/rollback, or the deadline cut the pump loop off while a tx was
+      // live — roll it back before tearing down the VM, so the driver
+      // connection isn't leaked with a half-applied transaction. Best-effort:
+      // the script result (success or the original error) is already decided;
+      // a rollback failure here must not mask it.
+      if (txState.open && txState.handle != null) {
+        const apiTx = args.ctx.api as Record<string, unknown> | undefined;
+        const rollback = apiTx?.rollbackTransaction;
+        if (typeof rollback === 'function') {
+          try {
+            await (rollback as (h: unknown) => Promise<void>).call(apiTx, txState.handle);
+          } catch {
+            /* best-effort cleanup — swallow so the real outcome surfaces */
+          }
+        }
+      }
       // newAsyncContext() owns its WASM module; disposing the context disposes
       // the runtime + module together.
       vm.dispose();
@@ -247,6 +271,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
     ctx: ScriptContext,
     caps: Set<HookBodyCapability>,
     origin: ScriptOrigin,
+    txState: TxState,
   ): void {
     setGlobalJson(vm, '__input', ctx.input);
     setGlobalJson(vm, '__previous', ctx.previous);
@@ -284,12 +309,91 @@ export class QuickJSScriptRunner implements ScriptRunner {
       const wrap = vm.newObject();
       const READ = ['find', 'findOne', 'count', 'aggregate'] as const;
       const WRITE = ['insert', 'update', 'delete', 'updateMany', 'deleteMany', 'upsert'] as const;
-      for (const m of READ) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.read', origin);
-      for (const m of WRITE) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.write', origin);
+      for (const m of READ) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.read', origin, txState);
+      for (const m of WRITE) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.write', origin, txState);
       return wrap;
     });
     vm.setProp(apiObj, 'object', objectFn);
     objectFn.dispose();
+
+    // Transaction control. The VM-facing surface is a single `ctx.api.transaction(fn)`
+    // (defined as JS sugar below); under the hood it drives three host leaves so
+    // begin / commit / rollback each settle through the same deferred-promise +
+    // pump mechanism every other host call uses (asyncify can't unwind twice).
+    //
+    // The handle is threaded EXPLICITLY through `txState` rather than via the
+    // engine's ambient AsyncLocalStorage: the body runs across many host
+    // event-loop turns, and ALS context does not survive those `setImmediate`
+    // boundaries. While a tx is open, `installApiMethod` resolves its repository
+    // from `txState.api` (the tx-scoped ScopedContext) so every op reuses the
+    // one connection.
+    const apiTx = ctx.api as Record<string, unknown> | undefined;
+    const installTxLeaf = (name: string, run: () => Promise<void>): void => {
+      const fn = vm.newFunction(name, () => {
+        if (!caps.has('api.transaction')) {
+          throw new SandboxError(
+            `capability 'api.transaction' not granted to ${origin.kind} '${origin.name}' (called ctx.api.transaction)`,
+          );
+        }
+        const deferred = vm.newPromise();
+        void (async () => {
+          try {
+            await run();
+            if (!vm.alive) return;
+            deferred.resolve(vm.undefined);
+          } catch (err) {
+            if (!vm.alive) return;
+            const errH =
+              err instanceof Error
+                ? vm.newError({ name: err.name || 'Error', message: err.message })
+                : vm.newError({ name: 'Error', message: String(err) });
+            deferred.reject(errH);
+            errH.dispose();
+          }
+        })();
+        return deferred.handle;
+      });
+      vm.setProp(apiObj, name, fn);
+      fn.dispose();
+    };
+
+    installTxLeaf('__txBegin', async () => {
+      if (txState.open) throw new SandboxError('nested ctx.api.transaction is not supported');
+      const begin = apiTx?.beginTransaction;
+      if (typeof begin === 'function') {
+        const r = (await (begin as () => Promise<{ ctx: unknown; handle: unknown } | null>).call(apiTx)) ?? null;
+        if (r) {
+          txState.api = r.ctx as Record<string, unknown>;
+          txState.handle = r.handle;
+        }
+      }
+      // else (or null result): driver without tx support → degrade to
+      // non-transactional execution, same as ScopedContext.transaction().
+      txState.open = true;
+    });
+
+    installTxLeaf('__txCommit', async () => {
+      const { handle, open } = txState;
+      txState.api = null;
+      txState.handle = null;
+      txState.open = false;
+      const commit = apiTx?.commitTransaction;
+      if (open && handle != null && typeof commit === 'function') {
+        await (commit as (h: unknown) => Promise<void>).call(apiTx, handle);
+      }
+    });
+
+    installTxLeaf('__txRollback', async () => {
+      const { handle, open } = txState;
+      txState.api = null;
+      txState.handle = null;
+      txState.open = false;
+      const rollback = apiTx?.rollbackTransaction;
+      if (open && handle != null && typeof rollback === 'function') {
+        await (rollback as (h: unknown) => Promise<void>).call(apiTx, handle);
+      }
+    });
+
     vm.setProp(ctxObj, 'api', apiObj);
     apiObj.dispose();
 
@@ -325,7 +429,46 @@ export class QuickJSScriptRunner implements ScriptRunner {
 
     vm.setProp(vm.global, '__ctx', ctxObj);
     ctxObj.dispose();
+
+    // VM-side sugar: `ctx.api.transaction(async () => { … })`. Begin runs
+    // OUTSIDE the try so a begin failure (e.g. missing capability) propagates
+    // without attempting a rollback there is no transaction for. The body's
+    // return value is forwarded; any throw triggers rollback then re-throws,
+    // so the caller observes the original error.
+    const sugar = vm.evalCode(
+      `__ctx.api.transaction = async function (fn) {
+         await __ctx.api.__txBegin();
+         try {
+           var r = await fn();
+           await __ctx.api.__txCommit();
+           return r;
+         } catch (e) {
+           await __ctx.api.__txRollback();
+           throw e;
+         }
+       };`,
+    );
+    if (sugar.error) {
+      const msg = vm.dump(sugar.error);
+      sugar.error.dispose();
+      throw new SandboxError(`failed to install ctx.api.transaction: ${formatErr(msg)}`);
+    }
+    sugar.value.dispose();
   }
+}
+
+/**
+ * Per-invocation transaction state shared between {@link QuickJSScriptRunner.execute}
+ * (which rolls back a tx the body left open) and the `ctx.api.transaction`
+ * host leaves (which open/close it). `api` is the tx-scoped ScopedContext that
+ * `installApiMethod` routes repository ops through while a tx is live; `handle`
+ * is the driver transaction handle; `open` guards against nesting and tells the
+ * finally block whether cleanup is owed.
+ */
+interface TxState {
+  api: Record<string, unknown> | null;
+  handle: unknown;
+  open: boolean;
 }
 
 /**
@@ -358,6 +501,7 @@ function installApiMethod(
   caps: Set<HookBodyCapability>,
   required: HookBodyCapability,
   origin: ScriptOrigin,
+  txState: TxState,
 ): void {
   const fn = vm.newFunction(method, (...argHandles) => {
     // Capability gate — throw synchronously so the VM sees a normal exception at
@@ -378,7 +522,13 @@ function installApiMethod(
     const deferred = vm.newPromise();
     void (async () => {
       try {
-        const proxy = (apiAny.object as (n: string) => Record<string, unknown>)(objectName);
+        // While a transaction is open, resolve the repository from the
+        // tx-scoped context so this op reuses the transaction's connection;
+        // otherwise use the base ctx.api. Read `txState` HERE (at call time,
+        // inside the async body) — the tx may have opened after this method
+        // was installed.
+        const source = (txState.api ?? apiAny) as Record<string, unknown>;
+        const proxy = (source.object as (n: string) => Record<string, unknown>)(objectName);
         const m = proxy[method] as ((...a: unknown[]) => unknown) | undefined;
         if (typeof m !== 'function') {
           throw new SandboxError(`ctx.api.object('${objectName}').${method} not implemented`);

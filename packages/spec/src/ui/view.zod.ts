@@ -379,14 +379,90 @@ export const CalendarConfigSchema = lazySchema(() => z.object({
 }));
 
 /**
- * Gantt Settings
+ * Gantt Settings.
+ *
+ * The first five fields are the timeline essentials (a bar per record from
+ * `startDateField`→`endDateField`, labelled by `titleField`). Everything below
+ * is optional and lets one Gantt view scale from a flat task list up to the
+ * full production-planning board: a multi-level tree (`parentField`), folder /
+ * milestone rows (`typeField`), planned-vs-actual baselines, dynamic grouping,
+ * a resource-workload histogram, and a quick-filter bar.
+ *
+ * These richer fields are consumed today by `@object-ui/plugin-gantt`; they
+ * live here so the metadata pipeline preserves them end-to-end instead of
+ * stripping them at the spec boundary.
  */
 export const GanttConfigSchema = lazySchema(() => z.object({
-  startDateField: z.string(),
-  endDateField: z.string(),
-  titleField: z.string(),
-  progressField: z.string().optional(),
-  dependenciesField: z.string().optional(),
+  startDateField: z.string().describe('Record field holding each bar’s start date/datetime'),
+  endDateField: z.string().describe('Record field holding each bar’s end date/datetime'),
+  titleField: z.string().describe('Record field rendered as the bar / row label'),
+  progressField: z.string().optional().describe('Numeric field (0–100) shown as bar fill'),
+  dependenciesField: z.string().optional().describe('Field holding predecessor ids/links drawn as dependency arrows'),
+
+  /** Field whose value colours the bar (hex or semantic name); falls back to status/priority. */
+  colorField: z.string().optional().describe('Field driving bar colour (hex or semantic name)'),
+
+  /**
+   * Self/lookup reference to the parent record — turns the flat list into a
+   * **multi-level tree** (e.g. 项目 → 产品 → 排产计划 → 派工单). Rows nest and
+   * can be expanded/collapsed; a parent with children that has no own dates
+   * renders as a folder/summary row spanning its descendants.
+   */
+  parentField: z.string().optional().describe('Lookup to the parent record — builds the row hierarchy/tree'),
+
+  /**
+   * Field classifying each row's shape: a `summary`/folder value renders as a
+   * span-only group row (no editable bar), `milestone` as a diamond, `task`
+   * (default) as a normal draggable bar. Lets upper tree levels be pure
+   * containers while leaf levels carry the schedulable bars.
+   */
+  typeField: z.string().optional().describe('Field selecting row type: task | summary(folder) | milestone'),
+
+  /** Extra fields surfaced in the bar tooltip — bare field names or `{ field, label }`. */
+  tooltipFields: z.array(z.union([
+    z.string(),
+    z.object({ field: z.string(), label: z.string().optional() }),
+  ])).optional().describe('Fields shown in the bar tooltip'),
+
+  /** Planned (baseline) start/end → a reference bar drawn under the actual one for variance. */
+  baselineStartField: z.string().optional().describe('Planned start field → baseline reference bar'),
+  baselineEndField: z.string().optional().describe('Planned end field → baseline reference bar'),
+
+  /**
+   * Bucket leaf rows by this field under one synthesized summary row per value
+   * (replacing the parent hierarchy) — the Gantt analogue of list/kanban
+   * grouping. Select/lookup values resolve to their display label.
+   */
+  groupByField: z.string().optional().describe('Group leaf rows under a synthesized summary per value'),
+
+  /**
+   * Resource / workload view. When true the chart renders a per-resource load
+   * histogram instead of the timeline grid: each task loads its `assigneeField`
+   * resource by `effortField` units (default 1) across its span, and any column
+   * exceeding `capacity` is flagged as over-allocated. `assigneeField` is
+   * required for the bucketing.
+   */
+  resourceView: z.boolean().optional().describe('Render a per-resource workload histogram instead of the timeline'),
+  assigneeField: z.string().optional().describe('Resource/assignee field bucketed by the workload view'),
+  effortField: z.string().optional().describe('Load units a task contributes per column (default 1)'),
+  capacity: z.number().optional().describe('Per-resource capacity ceiling; loads above flag overload (default 1)'),
+
+  /**
+   * Quick-filter bar above the chart — a row of multi-select dropdowns, each
+   * narrowing visible bars by one dimension. Options resolve from the object
+   * schema (select options / lookup records) unless overridden inline.
+   */
+  quickFilters: z.array(z.object({
+    field: z.string().describe('Record field/dot-path the dimension filters on'),
+    label: z.string().optional().describe('Dropdown label (defaults to the field label)'),
+    options: z.array(z.union([
+      z.string(),
+      z.object({ value: z.union([z.string(), z.number()]), label: z.string().optional() }),
+    ])).optional().describe('Explicit option override for non-enum dimensions'),
+  })).optional().describe('Quick-filter dropdown dimensions rendered above the chart'),
+
+  /** When true (default) filtering re-zooms the timeline to the filtered interval. */
+  autoZoomToFilter: z.boolean().optional().describe('Re-zoom timeline to filtered tasks (default true)'),
 }));
 
 /**

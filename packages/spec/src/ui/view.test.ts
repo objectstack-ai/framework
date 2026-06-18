@@ -210,6 +210,50 @@ describe('GanttConfigSchema', () => {
 
     expect(() => GanttConfigSchema.parse(config)).not.toThrow();
   });
+
+  it('accepts and preserves the tree / baseline / resource / quick-filter fields', () => {
+    // The 4-level production board (项目 → 产品 → 排产计划 → 派工单) and the
+    // resource-workload view rely on these. They must survive validation, not
+    // be stripped at the spec boundary (the bug this schema extension fixes).
+    const config = {
+      startDateField: 'planned_start',
+      endDateField: 'planned_end',
+      titleField: 'name',
+      progressField: 'progress',
+      dependenciesField: 'predecessors',
+      colorField: 'status',
+      parentField: 'parent',
+      typeField: 'row_type',
+      tooltipFields: ['owner', { field: 'qty', label: 'Quantity' }],
+      baselineStartField: 'baseline_start',
+      baselineEndField: 'baseline_end',
+      groupByField: 'workshop',
+      resourceView: true,
+      assigneeField: 'operator',
+      effortField: 'hours',
+      capacity: 8,
+      quickFilters: [
+        { field: 'workshop' },
+        { field: 'category', label: '派工类别', options: ['A', { value: 2, label: 'B' }] },
+      ],
+      autoZoomToFilter: false,
+    };
+
+    const parsed = GanttConfigSchema.parse(config);
+    // Round-trips intact — every richer field is retained.
+    expect(parsed).toEqual(config);
+  });
+
+  it('rejects a non-string parentField', () => {
+    expect(() =>
+      GanttConfigSchema.parse({
+        startDateField: 's',
+        endDateField: 'e',
+        titleField: 'n',
+        parentField: 123,
+      }),
+    ).toThrow();
+  });
 });
 
 describe('ListViewSchema', () => {

@@ -264,7 +264,7 @@ export function introspectScope(role: FieldRole, schema?: ExprSchemaHint): {
  */
 export const CEL_STDLIB_FUNCTIONS: string[] = [
   // Dates (registered stdlib)
-  'now', 'today', 'daysFromNow', 'daysAgo', 'daysBetween', 'date', 'datetime',
+  'now', 'today', 'daysFromNow', 'daysAgo', 'daysBetween', 'addDays', 'addMonths', 'date', 'datetime',
   // Numbers (registered stdlib)
   'abs', 'round', 'min', 'max',
   // Strings (registered stdlib)

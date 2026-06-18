@@ -49,6 +49,30 @@ describe('celEngine', () => {
     if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-02-14T00:00:00.000Z');
   });
 
+  it('addDays(date, n) shifts an arbitrary date — the "next service date" shape', () => {
+    // 下次维保日期 = 上次维保 + 周期天数. Operates on record.date, not now().
+    const r = celEngine.evaluate(cel('addDays(record.last_service, record.cycle_days)'), {
+      record: { last_service: '2026-06-18T00:00:00Z', cycle_days: 90 },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect((r.value as Date).toISOString()).toBe('2026-09-16T00:00:00.000Z');
+  });
+
+  it('addDays accepts a negative offset', () => {
+    const r = celEngine.evaluate(cel("addDays(date('2026-03-01'), -1)"), {});
+    expect(r.ok && (r.value as Date).toISOString()).toBe('2026-02-28T00:00:00.000Z');
+  });
+
+  it('addMonths clamps to the target month\'s last day (Jan 31 + 1mo → Feb 28)', () => {
+    const r = celEngine.evaluate(cel("addMonths(date('2026-01-31'), 1)"), {});
+    expect(r.ok && (r.value as Date).toISOString()).toBe('2026-02-28T00:00:00.000Z');
+  });
+
+  it('addMonths handles year roll-over and the common 6-month cycle', () => {
+    const r = celEngine.evaluate(cel("addMonths(date('2026-09-30'), 6)"), {});
+    expect(r.ok && (r.value as Date).toISOString()).toBe('2027-03-30T00:00:00.000Z');
+  });
+
   it('today()/daysFromNow()/daysAgo() resolve the calendar day in the reference timezone', () => {
     // 2026-01-15T02:00Z is still Jan 14 in America/New_York (UTC-5).
     const pinned = new Date('2026-01-15T02:00:00Z');
@@ -368,6 +392,7 @@ describe('celEngine', () => {
       const call: Record<string, string> = {
         now: 'now()', today: 'today()', daysFromNow: 'daysFromNow(30)', daysAgo: 'daysAgo(7)',
         daysBetween: 'daysBetween(today(), daysFromNow(7))', date: 'date("2026-03-15")',
+        addDays: 'addDays(today(), 7)', addMonths: 'addMonths(today(), 3)',
         datetime: 'datetime("2026-03-15T08:00:00Z")', abs: 'abs(-3.5)', round: 'round(2.6)',
         min: 'min(1, 2)', max: 'max(1, 2)', upper: 'upper("hi")', lower: 'lower("HI")',
         trim: 'trim(" x ")', contains: 'contains("hello", "ell")', startsWith: 'startsWith("hi", "h")',

@@ -24,17 +24,20 @@ import { z } from 'zod';
  *    - Users only see records they own
  *    - `using: "owner_id = current_user.id"`
  * 
- * 3. **Department-Based Access**
- *    - Users only see records from their department
- *    - `using: "department = current_user.department"`
- * 
- * 4. **Regional Access Control**
- *    - Sales reps only see accounts in their territory
- *    - `using: "region IN (current_user.assigned_regions)"`
- * 
- * 5. **Time-Based Access**
- *    - Users can only access active records
- *    - `using: "status = 'active' AND expiry_date > NOW()"`
+ * 3. **Organization Member Visibility**
+ *    - Users see fellow members of their active organization
+ *    - `using: "id IN (current_user.org_user_ids)"`
+ *      (`org_user_ids` is pre-resolved by the runtime)
+ *
+ * 4. **Territory / Regional Access (§7.3.1 dynamic membership)**
+ *    - Sales reps only see accounts in their assigned territories
+ *    - `using: "account_id IN (current_user.territory_account_ids)"`
+ *      (the runtime stages `territory_account_ids` in `ExecutionContext.rlsMembership`)
+ *
+ * 5. **Manager / Hierarchy Access (§7.3.1 dynamic membership)**
+ *    - Managers see records assigned to anyone they manage
+ *    - `using: "assigned_to_id IN (current_user.team_member_ids)"`
+ *      (the runtime pre-resolves `team_member_ids`, no subquery needed)
  * 
  * ## PostgreSQL RLS Comparison
  * 
@@ -70,9 +73,9 @@ import { z } from 'zod';
  * - Manual Sharing: Individual record sharing
  * 
  * ObjectStack RLS:
- * - More flexible formula-based conditions
- * - Direct SQL-like syntax
- * - Supports complex logic with AND/OR/NOT
+ * - A small, fixed expression grammar (equality, set-membership, always-true)
+ * - Subquery-shaped needs are pre-resolved by the runtime (§7.3.1)
+ * - Multiple policies OR-combine for union (any-match-allows) semantics
  * 
  * ## Best Practices
  * 
@@ -139,14 +142,16 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  * }
  * ```
  * 
- * @example Manager Can View Team Records
+ * @example Manager Can View Team Records (§7.3.1 dynamic membership)
  * ```typescript
  * {
  *   name: 'manager_team_access',
  *   label: 'Managers Can View Team Records',
  *   object: 'task',
  *   operation: 'select',
- *   using: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)',
+ *   // The runtime resolves the manager's reports into
+ *   // ExecutionContext.rlsMembership.team_member_ids — no subquery needed.
+ *   using: 'assigned_to_id IN (current_user.team_member_ids)',
  *   roles: ['manager', 'director'],
  *   enabled: true
  * }
@@ -164,27 +169,29 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  * }
  * ```
  * 
- * @example Regional Sales Access
+ * @example Regional Sales Access (§7.3.1 dynamic membership)
  * ```typescript
  * {
  *   name: 'regional_sales_access',
  *   label: 'Sales Reps Access Regional Accounts',
  *   object: 'account',
  *   operation: 'select',
- *   using: 'region = current_user.region OR region IS NULL',
+ *   // The runtime stages the rep's territory accounts in
+ *   // ExecutionContext.rlsMembership.territory_account_ids.
+ *   using: 'id IN (current_user.territory_account_ids)',
  *   roles: ['sales_rep'],
  *   enabled: true
  * }
  * ```
- * 
- * @example Time-Based Access Control
+ *
+ * @example Status-Based Access (literal match)
  * ```typescript
  * {
- *   name: 'active_records_only',
- *   label: 'Users Only Access Active Records',
+ *   name: 'published_only',
+ *   label: 'Users Only Access Published Records',
  *   object: 'contract',
  *   operation: 'select',
- *   using: 'status = "active" AND start_date <= NOW() AND end_date >= NOW()',
+ *   using: "status = 'published'",
  *   enabled: true
  * }
  * ```
@@ -261,55 +268,67 @@ export const RowLevelSecurityPolicySchema = lazySchema(() => z.object({
   /**
    * USING clause - Filter condition for SELECT/UPDATE/DELETE.
    * 
-   * This is a SQL-like expression evaluated for each row.
-   * Only rows where this expression returns TRUE are accessible.
-   * 
+   * This is a constrained, SQL-like expression compiled into an ObjectQL
+   * filter (see the supported grammar below). Only rows the compiled filter
+   * matches are accessible.
+   *
    * **Note**: For INSERT-only policies, USING is not required (only CHECK is needed).
    * For SELECT/UPDATE/DELETE operations, USING is required.
-   * 
-   * **Security Note**: RLS conditions are executed at the database level with
-   * parameterized queries. The implementation must use prepared statements
-   * to prevent SQL injection. Never concatenate user input directly into
-   * RLS conditions.
-   * 
-   * **SQL Dialect**: Compatible with PostgreSQL SQL syntax. Implementations
-   * may adapt to other databases (MySQL, SQL Server, etc.) but should maintain
-   * semantic equivalence.
-   * 
-   * Available context variables:
-   * - `current_user.id` - Current user's ID
-   * - `current_user.organization_id` - Active organization id (maps to `tenantId` in RLSUserContext / `ExecutionContext.tenantId`)
-   * - `current_user.role` - Current user's role
-   * - `current_user.department` - Current user's department
-   * - `current_user.*` - Any custom user field
-   * - `NOW()` - Current timestamp
-   * - `CURRENT_DATE` - Current date
-   * - `CURRENT_TIME` - Current time
-   * 
-   * **Context Variable Mapping**: The RLSUserContext schema uses camelCase (e.g., `tenantId`),
-   * but expressions use snake_case with `current_user.` prefix (e.g., `current_user.organization_id`).
-   * Implementations must handle this mapping.
-   * 
-   * Supported operators:
-   * - Comparison: =, !=, <, >, <=, >=, <> (not equal)
-   * - Logical: AND, OR, NOT
-   * - NULL checks: IS NULL, IS NOT NULL
-   * - Set operations: IN, NOT IN
-   * - String: LIKE, NOT LIKE, ILIKE (case-insensitive)
-   * - Pattern matching: ~ (regex), !~ (not regex)
-   * - Subqueries: (SELECT ...)
-   * - Array operations: ANY, ALL
-   * 
+   *
+   * **Security Note**: the compiler maps each form to a structured filter and
+   * binds context values as parameters at the driver layer — context values
+   * are never string-concatenated into SQL. Policy `using` strings are
+   * authored by administrators, not end users.
+   *
+   * **Supported expression grammar (reference compiler)**
+   *
+   * The reference RLS compiler implements a deliberately **small, fixed
+   * grammar** rather than a general SQL parser. Exactly four forms compile;
+   * anything else fails closed (the policy matches zero rows). Keep `using`
+   * to one of:
+   *
+   * 1. `field = current_user.<prop>` — equality against a context value
+   * 2. `field = 'literal'` — equality against a single-quoted string literal
+   * 3. `field IN (current_user.<array_prop>)` — set membership against a
+   *    pre-resolved id array (see "Dynamic membership" below)
+   * 4. `1 = 1` — always true / no restriction (privileged-role allow-all)
+   *
+   * There is intentionally **no** support for `AND`/`OR`/`NOT`, comparison
+   * operators other than `=`, `IS NULL`/`IS NOT NULL`, `NOT IN`, `LIKE`/
+   * `ILIKE`, regex (`~`/`!~`), `ANY`/`ALL`, subqueries, or `NOW()`/
+   * `CURRENT_DATE`/`CURRENT_TIME`. Combine conditions by defining multiple
+   * policies (they OR-combine); express anything subquery-shaped as a
+   * pre-resolved `current_user.*` array instead.
+   *
+   * **Context values** — `current_user.*` resolves against the request's
+   * execution context (camelCase fields map to snake_case placeholders):
+   * - `current_user.id` → `ExecutionContext.userId`
+   * - `current_user.organization_id` → `ExecutionContext.tenantId`
+   * - `current_user.roles` → `ExecutionContext.roles` (array)
+   * - `current_user.org_user_ids` → ids of fellow members of the active org
+   * - any key the runtime stages in `ExecutionContext.rlsMembership`
+   *
+   * A referenced value that is missing/`null` (scalar) or empty (array)
+   * makes that policy drop out — **fail-closed**, never fail-open.
+   *
+   * **Dynamic membership (§7.3.1)** — set-membership that would otherwise
+   * need a subquery ("tasks assigned to anyone I manage", "accounts in my
+   * territories") is resolved by the runtime into
+   * `ExecutionContext.rlsMembership` under a stable key, then referenced as
+   * `field IN (current_user.<key>)`. This keeps the compiler subquery-free
+   * while still supporting hierarchy- and sharing-based access.
+   *
    * **Prohibited**: Dynamic SQL, DDL statements, DML statements (INSERT/UPDATE/DELETE)
-   * 
+   *
    * @example "organization_id = current_user.organization_id"
-   * @example "owner_id = current_user.id OR created_by = current_user.id"
-   * @example "department IN (SELECT department FROM user_departments WHERE user_id = current_user.id)"
-   * @example "status = 'active' AND expiry_date > NOW()"
+   * @example "owner_id = current_user.id"
+   * @example "status = 'published'"
+   * @example "assigned_to_id IN (current_user.team_member_ids)" // §7.3.1 pre-resolved
+   * @example "1 = 1" // privileged-role allow-all
    */
   using: z.string()
     .optional()
-    .describe('Filter condition for SELECT/UPDATE/DELETE (PostgreSQL SQL WHERE clause syntax with parameterized context variables). Optional for INSERT-only policies.'),
+    .describe('Filter condition for SELECT/UPDATE/DELETE. One of the four compiler-supported forms: `field = current_user.<prop>`, `field = \'literal\'`, `field IN (current_user.<array>)`, or `1 = 1`. Optional for INSERT-only policies.'),
 
   /**
    * CHECK clause - Validation for INSERT/UPDATE operations.

@@ -23,7 +23,9 @@ interface RLSUserContext {
    * current user (incl. self). Pre-resolved by the runtime so RLS can
    * scope identity tables like `sys_user` via
    * `id IN (current_user.org_user_ids)` without needing subquery
-   * support in the compiler.
+   * support in the compiler. This is the one well-known membership set;
+   * arbitrary §7.3.1 sets arrive via `ExecutionContext.rlsMembership`
+   * and are merged in under their own keys (see {@link RLSCompiler.compileFilter}).
    */
   org_user_ids?: string[];
   [key: string]: unknown;
@@ -81,6 +83,21 @@ export class RLSCompiler {
       org_user_ids: (executionContext as any)?.org_user_ids,
     };
 
+    // §7.3.1 dynamic membership: the runtime pre-resolves arbitrary
+    // set-membership (team members, territory accounts, shared records)
+    // into `ExecutionContext.rlsMembership`. Merge each set under its key
+    // so `field IN (current_user.<key>)` resolves without subquery support.
+    // Arrays only; a missing/empty set still fails closed downstream.
+    // We never let a membership key clobber the named fields above.
+    const membership = (executionContext as any)?.rlsMembership;
+    if (membership && typeof membership === 'object') {
+      for (const [key, value] of Object.entries(membership)) {
+        if (Array.isArray(value) && userCtx[key] === undefined) {
+          userCtx[key] = value;
+        }
+      }
+    }
+
     const filters: Record<string, unknown>[] = [];
 
     for (const policy of policies) {
@@ -107,17 +124,32 @@ export class RLSCompiler {
 
   /**
    * Compile a single RLS expression into a query filter.
-   * 
-   * Supports simple expressions like:
-   * - "field_name = current_user.property"
-   * - "field_name IN (current_user.array_property)"
-   * - "field_name = 'literal_value'"
+   *
+   * This reference compiler recognizes exactly four forms — anything else
+   * returns `null` and (via {@link compileFilter}) fails closed:
+   * - `field = current_user.property`     → `{ field: <value> }`
+   * - `field = 'literal_value'`           → `{ field: 'literal_value' }`
+   * - `field IN (current_user.array)`     → `{ field: { $in: [...] } }`
+   *   (the array may be a §7.3.1 pre-resolved membership set)
+   * - `1 = 1`                             → `{}` (always-true / no restriction)
+   *
+   * There is intentionally no support for subqueries, `LIKE`/`ILIKE`,
+   * regex, `ANY`/`ALL`, `AND`/`OR`/`NOT`, or `NULL` checks — express those
+   * needs as a `current_user.*` property the runtime pre-resolves instead.
    */
   compileExpression(
     expression: string,
     userCtx: RLSUserContext
   ): Record<string, unknown> | null {
     if (!expression) return null;
+
+    // Always-true literal: "1 = 1" → no restriction (match every row).
+    // Lets RLS.allowAllPolicy ('1 = 1' for privileged roles) grant access
+    // instead of silently failing closed. An empty filter AND's onto the
+    // caller's where clause as a no-op.
+    if (/^\s*1\s*=\s*1\s*$/.test(expression)) {
+      return {};
+    }
 
     // Handle simple equality: "field = current_user.property"
     const eqMatch = expression.match(/^\s*(\w+)\s*=\s*current_user\.(\w+)\s*$/);

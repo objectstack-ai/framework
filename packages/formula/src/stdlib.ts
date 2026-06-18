@@ -74,6 +74,22 @@ function addDaysUtc(d: Date, n: number): Date {
 }
 
 /**
+ * Add `n` calendar months to a Date in UTC; returns a new Date. Clamps the day
+ * to the target month's last day so `addMonths(date('2026-01-31'), 1)` yields
+ * Feb 28, never an overflow into March — matching how authors expect a
+ * "next service date = last + N months" rule to behave.
+ */
+function addMonthsUtc(d: Date, n: number): Date {
+  const out = new Date(d.getTime());
+  const day = out.getUTCDate();
+  out.setUTCDate(1); // avoid roll-over while shifting the month
+  out.setUTCMonth(out.getUTCMonth() + n);
+  const lastDay = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(day, lastDay));
+  return out;
+}
+
+/**
  * Register the ObjectStack standard library into a CEL environment.
  *
  * The `now` resolver is closed over so each call uses the pinned
@@ -160,6 +176,22 @@ export function registerStdLib(
       'daysBetween(dyn, dyn): int',
       (a: unknown, b: unknown) =>
         BigInt(Math.round((toDate(b).getTime() - toDate(a).getTime()) / MS_PER_DAY)),
+    )
+    // Shift an arbitrary date by a (possibly negative) number of days/months.
+    // Unlike `daysFromNow`, these operate on a *given* date — the shape behind
+    // "next service date = last service + cycle". Args are coerced (Date | ISO
+    // string | epoch) so a `Field.date` arriving as a string works directly.
+    // `addMonths` clamps to the target month's last day (Jan 31 +1mo → Feb 28).
+    // `n` is typed `dyn` (not `int`): a record number field arrives as cel-js
+    // `double`, so an `int` overload would fault `no such overload` (#1928).
+    // We coerce defensively with `Number(...)`.
+    .registerFunction(
+      'addDays(dyn, dyn): google.protobuf.Timestamp',
+      (d: unknown, n: unknown) => addDaysUtc(toDate(d), Math.trunc(Number(n))),
+    )
+    .registerFunction(
+      'addMonths(dyn, dyn): google.protobuf.Timestamp',
+      (d: unknown, n: unknown) => addMonthsUtc(toDate(d), Math.trunc(Number(n))),
     )
     // Parse an ISO date / date-time string to a Timestamp. `date` and `datetime`
     // are aliases — both accept either form (the field's own type decides the

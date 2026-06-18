@@ -3081,6 +3081,64 @@ export class ScopedContext {
     }
   }
 
+  /**
+   * Resolve the default driver, if it exposes transaction primitives.
+   * Shared by {@link transaction} and the discrete begin/commit/rollback trio.
+   */
+  private txDriver(): any | undefined {
+    const engine = this.engine as any;
+    const driver = engine.defaultDriver
+      ? engine.drivers?.get(engine.defaultDriver)
+      : undefined;
+    return driver?.beginTransaction ? driver : undefined;
+  }
+
+  /**
+   * Discrete transaction primitives — `begin` / `commit` / `rollback` as three
+   * separate calls, in contrast to {@link transaction}'s single-callback form.
+   *
+   * This trio exists for callers that cannot keep a JS closure on the stack for
+   * the lifetime of the transaction — chiefly the sandbox runner, where the
+   * hook/action body's `ctx.api.transaction(fn)` is driven across many host
+   * event-loop turns via deferred promises. Across those `setImmediate`
+   * boundaries the engine's ambient `txStore` (AsyncLocalStorage) does NOT
+   * survive, so the transaction handle is threaded **explicitly**: `begin`
+   * returns a child ScopedContext carrying `transaction: trx` in its execution
+   * context, and `resolveTx` honors that explicit handle ahead of the ambient
+   * store. Every `object(...)` op on the returned context therefore reuses the
+   * one connection without relying on ALS.
+   *
+   * Returns `null` when the driver has no transaction support — the caller then
+   * runs non-transactionally against `this` (same graceful degrade as
+   * {@link transaction}).
+   */
+  async beginTransaction(): Promise<{ ctx: ScopedContext; handle: unknown } | null> {
+    const driver = this.txDriver();
+    if (!driver) return null;
+    const trx = await driver.beginTransaction();
+    const ctx = new ScopedContext(
+      { ...this.executionContext, transaction: trx },
+      this.engine
+    );
+    return { ctx, handle: trx };
+  }
+
+  /** Commit a handle obtained from {@link beginTransaction}. */
+  async commitTransaction(handle: unknown): Promise<void> {
+    const driver = this.txDriver();
+    if (!driver) return;
+    if (driver.commit) await driver.commit(handle);
+    else if (driver.commitTransaction) await driver.commitTransaction(handle);
+  }
+
+  /** Roll back a handle obtained from {@link beginTransaction}. */
+  async rollbackTransaction(handle: unknown): Promise<void> {
+    const driver = this.txDriver();
+    if (!driver) return;
+    if (driver.rollback) await driver.rollback(handle);
+    else if (driver.rollbackTransaction) await driver.rollbackTransaction(handle);
+  }
+
   get userId() { return this.executionContext.userId; }
   get tenantId() { return this.executionContext.tenantId; }
   /** Alias for tenantId — matches ObjectQLContext.spaceId convention */
