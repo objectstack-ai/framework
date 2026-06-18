@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Mapping } from '@objectstack/spec';
+import type { Mapping } from '@objectstack/spec/data';
 
 /**
  * CSV import mapping for bulk lead upload.

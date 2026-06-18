@@ -93,6 +93,8 @@ export const JobSchema = lazySchema(() => z.object({
 }));
 
 export type Job = z.infer<typeof JobSchema>;
+/** Authoring input for {@link Job} — defaulted fields are optional. */
+export type JobInput = z.input<typeof JobSchema>;
 
 /**
  * Type-safe factory for declaring background jobs in metadata-as-code.

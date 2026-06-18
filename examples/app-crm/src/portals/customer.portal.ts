@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Portal } from '@objectstack/spec';
+import type { Portal } from '@objectstack/spec/ui';
 
 /**
  * Customer Self-Service Portal — external users can view their account,

@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Connector } from '@objectstack/spec';
+import type { ConnectorInput } from '@objectstack/spec/integration';
 
 /**
  * HubSpot connector — sync contacts and deals bi-directionally.
  * Uses OAuth2 for authentication; actual credentials come from environment.
  */
-export const HubSpotConnector: Connector = {
+export const HubSpotConnector: ConnectorInput = {
   name: 'hubspot_crm',
   label: 'HubSpot CRM',
   type: 'saas',
@@ -91,7 +91,7 @@ export const HubSpotConnector: Connector = {
 /**
  * Slack connector — post notifications to channels.
  */
-export const SlackConnector: Connector = {
+export const SlackConnector: ConnectorInput = {
   name: 'slack_notifications',
   label: 'Slack',
   type: 'api',

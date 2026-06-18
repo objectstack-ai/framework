@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { TranslationBundle } from '@objectstack/spec';
+import type { TranslationBundle } from '@objectstack/spec/system';
 
 /**
  * CRM translation bundle — English + Simplified Chinese.

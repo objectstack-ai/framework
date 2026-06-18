@@ -18,7 +18,7 @@ const taskHook: Hook = {
         input.status = 'not_started';
       }
       // Validation
-      if (input.subject && input.subject.includes('spam')) {
+      if (typeof input.subject === 'string' && input.subject.includes('spam')) {
         throw new Error('Spam tasks are not allowed');
       }
     }

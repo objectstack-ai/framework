@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { EmailTemplateDefinition } from '@objectstack/spec/system';
+import type { EmailTemplateDefinitionInput } from '@objectstack/spec/system';
 
 /**
  * Welcome email sent to a Contact after it's added to the CRM.
  * Demonstrates marketing-category templates with a clear CTA.
  */
-export const WelcomeEmail: EmailTemplateDefinition = {
+export const WelcomeEmail: EmailTemplateDefinitionInput = {
   name: 'crm.welcome',
   label: 'Welcome — New Contact',
   category: 'marketing',

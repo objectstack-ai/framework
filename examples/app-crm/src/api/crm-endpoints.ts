@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { ApiEndpoint } from '@objectstack/spec';
+import type { ApiEndpoint } from '@objectstack/spec/api';
 
 /**
  * Custom REST endpoint — exposes pipeline summary metrics.

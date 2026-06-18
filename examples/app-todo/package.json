@@ -40,6 +40,7 @@
     "@objectstack/cli": "workspace:*",
     "ai": "^6.0.205",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

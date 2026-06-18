@@ -1,25 +1,26 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Identity, Security } from '@objectstack/spec';
+import type * as Identity from '@objectstack/spec/identity';
+import type * as Security from '@objectstack/spec/security';
 
 /**
  * Example roles — a small sales hierarchy.
  */
-export const SalesRepRole: Identity.Role = {
+export const SalesRepRole: Identity.RoleInput = {
   name: 'sales_rep',
   label: 'Sales Representative',
   description: 'Front-line sales representative.',
 };
 
-export const SalesManagerRole: Identity.Role = {
+export const SalesManagerRole: Identity.RoleInput = {
   name: 'sales_manager',
   label: 'Sales Manager',
   description: 'Manages a team of sales reps.',
-  parentRole: 'sales_rep',
+  parent: 'sales_rep',
 };
 
 /** Referenced by the Discount Approval second step. */
-export const FinanceApproverRole: Identity.Role = {
+export const FinanceApproverRole: Identity.RoleInput = {
   name: 'finance_approver',
   label: 'Finance Approver',
   description: 'Finance team member authorised to approve discounts above 30%.',
@@ -30,10 +31,9 @@ export const FinanceApproverRole: Identity.Role = {
  *
  * Note: `objects` is a Record keyed by object name, not an array.
  */
-export const SalesUserPermissionSet: Security.PermissionSet = {
+export const SalesUserPermissionSet: Security.PermissionSetInput = {
   name: 'crm_sales_user',
   label: 'CRM Sales User',
-  description: 'Standard CRUD on CRM objects for sales team members.',
   isProfile: false,
   objects: {
     crm_account:     { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
@@ -52,10 +52,9 @@ export const SalesUserPermissionSet: Security.PermissionSet = {
  * `crm_lead` (not a short `lead`). INSERT-only — guests can never read, edit, or
  * delete any record.
  */
-export const GuestPortalProfile: Security.PermissionSet = {
+export const GuestPortalProfile: Security.PermissionSetInput = {
   name: 'guest_portal',
   label: 'Guest (Public Forms)',
-  description: 'Anonymous Web-to-Lead submitters — INSERT-only on crm_lead.',
   isProfile: true,
   objects: {
     crm_lead: { allowRead: false, allowCreate: true, allowEdit: false, allowDelete: false },

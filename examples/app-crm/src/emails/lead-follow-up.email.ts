@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { EmailTemplateDefinition } from '@objectstack/spec/system';
+import type { EmailTemplateDefinitionInput } from '@objectstack/spec/system';
 
 /**
  * Follow-up nudge sent by the Stale Opportunity workflow when no
  * activity has been logged on a Lead for the configured threshold.
  */
-export const LeadFollowUpEmail: EmailTemplateDefinition = {
+export const LeadFollowUpEmail: EmailTemplateDefinitionInput = {
   name: 'crm.lead_followup',
   label: 'Lead — Follow-Up Reminder',
   category: 'notification',

@@ -172,5 +172,7 @@ export const PermissionSetSchema = lazySchema(() => z.object({
 }));
 
 export type PermissionSet = z.infer<typeof PermissionSetSchema>;
+/** Authoring input for {@link PermissionSet} — defaulted fields are optional. */
+export type PermissionSetInput = z.input<typeof PermissionSetSchema>;
 export type ObjectPermission = z.infer<typeof ObjectPermissionSchema>;
 export type FieldPermission = z.infer<typeof FieldPermissionSchema>;

@@ -1,13 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { ObjectExtension } from '@objectstack/spec';
+import type { ObjectExtensionInput } from '@objectstack/spec/data';
 
 /**
  * Extends the built-in crm_contact object with social-media fields.
  * Demonstrates ObjectExtension — additive fields without re-declaring the
  * whole object schema.
  */
-export const ContactExtension: ObjectExtension = {
+export const ContactExtension: ObjectExtensionInput = {
   extend: 'crm_contact',
   label: 'Contact (CRM Extended)',
   fields: {

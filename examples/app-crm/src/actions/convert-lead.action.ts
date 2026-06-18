@@ -1,15 +1,14 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { UI } from '@objectstack/spec';
+import type * as UI from '@objectstack/spec/ui';
 
 /**
  * Row-level action on crm_lead — launches the Convert Lead screen flow wizard.
  * Shown as a button in the lead list row menu and in the lead record header.
  */
-export const ConvertLeadAction: UI.Action = {
+export const ConvertLeadAction: UI.ActionInput = {
   name: 'crm_convert_lead',
   label: 'Convert Lead',
-  description: 'Open the Convert Lead wizard to create an Opportunity from this Lead.',
   icon: 'ArrowRightCircle',
   objectName: 'crm_lead',
   type: 'flow',
