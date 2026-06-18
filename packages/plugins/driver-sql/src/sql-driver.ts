@@ -41,12 +41,13 @@ const GLOBAL_TENANT = '__global__';
  * the drift between them is exactly what let array-valued fields (multiselect/
  * checkboxes/tags/repeater/vector) reach the SQLite binder un-serialized and
  * crash with "SQLite3 can only bind numbers, strings, bigints, buffers, and
- * null" (#field-zoo). `image`/`file`/`avatar` hold structured upload metadata;
- * `composite`/`address`/`location` are objects; the rest are arrays.
+ * null" (#field-zoo). `image`/`file`/`avatar`/`video`/`audio` hold structured
+ * upload metadata; `composite`/`address`/`location`/`record` are objects; the
+ * rest are arrays.
  */
 const JSON_COLUMN_TYPES = new Set<string>([
-  'json', 'object', 'array',
-  'image', 'file', 'avatar',
+  'json', 'object', 'array', 'record',
+  'image', 'file', 'avatar', 'video', 'audio',
   'location', 'address', 'composite',
   'multiselect', 'checkboxes', 'tags', 'repeater', 'vector',
 ]);
@@ -1115,7 +1116,10 @@ export class SqlDriver implements IDataDriver {
           if (this.isJsonField(type, field)) {
             jsonCols.push(name);
           }
-          if (type === 'boolean') {
+          // `toggle` shares boolean storage/affinity, so it needs the same
+          // read coercion (stored 1/0 → JS true/false) or it leaks back as a
+          // number/string instead of a boolean (#field-zoo).
+          if (type === 'boolean' || type === 'toggle') {
             booleanCols.push(name);
           }
           if (type === 'date') {
@@ -1841,9 +1845,23 @@ export class SqlDriver implements IDataDriver {
       case 'number':
       case 'currency':
       case 'percent':
+      // `rating`/`slider`/`progress` are authored as numeric scalars (a star
+      // count, a slider position, a percent-of-completion). Without an explicit
+      // case they fell to `default → table.string`, giving the column TEXT
+      // affinity so SQLite coerced the written number to a string ('4' not 4) —
+      // a silent type-fidelity leak the value-loss tests didn't catch. REAL
+      // affinity round-trips them as JS numbers (#field-zoo).
+      case 'rating':
+      case 'slider':
+      case 'progress':
         col = table.float(name);
         break;
+      // `toggle` is a boolean rendered as a switch. Same leak as above (TEXT
+      // affinity stored '1'); a boolean column gives NUMERIC affinity and the
+      // `booleanFields` read-coercion below converts the stored 1/0 back to a
+      // real JS boolean.
       case 'boolean':
+      case 'toggle':
         col = table.boolean(name);
         break;
       case 'date':
@@ -1854,22 +1872,6 @@ export class SqlDriver implements IDataDriver {
         break;
       case 'time':
         col = table.time(name);
-        break;
-      case 'json':
-      case 'object':
-      case 'array':
-      case 'image':
-      case 'file':
-      case 'avatar':
-      case 'location':
-      case 'address':
-      case 'composite':
-      case 'multiselect':
-      case 'checkboxes':
-      case 'tags':
-      case 'repeater':
-      case 'vector':
-        col = table.json(name);
         break;
       case 'lookup':
         col = table.string(name);
@@ -1887,7 +1889,12 @@ export class SqlDriver implements IDataDriver {
       case 'formula':
         return; // Virtual — no column
       default:
-        col = table.string(name);
+        // Array/object-valued types are stored as a JSON column. Driven by the
+        // single `JSON_COLUMN_TYPES` source so this DDL switch and `isJsonField`
+        // (the read-side deserializer) can never drift — the drift between them
+        // is exactly what let array-valued fields reach the binder un-serialized
+        // (#field-zoo). Everything else is a plain string.
+        col = JSON_COLUMN_TYPES.has(type) ? table.json(name) : table.string(name);
     }
 
     if (col) {
