@@ -19,6 +19,15 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
 
   canHandle(query: AnalyticsQuery, ctx: StrategyContext): boolean {
     if (!query.cube) return false;
+    // This strategy groups by the raw column expression (`GROUP BY <col>`) and
+    // emits no `date_trunc` — it cannot bucket a date dimension to a coarser
+    // granularity, nor resolve buckets on a non-UTC calendar. When the query
+    // asks for granularity bucketing we therefore DECLINE so the lower-priority
+    // ObjectQLStrategy handles it via `engine.aggregate` (native date_trunc when
+    // UTC-safe, else uniform in-memory bucketing). Without this, a date-bucketed
+    // query silently grouped by the raw timestamp — one bucket per row — and a
+    // non-UTC reference timezone was ignored entirely (ADR-0053 Phase 2, #1982).
+    if (query.timeDimensions?.some((td) => !!td.granularity)) return false;
     const caps = ctx.queryCapabilities(query.cube);
     return caps.nativeSql && typeof ctx.executeRawSql === 'function';
   }

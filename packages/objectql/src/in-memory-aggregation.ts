@@ -93,7 +93,13 @@ function aggregateBucket(rows: any[], aggregations: AggregationNode[]): Record<s
     const alias = agg.alias;
     const fn = agg.function;
     if (fn === 'count') {
-      if (!agg.field) {
+      // `*` is the count-all sentinel: the Cube `count` measure and a dataset
+      // `count` with no field both compile to `sql: '*'` (→ SQL `COUNT(*)`).
+      // A row never has a literal `'*'` property, so the non-null branch below
+      // counted zero for every bucket — the driver's `COUNT(*)` masked it, but
+      // the in-memory path (tz≠UTC date buckets per #1982, driver-rest/-memory)
+      // returned 0. Treat `'*'` like a fieldless count over the bucket's rows.
+      if (!agg.field || agg.field === '*') {
         out[alias] = rows.length;
       } else {
         out[alias] = rows.reduce(
