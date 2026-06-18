@@ -22,6 +22,7 @@ import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 import { createRestApiPlugin } from '@objectstack/rest';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
+import { SharingServicePlugin } from '@objectstack/plugin-sharing';
 import { SettingsServicePlugin, LocalCryptoProvider } from '@objectstack/service-settings';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 
@@ -43,6 +44,10 @@ export interface DogfoodStack {
   raw(path: string, init?: RequestInit): Promise<Response>;
   /** Sign in through the real auth route; returns a bearer token. Defaults to the dev admin. */
   signIn(email?: string, password?: string): Promise<string>;
+  /** Sign up a NEW user through the real auth route; returns their bearer token.
+   *  The first user is the seeded dev admin, so a fresh sign-up is a plain member
+   *  (no roles/grants) — exactly what RLS cross-owner proofs need. */
+  signUp(email: string, password?: string, name?: string): Promise<string>;
   /** Convenience: an authed JSON request relative to `/api/v1`. */
   apiAs(token: string, method: string, path: string, body?: unknown): Promise<Response>;
   /** Tear down the kernel (close DB / HTTP handles). */
@@ -86,6 +91,10 @@ export async function bootDogfoodStack(
   await kernel.use(new AnalyticsServicePlugin());
   await kernel.use(new AuthPlugin({ secret: 'dogfood-regression-secret' }));
   await kernel.use(new SecurityPlugin());
+  // Sharing service — apps that declare `requires: ['sharing']` rely on it for
+  // record-share grants; without it their RLS/sharing rules are inert and the
+  // verifier would under-report authorization.
+  await kernel.use(new SharingServicePlugin());
 
   // REST + dispatcher route surfaces (mount onto the http-server service).
   await kernel.use(createRestApiPlugin({ api: { api: { requireAuth: true } } as never }));
@@ -133,6 +142,24 @@ export async function bootDogfoodStack(
     return data.token;
   };
 
+  const signUp = async (
+    email: string,
+    password = 'Member-Pass-123',
+    name?: string,
+  ): Promise<string> => {
+    const res = await api('/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: name ?? email.split('@')[0] }),
+    });
+    if (!res.ok) {
+      throw new Error(`dogfood signUp failed: ${res.status} ${await res.text()}`);
+    }
+    const data = (await res.json()) as { token?: string };
+    if (!data.token) throw new Error('dogfood signUp: no token in response');
+    return data.token;
+  };
+
   const apiAs = (token: string, method: string, path: string, body?: unknown) =>
     api(path, {
       method,
@@ -157,5 +184,5 @@ export async function bootDogfoodStack(
     }
   };
 
-  return { kernel, api, raw, signIn, apiAs, stop };
+  return { kernel, api, raw, signIn, signUp, apiAs, stop };
 }
