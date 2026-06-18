@@ -554,6 +554,10 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "图表配置",
         description: "图表专属配置"
       },
+      end_user_controls: {
+        label: "终端用户控制",
+        description: "终端用户在此视图上可执行的操作——快速筛选、筛选标签页、可视化切换（ADR-0047，对标 Airtable Interface）。"
+      },
       navigation_sharing: {
         label: "导航与共享",
         description: "视图出现在哪里以及谁可以查看"
@@ -636,6 +640,28 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       chart: {
         label: "图表"
+      },
+      userFilters: {
+        label: "用户筛选器",
+        helpText: "快速筛选栏：控件样式（下拉 / 标签页 / 开关）+ 暴露的字段或标签页预设"
+      },
+      tabs: {
+        label: "标签页",
+        helpText: "视图内筛选标签页——每个标签页应用各自的筛选规则"
+      },
+      appearance: {
+        label: "外观",
+        helpText: "allowedVisualizations：允许用户切换的渲染器"
+      },
+      userActions: {
+        label: "用户操作",
+        helpText: "工具栏开关：排序 / 搜索 / 筛选 / 行高"
+      },
+      addRecord: {
+        label: "添加记录"
+      },
+      showRecordCount: {
+        label: "显示记录数"
       },
       navigation: {
         label: "导航"

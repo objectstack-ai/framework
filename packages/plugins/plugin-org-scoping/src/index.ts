@@ -20,6 +20,7 @@
 export { OrgScopingPlugin } from './org-scoping-plugin.js';
 export type { OrgScopingPluginOptions } from './org-scoping-plugin.js';
 export { claimOrphanOrgRows } from './claim-orphan-org-rows.js';
+export { claimOrgSeedOwnership } from './claim-org-seed-ownership.js';
 export { cloneOrgSeedData } from './clone-org-seed-data.js';
 export {
   ensureDefaultOrganization,

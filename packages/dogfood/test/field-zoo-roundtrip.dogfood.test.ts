@@ -13,15 +13,18 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import showcaseStack from '@objectstack/example-showcase';
+import { SECRET_MASK } from '@objectstack/objectql';
 import { bootDogfoodStack, type DogfoodStack } from '../src/harness.js';
 
 // A field-type coverage entry. `write` is the value POSTed; `expect` describes
 // how the value must come back. `equal` = exact (or set-equal for arrays);
-// `computed`/`present` cover server-owned fields you don't write.
+// `computed`/`present` cover server-owned fields you don't write; `masked`
+// covers `secret`, which is encrypt-on-write and masked on read.
 type Check =
   | { kind: 'equal'; write: unknown }
   | { kind: 'setEqual'; write: unknown[] }
-  | { kind: 'present' } // server-assigned, just must be non-null
+  | { kind: 'present'; write?: unknown } // written but only asserted non-null (e.g. one-way/opaque)
+  | { kind: 'masked'; write: unknown } // secret: POSTed plaintext must read back as SECRET_MASK
   | { kind: 'computed'; expected: unknown }; // derived, asserted not written
 
 interface FieldCase {
@@ -64,13 +67,45 @@ const MATRIX: FieldCase[] = [
   { field: 'f_tags', type: 'tags', check: { kind: 'setEqual', write: ['alpha', 'beta', 'gamma'] } },
   // numeric scalar — same fidelity class as rating/slider (was TEXT-affinity)
   { field: 'f_progress', type: 'progress', check: { kind: 'equal', write: 60 } },
+  // rich text — all plain strings on the wire
+  { field: 'f_markdown', type: 'markdown', check: { kind: 'equal', write: '# Heading\n\nbody' } },
+  { field: 'f_html', type: 'html', check: { kind: 'equal', write: '<p>hi</p>' } },
+  { field: 'f_richtext', type: 'richtext', check: { kind: 'equal', write: '<b>rich</b>' } },
+  { field: 'f_code', type: 'code', check: { kind: 'equal', write: '{\n  "a": 1\n}' } },
+  { field: 'f_signature', type: 'signature', check: { kind: 'equal', write: 'data:image/png;base64,AAAA' } },
+  { field: 'f_qrcode', type: 'qrcode', check: { kind: 'equal', write: 'https://objectstack.ai' } },
+  // temporal — instant
+  { field: 'f_datetime', type: 'datetime', check: { kind: 'equal', write: '2024-03-15T14:30:00.000Z' } },
   // structured JSON
   { field: 'f_json', type: 'json', check: { kind: 'equal', write: { a: 1, b: [2, 3] } } },
   { field: 'f_color', type: 'color', check: { kind: 'equal', write: '#FF8800' } },
+  { field: 'f_vector', type: 'vector', check: { kind: 'equal', write: [0.1, 0.2, 0.3] } },
   // object-valued types that must store/parse as JSON, not stringify to TEXT
   { field: 'f_record', type: 'record', check: { kind: 'equal', write: { home: '+1', work: '+2' } } },
   { field: 'f_video', type: 'video', check: { kind: 'equal', write: { url: 'https://cdn/v.mp4', duration: 12 } } },
   { field: 'f_audio', type: 'audio', check: { kind: 'equal', write: { url: 'https://cdn/a.mp3', duration: 30 } } },
+  { field: 'f_composite', type: 'composite', check: { kind: 'equal', write: { label: 'x', n: 1 } } },
+  { field: 'f_repeater', type: 'repeater', check: { kind: 'equal', write: [{ a: 1 }, { a: 2 }] } },
+  { field: 'f_location', type: 'location', check: { kind: 'equal', write: { lat: 37.77, lng: -122.42 } } },
+  { field: 'f_address', type: 'address', check: { kind: 'equal', write: { street: '1 Main', city: 'SF', country: 'US' } } },
+  { field: 'f_image', type: 'image', check: { kind: 'equal', write: { url: 'https://cdn/i.png', alt: 'i' } } },
+  { field: 'f_file', type: 'file', check: { kind: 'equal', write: { url: 'https://cdn/f.pdf', name: 'f.pdf', size: 1024 } } },
+  { field: 'f_avatar', type: 'avatar', check: { kind: 'equal', write: { url: 'https://cdn/a.png' } } },
+  // relational — store a reference id as a string and read it back verbatim.
+  // FK enforcement is off in this harness, so this asserts value fidelity
+  // (id string → id string), not referential integrity / $expand (covered
+  // elsewhere). The point here is the stored type doesn't drift.
+  { field: 'f_lookup', type: 'lookup', check: { kind: 'equal', write: 'acc_synthetic_0001' } },
+  { field: 'f_master_detail', type: 'master_detail', check: { kind: 'equal', write: 'proj_synthetic_0001' } },
+  { field: 'f_tree', type: 'tree', check: { kind: 'equal', write: 'cat_synthetic_0001' } },
+  // security — `secret` encrypts on write and masks on read; `password` is a
+  // credential type the generic CRUD path stores opaquely (auth owns hashing),
+  // so assert it merely persists rather than asserting a plaintext contract.
+  { field: 'f_secret', type: 'secret', check: { kind: 'masked', write: 'topsecret-value' } },
+  { field: 'f_password', type: 'password', check: { kind: 'present', write: 'p@ssw0rd!' } },
+  // NB: f_summary (roll-up) is intentionally absent — it's a computed
+  // aggregate over related records, null on a childless fixture row; its
+  // semantics are covered by dedicated roll-up tests, not value fidelity.
   // computed / system — not written, must materialize
   { field: 'f_autonumber', type: 'autonumber', check: { kind: 'present' } },
   // f_number(42) * f_percent(75) / 100 = 31.5
@@ -85,11 +120,11 @@ describe('dogfood: field-type capability matrix round-trips over HTTP (#2004)', 
     stack = await bootDogfoodStack(showcaseStack);
     const token = await stack.signIn();
 
-    // Build the create body from every `equal`/`setEqual` entry (+ required name).
+    // Build the create body from every entry that carries a `write` value
+    // (+ required name). `present`/`computed` server-owned fields are skipped.
     const body: Record<string, unknown> = { name: 'zoo-roundtrip' };
     for (const c of MATRIX) {
-      if (c.check.kind === 'equal') body[c.field] = c.check.write;
-      else if (c.check.kind === 'setEqual') body[c.field] = c.check.write;
+      if ('write' in c.check && c.check.write !== undefined) body[c.field] = c.check.write;
     }
 
     const created = await stack.apiAs(token, 'POST', '/data/showcase_field_zoo', body);
@@ -127,7 +162,13 @@ describe('dogfood: field-type capability matrix round-trips over HTTP (#2004)', 
           break;
         }
         case 'present':
-          expect(actual ?? null, `${c.field} should be server-assigned`).not.toBeNull();
+          expect(actual ?? null, `${c.field} should be persisted`).not.toBeNull();
+          break;
+        case 'masked':
+          // secret never leaves the engine as plaintext — the write value is
+          // encrypted into sys_secret and the read path returns the mask.
+          expect(actual, `${c.field} should not echo plaintext`).not.toEqual(c.check.write);
+          expect(actual).toEqual(SECRET_MASK);
           break;
         case 'computed':
           expect(Number(actual)).toBeCloseTo(Number(c.check.expected), 5);

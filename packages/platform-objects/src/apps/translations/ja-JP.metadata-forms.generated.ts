@@ -554,6 +554,10 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "チャート",
         description: "チャート専用設定。"
       },
+      end_user_controls: {
+        label: "エンドユーザー操作",
+        description: "このビューでエンドユーザーが行える操作——クイックフィルター、フィルタータブ、可視化切り替え（ADR-0047、Airtable Interface 互換）。"
+      },
       navigation_sharing: {
         label: "ナビゲーションと共有",
         description: "このビューの表示場所と閲覧可能者。"
@@ -636,6 +640,28 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       chart: {
         label: "チャート"
+      },
+      userFilters: {
+        label: "ユーザーフィルター",
+        helpText: "クイックフィルターバー：要素スタイル（ドロップダウン / タブ / トグル）+ 公開フィールドまたはタブプリセット"
+      },
+      tabs: {
+        label: "タブ",
+        helpText: "ビュー内フィルタータブ——各タブが独自のフィルタールールを適用"
+      },
+      appearance: {
+        label: "外観",
+        helpText: "allowedVisualizations：ユーザーが切り替え可能なレンダラー"
+      },
+      userActions: {
+        label: "ユーザーアクション",
+        helpText: "ツールバーの切り替え：並べ替え / 検索 / フィルター / 行の高さ"
+      },
+      addRecord: {
+        label: "レコードを追加"
+      },
+      showRecordCount: {
+        label: "レコード数を表示"
       },
       navigation: {
         label: "ナビゲーション"

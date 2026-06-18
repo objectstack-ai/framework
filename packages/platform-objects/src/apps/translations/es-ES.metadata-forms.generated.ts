@@ -554,6 +554,10 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "Gráfico",
         description: "Configuración específica de gráfico."
       },
+      end_user_controls: {
+        label: "Controles de usuario final",
+        description: "Lo que los usuarios finales pueden hacer en esta vista: filtros rápidos, pestañas de filtro, cambio de visualización (ADR-0047, paridad con Airtable Interface)."
+      },
       navigation_sharing: {
         label: "Navegación y uso compartido",
         description: "Dónde aparece esta vista y quién puede verla."
@@ -636,6 +640,28 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       chart: {
         label: "Gráfico"
+      },
+      userFilters: {
+        label: "Filtros de usuario",
+        helpText: "Barra de filtros rápidos: estilo de elemento (desplegable / pestañas / interruptor) + campos expuestos o preajustes de pestañas"
+      },
+      tabs: {
+        label: "Pestañas",
+        helpText: "Pestañas de filtro en la vista: cada pestaña aplica sus propias reglas de filtro"
+      },
+      appearance: {
+        label: "Apariencia",
+        helpText: "allowedVisualizations: qué renderizadores pueden alternar los usuarios"
+      },
+      userActions: {
+        label: "Acciones de usuario",
+        helpText: "Conmutadores de la barra de herramientas: ordenar / buscar / filtrar / altura de fila"
+      },
+      addRecord: {
+        label: "Agregar registro"
+      },
+      showRecordCount: {
+        label: "Mostrar recuento de registros"
       },
       navigation: {
         label: "Navegación"

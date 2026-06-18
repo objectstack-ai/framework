@@ -22,6 +22,7 @@ import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 import { createRestApiPlugin } from '@objectstack/rest';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
+import { SharingServicePlugin } from '@objectstack/plugin-sharing';
 import { SettingsServicePlugin, LocalCryptoProvider } from '@objectstack/service-settings';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 
@@ -43,6 +44,10 @@ export interface DogfoodStack {
   raw(path: string, init?: RequestInit): Promise<Response>;
   /** Sign in through the real auth route; returns a bearer token. Defaults to the dev admin. */
   signIn(email?: string, password?: string): Promise<string>;
+  /** Sign up a NEW user through the real auth route; returns their bearer token.
+   *  The first user is the seeded dev admin, so a fresh sign-up is a plain member
+   *  (no roles/grants) — exactly what RLS cross-owner proofs need. */
+  signUp(email: string, password?: string, name?: string): Promise<string>;
   /** Convenience: an authed JSON request relative to `/api/v1`. */
   apiAs(token: string, method: string, path: string, body?: unknown): Promise<Response>;
   /** Tear down the kernel (close DB / HTTP handles). */
@@ -52,6 +57,24 @@ export interface DogfoodStack {
 export interface BootOptions {
   /** Override the dev admin credentials the harness signs in with. */
   admin?: { email: string; password: string };
+  /**
+   * Override the SecurityPlugin instance. Pass a `new SecurityPlugin({...})`
+   * to carry a custom `fallbackPermissionSet` / extra permission sets — this
+   * is how the owner-isolated RLS fixture makes a fresh member fall back to a
+   * permission set that carries `RLS.ownerPolicy(...)` instead of the broad-read
+   * `member_default`. Defaults to a vanilla `new SecurityPlugin()`.
+   */
+  security?: SecurityPlugin;
+  /**
+   * Boot multi-tenant: register `@objectstack/plugin-org-scoping` BEFORE the
+   * SecurityPlugin so the wildcard `organization_id` RLS policies that ship in
+   * the default permission sets actually apply (SecurityPlugin probes the
+   * `org-scoping` service once at start and otherwise STRIPS them — see
+   * `collectRLSPolicies`). This exercises the org-scoped isolation real apps
+   * (e.g. hotcrm) rely on, rather than the single-tenant default where every
+   * tenant policy is stripped and a member sees every row. Default `false`.
+   */
+  multiTenant?: boolean;
 }
 
 /**
@@ -85,7 +108,21 @@ export async function bootDogfoodStack(
   await kernel.use(new SettingsServicePlugin());
   await kernel.use(new AnalyticsServicePlugin());
   await kernel.use(new AuthPlugin({ secret: 'dogfood-regression-secret' }));
-  await kernel.use(new SecurityPlugin());
+
+  // Multi-tenant: org-scoping MUST register BEFORE SecurityPlugin — the latter
+  // probes the `org-scoping` service exactly once at start and caches it, then
+  // keeps (vs strips) the wildcard `organization_id` RLS policies accordingly.
+  // Mirrors `plugin-dev`'s ordering for `OS_MULTI_ORG_ENABLED`.
+  if (opts.multiTenant) {
+    const { OrgScopingPlugin } = await import('@objectstack/plugin-org-scoping');
+    await kernel.use(new OrgScopingPlugin());
+  }
+
+  await kernel.use(opts.security ?? new SecurityPlugin());
+  // Sharing service — apps that declare `requires: ['sharing']` rely on it for
+  // record-share grants; without it their RLS/sharing rules are inert and the
+  // verifier would under-report authorization.
+  await kernel.use(new SharingServicePlugin());
 
   // REST + dispatcher route surfaces (mount onto the http-server service).
   await kernel.use(createRestApiPlugin({ api: { api: { requireAuth: true } } as never }));
@@ -133,6 +170,24 @@ export async function bootDogfoodStack(
     return data.token;
   };
 
+  const signUp = async (
+    email: string,
+    password = 'Member-Pass-123',
+    name?: string,
+  ): Promise<string> => {
+    const res = await api('/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: name ?? email.split('@')[0] }),
+    });
+    if (!res.ok) {
+      throw new Error(`dogfood signUp failed: ${res.status} ${await res.text()}`);
+    }
+    const data = (await res.json()) as { token?: string };
+    if (!data.token) throw new Error('dogfood signUp: no token in response');
+    return data.token;
+  };
+
   const apiAs = (token: string, method: string, path: string, body?: unknown) =>
     api(path, {
       method,
@@ -157,5 +212,5 @@ export async function bootDogfoodStack(
     }
   };
 
-  return { kernel, api, raw, signIn, apiAs, stop };
+  return { kernel, api, raw, signIn, signUp, apiAs, stop };
 }

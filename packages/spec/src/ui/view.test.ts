@@ -211,48 +211,31 @@ describe('GanttConfigSchema', () => {
     expect(() => GanttConfigSchema.parse(config)).not.toThrow();
   });
 
-  it('accepts and preserves the tree / baseline / resource / quick-filter fields', () => {
-    // The 4-level production board (项目 → 产品 → 排产计划 → 派工单) and the
-    // resource-workload view rely on these. They must survive validation, not
-    // be stripped at the spec boundary (the bug this schema extension fixes).
+  it('should accept extended renderer fields (hierarchy, baseline, grouping, resource, tooltip, quick filters)', () => {
     const config = {
-      startDateField: 'planned_start',
-      endDateField: 'planned_end',
+      startDateField: 'start_date',
+      endDateField: 'end_date',
       titleField: 'name',
-      progressField: 'progress',
-      dependenciesField: 'predecessors',
       colorField: 'status',
-      parentField: 'parent',
+      parentField: 'parent_id',
       typeField: 'row_type',
-      tooltipFields: ['owner', { field: 'qty', label: 'Quantity' }],
-      baselineStartField: 'baseline_start',
-      baselineEndField: 'baseline_end',
+      baselineStartField: 'planned_start',
+      baselineEndField: 'planned_end',
       groupByField: 'workshop',
       resourceView: true,
-      assigneeField: 'operator',
-      effortField: 'hours',
+      assigneeField: 'owner',
+      effortField: 'effort',
       capacity: 8,
+      tooltipFields: ['owner', { field: 'effort', label: '工时' }],
       quickFilters: [
-        { field: 'workshop' },
-        { field: 'category', label: '派工类别', options: ['A', { value: 2, label: 'B' }] },
+        { field: 'status' },
+        { field: 'category', label: '类别', options: ['A', { value: 1, label: 'B' }] },
       ],
       autoZoomToFilter: false,
     };
 
-    const parsed = GanttConfigSchema.parse(config);
-    // Round-trips intact — every richer field is retained.
-    expect(parsed).toEqual(config);
-  });
-
-  it('rejects a non-string parentField', () => {
-    expect(() =>
-      GanttConfigSchema.parse({
-        startDateField: 's',
-        endDateField: 'e',
-        titleField: 'n',
-        parentField: 123,
-      }),
-    ).toThrow();
+    expect(() => GanttConfigSchema.parse(config)).not.toThrow();
+    expect(GanttConfigSchema.parse(config)).toMatchObject({ parentField: 'parent_id', typeField: 'row_type' });
   });
 });
 

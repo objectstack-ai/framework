@@ -82,7 +82,10 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     if (normalizedFilters.length > 0) {
       for (const filter of normalizedFilters) {
         const colExpr = this.resolveFieldSql(cube, filter.member, tableName, joins);
-        const clause = this.buildFilterClause(colExpr, filter.operator, filter.values, params);
+        // Resolve the (object, column) this member binds against so the value
+        // can be coerced to the column's storage form (see buildFilterClause).
+        const target = this.resolveStorageTarget(cube, filter.member, tableName);
+        const clause = this.buildFilterClause(colExpr, filter.operator, filter.values, params, ctx, target);
         if (clause) whereClauses.push(clause);
       }
     }
@@ -94,7 +97,14 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
         if (td.dateRange) {
           const range = Array.isArray(td.dateRange) ? td.dateRange : [td.dateRange, td.dateRange];
           if (range.length === 2) {
-            params.push(range[0], range[1]);
+            // Same epoch-vs-text root cause as buildFilterClause: a dateRange on a
+            // SQLite `Field.datetime` column compares ISO TEXT against an INTEGER
+            // epoch and matches nothing. Coerce both bounds to the storage form.
+            const td2 = this.resolveStorageTarget(cube, td.dimension, tableName);
+            params.push(
+              this.coerceTemporal(ctx, td2, range[0]),
+              this.coerceTemporal(ctx, td2, range[1]),
+            );
             whereClauses.push(`${colExpr} BETWEEN $${params.length - 1} AND $${params.length}`);
           }
         }
@@ -318,7 +328,68 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     return fieldName;
   }
 
-  private buildFilterClause(col: string, operator: string, values: string[] | undefined, params: unknown[]): string | null {
+  /**
+   * Resolve the (object, column) a filter member binds against, so its
+   * comparand can be coerced to that column's on-disk storage form.
+   *
+   * Mirrors `resolveFieldSql`'s `sql` resolution but yields the *logical*
+   * target rather than the qualified SQL:
+   *   - A dotted column (`account.region`, emitted for a relation traversal)
+   *     belongs to the JOINED object — resolve the alias → target table via the
+   *     cube's `joins` map (alias `account` → object `crm_account` when
+   *     namespaced) and take the tail as the column.
+   *   - Otherwise the column lives on the cube's BASE table. Use the dimension's
+   *     resolved `sql` (the real column, which may differ from the member name,
+   *     e.g. dimension `assessed` → column `assessed_at`) rather than the member.
+   */
+  private resolveStorageTarget(
+    cube: Cube,
+    member: string,
+    baseTable: string,
+  ): { object: string; field: string } {
+    const dim = this.lookupMember(cube, member, 'dimension');
+    const measure = dim ? undefined : this.lookupMember(cube, member, 'measure');
+    const rawSql = dim?.sql ?? measure?.sql ?? (member.includes('.') ? member.split('.').slice(1).join('.') : member);
+
+    if (rawSql.includes('.')) {
+      const [alias, ...rest] = rawSql.split('.');
+      const object = cube.joins?.[alias]?.name ?? alias;
+      return { object, field: rest.join('.') };
+    }
+    return { object: baseTable, field: rawSql };
+  }
+
+  /**
+   * Apply the storage-form coercion for a single comparand. Prefers the
+   * driver-backed `coerceTemporalFilterValue` hook (single source of truth for
+   * the date/datetime storage convention — see StrategyContext); when the hook
+   * is absent, or returns the value unchanged (the field is not a temporal
+   * column, or the dialect stores it as a native timestamp), falls back to the
+   * generic boolean/number recovery so non-temporal typed columns still bind
+   * correctly.
+   */
+  private coerceTemporal(
+    ctx: StrategyContext,
+    target: { object: string; field: string },
+    value: string,
+  ): unknown {
+    if (typeof ctx.coerceTemporalFilterValue === 'function') {
+      const coerced = ctx.coerceTemporalFilterValue(target.object, target.field, value);
+      // Hook returns the value untouched for non-temporal / native-timestamp
+      // columns; only short-circuit when it actually changed the value.
+      if (coerced !== value) return coerced;
+    }
+    return coerceFilterValueForSql(value);
+  }
+
+  private buildFilterClause(
+    col: string,
+    operator: string,
+    values: string[] | undefined,
+    params: unknown[],
+    ctx: StrategyContext,
+    target: { object: string; field: string },
+  ): string | null {
     const opMap: Record<string, string> = {
       equals: '=', notEquals: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=',
       contains: 'LIKE', notContains: 'NOT LIKE',
@@ -329,7 +400,10 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
 
     if (operator === 'in' || operator === 'notIn') {
       if (!values || values.length === 0) return null;
-      const placeholders = values.map(v => { params.push(coerceFilterValueForSql(v)); return `$${params.length}`; }).join(', ');
+      // Dates can legitimately appear in an `in`/`notIn` set (e.g. a multi-day
+      // KPI), so coerce each element to the column's storage form too — same
+      // SQLite epoch-vs-text root cause as the scalar operators below.
+      const placeholders = values.map(v => { params.push(this.coerceTemporal(ctx, target, v)); return `$${params.length}`; }).join(', ');
       return `${col} ${operator === 'in' ? 'IN' : 'NOT IN'} (${placeholders})`;
     }
 
@@ -339,10 +413,13 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     if (operator === 'contains' || operator === 'notContains') {
       params.push(`%${values[0]}%`);
     } else {
-      // Coerce so booleans/numbers bind as their native SQL types
-      // (avoids '1' (text) vs 1 (integer) mismatches against typed
-      // boolean columns under SQLite/Postgres).
-      params.push(coerceFilterValueForSql(values[0]));
+      // Coerce so booleans/numbers bind as their native SQL types AND so a
+      // relative-date / ISO-string comparand on a SQLite `Field.datetime`
+      // column is converted to its INTEGER epoch storage form. Without this a
+      // dashboard filter like `assessed_at >= '2025-06-18'` compiles to a
+      // TEXT-vs-INTEGER affinity compare that is always false → "No rows",
+      // even though the rows exist (the confirmed time-series chart bug).
+      params.push(this.coerceTemporal(ctx, target, values[0]));
     }
     return `${col} ${sqlOp} $${params.length}`;
   }
