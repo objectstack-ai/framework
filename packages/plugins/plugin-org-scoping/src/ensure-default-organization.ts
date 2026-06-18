@@ -32,6 +32,8 @@
  * handle the seed-data side for those flows.
  */
 
+import { claimOrgSeedOwnership } from './claim-org-seed-ownership.js';
+
 interface EnsureOptions {
   logger?: {
     info: (message: string, meta?: Record<string, any>) => void;
@@ -73,6 +75,8 @@ export interface EnsureDefaultOrganizationResult {
   memberCreated: boolean;
   /** Human-readable reason when the helper short-circuited. */
   reason?: 'no_admin' | 'admin_already_in_org' | 'org_insert_failed' | 'member_insert_failed';
+  /** Count of the default org's seeded rows re-owned to the platform admin. */
+  ownershipClaimed?: number;
 }
 
 /**
@@ -170,5 +174,21 @@ export async function ensureDefaultOrganization(
     `[org-scoping] bound platform admin to default organization (${defaultOrgId})`,
     { userId: adminUserId, defaultOrgId },
   );
-  return { defaultOrgCreated, defaultOrgId, memberCreated: true };
+
+  // 6. Hand the default org's seeded rows (owner_id NULL) to the admin so
+  //    owner-keyed UX works out of the box — the multi-tenant companion to the
+  //    single-tenant first-admin handoff. Best-effort; never undoes the bind.
+  let ownershipClaimed = 0;
+  if (defaultOrgId) {
+    try {
+      const claims = await claimOrgSeedOwnership(ql, defaultOrgId, adminUserId, { logger });
+      ownershipClaimed = claims.reduce((s, c) => s + c.count, 0);
+    } catch (e) {
+      logger?.warn?.('[org-scoping] default-org seed ownership handoff failed', {
+        error: (e as Error).message,
+      });
+    }
+  }
+
+  return { defaultOrgCreated, defaultOrgId, memberCreated: true, ownershipClaimed };
 }
