@@ -22,7 +22,7 @@ import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 import { createRestApiPlugin } from '@objectstack/rest';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
-import { SettingsServicePlugin } from '@objectstack/service-settings';
+import { SettingsServicePlugin, LocalCryptoProvider } from '@objectstack/service-settings';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 
 /** A Hono app exposes `.request(path, init)` returning a standard `Response`. */
@@ -93,6 +93,18 @@ export async function bootDogfoodStack(
 
   // Fire the ready lifecycle: seed data, dev-admin bootstrap, route registration.
   await kernel.bootstrap();
+
+  // Secret fields (Field.secret) refuse to persist without a crypto provider —
+  // mirror `objectstack dev`, which wires LocalCryptoProvider in development so
+  // an app with an encrypted field is exercisable end-to-end.
+  try {
+    const engine = await kernel.getServiceAsync<{ setCryptoProvider?: (p: unknown) => void }>('objectql');
+    if (engine && typeof engine.setCryptoProvider === 'function') {
+      engine.setCryptoProvider(new LocalCryptoProvider());
+    }
+  } catch {
+    /* no engine / no crypto support — secret fields will fail closed, as in prod */
+  }
 
   const httpServer = await kernel.getServiceAsync<{ getRawApp(): InjectableApp; close?(): Promise<void> }>(
     'http-server',
