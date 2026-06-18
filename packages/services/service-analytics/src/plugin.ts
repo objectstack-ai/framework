@@ -33,6 +33,24 @@ interface DataEngineLike {
       options?: Array<{ value: unknown; label?: string }>;
     }>;
   } | undefined;
+  /**
+   * Resolve the storage driver backing an object (public ObjectQL accessor).
+   * Used to delegate temporal filter-value coercion to the driver, which is the
+   * single source of truth for how a `Field.date`/`Field.datetime` is stored on
+   * the active dialect. The driver may expose `temporalFilterValue(object, field,
+   * value)` (SqlDriver does); when absent we leave the value untouched.
+   */
+  getDriverForObject?(objectName: string): DriverLike | undefined;
+}
+
+/** Minimal driver surface the analytics layer probes for temporal coercion. */
+interface DriverLike {
+  /**
+   * Coerce a filter comparand to the column's on-disk storage form
+   * (SQLite `Field.datetime` → epoch ms; `Field.date` → YYYY-MM-DD; native
+   * timestamp / non-temporal → unchanged). Optional — only SqlDriver implements it.
+   */
+  temporalFilterValue?(objectName: string, field: string, value: unknown): unknown;
 }
 
 /**
@@ -381,6 +399,31 @@ export class AnalyticsServicePlugin implements Plugin {
       return pending ? rows : null;
     };
 
+    // Temporal storage-form coercion (fixes the SQLite datetime "No rows" bug).
+    // The raw-SQL strategy binds dashboard relative-date tokens (already expanded
+    // to ISO strings) directly, bypassing the driver's CRUD coercion. Delegate to
+    // the driver — the single source of truth for the on-disk storage convention —
+    // so a `Field.datetime` ISO comparand becomes epoch ms on SQLite, while
+    // `Field.date` text and native-timestamp (Postgres) columns pass through
+    // unchanged. Resolved at call time so plugin-init order does not matter.
+    const coerceTemporalFilterValue = (
+      objectName: string,
+      fieldName: string,
+      value: unknown,
+    ): unknown => {
+      try {
+        const svc = ctx.getService<DataEngineLike>('data');
+        const driver = svc?.getDriverForObject?.(objectName);
+        if (driver && typeof driver.temporalFilterValue === 'function') {
+          return driver.temporalFilterValue(objectName, fieldName, value);
+        }
+      } catch {
+        // No data engine / driver, or it doesn't support coercion — leave the
+        // value as-is (today's behaviour; safe for text/native-timestamp paths).
+      }
+      return value;
+    };
+
     const config: AnalyticsServiceConfig = {
       cubes: this.options.cubes,
       logger: ctx.logger,
@@ -390,6 +433,7 @@ export class AnalyticsServicePlugin implements Plugin {
       fallbackService,
       getReadScope,
       getAllowedRelationships: this.options.getAllowedRelationships,
+      coerceTemporalFilterValue,
       relationshipResolver,
       labelResolver,
       draftRowsResolver,

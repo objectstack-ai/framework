@@ -332,3 +332,73 @@ Cron day-boundaries (`sys_job`) need **no change** — already tz-wired via cron
 Every slice is feature-flaggable behind "reference timezone unset → UTC". With no org
 reference timezone configured, the resolver returns `'UTC'` and all compute/render
 paths are byte-for-byte today's behavior — the safe default and the rollback target.
+
+---
+
+## Addendum (2026-06-18) — the analytics raw-SQL filter path and the temporal-coercion contract
+
+> **Status:** first increment landed (commit `6f4cf856e`, branch
+> `fix/analytics-datetime-epoch-filter`). This addendum records a gap ADR-0053 did
+> **not** reach and the contract follow-ups it implies. It extends, and does not
+> revise, the decision above.
+
+### The gap
+
+ADR-0053 fixed the `date`-as-string-vs-instant family (#1874) on the driver CRUD
+path, and Phase 1 explicitly left `Field.datetime` stored as UTC epoch ms
+(`sql-driver.ts:1500`, decision step 4). But analytics has a **second filter
+surface that never touches that coercion**: `NativeSQLStrategy` builds raw SQL and
+runs it via `engine.execute`, bypassing the driver's dialect-aware
+`coerceFilterValue` (`sql-driver.ts:1543`). `buildFilterClause` emits
+`${col} <op> $N` and binds the comparand directly
+(`native-sql-strategy.ts:385-425`); the only type recovery was
+`coerceFilterValueForSql`, which re-derives a type by **regex on the value's
+shape** — no schema type, no date branch (`filter-normalizer.ts:127-140`).
+
+So a dashboard relative-date token resolved to an ISO string (`"2025-06-18"`),
+filtered against a `Field.datetime` column stored as an INTEGER epoch on SQLite,
+compiled to `epoch >= 'ISO'` — a TEXT-vs-INTEGER affinity compare that is **always
+false → 0 rows / empty chart**. This is the `datetime` analogue of the `date`
+equality miss Phase 1 fixed, on the one path 0053 did not address.
+
+### Decisions
+
+**D-A1 — The driver is the single source of dialect truth for filter-value
+coercion; every raw-SQL surface routes through it.** Invariant: any surface that
+binds a filter comparand into raw SQL (analytics `NativeSQLStrategy` today, and any
+future raw-SQL strategy) **must** coerce through the driver's dialect-aware
+temporal coercion, never re-derive a type from the value's textual shape. This
+closes the `datetime` analogue of Phase 1's `date` fix on the path 0053 did not
+reach. The first increment — commit `6f4cf856e` (branch
+`fix/analytics-datetime-epoch-filter`) — exposes the driver's coercion to
+analytics via a new `StrategyContext.coerceTemporalFilterValue(object, field,
+value)` hook delegating to the driver, applied across `gte/lte/gt/lt/equals`,
+`in/notIn`, and the `dateRange`/timeDimension path (`native-sql-strategy.ts:371`,
+`:88-106`). SQLite `datetime` → epoch ms; `date` text and native-timestamp
+dialects (Postgres/MySQL) pass through unchanged. **Record this PR as ledger
+evidence** — the same enforce-resolution pattern D3 uses for the dead schedule
+fields.
+
+**D-A2 — Formalize `temporalFilterValue` onto the `IDataDriver` contract.** The
+hook currently delegates to a **duck-typed** `driver.temporalFilterValue(...)`
+that is not on the driver contract. Promote it to a first-class
+`IDataDriver`-contract method so every consumer relies on a stable surface, and
+**demote the regex-shape `coerceFilterValueForSql` to a last-resort fallback (or
+retire it)** once the contract method is universal. (If an in-flight
+`IDataDriver`-interface change is open, align this with it; do not block on it.)
+
+**D-A3 — Add a temporal conformance matrix as the runtime regression backstop.**
+Cover `field-type {date, datetime} × operator {eq, gte/lte/gt/lt, in, dateRange} ×
+relative-token {today, N_days_ago, N_months_ago, …} × driver {SQLite, Postgres at
+minimum}`, asserting correct **row results** — not just emitted SQL. Analytics has
+been refactored repeatedly; this seam must not silently regress. This complements
+the #1950 build-time lint ADR-0053 already references: the lint warns at author
+time, the matrix proves runtime correctness across drivers.
+
+### Consequences
+
+- The `datetime`-on-raw-SQL filter bug is closed at the driver boundary, mirroring
+  Phase 1's "align the consumer with the driver's existing contract rather than
+  inventing a semantic" stance. No change to Phase 2's reference-timezone plan.
+- Until D-A2 lands, the hook depends on a duck-typed driver method — a known,
+  intentionally-temporary seam tracked here.
