@@ -52,6 +52,27 @@ const JSON_COLUMN_TYPES = new Set<string>([
   'multiselect', 'checkboxes', 'tags', 'repeater', 'vector',
 ]);
 
+/**
+ * Field types whose value is a numeric scalar. SINGLE SOURCE for the DDL
+ * column-type switch (these map to INTEGER/REAL columns) and the read-side
+ * coercion registry (`numericFields`).
+ *
+ * The read coercion exists so the fix is robust on SQLite even when the column
+ * predates it: a `rating`/`slider`/`progress` column created before #2025 has
+ * TEXT affinity and returns '4' not 4, and SQLite never alters a column's type
+ * in-place (the reconciler only ADDS columns). Coercing numeric-looking strings
+ * back to numbers on read transparently repairs those legacy rows — mirroring
+ * how `dateFields` repairs legacy timestamp-typed `Field.date` rows — so the
+ * type fidelity no longer depends on column affinity alone. `toggle`/`record`
+ * already self-heal this way via `booleanFields`/`jsonFields`; this closes the
+ * gap for the numeric scalars.
+ */
+const NUMERIC_SCALAR_TYPES = new Set<string>([
+  'integer', 'int',
+  'float', 'number', 'currency', 'percent', 'summary',
+  'rating', 'slider', 'progress',
+]);
+
 // ── Introspection Types ──────────────────────────────────────────────────────
 
 export interface IntrospectedColumn {
@@ -172,6 +193,7 @@ export class SqlDriver implements IDataDriver {
   protected config: Knex.Config;
   protected jsonFields: Record<string, string[]> = {};
   protected booleanFields: Record<string, string[]> = {};
+  protected numericFields: Record<string, string[]> = {};
   protected dateFields: Record<string, Set<string>> = {};
   protected datetimeFields: Record<string, Set<string>> = {};
   protected tablesWithTimestamps: Set<string> = new Set();
@@ -1090,6 +1112,7 @@ export class SqlDriver implements IDataDriver {
 
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];
+      const numericCols: string[] = [];
       const autoNumberCols: Array<{ name: string; format: string; prefix: string; padWidth: number; tenantField: string | null }> = [];
       // Auto-detect tenant field. Convention: the field named
       // `organization_id` (matching tenantPolicy default) scopes the
@@ -1122,6 +1145,12 @@ export class SqlDriver implements IDataDriver {
           if (type === 'boolean' || type === 'toggle') {
             booleanCols.push(name);
           }
+          // Numeric scalars are coerced back to JS numbers on read so legacy
+          // TEXT-affinity columns (created before they were mapped to a numeric
+          // column) still return numbers, not strings — see NUMERIC_SCALAR_TYPES.
+          if (NUMERIC_SCALAR_TYPES.has(type) && !field.multiple) {
+            numericCols.push(name);
+          }
           if (type === 'date') {
             (this.dateFields[tableName] ??= new Set()).add(name);
           }
@@ -1144,6 +1173,7 @@ export class SqlDriver implements IDataDriver {
       }
       this.jsonFields[tableName] = jsonCols;
       this.booleanFields[tableName] = booleanCols;
+      this.numericFields[tableName] = numericCols;
       this.autoNumberFields[tableName] = autoNumberCols;
       this.tenantFieldByTable[tableName] = tenantField;
 
@@ -2099,6 +2129,23 @@ export class SqlDriver implements IDataDriver {
         for (const field of booleanFields) {
           if (data[field] !== undefined && data[field] !== null) {
             data[field] = Boolean(data[field]);
+          }
+        }
+      }
+
+      // Numeric scalars stored on a legacy TEXT-affinity column come back as
+      // strings ('4'); coerce numeric-looking strings back to numbers so the
+      // declared type wins regardless of when the column was created. Only
+      // touch strings — a fresh REAL/INTEGER column already yields a number,
+      // and a genuinely non-numeric value (junk legacy data) is left intact
+      // rather than turned into NaN. See NUMERIC_SCALAR_TYPES.
+      const numericFields = this.numericFields[object];
+      if (numericFields && numericFields.length > 0) {
+        for (const field of numericFields) {
+          const v = data[field];
+          if (typeof v === 'string' && v.trim() !== '') {
+            const n = Number(v);
+            if (!Number.isNaN(n)) data[field] = n;
           }
         }
       }

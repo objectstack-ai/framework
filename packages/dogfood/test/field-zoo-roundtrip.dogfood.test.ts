@@ -62,9 +62,15 @@ const MATRIX: FieldCase[] = [
   { field: 'f_multiselect', type: 'multiselect', check: { kind: 'setEqual', write: ['red', 'blue'] } },
   { field: 'f_checkboxes', type: 'checkboxes', check: { kind: 'setEqual', write: ['email', 'push'] } },
   { field: 'f_tags', type: 'tags', check: { kind: 'setEqual', write: ['alpha', 'beta', 'gamma'] } },
+  // numeric scalar — same fidelity class as rating/slider (was TEXT-affinity)
+  { field: 'f_progress', type: 'progress', check: { kind: 'equal', write: 60 } },
   // structured JSON
   { field: 'f_json', type: 'json', check: { kind: 'equal', write: { a: 1, b: [2, 3] } } },
   { field: 'f_color', type: 'color', check: { kind: 'equal', write: '#FF8800' } },
+  // object-valued types that must store/parse as JSON, not stringify to TEXT
+  { field: 'f_record', type: 'record', check: { kind: 'equal', write: { home: '+1', work: '+2' } } },
+  { field: 'f_video', type: 'video', check: { kind: 'equal', write: { url: 'https://cdn/v.mp4', duration: 12 } } },
+  { field: 'f_audio', type: 'audio', check: { kind: 'equal', write: { url: 'https://cdn/a.mp3', duration: 30 } } },
   // computed / system — not written, must materialize
   { field: 'f_autonumber', type: 'autonumber', check: { kind: 'present' } },
   // f_number(42) * f_percent(75) / 100 = 31.5
