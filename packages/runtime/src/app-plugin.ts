@@ -534,10 +534,10 @@ export class AppPlugin implements Plugin {
                              defaultMode: 'upsert',
                              multiPass: true,
                              organizationId,
-                             // Bind os.user (system identity) and os.org (this
-                             // tenant) so identity-derived seed values resolve
-                             // per-org. org.id falls back to organizationId
-                             // inside the loader when identity.org is absent.
+                             // `os.org` is derived from organizationId inside
+                             // the loader. `seedIdentity` (os.user) is undefined
+                             // unless a seed embeds `cel`os.user.id`` — see the
+                             // lazy guard where it is resolved.
                              identity: seedIdentity,
                          },
                      });
@@ -668,14 +668,20 @@ export class AppPlugin implements Plugin {
     }
 
     /**
-     * Resolve the identity bound to `os.user` / `os.org` for seed CEL values.
+     * Lazily provision the identity bound to `os.user` for seed CEL values.
      *
-     * On a fresh boot there are zero users until the first human sign-up
-     * (which the SeedLoader runs *before*), so identity-derived seeds like
-     * `owner_id: cel`os.user.id`` had nothing to resolve against and were
-     * dropped silently. To make seeds deterministic and self-sufficient we
-     * upsert a single non-loginable **system user** (`usr_system`) and bind
-     * it as `os.user`.
+     * Called ONLY when a seed dataset actually embeds `cel`os.user.id`` (see the
+     * caller's `seedsReferenceOsUser` guard). The modern ownership model does
+     * not need this: seeds leave `owner_id` NULL and the first-admin bootstrap
+     * (`claimSeedOwnership` in plugin-security) re-owns those rows to the
+     * promoted human admin — so a typical bundle never references `os.user`, and
+     * the `usr_system` placeholder is never created.
+     *
+     * It survives only as a backward-compatible fallback for the rare seed that
+     * still embeds `cel`os.user.id``: such a seed runs before the first human
+     * sign-up, so we upsert a single non-loginable **system user**
+     * (`usr_system`) and bind it as `os.user` so the expression resolves instead
+     * of dropping the record.
      *
      * Why a dedicated system user rather than the login admin:
      *  - `sys_user` is better-auth-managed and schema-locked (ADR-0010); the
