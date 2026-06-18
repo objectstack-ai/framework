@@ -70,7 +70,26 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
    * resolveExecutionContext from `sys_member`.
    */
   org_user_ids: z.array(z.string()).optional(),
-  
+
+  /**
+   * Pre-resolved dynamic-membership arrays for RLS (§7.3.1). The runtime
+   * resolves set-membership that would otherwise need a subquery — team
+   * members under a manager, accounts in a sales rep's territories,
+   * records shared with the user — and stages each set here under a
+   * stable key. RLS policies then reference a key via
+   * `field IN (current_user.<key>)`, which the compiler resolves against
+   * this bag without any subquery support.
+   *
+   * `org_user_ids` is the one well-known, always-populated membership set
+   * and stays a named field for back-compat; everything else lives here.
+   * Keys are arbitrary `current_user.*` names; values are id arrays. A
+   * missing or empty array makes the referencing policy drop out and
+   * (if it was the only policy) fail closed — never fail open.
+   *
+   * @example { team_member_ids: ['u2', 'u3'], territory_account_ids: ['a7'] }
+   */
+  rlsMembership: z.record(z.string(), z.array(z.string())).optional(),
+
   /** Whether this is a system-level operation (bypasses permission checks) */
   isSystem: z.boolean().default(false),
   

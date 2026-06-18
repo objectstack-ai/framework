@@ -139,6 +139,8 @@ test asserts every entry resolves at runtime, so this table stays in sync with i
 | `daysFromNow(n)` | timestamp | `now()` + `n` days — **keeps the current time-of-day** (NOT midnight) |
 | `daysAgo(n)` | timestamp | `now()` − `n` days — keeps the current time-of-day |
 | `daysBetween(a, b)` | int | Whole days from `a` to `b` (negative if `b` precedes `a`). `daysBetween(today(), record.due)` = days remaining |
+| `addDays(d, n)` | timestamp | Shift **any** date by `n` days (negative ok). `addDays(record.last_service, record.cycle_days)` = next due date |
+| `addMonths(d, n)` | timestamp | Shift **any** date by `n` months; clamps to month-end (`addMonths(date('2026-01-31'), 1)` → Feb 28) |
 | `date(s)` / `datetime(s)` | timestamp | Parse an ISO date / date-time string to a timestamp |
 
 **Numbers**

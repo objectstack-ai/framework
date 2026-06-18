@@ -312,3 +312,222 @@ describe('QuickJSScriptRunner — long-running async host work (pump budget)', (
     ).rejects.toThrow(/timeout/i);
   }, 10000);
 });
+
+// ---------------------------------------------------------------------------
+// ctx.api.transaction(fn) — explicit transaction boundary inside the sandbox.
+//
+// The body drives begin / op / op / commit through deferred promises across
+// many pump iterations; we assert the handle is threaded explicitly (every
+// in-tx op carries the SAME tx number, out-of-tx ops carry none), commit/
+// rollback fire correctly, and a tx left open by a throw or a timeout is
+// rolled back by the runner's finally.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — ctx.api.transaction', () => {
+  /** A ScopedContext-shaped mock that records every op with its tx binding. */
+  function makeTxApi() {
+    const events: Array<{ op: string; name?: string; tx: number | null }> = [];
+    let nextTx = 0;
+    const repoFor = (tx: number | null) => (name: string) => ({
+      insert: async (rec: unknown) => { events.push({ op: 'insert', name, tx }); return { id: 'r', tx, rec }; },
+      findOne: async () => { events.push({ op: 'findOne', name, tx }); return { tx }; },
+      count: async () => { events.push({ op: 'count', name, tx }); return 0; },
+    });
+    const api = {
+      object: repoFor(null),
+      beginTransaction: async () => {
+        const handle = ++nextTx;
+        events.push({ op: 'begin', tx: handle });
+        return { ctx: { object: repoFor(handle) }, handle };
+      },
+      commitTransaction: async (handle: number) => { events.push({ op: 'commit', tx: handle }); },
+      rollbackTransaction: async (handle: number) => { events.push({ op: 'rollback', tx: handle }); },
+    };
+    return { api, events };
+  }
+
+  it('threads one tx handle through all in-tx ops and commits on success', async () => {
+    const { api, events } = makeTxApi();
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: `
+          await ctx.api.object('a').insert({ pre: 1 });        // out of tx
+          const out = await ctx.api.transaction(async () => {
+            await ctx.api.object('a').insert({ x: 1 });
+            await ctx.api.object('b').insert({ y: 2 });
+            return 'done';
+          });
+          await ctx.api.object('a').insert({ post: 1 });       // out of tx
+          return out;
+        `,
+        capabilities: ['api.write', 'api.transaction'],
+        timeoutMs: 30000,
+      },
+      ctx({ api }),
+      actionOpts,
+    );
+
+    // The callback's return value is forwarded.
+    expect(r.value).toBe('done');
+    // Strict ordering + handle threading.
+    expect(events).toEqual([
+      { op: 'insert', name: 'a', tx: null },  // before tx
+      { op: 'begin', tx: 1 },
+      { op: 'insert', name: 'a', tx: 1 },     // both in-tx ops share handle #1
+      { op: 'insert', name: 'b', tx: 1 },
+      { op: 'commit', tx: 1 },
+      { op: 'insert', name: 'a', tx: null },  // after tx — unbound again
+    ]);
+  }, 30000);
+
+  it('reads inside the tx also reuse the handle', async () => {
+    const { api, events } = makeTxApi();
+    await runner.runScript(
+      {
+        language: 'js',
+        source: `
+          await ctx.api.transaction(async () => {
+            await ctx.api.object('a').findOne({ id: 1 });
+            await ctx.api.object('a').insert({ x: 1 });
+          });
+        `,
+        capabilities: ['api.read', 'api.write', 'api.transaction'],
+        timeoutMs: 30000,
+      },
+      ctx({ api }),
+      actionOpts,
+    );
+    expect(events).toEqual([
+      { op: 'begin', tx: 1 },
+      { op: 'findOne', name: 'a', tx: 1 },
+      { op: 'insert', name: 'a', tx: 1 },
+      { op: 'commit', tx: 1 },
+    ]);
+  }, 30000);
+
+  it('rolls back (not commits) when the callback throws, and re-throws the original error', async () => {
+    const { api, events } = makeTxApi();
+    await expect(
+      runner.runScript(
+        {
+          language: 'js',
+          source: `
+            await ctx.api.transaction(async () => {
+              await ctx.api.object('a').insert({ x: 1 });
+              throw new Error('boom');
+            });
+          `,
+          capabilities: ['api.write', 'api.transaction'],
+          timeoutMs: 30000,
+        },
+        ctx({ api }),
+        actionOpts,
+      ),
+    ).rejects.toThrow(/boom/);
+
+    expect(events.map((e) => e.op)).toEqual(['begin', 'insert', 'rollback']);
+    expect(events.some((e) => e.op === 'commit')).toBe(false);
+  }, 30000);
+
+  it('rejects a nested transaction', async () => {
+    const { api } = makeTxApi();
+    await expect(
+      runner.runScript(
+        {
+          language: 'js',
+          source: `
+            await ctx.api.transaction(async () => {
+              await ctx.api.transaction(async () => {});
+            });
+          `,
+          capabilities: ['api.write', 'api.transaction'],
+          timeoutMs: 30000,
+        },
+        ctx({ api }),
+        actionOpts,
+      ),
+    ).rejects.toThrow(/nested/i);
+  }, 30000);
+
+  it('requires the api.transaction capability', async () => {
+    const { api } = makeTxApi();
+    await expect(
+      runner.runScript(
+        {
+          language: 'js',
+          source: `await ctx.api.transaction(async () => {});`,
+          capabilities: ['api.write'], // no api.transaction
+          timeoutMs: 30000,
+        },
+        ctx({ api }),
+        actionOpts,
+      ),
+    ).rejects.toThrow(/api\.transaction/);
+  }, 30000);
+
+  it('rolls back a transaction the body leaves open when the deadline fires', async () => {
+    const events: Array<{ op: string; tx: number | null }> = [];
+    let nextTx = 0;
+    const api = {
+      object: () => ({
+        // never settles — the in-tx op stalls until the deadline cuts in
+        insert: () => new Promise<never>(() => {}),
+      }),
+      beginTransaction: async () => {
+        const handle = ++nextTx;
+        events.push({ op: 'begin', tx: handle });
+        return { ctx: { object: () => ({ insert: () => new Promise<never>(() => {}) }) }, handle };
+      },
+      commitTransaction: async (h: number) => { events.push({ op: 'commit', tx: h }); },
+      rollbackTransaction: async (h: number) => { events.push({ op: 'rollback', tx: h }); },
+    };
+
+    await expect(
+      runner.runScript(
+        {
+          language: 'js',
+          source: `
+            await ctx.api.transaction(async () => {
+              await ctx.api.object('a').insert({ x: 1 });
+            });
+          `,
+          capabilities: ['api.write', 'api.transaction'],
+          timeoutMs: 300,
+        },
+        ctx({ api }),
+        actionOpts,
+      ),
+    ).rejects.toThrow(/timeout/i);
+
+    // begin happened, the op stalled, deadline fired → finally rolled it back.
+    expect(events.map((e) => e.op)).toEqual(['begin', 'rollback']);
+  }, 10000);
+
+  it('degrades to non-transactional when the driver lacks tx support', async () => {
+    const events: Array<{ op: string; tx: number | null }> = [];
+    // No beginTransaction — mimics an in-memory driver without tx primitives.
+    const api = {
+      object: () => ({
+        insert: async () => { events.push({ op: 'insert', tx: null }); return { id: 'r' }; },
+      }),
+    };
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: `
+          return await ctx.api.transaction(async () => {
+            await ctx.api.object('a').insert({ x: 1 });
+            return 'ok';
+          });
+        `,
+        capabilities: ['api.write', 'api.transaction'],
+        timeoutMs: 30000,
+      },
+      ctx({ api }),
+      actionOpts,
+    );
+    // Callback still runs and returns; the op simply isn't wrapped in a tx.
+    expect(r.value).toBe('ok');
+    expect(events).toEqual([{ op: 'insert', tx: null }]);
+  }, 30000);
+});

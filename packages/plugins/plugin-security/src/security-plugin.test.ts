@@ -6,6 +6,7 @@ import { PermissionEvaluator } from './permission-evaluator.js';
 import { FieldMasker } from './field-masker.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import type { PermissionSet } from '@objectstack/spec/security';
+import { RLS } from '@objectstack/spec/security';
 
 // ---------------------------------------------------------------------------
 // SecurityPlugin – basic metadata
@@ -1095,5 +1096,77 @@ describe('RLSCompiler', () => {
     expect(taskInsert).toHaveLength(2); // task insert + * all
     const contactFind = compiler.getApplicablePolicies('contact', 'find', policies);
     expect(contactFind).toHaveLength(2); // contact all + * all
+  });
+
+  // §7.3.1 dynamic membership — arbitrary pre-resolved sets in rlsMembership
+  it('should resolve IN against a §7.3.1 pre-resolved rlsMembership set', () => {
+    // Manager hierarchy: the runtime resolved the manager's reports into
+    // ctx.rlsMembership.team_member_ids. The compiler merges that bag into
+    // the user context so `IN (current_user.team_member_ids)` resolves
+    // without any subquery support.
+    const compiler = new RLSCompiler();
+    const policy: any = {
+      object: 'task',
+      operation: 'select',
+      using: 'assigned_to_id IN (current_user.team_member_ids)',
+    };
+    const ctx: any = {
+      userId: 'mgr-1',
+      tenantId: 'org-1',
+      roles: ['manager'],
+      rlsMembership: { team_member_ids: ['u2', 'u3', 'u4'] },
+    };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual({ assigned_to_id: { $in: ['u2', 'u3', 'u4'] } });
+  });
+
+  it('should fail-closed when a §7.3.1 membership set is empty', () => {
+    // A manager with no reports → empty team_member_ids → the IN policy
+    // drops out → sole policy → deny sentinel (zero rows). Never fail-open.
+    const compiler = new RLSCompiler();
+    const policy: any = {
+      object: 'task',
+      operation: 'select',
+      using: 'assigned_to_id IN (current_user.team_member_ids)',
+    };
+    const ctx: any = { userId: 'mgr-1', tenantId: 'org-1', roles: [], rlsMembership: { team_member_ids: [] } };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual(RLS_DENY_FILTER);
+  });
+
+  it('should not let a rlsMembership key clobber a named context field', () => {
+    // roles is a first-class field; a hostile/misconfigured membership bag
+    // must not override it. The named `roles` (['real-role']) wins; the
+    // policy compiles against it, not the injected ['spoofed'].
+    const compiler = new RLSCompiler();
+    const policy: any = { object: 'x', operation: 'select', using: 'role_id IN (current_user.roles)' };
+    const ctx: any = {
+      userId: 'u1',
+      tenantId: 'org-1',
+      roles: ['real-role'],
+      rlsMembership: { roles: ['spoofed'] },
+    };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual({ role_id: { $in: ['real-role'] } });
+  });
+
+  // Always-true literal — makes RLS.allowAllPolicy grant access instead of
+  // silently failing closed.
+  it('should compile "1 = 1" to an unrestricted (empty) filter', () => {
+    const compiler = new RLSCompiler();
+    const policy: any = { object: 'account', operation: 'all', using: '1 = 1', roles: ['ceo'] };
+    const ctx: any = { userId: 'u1', tenantId: 'org-1', roles: ['ceo'] };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual({}); // matches every row
+  });
+
+  it('should grant allow-all via RLS.allowAllPolicy instead of denying', () => {
+    // Regression guard: '1 = 1' used to be unsupported → deny sentinel,
+    // making the helper do the opposite of its name. Now it grants.
+    const compiler = new RLSCompiler();
+    const policy = RLS.allowAllPolicy('account', ['ceo', 'cfo']) as any;
+    const filter = compiler.compileFilter([policy]);
+    expect(filter).toEqual({});
+    expect(filter).not.toEqual(RLS_DENY_FILTER);
   });
 });
