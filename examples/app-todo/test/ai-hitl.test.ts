@@ -20,7 +20,7 @@
 // memory adapter's verb routing. (A parallel real-LLM smoke test lives
 // under `examples/app-todo/test/ai-real-llm.test.ts`.)
 //
-// Run via: `pnpm --filter @example/app-todo test:hitl`
+// Run via: `pnpm --filter @objectstack/example-todo test:hitl`
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { SqliteWasmDriver } from '@objectstack/driver-sqlite-wasm';

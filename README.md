@@ -115,7 +115,7 @@ pnpm docs:dev
 | `pnpm dev` | Run the showcase kitchen-sink example (`@objectstack/example-showcase`) — REST + Studio; exercises every metadata type, view, automation, AI & security chain |
 | `pnpm dev:showcase` | Same as `pnpm dev` (explicit alias) |
 | `pnpm dev:crm` | Run the minimal CRM example (`@objectstack/example-crm`) |
-| `pnpm dev:todo` | Run the Todo example (`@example/app-todo`) |
+| `pnpm dev:todo` | Run the Todo example (`@objectstack/example-todo`) |
 | `pnpm objectui:refresh` | Pull the sibling `../objectui` build into `packages/console/` |
 | `pnpm test` | Run all tests (Turborepo) |
 | `pnpm setup` | Install dependencies and build the spec package |
@@ -242,7 +242,7 @@ Cloud, package registry, and environment management subcommands (`os publish`, `
 
 | Example | Description | Level |
 | :--- | :--- | :--- |
-| [`@example/app-todo`](examples/app-todo) | Task management app — objects, views, dashboards, flows | Beginner |
+| [`@objectstack/example-todo`](examples/app-todo) | Task management app — objects, views, dashboards, flows | Beginner |
 | [`@objectstack/example-crm`](examples/app-crm) | Minimal CRM smoke-test workspace — validates the metadata loading pipeline | Intermediate |
 | [HotCRM](https://github.com/objectstack-ai/hotcrm) | Full-featured enterprise CRM reference app (separate repo) | Advanced |
 

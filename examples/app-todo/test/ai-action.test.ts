@@ -6,7 +6,7 @@
 // `action_<name>` tool, and that the `data_chat` agent can pick the right
 // one in plain English.
 //
-// Run via: `pnpm --filter @example/app-todo test:action`
+// Run via: `pnpm --filter @objectstack/example-todo test:action`
 //
 // No API key required — uses `MemoryLLMAdapter`, which heuristically
 // picks an action tool and resolves the record id from the preceding

@@ -19,7 +19,7 @@
 // the script exits 0 with a notice, so it can be chained in CI without
 // leaking spend.
 //
-// Run via: `AI_GATEWAY_API_KEY=... pnpm --filter @example/app-todo test:hitl:llm`
+// Run via: `AI_GATEWAY_API_KEY=... pnpm --filter @objectstack/example-todo test:hitl:llm`
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { SqliteWasmDriver } from '@objectstack/driver-sqlite-wasm';

@@ -4,7 +4,7 @@
 // runs the `query_data` tool end-to-end against seeded data, and verifies the
 // call was persisted in the `ai_traces` object.
 //
-// Run via: `pnpm --filter @example/app-todo test:ai`
+// Run via: `pnpm --filter @objectstack/example-todo test:ai`
 //
 // No API key required — the demo uses MemoryLLMAdapter, whose heuristic
 // `generateObject()` builds a QueryPlan from the schema-context snippet.

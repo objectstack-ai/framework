@@ -5,7 +5,7 @@
 //   1. the agent invoked the `query_data` tool, and
 //   2. a `chat_with_tools` row landed in `ai_traces`.
 //
-// Run via: `pnpm --filter @example/app-todo test:agent`
+// Run via: `pnpm --filter @objectstack/example-todo test:agent`
 //
 // No API key required — uses `MemoryLLMAdapter`, which knows how to
 // dispatch `query_data` heuristically and summarise the result.

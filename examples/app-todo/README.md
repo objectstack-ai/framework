@@ -101,7 +101,7 @@ pnpm typecheck
 
 ### Build
 ```bash
-pnpm --filter @example/app-todo build
+pnpm --filter @objectstack/example-todo build
 # Expected: Build succeeds, generates dist/ output
 ```
 
@@ -113,7 +113,7 @@ Open `objectstack.config.ts` to see how all pieces connect via `defineStack()`.
 This example also showcases the v1 AI capabilities. Run the end-to-end demo:
 
 ```bash
-pnpm --filter @example/app-todo test:ai
+pnpm --filter @objectstack/example-todo test:ai
 ```
 
 What it does — **no API key required**:
@@ -133,7 +133,7 @@ What it does — **no API key required**:
 A higher-level demo that exercises the **`data_chat` built-in agent** end-to-end:
 
 ```bash
-pnpm --filter @example/app-todo test:agent
+pnpm --filter @objectstack/example-todo test:agent
 ```
 
 1. Sends a natural-language user message to `AIService.chatWithTools()` (the same path the REST endpoint `POST /api/v1/ai/agents/data_chat/chat` uses)

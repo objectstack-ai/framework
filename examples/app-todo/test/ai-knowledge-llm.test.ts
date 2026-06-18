@@ -15,7 +15,7 @@
 // deterministic RLS demo still runs; only the LLM steps are skipped.
 //
 // Run via:
-//   AI_GATEWAY_API_KEY=... pnpm --filter @example/app-todo test:knowledge:llm
+//   AI_GATEWAY_API_KEY=... pnpm --filter @objectstack/example-todo test:knowledge:llm
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { SqliteWasmDriver } from '@objectstack/driver-sqlite-wasm';
