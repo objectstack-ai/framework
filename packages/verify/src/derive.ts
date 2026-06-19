@@ -9,8 +9,14 @@
 // write it → read it back → assert type fidelity" for every object, then runs
 // it against the real in-process stack.
 //
-// v0 derives per-object CRUD round-trip cases. RLS cross-owner denial (the
-// #1994 invariant) is v1 — it needs the multi-user harness + sharing service.
+// v0 derived per-object CRUD round-trip cases and SKIPPED any object with a
+// required relation (lookup / master_detail) — it had no target id to write.
+// v1 (ADR-0055 P0) closes that gap with RELATED-RECORD TOPOLOGICAL SYNTHESIS:
+// build the object dependency graph from required relational fields, topologically
+// order it (targets before dependents), and have the runner thread real ids — so
+// relationship-dense objects (the core of real apps) are verified, not skipped.
+// What it still can't satisfy (required-reference cycles, external/missing targets)
+// is reported `blocked` with a precise reason — the gate stays honest.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -30,12 +36,20 @@ export interface DerivedAssert {
   value: unknown;
   kind: AssertKind;
 }
+/** A relational field to fill with a real target id at run time (threaded by the runner). */
+export interface RelationalRef {
+  field: string; // the FK field key on this object
+  target: string; // the referenced object name
+  required: boolean;
+  multiple: boolean; // store as an array of ids
+}
 export interface CrudCase {
   object: string;
-  blocked?: string; // why this object can't be auto-CRUD'd (e.g. required lookup)
+  blocked?: string; // why this object can't be auto-CRUD'd (e.g. required-reference cycle)
   body?: Record<string, unknown>;
   asserts?: DerivedAssert[];
   skippedFields?: Array<{ name: string; type: string; reason: string }>;
+  relationalRefs?: RelationalRef[]; // resolved against created-record ids by the runner
 }
 
 function clampNum(f: any, fallback: number): number {
@@ -84,44 +98,166 @@ function synth(type: string, f: any): { value: unknown; kind: AssertKind } | nul
   }
 }
 
+/** The target object a relational field references (snake_case object name), or null. */
+function relationTarget(f: any): string | null {
+  const ref = f?.reference ?? f?.reference_to ?? f?.referenceTo;
+  return typeof ref === 'string' && ref.length > 0 ? ref : null;
+}
+
+interface Draft {
+  name: string;
+  body: Record<string, unknown>;
+  asserts: DerivedAssert[];
+  skippedFields: Array<{ name: string; type: string; reason: string }>;
+  relationalRefs: RelationalRef[];
+  requiredTargets: string[]; // referenced objects that MUST exist + be ordered-before
+  blocked?: string;
+}
+
 /**
- * Derive one CRUD round-trip case per authorable object in the config.
- * An object whose REQUIRED fields can't be synthesized (e.g. a required lookup
- * needing a target record) is reported `blocked` rather than silently skipped.
+ * Derive one CRUD round-trip case per authorable object, in DEPENDENCY ORDER.
+ *
+ * Required relational fields no longer block the object outright: the referenced
+ * target is created first (topological order) and the runner threads its real id
+ * in. Only genuinely unsatisfiable shapes are `blocked`:
+ *  - a required relation whose target is missing from the app config (external), or
+ *  - a required-reference cycle (incl. a required self-reference), or
+ *  - a required relation whose target is itself blocked (cascade), or
+ *  - a required non-relational field that can't be synthesized (unchanged from v0).
  */
 export function deriveCrudCases(config: any): CrudCase[] {
-  const cases: CrudCase[] = [];
-  for (const obj of config?.objects ?? []) {
+  const objects: any[] = config?.objects ?? [];
+  const byName = new Map<string, any>();
+  for (const o of objects) if (o?.name) byName.set(o.name, o);
+
+  const drafts = new Map<string, Draft>();
+
+  // ── Pass 1: per-object field classification ───────────────────────────────
+  for (const obj of objects) {
+    if (!obj?.name) continue;
     const fields: Record<string, any> = obj?.fields ?? {};
-    const body: Record<string, unknown> = {};
-    const asserts: DerivedAssert[] = [];
-    const skippedFields: Array<{ name: string; type: string; reason: string }> = [];
-    let blocked: string | undefined;
+    const d: Draft = {
+      name: obj.name, body: {}, asserts: [], skippedFields: [], relationalRefs: [], requiredTargets: [],
+    };
 
     for (const [name, f] of Object.entries(fields)) {
       const type = String((f as any)?.type ?? '').toLowerCase();
+      const isRequired = !!(f as any)?.required;
       if (SYSTEM_NAMES.has(name) || (f as any)?.system || (f as any)?.readonly) continue;
       if (COMPUTED.has(type)) continue;
 
-      if (RELATIONAL.has(type) || STRUCTURED.has(type) || MEDIA.has(type)) {
-        if ((f as any)?.required) { blocked = `required ${type} field "${name}" (needs target/structured value)`; break; }
-        skippedFields.push({ name, type, reason: 'unsynthesizable-optional' });
+      if (RELATIONAL.has(type)) {
+        const target = relationTarget(f);
+        if (!target) {
+          if (isRequired) { d.blocked = `required ${type} field "${name}" has no \`reference\` target`; break; }
+          d.skippedFields.push({ name, type, reason: 'relation-missing-reference' });
+          continue;
+        }
+        if (!byName.has(target)) {
+          // External / cross-app target — we can't synthesize a record for it.
+          if (isRequired) { d.blocked = `required ${type} field "${name}" → target "${target}" not in app config`; break; }
+          d.skippedFields.push({ name, type, reason: `relation-target-external:${target}` });
+          continue;
+        }
+        d.relationalRefs.push({ field: name, target, required: isRequired, multiple: !!(f as any)?.multiple });
+        if (isRequired) d.requiredTargets.push(target);
+        continue;
+      }
+
+      if (STRUCTURED.has(type) || MEDIA.has(type)) {
+        if (isRequired) { d.blocked = `required ${type} field "${name}" (needs structured/media value)`; break; }
+        d.skippedFields.push({ name, type, reason: 'unsynthesizable-optional' });
         continue;
       }
 
       const s = synth(type, f);
       if (!s) {
-        if ((f as any)?.required) { blocked = `required field "${name}" of type "${type}" is not synthesizable`; break; }
-        skippedFields.push({ name, type, reason: 'no-synth' });
+        if (isRequired) { d.blocked = `required field "${name}" of type "${type}" is not synthesizable`; break; }
+        d.skippedFields.push({ name, type, reason: 'no-synth' });
         continue;
       }
-      body[name] = s.value;
-      if (s.kind !== 'none') asserts.push({ field: name, type, value: s.value, kind: s.kind });
+      d.body[name] = s.value;
+      if (s.kind !== 'none') d.asserts.push({ field: name, type, value: s.value, kind: s.kind });
     }
 
-    // Every object needs a name-ish required text; synth already covers `name`.
-    if (blocked) cases.push({ object: obj.name, blocked });
-    else cases.push({ object: obj.name, body, asserts, skippedFields });
+    drafts.set(obj.name, d);
+  }
+
+  // ── Pass 2: cascade-block on missing/blocked required targets (to fixpoint) ─
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const d of drafts.values()) {
+      if (d.blocked) continue;
+      for (const t of d.requiredTargets) {
+        const td = drafts.get(t);
+        if (!td || td.blocked) {
+          d.blocked = `required relational target "${t}" is ${!td ? 'missing' : 'not synthesizable'}`;
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Pass 3: topological order (targets before dependents) over required edges ─
+  const emitted = new Set<string>();
+  const order: string[] = [];
+  const live = [...drafts.values()].filter((d) => !d.blocked).map((d) => d.name);
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (const name of live) {
+      if (emitted.has(name)) continue;
+      const d = drafts.get(name)!;
+      if (d.requiredTargets.every((t) => emitted.has(t))) {
+        emitted.add(name);
+        order.push(name);
+        progress = true;
+      }
+    }
+  }
+  // Residue = a required-reference cycle (incl. required self-reference).
+  for (const name of live) {
+    if (!emitted.has(name)) drafts.get(name)!.blocked = 'unsatisfiable required-reference cycle';
+  }
+
+  // ── Assemble: ordered live cases first, then blocked ones ──────────────────
+  const cases: CrudCase[] = [];
+  for (const name of order) {
+    const d = drafts.get(name)!;
+    cases.push({
+      object: d.name,
+      body: d.body,
+      asserts: d.asserts,
+      skippedFields: d.skippedFields,
+      ...(d.relationalRefs.length ? { relationalRefs: d.relationalRefs } : {}),
+    });
+  }
+  for (const d of drafts.values()) {
+    if (d.blocked) cases.push({ object: d.name, blocked: d.blocked });
   }
   return cases;
+}
+
+/**
+ * Resolve a case's relational fields against the registry of already-created
+ * record ids, returning the body to POST. When a REQUIRED target has no created
+ * record (its own creation failed at run time), returns a `missing` reason so the
+ * caller can skip rather than POST an invalid body.
+ */
+export function fillRelationalRefs(
+  c: CrudCase,
+  created: Map<string, string>,
+): { body: Record<string, unknown>; missing?: string } {
+  const body: Record<string, unknown> = { ...(c.body ?? {}) };
+  for (const ref of c.relationalRefs ?? []) {
+    const id = created.get(ref.target);
+    if (id == null) {
+      if (ref.required) return { body, missing: `required relation "${ref.field}" → no created "${ref.target}" record` };
+      continue; // optional: leave unset
+    }
+    body[ref.field] = ref.multiple ? [id] : id;
+  }
+  return { body };
 }
