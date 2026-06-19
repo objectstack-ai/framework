@@ -1,6 +1,15 @@
 # ADR-0047: Two run modes for object UI — data views vs interface pages, user filters, and runtime visualization choice
 
-**Status**: Proposed (2026-06-12)
+**Status**: Proposed (2026-06-12) · **Revised 2026-06-19**
+
+> **Revision (2026-06-19) — the "iron rule" is superseded.** Validating the
+> Studio config panel against Airtable showed Airtable has no "inherit from a
+> separate view" concept: an interface page defines its data surface (columns,
+> sort, base filter, visualizations, toolbar) **directly**. ObjectStack now
+> matches this — `InterfacePageConfig` carries its own `columns`/`sort`/`filterBy`
+> and the page editor edits them in place. `sourceView` is deprecated and kept
+> only as a runtime back-compat fallback. TL;DR #2 below no longer holds; the
+> rest of the ADR (two run modes, userFilters, visualization whitelist) stands.
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0017](./0017-object-has-many-view.md) (independent view entities, `viewKind`), [ADR-0019](./0019-app-as-consumer-unit.md) (App is the consumer-facing unit — navigation decides what users see), [ADR-0027](./0027-metadata-authoring-lifecycle.md) (draft · publish lifecycle), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (**AI is the long-term author of metadata — the design center this ADR inherits**)
 **Consumers**: `@objectstack/spec` (view + page Zod schemas), `@objectstack/objectql` (registry validation/diagnostics), `../objectui` (console `ObjectView` / `PageView`, `plugin-list`), framework templates (`hotcrm`, `app-showcase`), the `objectstack-ui` authoring skill
@@ -12,7 +21,7 @@
 ## TL;DR
 
 1. **Two run modes, both first-class.** *Data mode* (navigation → object): every list view of the object renders as a switcher tab; users may create personal views; the toolbar is permissive. *Interface mode* (navigation → page): an author-curated page **references** one view as its source and exposes only the controls the author enabled — filter tabs or dropdowns, a fixed (or whitelisted) visualization, selected user actions. This mirrors Airtable's Data vs Interfaces split and Power Platform's model-driven vs canvas split.
-2. **The iron rule: pages reference views, never restate them.** A page's `source` points at an object/view; columns, base filter, and sort are *inherited* from the view definition. The page schema carries presentation policy only — it has no field for columns, so the "page and view each declare columns, then drift" failure mode is unrepresentable.
+2. **~~The iron rule: pages reference views, never restate them.~~** *(Superseded by the 2026-06-19 revision — see banner above.)* The page now defines `columns`/`sort`/`filterBy` directly (Airtable parity). Drift is avoided not by forbidding columns on the page, but by making the page the single place they live (no second view to drift against).
 3. **`userFilters` becomes spec.** The end-user quick-filter surface (Airtable "User filters": element = `tabs | dropdown | toggle`, plus per-field config) is formalized in `ListViewSchema` and `InterfacePageConfig`. The client already implements and renders it (verified live, below); today it works only by accident of raw passthrough, with no type for authors and no Studio form.
 4. **Runtime visualization choice is an author-controlled whitelist.** `userActions.visualizations?: boolean | ViewType[]` at view level, `visualizations` at page level (superseding the misplaced `userFilters.elements` enum). Effective options = author whitelist ∩ types whose required field bindings resolve (kanban needs a select `groupBy`, calendar a date field, …). Data mode defaults open; interface mode defaults locked.
 5. **Defaults are asymmetric on purpose.** Data mode auto-derives quick filters from select/boolean fields and allows user views; interface mode is closed until the author opens it. An AI that emits *nothing* beyond objects + views + navigation gets a correct, complete system — "omission is correct" is the strongest guardrail we can give a generative author.
