@@ -10,6 +10,7 @@ import {
   EngineAggregateOptions,
   EngineCountOptions
 } from '@objectstack/spec/data';
+import { parseAutonumberFormat, renderAutonumber, missingFieldValues } from '@objectstack/spec/data';
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
 import { CoreServiceName, StorageNameMapping } from '@objectstack/spec/system';
@@ -699,14 +700,20 @@ export class ObjectQL implements IDataEngine {
       : this.txStore.getStore()?.transaction;
     const hasTx = tx !== undefined;
     const hasTenant = execCtx?.tenantId !== undefined;
+    const hasTz = execCtx?.timezone !== undefined;
     const isSystem = execCtx?.isSystem === true;
-    if (!hasTx && !hasTenant && !isSystem) return base;
+    if (!hasTx && !hasTenant && !isSystem && !hasTz) return base;
     const opts: any = base && typeof base === 'object' ? { ...base } : {};
     if (hasTx && opts.transaction === undefined) {
       opts.transaction = tx;
     }
     if (hasTenant && opts.tenantId === undefined) {
       opts.tenantId = execCtx!.tenantId;
+    }
+    if (hasTz && opts.timezone === undefined) {
+      // Thread the business timezone so date-dependent driver generation
+      // (autonumber `{YYYYMMDD}` tokens) resolves the calendar day correctly.
+      opts.timezone = execCtx!.timezone;
     }
     if (isSystem && opts.bypassTenantAudit === undefined) {
       // System-elevated writes (boot-time seeds, internal mirrors, scheduled
@@ -793,9 +800,12 @@ export class ObjectQL implements IDataEngine {
    * owns the value, not the client.
    *
    * In the fallback path the next value is `max(existing) + 1`, seeded once per
-   * `object.field` from the store then incremented in memory (monotonic within
-   * the process, resilient to deletions). `autonumberFormat` is honored, e.g.
-   * `CASE-{0000}` → `CASE-0042`. NOTE: this in-memory seeding is single-instance.
+   * `object.field.<scope>` from the store then incremented in memory (monotonic
+   * within the process, resilient to deletions). The shared `autonumberFormat`
+   * renderer is honored end-to-end, so date tokens (`AD{YYYYMMDD}{0000}`), field
+   * interpolation (`{island_zone}{000}`) and per-scope reset behave identically
+   * to the SQL driver's persistent sequence (#1603). NOTE: this in-memory seeding
+   * is single-instance.
    */
   private async applyAutonumbers(
     object: string,
@@ -806,26 +816,51 @@ export class ObjectQL implements IDataEngine {
     if (driverOwnsAutonumber) return; // driver generates persistently in create()
     const fields = (this.getSchema(object) as any)?.fields;
     if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return;
+    const now = new Date();
+    const timezone = execCtx?.timezone;
     for (const [name, def] of Object.entries(fields)) {
       if ((def as any)?.type !== 'autonumber') continue;
       const current = record[name];
       if (current != null && current !== '') continue; // respect explicit value
-      const key = `${object}.${name}`;
-      let next = this.autonumberCounters.get(key);
-      if (next == null) next = await this.seedAutonumber(object, name, execCtx);
-      next += 1;
-      this.autonumberCounters.set(key, next);
       // Honor either the spec-canonical `autonumberFormat` or the shorthand
       // `format` (both appear in metadata; the driver reads both too) — #1603.
       const fmt = (def as any).autonumberFormat ?? (def as any).format;
-      record[name] = this.formatAutonumber(fmt, next);
+      const tokens = parseAutonumberFormat(typeof fmt === 'string' ? fmt : '');
+      // Refuse to generate when an interpolated `{field}` is empty — it would
+      // render to an empty prefix and merge this record into the wrong counter
+      // scope. Mirror the SQL driver so both paths fail identically (#1603).
+      const missing = missingFieldValues(tokens, record);
+      if (missing.length > 0) {
+        throw new Error(
+          `Cannot generate autonumber "${object}.${name}" (format "${fmt}"): ` +
+            `referenced field(s) [${missing.join(', ')}] are empty on the record. ` +
+            `Fields interpolated into an autonumber format must be set before the record is created.`,
+        );
+      }
+      // The counter scope is the rendered prefix (date/field tokens before the
+      // sequence slot); it is independent of the counter value, so a throwaway
+      // render with seq 0 yields the scope and the literal prefix to seed from.
+      const probe = renderAutonumber({ tokens, seq: 0, record, now, timezone });
+      const counterKey = `${object}.${name}.${probe.scope}`;
+      let next = this.autonumberCounters.get(counterKey);
+      if (next == null) next = await this.seedAutonumber(object, name, probe.prefix, execCtx);
+      next += 1;
+      this.autonumberCounters.set(counterKey, next);
+      record[name] = renderAutonumber({ tokens, seq: next, record, now, timezone }).value;
     }
   }
 
-  /** Seed the autonumber counter from the current max numeric value in store. */
+  /**
+   * Seed the autonumber counter from the current max in store, scoped to
+   * `prefix`. With a non-empty prefix (date/field formats) only rows in the
+   * same scope count, and the counter is the digit-run immediately after the
+   * prefix; with an empty prefix (legacy fixed-prefix formats) the last digit
+   * run of the whole value is used, preserving the original behaviour.
+   */
   private async seedAutonumber(
     object: string,
     field: string,
+    prefix: string,
     execCtx?: ExecutionContext,
   ): Promise<number> {
     try {
@@ -838,22 +873,27 @@ export class ObjectQL implements IDataEngine {
       for (const r of rows || []) {
         const v = r?.[field];
         if (v == null) continue;
-        const m = String(v).match(/(\d+)(?!.*\d)/); // last run of digits
-        if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+        const s = String(v);
+        if (prefix && !s.startsWith(prefix)) continue;
+        const tail = prefix ? s.slice(prefix.length) : s;
+        // With a prefix the counter is the digit run right after it; without one
+        // (legacy fixed-prefix formats) it is the LAST digit run. Both use the
+        // linear /\d+/g — a backtracking lookahead here is a polynomial-ReDoS
+        // sink on stored values full of zeros (CodeQL js/polynomial-redos).
+        let digits: string | undefined;
+        if (prefix) {
+          const head = tail.match(/^\d+/);
+          digits = head ? head[0] : undefined;
+        } else {
+          const runs = tail.match(/\d+/g);
+          digits = runs ? runs[runs.length - 1] : undefined;
+        }
+        if (digits) max = Math.max(max, parseInt(digits, 10) || 0);
       }
       return max;
     } catch {
       return 0;
     }
-  }
-
-  /** Apply an autonumber format like `CASE-{0000}`; default to the bare number. */
-  private formatAutonumber(format: string | undefined, value: number): string {
-    if (!format) return String(value);
-    const m = format.match(/\{(0+)\}/);
-    if (!m) return format.includes('{0}') ? format.replace('{0}', String(value)) : `${format}${value}`;
-    const padded = String(value).padStart(m[1].length, '0');
-    return format.replace(m[0], padded);
   }
 
   /**

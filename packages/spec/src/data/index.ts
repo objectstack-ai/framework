@@ -5,6 +5,7 @@ export * from './filter.zod';
 export * from './date-macros.zod';
 export * from './object.zod';
 export * from './field.zod';
+export * from './autonumber-format';
 export * from './validation.zod';
 export * from './hook.zod';
 export * from './hook-body.zod';

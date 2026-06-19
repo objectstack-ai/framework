@@ -8,6 +8,7 @@
  */
 
 import type { QueryAST, DriverOptions, SchemaMode } from '@objectstack/spec/data';
+import { parseAutonumberFormat, renderAutonumber, missingFieldValues, type AutonumberToken } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
@@ -213,11 +214,19 @@ export class SqlDriver implements IDataDriver {
    */
   protected autoNumberFields: Record<
     string,
-    Array<{ name: string; format: string; prefix: string; padWidth: number; tenantField: string | null }>
+    Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }>
   > = {};
 
   /** Whether the sequences table has been ensured this process. */
   protected sequencesTableReady = false;
+  /**
+   * Whether `_objectstack_sequences` is the current `key_hash`-keyed shape.
+   * Set on a fresh create or a successful in-place migration. If a legacy table
+   * could NOT be migrated, this stays false: fixed-prefix sequences (empty
+   * scope) keep working via the legacy `(object, tenant_id, field)` key, while a
+   * per-scope write raises an actionable error rather than corrupting counters.
+   */
+  protected sequencesHasKeyHash = false;
   /** In-flight ensure promise; deduplicates concurrent first calls. */
   protected sequencesTableEnsurePromise: Promise<void> | null = null;
 
@@ -540,6 +549,15 @@ export class SqlDriver implements IDataDriver {
   /**
    * Ensure the sequence-counter table exists. Idempotent and cheap after
    * the first call (cached via `sequencesTableReady`).
+   *
+   * The row key is `key_hash` — a SHA-256 of `(object, tenant_id, field, scope)`
+   * where `scope` is the rendered autonumber prefix (date/field tokens before
+   * the `{0000}` slot), so a new day/group/parent starts a fresh counter. A
+   * single 64-char hashed primary key (rather than the four raw columns, which
+   * blow past MySQL's 3072-byte index limit under utf8mb4 and bound how long a
+   * `{field}` scope may be) keys every dialect uniformly and lets `scope` be a
+   * generous non-indexed column. Fixed-prefix formats use the empty scope and
+   * keep their single global counter (backward compatible).
    */
   protected async ensureSequencesTable(): Promise<void> {
     if (this.sequencesTableReady) return;
@@ -551,20 +569,19 @@ export class SqlDriver implements IDataDriver {
       const exists = await this.knex.schema.hasTable(SEQUENCES_TABLE);
       if (!exists) {
         try {
-          await this.knex.schema.createTable(SEQUENCES_TABLE, (t) => {
-            t.string('object').notNullable();
-            t.string('tenant_id').notNullable();
-            t.string('field').notNullable();
-            t.bigInteger('last_value').notNullable().defaultTo(0);
-            t.timestamp('updated_at').defaultTo(this.knex.fn.now());
-            t.primary(['object', 'tenant_id', 'field']);
-          });
+          await this.createSequencesTable(SEQUENCES_TABLE);
+          this.sequencesHasKeyHash = true;
         } catch (err: any) {
           // Race or cross-process create — re-check existence; ignore
           // "already exists" errors from any dialect.
           const stillMissing = !(await this.knex.schema.hasTable(SEQUENCES_TABLE));
           if (stillMissing) throw err;
+          // A racing creator may have used an older schema. Migrate in place.
+          await this.ensureSequencesKeyHashShape();
         }
+      } else {
+        // Pre-existing table may predate the `key_hash`/`scope` shape. Migrate.
+        await this.ensureSequencesKeyHashShape();
       }
       this.sequencesTableReady = true;
     })();
@@ -572,6 +589,81 @@ export class SqlDriver implements IDataDriver {
       await this.sequencesTableEnsurePromise;
     } finally {
       this.sequencesTableEnsurePromise = null;
+    }
+  }
+
+  /** SHA-256 of the composite counter key — the table's single-column PK. */
+  protected sequenceKeyHash(object: string, tenantId: string, field: string, scope: string): string {
+    return createHash('sha256')
+      .update(`${object}\u001f${tenantId}\u001f${field}\u001f${scope}`)
+      .digest('hex');
+  }
+
+  /** Create the current `key_hash`-keyed sequences table shape. */
+  protected async createSequencesTable(table: string): Promise<void> {
+    await this.knex.schema.createTable(table, (t) => {
+      t.string('key_hash', 64).notNullable().primary();
+      t.string('object').notNullable();
+      t.string('tenant_id').notNullable();
+      t.string('field').notNullable();
+      // Non-indexed, so it is free of the PK length limit — a long `{plan_no}`
+      // composite scope fits. 1024 is far above any realistic rendered prefix.
+      t.string('scope', 1024).notNullable().defaultTo('');
+      t.bigInteger('last_value').notNullable().defaultTo(0);
+      t.timestamp('updated_at').defaultTo(this.knex.fn.now());
+    });
+  }
+
+  /**
+   * Migrate a pre-existing `_objectstack_sequences` table to the current
+   * `key_hash`-keyed shape. Handles both the original 3-column table (no
+   * `scope`) and an interim 4-column `(object, tenant_id, field, scope)` table:
+   * every legacy row is read, its `key_hash` computed in app code (no portable
+   * SQL hash exists), and re-inserted into a freshly built table that then
+   * replaces the original. Idempotent — a no-op once `key_hash` is present.
+   *
+   * If the rebuild fails, `sequencesHasKeyHash` stays false: fixed-prefix
+   * sequences keep working via the legacy key and per-scope writes error
+   * actionably (see getNextSequenceValue), rather than corrupting data.
+   */
+  protected async ensureSequencesKeyHashShape(): Promise<void> {
+    if (await this.knex.schema.hasColumn(SEQUENCES_TABLE, 'key_hash')) {
+      this.sequencesHasKeyHash = true;
+      return;
+    }
+    const hasScope = await this.knex.schema.hasColumn(SEQUENCES_TABLE, 'scope');
+    const TMP = `${SEQUENCES_TABLE}__rebuild`;
+    try {
+      const rows: any[] = await this.knex(SEQUENCES_TABLE).select('*');
+      await this.knex.schema.dropTableIfExists(TMP);
+      await this.createSequencesTable(TMP);
+      const migrated = rows.map((r) => {
+        const scope = hasScope && r.scope != null ? String(r.scope) : '';
+        return {
+          key_hash: this.sequenceKeyHash(String(r.object), String(r.tenant_id), String(r.field), scope),
+          object: r.object,
+          tenant_id: r.tenant_id,
+          field: r.field,
+          scope,
+          last_value: r.last_value ?? 0,
+          updated_at: r.updated_at ?? this.knex.fn.now(),
+        };
+      });
+      if (migrated.length > 0) await this.knex(TMP).insert(migrated);
+      await this.knex.schema.dropTable(SEQUENCES_TABLE);
+      await this.knex.schema.renameTable(TMP, SEQUENCES_TABLE);
+      this.sequencesHasKeyHash = true;
+    } catch (err) {
+      // Leave the original table intact; fall back to legacy keying for
+      // fixed-prefix sequences and refuse per-scope writes until migrated.
+      this.sequencesHasKeyHash = false;
+      await this.knex.schema.dropTableIfExists(TMP).catch(() => {});
+      this.logger.warn(
+        `[autonumber] Failed to migrate ${SEQUENCES_TABLE} to the key_hash shape. ` +
+          `Fixed-prefix autonumbers keep working; date/{field}/per-parent formats will ` +
+          `error until the table is migrated.`,
+        { error: String(err) },
+      );
     }
   }
 
@@ -628,10 +720,32 @@ export class SqlDriver implements IDataDriver {
     tenantField: string | null,
     tenantId: string | null,
     parentTrx?: Knex.Transaction,
+    scope = '',
   ): Promise<number> {
     await this.ensureSequencesTable();
     const resolvedTenantId = tenantField && tenantId ? String(tenantId) : GLOBAL_TENANT;
-    const key = { object: tableName, tenant_id: resolvedTenantId, field };
+    if (scope !== '' && !this.sequencesHasKeyHash) {
+      // The legacy sequences table could not be migrated to the key_hash shape,
+      // so it cannot represent per-scope counters. Fail with a clear, actionable
+      // message instead of corrupting the single legacy counter.
+      throw new Error(
+        `Cannot generate a per-scope autonumber for "${object}.${field}": the ` +
+          `${SEQUENCES_TABLE} table is still the legacy shape. ` +
+          `Migrate it to the key_hash shape before using date/{field}/per-parent formats.`,
+      );
+    }
+    // `scope` (rendered date/field prefix, boundary-delimited) gives each
+    // period/group its own counter; '' keeps the single global counter for
+    // fixed-prefix formats. `prefix` is the full rendered prefix used to
+    // bootstrap from existing data. The row is keyed by a hash of the composite;
+    // on an un-migrated legacy table only fixed-prefix (scope '') reaches here,
+    // so fall back to the original `(object, tenant_id, field)` key for it.
+    const key = this.sequencesHasKeyHash
+      ? { key_hash: this.sequenceKeyHash(tableName, resolvedTenantId, field, scope) }
+      : { object: tableName, tenant_id: resolvedTenantId, field };
+    const insertRow = this.sequencesHasKeyHash
+      ? { ...key, object: tableName, tenant_id: resolvedTenantId, field, scope }
+      : { ...key };
 
     const runner: Knex | Knex.Transaction = parentTrx ?? this.knex;
 
@@ -658,7 +772,7 @@ export class SqlDriver implements IDataDriver {
         );
         const initial = seedMax + 1;
         try {
-          await trx(SEQUENCES_TABLE).insert({ ...key, last_value: initial });
+          await trx(SEQUENCES_TABLE).insert({ ...insertRow, last_value: initial });
           return initial;
         } catch (err) {
           // Another writer raced us to the first INSERT. Fall through to
@@ -675,10 +789,12 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
-   * For each `auto_number` field on the object that the caller did not
-   * provide a value for, reserve the next sequence value scoped to the
-   * record's tenant (or globally if the object has no tenant field) and
-   * render `prefix + zero-padded(value)`.
+   * For each `auto_number` field the caller left empty, render the format and
+   * reserve the next counter value. The counter is scoped to the rendered
+   * prefix (date tokens like `{YYYYMMDD}` in the request's business timezone,
+   * plus `{field}` interpolation from the row), so it resets per period/group;
+   * the full rendered prefix bootstraps the counter from existing data, and the
+   * tenant scopes it for isolation.
    */
   protected async fillAutoNumberFields(
     object: string,
@@ -689,8 +805,22 @@ export class SqlDriver implements IDataDriver {
     const cfgs = this.autoNumberFields[tableName] || this.autoNumberFields[object];
     if (!cfgs || cfgs.length === 0) return;
     const parentTrx = options?.transaction as Knex.Transaction | undefined;
+    const timezone = (options as any)?.timezone as string | undefined;
+    const now = new Date();
     for (const cfg of cfgs) {
       if (row[cfg.name] !== undefined && row[cfg.name] !== null && row[cfg.name] !== '') continue;
+      // A `{field}` token with no value would render to an empty prefix and
+      // silently merge this record into the wrong counter scope, so refuse to
+      // generate rather than emit a wrong record number (the referenced field
+      // must be populated before the autonumber — see field.zod docs).
+      const missing = missingFieldValues(cfg.tokens, row);
+      if (missing.length > 0) {
+        throw new Error(
+          `Cannot generate autonumber "${object}.${cfg.name}" (format "${cfg.format}"): ` +
+            `referenced field(s) [${missing.join(', ')}] are empty on the record. ` +
+            `Fields interpolated into an autonumber format must be set before the record is created.`,
+        );
+      }
       // Resolve tenant for this row: explicit field on the record wins,
       // then driver options, else null → global sequence.
       const rowTenant = cfg.tenantField ? row[cfg.tenantField] : undefined;
@@ -700,16 +830,20 @@ export class SqlDriver implements IDataDriver {
         : optTenant != null && optTenant !== ''
           ? String(optTenant)
           : null;
+      // Resolve the scope/prefix for this row (counter-value-independent),
+      // reserve the next value under that scope, then render the final string.
+      const probe = renderAutonumber({ tokens: cfg.tokens, seq: 0, record: row, now, timezone });
       const next = await this.getNextSequenceValue(
         object,
         tableName,
         cfg.name,
-        cfg.prefix,
+        probe.prefix,
         cfg.tenantField,
         tenantId,
         parentTrx,
+        probe.scope,
       );
-      row[cfg.name] = `${cfg.prefix}${String(next).padStart(cfg.padWidth, '0')}`;
+      row[cfg.name] = renderAutonumber({ tokens: cfg.tokens, seq: next, record: row, now, timezone }).value;
     }
   }
 
@@ -1113,7 +1247,7 @@ export class SqlDriver implements IDataDriver {
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];
       const numericCols: string[] = [];
-      const autoNumberCols: Array<{ name: string; format: string; prefix: string; padWidth: number; tenantField: string | null }> = [];
+      const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
       // Auto-detect tenant field. Convention: the field named
       // `organization_id` (matching tenantPolicy default) scopes the
       // Resolve tenant scope declaratively first (obj.tenancy.{enabled,
@@ -1164,10 +1298,11 @@ export class SqlDriver implements IDataDriver {
               ? field.autonumberFormat
               : (typeof field.format === 'string' && field.format ? field.format : '');
             const fmt = rawFmt || '{0000}';
-            const m = fmt.match(/\{(0+)\}/);
-            const padWidth = m ? m[1].length : 4;
-            const prefix = m ? fmt.slice(0, m.index ?? 0) : fmt;
-            autoNumberCols.push({ name, format: fmt, prefix, padWidth, tenantField });
+            // Tokenize once: the renderer resolves date tokens (`{YYYYMMDD}`),
+            // field interpolation (`{island_zone}`) and the sequence slot at
+            // fill time. The counter scopes to whatever renders before the slot.
+            const tokens = parseAutonumberFormat(fmt);
+            autoNumberCols.push({ name, format: fmt, tokens, tenantField });
           }
         }
       }
