@@ -18,7 +18,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { VerifyStack } from './harness.js';
-import { deriveCrudCases } from './derive.js';
+import { deriveCrudCases, fillRelationalRefs } from './derive.js';
 
 const PROBE_TYPES = new Set(['text', 'textarea', 'string']);
 const MUTATION = 'rls-mutated-by-B';
@@ -43,6 +43,10 @@ export async function runRlsProofs(
 ): Promise<RlsReport> {
   const cases = deriveCrudCases(config);
   const results: RlsResult[] = [];
+  // Admin-created ids, threaded so a detail's required relation points at a real
+  // master (topological order created it first) — lets the #1994 invariant reach
+  // relationship-dense objects, not just the leaves.
+  const createdIds = new Map<string, string>();
 
   for (const c of cases) {
     if (c.blocked) { results.push({ object: c.object, status: 'skipped', detail: c.blocked }); continue; }
@@ -52,8 +56,11 @@ export async function runRlsProofs(
     const probe = (c.asserts ?? []).find((a) => PROBE_TYPES.has(a.type));
     if (!probe) { results.push({ object: c.object, status: 'skipped', detail: 'no plain-text probe field' }); continue; }
 
+    const { body, missing } = fillRelationalRefs(c, createdIds);
+    if (missing) { results.push({ object: c.object, status: 'skipped', detail: missing }); continue; }
+
     // Admin (owner) creates the record.
-    const created = await stack.apiAs(adminToken, 'POST', `/data/${c.object}`, c.body);
+    const created = await stack.apiAs(adminToken, 'POST', `/data/${c.object}`, body);
     if (created.status >= 300) {
       results.push({ object: c.object, status: 'skipped', detail: `admin create failed (${created.status})` });
       continue;
@@ -61,6 +68,7 @@ export async function runRlsProofs(
     const cj = (await created.json()) as any;
     const id = cj?.id ?? cj?.record?.id;
     if (!id) { results.push({ object: c.object, status: 'skipped', detail: 'no id from create' }); continue; }
+    createdIds.set(c.object, String(id));
 
     // Member B: can they SEE it?
     const bRead = await stack.apiAs(memberToken, 'GET', `/data/${c.object}/${id}`);

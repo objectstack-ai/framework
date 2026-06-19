@@ -10,7 +10,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { VerifyStack } from './harness.js';
-import { deriveCrudCases, type CrudCase } from './derive.js';
+import { deriveCrudCases, fillRelationalRefs, type CrudCase } from './derive.js';
 
 export interface ObjectVerifyResult {
   object: string;
@@ -57,15 +57,24 @@ export async function runCrudVerification(
 ): Promise<VerifyReport> {
   const cases = deriveCrudCases(config);
   const results: ObjectVerifyResult[] = [];
+  // Registry of created record ids, threaded so a dependent object's required
+  // relation is filled with a real target id (topological order guarantees the
+  // target was created first). One instance per object — reused across refs.
+  const createdIds = new Map<string, string>();
 
   for (const c of cases as CrudCase[]) {
     if (c.blocked) {
       results.push({ object: c.object, status: 'skipped', reason: c.blocked });
       continue;
     }
+    const { body, missing } = fillRelationalRefs(c, createdIds);
+    if (missing) {
+      results.push({ object: c.object, status: 'skipped', reason: missing });
+      continue;
+    }
     let created: Response;
     try {
-      created = await stack.apiAs(token, 'POST', `/data/${c.object}`, c.body);
+      created = await stack.apiAs(token, 'POST', `/data/${c.object}`, body);
     } catch (e: any) {
       results.push({ object: c.object, status: 'create-failed', detail: String(e?.message ?? e).slice(0, 200) });
       continue;
@@ -91,6 +100,7 @@ export async function runCrudVerification(
       results.push({ object: c.object, status: 'create-failed', detail: 'no id returned' });
       continue;
     }
+    createdIds.set(c.object, String(id));
 
     const got = await stack.apiAs(token, 'GET', `/data/${c.object}/${id}`);
     if (got.status !== 200) {

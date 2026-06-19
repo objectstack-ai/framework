@@ -10,8 +10,8 @@
 export { bootStack } from './harness.js';
 export type { VerifyStack, BootOptions } from './harness.js';
 
-export { deriveCrudCases } from './derive.js';
-export type { CrudCase, DerivedAssert, AssertKind } from './derive.js';
+export { deriveCrudCases, fillRelationalRefs } from './derive.js';
+export type { CrudCase, DerivedAssert, AssertKind, RelationalRef } from './derive.js';
 
 export { runCrudVerification, formatReport } from './verify.js';
 export type { VerifyReport, ObjectVerifyResult } from './verify.js';
