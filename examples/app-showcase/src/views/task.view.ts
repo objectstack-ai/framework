@@ -35,10 +35,26 @@ export const TaskViews = defineView({
     // ADR-0047 — runtime visualization whitelist (Airtable "Appearance →
     // Visualizations"). Rendered as a compact dropdown in the toolbar's
     // right cluster; types whose bindings don't resolve are hidden by the
-    // client regardless.
+    // client regardless. This default list is the showcase's "switch every
+    // view" case: the SAME records re-shaped into each record-based
+    // visualization (chart is excluded — it aggregates a dataset, not records,
+    // and lives as its own named view + dashboard element).
     appearance: {
-      allowedVisualizations: ['grid', 'kanban', 'gallery', 'calendar'],
+      // The six record-based visualizations the spec + runtime switcher support
+      // out of the box: the SAME task records re-shaped on demand. (map needs a
+      // spec MapConfigSchema the ListViewSchema doesn't yet have, and chart
+      // aggregates a dataset rather than records — both live as their own named
+      // views below instead of in this switcher.)
+      allowedVisualizations: ['grid', 'kanban', 'gallery', 'calendar', 'timeline', 'gantt'],
     },
+
+    // Per-visualization bindings so each type in the switcher resolves and
+    // renders the same task records. Field names map to task.object.ts.
+    kanban: { groupByField: 'status', summarizeField: 'estimate_hours', columns: ['title', 'assignee', 'priority'] },
+    gallery: { coverField: 'cover', titleField: 'title', visibleFields: ['assignee', 'status', 'priority'] },
+    calendar: { startDateField: 'due_date', titleField: 'title', colorField: 'status' },
+    timeline: { startDateField: 'created_at', titleField: 'title', colorField: 'priority', scale: 'week' },
+    gantt: { startDateField: 'start_date', endDateField: 'end_date', titleField: 'title', progressField: 'progress' },
   },
 
   listViews: {
