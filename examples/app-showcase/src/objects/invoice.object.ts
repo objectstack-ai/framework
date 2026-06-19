@@ -103,6 +103,13 @@ export const InvoiceLine = ObjectSchema.create({
   icon: 'list',
   description: 'A single billable line on an invoice.',
 
+  // ADR-0055: a line's access is CONTROLLED BY ITS PARENT invoice — a user sees
+  // and edits a line only if they can see/edit its `invoice` master. No RLS is
+  // authored here; the security layer derives it from the required master_detail
+  // relationship (`invoice`). This is the canonical master-detail use of
+  // controlled_by_parent (a line is meaningless apart from its invoice).
+  sharingModel: 'controlled_by_parent',
+
   fields: {
     invoice: Field.masterDetail('showcase_invoice', {
       label: 'Invoice',
