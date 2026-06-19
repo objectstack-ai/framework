@@ -865,8 +865,19 @@ export class ObjectQL implements IDataEngine {
         const s = String(v);
         if (prefix && !s.startsWith(prefix)) continue;
         const tail = prefix ? s.slice(prefix.length) : s;
-        const m = prefix ? tail.match(/^(\d+)/) : tail.match(/(\d+)(?!.*\d)/);
-        if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+        // With a prefix the counter is the digit run right after it; without one
+        // (legacy fixed-prefix formats) it is the LAST digit run. Both use the
+        // linear /\d+/g — a backtracking lookahead here is a polynomial-ReDoS
+        // sink on stored values full of zeros (CodeQL js/polynomial-redos).
+        let digits: string | undefined;
+        if (prefix) {
+          const head = tail.match(/^\d+/);
+          digits = head ? head[0] : undefined;
+        } else {
+          const runs = tail.match(/\d+/g);
+          digits = runs ? runs[runs.length - 1] : undefined;
+        }
+        if (digits) max = Math.max(max, parseInt(digits, 10) || 0);
       }
       return max;
     } catch {
