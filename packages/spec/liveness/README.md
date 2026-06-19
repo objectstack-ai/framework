@@ -77,8 +77,8 @@ binding lands one class at a time (ADR-0054 §3), never as a big-bang backfill.
 |---|---|---|---|
 | Field types | ✅ enforced | `field.type` | `field-zoo-roundtrip.dogfood.test.ts#field-type-roundtrip` |
 | RLS / sharing | ✅ enforced | `permission.rowLevelSecurity.using` | `rls-fixture.dogfood.test.ts#rls-by-id-write` |
+| Flow nodes | ✅ enforced | `flow.nodes.type` | `flow-node.dogfood.test.ts#flow-node-execution` |
 | Analytics dims/measures | ⛔ pending | — | `analytics-timezone.dogfood.test.ts#analytics-tz-bucketing` (proof exists; surface `dataset`/`report` not yet governed) |
-| Flow nodes | ⛔ pending | `flow.nodes.type` (candidate) | none yet (Phase 2) |
 | Form layout/section/widget | ⛔ pending | — | none yet (Phase 2) |
 
 To bind a pending class: add its dogfood proof + `@proof:` tag, set `bound: true` and

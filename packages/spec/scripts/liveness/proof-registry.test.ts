@@ -102,7 +102,7 @@ describe('registry invariants', () => {
 
   it('BOUND_PROOF_PATHS maps the expected entries this phase', () => {
     expect([...BOUND_PROOF_PATHS.keys()].sort()).toEqual(
-      ['field/type', 'permission/rowLevelSecurity.using'].sort(),
+      ['field/type', 'flow/nodes.type', 'permission/rowLevelSecurity.using'].sort(),
     );
   });
 
@@ -119,6 +119,7 @@ describe('real proof wiring resolves', () => {
   const ledgerFor: Record<string, string> = {
     field: 'packages/spec/liveness/field.json',
     permission: 'packages/spec/liveness/permission.json',
+    flow: 'packages/spec/liveness/flow.json',
   };
 
   function ledgerEntry(type: string, path: string): any {

@@ -31,7 +31,8 @@
     "@objectstack/plugin-sharing": "workspace:*",
     "@objectstack/plugin-org-scoping": "workspace:*",
     "@objectstack/service-settings": "workspace:*",
-    "@objectstack/service-analytics": "workspace:*"
+    "@objectstack/service-analytics": "workspace:*",
+    "@objectstack/service-automation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

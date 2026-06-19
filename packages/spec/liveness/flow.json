@@ -64,7 +64,8 @@
         "type": {
           "status": "live",
           "evidence": "packages/services/service-automation/src/engine.ts",
-          "note": "open string vs live executor registry (ADR-0018); FlowNodeAction enum is out of sync."
+          "proof": "packages/dogfood/test/flow-node.dogfood.test.ts#flow-node-execution",
+          "note": "open string vs live executor registry (ADR-0018); FlowNodeAction enum is out of sync. ADR-0054 high-risk class (flow nodes): the proof authors a flow, triggers it over HTTP, and asserts the update_record node executed AND the input variable wired into its filter (only the targeted record changed) — guarding node execution + variable wiring, not just that the engine reads the node."
         },
         "label": {
           "status": "live",

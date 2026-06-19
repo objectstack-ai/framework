@@ -95,11 +95,11 @@ export const HIGH_RISK_CLASSES: HighRiskClass[] = [
     label: 'Flow nodes',
     summary: 'node execution + variable wiring through the automation engine.',
     proofId: 'flow-node-execution',
-    proofRef: null,
-    bound: false,
-    // Candidate binding target once a Phase-2 flow-execution proof exists.
+    proofRef: 'packages/dogfood/test/flow-node.dogfood.test.ts#flow-node-execution',
+    bound: true,
+    // `nodes.type` selects which executor runs — the property whose end-to-end
+    // execution + variable wiring the proof guards.
     ledgerBindings: [{ type: 'flow', path: 'nodes.type' }],
-    blockedReason: 'no runtime proof yet (ADR-0054 Phase 2). Add a dogfood flow-execution proof, then bind.',
   },
   {
     id: 'form-widget',

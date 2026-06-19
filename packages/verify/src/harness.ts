@@ -83,6 +83,16 @@ export interface BootOptions {
    * stripped and a member sees every row. Default `false`.
    */
   multiTenant?: boolean;
+  /**
+   * Register `@objectstack/service-automation` so authored flows execute against
+   * the real stack. The plugin seeds the built-in node executors and, at start(),
+   * pulls every flow in the app config from the ObjectQL registry and registers
+   * it — so `POST /api/v1/automation/:name/trigger` actually runs the flow's
+   * nodes. Without this the dispatcher's automation routes resolve no `automation`
+   * service and flow execution is unreachable. Opt-in (like `multiTenant`) so the
+   * default boot stays lean for apps that don't exercise flows. Default `false`.
+   */
+  automation?: boolean;
 }
 
 /**
@@ -124,6 +134,15 @@ export async function bootStack(
   if (opts.multiTenant) {
     const { OrgScopingPlugin } = await import('@objectstack/plugin-org-scoping');
     await kernel.use(new OrgScopingPlugin());
+  }
+
+  // Automation service — opt-in. Registered before bootstrap so its start()
+  // phase pulls the app's flows from the ObjectQL registry (populated by
+  // AppPlugin.init) and registers them. `memory` suspended-run store keeps the
+  // harness free of any manifest/persistence dependency for flow execution.
+  if (opts.automation) {
+    const { AutomationServicePlugin } = await import('@objectstack/service-automation');
+    await kernel.use(new AutomationServicePlugin({ suspendedRunStore: 'memory' }));
   }
 
   await kernel.use(opts.security ?? new SecurityPlugin());
