@@ -105,6 +105,8 @@ export const pageForm = defineForm({
             // ── User actions ──
             { field: 'userActions', type: 'composite', disclosure: 'popover', helpText: 'Toolbar toggles (search, sort, filter, row height)' },
             { field: 'addRecord', type: 'composite', disclosure: 'popover', helpText: 'Add-record entry point' },
+            // Buttons ARE object actions — pick from the source object's actions.
+            { field: 'buttons', widget: 'action-multi', dependsOn: 'source', helpText: "Toolbar buttons — pick from this object's actions" },
             { field: 'showRecordCount', helpText: 'Show the record count bar' },
             { field: 'allowPrinting', helpText: 'Allow users to print this page' },
           ],

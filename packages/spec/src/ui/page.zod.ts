@@ -257,6 +257,10 @@ export const InterfacePageConfigSchema = lazySchema(() => z.object({
   /** Add record */
   addRecord: AddRecordConfigSchema.optional().describe('Add record entry point configuration'),
 
+  /** Toolbar buttons — references to the source object's actions (ActionSchema).
+   * Buttons ARE object actions (not free text): correct-by-construction. */
+  buttons: z.array(z.string()).optional().describe("Toolbar buttons — names of the source object's actions to surface in the page toolbar"),
+
   /** Record count */
   showRecordCount: z.boolean().optional().describe('Show record count at page bottom'),
 

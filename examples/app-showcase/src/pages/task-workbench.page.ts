@@ -61,6 +61,10 @@ export const TaskWorkbenchPage: Page = {
       addRecordForm: false,
     },
 
+    // Toolbar buttons ARE object actions (ADR-0047) — referenced by name from
+    // the showcase_task object's ActionSchema, not free text.
+    buttons: ['showcase_bulk_reassign', 'showcase_mark_done'],
+
     showRecordCount: true,
   },
 };
