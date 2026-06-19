@@ -112,4 +112,43 @@ describe('ObjectQL autonumber ownership (#1603)', () => {
     expect(driver.created[0].doc_no).toBe('D-0001');
     expect(result.doc_no).toBe('D-0001');
   });
+
+  // The fallback path renders the SAME format tokens as the SQL driver
+  // (shared @objectstack/spec renderer), so {field}/{date} grouping must match.
+  it('fallback renders {field} tokens and counts independently per scope', async () => {
+    const TASK_SCHEMA = {
+      name: 'task',
+      fields: {
+        zone: { type: 'text' },
+        task_no: { type: 'autonumber', format: '{zone}{000}' },
+      },
+    };
+    vi.mocked(SchemaRegistry.getObject).mockReturnValue(TASK_SCHEMA as any);
+    const driver = makeDriver(false);
+    engine.registerDriver(driver, true);
+    await engine.init();
+
+    const a1 = await engine.insert('task', { zone: 'A' });
+    const b1 = await engine.insert('task', { zone: 'B' });
+    const a2 = await engine.insert('task', { zone: 'A' });
+
+    expect(a1.task_no).toBe('A001');
+    expect(b1.task_no).toBe('B001'); // a different scope restarts at 001
+    expect(a2.task_no).toBe('A002');
+  });
+
+  it('fallback renders {YYYYMMDD} date tokens in the business timezone', async () => {
+    const AUDIT_SCHEMA = {
+      name: 'audit',
+      fields: { audit_no: { type: 'autonumber', format: 'AD{YYYYMMDD}{0000}' } },
+    };
+    vi.mocked(SchemaRegistry.getObject).mockReturnValue(AUDIT_SCHEMA as any);
+    const driver = makeDriver(false);
+    engine.registerDriver(driver, true);
+    await engine.init();
+
+    const r = await engine.insert('audit', {}, { timezone: 'UTC' } as any);
+    // Today's UTC day + a fresh per-day counter.
+    expect(r.audit_no).toMatch(/^AD\d{8}0001$/);
+  });
 });

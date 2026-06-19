@@ -528,7 +528,25 @@ export const FieldSchema = lazySchema(() => z.object({
   sortable: z.boolean().optional().default(true).describe('Whether field is sortable in list views'),
   inlineHelpText: z.string().optional().describe('Help text displayed below the field in forms'),
   caseSensitive: z.boolean().optional().describe('Whether text comparisons are case-sensitive'),
-  autonumberFormat: z.string().optional().describe('Auto-number display format pattern (e.g., "CASE-{0000}")'),
+  /**
+   * Auto-number display format. Literal text interleaved with `{...}` tokens:
+   *
+   *   - `{0000}` — the sequence counter, zero-padded to that many digits
+   *     (at most one slot; omit it and the bare number is appended).
+   *   - `{YYYY} {YY} {MM} {DD} {YYYYMMDD}` — generation date in the request's
+   *     business timezone (`ExecutionContext.timezone`, ADR-0053; UTC fallback).
+   *   - `{field_name}` — the value of another field on the SAME record
+   *     (e.g. `{island_zone}`, `{plan_no}`), interpolated as text.
+   *
+   * The counter is scoped to whatever renders BEFORE the `{0000}` slot, so the
+   * period/group resets fall out automatically — no separate reset config:
+   *   - `AD{YYYYMMDD}{0000}`  → `AD202606170032`   (resets each day)
+   *   - `{section}{island_zone}{000}` → `JYG1A001`  (per island)
+   *   - `{plan_no}{000}`      → `…PROD20260617001001` (per parent record)
+   * A fixed-prefix format with no date/field token (e.g. `CASE-{0000}`) keeps a
+   * single global counter — fully backward compatible.
+   */
+  autonumberFormat: z.string().optional().describe('Auto-number format: literal text + {0000} counter, {YYYY}/{MM}/{DD}/{YYYYMMDD} date tokens (business tz), and {field_name} interpolation. Counter resets per rendered prefix (e.g. AD{YYYYMMDD}{0000} resets daily).'),
   /** Indexing */
   index: z.boolean().default(false).describe('Create standard database index'),
   externalId: z.boolean().default(false).describe('Is external ID for upsert operations'),

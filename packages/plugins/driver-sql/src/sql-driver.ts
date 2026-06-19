@@ -8,6 +8,7 @@
  */
 
 import type { QueryAST, DriverOptions, SchemaMode } from '@objectstack/spec/data';
+import { parseAutonumberFormat, renderAutonumber, type AutonumberToken } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
@@ -213,7 +214,7 @@ export class SqlDriver implements IDataDriver {
    */
   protected autoNumberFields: Record<
     string,
-    Array<{ name: string; format: string; prefix: string; padWidth: number; tenantField: string | null }>
+    Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }>
   > = {};
 
   /** Whether the sequences table has been ensured this process. */
@@ -540,6 +541,11 @@ export class SqlDriver implements IDataDriver {
   /**
    * Ensure the sequence-counter table exists. Idempotent and cheap after
    * the first call (cached via `sequencesTableReady`).
+   *
+   * The key is `(object, tenant_id, field, scope)`. `scope` is the rendered
+   * autonumber prefix (date/field tokens before the `{0000}` slot), so a new
+   * day/group/parent starts a fresh counter. Fixed-prefix formats use the
+   * empty scope and keep their single global counter (backward compatible).
    */
   protected async ensureSequencesTable(): Promise<void> {
     if (this.sequencesTableReady) return;
@@ -555,16 +561,22 @@ export class SqlDriver implements IDataDriver {
             t.string('object').notNullable();
             t.string('tenant_id').notNullable();
             t.string('field').notNullable();
+            t.string('scope').notNullable().defaultTo('');
             t.bigInteger('last_value').notNullable().defaultTo(0);
             t.timestamp('updated_at').defaultTo(this.knex.fn.now());
-            t.primary(['object', 'tenant_id', 'field']);
+            t.primary(['object', 'tenant_id', 'field', 'scope']);
           });
         } catch (err: any) {
           // Race or cross-process create — re-check existence; ignore
           // "already exists" errors from any dialect.
           const stillMissing = !(await this.knex.schema.hasTable(SEQUENCES_TABLE));
           if (stillMissing) throw err;
+          // A racing creator may have used the legacy 3-column schema.
+          await this.ensureSequencesScopeColumn();
         }
+      } else {
+        // Pre-existing table may predate the `scope` column. Migrate in place.
+        await this.ensureSequencesScopeColumn();
       }
       this.sequencesTableReady = true;
     })();
@@ -572,6 +584,68 @@ export class SqlDriver implements IDataDriver {
       await this.sequencesTableEnsurePromise;
     } finally {
       this.sequencesTableEnsurePromise = null;
+    }
+  }
+
+  /**
+   * Add the `scope` column (and fold it into the primary key) to a
+   * `_objectstack_sequences` table created before per-period/per-group
+   * counters existed. Every legacy row is a fixed-prefix sequence, so it
+   * migrates to `scope = ''` and keeps counting unchanged. Idempotent.
+   */
+  protected async ensureSequencesScopeColumn(): Promise<void> {
+    const hasScope = await this.knex.schema.hasColumn(SEQUENCES_TABLE, 'scope');
+    if (hasScope) return;
+
+    if (this.isSqlite) {
+      // SQLite can't alter a primary key in place — rebuild the table. Every
+      // legacy row carries scope '' so the copy is a straight projection.
+      const TMP = `${SEQUENCES_TABLE}__rebuild`;
+      await this.knex.schema.dropTableIfExists(TMP);
+      await this.knex.schema.createTable(TMP, (t) => {
+        t.string('object').notNullable();
+        t.string('tenant_id').notNullable();
+        t.string('field').notNullable();
+        t.string('scope').notNullable().defaultTo('');
+        t.bigInteger('last_value').notNullable().defaultTo(0);
+        t.timestamp('updated_at').defaultTo(this.knex.fn.now());
+        t.primary(['object', 'tenant_id', 'field', 'scope']);
+      });
+      await this.knex.raw(
+        `insert into ?? (object, tenant_id, field, scope, last_value, updated_at)
+         select object, tenant_id, field, '', last_value, updated_at from ??`,
+        [TMP, SEQUENCES_TABLE],
+      );
+      await this.knex.schema.dropTable(SEQUENCES_TABLE);
+      await this.knex.schema.renameTable(TMP, SEQUENCES_TABLE);
+      return;
+    }
+
+    // Postgres / MySQL: add the column, then widen the primary key.
+    await this.knex.schema.alterTable(SEQUENCES_TABLE, (t) => {
+      t.string('scope').notNullable().defaultTo('');
+    });
+    try {
+      if (this.isMysql) {
+        await this.knex.raw(
+          'ALTER TABLE ?? DROP PRIMARY KEY, ADD PRIMARY KEY (object, tenant_id, field, scope)',
+          [SEQUENCES_TABLE],
+        );
+      } else {
+        // Postgres: the implicit PK constraint is named `<table>_pkey`.
+        await this.knex.raw('ALTER TABLE ?? DROP CONSTRAINT IF EXISTS ??', [
+          SEQUENCES_TABLE,
+          `${SEQUENCES_TABLE}_pkey`,
+        ]);
+        await this.knex.raw('ALTER TABLE ?? ADD PRIMARY KEY (object, tenant_id, field, scope)', [
+          SEQUENCES_TABLE,
+        ]);
+      }
+    } catch (err) {
+      // Widening the PK is best-effort; the column itself is what new writes
+      // need. A stale 3-column PK only bites if a field's format flips from
+      // fixed to dynamic on an already-seeded deployment.
+      this.logger.warn('Failed to widen _objectstack_sequences primary key', { error: String(err) });
     }
   }
 
@@ -628,10 +702,14 @@ export class SqlDriver implements IDataDriver {
     tenantField: string | null,
     tenantId: string | null,
     parentTrx?: Knex.Transaction,
+    scope = '',
   ): Promise<number> {
     await this.ensureSequencesTable();
     const resolvedTenantId = tenantField && tenantId ? String(tenantId) : GLOBAL_TENANT;
-    const key = { object: tableName, tenant_id: resolvedTenantId, field };
+    // `scope` (rendered date/field prefix) gives each period/group its own
+    // counter; '' keeps the single global counter for fixed-prefix formats.
+    // `prefix` is the full rendered prefix used to bootstrap from existing data.
+    const key = { object: tableName, tenant_id: resolvedTenantId, field, scope };
 
     const runner: Knex | Knex.Transaction = parentTrx ?? this.knex;
 
@@ -675,10 +753,12 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
-   * For each `auto_number` field on the object that the caller did not
-   * provide a value for, reserve the next sequence value scoped to the
-   * record's tenant (or globally if the object has no tenant field) and
-   * render `prefix + zero-padded(value)`.
+   * For each `auto_number` field the caller left empty, render the format and
+   * reserve the next counter value. The counter is scoped to the rendered
+   * prefix (date tokens like `{YYYYMMDD}` in the request's business timezone,
+   * plus `{field}` interpolation from the row), so it resets per period/group;
+   * the full rendered prefix bootstraps the counter from existing data, and the
+   * tenant scopes it for isolation.
    */
   protected async fillAutoNumberFields(
     object: string,
@@ -689,6 +769,8 @@ export class SqlDriver implements IDataDriver {
     const cfgs = this.autoNumberFields[tableName] || this.autoNumberFields[object];
     if (!cfgs || cfgs.length === 0) return;
     const parentTrx = options?.transaction as Knex.Transaction | undefined;
+    const timezone = (options as any)?.timezone as string | undefined;
+    const now = new Date();
     for (const cfg of cfgs) {
       if (row[cfg.name] !== undefined && row[cfg.name] !== null && row[cfg.name] !== '') continue;
       // Resolve tenant for this row: explicit field on the record wins,
@@ -700,16 +782,20 @@ export class SqlDriver implements IDataDriver {
         : optTenant != null && optTenant !== ''
           ? String(optTenant)
           : null;
+      // Resolve the scope/prefix for this row (counter-value-independent),
+      // reserve the next value under that scope, then render the final string.
+      const probe = renderAutonumber({ tokens: cfg.tokens, seq: 0, record: row, now, timezone });
       const next = await this.getNextSequenceValue(
         object,
         tableName,
         cfg.name,
-        cfg.prefix,
+        probe.prefix,
         cfg.tenantField,
         tenantId,
         parentTrx,
+        probe.scope,
       );
-      row[cfg.name] = `${cfg.prefix}${String(next).padStart(cfg.padWidth, '0')}`;
+      row[cfg.name] = renderAutonumber({ tokens: cfg.tokens, seq: next, record: row, now, timezone }).value;
     }
   }
 
@@ -1113,7 +1199,7 @@ export class SqlDriver implements IDataDriver {
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];
       const numericCols: string[] = [];
-      const autoNumberCols: Array<{ name: string; format: string; prefix: string; padWidth: number; tenantField: string | null }> = [];
+      const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
       // Auto-detect tenant field. Convention: the field named
       // `organization_id` (matching tenantPolicy default) scopes the
       // Resolve tenant scope declaratively first (obj.tenancy.{enabled,
@@ -1164,10 +1250,11 @@ export class SqlDriver implements IDataDriver {
               ? field.autonumberFormat
               : (typeof field.format === 'string' && field.format ? field.format : '');
             const fmt = rawFmt || '{0000}';
-            const m = fmt.match(/\{(0+)\}/);
-            const padWidth = m ? m[1].length : 4;
-            const prefix = m ? fmt.slice(0, m.index ?? 0) : fmt;
-            autoNumberCols.push({ name, format: fmt, prefix, padWidth, tenantField });
+            // Tokenize once: the renderer resolves date tokens (`{YYYYMMDD}`),
+            // field interpolation (`{island_zone}`) and the sequence slot at
+            // fill time. The counter scopes to whatever renders before the slot.
+            const tokens = parseAutonumberFormat(fmt);
+            autoNumberCols.push({ name, format: fmt, tokens, tenantField });
           }
         }
       }

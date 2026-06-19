@@ -37,6 +37,14 @@ export const DriverOptionsSchema = lazySchema(() => z.object({
    * For multi-tenant databases (row-level security or schema-per-tenant).
    */
   tenantId: z.string().optional().describe('Tenant Isolation identifier'),
+
+  /**
+   * Business reference timezone (IANA name, e.g. `Asia/Shanghai`) for the
+   * request, threaded from `ExecutionContext.timezone` (ADR-0053). Drivers that
+   * generate date-dependent values — notably `autonumber` date tokens
+   * (`{YYYYMMDD}`) — resolve the calendar day in this zone, falling back to UTC.
+   */
+  timezone: z.string().optional().describe('Business reference timezone (IANA) for date-dependent generation, e.g. autonumber date tokens'),
 }));
 
 /**
