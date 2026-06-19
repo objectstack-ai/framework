@@ -68,7 +68,7 @@ export const pageForm = defineForm({
     {
       name: 'interface',
       label: 'Interface (list pages)',
-      description: 'ADR-0047 interface mode: bind a source view and curate the end-user surface — quick filters, locked visualizations, toolbar actions (Airtable Interfaces parity).',
+      description: 'Interface mode (Airtable parity): the page defines its own data surface directly — columns, filters, visualizations and toolbar — no inheriting from a separate view.',
       collapsible: true,
       // Primary content for a list page — open by default (still collapsible).
       collapsed: false,
@@ -78,7 +78,7 @@ export const pageForm = defineForm({
           field: 'interfaceConfig',
           type: 'composite',
           helpText:
-            'source/sourceView bind the object view (columns, base filter and sort are inherited — the iron rule); appearance.allowedVisualizations whitelists renderers (one entry = locked); userActions toggles the toolbar.',
+            'The page IS the view: source picks the object, columns/filterBy are defined directly here; appearance.allowedVisualizations whitelists renderers (one entry = locked); userActions toggles the toolbar.',
           // Order: common authoring controls first, rarely-used ones last.
           // Explicit sub-fields so `userFilters` can use the dedicated
           // filter-mode selector (None / Tabs / Dropdown, ADR-0047 §3.4a).
@@ -87,22 +87,25 @@ export const pageForm = defineForm({
           // (`element: 'toggle'` stays valid but deprecated — not offered.)
           // Keep this list in sync with InterfacePageConfigSchema.
           fields: [
-            { field: 'source', widget: 'ref:object', helpText: 'Object this list reads from' },
-            // Pick from the source object's views instead of typing a name.
-            // `dependsOn: 'source'` tells the picker which object's views to list.
-            { field: 'sourceView', widget: 'view-ref', dependsOn: 'source', helpText: 'Named list view to inherit columns/filter/sort from (blank = object default)' },
+            // ── Data ── the page defines its own data surface directly.
+            { field: 'source', widget: 'ref:object', helpText: 'Object this page reads from' },
+            // Columns are defined ON the page (no view inheritance). `dependsOn:
+            // 'source'` tells the picker which object's fields to offer.
+            { field: 'columns', widget: 'field-multi', dependsOn: 'source', helpText: 'Columns to show — defined directly on the page (blank = all object fields)' },
+            { field: 'filterBy', type: 'repeater', helpText: 'Always-on base filter for the page' },
+            { field: 'levels', helpText: 'Hierarchy levels to display (tree-like sources)' },
+            // ── Appearance ──
             { field: 'appearance', type: 'composite', helpText: 'Allowed visualizations (Grid / Kanban / Calendar / …) and description visibility' },
+            // ── User filters ──
             {
               field: 'userFilters',
               widget: 'filter-mode',
               helpText: 'End-user filter bar: None (no bar) / Tabs (named presets) / Dropdown (per-field). None removes the config.',
             },
+            // ── User actions ──
             { field: 'userActions', type: 'composite', helpText: 'Toolbar toggles (search, sort, filter, row height)' },
             { field: 'addRecord', type: 'composite', helpText: 'Add-record entry point' },
             { field: 'showRecordCount', helpText: 'Show the record count bar' },
-            // Less-common — kept last.
-            { field: 'filterBy', type: 'repeater', helpText: 'Always-on page filter (in addition to the source view)' },
-            { field: 'levels', helpText: 'Hierarchy levels to display (tree-like sources)' },
             { field: 'allowPrinting', helpText: 'Allow users to print this page' },
           ],
         },

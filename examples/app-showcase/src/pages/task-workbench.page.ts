@@ -34,9 +34,9 @@ export const TaskWorkbenchPage: Page = {
   interfaceConfig: {
     source: 'showcase_task',
 
-    // ADR-0047 iron rule: the page inherits columns/filter/sort from the
-    // referenced view and adds presentation policy only.
-    sourceView: 'default',
+    // ADR-0047 (revised): the page defines its own columns directly — no
+    // inheriting from a separate view.
+    columns: ['title', 'project', 'assignee', 'status', 'priority', 'estimate_hours'],
 
     // End-user quick filters — the only filtering surface on this page.
     userFilters: {

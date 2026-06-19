@@ -24,8 +24,8 @@ export const TaskTriagePage: Page = {
   regions: [],
   interfaceConfig: {
     source: 'showcase_task',
-    // Inherit columns/filter/sort from the object's default view (ADR-0047).
-    sourceView: 'default',
+    // ADR-0047 (revised): columns defined directly on the page (no inheritance).
+    columns: ['title', 'project', 'assignee', 'status', 'priority', 'due_date', 'progress'],
 
     // End-user filter element: a row of preset tabs. `showAllRecords` adds the
     // leading unfiltered "All" tab automatically.

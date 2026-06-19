@@ -13,6 +13,7 @@ import {
   UserFiltersSchema,
   ViewFilterRuleSchema,
   AddRecordConfigSchema,
+  ListColumnSchema,
 } from './view.zod';
 
 /**
@@ -226,10 +227,22 @@ export const RecordReviewConfigSchema = lazySchema(() => z.object({
 export const InterfacePageConfigSchema = lazySchema(() => z.object({
   /** Data binding (ADR-0047: pages REFERENCE views, never restate them) */
   source: z.string().optional().describe('Source object name for the page'),
-  sourceView: z.string().optional()
-    .describe('Named list view on the source object to inherit columns/filter/sort from (ADR-0047 iron rule: the page adds presentation policy only). Omit to use the object default view'),
+
+  // ADR-0047 (revised): the page carries its OWN view metadata — columns, sort
+  // and base filter are defined directly here (Airtable parity: there is no
+  // "inherit from a named view" concept). The page IS the view definition.
+  columns: z.union([z.array(z.string()), z.array(ListColumnSchema)]).optional()
+    .describe('Columns shown by the page. Blank = all object fields. Defined directly on the page (no view inheritance).'),
+  sort: z.array(SortItemSchema).optional()
+    .describe('Default sort order for the page, defined directly on the page.'),
+  filterBy: z.array(ViewFilterRuleSchema).optional().describe('Always-on page filter (base filter).'),
   levels: z.number().int().min(1).optional().describe('Number of hierarchy levels to display'),
-  filterBy: z.array(ViewFilterRuleSchema).optional().describe('Page-level filter criteria'),
+
+  /** @deprecated Back-compat only. Pre-revision pages inherited columns/filter/sort
+   * from a named object view; new pages define `columns`/`sort`/`filterBy` directly.
+   * Still honored at runtime as a fallback when the page has no own `columns`. */
+  sourceView: z.string().optional()
+    .describe('@deprecated Legacy named-view inheritance. Define columns/sort/filterBy on the page instead.'),
 
   /** Appearance — `appearance.allowedVisualizations` is the runtime visualization whitelist */
   appearance: AppearanceConfigSchema.optional().describe('Appearance and visualization configuration'),
