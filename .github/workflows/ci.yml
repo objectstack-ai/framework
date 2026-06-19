@@ -161,6 +161,19 @@ jobs:
       - name: Boot example apps and exercise real user flows
         run: pnpm turbo run test --filter=@objectstack/dogfood
 
+      # Replaces the former auto-verify dogfood tests: runs the published
+      # `objectstack verify` engine over each example app through the CLI —
+      # auto-derived CRUD round-trip fidelity + the cross-owner RLS invariant.
+      # Exits non-zero on a real runtime failure, so it gates like the tests did.
+      - name: Verify example apps via the `objectstack verify` CLI
+        run: |
+          pnpm turbo run build --filter=@objectstack/cli
+          for app in examples/app-crm examples/app-showcase; do
+            echo "::group::objectstack verify $app --rls"
+            OS_LOG_LEVEL=error node packages/cli/bin/run.js verify --app "$app/objectstack.config.ts" --rls
+            echo "::endgroup::"
+          done
+
   build-core:
     name: Build Core
     needs: filter

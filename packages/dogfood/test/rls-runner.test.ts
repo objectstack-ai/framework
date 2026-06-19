@@ -7,8 +7,8 @@
 // The invariant: a user who CANNOT READ a record must not be able to WRITE it.
 
 import { describe, it, expect } from 'vitest';
-import { runRlsProofs } from '../src/rls.js';
-import type { DogfoodStack } from '../src/harness.js';
+import { runRlsProofs } from '@objectstack/verify';
+import type { VerifyStack } from '@objectstack/verify';
 
 const CONFIG = {
   manifest: { id: 'fixture' },
@@ -19,12 +19,12 @@ const CONFIG = {
 function fakeStack(opts: {
   memberCanRead: boolean;
   memberWriteMutates: boolean; // does member's PATCH actually change the row?
-}): DogfoodStack {
+}): VerifyStack {
   const store: Record<string, any> = {};
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-  const apiAs: DogfoodStack['apiAs'] = async (token, method, path, body) => {
+  const apiAs: VerifyStack['apiAs'] = async (token, method, path, body) => {
     const isAdmin = token === 'admin';
     const [, , object, id] = path.split('/'); // /data/<object>/<id>
     if (method === 'POST') {

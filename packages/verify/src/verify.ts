@@ -9,7 +9,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { DogfoodStack } from './harness.js';
+import type { VerifyStack } from './harness.js';
 import { deriveCrudCases, type CrudCase } from './derive.js';
 
 export interface ObjectVerifyResult {
@@ -51,7 +51,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
  * never throws on a per-object failure (collects them).
  */
 export async function runCrudVerification(
-  stack: DogfoodStack,
+  stack: VerifyStack,
   token: string,
   config: any,
 ): Promise<VerifyReport> {

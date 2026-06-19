@@ -17,7 +17,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { DogfoodStack } from './harness.js';
+import type { VerifyStack } from './harness.js';
 import { deriveCrudCases } from './derive.js';
 
 const PROBE_TYPES = new Set(['text', 'textarea', 'string']);
@@ -36,7 +36,7 @@ export interface RlsReport {
 }
 
 export async function runRlsProofs(
-  stack: DogfoodStack,
+  stack: VerifyStack,
   adminToken: string,
   memberToken: string,
   config: any,
