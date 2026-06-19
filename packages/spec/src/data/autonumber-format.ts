@@ -200,6 +200,12 @@ export function renderAutonumber(input: RenderAutonumberInput): RenderedAutonumb
     else suffix += piece;
   }
   const dynamic = hasDynamicTokens(tokens);
+  // The scope IS the rendered prefix. Two records whose tokens render to the
+  // same prefix string (e.g. `{a}{b}` for ('AB','C') and ('A','BC')) also render
+  // the same VISIBLE number, so they must share one counter to stay unique —
+  // splitting them by token boundary would mint duplicate record numbers. The
+  // remedy for genuinely-distinct groups is an unambiguous format (a delimiter
+  // literal between variable tokens); the compile lint nudges authors there.
   const scope = dynamic ? prefix : '';
   const value = width === null
     // No `{0..0}` slot — append the bare counter (legacy behaviour).

@@ -123,6 +123,46 @@ describe('SqlDriver auto_number format tokens', () => {
     expect(b.plan_no).toBe(`PROD${utcYmd()}001`);
   });
 
+  it('shares one counter when adjacent {field} values concat to the same prefix', async () => {
+    await driver.initObjects([
+      {
+        name: 'task',
+        fields: {
+          a: { type: 'string' },
+          b: { type: 'string' },
+          task_no: { type: 'autonumber', format: '{a}{b}{000}' },
+        },
+      },
+    ]);
+    // ('AB','C') and ('A','BC') both render the prefix "ABC" and thus the same
+    // visible number — they MUST share one counter so the numbers stay unique
+    // (independent counters would mint two "ABC001"s).
+    const x1 = await driver.create('task', { a: 'AB', b: 'C' });
+    const y1 = await driver.create('task', { a: 'A', b: 'BC' });
+    const x2 = await driver.create('task', { a: 'AB', b: 'C' });
+
+    expect(x1.task_no).toBe('ABC001');
+    expect(y1.task_no).toBe('ABC002'); // same namespace, keeps climbing (unique)
+    expect(x2.task_no).toBe('ABC003');
+  });
+
+  it('handles a very long {field} scope (well past varchar(255))', async () => {
+    await driver.initObjects([
+      {
+        name: 'doc',
+        fields: {
+          big: { type: 'string' },
+          doc_no: { type: 'autonumber', format: '{big}{000}' },
+        },
+      },
+    ]);
+    const big = 'P'.repeat(400); // 400-char prefix → scope far exceeds 255
+    const r1 = await driver.create('doc', { big });
+    const r2 = await driver.create('doc', { big });
+    expect(r1.doc_no).toBe(`${big}001`);
+    expect(r2.doc_no).toBe(`${big}002`);
+  });
+
   it('refuses to generate when an interpolated {field} is empty (no silent mis-scope)', async () => {
     await driver.initObjects([
       {
@@ -148,7 +188,7 @@ describe('SqlDriver auto_number format tokens', () => {
     expect(r2.invoice_number).toBe('INV-0002');
   });
 
-  it('migrates a legacy 3-column _objectstack_sequences table by adding scope', async () => {
+  it('migrates a legacy 3-column _objectstack_sequences table to the key_hash shape', async () => {
     const k = (driver as any).knex;
     // Simulate a deployment whose sequence table predates the `scope` column.
     await k.schema.createTable('_objectstack_sequences', (t: any) => {
@@ -174,7 +214,38 @@ describe('SqlDriver auto_number format tokens', () => {
 
     const cols = await k('_objectstack_sequences').columnInfo();
     expect(Object.keys(cols)).toContain('scope');
+    expect(Object.keys(cols)).toContain('key_hash');
     // The legacy counter continued rather than restarting.
     expect(r.invoice_number).toBe('INV-0042');
+  });
+
+  it('migrates an interim {scope}-column table (no key_hash) and preserves counters', async () => {
+    const k = (driver as any).knex;
+    // A table from an earlier build of this feature: has `scope`, no `key_hash`.
+    await k.schema.createTable('_objectstack_sequences', (t: any) => {
+      t.string('object').notNullable();
+      t.string('tenant_id').notNullable();
+      t.string('field').notNullable();
+      t.string('scope').notNullable().defaultTo('');
+      t.bigInteger('last_value').notNullable().defaultTo(0);
+      t.timestamp('updated_at').defaultTo(k.fn.now());
+      t.primary(['object', 'tenant_id', 'field', 'scope']);
+    });
+    await k('_objectstack_sequences').insert({
+      object: 'invoice',
+      tenant_id: '__global__',
+      field: 'invoice_number',
+      scope: '',
+      last_value: 7,
+    });
+
+    await driver.initObjects([
+      { name: 'invoice', fields: { invoice_number: { type: 'autonumber', format: 'INV-{0000}' } } },
+    ]);
+    const r = await driver.create('invoice', {});
+
+    const cols = await k('_objectstack_sequences').columnInfo();
+    expect(Object.keys(cols)).toContain('key_hash');
+    expect(r.invoice_number).toBe('INV-0008'); // continued from the interim counter
   });
 });

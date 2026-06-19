@@ -121,11 +121,34 @@ describe('renderAutonumber', () => {
     expect(b.scope).toBe('JYG2B'); // a different island → a different counter
   });
 
+  it('gives adjacent {field} tokens a shared scope when their concat collides', () => {
+    // ('AB','C') and ('A','BC') render the SAME prefix "ABC" and therefore the
+    // same visible number — so they must share one scope/counter to stay unique;
+    // splitting them would mint duplicate record numbers. (Distinct groups need
+    // an unambiguous format with a delimiter literal; the compile lint nudges.)
+    const tokens = parseAutonumberFormat('{a}{b}{000}');
+    const ab_c = renderAutonumber({ tokens, seq: 1, now: NOW, record: { a: 'AB', b: 'C' } });
+    const a_bc = renderAutonumber({ tokens, seq: 1, now: NOW, record: { a: 'A', b: 'BC' } });
+    expect(ab_c.scope).toBe('ABC');
+    expect(a_bc.scope).toBe('ABC');
+    expect(ab_c.scope).toBe(a_bc.scope);
+  });
+
   it('places literal/field text after the sequence into the suffix', () => {
     const tokens = parseAutonumberFormat('{0000}-{section}');
     const r = renderAutonumber({ tokens, seq: 3, now: NOW, record: { section: 'X' } });
     expect(r.value).toBe('0003-X');
     expect(r.suffix).toBe('-X');
+  });
+
+  it('treats the pad width as a MINIMUM — the counter grows past it, never wraps', () => {
+    const tokens = parseAutonumberFormat('CASE-{000}');
+    expect(renderAutonumber({ tokens, seq: 7, now: NOW }).value).toBe('CASE-007');
+    expect(renderAutonumber({ tokens, seq: 999, now: NOW }).value).toBe('CASE-999');
+    // Past the pad width the number simply widens (it does not reset or error),
+    // matching mainstream autonumber semantics — uniqueness is preserved.
+    expect(renderAutonumber({ tokens, seq: 1000, now: NOW }).value).toBe('CASE-1000');
+    expect(renderAutonumber({ tokens, seq: 12345, now: NOW }).value).toBe('CASE-12345');
   });
 
   it('renders a missing field token as empty rather than throwing', () => {

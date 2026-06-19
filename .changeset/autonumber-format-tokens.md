@@ -26,11 +26,14 @@ emit byte-identical numbers (#1603 parity):
 
 Fixed-prefix formats like `CASE-{0000}` render an empty scope and keep their single
 global counter, so existing sequences are unchanged. The persistent
-`_objectstack_sequences` table gains a `scope` column (PK widened to
-`object, tenant_id, field, scope`); deployments with the legacy 3-column table are
-migrated in place on first use, carrying existing counters to `scope=''`.
+`_objectstack_sequences` table is keyed by a `key_hash` (SHA-256 of
+`object, tenant_id, field, scope`) — a single 64-char primary key that keys every
+dialect uniformly, stays within MySQL's utf8mb4 index-length limit (four raw
+columns would not), and lets `scope` be a generous non-indexed column. Deployments
+with an older table (3-column, or an interim `scope` column) are migrated in place
+on first use, carrying existing counters to `scope=''`.
 
-Guardrails against the `{field}` footguns:
+Guardrails:
 
 - **Empty interpolated field is a hard error, not a silent mis-number.** A
   `{field}` token whose value is missing at create time would render to an empty
@@ -41,7 +44,18 @@ Guardrails against the `{field}` footguns:
   checked against the object's fields: a `{field}` token naming a non-existent
   field (or the autonumber field itself) **fails the build**; a token naming an
   *optional* field emits an advisory warning to mark it `required: true`.
-- **Legacy sequence-table migration fails safe.** If the legacy table's primary
-  key cannot be widened to include `scope`, fixed-prefix sequences keep working and
-  a per-scope write raises an actionable error instead of an opaque DB primary-key
-  violation at insert time.
+- **Migration fails safe.** If a legacy table cannot be migrated to the `key_hash`
+  shape, fixed-prefix sequences keep working via the legacy key and a per-scope
+  write raises an actionable error instead of corrupting counters.
+- **Long `{field}` scopes are supported** (e.g. a long `{plan_no}`): the non-indexed
+  `scope` column and hashed key remove the old varchar/PK length ceiling.
+
+Notes on inherent semantics (documented, not bugs):
+
+- The counter scope IS the rendered prefix. When two records' tokens render to the
+  same prefix string (e.g. `{a}{b}` for `('AB','C')` and `('A','BC')`) they also
+  render the same visible number, so they share one counter to stay unique — the
+  remedy for genuinely-distinct groups is an unambiguous format (a delimiter
+  literal between variable tokens).
+- The sequence pad width is a MINIMUM; past it the number grows (`{000}` →
+  `1000`), it never wraps — matching mainstream autonumber semantics.

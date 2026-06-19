@@ -531,8 +531,9 @@ export const FieldSchema = lazySchema(() => z.object({
   /**
    * Auto-number display format. Literal text interleaved with `{...}` tokens:
    *
-   *   - `{0000}` — the sequence counter, zero-padded to that many digits
-   *     (at most one slot; omit it and the bare number is appended).
+   *   - `{0000}` — the sequence counter, zero-padded to that many digits as a
+   *     MINIMUM width (at most one slot; omit it and the bare number is
+   *     appended). Past that width the number simply grows — it never wraps.
    *   - `{YYYY} {YY} {MM} {DD} {YYYYMMDD}` — generation date in the request's
    *     business timezone (`ExecutionContext.timezone`, ADR-0053; UTC fallback).
    *   - `{field_name}` — the value of another field on the SAME record
