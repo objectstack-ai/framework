@@ -3,7 +3,7 @@
 **Status**: Accepted (2026-06-18)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove gate), [ADR-0005](./0005-metadata-customization-overlay.md) (artifact vs runtime), [ADR-0053](./0053-date-and-datetime-semantics.md) (the domain of the motivating regression)
-**Consumers**: `@objectstack/spec` (liveness ledger `packages/spec/liveness/<type>.json`), the Spec Liveness Check CI gate (#1919), `@objectstack/dogfood` (the runtime gate, [#2020](https://github.com/objectstack-ai/framework/pull/2020)), spec authors, platform contributors.
+**Consumers**: `@objectstack/spec` (liveness ledger `packages/spec/liveness/<type>.json`), the Spec Liveness Check CI gate (#1919), `@objectstack/dogfood` (the runtime gate, [#2020](https://github.com/objectstack-ai/framework/pull/2020)), `@objectstack/verify` (the published proof engine + CLI, [#2041](https://github.com/objectstack-ai/framework/pull/2041)), spec authors, platform contributors.
 **Surfaced by**: PR [#2018](https://github.com/objectstack-ai/framework/pull/2018) — "organization timezone drives analytics date bucketing" was **green on every static gate** (build, ~900 unit tests, spec-liveness, CodeQL) yet broken end-to-end across three integration seams; and the field-type capability-matrix dogfood ([#2022](https://github.com/objectstack-ai/framework/pull/2022)), which on its first run found `rating`/`slider`/`toggle` reading back wrong-typed.
 
 ---
@@ -156,3 +156,45 @@ the proof corpus stays CI-cheap as it grows.
   server-reachable behavior. Pure objectui/React render correctness belongs in
   objectui's own suite; a property whose only failure mode is client render is
   out of scope for this gate.
+
+
+---
+
+## Update (2026-06-19) — the proof engine is now `@objectstack/verify`
+
+The proof *mechanism* this ADR assigns to `@objectstack/dogfood` has since been
+extracted into a published, app-agnostic package: **`@objectstack/verify`**
+([#2041](https://github.com/objectstack-ai/framework/pull/2041)) — `bootStack`
+(the real in-process stack via Hono request-injection), `deriveCrudCases`
+(a runtime contract auto-derived from any app's metadata), `runCrudVerification`
+(write → read → assert type fidelity), and `runRlsProofs` (the #1994
+"can't-write-what-you-can't-read" invariant) — plus an `objectstack verify` CLI.
+
+This sharpens the decision without changing it:
+
+- **The gate vs. the engine.** `@objectstack/dogfood` remains the *gate* — the
+  framework's own **hand-written golden proofs** (e.g. the #2018 tz-bucketing
+  test, which `derive` can never auto-generate) — and now runs *on* the
+  `@objectstack/verify` engine instead of carrying it. A `proof` (§1) is still a
+  dogfood test; what changed is that the harness underneath it is reusable.
+- **Phase 1 is now a reusable matrix.** The field-type matrix (#2022) is the
+  published `deriveCrudCases` + `runCrudVerification`; the #1994 RLS seed is
+  `runRlsProofs`. They are no longer internal to dogfood.
+- **Phase 3 has a concrete vehicle.** `deriveCrudCases` — metadata → synthesized
+  record → asserted round-trip — *is* the seed of the deferred generative pass;
+  Phase 3 grows it rather than starting from zero.
+- **Third parties get the same gate.** Because it is published, a third-party or
+  template author runs the identical proofs against their own app
+  (`objectstack verify --rls`), extending *prove-it-runs* beyond the framework's
+  curated examples — the AI-authoring audience this ADR is written for. Validated
+  against the external `hotcrm` app and the 9-app template corpus (#2041).
+
+**Honest scope of the *auto-derived* path.** `@objectstack/verify`'s auto-derive
+asserts only **scalar field round-trip fidelity** and the **by-id RLS invariant**,
+and **skips** objects whose required fields it can't synthesize (lookups /
+master-detail) and field classes it can't assert (computed/formula, flow nodes,
+analytics bucketing, UI). A green `objectstack verify` therefore proves those two
+dimensions over the auto-reachable subset — it does **not** subsume the
+hand-written golden proofs, which is exactly why §4's gate keeps them. Closing
+that gap (related-record topological synthesis; computed/flow/analytics
+assertions) is the substance of Phases 2–3.
