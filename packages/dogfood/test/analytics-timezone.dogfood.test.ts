@@ -3,6 +3,12 @@
 // GOLDEN REGRESSION for #1982 / #2018 — "organization timezone drives analytics
 // date bucketing", exercised end-to-end through the real HTTP + service stack.
 //
+// @proof: analytics-tz-bucketing
+// ADR-0054 runtime proof for the analytics high-risk class. Registered in
+// proof-registry.mts but NOT yet ledger-bound: the authorable surface
+// (dataset/report dimensions+measures) is not a GOVERNED liveness type yet, so
+// there is no entry to carry the proof. Binds once dataset/report are governed.
+//
 // This is the test that would have caught #2018 before merge. That bug passed
 // every static gate: it lived in the *integration* of NativeSQLStrategy routing
 // + in-memory count + REST execution-context resolution. Only booting the app

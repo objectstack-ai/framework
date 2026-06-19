@@ -6,12 +6,18 @@ name: Spec Liveness Check
 # property of a GOVERNED type to declare a liveness status with evidence in
 # packages/spec/liveness/<type>.json. A new unclassified property fails the check (the
 # ratchet: no new undeclared surface). See packages/spec/liveness/README.md.
+#
+# ADR-0054 (prove-it-runs): bound high-risk 'live' properties must carry a `proof`
+# pointing to a dogfood test that declares the matching `@proof:` tag. The gate also
+# triggers on packages/dogfood/** so deleting/renaming a proof re-runs this check and
+# the dangling reference is caught (the proof files live outside packages/spec/).
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'packages/spec/**'
+      - 'packages/dogfood/**'
 
 permissions:
   contents: read

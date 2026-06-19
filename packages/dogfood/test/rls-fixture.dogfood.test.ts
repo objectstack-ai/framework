@@ -2,6 +2,12 @@
 //
 // The HARD, revert-provable #1994 gate.
 //
+// @proof: rls-by-id-write
+// ADR-0054 runtime proof for the RLS / sharing high-risk class. Referenced by the
+// liveness ledger entry `permission.rowLevelSecurity.using`
+// (packages/spec/liveness/permission.json); the spec liveness gate fails if this
+// tag is removed. See proof-registry.mts.
+//
 // `auto-verify-rls.dogfood.test.ts` runs the cross-owner runner over the real
 // apps, but single-tenant boot strips the tenant policy so every object is
 // `member-visible` — the by-id-write path is never exercised. This test boots a

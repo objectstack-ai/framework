@@ -35,6 +35,57 @@ Resolution per property: **ledger entry → spec `.describe()` marker → UNCLAS
 Framework provenance/lock fields (`_lock*`, `_provenance`, `_packageId/Version`,
 `protection` — ADR-0010) are auto-classified `live`.
 
+## Runtime proofs — prove-it-runs (ADR-0054)
+
+`live` today means only *a static pointer to a consumer* — proof that something
+*reads* the property. That is necessary but not sufficient: a property can be live
+at every layer yet **broken end-to-end** (the break lives in the integration —
+engine ↔ driver ↔ service ↔ HTTP). [ADR-0054](../../../docs/adr/0054-runtime-proof-for-authorable-surface.md)
+adds the third leg: for a defined class of **high-risk** authorable properties, a
+`live` entry must carry a **`proof`** — a reference to a `@objectstack/dogfood` test
+that authors the property against the real in-process stack and asserts the runtime
+outcome.
+
+```jsonc
+"type": {
+  "status": "live",
+  "evidence": "packages/objectql/src/engine.ts",
+  "proof": "packages/dogfood/test/field-zoo-roundtrip.dogfood.test.ts#field-type-roundtrip"
+}
+```
+
+**The contract.** A `proof` is `"<repo-relative-file>#<proof-id>"`. The dogfood test
+self-declares the id with a greppable tag near its top:
+
+```ts
+// @proof: field-type-roundtrip
+```
+
+The gate validates **statically** (it never runs the test — that's the dogfood
+gate's job, keeping this gate seconds-cheap): the file must exist **and** declare the
+`@proof: <id>` tag. A bound entry must point at *its own class's* proof. The reverse
+is also checked: a `@proof:` tag under `packages/dogfood/test/**` that isn't
+registered in `../scripts/liveness/proof-registry.mts` is flagged (warning) so a new
+proof gets wired in.
+
+**The ratchet (the authoritative high-risk-class list).** Defined in
+`../scripts/liveness/proof-registry.mts`. A class is **CI-enforced** (`bound`) only
+once it has *both* a runtime proof *and* a governed ledger entry to carry it — the
+binding lands one class at a time (ADR-0054 §3), never as a big-bang backfill.
+
+| High-risk class | Bound? | Ledger binding | Proof |
+|---|---|---|---|
+| Field types | ✅ enforced | `field.type` | `field-zoo-roundtrip.dogfood.test.ts#field-type-roundtrip` |
+| RLS / sharing | ✅ enforced | `permission.rowLevelSecurity.using` | `rls-fixture.dogfood.test.ts#rls-by-id-write` |
+| Analytics dims/measures | ⛔ pending | — | `analytics-timezone.dogfood.test.ts#analytics-tz-bucketing` (proof exists; surface `dataset`/`report` not yet governed) |
+| Flow nodes | ⛔ pending | `flow.nodes.type` (candidate) | none yet (Phase 2) |
+| Form layout/section/widget | ⛔ pending | — | none yet (Phase 2) |
+
+To bind a pending class: add its dogfood proof + `@proof:` tag, set `bound: true` and
+its `ledgerBindings` in `proof-registry.mts`, add the `proof` to the ledger entry, and
+confirm the gate is green. Because the gate also triggers on `packages/dogfood/**`,
+deleting or renaming a proof re-runs this check and the dangling reference is caught.
+
 ## Author warnings — closing the loop (`authorWarn`)
 
 Classification is also fed back to the *author* at build time. The CLI `compile`

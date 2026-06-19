@@ -3,6 +3,11 @@
 // CAPABILITY-MATRIX golden test — every authorable field type must survive a
 // real HTTP write → read round-trip.
 //
+// @proof: field-type-roundtrip
+// ADR-0054 runtime proof for the field-type high-risk class. Referenced by the
+// liveness ledger entry `field.type` (packages/spec/liveness/field.json); the
+// spec liveness gate fails if this tag is removed. See proof-registry.mts.
+//
 // `showcase_field_zoo` carries one field of (almost) every protocol FieldType.
 // Until now it was only *static*-checked (the metadata bundle registers it);
 // nothing wrote a record and read it back. But the platform's value is that an

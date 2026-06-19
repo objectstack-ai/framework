@@ -22,6 +22,11 @@
 // Statuses: live | experimental | planned | dead.  Resolution per property:
 //   ledger entry → spec `.describe()` marker ([EXPERIMENTAL — not enforced]) → UNCLASSIFIED
 //
+// PROVE-IT-RUNS (ADR-0054): a `live` entry may carry a `proof` (a dogfood test
+// reference `<file>#<proof-id>`). For the HIGH-RISK classes bound this phase
+// (see proof-registry.mts), a `live` classification MUST carry a valid proof —
+// the file must exist and declare the `@proof: <id>` tag. CI fails otherwise.
+//
 // Usage:
 //   tsx check-liveness.mts                 # check all governed types
 //   tsx check-liveness.mts --dump <type>   # inventory a type's properties (seeding aid)
@@ -29,10 +34,18 @@
 
 process.env.OS_EAGER_SCHEMAS = '1';
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { getMetadataTypeSchema, listMetadataTypeSchemaTypes } from '../../src/kernel/metadata-type-schemas';
+import {
+  BOUND_PROOF_PATHS,
+  HIGH_RISK_CLASSES,
+  KNOWN_PROOF_IDS,
+  extractProofTags,
+  parseProofRef,
+  validateProofRef,
+} from './proof-registry.mts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const specRoot = resolve(here, '../..'); // packages/spec
@@ -131,7 +144,17 @@ if (dumpIdx !== -1) {
 
 // ---- check ----
 const asJson = args.includes('--json');
-const report: any = { types: {}, totals: { byStatus: {} as Record<string, number> }, unclassified: [] as string[], staleEvidence: [] as string[] };
+const report: any = {
+  types: {},
+  totals: { byStatus: {} as Record<string, number> },
+  unclassified: [] as string[],
+  staleEvidence: [] as string[],
+  proofErrors: [] as string[], // a `proof` ref that doesn't resolve (missing file / missing tag / malformed)
+  proofMissing: [] as string[], // a bound high-risk `live` entry with no proof at all
+  orphanProofs: [] as string[], // a dogfood `@proof:` tag not registered in proof-registry.mts
+};
+
+const proofFs = { existsSync, readFileSync };
 
 function classify(type: string, path: string, status: string, led: any, cat: any) {
   cat.classified++;
@@ -140,6 +163,50 @@ function classify(type: string, path: string, status: string, led: any, cat: any
   if (status === 'live' && led?.evidence) {
     const file = String(led.evidence).split(':')[0];
     if (/\//.test(file) && !existsSync(join(repoRoot, file))) report.staleEvidence.push(`${type}/${path} → ${led.evidence}`);
+  }
+  // ── ADR-0054 prove-it-runs ──
+  const boundClass = BOUND_PROOF_PATHS.get(`${type}/${path}`);
+  if (led?.proof !== undefined) {
+    // Any declared proof is validated (no silent rot), bound or not.
+    const v = validateProofRef(led.proof, { repoRoot, fs: proofFs, join });
+    if (!v.ok) report.proofErrors.push(`${type}/${path} → ${v.error}`);
+    else if (boundClass) {
+      // A bound entry must point at ITS class's proof, not just any valid proof.
+      const id = parseProofRef(led.proof)?.id;
+      if (id !== boundClass.proofId) {
+        report.proofErrors.push(
+          `${type}/${path} → proof "${id}" is not the bound ${boundClass.label} proof ("${boundClass.proofId}")`,
+        );
+      }
+    }
+  } else if (boundClass && status === 'live') {
+    report.proofMissing.push(
+      `${type}/${path} (${boundClass.label}) — high-risk live property requires a proof: expected "${boundClass.proofRef}"`,
+    );
+  }
+}
+
+// Reverse integrity: every `@proof:` tag declared under the dogfood proof tree
+// must be registered in proof-registry.mts. An orphan tag means a proof was
+// written but never wired into the high-risk-class list — flag it (warning).
+function scanOrphanProofs() {
+  const proofDir = join(repoRoot, 'packages/dogfood/test');
+  if (!existsSync(proofDir)) return; // spec may be consumed standalone (published)
+  const walk = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, ent.name);
+      if (ent.isDirectory()) out.push(...walk(full));
+      else if (ent.isFile() && ent.name.endsWith('.ts')) out.push(full);
+    }
+    return out;
+  };
+  for (const file of walk(proofDir)) {
+    for (const tag of extractProofTags(readFileSync(file, 'utf8'))) {
+      if (!KNOWN_PROOF_IDS.has(tag)) {
+        report.orphanProofs.push(`@proof: ${tag} (in ${file.slice(repoRoot.length + 1)}) — not registered in proof-registry.mts`);
+      }
+    }
   }
 }
 
@@ -169,7 +236,11 @@ for (const type of GOVERNED) {
   report.types[type] = cat;
 }
 
+scanOrphanProofs();
+
 const totalUnclassified = report.unclassified.length;
+const totalProofFailures = report.proofErrors.length + report.proofMissing.length;
+const failed = totalUnclassified > 0 || totalProofFailures > 0;
 if (asJson) {
   process.stdout.write(JSON.stringify(report, null, 2) + '\n');
 } else {
@@ -178,15 +249,30 @@ if (asJson) {
     const parts = Object.entries(v.byStatus).map(([s, n]) => `${s} ${n}`).join(', ');
     console.log(`  ${t.padEnd(11)} ${v.classified} classified (${parts || '—'})${v.unclassified ? `, ${v.unclassified} UNCLASSIFIED` : ''}`);
   }
+  const boundClasses = HIGH_RISK_CLASSES.filter((c) => c.bound).map((c) => c.label);
+  console.log(`\nprove-it-runs (ADR-0054): proof REQUIRED for bound high-risk classes — ${boundClasses.join(', ') || 'none'}`);
   if (report.staleEvidence.length) {
     console.log(`\n⚠ ${report.staleEvidence.length} 'live' entr(ies) cite a missing file:`);
     report.staleEvidence.forEach((s: string) => console.log(`    ${s}`));
   }
+  if (report.orphanProofs.length) {
+    console.log(`\n⚠ ${report.orphanProofs.length} unregistered dogfood proof tag(s) — add to proof-registry.mts:`);
+    report.orphanProofs.forEach((s: string) => console.log(`    ${s}`));
+  }
+  if (report.proofMissing.length) {
+    console.log(`\n✗ ${report.proofMissing.length} high-risk 'live' propert(ies) missing a runtime proof:`);
+    report.proofMissing.forEach((s: string) => console.log(`    ${s}`));
+  }
+  if (report.proofErrors.length) {
+    console.log(`\n✗ ${report.proofErrors.length} proof reference(s) do not resolve:`);
+    report.proofErrors.forEach((s: string) => console.log(`    ${s}`));
+  }
   if (totalUnclassified) {
     console.log(`\n✗ ${totalUnclassified} UNCLASSIFIED — classify in packages/spec/liveness/<type>.json:`);
     report.unclassified.forEach((s: string) => console.log(`    ${s}`));
-  } else {
-    console.log('\n✓ all governed-type properties are classified.');
+  }
+  if (!failed) {
+    console.log('\n✓ all governed-type properties are classified; all bound high-risk proofs resolve.');
   }
 }
-process.exit(totalUnclassified > 0 ? 1 : 0);
+process.exit(failed ? 1 : 0);
