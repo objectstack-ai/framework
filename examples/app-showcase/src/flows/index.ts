@@ -311,11 +311,16 @@ export const ScheduledDigestFlow = defineFlow({
     {
       id: 'start',
       type: 'start',
-      label: 'Every 20s',
+      label: 'Every 60s (demo)',
       config: {
-        // Interval keeps the demo observable in-session; production digests
-        // would use a cron expression, e.g. { type: 'cron', expression: '0 8 * * *' }.
-        schedule: { type: 'interval', intervalMs: 20000 },
+        // DEMO-ONLY interval. Each tick fans out into job_run + notification +
+        // delivery + receipt + inbox rows (all append-only, ADR-0057). At 20s
+        // this filled dev.db to 260MB+ over a multi-day `pnpm dev`. 60s keeps
+        // the schedule trigger observable within a minute while cutting the
+        // write rate 3x. Production digests use a cron expression instead,
+        // e.g. { type: 'cron', expression: '0 8 * * *' }. Real bounding comes
+        // from the lifecycle/retention work (ADR-0057), not this number.
+        schedule: { type: 'interval', intervalMs: 60000 },
       },
     },
     {

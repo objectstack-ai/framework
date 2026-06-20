@@ -54,8 +54,23 @@ export interface AuditWriterOptions {
  * permissions and always succeed regardless of the calling user's RBAC.
  */
 
-/** Tables that are intentionally excluded from audit/activity writes. */
+/**
+ * Tables that are intentionally excluded from audit/activity writes.
+ *
+ * Two reasons an object lands here:
+ *  1. Recursion / auth noise — the audit & activity tables themselves, plus
+ *     session/presence/auth tables (high-frequency, low value).
+ *  2. Operational telemetry / plumbing (ADR-0057) — platform-internal
+ *     event/log/queue objects with a `telemetry`/`transient`/`event`
+ *     lifecycle class. These are NOT user-attributable, compliance-relevant
+ *     changes; mirroring every one of them into the immutable audit ledger
+ *     *and* the activity feed is the dominant source of unbounded growth (a
+ *     single 20s scheduled flow fanned out to ~21 audit+activity rows/tick,
+ *     ~76% of all row growth — see the lifecycle-retention ADR). Until the
+ *     event-spine (ADR-0052 §P2) lands, exclude them at the writer seam.
+ */
 const SKIP_OBJECTS = new Set<string>([
+  // (1) recursion + auth/session noise
   'sys_audit_log',
   'sys_activity',
   'sys_comment',
@@ -65,6 +80,17 @@ const SKIP_OBJECTS = new Set<string>([
   'sys_account_session',
   'sys_account_verification',
   'sys_account_account',
+  'sys_device_code',
+  // (2) operational telemetry / plumbing (ADR-0057 — telemetry/transient/event)
+  'sys_job',                     // schedule heartbeats (last_run_at churn)
+  'sys_job_run',                 // one row per scheduled execution
+  'sys_automation_run',          // one row per automation execution
+  'sys_notification',            // messaging-owned (ADR-0030); its own lifecycle
+  'sys_notification_delivery',
+  'sys_notification_receipt',
+  'sys_inbox_message',           // per-user fan-out of every notification
+  'sys_http_delivery',           // webhook/outbound transport log
+  'ai_traces',                   // LLM trace telemetry
 ]);
 
 /** Fields that are noise in diffs (always change, never user-meaningful). */
