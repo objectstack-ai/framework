@@ -2,14 +2,19 @@
 "@objectstack/example-showcase": minor
 ---
 
-feat(app-showcase): declarative owner-private object (`showcase_private_note`, ADR-0056)
+feat(app-showcase): declarative OWD scenarios — owner-private + public-read (ADR-0056)
 
-Adds the canonical **declarative `private` OWD** scenario: `showcase_private_note`
-declares `sharingModel: 'private'` and an `owner_id` field — and nothing else (no
-RLS policy, no owner predicate, no permission-set rule). The engine derives owner
-scoping from the OWD baseline + the auto-stamped `owner_id`, so a user sees and
-edits only the notes they own. This is the declarative counterpart to the invoice's
-hand-written `owner = current_user.email` escape-hatch — for plain "my records are
-mine" ownership, an object declares one word and the platform enforces it. Proven
-end-to-end (two users, owner isolation on read + by-id read/write) by the new
-`showcase-private-owd` dogfood test.
+Adds the two canonical Org-Wide-Default scenarios, each declaring its access policy
+in ONE word with no authored RLS:
+
+- `showcase_private_note` — `sharingModel: 'private'`: a user sees and edits only
+  the notes they own (owner-only read + write).
+- `showcase_announcement` — `sharingModel: 'read'`: every member reads every
+  announcement, but only the owner may edit/delete it (public-read).
+
+Both derive scoping from the OWD baseline + the auto-stamped `owner_id` — the
+declarative counterpart to the invoice's hand-written `owner = current_user.email`
+escape-hatch. Proven end-to-end (two users, real HTTP) by the new
+`showcase-private-owd` and `showcase-public-read-owd` dogfood tests, which together
+demonstrate the OWD read-visibility axis (`private` hides others' rows; `read`
+shows them but still protects writes).
