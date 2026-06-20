@@ -10,7 +10,7 @@
  */
 
 export { SysRecordShare, SysSharingRule, SysShareLink } from './objects/index.js';
-export { SysDepartment, SysDepartmentMember } from '@objectstack/platform-objects/identity';
+export { SysBusinessUnit, SysBusinessUnitMember } from '@objectstack/platform-objects/identity';
 export {
   SharingService,
   type SharingEngine,
@@ -29,7 +29,7 @@ export {
   type ShareLinkRoutesOptions,
 } from './share-link-routes.js';
 export { TeamGraphService, expandPrincipal, type TeamGraphOptions } from './team-graph.js';
-export { DepartmentGraphService, type DepartmentGraphOptions } from './department-graph.js';
+export { BusinessUnitGraphService, type BusinessUnitGraphOptions } from './business-unit-graph.js';
 export { bindRuleHooks, unbindAllRuleHooks, SHARING_RULE_HOOK_PACKAGE } from './rule-hooks.js';
 export {
   SharingServicePlugin,
@@ -40,7 +40,7 @@ export type {
   ISharingService,
   ISharingRuleService,
   ITeamGraphService,
-  IDepartmentGraphService,
+  IBusinessUnitGraphService,
   RecordShare,
   GrantShareInput,
   SharingExecutionContext,

@@ -577,7 +577,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department: {
+  sys_business_unit: {
     label: "Departamento",
     pluralLabel: "Departamentos",
     description: "Nodo jerárquico de la estructura organizativa (departamento / división / unidad de negocio / oficina).",
@@ -601,7 +601,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           cost_center: "Centro de coste"
         }
       },
-      parent_department_id: {
+      parent_business_unit_id: {
         label: "Departamento principal",
         help: "Autorreferencia para el árbol organizativo. Null = raíz del tenant."
       },
@@ -654,7 +654,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department_member: {
+  sys_business_unit_member: {
     label: "Miembro del departamento",
     pluralLabel: "Miembros del departamento",
     description: "Asignación de usuario a un departamento (compatible con organizaciones matriciales y con vigencia temporal).",
@@ -662,13 +662,13 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "ID de miembro"
       },
-      department_id: {
+      business_unit_id: {
         label: "Departamento"
       },
       user_id: {
         label: "Usuario"
       },
-      role_in_department: {
+      role_in_business_unit: {
         label: "Rol en el departamento",
         help: "`lead` es el responsable del día a día; `deputy` puede sustituir al responsable en el enrutamiento de aprobaciones.",
         options: {

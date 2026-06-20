@@ -10,7 +10,7 @@ export const ApproverType = z.enum([
   'user',           // Specific user(s)
   'role',           // Users with specific role (sys_member.role)
   'team',           // Members of a flat collaboration team (sys_team)
-  'department',     // Members of a department + all descendant departments (sys_department)
+  'department',     // Members of a department + all descendant departments (sys_business_unit)
   'manager',        // Submitter's manager (sys_user.manager_id)
   'field',          // User ID defined in a record field
   'queue'           // Data ownership queue

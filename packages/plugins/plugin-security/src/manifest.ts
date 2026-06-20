@@ -13,6 +13,7 @@ import {
   SysRole,
   SysUserPermissionSet,
   SysRolePermissionSet,
+  SysUserRole,
   defaultPermissionSets,
 } from './objects/index.js';
 
@@ -25,6 +26,7 @@ export const securityObjects = [
   SysPermissionSet,
   SysUserPermissionSet,
   SysRolePermissionSet,
+  SysUserRole,
 ];
 
 /** Default platform permission sets (admin / member / viewer). */

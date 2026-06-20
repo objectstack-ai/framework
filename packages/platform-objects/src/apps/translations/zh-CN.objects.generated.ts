@@ -577,7 +577,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department: {
+  sys_business_unit: {
     label: "部门",
     pluralLabel: "部门",
     description: "层级化组织骨架节点（部门 / 事业部 / 业务单元 / 办公地点）。",
@@ -601,7 +601,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           cost_center: "成本中心"
         }
       },
-      parent_department_id: {
+      parent_business_unit_id: {
         label: "上级部门",
         help: "组织树的自关联字段。Null 表示租户根节点。"
       },
@@ -654,7 +654,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department_member: {
+  sys_business_unit_member: {
     label: "部门成员",
     pluralLabel: "部门成员",
     description: "用户到部门的任职关系（适配矩阵组织并支持生效时间）。",
@@ -662,13 +662,13 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "成员 ID"
       },
-      department_id: {
+      business_unit_id: {
         label: "部门"
       },
       user_id: {
         label: "用户"
       },
-      role_in_department: {
+      role_in_business_unit: {
         label: "部门内角色",
         help: "`lead` 表示日常负责人；`deputy` 可在审批路由中代替负责人。",
         options: {

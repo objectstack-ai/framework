@@ -281,8 +281,8 @@ export class ApprovalService implements IApprovalService {
    *
    * **Graph semantics:**
    *   - `team`       → flat members of `sys_team` (better-auth; no BFS)
-   *   - `department` → recursive BFS of `sys_department.parent_department_id`
-   *                    → members of every descendant via `sys_department_member`
+   *   - `department` → recursive BFS of `sys_business_unit.parent_business_unit_id`
+   *                    → members of every descendant via `sys_business_unit_member`
    *   - `role`       → users with `sys_member.role = value` in tenant
    *   - `manager`    → `sys_user.manager_id` of `record[value] ?? record.owner_id`
    *   - `field`      → literal user id stored in `record[value]`
@@ -299,8 +299,8 @@ export class ApprovalService implements IApprovalService {
         if (a.type === 'team') {
           const users = await this.expandTeamUsers(String(a.value));
           if (users.length) { for (const u of users) out.push(u); continue; }
-        } else if (a.type === 'department' || a.type === 'dept') {
-          const users = await this.expandDepartmentUsers(String(a.value), organizationId);
+        } else if (a.type === 'business_unit' || a.type === 'bu') {
+          const users = await this.expandBusinessUnitUsers(String(a.value), organizationId);
           if (users.length) { for (const u of users) out.push(u); continue; }
         } else if (a.type === 'role') {
           const users = await this.expandRoleUsers(String(a.value), organizationId);
@@ -333,15 +333,15 @@ export class ApprovalService implements IApprovalService {
     return Array.from(new Set((rows ?? []).map((r: any) => String(r.user_id ?? '')).filter(Boolean)));
   }
 
-  /** Recursive department — walks `sys_department.parent_department_id`. */
-  private async expandDepartmentUsers(departmentId: string, organizationId?: string | null): Promise<string[]> {
-    if (!departmentId) return [];
+  /** Recursive department — walks `sys_business_unit.parent_business_unit_id`. */
+  private async expandBusinessUnitUsers(businessUnitId: string, organizationId?: string | null): Promise<string[]> {
+    if (!businessUnitId) return [];
     // Seed sanity check: skip if dept doesn't exist or is inactive within tenant.
     try {
-      const seed = await this.engine.find('sys_department', {
+      const seed = await this.engine.find('sys_business_unit', {
         filter: organizationId
-          ? { id: departmentId, organization_id: organizationId }
-          : { id: departmentId },
+          ? { id: businessUnitId, organization_id: organizationId }
+          : { id: businessUnitId },
         fields: ['id', 'active'],
         limit: 1,
         context: SYSTEM_CTX,
@@ -350,15 +350,15 @@ export class ApprovalService implements IApprovalService {
       if (!seedRow || seedRow.active === false) return [];
     } catch { return []; }
 
-    const seen = new Set<string>([departmentId]);
-    const queue: string[] = [departmentId];
+    const seen = new Set<string>([businessUnitId]);
+    const queue: string[] = [businessUnitId];
     while (queue.length) {
       const parent = queue.shift()!;
       let kids: any[] = [];
       try {
-        const filter: any = { parent_department_id: parent, active: { $ne: false } };
+        const filter: any = { parent_business_unit_id: parent, active: { $ne: false } };
         if (organizationId) filter.organization_id = organizationId;
-        kids = await this.engine.find('sys_department', { filter, fields: ['id'], limit: 1000, context: SYSTEM_CTX } as any);
+        kids = await this.engine.find('sys_business_unit', { filter, fields: ['id'], limit: 1000, context: SYSTEM_CTX } as any);
       } catch { kids = []; }
       for (const k of kids ?? []) {
         const kid = String((k as any).id ?? '');
@@ -367,8 +367,8 @@ export class ApprovalService implements IApprovalService {
     }
     let rows: any[] = [];
     try {
-      rows = await this.engine.find('sys_department_member', {
-        filter: { department_id: { $in: Array.from(seen) } },
+      rows = await this.engine.find('sys_business_unit_member', {
+        filter: { business_unit_id: { $in: Array.from(seen) } },
         fields: ['user_id'],
         limit: 10000,
         context: SYSTEM_CTX,

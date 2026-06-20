@@ -4,12 +4,13 @@ import type { Plugin, PluginContext } from '@objectstack/core';
 import type { EngineMiddleware, OperationContext } from '@objectstack/objectql';
 import type { IHttpServer } from '@objectstack/spec/contracts';
 import { SysRecordShare, SysSharingRule, SysShareLink } from './objects/index.js';
-import { SysDepartment, SysDepartmentMember } from '@objectstack/platform-objects/identity';
+import { SysBusinessUnit, SysBusinessUnitMember } from '@objectstack/platform-objects/identity';
 import { SharingService, type SharingEngine } from './sharing-service.js';
 import { SharingRuleService } from './sharing-rule-service.js';
 import { ShareLinkService } from './share-link-service.js';
 import { registerShareLinkRoutes } from './share-link-routes.js';
 import { bindRuleHooks, unbindAllRuleHooks } from './rule-hooks.js';
+import { bootstrapDeclaredSharingRules } from './bootstrap-declared-sharing-rules.js';
 
 export interface SharingPluginOptions {
   /** Extra object names that bypass sharing entirely. */
@@ -88,7 +89,7 @@ export class SharingServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysRecordShare, SysSharingRule, SysDepartment, SysDepartmentMember, SysShareLink],
+      objects: [SysRecordShare, SysSharingRule, SysBusinessUnit, SysBusinessUnitMember, SysShareLink],
       // ADR-0029 D7 — contribute the sharing entries into the Setup app's
       // `group_access_control` slot (priority 200 so they sit after plugin-
       // security's Roles / Permission Sets). This plugin owns these objects (K2).
@@ -163,6 +164,19 @@ export class SharingServicePlugin implements Plugin {
             logger: ctx.logger as any,
           });
           ctx.registerService('sharingRules', this.ruleService);
+
+          // [ADR-0057 D6 / #2077] Seed stack-declared sharingRules into
+          // sys_sharing_rule BEFORE listRules so the lifecycle hooks bind to a
+          // populated table (previously rules were decorative — ruleCount: 0).
+          try {
+            let metadataService: any = null;
+            try { metadataService = ctx.getService<any>('metadata'); } catch { /* optional */ }
+            if (metadataService) {
+              await bootstrapDeclaredSharingRules(this.ruleService, metadataService, engine, ctx.logger as any);
+            }
+          } catch (err: any) {
+            ctx.logger.warn('SharingServicePlugin: sharing-rule seeding failed', { error: err?.message });
+          }
 
           if (typeof engine.registerHook === 'function' && typeof engine.unregisterHooksByPackage === 'function') {
             const rules = await this.ruleService.listRules({ activeOnly: true }, { isSystem: true } as any);

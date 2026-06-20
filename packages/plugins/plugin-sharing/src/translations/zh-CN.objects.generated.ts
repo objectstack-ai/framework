@@ -131,7 +131,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       recipient_type: {
         label: "接收方类型",
-        help: "接收访问权限的主体类型——求值时会展开为用户授权。`department` 会沿 parent_department_id 树展开；`team` 为扁平结构（better-auth）。",
+        help: "接收访问权限的主体类型——求值时会展开为用户授权。`department` 会沿 parent_business_unit_id 树展开；`team` 为扁平结构（better-auth）。",
         options: {
           user: "用户",
           team: "团队",

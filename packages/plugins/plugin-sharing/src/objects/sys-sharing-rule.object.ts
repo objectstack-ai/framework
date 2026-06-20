@@ -131,12 +131,12 @@ export const SysSharingRule = ObjectSchema.create({
     }),
 
     recipient_type: Field.select(
-      ['user', 'team', 'department', 'role', 'role_and_subordinates', 'queue'],
+      ['user', 'team', 'business_unit', 'role', 'role_and_subordinates', 'queue'],
       {
         label: 'Recipient Type',
         required: true,
-        defaultValue: 'department',
-        description: 'Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth); `role` is the role\'s direct members; `role_and_subordinates` walks the sys_role.parent hierarchy to also include every subordinate role (ADR-0056 D6).',
+        defaultValue: 'business_unit',
+        description: 'Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_business_unit_id tree; `team` is flat (better-auth); `role` is the role\'s direct members; `role_and_subordinates` walks the sys_role.parent hierarchy to also include every subordinate role (ADR-0056 D6).',
         group: 'Recipient',
       },
     ),

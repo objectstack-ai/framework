@@ -25,8 +25,8 @@ export interface TeamGraphOptions {
  * grouping) plus `sys_member.role` for tenant role expansion.
  *
  * **This service does NOT walk a hierarchy.** Teams here are flat —
- * the enterprise org chart lives in `sys_department` and is served by
- * {@link DepartmentGraphService}.
+ * the enterprise org chart lives in `sys_business_unit` and is served by
+ * {@link BusinessUnitGraphService}.
  *
  * All queries elevate to {@link SYSTEM_CTX} since the graph is platform
  * metadata; callers (sharing rule evaluator, approval engine) own their
@@ -120,7 +120,7 @@ export class TeamGraphService implements ITeamGraphService {
  *
  * `team` → flat team members (this service).
  * `department` → recursive department members (delegated; requires a
- *   {@link IDepartmentGraphService} instance passed in `opts.dept`).
+ *   {@link IBusinessUnitGraphService} instance passed in `opts.dept`).
  * `role` → tenant role members.
  * `manager` → submitter's manager via `record[value] ?? record.owner_id`.
  * `field` → literal user id stored in `record[value]`.
@@ -137,7 +137,7 @@ export async function expandPrincipal(
   if (!v) return [];
   if (t === 'user') return [v];
   if (t === 'team') return ctx.team.expandUsers(v);
-  if (t === 'department' || t === 'dept') {
+  if (t === 'business_unit' || t === 'bu') {
     if (ctx.dept) return ctx.dept.expandUsers(v);
     return [`${t}:${v}`];
   }

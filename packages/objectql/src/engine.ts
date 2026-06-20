@@ -1866,6 +1866,15 @@ export class ObjectQL implements IDataEngine {
     const ast: QueryAST = { object, ...query };
     // Remove context from the AST — it's not a driver concern
     delete (ast as any).context;
+    // Normalize the `filter` alias → `where`. The DataEngine contract
+    // (`spec/data/data-engine.zod.ts`) exposes both, but the driver AST only
+    // understands `where`; an internal caller passing `{ filter }` would
+    // otherwise match ALL rows (silent over-grant — surfaced by ADR-0057's
+    // sharing/graph read path). `where` wins when both are present.
+    if ((ast as any).filter != null && ast.where == null) {
+      ast.where = (ast as any).filter;
+    }
+    delete (ast as any).filter;
     // Normalize OData `top` alias → standard `limit`
     if ((ast as any).top != null && ast.limit == null) {
       ast.limit = (ast as any).top;

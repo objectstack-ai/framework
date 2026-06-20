@@ -131,7 +131,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       recipient_type: {
         label: "受信者タイプ",
-        help: "アクセスを受け取るプリンシパルの種別 — 評価時にユーザー付与に展開されます。`department` は parent_department_id ツリーをたどります。`team` はフラット（better-auth）。",
+        help: "アクセスを受け取るプリンシパルの種別 — 評価時にユーザー付与に展開されます。`department` は parent_business_unit_id ツリーをたどります。`team` はフラット（better-auth）。",
         options: {
           user: "ユーザー",
           team: "チーム",

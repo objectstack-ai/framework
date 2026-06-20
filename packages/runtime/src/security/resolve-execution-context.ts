@@ -233,6 +233,19 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
     }
   }
 
+  // [ADR-0057 D4] Platform-owned RBAC role assignments — the source of truth,
+  // decoupled from better-auth's `sys_member.role` (which is being reframed to
+  // org-administration: owner/admin/member). Merged alongside membership roles
+  // during the transition window. `organization_id = null` = a global (cross-
+  // tenant) assignment; tenant-scoped assignments match the active org.
+  const userRoleRows = await tryFind(ql, 'sys_user_role', { user_id: userId }, 200);
+  for (const ur of userRoleRows) {
+    const org = ur.organization_id ?? null;
+    if (org && tenantId && org !== tenantId) continue;
+    const r = ur.role;
+    if (typeof r === 'string' && r && !ctx.roles!.includes(r)) ctx.roles!.push(r);
+  }
+
   // 3a. Resolve fellow-organization user IDs so RLS can scope identity
   //     tables (`sys_user`) to collaborators in the active org via
   //     `id IN (current_user.org_user_ids)`. Without this, the default

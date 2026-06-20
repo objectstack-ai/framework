@@ -240,6 +240,47 @@ export class AppPlugin implements Plugin {
             });
         }
 
+        // [ADR-0057 / #2077] Surface stack-declared SECURITY metadata (roles,
+        // permission sets, sharing rules, policies) in the metadata registry so
+        // the boot seeders (plugin-security / plugin-sharing) and runtime
+        // resolvers can read them via `list('role'|'permission'|'sharing_rule')`.
+        // Without this, bootStack's metadata service holds only objects (the
+        // artifact loader that registers these runs only in compiled serve.ts),
+        // leaving the declarations decorative.
+        try {
+            const metadata = ctx.getService('metadata') as
+                | { registerInMemory?: (t: string, n: string, d: unknown) => void }
+                | undefined;
+            if (typeof metadata?.registerInMemory === 'function') {
+                const securityBundle: any = this.bundle.manifest
+                    ? { ...this.bundle.manifest, ...this.bundle }
+                    : this.bundle;
+                const SECURITY_FIELDS: Array<[string, string]> = [
+                    ['roles', 'role'],
+                    ['permissions', 'permission'],
+                    ['sharingRules', 'sharing_rule'],
+                    ['policies', 'policy'],
+                ];
+                let count = 0;
+                for (const [field, type] of SECURITY_FIELDS) {
+                    const arr = securityBundle?.[field];
+                    if (!Array.isArray(arr)) continue;
+                    for (const item of arr) {
+                        if (!item?.name) continue;
+                        metadata.registerInMemory(type, item.name, item);
+                        count += 1;
+                    }
+                }
+                if (count > 0) {
+                    ctx.logger.info('Registered stack-declared security metadata', { appId, count });
+                }
+            }
+        } catch (err) {
+            ctx.logger.warn('[AppPlugin] failed to register security metadata', {
+                error: (err as Error)?.message ?? String(err),
+            });
+        }
+
         // Resolve the runtime hook owner. Modules that declare both a
         // `default` (defineStack(...)) export and a named `onEnable` export
         // hide the named export from `bundle.default`, so we fall back to the

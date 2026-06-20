@@ -13,7 +13,7 @@ import type { SharingEngine } from './sharing-service.js';
 import type { SharingService } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
 import { RoleGraphService } from './role-graph.js';
-import { DepartmentGraphService } from './department-graph.js';
+import { BusinessUnitGraphService } from './business-unit-graph.js';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
@@ -258,8 +258,8 @@ export class SharingRuleService implements ISharingRuleService {
     });
     if (rule.recipient_type === 'user') return [rule.recipient_id];
     if (rule.recipient_type === 'team') return team.expandUsers(rule.recipient_id);
-    if (rule.recipient_type === 'department') {
-      const dept = new DepartmentGraphService({
+    if (rule.recipient_type === 'business_unit') {
+      const dept = new BusinessUnitGraphService({
         engine: this.engine,
         organizationId: rule.organization_id ?? null,
         teamGraph: team,

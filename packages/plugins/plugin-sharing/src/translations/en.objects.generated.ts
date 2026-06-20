@@ -131,7 +131,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       recipient_type: {
         label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).",
+        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_business_unit_id tree; `team` is flat (better-auth).",
         options: {
           user: "user",
           team: "team",

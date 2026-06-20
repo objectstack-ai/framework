@@ -74,6 +74,38 @@ export class PermissionEvaluator {
     return false;
   }
 
+
+  /**
+   * [ADR-0057 D1] Effective access DEPTH for an operation class on an object,
+   * merged most-permissively across the permission sets. `view/modifyAll`
+   * shortcut to 'org'. A granting set with no scope defaults to 'own' (the
+   * owner-only baseline owner-scoped objects already enforce); the WIDEST wins.
+   * Returns 'org' when no set grants the op (the caller denies separately, so
+   * the value is unused).
+   */
+  getEffectiveScope(
+    opClass: 'read' | 'write',
+    objectName: string,
+    permissionSets: PermissionSet[],
+  ): 'own' | 'unit' | 'unit_and_below' | 'org' {
+    const RANK = { own: 0, unit: 1, unit_and_below: 2, org: 3 } as const;
+    const ORDER = ['own', 'unit', 'unit_and_below', 'org'] as const;
+    let widest = -1;
+    let matched = false;
+    for (const ps of permissionSets) {
+      const op: any = ps.objects?.[objectName] ?? ps.objects?.['*'];
+      if (!op) continue;
+      matched = true;
+      if (opClass === 'read' && (op.viewAllRecords || op.modifyAllRecords)) return 'org';
+      if (opClass === 'write' && op.modifyAllRecords) return 'org';
+      const s = opClass === 'read' ? op.readScope : op.writeScope;
+      const rank = s ? RANK[s as keyof typeof RANK] : RANK.own;
+      if (rank > widest) widest = rank;
+    }
+    if (!matched) return 'org';
+    return ORDER[widest < 0 ? 0 : widest];
+  }
+
   /**
    * Get the merged field permissions for an object.
    * Returns a map of field names to their effective permissions.

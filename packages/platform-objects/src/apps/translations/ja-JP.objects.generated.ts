@@ -577,7 +577,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department: {
+  sys_business_unit: {
     label: "部門",
     pluralLabel: "部門",
     description: "階層的な組織ツリーノード（部門 / 事業部 / ビジネスユニット / オフィス）。",
@@ -601,7 +601,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           cost_center: "コストセンター"
         }
       },
-      parent_department_id: {
+      parent_business_unit_id: {
         label: "親部門",
         help: "組織ツリーの自己参照。null = テナントのルート。"
       },
@@ -654,7 +654,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department_member: {
+  sys_business_unit_member: {
     label: "部門メンバー",
     pluralLabel: "部門メンバー",
     description: "部門へのユーザー割り当て（マトリクス組織対応、有効期限付き）。",
@@ -662,13 +662,13 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       id: {
         label: "メンバー ID"
       },
-      department_id: {
+      business_unit_id: {
         label: "部門"
       },
       user_id: {
         label: "ユーザー"
       },
-      role_in_department: {
+      role_in_business_unit: {
         label: "部門内ロール",
         help: "`lead` は日常の責任者、`deputy` は承認ルーティングでリードの代理を務める場合があります。",
         options: {

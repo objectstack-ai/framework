@@ -44,6 +44,14 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
   { id: 'default-profile', summary: 'app-declared default profile (isDefault)', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },
 
+  // ── ADR-0057 — ERP authorization core (enforced + e2e proven) ──────────
+  { id: 'scope-depth', summary: 'permission-grant access DEPTH (own/unit/unit_and_below/org)', state: 'enforced',
+    enforcement: 'plugin-security getEffectiveScope (stash) + plugin-sharing resolveOwnerScopeIds (owner IN unit-set) — ADR-0057 D1', proof: 'showcase-scope-depth.dogfood.test.ts' },
+  { id: 'declarative-rbac-seeding', summary: 'stack-declared roles + sharingRules seeded at boot (#2077)', state: 'enforced',
+    enforcement: 'plugin-security bootstrapDeclaredRoles + plugin-sharing bootstrapDeclaredSharingRules — ADR-0057 D6', proof: 'showcase-declarative-rbac-seeding.dogfood.test.ts' },
+  { id: 'rbac-role-assignment', summary: 'platform-owned RBAC assignment (sys_user_role, decoupled from better-auth membership)', state: 'enforced',
+    enforcement: 'runtime/resolve-execution-context.ts reads sys_user_role (union sys_member.role) — ADR-0057 D4' },
+
   // ── Enforced (unit-proven; e2e proof is a follow-on) ───────────────────
   { id: 'object-crud', summary: 'object CRUD permissions', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts checkObjectPermission (fail-closed 403)' },
@@ -54,9 +62,9 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
   { id: 'record-share', summary: 'manual record shares (sys_record_share)', state: 'enforced',
     enforcement: 'plugin-sharing/sharing-service.ts buildReadFilter/canEdit' },
   { id: 'sharing-rules', summary: 'criteria/owner sharing rules', state: 'enforced',
-    enforcement: 'plugin-sharing/sharing-rule-service.ts (materialized into sys_record_share)' },
-  { id: 'role-hierarchy', summary: 'role-hierarchy widening (role_and_subordinates)', state: 'enforced',
-    enforcement: 'plugin-sharing/role-graph.ts RoleGraphService (sys_role.parent)' },
+    enforcement: 'plugin-sharing/sharing-rule-service.ts (materialized into sys_record_share)', proof: 'showcase-bu-hierarchy-sharing.dogfood.test.ts' },
+  { id: 'hierarchy-widening', summary: 'hierarchy widening — a unit + its subordinate units gain access', state: 'enforced',
+    enforcement: 'plugin-sharing/business-unit-graph.ts BusinessUnitGraphService subtree (business_unit recipient) — ADR-0057 D5 re-homed off the never-existent sys_role.parent', proof: 'showcase-bu-hierarchy-sharing.dogfood.test.ts' },
   { id: 'rls-compiler-fail-closed', summary: 'uncompilable RLS predicate is surfaced/denied, not dropped', state: 'enforced',
     enforcement: 'plugin-security/rls-compiler.ts isSupportedRlsExpression + warn' },
   { id: 'system-permissions', summary: 'systemPermissions / tab-app gating', state: 'enforced',

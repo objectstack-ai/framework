@@ -3,9 +3,9 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_department_member — User ↔ Department Assignment
+ * sys_business_unit_member — User ↔ Department Assignment
  *
- * Many-to-many between `sys_user` and `sys_department`. A user can belong
+ * Many-to-many between `sys_user` and `sys_business_unit`. A user can belong
  * to multiple departments (matrix orgs) but exactly one is marked
  * `is_primary` to drive the default reporting view.
  *
@@ -14,16 +14,16 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *
  * @namespace sys
  */
-export const SysDepartmentMember = ObjectSchema.create({
-  name: 'sys_department_member',
-  label: 'Department Member',
-  pluralLabel: 'Department Members',
+export const SysBusinessUnitMember = ObjectSchema.create({
+  name: 'sys_business_unit_member',
+  label: 'Business Unit Member',
+  pluralLabel: 'Business Unit Members',
   icon: 'user-cog',
   isSystem: true,
   managedBy: 'platform',
-  description: 'User assignment to a department (matrix-org friendly, effective-dated).',
-  titleFormat: '{user_id} in {department_id}',
-  compactLayout: ['user_id', 'department_id', 'role_in_department', 'is_primary'],
+  description: 'User assignment to a business unit (matrix-org friendly, effective-dated).',
+  titleFormat: '{user_id} in {business_unit_id}',
+  compactLayout: ['user_id', 'business_unit_id', 'role_in_business_unit', 'is_primary'],
 
   fields: {
     id: Field.text({
@@ -33,8 +33,8 @@ export const SysDepartmentMember = ObjectSchema.create({
       group: 'System',
     }),
 
-    department_id: Field.lookup('sys_department', {
-      label: 'Department',
+    business_unit_id: Field.lookup('sys_business_unit', {
+      label: 'Business Unit',
       required: true,
       group: 'Assignment',
     }),
@@ -45,10 +45,10 @@ export const SysDepartmentMember = ObjectSchema.create({
       group: 'Assignment',
     }),
 
-    role_in_department: Field.select(
+    role_in_business_unit: Field.select(
       ['member', 'lead', 'deputy'],
       {
-        label: 'Role in Department',
+        label: 'Role in Business Unit',
         required: false,
         defaultValue: 'member',
         description: '`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.',
@@ -60,7 +60,7 @@ export const SysDepartmentMember = ObjectSchema.create({
       label: 'Primary Assignment',
       required: false,
       defaultValue: true,
-      description: 'When the user is in multiple departments, this marks the canonical one for reporting.',
+      description: 'When the user is in multiple business units, this marks the canonical one for reporting.',
       group: 'Assignment',
     }),
 
@@ -92,7 +92,7 @@ export const SysDepartmentMember = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['department_id', 'user_id'], unique: true },
+    { fields: ['business_unit_id', 'user_id'], unique: true },
     { fields: ['user_id'] },
     { fields: ['is_primary'] },
   ],

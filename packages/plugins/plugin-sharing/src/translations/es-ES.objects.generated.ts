@@ -131,7 +131,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       recipient_type: {
         label: "Tipo de destinatario",
-        help: "Tipo de principal que recibe acceso; se expande a concesiones de usuario durante la evaluación. `department` recorre el árbol parent_department_id; `team` es plano (better-auth).",
+        help: "Tipo de principal que recibe acceso; se expande a concesiones de usuario durante la evaluación. `department` recorre el árbol parent_business_unit_id; `team` es plano (better-auth).",
         options: {
           user: "Usuario",
           team: "Equipo",

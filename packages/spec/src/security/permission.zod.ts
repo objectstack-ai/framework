@@ -14,6 +14,13 @@ import { RowLevelSecurityPolicySchema } from './rls.zod';
  * - Purge (Hard delete / Compliance)
  */
 import { lazySchema } from '../shared/lazy-schema';
+/**
+ * [ADR-0057 D1] Object access DEPTH — the Dataverse "access level" axis,
+ * layered on top of OWD. Widens the owner-match for owner-scoped objects.
+ */
+export const ObjectAccessScopeSchema = z.enum(['own', 'unit', 'unit_and_below', 'org']);
+export type ObjectAccessScope = z.infer<typeof ObjectAccessScopeSchema>;
+
 export const ObjectPermissionSchema = lazySchema(() => z.object({
   /** C: Create */
   allowCreate: z.boolean().default(false).describe('Create permission'),
@@ -51,6 +58,17 @@ export const ObjectPermissionSchema = lazySchema(() => z.object({
    * Equivalent to Microsoft Dataverse "Organization" level write access.
    */
   modifyAllRecords: z.boolean().default(false).describe('Modify All Data (Bypass Sharing)'),
+
+  /**
+   * [ADR-0057 D1] Read access DEPTH (Dataverse-style access level), layered on
+   * top of OWD. For owner-scoped (`private`) objects it widens the owner-match:
+   * `own` (owner only) | `unit` (my business unit) | `unit_and_below` (my BU +
+   * descendants) | `org` (whole tenant). Unset = `own` baseline. Resolved into
+   * an `owner_id IN (…)` set at request time; sharing rules still widen on top.
+   */
+  readScope: ObjectAccessScopeSchema.optional().describe('[ADR-0057 D1] Read depth: own|unit|unit_and_below|org'),
+  /** [ADR-0057 D1] Write (edit/delete) access DEPTH — same enum as readScope. */
+  writeScope: ObjectAccessScopeSchema.optional().describe('[ADR-0057 D1] Write depth: own|unit|unit_and_below|org'),
 }));
 
 /**

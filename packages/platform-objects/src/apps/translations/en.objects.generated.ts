@@ -577,9 +577,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department: {
-    label: "Department",
-    pluralLabel: "Departments",
+  sys_business_unit: {
+    label: "Business Unit",
+    pluralLabel: "Business Units",
     description: "Hierarchical org-skeleton node (department / division / business unit / office).",
     fields: {
       name: {
@@ -601,8 +601,8 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           cost_center: "cost_center"
         }
       },
-      parent_department_id: {
-        label: "Parent Department",
+      parent_business_unit_id: {
+        label: "Parent Business Unit",
         help: "Self-reference for the org tree. Null = root of tenant."
       },
       organization_id: {
@@ -610,7 +610,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         help: "Tenant scope."
       },
       manager_user_id: {
-        label: "Department Head",
+        label: "Business Unit Head",
         help: "User responsible for this org unit (department head / lead)."
       },
       active: {
@@ -630,7 +630,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         help: "ID in upstream HRIS (Workday / SAP HR / 北森)."
       },
       id: {
-        label: "Department ID"
+        label: "Business Unit ID"
       },
       created_at: {
         label: "Created At"
@@ -654,22 +654,22 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_department_member: {
-    label: "Department Member",
-    pluralLabel: "Department Members",
+  sys_business_unit_member: {
+    label: "Business Unit Member",
+    pluralLabel: "Business Unit Members",
     description: "User assignment to a department (matrix-org friendly, effective-dated).",
     fields: {
       id: {
         label: "Member ID"
       },
-      department_id: {
-        label: "Department"
+      business_unit_id: {
+        label: "Business Unit"
       },
       user_id: {
         label: "User"
       },
-      role_in_department: {
-        label: "Role in Department",
+      role_in_business_unit: {
+        label: "Role in Business Unit",
         help: "`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.",
         options: {
           member: "member",

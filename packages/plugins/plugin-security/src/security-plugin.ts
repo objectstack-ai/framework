@@ -3,6 +3,7 @@
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { PermissionEvaluator } from './permission-evaluator.js';
+import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { FieldMasker } from './field-masker.js';
 import { PermissionDeniedError } from './errors.js';
@@ -366,6 +367,19 @@ export class SecurityPlugin implements Plugin {
         }
       }
 
+      // 2.6. [ADR-0057 D1] Stash the grant's access DEPTH for this object so the
+      //      sharing service can widen the owner-match (owner_id IN unit-set)
+      //      while still OR-ing in shares. Owner-set expansion needs the BU graph
+      //      (plugin-sharing), so we pass the scope STRING, not the resolved set.
+      if (permissionSets.length > 0) {
+        const sc: any = opCtx.context;
+        if (['find', 'findOne', 'count', 'aggregate'].includes(opCtx.operation)) {
+          sc.__readScope = this.permissionEvaluator.getEffectiveScope('read', opCtx.object, permissionSets);
+        } else if (opCtx.operation === 'update' || opCtx.operation === 'delete') {
+          sc.__writeScope = this.permissionEvaluator.getEffectiveScope('write', opCtx.object, permissionSets);
+        }
+      }
+
       // 2.7. Row-level WRITE authorization (pre-image check).
       //
       // RLS is injected as a `where` filter on the read path (step 3, via
@@ -575,6 +589,13 @@ export class SecurityPlugin implements Plugin {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
+        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_role so they
+        // stop being decorative (role→permission-set resolution + recipients).
+        try {
+          await bootstrapDeclaredRoles(ql, this.metadata, { logger: ctx.logger });
+        } catch (e) {
+          ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
+        }
         bootstrapRanOnce = true;
         ctx.logger.info('[security] platform bootstrap complete', report);
         return report;

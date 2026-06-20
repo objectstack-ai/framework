@@ -3,7 +3,7 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_department — Enterprise Org-Skeleton Node
+ * sys_business_unit — Business Unit (canonical org/data-partition tree, ADR-0057 D2)
  *
  * The persistent, hierarchical org chart node. **This is distinct from
  * `sys_team`** (which is the flat better-auth collaboration grouping).
@@ -14,31 +14,31 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * structure works identically regardless of value.
  *
  * Drives:
- *   - `recipient_type='department'` sharing rules
- *   - `dept:` approver prefix in the approval engine
+ *   - `recipient_type='business_unit'` sharing rules
+ *   - `bu:` approver prefix in the approval engine
  *   - Report rollups and manager chains in CRM/PM apps
  *
  * @namespace sys
  */
-export const SysDepartment = ObjectSchema.create({
-  name: 'sys_department',
-  label: 'Department',
-  pluralLabel: 'Departments',
+export const SysBusinessUnit = ObjectSchema.create({
+  name: 'sys_business_unit',
+  label: 'Business Unit',
+  pluralLabel: 'Business Units',
   icon: 'building',
   isSystem: true,
   managedBy: 'platform',
-  description: 'Hierarchical org-skeleton node (department / division / business unit / office).',
+  description: 'Canonical Business Unit tree — hierarchical org/data-partition node (company / division / department / region / office). ADR-0057 D2.',
   displayNameField: 'name',
   titleFormat: '{name}',
-  compactLayout: ['name', 'kind', 'parent_department_id', 'manager_user_id'],
+  compactLayout: ['name', 'kind', 'parent_business_unit_id', 'manager_user_id'],
 
   listViews: {
     active: {
       type: 'grid',
       name: 'active',
       label: 'Active',
-      data: { provider: 'object', object: 'sys_department' },
-      columns: ['name', 'code', 'kind', 'parent_department_id', 'manager_user_id', 'effective_from'],
+      data: { provider: 'object', object: 'sys_business_unit' },
+      columns: ['name', 'code', 'kind', 'parent_business_unit_id', 'manager_user_id', 'effective_from'],
       filter: [{ field: 'active', operator: 'equals', value: true }],
       sort: [{ field: 'name', order: 'asc' }],
       pagination: { pageSize: 100 },
@@ -47,7 +47,7 @@ export const SysDepartment = ObjectSchema.create({
       type: 'grid',
       name: 'inactive',
       label: 'Inactive',
-      data: { provider: 'object', object: 'sys_department' },
+      data: { provider: 'object', object: 'sys_business_unit' },
       columns: ['name', 'code', 'kind', 'effective_to'],
       filter: [{ field: 'active', operator: 'equals', value: false }],
       sort: [{ field: 'effective_to', order: 'desc' }],
@@ -57,8 +57,8 @@ export const SysDepartment = ObjectSchema.create({
       type: 'grid',
       name: 'by_kind',
       label: 'By Kind',
-      data: { provider: 'object', object: 'sys_department' },
-      columns: ['kind', 'name', 'code', 'parent_department_id', 'manager_user_id', 'active'],
+      data: { provider: 'object', object: 'sys_business_unit' },
+      columns: ['kind', 'name', 'code', 'parent_business_unit_id', 'manager_user_id', 'active'],
       sort: [{ field: 'kind', order: 'asc' }, { field: 'name', order: 'asc' }],
       grouping: { fields: [{ field: 'kind', order: 'asc', collapsed: false }] },
       pagination: { pageSize: 100 },
@@ -67,8 +67,8 @@ export const SysDepartment = ObjectSchema.create({
       type: 'grid',
       name: 'all_departments',
       label: 'All',
-      data: { provider: 'object', object: 'sys_department' },
-      columns: ['name', 'code', 'kind', 'parent_department_id', 'manager_user_id', 'active'],
+      data: { provider: 'object', object: 'sys_business_unit' },
+      columns: ['name', 'code', 'kind', 'parent_business_unit_id', 'manager_user_id', 'active'],
       sort: [{ field: 'name', order: 'asc' }],
       pagination: { pageSize: 100 },
     },
@@ -105,7 +105,7 @@ export const SysDepartment = ObjectSchema.create({
     ),
 
     // ── Hierarchy ────────────────────────────────────────────────
-    parent_department_id: Field.lookup('sys_department', {
+    parent_business_unit_id: Field.lookup('sys_business_unit', {
       label: 'Parent Department',
       required: false,
       description: 'Self-reference for the org tree. Null = root of tenant.',
@@ -183,7 +183,7 @@ export const SysDepartment = ObjectSchema.create({
 
   indexes: [
     { fields: ['organization_id'] },
-    { fields: ['parent_department_id'] },
+    { fields: ['parent_business_unit_id'] },
     { fields: ['code', 'organization_id'], unique: true },
     { fields: ['active'] },
   ],

@@ -1,5 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { BusinessUnitGraphService } from './business-unit-graph.js';
 import type {
   ISharingService,
   RecordShare,
@@ -121,8 +122,18 @@ export class SharingService implements ISharingService {
       return { id: '__deny_all__' };
     }
 
+    // [ADR-0057 D1] Access DEPTH widens the owner-match for this grant:
+    // own → [me], unit → my BU members, unit_and_below → my BU subtree, org →
+    // no owner filter. Sharing grants are still OR-ed in on top (additive).
+    const readScope = (context as any).__readScope as ('own' | 'unit' | 'unit_and_below' | 'org' | undefined);
+    if (readScope === 'org') return null;
+    const ownerIds = await this.resolveOwnerScopeIds(context, readScope);
+    const ownerMatch: Record<string, unknown> = ownerIds.length === 1
+      ? { [OWNER_FIELD]: ownerIds[0] }
+      : { [OWNER_FIELD]: { $in: ownerIds } };
+
     const grants = await this.engine.find('sys_record_share', {
-      filter: {
+      where: {
         object_name: object,
         recipient_type: 'user',
         recipient_id: context.userId,
@@ -137,12 +148,12 @@ export class SharingService implements ISharingService {
       : [];
 
     if (grantedIds.length === 0) {
-      return { [OWNER_FIELD]: context.userId };
+      return ownerMatch;
     }
 
     return {
       $or: [
-        { [OWNER_FIELD]: context.userId },
+        ownerMatch,
         { id: { $in: grantedIds } },
       ],
     };
@@ -167,19 +178,24 @@ export class SharingService implements ISharingService {
     if (!hasOwnerField(schema)) return true;
     if (!context.userId) return false;
 
-    // 1) Ownership — fast path.
+    // 1) Ownership (write DEPTH widens the owner-set) — fast path.
     const own = await this.engine.find(object, {
-      filter: { id: recordId },
+      where: { id: recordId },
       fields: ['id', OWNER_FIELD],
       limit: 1,
       context: SYSTEM_CTX,
     });
     const owner = Array.isArray(own) && own[0] ? (own[0] as any)[OWNER_FIELD] : undefined;
-    if (owner && String(owner) === String(context.userId)) return true;
+    if (owner != null) {
+      const writeScope = (context as any).__writeScope as ('own' | 'unit' | 'unit_and_below' | 'org' | undefined);
+      if (writeScope === 'org') return true;
+      const owners = await this.resolveOwnerScopeIds(context, writeScope);
+      if (owners.includes(String(owner))) return true;
+    }
 
     // 2) Explicit edit / full share.
     const editGrants = await this.engine.find('sys_record_share', {
-      filter: {
+      where: {
         object_name: object,
         record_id: recordId,
         recipient_type: 'user',
@@ -212,7 +228,7 @@ export class SharingService implements ISharingService {
     // Upsert: if a row with same (object, record, recipient) exists,
     // update its access level / reason; otherwise insert a new one.
     const existing = await this.engine.find('sys_record_share', {
-      filter: {
+      where: {
         object_name: input.object,
         record_id: input.recordId,
         recipient_type: recipientType,
@@ -271,7 +287,7 @@ export class SharingService implements ISharingService {
     _context: SharingExecutionContext,
   ): Promise<RecordShare[]> {
     const rows = await this.engine.find('sys_record_share', {
-      filter: { object_name: object, record_id: recordId },
+      where: { object_name: object, record_id: recordId },
       orderBy: [{ field: 'created_at', order: 'desc' }],
       limit: 500,
       context: SYSTEM_CTX,
@@ -280,6 +296,50 @@ export class SharingService implements ISharingService {
   }
 
   // ── helpers ──────────────────────────────────────────────────────
+
+  /**
+   * [ADR-0057 D1] Resolve the owner-id set for a read/write DEPTH scope.
+   * `own`/unset → just the caller; `unit` → members of the caller's business
+   * unit(s); `unit_and_below` → the caller's BU subtree (BFS). Always includes
+   * self. Elevated to SYSTEM_CTX (membership graph is platform metadata).
+   */
+  private async resolveOwnerScopeIds(
+    context: SharingExecutionContext,
+    scope: 'own' | 'unit' | 'unit_and_below' | 'org' | undefined,
+  ): Promise<string[]> {
+    const me = String((context as any).userId);
+    if (!scope || scope === 'own' || scope === 'org') return [me];
+    const orgId = (context as any).organizationId ?? (context as any).tenantId ?? null;
+    const myBus = await this.engine.find('sys_business_unit_member', {
+      where: { user_id: me },
+      fields: ['business_unit_id'],
+      limit: 1000,
+      context: SYSTEM_CTX,
+    });
+    const buIds = Array.from(
+      new Set((myBus ?? []).map((r: any) => String(r.business_unit_id ?? '')).filter(Boolean)),
+    );
+    if (buIds.length === 0) return [me];
+    const ids = new Set<string>([me]);
+    if (scope === 'unit') {
+      const members = await this.engine.find('sys_business_unit_member', {
+        where: { business_unit_id: { $in: buIds } },
+        fields: ['user_id'],
+        limit: 10000,
+        context: SYSTEM_CTX,
+      });
+      for (const m of members ?? []) {
+        const u = String((m as any).user_id ?? '');
+        if (u) ids.add(u);
+      }
+    } else {
+      const bug = new BusinessUnitGraphService({ engine: this.engine, organizationId: orgId });
+      for (const bu of buIds) {
+        for (const u of await bug.expandUsers(bu)) ids.add(u);
+      }
+    }
+    return Array.from(ids);
+  }
 
   private shouldBypass(object: string, context: SharingExecutionContext): boolean {
     if (context?.isSystem) return true;

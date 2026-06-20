@@ -183,7 +183,7 @@ describe('SeedLoaderService', () => {
           name: 'employee',
           fields: {
             name: { type: 'text' },
-            department_id: { type: 'lookup', reference: 'department' },
+            business_unit_id: { type: 'lookup', reference: 'department' },
           },
         },
       });
@@ -211,7 +211,7 @@ describe('SeedLoaderService', () => {
           name: 'employee',
           fields: {
             name: { type: 'text' },
-            department_id: { type: 'lookup', reference: 'department' },
+            business_unit_id: { type: 'lookup', reference: 'department' },
           },
         },
       });
@@ -568,7 +568,7 @@ describe('SeedLoaderService', () => {
           name: 'employee',
           fields: {
             name: { type: 'text' },
-            department_id: { type: 'lookup', reference: 'department' },
+            business_unit_id: { type: 'lookup', reference: 'department' },
           },
         },
       });
@@ -578,7 +578,7 @@ describe('SeedLoaderService', () => {
       const result = await loader.load({
         seeds: [
           { object: 'department', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Engineering', head_id: 'Alice' }] },
-          { object: 'employee', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Alice', department_id: 'Engineering' }] },
+          { object: 'employee', externalId: 'name', mode: 'upsert', env: ['prod', 'dev', 'test'], records: [{ name: 'Alice', business_unit_id: 'Engineering' }] },
         ],
         config: {
           dryRun: false, haltOnError: false, multiPass: true,

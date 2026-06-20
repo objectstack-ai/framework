@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { IDepartmentGraphService } from '@objectstack/spec/contracts';
+import type { IBusinessUnitGraphService } from '@objectstack/spec/contracts';
 import type { SharingEngine } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
 
@@ -12,7 +12,7 @@ type DeptCache = {
   head?: Map<string, string | null>;
 };
 
-export interface DepartmentGraphOptions {
+export interface BusinessUnitGraphOptions {
   engine: SharingEngine;
   /** Optional tenant scope; null means cross-tenant lookups. */
   organizationId?: string | null;
@@ -27,10 +27,10 @@ export interface DepartmentGraphOptions {
 }
 
 /**
- * Default {@link IDepartmentGraphService} implementation.
+ * Default {@link IBusinessUnitGraphService} implementation.
  *
- * Walks `sys_department.parent_department_id` for hierarchy and
- * `sys_department_member` for member expansion. Treats the optional
+ * Walks `sys_business_unit.parent_business_unit_id` for hierarchy and
+ * `sys_business_unit_member` for member expansion. Treats the optional
  * `active` flag as a hard filter (inactive departments contribute no
  * members and stop BFS descent into their subtrees).
  *
@@ -38,13 +38,13 @@ export interface DepartmentGraphOptions {
  * lookup so callers can use this single service in approval / sharing
  * pipelines.
  */
-export class DepartmentGraphService implements IDepartmentGraphService {
+export class BusinessUnitGraphService implements IBusinessUnitGraphService {
   private readonly engine: SharingEngine;
   private readonly organizationId: string | null;
   private readonly cache: DeptCache;
   private readonly teamGraph?: TeamGraphService;
 
-  constructor(opts: DepartmentGraphOptions) {
+  constructor(opts: BusinessUnitGraphOptions) {
     this.engine = opts.engine;
     this.organizationId = opts.organizationId ?? null;
     this.cache = opts.cache ?? {};
@@ -54,16 +54,16 @@ export class DepartmentGraphService implements IDepartmentGraphService {
     this.teamGraph = opts.teamGraph;
   }
 
-  async descendants(departmentId: string): Promise<string[]> {
-    if (!departmentId) return [];
-    const cached = this.cache.descendants!.get(departmentId);
+  async descendants(businessUnitId: string): Promise<string[]> {
+    if (!businessUnitId) return [];
+    const cached = this.cache.descendants!.get(businessUnitId);
     if (cached) return cached;
 
     // Verify seed itself is active + within tenant scope.
     let seedActive = true;
     try {
-      const seedRows = await this.engine.find('sys_department', {
-        filter: this.orgScope({ id: departmentId }),
+      const seedRows = await this.engine.find('sys_business_unit', {
+        where: this.orgScope({ id: businessUnitId }),
         fields: ['id', 'active'],
         limit: 1,
         context: SYSTEM_CTX,
@@ -75,18 +75,18 @@ export class DepartmentGraphService implements IDepartmentGraphService {
       seedActive = false;
     }
     if (!seedActive) {
-      this.cache.descendants!.set(departmentId, []);
+      this.cache.descendants!.set(businessUnitId, []);
       return [];
     }
 
-    const seen = new Set<string>([departmentId]);
-    const queue: string[] = [departmentId];
+    const seen = new Set<string>([businessUnitId]);
+    const queue: string[] = [businessUnitId];
     while (queue.length) {
       const parent = queue.shift()!;
       let children: any[] = [];
       try {
-        children = await this.engine.find('sys_department', {
-          filter: this.orgScope({ parent_department_id: parent, active: { $ne: false } }),
+        children = await this.engine.find('sys_business_unit', {
+          where: this.orgScope({ parent_business_unit_id: parent, active: { $ne: false } }),
           fields: ['id'],
           limit: 1000,
           context: SYSTEM_CTX,
@@ -103,22 +103,22 @@ export class DepartmentGraphService implements IDepartmentGraphService {
       }
     }
     const out = Array.from(seen);
-    this.cache.descendants!.set(departmentId, out);
+    this.cache.descendants!.set(businessUnitId, out);
     return out;
   }
 
-  async expandUsers(departmentId: string): Promise<string[]> {
-    if (!departmentId) return [];
-    const cached = this.cache.expandUsers!.get(departmentId);
+  async expandUsers(businessUnitId: string): Promise<string[]> {
+    if (!businessUnitId) return [];
+    const cached = this.cache.expandUsers!.get(businessUnitId);
     if (cached) return cached;
 
-    const depts = await this.descendants(departmentId);
-    if (depts.length === 0) return [];
+    const units = await this.descendants(businessUnitId);
+    if (units.length === 0) return [];
 
     let rows: any[] = [];
     try {
-      rows = await this.engine.find('sys_department_member', {
-        filter: { department_id: { $in: depts } },
+      rows = await this.engine.find('sys_business_unit_member', {
+        where: { business_unit_id: { $in: units } },
         fields: ['user_id'],
         limit: 10000,
         context: SYSTEM_CTX,
@@ -129,17 +129,17 @@ export class DepartmentGraphService implements IDepartmentGraphService {
     const users = Array.from(
       new Set((rows ?? []).map((r: any) => String(r.user_id ?? '')).filter(Boolean)),
     );
-    this.cache.expandUsers!.set(departmentId, users);
+    this.cache.expandUsers!.set(businessUnitId, users);
     return users;
   }
 
-  async headOf(departmentId: string): Promise<string | null> {
-    if (!departmentId) return null;
-    if (this.cache.head!.has(departmentId)) return this.cache.head!.get(departmentId) ?? null;
+  async headOf(businessUnitId: string): Promise<string | null> {
+    if (!businessUnitId) return null;
+    if (this.cache.head!.has(businessUnitId)) return this.cache.head!.get(businessUnitId) ?? null;
     let row: any = null;
     try {
-      const rows = await this.engine.find('sys_department', {
-        filter: { id: departmentId },
+      const rows = await this.engine.find('sys_business_unit', {
+        where: { id: businessUnitId },
         fields: ['id', 'manager_user_id'],
         limit: 1,
         context: SYSTEM_CTX,
@@ -149,7 +149,7 @@ export class DepartmentGraphService implements IDepartmentGraphService {
       row = null;
     }
     const head = row?.manager_user_id ? String(row.manager_user_id) : null;
-    this.cache.head!.set(departmentId, head);
+    this.cache.head!.set(businessUnitId, head);
     return head;
   }
 
@@ -159,7 +159,7 @@ export class DepartmentGraphService implements IDepartmentGraphService {
     if (!userId) return null;
     try {
       const rows = await this.engine.find('sys_user', {
-        filter: { id: userId },
+        where: { id: userId },
         fields: ['id', 'manager_id'],
         limit: 1,
         context: SYSTEM_CTX,
