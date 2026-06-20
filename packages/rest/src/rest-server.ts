@@ -3708,12 +3708,15 @@ export class RestServer {
                         Object.assign(filteredData, rawBody);
                     }
 
-                    // Anonymous execution context. Carries the `guest_portal`
-                    // permission set name so the SecurityPlugin resolves it
-                    // and enforces INSERT-only on the target object.
-                    // Leaving `userId` undefined keeps `ctx.user?.id` falsy
-                    // in object hooks (the canonical guest-detection check).
+                    // ADR-0056 (Option A): authorization DERIVED from the declared
+                    // form — a narrow create grant scoped to exactly this form's target
+                    // object. The SecurityPlugin honors `publicFormGrant` (create + the
+                    // immediate read-back, that object ONLY), so public forms work under
+                    // secure-by-default (requireAuth) WITHOUT a deployment-configured
+                    // `guest_portal`. `guest_portal` + `anonymous` are kept for back-compat
+                    // with object hooks (guest detection via falsy `ctx.user?.id`).
                     const context: any = {
+                        publicFormGrant: { object: match.object },
                         permissions: ['guest_portal'],
                         anonymous: true,
                     };

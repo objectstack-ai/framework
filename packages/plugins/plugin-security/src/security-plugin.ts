@@ -285,6 +285,28 @@ export class SecurityPlugin implements Plugin {
         return next();
       }
 
+      // ADR-0056 (Option A) — declaration-derived PUBLIC-FORM grant. A public
+      // form submission carries `publicFormGrant: { object }` derived from the
+      // form's declared target (set by the rest-server form-submit route). It
+      // authorizes ONLY create + the immediate read-back on THAT object — never
+      // anything else, and never the anonymous fall-open. This lets public forms
+      // work under secure-by-default (requireAuth) WITHOUT a deployment-configured
+      // `guest_portal`, scoped to exactly the declared object (the field
+      // allow-list is enforced at the route; the context is request-scoped).
+      const formGrant = opCtx.context?.publicFormGrant;
+      if (formGrant && typeof formGrant === 'object' && (formGrant as { object?: string }).object) {
+        const grantObject = (formGrant as { object: string }).object;
+        const allowed =
+          opCtx.object === grantObject &&
+          ['insert', 'find', 'findOne', 'count'].includes(opCtx.operation);
+        if (allowed) return next();
+        throw new PermissionDeniedError(
+          `[Security] Access denied: public-form grant permits only create/read-back on '${grantObject}', ` +
+            `not '${opCtx.operation}' on '${opCtx.object}'`,
+          { operation: opCtx.operation, object: opCtx.object },
+        );
+      }
+
       const roles = opCtx.context?.roles ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
