@@ -190,6 +190,20 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 restServer.registerRoutes();
 
                 ctx.logger.info('REST API successfully registered');
+
+                // ADR-0056 D2 (warn → enforce): surface the fail-open posture.
+                // When `requireAuth` is off, anonymous requests reach the data API
+                // and read any object with no OWD/RLS — secure-by-default would deny
+                // them and route public access through share-links / `publicSharing`.
+                // We do NOT flip the default here (it would break deployments that
+                // rely on anonymous reads); we make the posture explicit instead.
+                if (!(config.api as any)?.requireAuth) {
+                    ctx.logger.warn(
+                        '[security] anonymous access to the data API is ALLOWED (api.requireAuth=false) — ' +
+                        'objects without OWD/RLS are world-readable. For secure-by-default set ' +
+                        'api.requireAuth=true and expose public records via share-links / publicSharing (ADR-0056 D2).',
+                    );
+                }
             } catch (err: any) {
                 ctx.logger.error('Failed to register REST API routes', { error: err.message } as any);
                 throw err;
