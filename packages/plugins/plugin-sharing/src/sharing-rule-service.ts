@@ -12,6 +12,7 @@ import type {
 import type { SharingEngine } from './sharing-service.js';
 import type { SharingService } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
+import { RoleGraphService } from './role-graph.js';
 import { DepartmentGraphService } from './department-graph.js';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
@@ -266,6 +267,16 @@ export class SharingRuleService implements ISharingRuleService {
       return dept.expandUsers(rule.recipient_id);
     }
     if (rule.recipient_type === 'role') return team.expandRoleUsers(rule.recipient_id, rule.organization_id ?? undefined);
+    if (rule.recipient_type === 'role_and_subordinates') {
+      // ADR-0056 D6 — declarative role-hierarchy widening: this role + every
+      // subordinate role's users (configured per sharing rule, not hardcoded).
+      const roleGraph = new RoleGraphService({
+        engine: this.engine,
+        organizationId: rule.organization_id ?? null,
+        teamGraph: team,
+      });
+      return roleGraph.expandRoleAndSubordinates(rule.recipient_id, rule.organization_id ?? undefined);
+    }
     // queue — v1 stores literal; treat as no-op until queue impl lands.
     return [];
   }

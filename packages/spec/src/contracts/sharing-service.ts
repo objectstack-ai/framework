@@ -133,7 +133,7 @@ export interface ISharingService {
  * - `role`       — tenant role on `sys_member.role`
  * - `queue`      — opaque queue identifier (resolution left to caller / app)
  */
-export type SharingRuleRecipientType = 'user' | 'team' | 'department' | 'role' | 'queue';
+export type SharingRuleRecipientType = 'user' | 'team' | 'department' | 'role' | 'role_and_subordinates' | 'queue';
 
 /**
  * Stored shape of a sharing rule. Maps 1-to-1 to `sys_sharing_rule`
