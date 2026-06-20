@@ -8,3 +8,4 @@ export { Team, ProjectMembership } from './team.object.js';
 export { Product, Invoice, InvoiceLine } from './invoice.object.js';
 export { FieldZoo } from './field-zoo.object.js';
 export { Preference } from './preference.object.js';
+export { PrivateNote } from './private-note.object.js';
