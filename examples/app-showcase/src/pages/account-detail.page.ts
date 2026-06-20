@@ -9,8 +9,8 @@ import type { Page } from '@objectstack/spec/ui';
  *   • `record:related_list` — the account's Projects and Invoices, each a live
  *                             child list (relationshipField = the `account`
  *                             lookup on the child object).
- *   • field changes surface in the synthesized discussion feed (trackHistory
- *     on status/industry) — verified: 'Industry: Retail → Finance'.
+ *   • `record:history` — a self-fetching audit tab (sys_activity field_change),
+ *     and the same changes also surface in the discussion feed.
  *   • the synthesized `discussion` slot — a unified activity + comment feed
  *     (@mentions, reactions): the human collaboration surface, for free.
  *   • `record:highlights` + `record:details` — the summary strip + sections.
@@ -88,6 +88,15 @@ export const AccountDetailPage: Page = {
                   showViewAll: true,
                 },
               },
+            ],
+          },
+          {
+            key: 'history',
+            label: 'History',
+            children: [
+              // Self-fetches from sys_activity (field_change events) via record
+              // context — trackHistory on status/industry feeds the entries.
+              { type: 'record:history', properties: { limit: 50 } },
             ],
           },
         ],

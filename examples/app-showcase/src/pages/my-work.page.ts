@@ -5,14 +5,10 @@ import type { Page } from '@objectstack/spec/ui';
 /**
  * My Work — a role-aware workspace home that *composes* live data the way a
  * real landing page does, instead of listing one component per type:
- *   • a KPI hero row of live `object-metric` tiles (team throughput);
+ *   • a KPI hero row of live `object-metric` tiles in an equal-width `grid`;
  *   • a personal work queue — `object-grid` filtered to the signed-in user
  *     via the `{current_user_id}` token (records I own);
- *   • a sidebar Shortcuts card pointing at the key surfaces.
- *
- * (Note: page-component `visible` expressions don't receive a `current_user`
- * context in the renderer, so true per-role gating belongs in object/field
- * permissions + sharing rules, not a card-level expression.)
+ *   • sidebar shortcuts + a per-user `visible`-gated note on `user.email`.
  */
 export const MyWorkPage: Page = {
   name: 'showcase_my_work',
@@ -33,14 +29,12 @@ export const MyWorkPage: Page = {
       name: 'main',
       width: 'large',
       components: [
-        // KPI hero ROW — three live tiles laid out horizontally via a grid.
+        // KPI hero ROW — equal-width tiles in a 3-col grid (layout grid, not ObjectGrid).
         {
-          type: 'flex',
+          type: 'grid',
           properties: {
-            direction: 'row',
-            wrap: true,
+            columns: 3,
             gap: 4,
-            align: 'stretch',
             children: [
               { type: 'object-metric', properties: { objectName: 'showcase_task', label: 'Open Tasks', icon: 'list-checks', aggregate: { field: 'id', function: 'count' }, filter: { status: { $ne: 'done' } } } },
               { type: 'object-metric', properties: { objectName: 'showcase_task', label: 'In Review', icon: 'eye', aggregate: { field: 'id', function: 'count' }, filter: { status: 'in_review' } } },
@@ -64,12 +58,16 @@ export const MyWorkPage: Page = {
       name: 'sidebar',
       width: 'small',
       components: [
-        // Sidebar shortcuts — plain text lines (region containers don't render
-        // nested page:card bodies; direct components are the reliable path).
         { type: 'element:text', properties: { content: 'Shortcuts' } },
-        { type: 'element:text', properties: { content: '• Delivery Operations — the org-wide KPI dashboard.' } },
-        { type: 'element:text', properties: { content: '• Approvals — items in review awaiting a decision.' } },
-        { type: 'element:text', properties: { content: '• New Project (Wizard) — create a project step by step.' } },
+        { type: 'element:text', properties: { content: '• Delivery Operations — org-wide KPI dashboard.' } },
+        { type: 'element:text', properties: { content: '• Approvals — items in review.' } },
+        { type: 'element:text', properties: { content: '• New Project (Wizard).' } },
+        // Per-user rendering via `visible` on the signed-in user (now that the
+        // renderer feeds `user` into the expression context). The first line
+        // shows for the admin; the second is gated to a different email and
+        // stays hidden — proving the gate, not just always-on rendering.
+        { type: 'element:text', properties: { visible: "user.email == 'admin@objectos.ai'", content: '✓ Admin-only note (visible: user.email == admin@objectos.ai)' } },
+        { type: 'element:text', properties: { visible: "user.email == 'nobody@example.com'", content: 'This must NOT appear (gated to a different user).' } },
       ],
     },
   ],
