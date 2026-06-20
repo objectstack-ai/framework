@@ -6,6 +6,17 @@ export { ProjectWorkspacePage } from './project-workspace.page.js';
 export { ProjectDetailPage } from './project-detail.page.js';
 export { TaskWorkbenchPage } from './task-workbench.page.js';
 export { TaskTriagePage } from './task-triage.page.js';
+export { ActiveProjectsPage } from './active-projects.page.js';
+export { TaskDetailPage } from './task-detail.page.js';
+export {
+  TaskBoardPage,
+  TaskCalendarPage,
+  TaskGalleryPage,
+  TaskSchedulePage,
+  TaskTimelinePage,
+  TaskMapPage,
+  TaskAllViewsPage,
+} from './task-visualizations.pages.js';
 
 /**
  * Component Gallery — a custom page that places a spread of standard page
