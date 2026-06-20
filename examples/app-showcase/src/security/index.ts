@@ -83,6 +83,33 @@ export const ContributorPermissionSet = {
   ],
 };
 
+// ── App-declared DEFAULT PROFILE (ADR-0056 D7) ──────────────────────────────
+/**
+ * The showcase's default access posture for a freshly signed-up user who holds
+ * no explicit grants. `isDefault: true` makes the app declare what "a new member
+ * can do" instead of inheriting the built-in `member_default` wildcard. The CLI
+ * (`pnpm dev`) reads this off the stack and wires it as the SecurityPlugin
+ * fallback (ADR-0056 D7) — without that wiring an `isDefault` flag in app
+ * metadata is silently ignored. Deliberately read-mostly: a brand-new member can
+ * browse the shared catalog + announcements and file tasks/inquiries, but cannot
+ * edit or delete anyone's records (owner/OWD enforcement still applies on top).
+ */
+export const MemberDefaultProfile = {
+  name: 'showcase_member_default',
+  label: 'Showcase Member (Default)',
+  description: 'App-declared default profile for new sign-ups — read-mostly baseline (ADR-0056 D7).',
+  isProfile: true,
+  isDefault: true,
+  objects: {
+    showcase_account: { allowRead: true },
+    showcase_product: { allowRead: true },
+    showcase_project: { allowRead: true },
+    showcase_task: { allowRead: true, allowCreate: true },
+    showcase_announcement: { allowRead: true },
+    showcase_inquiry: { allowRead: true, allowCreate: true },
+  },
+};
+
 // ── Sharing rules ──────────────────────────────────────────────────────────
 /** criteria-based: red-health projects are shared up to executives. */
 export const RedProjectSharingRule = {
@@ -128,6 +155,6 @@ export const ShowcasePolicy = {
 };
 
 export const allRoles = [ContributorRole, ManagerRole, ExecRole];
-export const allPermissionSets = [ContributorPermissionSet];
+export const allPermissionSets = [ContributorPermissionSet, MemberDefaultProfile];
 export const allSharingRules = [RedProjectSharingRule, ContributorTaskSharingRule];
 export const allPolicies = [ShowcasePolicy];

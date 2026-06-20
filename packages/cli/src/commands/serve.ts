@@ -1297,8 +1297,14 @@ export default class Serve extends Command {
             // Pair: SecurityPlugin (RBAC) — optional
             try {
               const securityPkg = '@objectstack/plugin-security';
-              const { SecurityPlugin } = await import(/* webpackIgnore: true */ securityPkg);
-              await kernel.use(new SecurityPlugin());
+              const { SecurityPlugin, appDefaultProfileName } = await import(/* webpackIgnore: true */ securityPkg);
+              // ADR-0056 D7 — honor an app-declared default profile. A stack
+              // permission set marked `isProfile && isDefault` becomes the
+              // fallback for users with no explicit grants. The SecurityPlugin's
+              // own scan only sees its built-in sets, so the CLI passes the
+              // declared name through explicitly (undefined → built-in default).
+              const appDefaultProfile = appDefaultProfileName((config as any)?.permissions);
+              await kernel.use(new SecurityPlugin(appDefaultProfile ? { fallbackPermissionSet: appDefaultProfile } : undefined));
               trackPlugin('Security');
             } catch {
               // optional

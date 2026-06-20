@@ -25,3 +25,4 @@ export {
 } from './auto-org-admin-grant.js';
 export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
+export { appDefaultProfileName } from './app-default-profile.js';
