@@ -33,7 +33,7 @@ export const TaskBoardPage: Page = {
     source: 'showcase_task',
     columns: [...cols, 'estimate_hours'],
     appearance: { showDescription: true, allowedVisualizations: ['kanban'] },
-    userActions: { sort: true, search: true },
+    userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -46,7 +46,7 @@ export const TaskCalendarPage: Page = {
     source: 'showcase_task',
     columns: cols,
     appearance: { showDescription: true, allowedVisualizations: ['calendar'] },
-    userActions: { sort: false, search: true },
+    userActions: { sort: false, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -59,7 +59,7 @@ export const TaskGalleryPage: Page = {
     source: 'showcase_task',
     columns: [...cols, 'cover'],
     appearance: { showDescription: true, allowedVisualizations: ['gallery'] },
-    userActions: { sort: true, search: true },
+    userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -72,7 +72,7 @@ export const TaskSchedulePage: Page = {
     source: 'showcase_task',
     columns: [...cols, 'start_date', 'end_date', 'progress'],
     appearance: { showDescription: true, allowedVisualizations: ['gantt'] },
-    userActions: { sort: true, search: true },
+    userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -85,7 +85,7 @@ export const TaskTimelinePage: Page = {
     source: 'showcase_task',
     columns: [...cols, 'created_at'],
     appearance: { showDescription: true, allowedVisualizations: ['timeline'] },
-    userActions: { sort: true, search: true },
+    userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -98,7 +98,7 @@ export const TaskMapPage: Page = {
     source: 'showcase_task',
     columns: [...cols, 'location'],
     appearance: { showDescription: true, allowedVisualizations: ['map'] },
-    userActions: { sort: false, search: true },
+    userActions: { sort: false, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };
@@ -116,7 +116,7 @@ export const TaskAllViewsPage: Page = {
       showDescription: true,
       allowedVisualizations: ['grid', 'kanban', 'gallery', 'calendar', 'timeline', 'gantt', 'map'],
     },
-    userActions: { sort: true, search: true },
+    userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
 };

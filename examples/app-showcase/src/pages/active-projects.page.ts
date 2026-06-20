@@ -31,7 +31,7 @@ export const ActiveProjectsPage: Page = {
       element: 'dropdown',
       fields: [{ field: 'health', showCount: true }, { field: 'status' }],
     },
-    userActions: { sort: true, search: true, filter: true },
+    userActions: { sort: true, search: true, filter: true, rowHeight: false, addRecordForm: false },
     // Add-record entry point: a toolbar button that opens the default form.
     addRecord: { enabled: true, position: 'top', mode: 'form', formView: 'default' },
     showRecordCount: true,
