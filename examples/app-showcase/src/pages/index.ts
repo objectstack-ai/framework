@@ -9,6 +9,9 @@ export { TaskTriagePage } from './task-triage.page.js';
 export { ActiveProjectsPage } from './active-projects.page.js';
 export { TaskDetailPage } from './task-detail.page.js';
 export { AccountDetailPage } from './account-detail.page.js';
+export { ReviewQueuePage } from './review-queue.page.js';
+export { NewProjectWizardPage } from './new-project-wizard.page.js';
+export { MyWorkPage } from './my-work.page.js';
 export {
   TaskBoardPage,
   TaskCalendarPage,
