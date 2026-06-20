@@ -23,6 +23,7 @@ export const Account = ObjectSchema.create({
     name: Field.text({ label: 'Account Name', required: true, searchable: true, maxLength: 200 }),
     industry: Field.select({
       label: 'Industry',
+      trackHistory: true,
       options: [
         { label: 'Technology', value: 'technology', default: true },
         { label: 'Finance', value: 'finance' },
@@ -36,6 +37,7 @@ export const Account = ObjectSchema.create({
     status: Field.select({
       label: 'Lifecycle',
       required: true,
+      trackHistory: true,
       options: [
         { label: 'Prospect', value: 'prospect', default: true, color: '#94A3B8' },
         { label: 'Active', value: 'active', color: '#10B981' },

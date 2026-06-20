@@ -15,6 +15,18 @@ export const ShowcaseApp = App.create({
 
   navigation: [
     {
+      id: 'grp_workspace',
+      type: 'group',
+      label: 'Workspace',
+      icon: 'briefcase',
+      children: [
+        { id: 'nav_my_work', type: 'page', pageName: 'showcase_my_work', label: 'My Work', icon: 'home' },
+        { id: 'nav_review_queue', type: 'page', pageName: 'showcase_review_queue', label: 'Approvals', icon: 'check-check' },
+        { id: 'nav_new_project_wizard', type: 'page', pageName: 'showcase_new_project_wizard', label: 'New Project (Wizard)', icon: 'wand-2' },
+        { id: 'nav_settings', type: 'object', objectName: 'showcase_preference', label: 'Settings', icon: 'settings' },
+      ],
+    },
+    {
       id: 'grp_data',
       type: 'group',
       label: 'Data Model',
@@ -50,10 +62,6 @@ export const ShowcaseApp = App.create({
       label: 'Pages',
       icon: 'layout',
       children: [
-        { id: 'nav_my_work', type: 'page', pageName: 'showcase_my_work', label: 'My Work', icon: 'home' },
-        { id: 'nav_review_queue', type: 'page', pageName: 'showcase_review_queue', label: 'Approvals', icon: 'check-check' },
-        { id: 'nav_new_project_wizard', type: 'page', pageName: 'showcase_new_project_wizard', label: 'New Project (Wizard)', icon: 'wand-2' },
-        { id: 'nav_settings', type: 'object', objectName: 'showcase_preference', label: 'Settings', icon: 'settings' },
         { id: 'nav_gallery', type: 'page', pageName: 'showcase_component_gallery', label: 'Component Gallery', icon: 'layout-template' },
         { id: 'nav_project_workspace', type: 'page', pageName: 'showcase_project_workspace', label: 'New Project + Tasks', icon: 'folder-plus' },
         // ADR-0047 interface mode: same object as nav_tasks, curated surface.
