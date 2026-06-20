@@ -34,6 +34,10 @@ export const ShowcaseProjectDataset = defineDataset({
   object: 'showcase_project',
   dimensions: [
     { name: 'account', label: 'Account', field: 'account', type: 'lookup' },
+    // status / health added for the Operations dashboard — power the
+    // "by health" chart and the filtered KPI tiles (active / at-risk).
+    { name: 'status', label: 'Status', field: 'status', type: 'string' },
+    { name: 'health', label: 'Health', field: 'health', type: 'string' },
   ],
   measures: [
     { name: 'project_count', label: 'Projects', aggregate: 'count' },

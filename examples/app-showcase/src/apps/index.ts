@@ -36,6 +36,7 @@ export const ShowcaseApp = App.create({
       label: 'Analytics',
       icon: 'chart-bar',
       children: [
+        { id: 'nav_ops', type: 'dashboard', dashboardName: 'showcase_ops_dashboard', label: 'Delivery Operations', icon: 'gauge' },
         { id: 'nav_charts', type: 'dashboard', dashboardName: 'showcase_chart_gallery', label: 'Chart Gallery', icon: 'layout-dashboard' },
         { id: 'nav_report_tabular', type: 'object', objectName: 'showcase_task', viewName: 'tabular', label: 'Task List', icon: 'table' },
         { id: 'nav_report_summary', type: 'report', reportName: 'showcase_hours_by_status', label: 'Hours by Status', icon: 'sigma' },

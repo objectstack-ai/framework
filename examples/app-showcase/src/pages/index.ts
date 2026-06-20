@@ -8,6 +8,7 @@ export { TaskWorkbenchPage } from './task-workbench.page.js';
 export { TaskTriagePage } from './task-triage.page.js';
 export { ActiveProjectsPage } from './active-projects.page.js';
 export { TaskDetailPage } from './task-detail.page.js';
+export { AccountDetailPage } from './account-detail.page.js';
 export {
   TaskBoardPage,
   TaskCalendarPage,

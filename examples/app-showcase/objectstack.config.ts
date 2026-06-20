@@ -14,11 +14,11 @@ import {
 import * as objects from './src/objects/index.js';
 import { TaskViews, ProjectViews } from './src/views/index.js';
 import { ShowcaseApp } from './src/apps/index.js';
-import { ChartGalleryDashboard } from './src/dashboards/index.js';
+import { ChartGalleryDashboard, OpsDashboard } from './src/dashboards/index.js';
 import { ShowcaseTaskDataset, ShowcaseProjectDataset } from './src/datasets/index.js';
 import { allReports } from './src/reports/index.js';
 import { allActions } from './src/actions/index.js';
-import { ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage } from './src/pages/index.js';
+import { ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, AccountDetailPage } from './src/pages/index.js';
 import { allFlows } from './src/flows/index.js';
 import { allWebhooks } from './src/webhooks/index.js';
 import { allHooks } from './src/hooks/index.js';
@@ -143,8 +143,8 @@ export default defineStack({
   apps: [ShowcaseApp],
   portals: allPortals,
   views: [TaskViews, ProjectViews],
-  pages: [ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage],
-  dashboards: [ChartGalleryDashboard],
+  pages: [ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, AccountDetailPage],
+  dashboards: [ChartGalleryDashboard, OpsDashboard],
   books: allBooks,
   datasets: [ShowcaseTaskDataset, ShowcaseProjectDataset],
   reports: allReports,
