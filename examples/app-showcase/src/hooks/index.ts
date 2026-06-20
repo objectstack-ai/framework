@@ -94,7 +94,7 @@ export const StampInquiryDefaultsHook = {
   events: ['beforeInsert'] as LifecycleEvent[],
   body: {
     language: 'js' as const,
-    source: "if (!ctx.input.status) ctx.input.status = 'new'; ctx.input.source = 'web';",
+    source: "if (!ctx.input.status) ctx.input.status = 'new'; if (!ctx.input.source) ctx.input.source = 'web';",
   },
   priority: 50,
   onError: 'abort' as const,
