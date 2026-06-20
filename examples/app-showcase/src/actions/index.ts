@@ -17,7 +17,10 @@ export const MarkDoneAction: Action = {
   icon: 'check',
   objectName: task,
   type: 'script',
-  locations: ['list_item', 'record_header'],
+  // `record_section` so the Task Detail page's `record:quick_actions` bar
+  // (which names this action) resolves it — the engine location-filters even
+  // explicitly-named actions, mirroring the platform's own sys-user pages.
+  locations: ['list_item', 'record_header', 'record_section'],
   refreshAfter: true,
 };
 
@@ -82,7 +85,8 @@ export const LogTimeAction: Action = {
   objectName: task,
   type: 'form',
   target: 'showcase_task.default',
-  locations: ['record_header', 'record_related'],
+  // `record_section` so it surfaces in the Task Detail quick-actions bar too.
+  locations: ['record_header', 'record_related', 'record_section'],
   refreshAfter: true,
 };
 
