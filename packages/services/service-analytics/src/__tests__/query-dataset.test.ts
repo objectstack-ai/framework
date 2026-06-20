@@ -80,4 +80,55 @@ describe('AnalyticsService.queryDataset', () => {
     });
     expect(svc.cubeRegistry.has('sales')).toBe(true);
   });
+
+  // ── ADR-0021 D2 drill-through metadata ──────────────────────────────────
+  it('exposes drill-through metadata: object, dimensionFields, and a raw-value sidecar', async () => {
+    const captured: { sql: string; params: unknown[] }[] = [];
+    const result = await service(captured).queryDataset(
+      dataset,
+      { dimensions: ['region'], measures: ['revenue'] },
+      { tenantId: 'org_A' } as ExecutionContext,
+    ) as any;
+    // The host drills into the dataset's base object…
+    expect(result.object).toBe('opportunity');
+    // …mapping the drillable dimension name to its underlying field…
+    expect(result.dimensionFields).toEqual({ region: 'account.region' });
+    // …and the RAW grouped value is preserved in a parallel array (rows are
+    // NOT mutated — they keep exactly their measure/dimension columns).
+    expect(result.drillRawRows).toEqual([{ region: 'NA' }]);
+    expect(result.rows[0]).toEqual({ region: 'NA', revenue: 100 });
+  });
+
+  it('enriches dimension columns with their dataset display label', async () => {
+    const labeled = DatasetSchema.parse({
+      name: 'sales2', label: 'Sales', object: 'opportunity', include: ['account'],
+      dimensions: [{ name: 'region', field: 'account.region', type: 'string', label: 'Region' }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue', certified: true }],
+    });
+    const result = await service([]).queryDataset(
+      labeled,
+      { dimensions: ['region'], measures: ['revenue'] },
+      { tenantId: 'org_A' } as ExecutionContext,
+    ) as any;
+    const regionField = (result.fields ?? []).find((f: any) => f.name === 'region' || f.name === 'account.region');
+    expect(regionField?.label).toBe('Region');
+  });
+
+  it('does NOT mark a date dimension drillable (a humanized bucket cannot be exact-matched)', async () => {
+    const dated = DatasetSchema.parse({
+      name: 'sales3', label: 'Sales', object: 'opportunity', include: [],
+      dimensions: [{ name: 'closed', field: 'close_date', type: 'date' }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+    });
+    const svc = new AnalyticsService({
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+      executeRawSql: async () => [{ closed: 1700000000000, revenue: 100 }],
+      getReadScope: (_o, ctx?: ExecutionContext) => (ctx?.tenantId ? { organization_id: ctx.tenantId } : undefined),
+    });
+    const result = await svc.queryDataset(dated, { dimensions: ['closed'], measures: ['revenue'] }, { tenantId: 'org_A' } as ExecutionContext) as any;
+    // No drillable (non-date) dimension → no drill metadata at all.
+    expect(result.dimensionFields).toBeUndefined();
+    expect(result.object).toBeUndefined();
+    expect(result.drillRawRows).toBeUndefined();
+  });
 });
