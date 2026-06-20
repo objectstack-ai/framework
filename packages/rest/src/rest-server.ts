@@ -918,6 +918,7 @@ export class RestServer {
             //    key authenticates. Anonymous (neither) → undefined → 401.
             let userId: string;
             let tenantId: string | undefined;
+            let email: string | undefined;
             const keyPrincipal = await resolveApiKeyPrincipal(identityQl, headers).catch(() => undefined);
             if (keyPrincipal) {
                 userId = keyPrincipal.userId;
@@ -928,6 +929,16 @@ export class RestServer {
                 if (!session?.user?.id) return undefined;
                 userId = session.user.id;
                 tenantId = session.session?.activeOrganizationId ?? undefined;
+                if (session.user?.email) email = String(session.user.email);
+            }
+            // Resolve the caller's UNIQUE email for `current_user.email` RLS owner
+            // policies (e.g. `owner = current_user.email`). Session-supplied when
+            // present, else a bounded sys_user lookup (the API-key path). Email is
+            // the unique owner anchor — display `name` is never exposed to RLS
+            // (names collide, and a collision on an ownership predicate leaks access).
+            if (!email && identityQl && typeof identityQl.find === 'function') {
+                const urows = await identityQl.find('sys_user', { where: { id: userId }, limit: 1, context: { isSystem: true } } as any).catch(() => []);
+                if ((urows as any)?.[0]?.email) email = String((urows as any)[0].email);
             }
             // Look up the link tables to surface roles + permission set names.
             // Skipping this lookup would silently ignore admin/role grants —
@@ -1052,6 +1063,7 @@ export class RestServer {
             return {
                 userId,
                 tenantId,
+                email,
                 roles,
                 permissions,
                 systemPermissions,

@@ -974,6 +974,29 @@ describe('RLSCompiler', () => {
     expect(filter).toEqual({ owner_id: 'user-42' });
   });
 
+  it('resolves current_user.email to the literal (unique owner anchor)', () => {
+    // Email is the seedable, unique owner anchor — a data column like
+    // `owner` can be authored against it and compiles to a concrete literal,
+    // which is what lets controlled_by_parent resolve master ids under a
+    // system find (the value is baked in, not a placeholder).
+    const compiler = new RLSCompiler();
+    const policy: any = { object: 'showcase_invoice', operation: 'select', using: 'owner = current_user.email' };
+    const ctx: any = { userId: 'u1', email: 'ada@example.com', roles: [] };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual({ owner: 'ada@example.com' });
+  });
+
+  it('does NOT resolve current_user.name (collision-prone) → fail-closed', () => {
+    // Display names are intentionally NOT exposed to RLS: they collide, and a
+    // collision on an ownership predicate is an access leak. An unresolved
+    // variable drops the (only) policy → deny sentinel.
+    const compiler = new RLSCompiler();
+    const policy: any = { object: 'showcase_invoice', operation: 'select', using: 'owner = current_user.name' };
+    const ctx: any = { userId: 'u1', email: 'ada@example.com', roles: [] };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual(RLS_DENY_FILTER);
+  });
+
   it('should compile literal equality expression', () => {
     const compiler = new RLSCompiler();
     const policy: any = { object: 'doc', operation: 'select', using: "status = 'published'" };

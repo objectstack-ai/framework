@@ -7,7 +7,7 @@ import { Project } from '../objects/project.object.js';
 import { Task } from '../objects/task.object.js';
 import { Category } from '../objects/category.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
-import { Product } from '../objects/invoice.object.js';
+import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
 
 /**
@@ -143,4 +143,35 @@ const fieldZoo = defineSeed(FieldZoo, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships, fieldZoo];
+// Invoices owned by different contributors — the controlled-by-parent demo
+// (ADR-0055). Under the `showcase_contributor` permission set's owner RLS, a
+// contributor (e.g. ada@example.com) sees only the invoices they OWN; because
+// `showcase_invoice_line` is `controlled_by_parent`, the lines below follow
+// automatically — ada sees INV-1001/1002's lines but never linus's INV-1003.
+const invoices = defineSeed(Invoice, {
+  mode: 'upsert',
+  externalId: 'name',
+  records: [
+    { name: 'INV-1001', account: 'Northwind', owner: 'ada@example.com', status: 'sent', issued_on: cel`daysAgo(10)`, tax_rate: 8 },
+    { name: 'INV-1002', account: 'Contoso', owner: 'ada@example.com', status: 'draft', tax_rate: 0 },
+    { name: 'INV-1003', account: 'Contoso', owner: 'linus@example.com', status: 'paid', issued_on: cel`daysAgo(30)`, paid_on: cel`daysAgo(2)`, tax_rate: 8 },
+    { name: 'INV-1004', account: 'Fabrikam', owner: 'grace@example.com', status: 'draft', tax_rate: 0 },
+  ],
+});
+
+// Line items — `product` resolves by SKU (the Product seed's externalId), and
+// `invoice` by invoice number. A contributor reaches a line only through its
+// master invoice, so these inherit the invoice's owner scoping.
+const invoiceLines = defineSeed(InvoiceLine, {
+  mode: 'upsert',
+  externalId: 'description',
+  records: [
+    { description: 'INV-1001 \u00b7 Consulting hours', invoice: 'INV-1001', product: 'SERVICE-HR', position: 0, quantity: 10, unit_price: 150, amount: 1500 },
+    { description: 'INV-1001 \u00b7 Widget A units', invoice: 'INV-1001', product: 'WIDGET-A', position: 1, quantity: 4, unit_price: 29.99, amount: 119.96 },
+    { description: 'INV-1002 \u00b7 Gadget X units', invoice: 'INV-1002', product: 'GADGET-X', position: 0, quantity: 2, unit_price: 99, amount: 198 },
+    { description: 'INV-1003 \u00b7 Widget B units', invoice: 'INV-1003', product: 'WIDGET-B', position: 0, quantity: 6, unit_price: 49.99, amount: 299.94 },
+    { description: 'INV-1004 \u00b7 Consulting hours', invoice: 'INV-1004', product: 'SERVICE-HR', position: 0, quantity: 3, unit_price: 150, amount: 450 },
+  ],
+});
+
+export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships, fieldZoo, invoices, invoiceLines];

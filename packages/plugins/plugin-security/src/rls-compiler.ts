@@ -28,6 +28,14 @@ interface RLSUserContext {
    * and are merged in under their own keys (see {@link RLSCompiler.compileFilter}).
    */
   org_user_ids?: string[];
+  /**
+   * The caller's unique, auth-enforced email. RLS expressions reference it as
+   * `current_user.email` for human-readable, *seedable* owner scoping
+   * (`owner = current_user.email`). Email is exposed because it is UNIQUE; the
+   * user's display `name` is deliberately NOT exposed — names collide, and a
+   * collision on an ownership predicate is an access-control leak.
+   */
+  email?: string;
   [key: string]: unknown;
 }
 
@@ -81,6 +89,8 @@ export class RLSCompiler {
       organization_id: executionContext?.tenantId,
       roles: executionContext?.roles,
       org_user_ids: (executionContext as any)?.org_user_ids,
+      // Unique identifier — safe for ownership predicates (see RLSUserContext).
+      email: (executionContext as any)?.email,
     };
 
     // §7.3.1 dynamic membership: the runtime pre-resolves arbitrary

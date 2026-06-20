@@ -45,6 +45,12 @@ export const Invoice = ObjectSchema.create({
   fields: {
     name: Field.text({ label: 'Invoice Number', required: true, searchable: true, maxLength: 60 }),
     account: Field.lookup('showcase_account', { label: 'Account', required: true }),
+    // Owner email — the row-level-security anchor. The `showcase_contributor`
+    // permission set scopes invoice SELECT to `owner = current_user.email` (email
+    // is the unique, seedable identifier), so a contributor sees only their own
+    // invoices; because `showcase_invoice_line` is `controlled_by_parent`, the
+    // lines follow automatically (ADR-0055). Mirror of `project.owner`.
+    owner: Field.text({ label: 'Owner', maxLength: 200 }),
     status: Field.select({
       label: 'Status',
       required: true,

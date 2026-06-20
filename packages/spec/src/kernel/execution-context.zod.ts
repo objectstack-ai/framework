@@ -21,6 +21,14 @@ import { lazySchema } from '../shared/lazy-schema';
 export const ExecutionContextSchema = lazySchema(() => z.object({
   /** Current user ID (resolved from session) */
   userId: z.string().optional(),
+
+  /**
+   * Current user's unique email (resolved from session, falling back to a
+   * `sys_user` lookup). Exposed to RLS as `current_user.email` for seedable,
+   * human-readable owner scoping. Unique by auth invariant — unlike display
+   * `name`, which is intentionally not surfaced to RLS.
+   */
+  email: z.string().optional(),
   
   /** Current organization/tenant ID (resolved from session.activeOrganizationId) */
   tenantId: z.string().optional(),

@@ -40,6 +40,11 @@ export const ContributorPermissionSet = {
     showcase_project: { allowRead: true, allowCreate: false, allowEdit: true, allowDelete: false },
     showcase_task: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
     showcase_account: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+    // Invoice graph: contributors fully manage invoices + their lines. Read/write
+    // is scoped by the owner RLS below (invoice) and DERIVED for the lines, which
+    // are `controlled_by_parent` — no line RLS is authored (ADR-0055).
+    showcase_invoice: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+    showcase_invoice_line: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
   },
   // Field-level security — contributors can read but not edit budget figures.
   fields: {
@@ -55,7 +60,22 @@ export const ContributorPermissionSet = {
       description: 'Contributors can only select tasks assigned to them.',
       object: 'showcase_task',
       operation: 'select' as const,
-      using: "assignee == current_user.name",
+      using: "assignee = current_user.email",
+      roles: ['contributor'],
+      enabled: true,
+      priority: 10,
+    },
+    // Owner RLS on the MASTER invoice. Because `showcase_invoice_line` is
+    // `controlled_by_parent`, a contributor seeing only their own invoices also
+    // sees only those invoices' lines — and can by-id read/write a line only when
+    // they can read/write its master (ADR-0055). No line rule is authored here.
+    {
+      name: 'invoice_own_rows',
+      label: 'Own Invoices Only',
+      description: "Contributors only see invoices they own; their lines follow via controlled_by_parent.",
+      object: 'showcase_invoice',
+      operation: 'select' as const,
+      using: "owner = current_user.email",
       roles: ['contributor'],
       enabled: true,
       priority: 10,

@@ -192,6 +192,8 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
       userId = sessionData?.user?.id ?? sessionData?.session?.userId;
       tenantId = tenantId ?? sessionData?.session?.activeOrganizationId;
       ctx.accessToken = sessionData?.session?.token ?? ctx.accessToken;
+      // Session carries the user's email for free → use it for RLS owner-by-email.
+      if (sessionData?.user?.email) ctx.email = String(sessionData.user.email);
     } catch {
       // no auth configured — return anonymous context
     }
@@ -208,6 +210,15 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   //    SecurityPlugin middleware.
   const ql = await opts.getQl();
   if (!ql) return ctx;
+
+  // Resolve the caller's unique email for `current_user.email` RLS policies when
+  // the session path didn't supply it (e.g. API-key auth). One bounded lookup;
+  // email is the auth-unique owner anchor (display name is never used — it
+  // collides, and a collision on an ownership predicate leaks access).
+  if (!ctx.email) {
+    const userRows = await tryFind(ql, 'sys_user', { id: userId }, 1);
+    if (userRows[0]?.email) ctx.email = String(userRows[0].email);
+  }
 
   const memberWhere: any = tenantId
     ? { user_id: userId, organization_id: tenantId }
