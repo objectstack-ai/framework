@@ -129,7 +129,7 @@ Return filtered result
 
 ## 2. Row-Level Security
 
-Row-level filtering is expressed as **RLS policies** (`RowLevelSecurityPolicySchema` in `packages/spec/src/security/rls.zod.ts`). Policies carry a SQL-like `using` clause (for SELECT/UPDATE/DELETE) and/or a `check` clause (for INSERT/UPDATE). Multiple policies for one object are combined with OR (most-permissive wins). Available context variables include `current_user.id`, `current_user.organization_id`, `current_user.role`, `current_user.department`, plus any custom user field.
+Row-level filtering is expressed as **RLS policies** (`RowLevelSecurityPolicySchema` in `packages/spec/src/security/rls.zod.ts`). Policies carry a SQL-like `using` clause (for SELECT/UPDATE/DELETE) and/or a `check` clause (for INSERT/UPDATE). Multiple policies for one object are combined with OR (most-permissive wins). Available context variables are the **unique identifiers and membership sets** the runtime pre-resolves: equality predicates may use `current_user.id`, `current_user.email` (the unique, seedable owner anchor), or `current_user.organization_id`; set-membership predicates may use `id IN (current_user.org_user_ids)`, `IN (current_user.roles)`, or any §7.3.1 set staged in `ExecutionContext.rlsMembership`. Display `name` and arbitrary user fields are **intentionally not** resolvable — only unique identifiers, so an ownership predicate can never leak access through a name collision.
 
 Policies can be attached to a permission set via its `rowLevelSecurity` array, or registered as standalone metadata.
 
