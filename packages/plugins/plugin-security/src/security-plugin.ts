@@ -116,7 +116,10 @@ export class SecurityPlugin implements Plugin {
       options.defaultPermissionSets ?? securityDefaultPermissionSets;
     this.fallbackPermissionSet =
       options.fallbackPermissionSet === undefined
-        ? 'member_default'
+        // ADR-0056 D7: an app may declare its default profile via `isDefault: true`
+        // on a permission set; it becomes the fallback for users with no explicit
+        // grants. Falls back to the built-in `member_default` when none is declared.
+        ? (this.bootstrapPermissionSets.find((p) => (p as { isDefault?: boolean }).isDefault)?.name ?? 'member_default')
         : options.fallbackPermissionSet;
   }
 

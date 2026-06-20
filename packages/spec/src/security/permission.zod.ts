@@ -95,6 +95,7 @@ export const PermissionSetSchema = lazySchema(() => z.object({
   
   /** Is this a Profile? (Base set for a user) */
   isProfile: z.boolean().default(false).describe('Whether this is a user profile'),
+  isDefault: z.boolean().default(false).describe('[ADR-0056 D7] When true, this profile is the FALLBACK assigned to authenticated users who have no explicit grants — an app declares its default access posture here instead of relying on the built-in member_default. Foundation for SSO/JIT provisioning.'),
   
   /** Object Permissions Map: <entity_name> -> permissions */
   objects: z.record(z.string(), ObjectPermissionSchema).describe('Entity permissions'),
