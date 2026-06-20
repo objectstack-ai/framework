@@ -22,6 +22,25 @@ import { resolveDimensionLabels, type DimensionLabelDeps } from './dimension-lab
 import { evaluateAnalyticsQueryOverRows } from './preview-evaluator.js';
 
 /**
+ * Analytics result augmented with drill-through metadata (ADR-0021 D2; see
+ * queryDataset). Carried alongside `rows` so the host can drill a clicked bucket
+ * back to the underlying records without the renderer knowing field mappings.
+ */
+type AnalyticsResultWithDrill = AnalyticsResult & {
+  /** The dataset's base object — the host drills into its records. */
+  object?: string;
+  /** Selected drillable dimension NAME → underlying object FIELD name. */
+  dimensionFields?: Record<string, string>;
+  /**
+   * RAW grouped values per row, aligned to `rows` by index — each a map of
+   * drillable dimension NAME → stored value (BEFORE label resolution rewrote
+   * `rows[i][dim]` to the display label). The exact-match drill filter is built
+   * from these, never from the display labels.
+   */
+  drillRawRows?: Array<Record<string, unknown>>;
+};
+
+/**
  * Detect the "backing object/table isn't present in this kernel" class of
  * error so a dataset query can degrade to an empty result instead of failing
  * the widget with a 500. Matches the missing-relation signatures across the
@@ -441,14 +460,41 @@ export class AnalyticsService implements IAnalyticsService {
       throw err;
     }
 
+    // Selected dimensions resolved against the dataset definition — shared by
+    // drill metadata, label resolution, and dimension field-label enrichment.
+    const selectedDims = (selection.dimensions ?? [])
+      .map((name) => dataset.dimensions?.find((d) => d.name === name))
+      .filter((d): d is NonNullable<typeof d> => !!d);
+
+    // ADR-0021 D2 — drill-through metadata. A host (dashboard/report) drills a
+    // clicked bucket back to the underlying records, but it only knows the
+    // dimension NAMES, and the label resolution below OVERWRITES the raw grouped
+    // value in each row with its display label. So before that happens, snapshot
+    // the raw grouped values into a PARALLEL array (aligned to `rows` by index —
+    // the result rows are NOT mutated) and expose the dataset's `object` +
+    // dimension→field mapping so the renderer can build an exact-match filter.
+    // Date buckets are excluded — a humanized bucket ("2026-06") can't be
+    // exact-matched against the stored timestamp, so they are not drillable.
+    const drillDims = selectedDims.filter((d) => !!d.field && d.type !== 'date');
+    if (drillDims.length && result.rows.length) {
+      (result as AnalyticsResultWithDrill).object = dataset.object;
+      (result as AnalyticsResultWithDrill).dimensionFields = Object.fromEntries(
+        drillDims.map((d) => [d.name, d.field as string]),
+      );
+      (result as AnalyticsResultWithDrill).drillRawRows = result.rows.map((row) => {
+        const raw: Record<string, unknown> = {};
+        for (const d of drillDims) raw[d.name] = row[d.name];
+        return raw;
+      });
+    }
+
     // ADR-0021 — resolve grouped dimension values to human display labels
     // (select option label, lookup related-record name). Charts render the
     // dimension key verbatim, so this is the single place that turns a stored
     // value / FK id into the text a user expects to read.
-    if (this.labelResolver && selection.dimensions?.length) {
-      const dims = selection.dimensions
-        .map((name) => dataset.dimensions?.find((d) => d.name === name))
-        .filter((d): d is NonNullable<typeof d> => !!d?.field)
+    if (this.labelResolver && selectedDims.length) {
+      const dims = selectedDims
+        .filter((d) => !!d.field)
         .map((d) => ({ name: d.name, field: d.field, type: d.type, dateGranularity: d.dateGranularity }));
       if (dims.length) {
         try {
@@ -478,6 +524,22 @@ export class AnalyticsService implements IAnalyticsService {
         if (!m) continue;
         if (f.label == null && typeof m.label === 'string') f.label = m.label;
         if (f.format == null && m.format) f.format = m.format;
+      }
+    }
+
+    // Enrich DIMENSION columns with their display `label` too, so a grouped
+    // table header reads "Status" instead of the raw field name "status". The
+    // measure-only enrichment above left dimension headers bare (the renderer
+    // then fell back to the raw dimension name).
+    if (result.fields?.length && selectedDims.length) {
+      const dimByName = new Map(selectedDims.map((d) => [d.name, d]));
+      const dimByField = new Map(selectedDims.filter((d) => !!d.field).map((d) => [d.field as string, d]));
+      for (const f of result.fields) {
+        if (f.label != null) continue;
+        // Result fields may be keyed by the dataset dimension NAME or the
+        // underlying cube FIELD depending on strategy — match either.
+        const d = dimByName.get(f.name) ?? dimByField.get(f.name);
+        if (d && typeof d.label === 'string') f.label = d.label;
       }
     }
     return result;
