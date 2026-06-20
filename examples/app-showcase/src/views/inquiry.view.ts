@@ -21,8 +21,6 @@ const data = { provider: 'object' as const, object: 'showcase_inquiry' };
  * hook (`hooks/index.ts`).
  */
 export const InquiryViews = defineView({
-  name: 'showcase_inquiry_views',
-  object: 'showcase_inquiry',
   // Default list shown when the object is opened — carries `data` so the view
   // registrar can resolve the target object (without it the whole view, public
   // form included, is dropped).
@@ -55,7 +53,6 @@ export const InquiryViews = defineView({
     // "what the public may set"; everything else is stripped server-side.
     contact: {
       type: 'simple',
-      label: 'Contact Us',
       data,
       sections: [
         {
