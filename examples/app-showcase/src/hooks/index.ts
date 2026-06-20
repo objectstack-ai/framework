@@ -78,8 +78,32 @@ export const WarnOverBudgetHook = {
   description: 'Emits a warning when a project’s spend exceeds its budget.',
 };
 
+/**
+ * beforeInsert — stamp server-controlled defaults on a public inquiry.
+ *
+ * The web-to-lead public form (ADR-0056 Option A) lets anonymous visitors
+ * INSERT a `showcase_inquiry`. Its field whitelist already excludes `status` /
+ * `source`, but this hook is the server-side belt-and-braces: it stamps
+ * `status = 'new'` and `source = 'web'` so an inquiry can never arrive
+ * pre-triaged, regardless of how the request was crafted.
+ */
+export const StampInquiryDefaultsHook = {
+  name: 'showcase_stamp_inquiry_defaults',
+  label: 'Stamp Inquiry Defaults',
+  object: 'showcase_inquiry',
+  events: ['beforeInsert'] as LifecycleEvent[],
+  body: {
+    language: 'js' as const,
+    source: "if (!ctx.input.status) ctx.input.status = 'new'; ctx.input.source = 'web';",
+  },
+  priority: 50,
+  onError: 'abort' as const,
+  description: 'Stamps status=new and source=web on every new inquiry (public web-to-lead defaults).',
+};
+
 export const allHooks = [
   NormalizeTaskTitleHook,
+  StampInquiryDefaultsHook,
   AuditTaskCompletionHook,
   WarnOverBudgetHook,
 ];

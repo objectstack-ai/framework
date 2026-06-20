@@ -10,3 +10,4 @@ export { FieldZoo } from './field-zoo.object.js';
 export { Preference } from './preference.object.js';
 export { PrivateNote } from './private-note.object.js';
 export { Announcement } from './announcement.object.js';
+export { Inquiry } from './inquiry.object.js';

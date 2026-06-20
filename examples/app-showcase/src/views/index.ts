@@ -2,3 +2,4 @@
 
 export { TaskViews } from './task.view.js';
 export { ProjectViews } from './project.view.js';
+export { InquiryViews } from './inquiry.view.js';

@@ -12,7 +12,7 @@ import {
 } from '@objectstack/cloud-connection';
 
 import * as objects from './src/objects/index.js';
-import { TaskViews, ProjectViews } from './src/views/index.js';
+import { TaskViews, ProjectViews, InquiryViews } from './src/views/index.js';
 import { ShowcaseApp } from './src/apps/index.js';
 import { ChartGalleryDashboard, OpsDashboard } from './src/dashboards/index.js';
 import { ShowcaseTaskDataset, ShowcaseProjectDataset } from './src/datasets/index.js';
@@ -142,7 +142,7 @@ export default defineStack({
   // UI
   apps: [ShowcaseApp],
   portals: allPortals,
-  views: [TaskViews, ProjectViews],
+  views: [TaskViews, ProjectViews, InquiryViews],
   pages: [ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, AccountDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage],
   dashboards: [ChartGalleryDashboard, OpsDashboard],
   books: allBooks,
