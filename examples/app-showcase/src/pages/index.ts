@@ -24,10 +24,11 @@ export {
 } from './task-visualizations.pages.js';
 
 /**
- * Component Gallery — a custom page that places a spread of standard page
- * components (header, card, tabs, text/number/image/divider/button elements,
- * and the AI chat window) so the page renderer and component registry can be
- * exercised visually.
+ * Showcase home — a clean welcome landing. A live KPI grid (object-metric in
+ * the layout `grid`) over the seeded data, an intro, and a primary action.
+ * Deliberately avoids components that render as placeholders/empty in a page
+ * region (ai:input, oversized element:image, page:card body) so the first
+ * impression is polished, not a debug canvas.
  */
 export const ComponentGalleryPage: Page = {
   name: 'showcase_component_gallery',
@@ -54,11 +55,21 @@ export const ComponentGalleryPage: Page = {
       name: 'main',
       width: 'large',
       components: [
-        { type: 'element:text', properties: { content: 'This page demonstrates the standard page component set. Open the navigation to explore objects, the 8 list-view types on Tasks, the Chart Gallery dashboard, and the four report types.' } },
-        { type: 'element:divider', properties: {} },
-        { type: 'page:card', properties: { title: 'Getting Started' } },
-        { type: 'element:number', properties: { label: 'Demo Tasks', value: 12 } },
-        { type: 'element:image', properties: { src: 'https://objectstack.ai/logo.png', alt: 'Logo' } },
+        { type: 'element:text', properties: { content: 'A working project-delivery workspace that exercises every metadata type, view, chart, and capability chain. Use the navigation to explore — start with My Work, the Delivery Operations dashboard, or the eight Task visualizations.' } },
+        // Live KPI row over the seeded data (object-metric in the layout grid).
+        {
+          type: 'grid',
+          properties: {
+            columns: 4,
+            gap: 4,
+            children: [
+              { type: 'object-metric', properties: { objectName: 'showcase_project', label: 'Projects', icon: 'folder-kanban', aggregate: { field: 'id', function: 'count' } } },
+              { type: 'object-metric', properties: { objectName: 'showcase_task', label: 'Tasks', icon: 'check-square', aggregate: { field: 'id', function: 'count' } } },
+              { type: 'object-metric', properties: { objectName: 'showcase_account', label: 'Accounts', icon: 'building', aggregate: { field: 'id', function: 'count' } } },
+              { type: 'object-metric', properties: { objectName: 'showcase_task', label: 'Open Tasks', icon: 'list-checks', aggregate: { field: 'id', function: 'count' }, filter: { status: { $ne: 'done' } } } },
+            ],
+          },
+        },
         { type: 'element:button', properties: { label: 'Create Task', actionName: 'showcase_new_task' } },
       ],
     },
@@ -66,11 +77,11 @@ export const ComponentGalleryPage: Page = {
       name: 'sidebar',
       width: 'small',
       components: [
-        // NOTE: `ai:chat_window` is intentionally NOT a supported inline page
-        // component — the canonical chat entry point is the floating chatbot
-        // overlay (plugin-chatbot), so referencing it here surfaces a loud
-        // "Unknown component type". Use a supported inline AI block instead.
-        { type: 'ai:input', properties: { agentName: 'showcase_assistant', placeholder: 'Ask the showcase assistant…' } },
+        { type: 'element:text', properties: { content: 'Explore' } },
+        { type: 'element:text', properties: { content: '• My Work — your queue & live KPIs' } },
+        { type: 'element:text', properties: { content: '• Delivery Operations — org dashboard' } },
+        { type: 'element:text', properties: { content: '• Tasks → All Views — 8 visualizations' } },
+        { type: 'element:text', properties: { content: '• Field Zoo — every field type' } },
       ],
     },
   ],

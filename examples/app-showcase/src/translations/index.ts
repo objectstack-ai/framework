@@ -88,6 +88,25 @@ export const ShowcaseTranslationBundle = {
           compact_density: { label: 'Compact Density' },
         },
       },
+      showcase_product: {
+        label: 'Product', pluralLabel: 'Products',
+        fields: { name: { label: 'Name' }, sku: { label: 'SKU' }, description: { label: 'Description' }, unit_price: { label: 'Unit Price' }, active: { label: 'Active' } },
+      },
+      showcase_team: {
+        label: 'Team', pluralLabel: 'Teams',
+        fields: { name: { label: 'Team Name' }, lead: { label: 'Lead' }, capacity_hours: { label: 'Capacity (h)' } },
+      },
+      showcase_project_membership: {
+        label: 'Membership', pluralLabel: 'Memberships',
+        fields: { team: { label: 'Team' }, project: { label: 'Project' }, role: { label: 'Role' }, allocation_percent: { label: 'Allocation %' } },
+      },
+      showcase_category: {
+        label: 'Category', pluralLabel: 'Categories',
+        fields: { name: { label: 'Name' }, parent: { label: 'Parent' }, color: { label: 'Color' }, sort_order: { label: 'Sort Order' } },
+      },
+      showcase_field_zoo: {
+        label: 'Field Zoo', pluralLabel: 'Field Zoo',
+      },
     },
   },
   'zh-CN': {
@@ -168,6 +187,25 @@ export const ShowcaseTranslationBundle = {
           notifications_enabled: { label: '启用通知' },
           compact_density: { label: '紧凑密度' },
         },
+      },
+      showcase_product: {
+        label: '产品', pluralLabel: '产品',
+        fields: { name: { label: '名称' }, sku: { label: 'SKU' }, description: { label: '描述' }, unit_price: { label: '单价' }, active: { label: '启用' } },
+      },
+      showcase_team: {
+        label: '团队', pluralLabel: '团队',
+        fields: { name: { label: '团队名称' }, lead: { label: '负责人' }, capacity_hours: { label: '产能(小时)' } },
+      },
+      showcase_project_membership: {
+        label: '成员', pluralLabel: '成员',
+        fields: { team: { label: '团队' }, project: { label: '项目' }, role: { label: '角色' }, allocation_percent: { label: '分配比例' } },
+      },
+      showcase_category: {
+        label: '分类', pluralLabel: '分类',
+        fields: { name: { label: '名称' }, parent: { label: '上级' }, color: { label: '颜色' }, sort_order: { label: '排序' } },
+      },
+      showcase_field_zoo: {
+        label: '字段动物园', pluralLabel: '字段动物园',
       },
     },
   },
