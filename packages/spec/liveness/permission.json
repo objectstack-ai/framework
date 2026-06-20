@@ -16,6 +16,11 @@
       "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/PermissionPreview.tsx:92 (!!d.isProfile)",
       "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
     },
+    "isDefault": {
+      "status": "live",
+      "evidence": "plugin-security: packages/plugins/plugin-security/src/security-plugin.ts (constructor) — when no explicit fallbackPermissionSet is configured, the SecurityPlugin resolves the fallback from the permission set marked isDefault:true (ADR-0056 D7).",
+      "note": "LIVE — app-declared default profile; proven by packages/dogfood/test/showcase-default-profile.dogfood.test.ts."
+    },
     "objects": {
       "children": {
         "allowCreate": {
