@@ -1,5 +1,11 @@
 # @objectstack/nuxt
 
+## 9.11.0
+
+### Patch Changes
+
+- @objectstack/runtime@9.11.0
+
 ## 9.10.0
 
 ### Patch Changes
