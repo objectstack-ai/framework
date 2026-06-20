@@ -92,7 +92,7 @@ export const pageForm = defineForm({
             // Columns are defined ON the page (no view inheritance). `dependsOn:
             // 'source'` tells the picker which object's fields to offer.
             { field: 'columns', widget: 'field-multi', dependsOn: 'source', helpText: 'Columns to show — defined directly on the page (blank = all object fields)' },
-            { field: 'filterBy', type: 'repeater', helpText: 'Always-on base filter for the page' },
+            { field: 'filterBy', widget: 'filter-builder', dependsOn: 'source', helpText: 'Always-on base filter for the page — same visual builder as the list toolbar.' },
             { field: 'levels', helpText: 'Hierarchy levels to display (tree-like sources)' },
             // ── Appearance ──
             { field: 'appearance', type: 'composite', disclosure: 'popover', helpText: 'Allowed visualizations (Grid / Kanban / Calendar / …) and description visibility' },
