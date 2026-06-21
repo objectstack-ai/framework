@@ -16,7 +16,7 @@ jobs:
   smoke:
     name: Showcase nav-surface smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -25,8 +25,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The smoke's webServer runs the CLI (`os serve --dev`); build it first.
-      - run: pnpm turbo run build --filter=@objectstack/cli
+      # The smoke's webServer runs `os serve --dev`, which loads the showcase
+      # config + its workspace runtime deps (CLI, connector-rest, …) from their
+      # built `dist/`. Build the whole dependency closure (excluding the
+      # showcase's own app build, which serve --dev doesn't need).
+      - run: pnpm turbo run build --filter=@objectstack/example-showcase^...
       - name: Install Playwright Chromium
         working-directory: examples/app-showcase
         run: pnpm exec playwright install --with-deps chromium
