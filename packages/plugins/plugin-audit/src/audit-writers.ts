@@ -352,6 +352,14 @@ export function installAuditWriters(
 
     const sess: any = (ctx as any).session ?? {};
     const userId: string | undefined = sess.userId;
+    // Principal label for attribution. Prefer the real user id; otherwise fall
+    // back to a service/automation principal the host put on the context
+    // (`ExecutionContext.actor`, e.g. `svc:<name>`). This is what makes a
+    // non-user-authenticated write attributable instead of a null actor — the
+    // os-790m7q env-delete class (ADR-0014 D2). `user_id` stays user-only (it's
+    // a strict sys_user lookup); the service principal lands on `actor`.
+    const actorLabel: string | null =
+      userId ?? (typeof sess.actor === 'string' && sess.actor.trim() ? sess.actor.trim() : null);
     // Prefer the active session tenant, but fall back to the audited
     // record's own `organization_id`. This matters in two cases:
     //   1. Background jobs / unauthenticated sudo paths where the
@@ -405,6 +413,11 @@ export function installAuditWriters(
     // column made every audit INSERT fail. Only stamp it when declared.
     if (objectHasField('sys_audit_log', 'organization_id')) {
       auditRow.organization_id = tenantId ?? null;
+    }
+    // First-class principal label (ADR-0014 D2). Conditionally stamped — same
+    // rationale as organization_id: older audit tables predate the column.
+    if (objectHasField('sys_audit_log', 'actor')) {
+      auditRow.actor = actorLabel;
     }
 
     const label = recordLabel(after ?? before, recordId ?? '');

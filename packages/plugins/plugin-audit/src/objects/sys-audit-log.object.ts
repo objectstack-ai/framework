@@ -100,11 +100,26 @@ export const SysAuditLog = ObjectSchema.create({
     ),
 
     user_id: Field.lookup('sys_user', {
+      label: 'User',
+      required: false,
+      readonly: true,
+      searchable: true,
+      description: 'User who performed the action (null for non-user / service actions — see actor)',
+      group: 'Event',
+    }),
+
+    // First-class principal label, independent of the sys_user lookup. Records
+    // WHO acted even when there is no real user row: a user id, a service-token
+    // principal (`svc:<name>`), or null/'system'. `user_id` stays a strict
+    // sys_user lookup (a service principal can't be stuffed there), so this is
+    // the field that makes service-token writes attributable (ADR-0014 D2).
+    actor: Field.text({
       label: 'Actor',
       required: false,
       readonly: true,
       searchable: true,
-      description: 'User who performed the action (null for system actions)',
+      maxLength: 255,
+      description: 'Principal that performed the action: a user id, svc:<name>, or null',
       group: 'Event',
     }),
 
