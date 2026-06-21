@@ -72,6 +72,13 @@ export const DatasetMeasureSchema = lazySchema(() => z.object({
   filter: FilterConditionSchema.optional(),
   /** Display format, e.g. "$0,0.00", "0.0%". */
   format: z.string().optional(),
+  /**
+   * Display currency (ISO 4217, e.g. "USD", "CNY"). Carried onto the result
+   * field so presentations render a locale-correct symbol via `Intl` rather
+   * than a "$" baked into `format`. Declare it on the measure (the semantic
+   * layer) when the aggregated field is a fixed-currency amount.
+   */
+  currency: z.string().length(3).optional().describe('Display currency code (ISO 4217)'),
   /** Governance: a human-blessed metric — the review checkpoint. */
   certified: z.boolean().default(false).describe('Blessed metric (governance checkpoint)'),
   /**

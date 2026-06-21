@@ -25,7 +25,7 @@ export const OpportunityDataset = defineDataset({
 
   measures: [
     { name: 'opp_count', label: 'Opportunities', aggregate: 'count' },
-    { name: 'total_amount', label: 'Total Amount', aggregate: 'sum', field: 'amount', format: '$0,0' },
-    { name: 'avg_amount', label: 'Avg Deal Size', aggregate: 'avg', field: 'amount', format: '$0,0' },
+    { name: 'total_amount', label: 'Total Amount', aggregate: 'sum', field: 'amount', format: '0,0', currency: 'USD' },
+    { name: 'avg_amount', label: 'Avg Deal Size', aggregate: 'avg', field: 'amount', format: '0,0', currency: 'USD' },
   ],
 });
