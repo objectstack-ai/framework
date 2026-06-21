@@ -33,6 +33,40 @@ layered on by a private host **without forking**.
 
 The runtime admin owns only the `origin: 'runtime'` lifecycle.
 
+## REST routes
+
+Mounted under `/api/v1/datasources` by `registerDatasourceAdminRoutes` (lifecycle
++ introspection) and the federation routes by the external service. Every route
+degrades gracefully (`503` / "unavailable") when its service isn't wired.
+
+**Lifecycle & connection**
+- `GET    /datasources` — list (code + runtime, with provenance/health)
+- `GET    /datasources/drivers` — driver catalog + per-driver JSON-Schema `configSchema` (drives the Studio connection form)
+- `GET    /datasources/:name` — one datasource's detail, **credential-stripped** (`config` + `hasSecret`)
+- `POST   /datasources` — create a runtime datasource
+- `PATCH  /datasources/:name` — update a runtime datasource
+- `DELETE /datasources/:name` — remove a runtime datasource (blocked while objects are bound)
+- `POST   /datasources/test` — probe an unsaved draft (inline body)
+- `POST   /datasources/:name/test` — probe a **saved** datasource by name (backs the `test_connection` action)
+
+**Introspection / sync (read-only)**
+- `GET    /datasources/:name/remote-tables` — list remote tables
+- `POST   /datasources/:name/object-draft` — generate an object definition draft for one table (no persistence)
+- federation import/validate/refresh routes under `/datasources/:name/external/*` (ADR-0015)
+
+Credentials never travel in `config`: a `format:'password'` field is split into
+the top-level `secret` on write (encrypted to `sys_secret`), and reads never
+echo it (`hasSecret` only).
+
+## Studio integration
+
+`datasource` is a metadata type, so it is administered through the generic
+metadata-admin engine (not a bespoke page): the `DatasourceAdminServicePlugin`
+contributes a **Datasources** entry to the Setup app's `group_integrations` nav
+slot (→ the engine route `…/component/metadata/resource?type=datasource`), where
+the list/create/edit/test/**sync objects**/delete UI lives. Runtime records are
+persisted to `sys_metadata` and restored (pools rehydrated) on restart.
+
 ## Exports
 
 - Federation: `ExternalDatasourceService`, `ExternalDatasourceServicePlugin`.
