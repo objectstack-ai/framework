@@ -58,6 +58,18 @@ jobs:
         # prepublishOnly guard in @objectstack/console passes.
         run: bash scripts/build-console.sh
 
+      - name: Downstream backward-compat smoke (live hotcrm)
+        # Pre-publish gate (#2035): the about-to-publish @objectstack/spec must
+        # not break a real third-party consumer pinned to a published release.
+        # Clones objectstack-ai/hotcrm@${HOTCRM_REF}, installs it (published
+        # deps), overlays the freshly-built spec dist, and runs hotcrm's own
+        # typecheck + `objectstack validate`. A red here blocks the publish.
+        # The deterministic in-repo floor is @objectstack/downstream-contract;
+        # this is the live ceiling.
+        env:
+          HOTCRM_REF: v1.2.0
+        run: bash scripts/downstream-smoke.sh
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
