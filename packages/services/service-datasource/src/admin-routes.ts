@@ -2,6 +2,7 @@
 
 import type { PluginContext } from '@objectstack/core';
 import type { IHttpServer } from '@objectstack/spec/contracts';
+import { DRIVER_CATALOG } from './driver-catalog.js';
 
 /**
  * Datasource lifecycle REST routes (ADR-0015 Addendum §3.5).
@@ -61,6 +62,13 @@ export function registerDatasourceAdminRoutes(
     if (!svc?.listDatasources) return unavailable(res);
     const datasources = await svc.listDatasources();
     res.json({ datasources });
+  });
+
+  // Catalog of connection drivers + their JSON-Schema config (drives the
+  // Studio connection form). Static metadata — no service dependency, so it
+  // is always available even before any datasource-admin service is wired.
+  server.get(`${root}/drivers`, async (_req: any, res: any) => {
+    res.json({ drivers: DRIVER_CATALOG });
   });
 
   // Probe a connection without persisting anything. Registered before the

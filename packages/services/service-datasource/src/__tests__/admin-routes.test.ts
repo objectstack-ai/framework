@@ -42,6 +42,18 @@ describe('registerDatasourceAdminRoutes (real HonoHttpServer)', () => {
     expect(listDatasources).toHaveBeenCalledOnce();
   });
 
+  it('GET /api/v1/datasources/drivers returns the driver catalog with configSchema', async () => {
+    const app = mount({}); // no service dependency — static catalog
+    const res = await app.fetch(json('/api/v1/datasources/drivers'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { drivers: Array<{ id: string; label: string; configSchema: any }> };
+    expect(Array.isArray(body.drivers)).toBe(true);
+    const sqlite = body.drivers.find((d) => d.id === 'sqlite');
+    expect(sqlite).toBeTruthy();
+    expect(sqlite!.label).toBe('SQLite');
+    expect(sqlite!.configSchema?.properties?.filename?.type).toBe('string');
+  });
+
   it('POST /api/v1/datasources/test splits the inline secret out of the draft', async () => {
     const testConnection = vi.fn().mockResolvedValue({ ok: true });
     const app = mount({ testConnection });
