@@ -1,0 +1,4 @@
+
+# Playwright smoke artifacts
+test-results/
+playwright-report/

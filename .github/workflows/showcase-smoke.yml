@@ -1,0 +1,42 @@
+# Showcase Smoke — NON-BLOCKING. Drives the console (served by the backend at
+# /_console) across every showcase nav surface, asserting render health
+# (no crash / no leaked dev placeholder / charts draw). Manual + nightly only;
+# it never gates PRs. Promote to a PR gate once it has proven stable here.
+name: Showcase Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC nightly
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Showcase nav-surface smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The smoke's webServer runs the CLI (`os serve --dev`); build it first.
+      - run: pnpm turbo run build --filter=@objectstack/cli
+      - name: Install Playwright Chromium
+        working-directory: examples/app-showcase
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run showcase smoke
+        working-directory: examples/app-showcase
+        run: pnpm test:smoke
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: showcase-smoke-report
+          path: examples/app-showcase/playwright-report/
+          retention-days: 7

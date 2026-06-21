@@ -17,7 +17,8 @@
     "build": "objectstack build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify": "pnpm typecheck && pnpm test"
+    "verify": "pnpm typecheck && pnpm test",
+    "test:smoke": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "@objectstack/cloud-connection": "workspace:*",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
     "@objectstack/objectql": "workspace:*",
+    "@playwright/test": "^1.61.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }
