@@ -89,6 +89,19 @@ export interface StandaloneStackResult {
     requires?: string[];
     objects?: any[];
     manifest?: any;
+    /**
+     * App-declared RBAC metadata, surfaced so the CLI (`serve`/`dev`/`start`)
+     * can wire it without a host `objectstack.config.ts`. In particular the
+     * `serve` command reads `permissions[]` to honour an app-declared default
+     * profile (ADR-0056 D7 — `appDefaultProfileName` → SecurityPlugin
+     * `fallbackPermissionSet`) and reads both `roles[]` and `permissions[]` to
+     * register application org roles with Better-Auth. Without these the
+     * artifact-serve path silently fell back to the built-in `member_default`
+     * (owner-only), so an `isDefault` profile declared purely in app metadata
+     * was ignored under `objectstack dev`.
+     */
+    permissions?: any[];
+    roles?: any[];
 }
 
 type ResolvedDriverKind = 'memory' | 'postgres' | 'mongodb' | 'sqlite' | 'sqlite-wasm';
@@ -250,6 +263,13 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
     const objects: any[] | undefined =
         Array.isArray(artifactBundle?.objects) ? artifactBundle.objects : undefined;
     const manifest: any | undefined = artifactBundle?.manifest;
+    // ADR-0056 D7 — surface app-declared RBAC so the CLI's artifact-serve
+    // path honours an `isDefault` profile (appDefaultProfileName) and
+    // registers application org roles, exactly like the config-load path.
+    const permissions: any[] | undefined =
+        Array.isArray(artifactBundle?.permissions) ? artifactBundle.permissions : undefined;
+    const roles: any[] | undefined =
+        Array.isArray(artifactBundle?.roles) ? artifactBundle.roles : undefined;
 
     return {
         plugins,
@@ -260,5 +280,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         ...(requires ? { requires } : {}),
         ...(objects ? { objects } : {}),
         ...(manifest ? { manifest } : {}),
+        ...(permissions ? { permissions } : {}),
+        ...(roles ? { roles } : {}),
     };
 }
