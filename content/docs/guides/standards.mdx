@@ -241,9 +241,9 @@ A profile is just a `PermissionSet` with `isProfile: true`. There is no separate
 `Profile` type — both share the same `PermissionSetSchema`.
 
 ```typescript
-import type { PermissionSet } from '@objectstack/spec/security';
+import { definePermissionSet } from '@objectstack/spec/security';
 
-export const MyProfile: PermissionSet = {
+export const MyProfile = definePermissionSet({
   name: 'profile_name',
   label: 'Profile Label',
   isProfile: true,
@@ -271,15 +271,15 @@ export const MyProfile: PermissionSet = {
     app_sales: 'visible',      // Visible
     app_admin: 'hidden',       // Hidden
   },
-};
+});
 ```
 
 ### Sharing Rule Pattern
 
 ```typescript
-import type { SharingRule } from '@objectstack/spec/security';
+import { defineSharingRule } from '@objectstack/spec/security';
 
-export const MySharingRule: SharingRule = {
+export const MySharingRule = defineSharingRule({
   name: 'rule_name',
   object: 'object_name',
   type: 'criteria',                       // 'criteria' | 'owner'
@@ -294,7 +294,7 @@ export const MySharingRule: SharingRule = {
   },
 
   accessLevel: 'edit',                    // 'read' | 'edit' | 'full'
-};
+});
 ```
 
 ---

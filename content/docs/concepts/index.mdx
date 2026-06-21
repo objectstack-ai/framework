@@ -150,9 +150,9 @@ Access control is declared as **permission set** metadata (the `PermissionSet` s
 
 ```typescript
 // packages/crm/src/permissions/sales_rep.permission.ts
-import type { PermissionSet } from '@objectstack/spec';
+import { definePermissionSet } from '@objectstack/spec';
 
-export const salesRep: PermissionSet = {
+export const salesRep = definePermissionSet({
   name: 'sales_rep',
   label: 'Sales Rep',
   isProfile: true,
@@ -167,10 +167,10 @@ export const salesRep: PermissionSet = {
   fields: {
     'customer.annual_revenue': { readable: true, editable: false }, // Read-only
   },
-};
+});
 
 // packages/crm/src/permissions/sales_manager.permission.ts
-export const salesManager: PermissionSet = {
+export const salesManager = definePermissionSet({
   name: 'sales_manager',
   label: 'Sales Manager',
   isProfile: true,
@@ -182,7 +182,7 @@ export const salesManager: PermissionSet = {
       allowDelete: true,
     },
   },
-};
+});
 ```
 
 ### Example: Flow Automation
