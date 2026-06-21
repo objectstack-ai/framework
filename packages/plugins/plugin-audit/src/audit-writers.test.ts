@@ -76,7 +76,7 @@ function makeEngine(
 
 const SINGLE_TENANT = {
   // No `organization_id` — single-tenant stacks skip the auto-injection.
-  sys_audit_log: ['id', 'action', 'user_id', 'object_name', 'record_id', 'old_value', 'new_value', 'tenant_id'],
+  sys_audit_log: ['id', 'action', 'user_id', 'actor', 'object_name', 'record_id', 'old_value', 'new_value', 'tenant_id'],
   sys_activity: ['id', 'type', 'timestamp', 'summary', 'actor_id', 'object_name', 'record_id', 'record_label', 'metadata'],
 };
 
@@ -123,6 +123,55 @@ describe('audit writers — organization_id stamping (#1532)', () => {
     const activity = created.find((c) => c.object === 'sys_activity');
     expect(audit?.row.organization_id).toBe('org-9');
     expect(activity?.row.organization_id).toBe('org-9');
+  });
+});
+
+describe('audit writers — actor attribution (ADR-0014 D2, cloud#340)', () => {
+  it('records a real user id on actor + user_id', async () => {
+    const { engine, fire, created } = makeEngine(SINGLE_TENANT);
+    installAuditWriters(engine as any, 'test.audit');
+    await fire('afterInsert', {
+      object: 'crm_lead',
+      input: { id: 'lead-1' },
+      result: { id: 'lead-1', name: 'Acme' },
+      session: { userId: 'user-7' },
+    });
+    const audit = created.find((c) => c.object === 'sys_audit_log');
+    expect(audit?.row.user_id).toBe('user-7');
+    expect(audit?.row.actor).toBe('user-7');
+  });
+
+  it('attributes a service-token write (no userId) via session.actor → actor, user_id stays null', async () => {
+    const { engine, fire, created } = makeEngine(SINGLE_TENANT);
+    installAuditWriters(engine as any, 'test.audit');
+    // The os-790m7q class: a service-token delete with no real user.
+    await fire('afterDelete', {
+      object: 'sys_environment',
+      input: { id: 'os-790m7q' },
+      __previous: { id: 'os-790m7q', name: 'test' },
+      result: { id: 'os-790m7q' },
+      session: { actor: 'svc:cloud-control' },
+    });
+    const audit = created.find((c) => c.object === 'sys_audit_log');
+    expect(audit?.row.action).toBe('delete');
+    // user_id (sys_user lookup) stays null — a service principal isn't a user…
+    expect(audit?.row.user_id).toBeNull();
+    // …but the action is now ATTRIBUTABLE on actor.
+    expect(audit?.row.actor).toBe('svc:cloud-control');
+  });
+
+  it('leaves actor null when neither a user nor a service principal is present', async () => {
+    const { engine, fire, created } = makeEngine(SINGLE_TENANT);
+    installAuditWriters(engine as any, 'test.audit');
+    await fire('afterInsert', {
+      object: 'crm_lead',
+      input: { id: 'lead-2' },
+      result: { id: 'lead-2', name: 'Beta' },
+      session: {},
+    });
+    const audit = created.find((c) => c.object === 'sys_audit_log');
+    expect(audit?.row.actor).toBeNull();
+    expect(audit?.row.user_id).toBeNull();
   });
 });
 

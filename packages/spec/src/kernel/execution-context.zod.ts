@@ -23,6 +23,17 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
   userId: z.string().optional(),
 
   /**
+   * Stable principal label for AUDIT ATTRIBUTION when the operation is not a
+   * real user — e.g. a service token (`svc:<name>`) or an automation. The audit
+   * writer records this on `sys_audit_log.actor` so a non-user-authenticated
+   * write (the class that left `user_id` null and made the os-790m7q env-delete
+   * unattributable) is still attributable. `userId` takes precedence when set;
+   * this is the fallback. The runtime/host sets it (e.g. the control plane's
+   * service-mode auth) — the framework only defines + records the contract.
+   */
+  actor: z.string().optional(),
+
+  /**
    * Current user's unique email (resolved from session, falling back to a
    * `sys_user` lookup). Exposed to RLS as `current_user.email` for seedable,
    * human-readable owner scoping. Unique by auth invariant — unlike display
