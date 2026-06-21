@@ -13,7 +13,9 @@
  * over-sharing would be worse than not enforcing (ADR-0049):
  *   - `owner`-type rules (`ownedBy`): role membership is dynamic, no static
  *     `criteria_json` equivalent.
- *   - CEL `condition` the mini-translator can't reduce to a field equality.
+ *   - a CEL `condition` the canonical compiler cannot lower (functions,
+ *     cross-object traversal) — ADR-0058 D2. Compound predicates (AND/OR,
+ *     comparisons, null, in) DO lower now and are enforced (ADR-0058 D3, #1887).
  *   - `sharedWith.type` of `group`/`guest`: no runtime recipient mapping.
  *
  * Seeding upserts via `SharingRuleService.defineRule` (idempotent by name) and

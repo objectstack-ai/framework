@@ -94,13 +94,18 @@ export const OwnerSharingRuleSchema = lazySchema(() => BaseSharingRuleSchema.ext
 /**
  * Master Sharing Rule Schema
  *
- * ⚠️ EXPERIMENTAL — NOT ENFORCED as authored (ADR-0049, #1887).
- * The live engine enforces a divergent runtime model (`sys_sharing_rule`: JSON
- * `criteria_json`, recipient enum `user`/`team`/`department`/`role`/`queue`).
- * This spec's CEL `condition` is never compiled (unparsable CEL degrades to
- * "match nothing"), and recipients such as `role_and_subordinates`/`guest` have
- * no runtime mapping. Authoring a rule via this schema does NOT grant access —
- * use `sys_sharing_rule` directly until reconciliation. Tracked by #1887 (M2).
+ * ADR-0058 D3 — closes #1887. The CEL `condition` of a criteria-based rule is
+ * COMPILED to the runtime `criteria_json` FilterCondition by the canonical
+ * `@objectstack/formula` compiler at seed / `defineRule` time, and ENFORCED:
+ * records matching the criteria materialise `sys_record_share` grants for the
+ * resolved recipients. Supported recipients: `user` / `team` / `business_unit` /
+ * `role` / `role_and_subordinates` (→ `unit_and_subordinates`, ADR-0057 D5).
+ *
+ * Still `[experimental — not enforced]` (ADR-0049): `owner`-type rules
+ * (`ownedBy` — depends on live role membership, with no static `criteria_json`
+ * equivalent) and `group` / `guest` recipients (no runtime recipient mapping).
+ * A `condition` the compiler cannot lower (functions, cross-object traversal) is
+ * skipped and logged — never seeded as a permissive match-all.
  */
 export const SharingRuleSchema = lazySchema(() => z.discriminatedUnion('type', [
   CriteriaSharingRuleSchema,

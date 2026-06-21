@@ -5,6 +5,7 @@ import { SharingService } from './sharing-service.js';
 import { SharingRuleService } from './sharing-rule-service.js';
 import { TeamGraphService, expandPrincipal } from './team-graph.js';
 import { BusinessUnitGraphService } from './business-unit-graph.js';
+import { celToFilter } from './bootstrap-declared-sharing-rules.js';
 
 interface Row { [k: string]: any }
 
@@ -344,5 +345,63 @@ describe('SharingRuleService', () => {
     expect(res.grantsCreated).toBe(4);
     expect(engine._tables.sys_record_share).toHaveLength(4);
     expect(new Set(engine._tables.sys_record_share.map(s => s.recipient_id))).toEqual(new Set(['alice', 'bob']));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1887 — sharing CEL `condition` compiled & ENFORCED end-to-end (ADR-0058 D3)
+//
+// Before P2, a compound CEL condition returned null from celToFilter and the
+// rule was SKIPPED (decorative metadata, #1887). Now the canonical compiler
+// lowers it to a compound `criteria_json` that the runtime matching honours, so
+// exactly the records satisfying the full predicate materialise grants.
+// ---------------------------------------------------------------------------
+describe('#1887 — compound sharing condition compiled + enforced (ADR-0058 D3)', () => {
+  let engine: ReturnType<typeof makeEngine>;
+  let sharing: SharingService;
+  let rules: SharingRuleService;
+  const SYS = { isSystem: true, organizationId: 'org1' } as any;
+
+  beforeEach(() => {
+    engine = makeEngine();
+    engine._tables.opportunity = [
+      { id: 'opp1', name: 'Big1', amount: 200000 }, // matches amount>=100k AND name=Big1
+      { id: 'opp2', name: 'Big2', amount: 150000 }, // amount ok but wrong name
+      { id: 'opp3', name: 'Small', amount: 5000 },  // neither
+    ];
+    sharing = new SharingService({ engine: engine as any });
+    rules = new SharingRuleService({ engine: engine as any, sharing });
+  });
+
+  it('celToFilter lowers a COMPOUND CEL condition to a compound FilterCondition', () => {
+    expect(celToFilter('record.amount >= 100000 && record.name == "Big1"'))
+      .toEqual({ $and: [{ amount: { $gte: 100000 } }, { name: 'Big1' }] });
+    // accepts the { dialect, source } authoring shape
+    expect(celToFilter({ dialect: 'cel', source: 'record.amount >= 100000' }))
+      .toEqual({ amount: { $gte: 100000 } });
+    // null-check & disjunction lower too (no longer field-equality-only)
+    expect(celToFilter('record.region == null || record.tier == "gold"')).toEqual({
+      $or: [{ region: { $null: true } }, { tier: 'gold' }],
+    });
+    // non-pushdownable → null → caller skips (never a permissive match-all)
+    expect(celToFilter('size(record.tags) > 0')).toBeNull();
+  });
+
+  it('shares ONLY the records satisfying the full AND (not just one conjunct)', async () => {
+    const r = await rules.defineRule({
+      name: 'big1_hv', label: 'Big1 high-value', object: 'opportunity',
+      criteria: celToFilter('record.amount >= 100000 && record.name == "Big1"'),
+      recipientType: 'user', recipientId: 'alice', accessLevel: 'read',
+    }, SYS);
+    // The CEL condition persisted as a COMPOUND criteria_json (not skipped).
+    expect(JSON.parse(engine._tables.sys_sharing_rule[0].criteria_json))
+      .toEqual({ $and: [{ amount: { $gte: 100000 } }, { name: 'Big1' }] });
+
+    const res = await rules.evaluateRule(r.id, SYS);
+    expect(res.matchedRecords).toBe(1); // only opp1 — opp2 fails the name conjunct
+    const shared = (engine._tables.sys_record_share ?? [])
+      .filter((sh: any) => sh.recipient_id === 'alice')
+      .map((sh: any) => sh.record_id);
+    expect(shared).toEqual(['opp1']);
   });
 });
