@@ -602,7 +602,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         }
       },
       parent_business_unit_id: {
-        label: "上级部门",
+        label: "上级业务单元",
         help: "组织树的自关联字段。Null 表示租户根节点。"
       },
       organization_id: {
@@ -610,27 +610,27 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         help: "租户范围。"
       },
       manager_user_id: {
-        label: "部门负责人",
-        help: "负责该组织单元的用户（部门负责人 / lead）。"
+        label: "业务单元负责人",
+        help: "负责该组织单元的用户（业务单元负责人 / lead）。"
       },
       active: {
         label: "启用",
-        help: "为 false 时，图谱查询不会展开该部门成员。"
+        help: "为 false 时，图谱查询不会展开该业务单元成员。"
       },
       effective_from: {
         label: "生效时间",
-        help: "该部门生效的时间（HRIS 同步）。"
+        help: "该业务单元生效的时间（HRIS 同步）。"
       },
       effective_to: {
         label: "失效时间",
-        help: "该部门停用的时间（HRIS 同步）。"
+        help: "该业务单元停用的时间（HRIS 同步）。"
       },
       external_ref: {
         label: "外部引用",
         help: "上游 HRIS 中的 ID（Workday / SAP HR / 北森）。"
       },
       id: {
-        label: "部门 ID"
+        label: "业务单元 ID"
       },
       created_at: {
         label: "创建时间"
@@ -657,19 +657,19 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
   sys_business_unit_member: {
     label: "业务单元成员",
     pluralLabel: "业务单元成员",
-    description: "用户到部门的任职关系（适配矩阵组织并支持生效时间）。",
+    description: "用户到业务单元的任职关系（适配矩阵组织并支持生效时间）。",
     fields: {
       id: {
         label: "成员 ID"
       },
       business_unit_id: {
-        label: "部门"
+        label: "业务单元"
       },
       user_id: {
         label: "用户"
       },
       role_in_business_unit: {
-        label: "部门内角色",
+        label: "业务单元内角色",
         help: "`lead` 表示日常负责人；`deputy` 可在审批路由中代替负责人。",
         options: {
           member: "成员",
@@ -679,7 +679,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       is_primary: {
         label: "主任职",
-        help: "当用户属于多个部门时，用于标记报表上的主部门。"
+        help: "当用户属于多个业务单元时，用于标记报表上的主业务单元。"
       },
       effective_from: {
         label: "生效时间"

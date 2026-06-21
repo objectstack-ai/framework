@@ -106,7 +106,7 @@ export const SysBusinessUnit = ObjectSchema.create({
 
     // ── Hierarchy ────────────────────────────────────────────────
     parent_business_unit_id: Field.lookup('sys_business_unit', {
-      label: 'Parent Department',
+      label: 'Parent Business Unit',
       required: false,
       description: 'Self-reference for the org tree. Null = root of tenant.',
       group: 'Hierarchy',
@@ -121,9 +121,9 @@ export const SysBusinessUnit = ObjectSchema.create({
 
     // ── Leadership ───────────────────────────────────────────────
     manager_user_id: Field.lookup('sys_user', {
-      label: 'Department Head',
+      label: 'Business Unit Head',
       required: false,
-      description: 'User responsible for this org unit (department head / lead).',
+      description: 'User responsible for this org unit (business unit head / lead).',
       group: 'Leadership',
     }),
 
@@ -139,14 +139,14 @@ export const SysBusinessUnit = ObjectSchema.create({
     effective_from: Field.datetime({
       label: 'Effective From',
       required: false,
-      description: 'When this department came into existence (HRIS sync).',
+      description: 'When this business unit came into existence (HRIS sync).',
       group: 'Lifecycle',
     }),
 
     effective_to: Field.datetime({
       label: 'Effective To',
       required: false,
-      description: 'When this department was retired (HRIS sync).',
+      description: 'When this business unit was retired (HRIS sync).',
       group: 'Lifecycle',
     }),
 
@@ -160,7 +160,7 @@ export const SysBusinessUnit = ObjectSchema.create({
 
     // ── System ───────────────────────────────────────────────────
     id: Field.text({
-      label: 'Department ID',
+      label: 'Business Unit ID',
       required: true,
       readonly: true,
       group: 'System',

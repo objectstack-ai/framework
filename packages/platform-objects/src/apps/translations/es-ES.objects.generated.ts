@@ -602,7 +602,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         }
       },
       parent_business_unit_id: {
-        label: "Departamento principal",
+        label: "Unidad de negocio principal",
         help: "Autorreferencia para el árbol organizativo. Null = raíz del tenant."
       },
       organization_id: {
@@ -663,7 +663,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "ID de miembro"
       },
       business_unit_id: {
-        label: "Departamento"
+        label: "Unidad de negocio"
       },
       user_id: {
         label: "Usuario"
