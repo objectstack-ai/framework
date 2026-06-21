@@ -952,6 +952,32 @@ defineDataset({
   compareTo: 'previousYear' }
 ```
 
+### Drilldown
+
+Dashboards drill in two ways: **drill-through** turns an aggregate into the rows
+behind it; **drill-to-record** opens one record.
+
+* **`table` / `pivot` widgets drill through.** Clicking an aggregated table row
+  or pivot cell opens a side drawer listing the underlying records. The dataset
+  preserves each grouped row's raw group keys, so the drawer filters to the
+  *exact* records (no label→id guessing). Automatic — no per-widget config.
+* **The drilled record list drills to record.** Any row in that drawer opens the
+  single record's detail, completing the **group → records → record** chain.
+* **`metric` / `chart` widgets are not click-drillable** in the dataset form
+  (they render the aggregate only; `compareTo` still applies). Surface the detail
+  through a `table` / `pivot` widget instead.
+
+> **Renderer note (object/record-backed surfaces).** The ObjectUI renderer
+> exposes a richer `options.drillDown` block for non-dataset list/table widgets
+> and the drill drawers — `enabled`, `mode` (`'filter'` = aggregate → filtered
+> list; `'record'` = row → that record), `target` (`'drawer'` | `'dialog'`),
+> `columns` (whitelist), and `title` (`${event.*}` interpolation). At the
+> renderer level drill-through covers the `bar` / `line` / `area` / `pie` /
+> `donut` / `funnel` / `scatter` / `treemap` / `sankey` families and pivot
+> cell/row/column/total clicks (`radar` is excluded — no single clickable
+> category point). **Dataset-bound dashboards use the semantic-layer drill above
+> and ignore this block.**
+
 | `dateGranularity` | Rendered bucket label |
 |:--|:--|
 | `'day'` | `YYYY-MM-DD` |
