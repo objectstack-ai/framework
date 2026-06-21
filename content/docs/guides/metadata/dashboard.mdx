@@ -201,6 +201,13 @@ drawer to open that single record's detail. This completes the
 **group → records → record** chain (e.g. *Revenue by Region* → the orders in
 the *West* bucket → one order).
 
+The drawer also offers an **"Open in list →"** escape hatch — escalate the peek
+to the object's full list page (sort / bulk-select / export / shareable URL),
+scoped by the same drill filter. In-place drawer is the default (keep context);
+the escape hatch is there when you need the full surface. **Reports drill
+identically**: a `summary` / `matrix` report opens the same in-place drawer on
+row/cell click, so dashboard and report drill behave the same.
+
 ```typescript
 // A drill-through table widget. No drill configuration is required — it is
 // automatic whenever the dataset exposes the base object and the widget groups
@@ -222,10 +229,12 @@ click-drillable; expose the detail through a `table`/`pivot` widget instead.
 
 > **Renderer note.** Object/record-backed list and table surfaces (and the
 > ObjectUI renderer's `options.drillDown` block) support a richer drill model —
-> a `mode: 'filter' | 'record'` discriminator, drawer-vs-dialog target, a column
+> a `mode: 'filter' | 'record'` discriminator, a `target` of `'drawer'` /
+> `'dialog'` / `'navigate'` (the last opens the list page directly), a column
 > whitelist, and chart-segment drill for the `scatter` / `treemap` / `sankey`
 > families. Those knobs live in the renderer; dataset-bound dashboards drill
-> through the semantic layer as described above.
+> through the semantic layer as described above (and get the "Open in list →"
+> escape hatch from the host app, e.g. the console).
 
 ### Aggregation Functions
 
