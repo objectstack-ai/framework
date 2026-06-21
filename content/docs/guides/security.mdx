@@ -118,6 +118,36 @@ export const SalesRepProfile: PermissionSet = {
 | `viewAllRecords` | View ALL records regardless of ownership |
 | `modifyAllRecords` | Edit ALL records regardless of ownership |
 
+### Access depth — `readScope` / `writeScope` (ADR-0057 D1)
+
+Beyond the boolean grants above, an owner-scoped object grant can carry a
+**`readScope` / `writeScope`** that widens the owner-match *declaratively* — the
+ERP "see my own / my reports / my unit / my unit and below / the whole org" axis,
+without hand-writing one RLS policy per object:
+
+| Scope | Owner-match widens to |
+|------------|-------------|
+| `own` | the caller (baseline; unset = this) |
+| `own_and_reports` | the caller + their `sys_user.manager_id` report chain |
+| `unit` | owners in the caller's business unit (`sys_business_unit`) |
+| `unit_and_below` | the caller's BU + all descendant BUs (BFS) |
+| `org` | the whole tenant (≈ `viewAllRecords` / `modifyAllRecords`) |
+
+```typescript
+objects: {
+  account: { allowRead: true, allowEdit: true, readScope: 'unit_and_below', writeScope: 'own' },
+}
+```
+
+It resolves to an `owner_id IN (…)` set at request time and AND-injects alongside
+RLS (no compiler change; ADR-0055). Sharing rules still widen on top.
+
+> **Open-core boundary (ADR-0016).** `own` and `org` are open-source. The
+> hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`) require
+> the paid `@objectstack/security-enterprise` plugin (BU-subtree + manager-chain
+> resolver); without it they **fail closed to `own`** (never fail-open), and
+> `defineStack` errors if a grant uses one without `requires: ['hierarchy-security']`.
+
 ### Standard Profiles
 
 #### Sales Representative

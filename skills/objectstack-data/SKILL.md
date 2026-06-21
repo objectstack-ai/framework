@@ -424,6 +424,44 @@ permissions: {
 - Source: `node_modules/@objectstack/spec/src/security/permission.zod.ts`
 - Combine with `enable.apiMethods` to also restrict the HTTP surface.
 
+### Access depth (scope-depth) — the ERP "see my unit / my unit and below" axis
+
+For owner-scoped (`private`) objects, a per-object grant on a permission set can
+carry **`readScope` / `writeScope`** that *widens the owner-match declaratively* —
+the ERP "my own / my reports / my unit / my unit and below / whole org" axis
+(ADR-0057 D1). It saves hand-writing one RLS policy per object.
+
+```typescript
+// in a permission set's `objects` map
+objects: {
+  account: {
+    allowRead: true, allowEdit: true,
+    readScope: 'unit_and_below',  // see accounts owned by my BU + descendant BUs
+    writeScope: 'own',            // but only edit my own
+  },
+}
+```
+
+| Scope | Who you can see / write |
+|:--|:--|
+| `own` | `owner == me` (baseline; unset = this) |
+| `own_and_reports` | me + everyone below me on the `sys_user.manager_id` chain |
+| `unit` | owners in my business unit (`sys_business_unit`) |
+| `unit_and_below` | my BU + all descendant BUs (BFS) |
+| `org` | the whole tenant (≈ `viewAllRecords` / `modifyAllRecords`) |
+
+Resolves at request time into an `owner_id IN (…)` set and AND-injects like RLS
+(no compiler change; ADR-0055). Sharing rules still widen on top.
+
+> ⚠️ **Open-core boundary (ADR-0016).** `own` and `org` work in open-source. The
+> **hierarchy-relative** scopes — `own_and_reports` / `unit` / `unit_and_below` —
+> need the **paid** `@objectstack/security-enterprise` plugin (BU-subtree +
+> manager-chain resolver). Without it they **fail closed to `own`** (never
+> fail-open), and `defineStack` errors if a grant uses one without
+> `requires: ['hierarchy-security']`. In an open-source app, author `own` / `org`
+> + explicit sharing rules; reach for `unit*` only when the enterprise plugin is
+> present.
+
 ### Row-Level Security (RLS)
 
 The **enforced** RLS surface is a list of `rowLevelSecurity` policies on a
