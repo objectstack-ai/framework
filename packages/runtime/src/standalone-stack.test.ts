@@ -65,19 +65,26 @@ function appDefaultProfileName(permissions: unknown): string | undefined {
   return undefined;
 }
 
+// The first createStandaloneStack call cold-loads heavy deps (objectql,
+// metadata, driver-memory) via dynamic import — on a cold CI worker that can
+// exceed vitest's default 5s test timeout. Do the one-time boot in beforeAll
+// (with a generous timeout) and have the assertion cases read the result.
+const BOOT_TIMEOUT = 60_000;
+
 describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-0056 D7)', () => {
   let dir: string;
   let artifactPath: string;
+  let result: Awaited<ReturnType<typeof createStandaloneStack>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'os-standalone-rbac-'));
     artifactPath = join(dir, 'objectstack.json');
     writeFileSync(artifactPath, JSON.stringify(ARTIFACT), 'utf-8');
-  });
+    result = await createStandaloneStack({ artifactPath, databaseUrl: 'memory://standalone-rbac' });
+  }, BOOT_TIMEOUT);
   afterAll(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ } });
 
-  it('surfaces permissions[] (with isDefault profile + readScope) at the top level', async () => {
-    const result = await createStandaloneStack({ artifactPath, databaseUrl: 'memory://standalone-rbac' });
+  it('surfaces permissions[] (with isDefault profile + readScope) at the top level', () => {
     expect(Array.isArray(result.permissions)).toBe(true);
     expect(result.permissions!.map((p: any) => p.name).sort()).toEqual(['app_contributor', 'app_member_default']);
     const def = result.permissions!.find((p: any) => p.name === 'app_member_default');
@@ -86,34 +93,31 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
     expect(def.objects.note.readScope).toBe('unit_and_below');
   });
 
-  it('surfaces roles[] at the top level', async () => {
-    const result = await createStandaloneStack({ artifactPath, databaseUrl: 'memory://standalone-rbac' });
+  it('surfaces roles[] at the top level', () => {
     expect(Array.isArray(result.roles)).toBe(true);
     expect(result.roles!.map((r: any) => r.name).sort()).toEqual(['contributor', 'manager']);
   });
 
-  it('still surfaces objects/requires/manifest (no regression)', async () => {
-    const result = await createStandaloneStack({ artifactPath, databaseUrl: 'memory://standalone-rbac' });
+  it('still surfaces objects/requires/manifest (no regression)', () => {
     expect(result.requires).toEqual(['auth']);
     expect(result.objects!.map((o: any) => o.name)).toEqual(['note']);
     expect(result.manifest?.id).toBe('com.test.scope-app');
   });
 
-  it('the surfaced config drives appDefaultProfileName → the app profile (the exact CLI wiring)', async () => {
+  it('the surfaced config drives appDefaultProfileName → the app profile (the exact CLI wiring)', () => {
     // Reproduce serve.ts: `config = { ...originalConfig, ...standaloneStack }`,
     // then `appDefaultProfileName(config.permissions)` → SecurityPlugin fallback.
-    const standaloneStack = await createStandaloneStack({ artifactPath, databaseUrl: 'memory://standalone-rbac' });
-    const config: any = { ...{}, ...standaloneStack };
+    const config: any = { ...{}, ...result };
     expect(appDefaultProfileName(config.permissions)).toBe('app_member_default');
   });
 
   it('createDefaultHostConfig (the actual serve artifact-fallback) surfaces the same', async () => {
-    const result = await createDefaultHostConfig({
+    const r = await createDefaultHostConfig({
       requireArtifact: true,
       artifactPath,
       databaseUrl: 'memory://standalone-rbac',
     });
-    expect(appDefaultProfileName(result.permissions)).toBe('app_member_default');
-    expect(result.roles!.map((r: any) => r.name).sort()).toEqual(['contributor', 'manager']);
-  });
+    expect(appDefaultProfileName(r.permissions)).toBe('app_member_default');
+    expect(r.roles!.map((x: any) => x.name).sort()).toEqual(['contributor', 'manager']);
+  }, BOOT_TIMEOUT);
 });
