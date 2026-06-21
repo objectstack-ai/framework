@@ -309,6 +309,7 @@ describe('FieldSchema', () => {
         lookupPageSize: 20,
         lookupFilters: [{ field: 'status', operator: 'eq', value: 'active' }],
         dependsOn: ['region', { field: 'country', param: 'country_code' }],
+        allowCreate: true,
       };
 
       const result = FieldSchema.parse(lookupField);
@@ -318,6 +319,7 @@ describe('FieldSchema', () => {
       expect(result.lookupPageSize).toBe(20);
       expect(result.lookupFilters?.[0]).toEqual({ field: 'status', operator: 'eq', value: 'active' });
       expect(result.dependsOn).toHaveLength(2);
+      expect(result.allowCreate).toBe(true);
     });
 
     it('builds a lookup with picker config via Field.lookup', () => {
