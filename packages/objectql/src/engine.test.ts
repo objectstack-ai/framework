@@ -456,6 +456,127 @@ describe('ObjectQL Engine', () => {
             );
         });
 
+        it('should apply a nested expand where-filter to the related $in query', async () => {
+            // Regression: query-syntax.mdx documents `expand: { rel: { where: {...} } }`
+            // and the QueryAST schema accepts it, but the engine used to drop
+            // nestedAST.where — silently returning *all* related records.
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'task') return {
+                    name: 'task',
+                    fields: {
+                        assignee: { type: 'lookup', reference: 'user' },
+                        title: { type: 'text' },
+                    },
+                } as any;
+                if (name === 'user') return {
+                    name: 'user',
+                    fields: { name: { type: 'text' }, active: { type: 'boolean' } },
+                } as any;
+                return undefined;
+            });
+
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([
+                    { id: 't1', title: 'Task 1', assignee: 'u1' },
+                    { id: 't2', title: 'Task 2', assignee: 'u2' },
+                ])
+                // Driver does the filtering; only the active user comes back.
+                .mockResolvedValueOnce([{ id: 'u1', name: 'Alice', active: true }]);
+
+            const result = await engine.find('task', {
+                expand: {
+                    assignee: { object: 'user', where: { active: { $eq: true } } },
+                },
+            });
+
+            // The nested filter is AND-merged with the batch $in (not clobbered).
+            expect(mockDriver.find).toHaveBeenCalledTimes(2);
+            const expandCall = vi.mocked(mockDriver.find).mock.calls[1];
+            expect(expandCall[1]).toEqual(
+                expect.objectContaining({
+                    object: 'user',
+                    where: {
+                        $and: [
+                            { id: { $in: ['u1', 'u2'] } },
+                            { active: { $eq: true } },
+                        ],
+                    },
+                }),
+            );
+
+            // Records the driver filtered out keep their raw FK id (unresolved).
+            expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice', active: true });
+            expect(result[1].assignee).toBe('u2');
+        });
+
+        it('should preserve $or logical groups in a nested expand where (no shallow clobber)', async () => {
+            // A shallow `{ ...nestedAST.where }` spread would be unsafe if the
+            // nested filter itself keyed `id` or used a top-level logical group.
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'task') return {
+                    name: 'task',
+                    fields: { assignee: { type: 'lookup', reference: 'user' } },
+                } as any;
+                if (name === 'user') return {
+                    name: 'user',
+                    fields: { role: { type: 'text' }, active: { type: 'boolean' } },
+                } as any;
+                return undefined;
+            });
+
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([{ id: 't1', assignee: 'u1' }])
+                .mockResolvedValueOnce([{ id: 'u1', role: 'admin' }]);
+
+            const nestedWhere = {
+                $or: [{ role: { $eq: 'admin' } }, { active: { $eq: true } }],
+            };
+            await engine.find('task', {
+                expand: { assignee: { object: 'user', where: nestedWhere } },
+            });
+
+            const expandCall = vi.mocked(mockDriver.find).mock.calls[1];
+            expect(expandCall[1]).toEqual(
+                expect.objectContaining({
+                    where: { $and: [{ id: { $in: ['u1'] } }, nestedWhere] },
+                }),
+            );
+        });
+
+        it('should not push nested expand limit/offset into the batched $in query', async () => {
+            // The expand path batch-loads every parent's related records in one
+            // $in query, so a *per-parent* limit/offset can't be expressed here.
+            // Propagating them would globally cap the batch and silently drop
+            // records some parents need — so they are intentionally not forwarded.
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'task') return {
+                    name: 'task',
+                    fields: { assignee: { type: 'lookup', reference: 'user' } },
+                } as any;
+                if (name === 'user') return { name: 'user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([
+                    { id: 't1', assignee: 'u1' },
+                    { id: 't2', assignee: 'u2' },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'u1', name: 'Alice' },
+                    { id: 'u2', name: 'Bob' },
+                ]);
+
+            await engine.find('task', {
+                expand: { assignee: { object: 'user', limit: 1, offset: 2 } },
+            });
+
+            const expandCall = vi.mocked(mockDriver.find).mock.calls[1];
+            expect(expandCall[1]).not.toHaveProperty('limit');
+            expect(expandCall[1]).not.toHaveProperty('offset');
+            expect(expandCall[1]).not.toHaveProperty('top');
+        });
+
         it('should expand master_detail fields', async () => {
             vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
                 if (name === 'order_item') return {

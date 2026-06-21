@@ -1791,11 +1791,27 @@ export class ObjectQL implements IDataEngine {
 
       // Batch-load related records using $in query
       try {
+        // Constrain the batch to the collected FK ids. When the nested expand
+        // AST carries its own `where`, AND-merge it via an explicit `$and`
+        // group rather than spreading keys onto the id filter: a shallow spread
+        // would clobber the `id` constraint (if the nested filter also keys
+        // `id`) and is ambiguous when the nested filter is a top-level `$or` /
+        // `$and`. The `$and` wrapper is correct for every FilterCondition shape.
+        const idFilter = { id: { $in: uniqueIds } };
+        const where = nestedAST.where
+          ? { $and: [idFilter, nestedAST.where] }
+          : idFilter;
+
         const relatedQuery: QueryAST = {
           object: referenceObject,
-          where: { id: { $in: uniqueIds } },
+          where,
           ...(nestedAST.fields ? { fields: nestedAST.fields } : {}),
           ...(nestedAST.orderBy ? { orderBy: nestedAST.orderBy } : {}),
+          // NOTE: nestedAST.limit/offset are intentionally NOT forwarded here.
+          // This path batch-loads every parent's related records in a single
+          // $in query, so a *per-parent* limit/offset can't be expressed — a
+          // global cap on the batch would silently drop records other parents
+          // need. Paginate by querying the related object directly instead.
         };
 
         const driver = this.getDriver(referenceObject);
