@@ -59,6 +59,15 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
    */
   locale: z.string().optional(),
 
+  /**
+   * Active default currency (ISO 4217, e.g. `USD`, `CNY`), resolved from the
+   * `localization` settings alongside `timezone`/`locale`. The tenant-level
+   * fallback applied when a currency field/measure omits its own (the
+   * `localization.currency` manifest contract). Undefined when no tenant
+   * default is configured — consumers then render a plain number.
+   */
+  currency: z.string().optional(),
+
   /** User role names (resolved from Member + Role) */
   roles: z.array(z.string()).default([]),
   

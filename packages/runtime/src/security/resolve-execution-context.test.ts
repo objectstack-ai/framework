@@ -198,11 +198,24 @@ describe('resolveExecutionContext — localization (timezone + locale)', () => {
       settingsService: makeSettings({
         'localization.timezone': 'Europe/Paris',
         'localization.locale': 'zh-CN',
+        'localization.currency': 'EUR',
       }),
     }));
     expect(ctx.userId).toBe('u1');
     expect(ctx.timezone).toBe('Europe/Paris');
     expect(ctx.locale).toBe('zh-CN');
+    expect(ctx.currency).toBe('EUR');
+  });
+
+  it('resolves the tenant default currency (ISO 4217, upper-cased) and ignores junk', async () => {
+    const ok = await resolveExecutionContext(makeTzOpts({
+      settingsService: makeSettings({ 'localization.currency': 'cny' }),
+    }));
+    expect(ok.currency).toBe('CNY');
+    const junk = await resolveExecutionContext(makeTzOpts({
+      settingsService: makeSettings({ 'localization.currency': 'not-a-code' }),
+    }));
+    expect(junk.currency).toBeUndefined();
   });
 
   it('falls back to a direct tenant-scoped sys_setting read when no settings service', async () => {
@@ -210,10 +223,12 @@ describe('resolveExecutionContext — localization (timezone + locale)', () => {
       settings: [
         { namespace: 'localization', key: 'timezone', scope: 'tenant', value: 'Asia/Tokyo' },
         { namespace: 'localization', key: 'locale', scope: 'tenant', value: 'ja-JP' },
+        { namespace: 'localization', key: 'currency', scope: 'tenant', value: 'JPY' },
       ],
     }));
     expect(ctx.timezone).toBe('Asia/Tokyo');
     expect(ctx.locale).toBe('ja-JP');
+    expect(ctx.currency).toBe('JPY');
   });
 
   it('ignores per-user sys_user_preference rows (organization-level only)', async () => {

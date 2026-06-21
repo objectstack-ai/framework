@@ -1044,20 +1044,24 @@ export class RestServer {
             // `resolveLocalization` (runtime/security/resolve-execution-context.ts).
             let timezone: string | undefined;
             let locale: string | undefined;
+            let currency: string | undefined;
             try {
                 const settings = this.settingsServiceProvider
                     ? await this.settingsServiceProvider(environmentId).catch(() => undefined)
                     : undefined;
                 if (settings && typeof settings.get === 'function') {
                     const sctx = { tenantId, userId };
-                    const [tzRes, localeRes] = await Promise.all([
+                    const [tzRes, localeRes, currencyRes] = await Promise.all([
                         settings.get('localization', 'timezone', sctx).catch(() => undefined),
                         settings.get('localization', 'locale', sctx).catch(() => undefined),
+                        settings.get('localization', 'currency', sctx).catch(() => undefined),
                     ]);
                     const tzVal = tzRes?.value;
                     const localeVal = localeRes?.value;
+                    const currencyVal = currencyRes?.value;
                     if (typeof tzVal === 'string' && tzVal.trim()) timezone = tzVal.trim();
                     if (typeof localeVal === 'string' && localeVal.trim()) locale = localeVal.trim();
+                    if (typeof currencyVal === 'string' && currencyVal.trim()) currency = currencyVal.trim().toUpperCase();
                 }
             } catch { /* best-effort — fall back to engine UTC default */ }
             return {
@@ -1071,6 +1075,7 @@ export class RestServer {
                 org_user_ids,
                 ...(timezone ? { timezone } : {}),
                 ...(locale ? { locale } : {}),
+                ...(currency ? { currency } : {}),
             } as any;
         } catch {
             return undefined;

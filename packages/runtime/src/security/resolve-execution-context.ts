@@ -90,6 +90,12 @@ function coerceLocale(value: unknown): string | undefined {
   return s || undefined;
 }
 
+/** Coerce a stored currency value to an ISO 4217 (3-letter) code, or undefined. */
+function coerceCurrency(value: unknown): string | undefined {
+  const s = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  return /^[A-Z]{3}$/.test(s) ? s : undefined;
+}
+
 /**
  * Resolve the workspace localization defaults onto the ExecutionContext
  * (ADR-0053 Phase 2): reference `timezone` and `locale`.
@@ -108,20 +114,22 @@ async function resolveLocalization(
   opts: ResolveOptions,
   ql: any,
   sctx: { tenantId?: string; userId?: string },
-): Promise<{ timezone: string; locale: string }> {
+): Promise<{ timezone: string; locale: string; currency?: string }> {
   // 1. Canonical — the `localization` manifest via the settings service.
   try {
     const settings: any = await opts.getService('settings');
     if (settings && typeof settings.get === 'function') {
-      const [tzRes, localeRes] = await Promise.all([
+      const [tzRes, localeRes, currencyRes] = await Promise.all([
         settings.get('localization', 'timezone', sctx).catch(() => undefined),
         settings.get('localization', 'locale', sctx).catch(() => undefined),
+        settings.get('localization', 'currency', sctx).catch(() => undefined),
       ]);
       const tz = coerceTimeZone(tzRes?.value);
       const locale = coerceLocale(localeRes?.value);
+      const currency = coerceCurrency(currencyRes?.value);
       // A resolved value (incl. the manifest default) means the namespace is
       // live — trust it and skip the legacy direct read.
-      if (tz || locale) return { timezone: tz ?? 'UTC', locale: locale ?? 'en-US' };
+      if (tz || locale || currency) return { timezone: tz ?? 'UTC', locale: locale ?? 'en-US', currency };
     }
   } catch {
     // settings service unavailable → fall through to the direct read
@@ -131,9 +139,11 @@ async function resolveLocalization(
   //    registered, or namespace not loaded).
   const tzRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'timezone', scope: 'tenant' }, 1);
   const localeRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'locale', scope: 'tenant' }, 1);
+  const currencyRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'currency', scope: 'tenant' }, 1);
   return {
     timezone: coerceTimeZone(tzRows[0]?.value) ?? 'UTC',
     locale: coerceLocale(localeRows[0]?.value) ?? 'en-US',
+    currency: coerceCurrency(currencyRows[0]?.value),
   };
 }
 
@@ -363,6 +373,7 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   const localization = await resolveLocalization(opts, ql, { tenantId, userId });
   ctx.timezone = localization.timezone;
   ctx.locale = localization.locale;
+  if (localization.currency) ctx.currency = localization.currency;
 
   return ctx;
 }
