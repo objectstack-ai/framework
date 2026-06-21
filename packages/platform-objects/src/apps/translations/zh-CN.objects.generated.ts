@@ -599,7 +599,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           company: "公司",
           division: "事业部",
           department: "部门",
-          team: "团队",
           office: "办公地点",
           cost_center: "成本中心"
         }

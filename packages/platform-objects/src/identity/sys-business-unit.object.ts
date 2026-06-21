@@ -9,7 +9,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * `sys_team`** (which is the flat better-auth collaboration grouping).
  *
  * A single tenant typically has one `kind='company'` root, then nested
- * `division` / `department` / `team` / `office` nodes underneath. The
+ * `division` / `department` / `office` nodes underneath. The
  * `kind` enum is purely a display/categorisation hint — the recursive
  * structure works identically regardless of value.
  *
@@ -94,7 +94,7 @@ export const SysBusinessUnit = ObjectSchema.create({
     }),
 
     kind: Field.select(
-      ['company', 'division', 'department', 'team', 'office', 'cost_center'],
+      ['company', 'division', 'department', 'office', 'cost_center'],
       {
         label: 'Kind',
         required: true,

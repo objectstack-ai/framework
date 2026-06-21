@@ -599,7 +599,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           company: "Empresa",
           division: "División",
           department: "Departamento",
-          team: "Equipo",
           office: "Oficina",
           cost_center: "Centro de coste"
         }
