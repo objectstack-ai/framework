@@ -25,6 +25,18 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
     // ═══════════════════════════════════════════════════════════════
 
     describe('findData', () => {
+        it('normalizes $search/$searchFields (OData) to bare search/searchFields, not implicit filters', async () => {
+            await protocol.findData({ object: 'showcase_account', query: { $search: 'retail', $searchFields: ['name', 'industry'] } });
+            const opts = mockEngine.find.mock.calls[0][1];
+            expect(opts.search).toBe('retail');
+            expect(opts.searchFields).toEqual(['name', 'industry']);
+            expect(opts.$search).toBeUndefined();
+            expect(opts.$searchFields).toBeUndefined();
+            // critical: must NOT fall through to the implicit-filter pass as where.$search
+            expect(opts.where?.$search).toBeUndefined();
+            expect(opts.where?.searchFields).toBeUndefined();
+        });
+
         it('should normalize $expand (OData) string to expand Record', async () => {
             await protocol.findData({ object: 'order_item', query: { $expand: 'order,product' } });
 

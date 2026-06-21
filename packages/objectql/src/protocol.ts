@@ -2021,6 +2021,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             ['$orderby', 'orderBy'],
             ['$select', 'select'],
             ['$count', 'count'],
+            ['$search', 'search'],
+            ['$searchFields', 'searchFields'],
         ] as const) {
             if (options[dollar] != null && options[bare] == null) {
                 options[bare] = options[dollar];
@@ -2133,7 +2135,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             'expand',
             'distinct', 'count',
             'aggregations', 'groupBy',
-            'search', 'context', 'cursor',
+            'search', 'searchFields', 'context', 'cursor',
         ]);
         if (!options.where) {
             const implicitFilters: Record<string, unknown> = {};
