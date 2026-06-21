@@ -197,6 +197,16 @@ export class SqlDriver implements IDataDriver {
   protected numericFields: Record<string, string[]> = {};
   protected dateFields: Record<string, Set<string>> = {};
   protected datetimeFields: Record<string, Set<string>> = {};
+  /**
+   * Federation read path (ADR-0015). For external objects whose physical
+   * remote table differs from the object name, these map between the two so
+   * {@link getBuilder} targets the remote table while the coercion maps above
+   * stay keyed by OBJECT name (matching formatInput/formatOutput). Empty for
+   * managed objects, so the managed query path is unchanged.
+   */
+  protected physicalTableByObject: Record<string, string> = {};
+  protected physicalSchemaByObject: Record<string, string> = {};
+  protected objectByPhysicalTable: Record<string, string> = {};
   protected tablesWithTimestamps: Set<string> = new Set();
   /**
    * Autonumber field configs per table, captured during initObjects.
@@ -818,8 +828,11 @@ export class SqlDriver implements IDataDriver {
     row: Record<string, any>,
     options?: DriverOptions,
   ): Promise<void> {
-    const tableName = StorageNameMapping.resolveTableName({ name: object } as any);
-    const cfgs = this.autoNumberFields[tableName] || this.autoNumberFields[object];
+    // Scan/seed the physical (remote) table for an external object; managed
+    // objects fall through to the storage-mapped name. Config lookup stays
+    // keyed by object name (matching initObjects/registerExternalObject).
+    const tableName = this.physicalTableByObject[object] ?? StorageNameMapping.resolveTableName({ name: object } as any);
+    const cfgs = this.autoNumberFields[object] || this.autoNumberFields[tableName];
     if (!cfgs || cfgs.length === 0) return;
     const parentTrx = options?.transaction as Knex.Transaction | undefined;
     const timezone = (options as any)?.timezone as string | undefined;
@@ -1252,6 +1265,86 @@ export class SqlDriver implements IDataDriver {
   /**
    * Batch-initialise tables from an array of object definitions.
    */
+  /**
+   * DDL-free metadata registration for a federated (external) object — the
+   * read-path counterpart to {@link initObjects} (ADR-0015 federation).
+   *
+   * `initObjects` is gated by `assertSchemaMutable` and therefore throws for
+   * any non-`managed` driver, which left external objects with NO read-coercion
+   * metadata and the query path resolving to a table named after the object
+   * instead of its remote table. This populates the same coercion maps (keyed
+   * by OBJECT name, matching formatInput/formatOutput/coerceFilterValue) and
+   * records the physical remote table (`external.remoteName`, optionally
+   * `external.remoteSchema`) so {@link getBuilder} targets it — WITHOUT running
+   * any DDL (createTable/alterTable/columnInfo). Keep the field-classification
+   * below in sync with initObjects() if the field-type -> storage mapping changes.
+   */
+  registerExternalObject(schema: {
+    name: string;
+    fields?: Record<string, any>;
+    tenancy?: any;
+    external?: { remoteName?: string; remoteSchema?: string };
+  }): void {
+    const key = schema.name;
+    const remoteName = schema.external?.remoteName || schema.name;
+    const remoteSchema = schema.external?.remoteSchema;
+    this.physicalTableByObject[key] = remoteName;
+    this.objectByPhysicalTable[remoteName] = key;
+    if (remoteSchema) {
+      if (this.isSqlite) {
+        this.logger.warn(
+          `[sql-driver] external object "${key}" declares remoteSchema="${remoteSchema}" but SQLite has no schema namespace; ignoring (treating "${remoteName}" as a bare table).`,
+        );
+      } else {
+        this.physicalSchemaByObject[key] = remoteSchema;
+      }
+    }
+
+    const jsonCols: string[] = [];
+    const booleanCols: string[] = [];
+    const numericCols: string[] = [];
+    const dateCols: string[] = [];
+    const datetimeCols: string[] = [];
+    const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
+
+    const tenancyDecl = (schema as any)?.tenancy;
+    let tenantField: string | null = null;
+    if (tenancyDecl && tenancyDecl.enabled !== false && tenancyDecl.tenantField) {
+      const declared = String(tenancyDecl.tenantField);
+      if (schema.fields && Object.prototype.hasOwnProperty.call(schema.fields, declared)) {
+        tenantField = declared;
+      }
+    }
+    if (!tenantField) {
+      const hasOrgField = !!(schema.fields && Object.prototype.hasOwnProperty.call(schema.fields, 'organization_id'));
+      tenantField = hasOrgField ? 'organization_id' : null;
+    }
+    if (schema.fields) {
+      for (const [name, field] of Object.entries<any>(schema.fields)) {
+        const type = field.type || 'string';
+        if (this.isJsonField(type, field)) jsonCols.push(name);
+        if (type === 'boolean' || type === 'toggle') booleanCols.push(name);
+        if (NUMERIC_SCALAR_TYPES.has(type) && !field.multiple) numericCols.push(name);
+        if (type === 'date') dateCols.push(name);
+        if (type === 'datetime') datetimeCols.push(name);
+        if (type === 'auto_number' || type === 'autonumber') {
+          const rawFmt = (typeof field.autonumberFormat === 'string' && field.autonumberFormat)
+            ? field.autonumberFormat
+            : (typeof field.format === 'string' && field.format ? field.format : '');
+          const fmt = rawFmt || '{0000}';
+          autoNumberCols.push({ name, format: fmt, tokens: parseAutonumberFormat(fmt), tenantField });
+        }
+      }
+    }
+    this.jsonFields[key] = jsonCols;
+    this.booleanFields[key] = booleanCols;
+    this.numericFields[key] = numericCols;
+    this.autoNumberFields[key] = autoNumberCols;
+    this.tenantFieldByTable[key] = tenantField;
+    if (dateCols.length) this.dateFields[key] = new Set(dateCols);
+    if (datetimeCols.length) this.datetimeFields[key] = new Set(datetimeCols);
+  }
+
   async initObjects(objects: Array<{ name: string; fields?: Record<string, any> }>): Promise<void> {
     // DDL gate (ADR-0015 §5.1): createTable/alterTable below mutate schema.
     // Also covers `syncSchema`, which delegates here.
@@ -1563,7 +1656,17 @@ export class SqlDriver implements IDataDriver {
   }
 
   protected getBuilder(object: string, options?: DriverOptions) {
-    let builder = this.knex(object);
+    // Federation (ADR-0015): an external object resolves to its remote table
+    // (`external.remoteName`, optionally schema-qualified). Managed objects miss
+    // both maps, so this is `this.knex(object)` — unchanged. `.withSchema()` is
+    // applied on the builder (not via `knex.withSchema().from()`) so the builder
+    // type is identical to the managed path for every downstream caller.
+    const physical = this.physicalTableByObject[object] ?? object;
+    let builder = this.knex(physical);
+    const remoteSchema = this.physicalSchemaByObject[object];
+    if (remoteSchema) {
+      builder = builder.withSchema(remoteSchema);
+    }
     if (options?.transaction) {
       builder = builder.transacting(options.transaction as Knex.Transaction);
     }
@@ -1699,6 +1802,21 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Coercion-map key for a builder. Coercion maps (date/datetime) are keyed by
+   * OBJECT name, but after the federation change {@link getBuilder} targets the
+   * physical remote table, so a builder reports the remote name. Map it back to
+   * the object name for external objects; identity for managed ones (no reverse
+   * entry). Note datetime coercion is a SQLite-only concern (see
+   * coerceFilterValue), and SQLite external tables are bare-named, so this is
+   * exact where it matters.
+   */
+  protected coercionKey(builder: any): string | null {
+    const physical = this.tableNameForBuilder(builder);
+    if (physical == null) return null;
+    return this.objectByPhysicalTable[physical] ?? physical;
+  }
+
+  /**
    * Collapse a `Field.date` value to a timezone-naive `YYYY-MM-DD`
    * calendar-day string (ADR-0053 Phase 1). A `Date` collapses to its UTC
    * calendar day; a string keeps its leading date and drops any time
@@ -1808,7 +1926,7 @@ export class SqlDriver implements IDataDriver {
 
   protected applyFilters(builder: Knex.QueryBuilder, filters: any) {
     if (!filters) return;
-    const table = this.tableNameForBuilder(builder);
+    const table = this.coercionKey(builder);
 
     if (!Array.isArray(filters) && typeof filters === 'object') {
       const hasMongoOperators = Object.keys(filters).some(
@@ -1905,7 +2023,7 @@ export class SqlDriver implements IDataDriver {
 
   protected applyFilterCondition(builder: Knex.QueryBuilder, condition: any, logicalOp: 'and' | 'or' = 'and', tableHint?: string | null) {
     if (!condition || typeof condition !== 'object') return;
-    const table = tableHint ?? this.tableNameForBuilder(builder);
+    const table = tableHint ?? this.coercionKey(builder);
 
     for (const [key, value] of Object.entries(condition)) {
       if (key === '$and' && Array.isArray(value)) {

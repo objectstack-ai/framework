@@ -68,6 +68,21 @@ describe('SqlDriver DDL gate (ADR-0015)', () => {
     );
   });
 
+  it('registerExternalObject is DDL-free: does not throw on external mode and creates no table', async () => {
+    driver = makeDriver('external');
+    expect(() =>
+      driver.registerExternalObject!({
+        name: 'ext_widget',
+        external: { remoteName: 'widgets' },
+        fields: { sku: { type: 'text' } },
+      }),
+    ).not.toThrow();
+    const k = (driver as any).knex;
+    // No DDL ran — neither the object name nor the remote name was created.
+    expect(await k.schema.hasTable('ext_widget')).toBe(false);
+    expect(await k.schema.hasTable('widgets')).toBe(false);
+  });
+
   it('also blocks DDL in validate-only mode', async () => {
     driver = makeDriver('validate-only');
     await expect(

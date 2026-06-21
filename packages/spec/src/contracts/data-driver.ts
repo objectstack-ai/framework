@@ -163,6 +163,18 @@ export interface IDataDriver {
    */
   syncSchemasBatch?(schemas: Array<{ object: string; schema: unknown }>, options?: DriverOptions): Promise<void>;
 
+  /**
+   * Register a federated (external) object's read metadata WITHOUT running DDL
+   * (ADR-0015). For datasources with `schemaMode !== 'managed'`, the schema is
+   * owned by the remote database, so `syncSchema()`/`initObjects()` (which run
+   * DDL) are forbidden. Drivers that support federation implement this to record
+   * the physical remote table (`external.remoteName` / `remoteSchema`) and the
+   * per-object read-coercion metadata so queries resolve to the remote table.
+   * Optional: drivers that don't support federation simply omit it (the engine
+   * skips external objects for them).
+   */
+  registerExternalObject?(schema: unknown): void | Promise<void>;
+
   /** Drop the underlying table or collection (destructive) */
   dropTable(object: string, options?: DriverOptions): Promise<void>;
 

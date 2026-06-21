@@ -2815,7 +2815,18 @@ export class ObjectQL implements IDataEngine {
     const obj = this._registry.getObject(objectName) as any;
     if (!obj) return;
     const driver = this.getDriverForObject(objectName);
-    if (!driver || typeof (driver as any).syncSchema !== 'function') return;
+    if (!driver) return;
+    // Federated (external) object (ADR-0015): register read metadata WITHOUT DDL
+    // (its remote schema is owned externally). This is what an app's onEnable
+    // calls after registering a late external driver so coercion maps + the
+    // physical-table mapping exist for queries. See SqlDriver.registerExternalObject.
+    if (obj.external != null) {
+      if (typeof (driver as any).registerExternalObject === 'function') {
+        await (driver as any).registerExternalObject(obj);
+      }
+      return;
+    }
+    if (typeof (driver as any).syncSchema !== 'function') return;
     const tableName = StorageNameMapping.resolveTableName(obj);
     await (driver as any).syncSchema(tableName, obj);
   }

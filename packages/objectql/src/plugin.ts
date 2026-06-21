@@ -698,6 +698,33 @@ export class ObjectQLPlugin implements Plugin {
         continue;
       }
 
+      // Federated (external) objects (ADR-0015): their schema is owned by the
+      // remote database, so DDL (syncSchema/initObjects) is forbidden and would
+      // throw. Register read metadata (physical remote table + coercion maps)
+      // without DDL so the query path resolves to the remote table, then skip
+      // the DDL grouping below.
+      if (obj.external != null) {
+        if (typeof driver.registerExternalObject === 'function') {
+          try {
+            await driver.registerExternalObject(obj);
+            synced++;
+          } catch (e: unknown) {
+            ctx.logger.warn('Failed to register external object metadata', {
+              object: obj.name,
+              driver: driver.name,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        } else {
+          ctx.logger.debug('Driver does not support registerExternalObject, skipping external object', {
+            object: obj.name,
+            driver: driver.name,
+          });
+          skipped++;
+        }
+        continue;
+      }
+
       if (typeof driver.syncSchema !== 'function') {
         ctx.logger.debug('Driver does not support syncSchema, skipping', {
           object: obj.name,

@@ -865,3 +865,87 @@ The ADR is considered "delivered" when:
 - `packages/plugins/driver-sql/src/sql-driver.ts` (introspectSchema, createTable, alterTable)
 - `packages/services/service-ai/src/tools/query-data.tool.ts`
 - `packages/services/service-ai/src/schema-retriever.ts`
+
+---
+
+## 18. Addendum (2026-06): Federation read path honours `remoteName` / `remoteSchema`
+
+**Status:** accepted — implements §3.1 / §8 of this ADR that shipped only partially.
+
+### Problem
+
+The spec, introspection (`os datasource introspect`), boot validation (§5.2), and
+the write gate (§5.3) all honoured an object's `external.remoteName` /
+`external.remoteSchema`. **The query-execution path did not.** Reads resolved the
+physical table from the *object name* alone, ignoring the binding — so the
+canonical example in §8 (object `wh_order` → `external: { remoteSchema: 'mart',
+remoteName: 'fact_orders' }`) could not actually be queried.
+
+Reproduced with the real engine + a real better-sqlite3 driver: an object
+`ext_customer` bound to remote table `remote_customers` via `remoteName` failed
+with `no such table: ext_customer`; only naming the object `remote_customers`
+returned rows. This is a correctness gap, not a feature request — the declared
+contract validated green and then queried the wrong (non-existent) table.
+
+### Root cause
+
+- `SqlDriver.getBuilder(object)` did `this.knex(object)` — the object name *was*
+  the physical table.
+- Per-object read-coercion metadata (`json`/`boolean`/`numeric`/`date`/`datetime`)
+  is populated only inside `initObjects()`, whose first statement is
+  `assertSchemaMutable()` (the DDL gate, §5.1) → it throws for any
+  `schemaMode !== 'managed'` driver. The boot schema-sync swallowed that throw
+  per-object, leaving external objects with **zero** coercion metadata and no
+  table-name mapping.
+
+### Fix
+
+- **`SqlDriver.registerExternalObject(schema)`** — a DDL-free counterpart to
+  `initObjects()`. It records the physical remote table
+  (`physicalTableByObject` / `physicalSchemaByObject`) and populates the same
+  coercion maps, keyed by **object name** (matching `formatInput`/`formatOutput`/
+  `coerceFilterValue`), without running any DDL.
+- **`getBuilder()`** now resolves `physicalTableByObject[object] ?? object`, and
+  applies `.withSchema()` when a remote schema is recorded. Managed objects miss
+  both maps, so the path is unchanged (one `undefined` lookup).
+- **Coercion re-keying** — `applyFilters`/`applyFilterCondition` map the builder's
+  physical table back to the object name (`coercionKey`) so date/datetime filter
+  coercion still resolves after the table switch.
+- **Engine/plugin routing** — `ObjectQLPlugin.syncRegisteredSchemas` (boot) and
+  `ObjectQL.syncObjectSchema` (on-demand) route objects with `external != null`
+  to `driver.registerExternalObject()` instead of the DDL `syncSchema`. The
+  on-demand path lets an app register a *late* external driver (one added via an
+  `onEnable` hook) and then make its objects queryable.
+- **Driver contract** — `IDataDriver.registerExternalObject?()` is declared
+  optional, so non-SQL drivers degrade gracefully (the engine skips external
+  objects they can't serve).
+
+### Scope
+
+- `remoteName` is honoured on **all** dialects.
+- `remoteSchema` is applied via `knex.withSchema()` on Postgres / MySQL; on
+  **SQLite it is a no-op** (no schema namespace) and logs a one-time warning.
+- External reads use **best-effort coercion**: with no DDL/`columnInfo`, coercion
+  is driven purely by the declared field types. Keep external object fields to
+  well-understood scalar types.
+
+### Explicitly out of scope (separate follow-ups)
+
+1. **`external.columnMap`** (remote column name ≠ local field key). The driver's
+   `select` / `where` / `orderBy` do not currently apply column-name translation,
+   and `columnMap` is the inverse of per-field `field.columnName` — reconciling
+   the two into one source of truth is its own change.
+2. **Native-analytics SQL over external objects** — the analytics service compiles
+   its own `FROM "<table>"` outside the driver and needs the same remote-table
+   awareness.
+3. **Auto-connecting declared datasources** as queryable ObjectQL drivers in the
+   standalone runtime. Today a declared non-default datasource appears in the
+   metadata registry (Setup → Datasources) but is only made queryable by
+   registering a live driver under its name (e.g. via an app `onEnable` hook).
+
+### Tests
+
+`packages/plugins/driver-sql/src/sql-driver-external-remote-name.test.ts` (read /
+filter / coercion against a differently-named remote table, no DDL leakage) and an
+added case in `sql-driver-ddl-gate.test.ts` (`registerExternalObject` is DDL-free).
+File-based better-sqlite3 tests require Node ≥ 25 (ABI 141) in this repo.
