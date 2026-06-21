@@ -16,6 +16,11 @@ export { templateEngine, TEMPLATE_FORMATTERS, formatValue } from './template-eng
 export { registerStdLib, buildScope } from './stdlib';
 export { resolveSeed, resolveSeedRecord } from './seed-eval';
 export { normalizeExpression, normalizeExpressionTree } from './normalize';
+// ADR-0058 — canonical CEL → FilterCondition pushdown compiler (one AST,
+// two backends). Replaces the regex/celToFilter front-ends in plugin-security
+// and plugin-sharing; honours ADR-0055 (no subquery / no cross-object traversal).
+export { compileCelToFilter, isPushdownableCel, lowerCelAst } from './cel-to-filter';
+export type { CelFilterCompileResult, CelFilterCompileOptions, CelFilterFailReason } from './cel-to-filter';
 // ADR-0032 — shared validator + introspection (one validator for build,
 // registration, and the agent-callable validate_expression tool).
 export { validateExpression, introspectScope, expectedDialect, CEL_STDLIB_FUNCTIONS } from './validate';
