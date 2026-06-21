@@ -164,9 +164,10 @@ the base object and joined objects.
 
 ObjectUI currently renders dataset-backed metric, chart,
 table/list, pivot, funnel, and gauge-style widgets with type-aware cells,
-field/option labels, date bucketing, numeric/currency formatting, and
-drill-down affordances. Use declarative drill-down settings and preserve raw
-group keys so the generated filter can navigate to the underlying records.
+field/option labels, date bucketing, and numeric/currency formatting.
+`table` and `pivot` widgets are also **drill-through** (see
+[Drill-down](#drill-down) below); the dataset preserves raw group keys so the
+generated filter navigates to the exact underlying records.
 
 ### Chart Types
 
@@ -187,6 +188,44 @@ group keys so the generated filter can navigate to the underlying records.
 
 Additional types: `horizontal-bar`, `column`, `donut`, `sankey`, `solid-gauge`,
 `kpi`, and `bullet`. The default type is `metric`.
+
+### Drill-down
+
+`table` and `pivot` widgets are **drill-through**: clicking an aggregated row
+(table) or cell (pivot) opens a side drawer listing the **underlying records**
+behind that group. Because the dataset preserves each grouped row's raw group
+keys, the drawer's filter matches the exact records — no label-to-id guessing.
+
+The drilled record list is itself **drill-to-record**: click any row in the
+drawer to open that single record's detail. This completes the
+**group → records → record** chain (e.g. *Revenue by Region* → the orders in
+the *West* bucket → one order).
+
+```typescript
+// A drill-through table widget. No drill configuration is required — it is
+// automatic whenever the dataset exposes the base object and the widget groups
+// by at least one dimension.
+{
+  id: 'orders_by_region',
+  title: 'Orders by Region',
+  type: 'table',
+  dataset: 'sales',
+  dimensions: ['region'],
+  values: ['revenue', 'deal_count'],
+  layout: { x: 0, y: 0, w: 6, h: 4 },
+}
+```
+
+Drill-through is automatic — there is no per-widget drill configuration in the
+dataset form. `metric` and `chart` widgets render the aggregate only and are not
+click-drillable; expose the detail through a `table`/`pivot` widget instead.
+
+> **Renderer note.** Object/record-backed list and table surfaces (and the
+> ObjectUI renderer's `options.drillDown` block) support a richer drill model —
+> a `mode: 'filter' | 'record'` discriminator, drawer-vs-dialog target, a column
+> whitelist, and chart-segment drill for the `scatter` / `treemap` / `sankey`
+> families. Those knobs live in the renderer; dataset-bound dashboards drill
+> through the semantic layer as described above.
 
 ### Aggregation Functions
 
