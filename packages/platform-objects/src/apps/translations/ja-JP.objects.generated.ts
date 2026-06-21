@@ -578,8 +578,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit: {
-    label: "部門",
-    pluralLabel: "部門",
+    label: "ビジネスユニット",
+    pluralLabel: "ビジネスユニット",
     description: "階層的な組織ツリーノード（部門 / 事業部 / ビジネスユニット / オフィス）。",
     fields: {
       name: {
@@ -655,8 +655,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit_member: {
-    label: "部門メンバー",
-    pluralLabel: "部門メンバー",
+    label: "ビジネスユニットメンバー",
+    pluralLabel: "ビジネスユニットメンバー",
     description: "部門へのユーザー割り当て（マトリクス組織対応、有効期限付き）。",
     fields: {
       id: {

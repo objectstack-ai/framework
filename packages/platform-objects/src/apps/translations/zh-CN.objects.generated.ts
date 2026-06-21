@@ -578,8 +578,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit: {
-    label: "部门",
-    pluralLabel: "部门",
+    label: "业务单元",
+    pluralLabel: "业务单元",
     description: "层级化组织骨架节点（部门 / 事业部 / 业务单元 / 办公地点）。",
     fields: {
       name: {
@@ -655,8 +655,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit_member: {
-    label: "部门成员",
-    pluralLabel: "部门成员",
+    label: "业务单元成员",
+    pluralLabel: "业务单元成员",
     description: "用户到部门的任职关系（适配矩阵组织并支持生效时间）。",
     fields: {
       id: {
