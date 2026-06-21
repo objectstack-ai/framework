@@ -78,14 +78,16 @@ export default [
       }],
     },
   },
-  // issue #2035 — authoring-entry guard. Flags exported consts in example
-  // metadata files that are annotated with a spec domain type (simple `Page`
-  // or qualified `UI.Page`) instead of being wrapped in the `defineX` factory.
-  // AST-only (no type info): matches the declaration shape, not local vars or
-  // function params. Scoped to examples — the reference corpus AI learns from.
+  // issue #2035 — authoring-entry guard. Flags exported consts in metadata
+  // files that are annotated with a spec domain type (simple `Page` or qualified
+  // `UI.Page`) instead of being wrapped in the `defineX` factory. AST-only (no
+  // type info): matches the declaration shape, not local vars or function params.
+  // Scoped to the authoring surfaces — the example corpus AI learns from and the
+  // platform's own apps. NOT downstream-contract: its bare literals are a frozen
+  // backward-compat fixture (#2089) and are intentional.
   {
-    files: ['examples/**/*.{ts,tsx,mts,cts}'],
-    ignores: ['**/node_modules/**', '**/dist/**'],
+    files: ['examples/**/*.{ts,tsx,mts,cts}', 'packages/apps/**/*.{ts,tsx,mts,cts}'],
+    ignores: ['**/node_modules/**', '**/dist/**', 'packages/downstream-contract/**'],
     languageOptions: {
       parser: tsParser,
       parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
