@@ -190,6 +190,8 @@
     "check:skill-docs": "tsx scripts/build-skill-docs.ts --check",
     "analyze": "tsx scripts/analyze-bundle-size.ts",
     "gen:sbom": "tsx scripts/generate-sbom.ts",
+    "gen:api-surface": "tsx scripts/build-api-surface.ts",
+    "check:api-surface": "tsx scripts/build-api-surface.ts --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

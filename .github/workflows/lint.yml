@@ -107,3 +107,12 @@ jobs:
       # export a published-spec third party already uses. See the package README.
       - name: Type check downstream consumer contract
         run: pnpm --filter @objectstack/downstream-contract run typecheck
+
+      # Public API-surface gate (#2035): the spec package IS the third-party API.
+      # A removed/renamed export silently breaks every consumer pinned to a
+      # published release. This diffs the built export surface against the
+      # committed snapshot; intentional changes regenerate it via
+      # `pnpm --filter @objectstack/spec gen:api-surface`. Runs after the build
+      # step above (reads the built dist).
+      - name: Check @objectstack/spec public API surface
+        run: pnpm --filter @objectstack/spec run check:api-surface
