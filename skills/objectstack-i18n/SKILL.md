@@ -33,6 +33,11 @@ and integration with the I18nService.
 - You need to **detect missing or stale translations** (coverage analysis).
 - You are integrating **AI-powered translation suggestions**.
 - You are implementing **locale-specific formatting** (dates, numbers, currency).
+  > Workspace regional defaults — reference `timezone`, `locale`, and **`currency`**
+  > — live in the `localization` SETTINGS (tenant-scoped), are resolved onto every
+  > request's `ExecutionContext`, and are exposed to the client at
+  > `GET /api/v1/auth/me/localization`. `localization.currency` is the fallback a
+  > currency field/measure uses when it omits its own (ADR-0053).
 - You need to understand **translation file organization strategies** (bundled, per_locale, per_namespace).
 
 ---

@@ -197,11 +197,18 @@ What kind of data?
   type: 'currency',
   currencyConfig: {
     precision: 2,
-    currencyMode: 'multi',  // or 'single'
-    defaultCurrency: 'USD',
+    currencyMode: 'fixed',   // 'fixed' = one currency for the column;
+                             // 'dynamic' = per-record `{ value, currency }`
+    defaultCurrency: 'USD',  // ISO 4217
   },
 }
 ```
+
+**Currency resolution (ADR-0053).** A displayed amount resolves its symbol
+through: the field's own `currencyConfig.defaultCurrency` → the tenant
+`localization.currency` default. With neither set, renderers show a plain
+grouped number (never a hardcoded `$`). The same chain backs analytics measures
+(a measure's explicit `currency` wins over the field/tenant default).
 
 ### Select with Default
 

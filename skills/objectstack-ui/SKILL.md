@@ -937,6 +937,11 @@ defineDataset({
   dimensions: [{ name: 'signed_date', field: 'signed_date', type: 'date', dateGranularity: 'month' }],
   measures: [{ name: 'signed_count', aggregate: 'count' }],
 });
+// A monetary measure may declare `currency` (ISO 4217) for a locale-correct
+// symbol: `{ name: 'revenue', aggregate: 'sum', field: 'amount', currency: 'USD' }`.
+// It resolves measure `currency` → the aggregated field's
+// `currencyConfig.defaultCurrency` → the tenant `localization.currency` default
+// (ADR-0053). Omit it for non-money measures (count, avg-of-hours).
 
 // The widget just selects the dimension by name:
 { id: 'signed_by_month', type: 'line',
