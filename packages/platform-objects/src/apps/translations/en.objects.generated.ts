@@ -611,7 +611,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       manager_user_id: {
         label: "Business Unit Head",
-        help: "User responsible for this org unit (department head / lead)."
+        help: "User responsible for this org unit (business unit head / lead)."
       },
       active: {
         label: "Active",
@@ -619,11 +619,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       effective_from: {
         label: "Effective From",
-        help: "When this department came into existence (HRIS sync)."
+        help: "When this business unit came into existence (HRIS sync)."
       },
       effective_to: {
         label: "Effective To",
-        help: "When this department was retired (HRIS sync)."
+        help: "When this business unit was retired (HRIS sync)."
       },
       external_ref: {
         label: "External Reference",
@@ -657,7 +657,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
   sys_business_unit_member: {
     label: "Business Unit Member",
     pluralLabel: "Business Unit Members",
-    description: "User assignment to a department (matrix-org friendly, effective-dated).",
+    description: "User assignment to a business unit (matrix-org friendly, effective-dated).",
     fields: {
       id: {
         label: "Member ID"

@@ -578,8 +578,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit: {
-    label: "部門",
-    pluralLabel: "部門",
+    label: "ビジネスユニット",
+    pluralLabel: "ビジネスユニット",
     description: "階層的な組織ツリーノード（部門 / 事業部 / ビジネスユニット / オフィス）。",
     fields: {
       name: {
@@ -602,7 +602,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         }
       },
       parent_business_unit_id: {
-        label: "親部門",
+        label: "親ビジネスユニット",
         help: "組織ツリーの自己参照。null = テナントのルート。"
       },
       organization_id: {
@@ -610,8 +610,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         help: "テナントスコープ。"
       },
       manager_user_id: {
-        label: "部門長",
-        help: "この組織単位の責任者（部門長 / リード）。"
+        label: "ビジネスユニット長",
+        help: "この組織単位の責任者（ビジネスユニット長 / リード）。"
       },
       active: {
         label: "有効",
@@ -619,18 +619,18 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       effective_from: {
         label: "有効開始日",
-        help: "この部門が設立された日時（HRIS 同期）。"
+        help: "このビジネスユニットが設立された日時（HRIS 同期）。"
       },
       effective_to: {
         label: "有効終了日",
-        help: "この部門が廃止された日時（HRIS 同期）。"
+        help: "このビジネスユニットが廃止された日時（HRIS 同期）。"
       },
       external_ref: {
         label: "外部参照",
         help: "上流 HRIS（Workday / SAP HR / 北森）の ID。"
       },
       id: {
-        label: "部門 ID"
+        label: "ビジネスユニット ID"
       },
       created_at: {
         label: "作成日時"
@@ -655,21 +655,21 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit_member: {
-    label: "部門メンバー",
-    pluralLabel: "部門メンバー",
-    description: "部門へのユーザー割り当て（マトリクス組織対応、有効期限付き）。",
+    label: "ビジネスユニットメンバー",
+    pluralLabel: "ビジネスユニットメンバー",
+    description: "ビジネスユニットへのユーザー割り当て（マトリクス組織対応、有効期限付き）。",
     fields: {
       id: {
         label: "メンバー ID"
       },
       business_unit_id: {
-        label: "部門"
+        label: "ビジネスユニット"
       },
       user_id: {
         label: "ユーザー"
       },
       role_in_business_unit: {
-        label: "部門内ロール",
+        label: "ビジネスユニット内ロール",
         help: "`lead` は日常の責任者、`deputy` は承認ルーティングでリードの代理を務める場合があります。",
         options: {
           member: "メンバー",
@@ -679,7 +679,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       is_primary: {
         label: "主要割り当て",
-        help: "ユーザーが複数の部門に所属する場合、レポーティングの正規部門をマークします。"
+        help: "ユーザーが複数のビジネスユニットに所属する場合、レポーティングの正規ビジネスユニットをマークします。"
       },
       effective_from: {
         label: "有効開始日"

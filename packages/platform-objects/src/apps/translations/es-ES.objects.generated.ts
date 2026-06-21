@@ -578,8 +578,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit: {
-    label: "Departamento",
-    pluralLabel: "Departamentos",
+    label: "Unidad de negocio",
+    pluralLabel: "Unidades de negocio",
     description: "Nodo jerárquico de la estructura organizativa (departamento / división / unidad de negocio / oficina).",
     fields: {
       name: {
@@ -602,7 +602,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         }
       },
       parent_business_unit_id: {
-        label: "Departamento principal",
+        label: "Unidad de negocio principal",
         help: "Autorreferencia para el árbol organizativo. Null = raíz del tenant."
       },
       organization_id: {
@@ -655,15 +655,15 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
     }
   },
   sys_business_unit_member: {
-    label: "Miembro del departamento",
-    pluralLabel: "Miembros del departamento",
+    label: "Miembro de unidad de negocio",
+    pluralLabel: "Miembros de unidad de negocio",
     description: "Asignación de usuario a un departamento (compatible con organizaciones matriciales y con vigencia temporal).",
     fields: {
       id: {
         label: "ID de miembro"
       },
       business_unit_id: {
-        label: "Departamento"
+        label: "Unidad de negocio"
       },
       user_id: {
         label: "Usuario"

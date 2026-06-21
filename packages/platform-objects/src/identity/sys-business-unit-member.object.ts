@@ -3,10 +3,10 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_business_unit_member — User ↔ Department Assignment
+ * sys_business_unit_member — User ↔ Business Unit Assignment
  *
  * Many-to-many between `sys_user` and `sys_business_unit`. A user can belong
- * to multiple departments (matrix orgs) but exactly one is marked
+ * to multiple business units (matrix orgs) but exactly one is marked
  * `is_primary` to drive the default reporting view.
  *
  * Effective-dated so that historical reports & audits can reconstruct

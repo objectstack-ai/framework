@@ -45,7 +45,7 @@ export const esES: TranslationData = {
         nav_system_overview: { label: 'Resumen del Sistema' },
 
         nav_users: { label: 'Usuarios' },
-        nav_departments: { label: 'Departamentos' },
+        nav_business_units: { label: 'Unidades de negocio' },
         nav_teams: { label: 'Equipos' },
         nav_organizations: { label: 'Organizaciones' },
         nav_invitations: { label: 'Invitaciones' },
