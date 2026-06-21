@@ -296,6 +296,40 @@ describe('FieldSchema', () => {
       const result = FieldSchema.parse(lookupField);
       expect(result.deleteBehavior).toBe('set_null');
     });
+
+    it('should preserve forward record-picker config (display/columns/filters/depends)', () => {
+      const lookupField: Field = {
+        name: 'account',
+        label: 'Account',
+        type: 'lookup',
+        reference: 'crm_account',
+        displayField: 'name',
+        descriptionField: 'industry',
+        lookupColumns: ['name', { field: 'annual_revenue', label: 'Revenue', type: 'currency' }],
+        lookupPageSize: 20,
+        lookupFilters: [{ field: 'status', operator: 'eq', value: 'active' }],
+        dependsOn: ['region', { field: 'country', param: 'country_code' }],
+      };
+
+      const result = FieldSchema.parse(lookupField);
+      expect(result.displayField).toBe('name');
+      expect(result.descriptionField).toBe('industry');
+      expect(result.lookupColumns).toHaveLength(2);
+      expect(result.lookupPageSize).toBe(20);
+      expect(result.lookupFilters?.[0]).toEqual({ field: 'status', operator: 'eq', value: 'active' });
+      expect(result.dependsOn).toHaveLength(2);
+    });
+
+    it('builds a lookup with picker config via Field.lookup', () => {
+      const f = Field.lookup('crm_account', {
+        label: 'Account',
+        lookupColumns: ['name', 'industry'],
+        lookupFilters: [{ field: 'status', operator: 'eq', value: 'active' }],
+      });
+      const result = FieldSchema.parse({ name: 'account', ...f });
+      expect(result.lookupColumns).toEqual(['name', 'industry']);
+      expect(result.lookupFilters?.[0].operator).toBe('eq');
+    });
   });
 
   describe('Calculated Fields', () => {
