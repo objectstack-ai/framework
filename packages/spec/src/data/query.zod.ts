@@ -586,9 +586,11 @@ export type QueryInput = z.input<typeof BaseQuerySchema> & {
 export const QuerySchema: z.ZodType<QueryAST> = lazySchema(() => BaseQuerySchema.extend({
   expand: z.lazy(() => z.record(z.string(), QuerySchema)).optional().describe(
     'Recursive relation loading map. Keys are lookup/master_detail field names; '
-    + 'values are nested QueryAST objects that control select, filter, sort, and '
-    + 'further expansion on the related object. The engine resolves expand via '
-    + 'batch $in queries (driver-agnostic) with a default max depth of 3.'
+    + 'values are nested QueryAST objects that control select (`fields`) and filter '
+    + '(`where`, AND-merged with the batch $in), plus further expansion on the related '
+    + 'object. The engine resolves expand via batch $in queries (driver-agnostic) with a '
+    + 'default max depth of 3; per-parent `limit`/`offset`/`orderBy` are NOT applied on '
+    + 'this path.'
   ),
 }));
 

@@ -442,22 +442,37 @@ The engine resolves `expand` via batch `$in` queries (driver-agnostic) with a de
 
 ### Filtered Expand
 
-You can filter, sort, and limit expanded relations:
+Expansion follows **`lookup`** and **`master_detail`** fields — i.e. the foreign key
+lives on the object you are querying. The nested `QueryAST` can **filter** (`where`) and
+**select** (`fields`) the related records:
 
 ```typescript
 const query: QueryAST = {
-  object: 'account',
-  fields: ['company_name'],
+  object: 'task',
+  fields: ['title', 'assignee'],
   expand: {
-    opportunities: {
-      object: 'opportunity',
-      where: { stage: { $ne: 'Closed Lost' } },
-      orderBy: [{ field: 'amount', order: 'desc' }],
-      limit: 5,
+    // assignee is a lookup → user; only resolve assignees that are still active.
+    assignee: {
+      object: 'user',
+      where: { active: { $eq: true } },
+      fields: ['name', 'email'],
     },
   },
 };
 ```
+
+The nested `where` is **AND-merged** with the batch `$in` the engine uses to load related
+records, so a related record is attached only when it also matches your filter. A foreign
+key whose target is filtered out is left as the raw id (unresolved) rather than dropped.
+
+<Callout type="warn">
+**Per-parent shaping (`limit` / `offset` / `orderBy`) is not honored on the expand path.**
+The engine batch-loads every parent's related records in a single `$in` query and then
+re-attaches them to each parent by foreign key, so it cannot express a per-parent page
+size, and the injected order follows each parent's own foreign-key value rather than the
+nested `orderBy`. To paginate or order related records, query the related object directly
+with its own `where` + `orderBy` + `limit`.
+</Callout>
 
 ---
 
