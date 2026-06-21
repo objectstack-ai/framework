@@ -963,20 +963,32 @@ behind it; **drill-to-record** opens one record.
   *exact* records (no label→id guessing). Automatic — no per-widget config.
 * **The drilled record list drills to record.** Any row in that drawer opens the
   single record's detail, completing the **group → records → record** chain.
+* **Escape hatch — "Open in list →".** The drawer header offers a link to the
+  object's *full* list page (sort / bulk-select / export / shareable URL),
+  scoped by the same drill filter. The in-place drawer is the default (peek
+  without losing the dashboard); the escape hatch escalates when the user wants
+  the full surface — the Looker / Power BI "see records → open page" model.
 * **`metric` / `chart` widgets are not click-drillable** in the dataset form
   (they render the aggregate only; `compareTo` still applies). Surface the detail
   through a `table` / `pivot` widget instead.
 
+**Reports drill the same way.** A `summary` / `matrix` report (`drilldown`
+defaults `true`) opens the identical in-place drawer on row/cell click — peek the
+records, click a row to open one, or "Open in list →" for the full list page.
+Dashboard and report drill are unified.
+
 > **Renderer note (object/record-backed surfaces).** The ObjectUI renderer
 > exposes a richer `options.drillDown` block for non-dataset list/table widgets
 > and the drill drawers — `enabled`, `mode` (`'filter'` = aggregate → filtered
-> list; `'record'` = row → that record), `target` (`'drawer'` | `'dialog'`),
-> `columns` (whitelist), and `title` (`${event.*}` interpolation). At the
-> renderer level drill-through covers the `bar` / `line` / `area` / `pie` /
+> list; `'record'` = row → that record), `target` (`'drawer'` | `'dialog'` |
+> `'navigate'`, where `'navigate'` skips the drawer and opens the list page
+> directly), `columns` (whitelist), and `title` (`${event.*}` interpolation). At
+> the renderer level drill-through covers the `bar` / `line` / `area` / `pie` /
 > `donut` / `funnel` / `scatter` / `treemap` / `sankey` families and pivot
 > cell/row/column/total clicks (`radar` is excluded — no single clickable
-> category point). **Dataset-bound dashboards use the semantic-layer drill above
-> and ignore this block.**
+> category point). The "Open in list →" escape hatch appears whenever the host
+> app wired drill navigation (the console does). **Dataset-bound dashboards use
+> the semantic-layer drill above and ignore the rest of this block.**
 
 | `dateGranularity` | Rendered bucket label |
 |:--|:--|
