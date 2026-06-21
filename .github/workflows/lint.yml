@@ -50,6 +50,14 @@ jobs:
       - name: ESLint
         run: pnpm lint
 
+      # Docs/skills authoring guard (#2035 / ADR-0059): TS code blocks in
+      # Markdown/MDX are not type-checked or ESLinted, so skills/ and
+      # content/docs/ can drift back to teaching the bare `: Page = {}` literal
+      # while the examples (which ARE linted) stay clean. This fails on any bare
+      # metadata literal for the 16 factory domains in a doc code block.
+      - name: Doc/skill authoring guard
+        run: pnpm check:doc-authoring
+
   typecheck:
     name: TypeScript Type Check
     runs-on: ubuntu-latest

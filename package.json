@@ -24,7 +24,8 @@
     "objectui:bump": "bash scripts/bump-objectui.sh",
     "objectui:refresh": "bash scripts/bump-objectui.sh && bash scripts/build-console.sh",
     "objectui:clean": "rm -rf packages/console/dist .cache/objectui-*",
-    "lint": "eslint . --no-inline-config"
+    "lint": "eslint . --no-inline-config",
+    "check:doc-authoring": "node scripts/check-doc-authoring.mjs"
   },
   "keywords": [
     "objectstack",
