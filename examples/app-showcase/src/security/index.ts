@@ -80,6 +80,22 @@ export const ContributorPermissionSet = {
       enabled: true,
       priority: 10,
     },
+    // [ADR-0058 D4] RLS `check` — write-side post-image validation (NOT a read
+    // filter). On UPDATE the new row must still be owned by the caller, so a
+    // contributor cannot reassign an invoice they own to someone else. `check`
+    // is compiled by the canonical CEL compiler and matched against the post-
+    // image (pre-image ∪ change set); a violating write is denied (fail-closed).
+    {
+      name: 'invoice_owner_immutable',
+      label: 'Invoice Owner Cannot Be Reassigned',
+      description: 'A contributor cannot change an invoice they own to a different owner (write-time CHECK, ADR-0058 D4).',
+      object: 'showcase_invoice',
+      operation: 'update' as const,
+      check: "owner == current_user.email",
+      roles: ['contributor'],
+      enabled: true,
+      priority: 10,
+    },
   ],
 };
 
@@ -124,6 +140,25 @@ export const RedProjectSharingRule = {
   active: true,
 };
 
+/**
+ * [ADR-0058 D3 / closes #1887] criteria-based with a COMPOUND CEL condition.
+ * Before #1887 a multi-clause `&&` condition was silently skipped (the sharing
+ * rule was decorative metadata); now it compiles to a compound `criteria_json`
+ * and enforces. Shares only projects that are BOTH at-risk (red) AND high-budget
+ * with managers — the AND matters: a red but low-budget project is NOT shared.
+ */
+export const HighValueRedProjectRule = {
+  type: 'criteria' as const,
+  name: 'share_high_value_red_projects_with_managers',
+  label: 'High-Value Red Projects → Managers',
+  description: 'Share at-risk (red health) projects over the budget threshold with managers (compound condition, ADR-0058 D3).',
+  object: 'showcase_project',
+  condition: "record.health == 'red' && record.budget > 100000",
+  accessLevel: 'read' as const,
+  sharedWith: { type: 'role' as const, value: 'manager' },
+  active: true,
+};
+
 /** owner-based: a contributor's tasks are shared read-only with managers. */
 export const ContributorTaskSharingRule = {
   type: 'owner' as const,
@@ -156,5 +191,5 @@ export const ShowcasePolicy = {
 
 export const allRoles = [ContributorRole, ManagerRole, ExecRole];
 export const allPermissionSets = [ContributorPermissionSet, MemberDefaultProfile];
-export const allSharingRules = [RedProjectSharingRule, ContributorTaskSharingRule];
+export const allSharingRules = [RedProjectSharingRule, HighValueRedProjectRule, ContributorTaskSharingRule];
 export const allPolicies = [ShowcasePolicy];
