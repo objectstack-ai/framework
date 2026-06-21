@@ -99,6 +99,29 @@ describe('AnalyticsService.queryDataset', () => {
     expect(result.rows[0]).toEqual({ region: 'NA', revenue: 100 });
   });
 
+  it('enriches a measure column with its declared currency (ISO 4217)', async () => {
+    const priced = DatasetSchema.parse({
+      name: 'sales_priced', label: 'Sales', object: 'opportunity', include: [],
+      dimensions: [{ name: 'stage', field: 'stage', type: 'string' }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue', format: '0,0', currency: 'USD', certified: true }],
+    });
+    const svc = new AnalyticsService({
+      queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+      executeRawSql: async () => [{ stage: 'Won', revenue: 1000 }],
+      getReadScope: (_o, ctx?: ExecutionContext) => (ctx?.tenantId ? { organization_id: ctx.tenantId } : undefined),
+    });
+    const result = await svc.queryDataset(
+      priced,
+      { dimensions: ['stage'], measures: ['revenue'] },
+      { tenantId: 'org_A' } as ExecutionContext,
+    ) as any;
+    // The measure's declared currency rides onto the result field so the client
+    // renders a locale-correct symbol via Intl (not a "$" baked into `format`).
+    const revenueField = (result.fields ?? []).find((f: any) => f.name === 'revenue');
+    expect(revenueField?.currency).toBe('USD');
+    expect(revenueField?.format).toBe('0,0');
+  });
+
   it('enriches dimension columns with their dataset display label', async () => {
     const labeled = DatasetSchema.parse({
       name: 'sales2', label: 'Sales', object: 'opportunity', include: ['account'],

@@ -524,6 +524,11 @@ export class AnalyticsService implements IAnalyticsService {
         if (!m) continue;
         if (f.label == null && typeof m.label === 'string') f.label = m.label;
         if (f.format == null && m.format) f.format = m.format;
+        // Carry the measure's declared currency so the renderer can render a
+        // locale-correct symbol via Intl (never a "$" baked into `format`).
+        const fc = f as { currency?: string };
+        const mc = m as { currency?: string };
+        if (fc.currency == null && mc.currency) fc.currency = mc.currency;
       }
     }
 
