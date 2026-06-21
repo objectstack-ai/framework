@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type * as UI from '@objectstack/spec/ui';
+import { defineReport } from '@objectstack/spec/ui';
 
 /**
  * Example report — total opportunity amount grouped by ACCOUNT.
@@ -13,7 +13,7 @@ import type * as UI from '@objectstack/spec/ui';
  * `total_amount` measure (USD), this exercises both render paths — Intl
  * currency formatting AND raw-value lookup drill — end to end.
  */
-export const SalesByAccountReport: UI.ReportInput = {
+export const SalesByAccountReport = defineReport({
   name: 'crm_sales_by_account',
   label: 'Sales by Account',
   description: 'Total opportunity amount grouped by account (lookup-dimension drill).',
@@ -21,4 +21,4 @@ export const SalesByAccountReport: UI.ReportInput = {
   dataset: 'opportunity_metrics',
   rows: ['account'],
   values: ['total_amount'],
-};
+});
