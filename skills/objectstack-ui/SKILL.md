@@ -452,13 +452,13 @@ filter; keep `filter` on the widget when binding a dataset.
 ### Report Configuration
 
 ```typescript
-import type { ReportInput } from '@objectstack/spec/ui';
+import { defineReport } from '@objectstack/spec/ui';
 
 // ADR-0021: a report binds a `dataset` and selects `rows` (dimensions) +
 // `values` (measures) BY NAME. The `opportunity_metrics` dataset defines the
 // object, the `amount_sum` measure, and the `forecast_category` + `close_date`
 // (dateGranularity: 'quarter') dimensions — see Guides → Analytics Datasets.
-export const PipelineCoverageReport: ReportInput = {
+export const PipelineCoverageReport = defineReport({
   name: 'pipeline_coverage_by_quarter',
   label: 'Pipeline Coverage (Quarter)',
   type: 'matrix',
@@ -469,7 +469,7 @@ export const PipelineCoverageReport: ReportInput = {
   runtimeFilter: { stage: { $ne: 'closed_lost' } },
   // drilldown defaults true — click a cell to open the underlying records; set false to disable.
   chart: { type: 'bar', xAxis: 'forecast_category', yAxis: 'amount_sum' },
-};
+});
 ```
 
 > **`dateGranularity`** lives on the dataset's date **dimension**
@@ -514,7 +514,9 @@ duplicate asset.
 of its own — never restate what the view already defines.
 
 ```typescript
-export const TaskWorkbenchPage: Page = {
+import { definePage } from '@objectstack/spec/ui';
+
+export const TaskWorkbenchPage = definePage({
   name: 'task_workbench',
   type: 'list',
   object: 'task',
@@ -525,7 +527,7 @@ export const TaskWorkbenchPage: Page = {
     appearance: { allowedVisualizations: ['grid'] },  // locked
     userActions: { sort: true, search: true, filter: false },
   },
-};
+});
 ```
 
 ---
@@ -570,10 +572,10 @@ which contain components.
 ### Example — Record Detail Page
 
 ```typescript
-import { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 import { ConvertLeadAction } from '../actions/lead.actions';
 
-export const LeadDetailPage: Page = {
+export const LeadDetailPage = definePage({
   name: 'lead_detail_page',
   label: 'Lead Detail',
   type: 'record_detail',
@@ -613,7 +615,7 @@ export const LeadDetailPage: Page = {
     },
     // left_sidebar / main / right_sidebar regions follow…
   ],
-};
+});
 ```
 
 > **Variable substitution** — `{first_name}`, `{current_user.first_name}`,
@@ -1026,9 +1028,9 @@ widgets can compose without hand-rolling each query. Register under
 `defineStack({ analyticsCubes: [...] })`.
 
 ```typescript
-import type { Cube } from '@objectstack/spec/data';
+import { defineCube } from '@objectstack/spec/data';
 
-export const opportunityCube: Cube = {
+export const opportunityCube = defineCube({
   name: 'opportunity',
   title: 'Opportunities',
   sql: 'opportunity',            // underlying object name (snake_case)
@@ -1044,7 +1046,7 @@ export const opportunityCube: Cube = {
     account_industry: { name: 'account_industry', label: 'Industry', type: 'string', sql: 'account.industry' },
     owner:            { name: 'owner',            label: 'Owner',    type: 'string', sql: 'owner' },
   },
-};
+});
 ```
 
 ### Cube Best Practices
@@ -1102,7 +1104,9 @@ the current record. `record.<field>` resolves identically on every surface
 wrap a predicate in `${…}` or `{…}` braces (see `objectstack-formula`).
 
 ```typescript
-export const ReassignLeadAction: Action = {
+import { defineAction } from '@objectstack/spec/ui';
+
+export const ReassignLeadAction = defineAction({
   name: 'reassign_lead',
   label: 'Reassign Lead',
   objectName: 'lead',
@@ -1115,7 +1119,7 @@ export const ReassignLeadAction: Action = {
   undoable: true,                 // success toast offers Undo; Ctrl+Z works too
   successMessage: 'Lead reassigned.',
   errorMessage: "Couldn't reassign this lead — try again.",
-};
+});
 ```
 
 ### Examples
@@ -1123,10 +1127,10 @@ export const ReassignLeadAction: Action = {
 **Flow-typed action** (delegates to a screen flow):
 
 ```typescript
-import type { Action } from '@objectstack/spec/ui';
+import { defineAction } from '@objectstack/spec/ui';
 import { P } from '@objectstack/spec';
 
-export const ConvertLeadAction: Action = {
+export const ConvertLeadAction = defineAction({
   name: 'convert_lead',
   label: 'Convert Lead',
   objectName: 'lead',
@@ -1138,13 +1142,15 @@ export const ConvertLeadAction: Action = {
   confirmText: 'Are you sure you want to convert this lead?',
   successMessage: 'Lead converted successfully!',
   refreshAfter: true,
-};
+});
 ```
 
 **Modal-typed action** (collect params, then execute server body):
 
 ```typescript
-export const AddToCampaignAction: Action = {
+import { defineAction } from '@objectstack/spec/ui';
+
+export const AddToCampaignAction = defineAction({
   name: 'create_campaign',
   label: 'Add to Campaign',
   objectName: 'lead',
@@ -1173,7 +1179,7 @@ export const AddToCampaignAction: Action = {
   },
   successMessage: 'Leads added to campaign!',
   refreshAfter: true,
-};
+});
 ```
 
 ### Opening in a New Tab (`opensInNewTab` / `newTabUrl`)
@@ -1188,7 +1194,9 @@ alongside `opensInNewTab: true`, and the target endpoint must enforce its own
 auth (the new tab carries no in-app session context).
 
 ```typescript
-export const OpenInvoicePdfAction: Action = {
+import { defineAction } from '@objectstack/spec/ui';
+
+export const OpenInvoicePdfAction = defineAction({
   name: 'open_invoice_pdf',
   label: 'Open PDF',
   objectName: 'invoice',
@@ -1196,7 +1204,7 @@ export const OpenInvoicePdfAction: Action = {
   opensInNewTab: true,
   newTabUrl: '/api/v1/invoice/{recordId}/pdf',   // zero-roundtrip; endpoint self-auths
   locations: ['record_header'],
-};
+});
 ```
 
 ### Action Parameter Patterns

@@ -144,12 +144,12 @@ That's the job of the other layers.
 
 ```typescript
 // packages/crm/src/permissions/sales_rep.permission.ts
-import type { PermissionSet } from '@objectstack/spec/security';
+import { definePermissionSet } from '@objectstack/spec/security';
 
 // A permission set is keyed by object name. Each object grants the four
 // CRUD verbs (allowCreate / allowRead / allowEdit / allowDelete), and
 // optional field-level security keyed by "object.field".
-export const SalesRep: PermissionSet = {
+export const SalesRep = definePermissionSet({
   name: 'sales_rep',
   isProfile: true,
   objects: {
@@ -163,7 +163,7 @@ export const SalesRep: PermissionSet = {
   fields: {
     'customer.annual_revenue': { readable: true, editable: false }, // Read-only
   },
-};
+});
 ```
 
 ### Example: Workflow Automation

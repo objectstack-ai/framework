@@ -62,9 +62,9 @@ A profile is modelled as a `PermissionSet` with `isProfile: true` (see
 `PermissionSetSchema`.
 
 ```typescript
-import type { PermissionSet } from '@objectstack/spec/security';
+import { definePermissionSet } from '@objectstack/spec/security';
 
-export const SalesRepProfile: PermissionSet = {
+export const SalesRepProfile = definePermissionSet({
   name: 'sales_rep',
   label: 'Sales Representative',
   isProfile: true,
@@ -101,7 +101,7 @@ export const SalesRepProfile: PermissionSet = {
     app_admin: 'hidden',    // Not visible
     app_sales: 'visible',   // Available
   },
-};
+});
 ```
 
 ### Object Permission Levels
@@ -153,7 +153,9 @@ RLS (no compiler change; ADR-0055). Sharing rules still widen on top.
 #### Sales Representative
 
 ```typescript
-export const SalesRepProfile: PermissionSet = {
+import { definePermissionSet } from '@objectstack/spec/security';
+
+export const SalesRepProfile = definePermissionSet({
   name: 'sales_rep',
   isProfile: true,
   objects: {
@@ -167,13 +169,15 @@ export const SalesRepProfile: PermissionSet = {
   fields: {
     'account.annual_revenue': { readable: true, editable: false }, // Read-only
   },
-};
+});
 ```
 
 #### Sales Manager
 
 ```typescript
-export const SalesManagerProfile: PermissionSet = {
+import { definePermissionSet } from '@objectstack/spec/security';
+
+export const SalesManagerProfile = definePermissionSet({
   name: 'sales_manager',
   isProfile: true,
   objects: {
@@ -187,13 +191,15 @@ export const SalesManagerProfile: PermissionSet = {
     },
     // ... full access to sales objects
   },
-};
+});
 ```
 
 #### Service Agent
 
 ```typescript
-export const ServiceAgentProfile: PermissionSet = {
+import { definePermissionSet } from '@objectstack/spec/security';
+
+export const ServiceAgentProfile = definePermissionSet({
   name: 'service_agent',
   isProfile: true,
   objects: {
@@ -206,7 +212,7 @@ export const ServiceAgentProfile: PermissionSet = {
     'case.is_sla_violated': { readable: true, editable: false },
     'case.resolution_time_hours': { readable: true, editable: false },
   },
-};
+});
 ```
 
 ---
@@ -216,9 +222,9 @@ export const ServiceAgentProfile: PermissionSet = {
 Permission sets extend profile permissions without changing the profile.
 
 ```typescript
-import type { PermissionSet } from '@objectstack/spec/security';
+import { definePermissionSet } from '@objectstack/spec/security';
 
-export const AdvancedReportingPermissionSet: PermissionSet = {
+export const AdvancedReportingPermissionSet = definePermissionSet({
   name: 'advanced_reporting',
   label: 'Advanced Reporting',
 
@@ -238,15 +244,15 @@ export const AdvancedReportingPermissionSet: PermissionSet = {
 
   // System permissions are a flat array of capability strings
   systemPermissions: ['run_reports', 'export_reports', 'create_dashboards'],
-};
+});
 
-export const BulkDataPermissionSet: PermissionSet = {
+export const BulkDataPermissionSet = definePermissionSet({
   name: 'bulk_data_access',
   label: 'Bulk Data Access',
 
   objects: {},
   systemPermissions: ['bulk_api', 'view_all_data'],
-};
+});
 ```
 
 ### Built-in Permission Sets
@@ -418,9 +424,9 @@ export const OrganizationDefaults = {
 Share records based on field criteria:
 
 ```typescript
-import type { SharingRule } from '@objectstack/spec/security';
+import { defineSharingRule } from '@objectstack/spec/security';
 
-export const AccountTeamSharingRule: SharingRule = {
+export const AccountTeamSharingRule = defineSharingRule({
   name: 'account_team_sharing',
   label: 'Share Active Customers with Sales Team',
   type: 'criteria',
@@ -437,7 +443,7 @@ export const AccountTeamSharingRule: SharingRule = {
 
   // Access level granted: read | edit | full
   accessLevel: 'edit',
-};
+});
 ```
 
 #### Recipient types
@@ -466,7 +472,9 @@ evaluated (`afterInsert` / `afterUpdate`); `role_and_subordinates` walks the
 Share based on record owner characteristics:
 
 ```typescript
-export const OpportunityOwnerSharingRule: SharingRule = {
+import { defineSharingRule } from '@objectstack/spec/security';
+
+export const OpportunityOwnerSharingRule = defineSharingRule({
   name: 'opportunity_owner_sharing',
   label: 'Share Sales Rep Opportunities with Managers',
   type: 'owner',
@@ -485,7 +493,7 @@ export const OpportunityOwnerSharingRule: SharingRule = {
   },
 
   accessLevel: 'read',
-};
+});
 ```
 
 ### Analytics and Dataset Read Scope
