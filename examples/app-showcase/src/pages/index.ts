@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 export { ProjectWorkspacePage } from './project-workspace.page.js';
 export { ProjectDetailPage } from './project-detail.page.js';
@@ -30,7 +30,7 @@ export {
  * region (ai:input, oversized element:image, page:card body) so the first
  * impression is polished, not a debug canvas.
  */
-export const ComponentGalleryPage: Page = {
+export const ComponentGalleryPage = definePage({
   name: 'showcase_component_gallery',
   label: 'Component Gallery',
   type: 'home',
@@ -85,4 +85,4 @@ export const ComponentGalleryPage: Page = {
       ],
     },
   ],
-};
+});

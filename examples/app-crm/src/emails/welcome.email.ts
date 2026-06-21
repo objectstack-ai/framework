@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { EmailTemplateDefinitionInput } from '@objectstack/spec/system';
+import { defineEmailTemplateDefinition } from '@objectstack/spec/system';
 
 /**
  * Welcome email sent to a Contact after it's added to the CRM.
  * Demonstrates marketing-category templates with a clear CTA.
  */
-export const WelcomeEmail: EmailTemplateDefinitionInput = {
+export const WelcomeEmail = defineEmailTemplateDefinition({
   name: 'crm.welcome',
   label: 'Welcome — New Contact',
   category: 'marketing',
@@ -36,4 +36,4 @@ Open your portal: {{portal_url}}`,
   replyTo: 'support@acme.example',
   active: true,
   description: 'Marketing welcome email sent on contact creation.',
-};
+});

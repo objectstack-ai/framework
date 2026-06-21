@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Mapping } from '@objectstack/spec/data';
+import { defineMapping } from '@objectstack/spec/data';
 
 /**
  * CSV import mapping for bulk lead upload.
  * Maps common CRM export column names to crm_lead fields.
  */
-export const LeadCsvImportMapping: Mapping = {
+export const LeadCsvImportMapping = defineMapping({
   name: 'csv_import_leads',
   label: 'CSV Import: Leads',
   sourceFormat: 'csv',
@@ -51,12 +51,12 @@ export const LeadCsvImportMapping: Mapping = {
   ],
   errorPolicy: 'skip',
   batchSize: 500,
-};
+});
 
 /**
  * JSON import mapping for contact sync from external systems (HubSpot, etc.).
  */
-export const ContactJsonSyncMapping: Mapping = {
+export const ContactJsonSyncMapping = defineMapping({
   name: 'json_sync_contacts',
   label: 'JSON Sync: Contacts from HubSpot',
   sourceFormat: 'json',
@@ -72,4 +72,4 @@ export const ContactJsonSyncMapping: Mapping = {
   ],
   errorPolicy: 'skip',
   batchSize: 250,
-};
+});

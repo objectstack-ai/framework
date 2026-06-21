@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Action } from '@objectstack/spec/ui';
+import { defineAction } from '@objectstack/spec/ui';
 
 const task = 'showcase_task';
 
@@ -11,7 +11,7 @@ const task = 'showcase_task';
  */
 
 /** script — inline handler, shown on each row and the record header. */
-export const MarkDoneAction: Action = {
+export const MarkDoneAction = defineAction({
   name: 'showcase_mark_done',
   label: 'Mark Done',
   icon: 'check',
@@ -22,10 +22,10 @@ export const MarkDoneAction: Action = {
   // explicitly-named actions, mirroring the platform's own sys-user pages.
   locations: ['list_item', 'record_header', 'record_section'],
   refreshAfter: true,
-};
+});
 
 /** url — navigate out, from the row overflow menu. */
-export const OpenDocsAction: Action = {
+export const OpenDocsAction = defineAction({
   name: 'showcase_open_docs',
   label: 'Open Docs',
   icon: 'book-open',
@@ -34,7 +34,7 @@ export const OpenDocsAction: Action = {
   target: 'https://docs.objectstack.ai',
   locations: ['record_more'],
   refreshAfter: false,
-};
+});
 
 /**
  * flow — launch the Reassign screen-flow wizard. Row-level (`list_item`) so the
@@ -42,7 +42,7 @@ export const OpenDocsAction: Action = {
  * `screen` node and writes it back with `update_record`. The objectui
  * FlowRunner renders the screen and resumes the run.
  */
-export const BulkReassignAction: Action = {
+export const BulkReassignAction = defineAction({
   name: 'showcase_bulk_reassign',
   label: 'Reassign…',
   icon: 'users',
@@ -51,10 +51,10 @@ export const BulkReassignAction: Action = {
   target: 'showcase_reassign_wizard',
   locations: ['list_item', 'list_toolbar'],
   refreshAfter: true,
-};
+});
 
 /** modal — open a dialog/page. */
-export const QuickViewAction: Action = {
+export const QuickViewAction = defineAction({
   name: 'showcase_quick_view',
   label: 'Quick View',
   icon: 'eye',
@@ -63,10 +63,10 @@ export const QuickViewAction: Action = {
   target: 'showcase_component_gallery',
   locations: ['list_item'],
   refreshAfter: false,
-};
+});
 
 /** api — call a custom endpoint. */
-export const RecalcEstimateAction: Action = {
+export const RecalcEstimateAction = defineAction({
   name: 'showcase_recalc_estimate',
   label: 'Recalculate Estimate',
   icon: 'calculator',
@@ -75,10 +75,10 @@ export const RecalcEstimateAction: Action = {
   target: '/api/v1/showcase/recalc',
   locations: ['record_more', 'record_section'],
   refreshAfter: true,
-};
+});
 
 /** form — open a parameter form dialog. */
-export const LogTimeAction: Action = {
+export const LogTimeAction = defineAction({
   name: 'showcase_log_time',
   label: 'Log Time',
   icon: 'clock',
@@ -88,10 +88,10 @@ export const LogTimeAction: Action = {
   // `record_section` so it surfaces in the Task Detail quick-actions bar too.
   locations: ['record_header', 'record_related', 'record_section'],
   refreshAfter: true,
-};
+});
 
 /** global nav command-palette action. */
-export const NewTaskAction: Action = {
+export const NewTaskAction = defineAction({
   name: 'showcase_new_task',
   label: 'New Task',
   icon: 'plus',
@@ -100,7 +100,7 @@ export const NewTaskAction: Action = {
   target: 'showcase_component_gallery',
   locations: ['global_nav'],
   refreshAfter: true,
-};
+});
 
 export const allActions = [
   MarkDoneAction,

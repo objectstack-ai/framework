@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { TranslationBundle } from '@objectstack/spec/system';
+import { defineTranslationBundle } from '@objectstack/spec/system';
 import { en } from './en';
 import { zhCN } from './zh-CN';
 import { jaJP } from './ja-JP';
@@ -17,8 +17,8 @@ import { jaJP } from './ja-JP';
  *
  * Supported locales: en (English), zh-CN (Chinese), ja-JP (Japanese)
  */
-export const TodoTranslations: TranslationBundle = {
+export const TodoTranslations = defineTranslationBundle({
   en,
   'zh-CN': zhCN,
   'ja-JP': jaJP,
-};
+});

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Project detail — a slotted record page that surfaces the project's Tasks as
@@ -14,7 +14,7 @@ import type { Page } from '@objectstack/spec/ui';
  * fills in the header / highlights / details / discussion; the Tasks tab below
  * replaces the synthesized related-list strip.
  */
-export const ProjectDetailPage: Page = {
+export const ProjectDetailPage = definePage({
   name: 'showcase_project_detail',
   label: 'Project',
   type: 'record',
@@ -102,4 +102,4 @@ export const ProjectDetailPage: Page = {
       },
     },
   },
-};
+});

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Settings — every enterprise app needs one. A record page over the singleton
@@ -8,7 +8,7 @@ import type { Page } from '@objectstack/spec/ui';
  * to change it), so this is a working preferences surface grouped into
  * Appearance / Notifications sections.
  */
-export const SettingsPage: Page = {
+export const SettingsPage = definePage({
   name: 'showcase_settings',
   label: 'Setting',
   type: 'record',
@@ -33,4 +33,4 @@ export const SettingsPage: Page = {
       ],
     },
   ],
-};
+});

@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Cube } from '@objectstack/spec/data';
+import { defineCube } from '@objectstack/spec/data';
 
 /**
  * Opportunity Pipeline Cube — revenue metrics broken down by stage,
  * owner, and account for the CRM sales dashboard.
  */
-export const PipelineCube: Cube = {
+export const PipelineCube = defineCube({
   name: 'crm_pipeline',
   title: 'CRM Pipeline',
   description: 'Revenue and deal-count analytics across the sales pipeline.',
@@ -71,12 +71,12 @@ export const PipelineCube: Cube = {
     every: '1 hour',
   },
   public: false,
-};
+});
 
 /**
  * Lead funnel cube — conversion metrics from lead to opportunity.
  */
-export const LeadFunnelCube: Cube = {
+export const LeadFunnelCube = defineCube({
   name: 'crm_lead_funnel',
   title: 'CRM Lead Funnel',
   description: 'Lead volume and conversion rate analytics.',
@@ -119,4 +119,4 @@ export const LeadFunnelCube: Cube = {
     every: '30 minutes',
   },
   public: false,
-};
+});

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Task Triage — interface page demonstrating the **tabs** user-filter element
@@ -13,7 +13,7 @@ import type { Page } from '@objectstack/spec/ui';
  * (`{ name, label, filter }`) — it never switches the view form; that is the
  * separate "Visualizations" axis (locked to grid here).
  */
-export const TaskTriagePage: Page = {
+export const TaskTriagePage = definePage({
   name: 'showcase_task_triage',
   label: 'Task Triage',
   type: 'list',
@@ -56,4 +56,4 @@ export const TaskTriagePage: Page = {
 
     showRecordCount: true,
   },
-};
+});

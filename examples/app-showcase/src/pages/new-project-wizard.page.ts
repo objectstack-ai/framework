@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * New Project Wizard — a multi-step (wizard) form surface. The showcase
@@ -9,7 +9,7 @@ import type { Page } from '@objectstack/spec/ui';
  * `formType: 'wizard'` directly: Basics → Status → Budget, with a step
  * indicator, over showcase_project.
  */
-export const NewProjectWizardPage: Page = {
+export const NewProjectWizardPage = definePage({
   name: 'showcase_new_project_wizard',
   label: 'New Project (Wizard)',
   type: 'app',
@@ -40,4 +40,4 @@ export const NewProjectWizardPage: Page = {
       ],
     },
   ],
-};
+});

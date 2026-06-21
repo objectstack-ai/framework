@@ -1,11 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Theme } from '@objectstack/spec/ui';
+import { defineTheme } from '@objectstack/spec/ui';
 
 /**
  * Default CRM brand theme — light mode with professional blue palette.
  */
-export const CrmLightTheme: Theme = {
+export const CrmLightTheme = defineTheme({
   name: 'crm_light',
   label: 'CRM Light',
   description: 'Default CRM theme — professional blue, light mode.',
@@ -54,12 +54,12 @@ export const CrmLightTheme: Theme = {
   },
   density: 'regular',
   wcagContrast: 'AA',
-};
+});
 
 /**
  * Dark variant — same palette, dark surfaces.
  */
-export const CrmDarkTheme: Theme = {
+export const CrmDarkTheme = defineTheme({
   name: 'crm_dark',
   label: 'CRM Dark',
   description: 'CRM dark mode theme.',
@@ -80,4 +80,4 @@ export const CrmDarkTheme: Theme = {
     info: '#3DD5F3',
   },
   density: 'regular',
-};
+});
