@@ -134,6 +134,9 @@ importers:
       '@objectstack/connector-slack':
         specifier: workspace:*
         version: link:../../packages/connectors/connector-slack
+      '@objectstack/driver-sql':
+        specifier: workspace:*
+        version: link:../../packages/plugins/driver-sql
       '@objectstack/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime

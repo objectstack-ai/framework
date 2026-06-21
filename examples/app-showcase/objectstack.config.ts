@@ -12,6 +12,9 @@ import {
 } from '@objectstack/cloud-connection';
 
 import * as objects from './src/objects/index.js';
+import { ShowcaseExternalDatasource } from './src/datasources/showcase-external.datasource.js';
+import { ExternalCustomer, ExternalOrder } from './src/objects/external/index.js';
+import { setupShowcaseExternalDatasource } from './src/datasources/external-fixture.js';
 import { TaskViews, ProjectViews, InquiryViews } from './src/views/index.js';
 import { ShowcaseApp } from './src/apps/index.js';
 import { ChartGalleryDashboard, OpsDashboard } from './src/dashboards/index.js';
@@ -124,6 +127,13 @@ export default defineStack({
   // database at `<project>/.objectstack/data/standalone.db`, so data and
   // AI-authored metadata survive restarts (a `:memory:` datasource would wipe
   // everything on every restart, which makes local app-building unusable).
+  //
+  // External-datasource federation demo (ADR-0015): a second, read-only SQLite
+  // file declared as a code-defined external datasource. It appears in
+  // Setup → Datasources and its federated objects (below) are queryable via
+  // REST. The fixture file + live driver are wired by `onEnable` (bottom of
+  // this file). `os dev` needs no extra setup.
+  datasources: [ShowcaseExternalDatasource],
 
   // i18n
   translations: [ShowcaseTranslationBundle],
@@ -137,7 +147,7 @@ export default defineStack({
   },
 
   // Data
-  objects: Object.values(objects),
+  objects: [...Object.values(objects), ExternalCustomer, ExternalOrder],
 
   // UI
   apps: [ShowcaseApp],
@@ -172,3 +182,14 @@ export default defineStack({
   // Seed data
   data: ShowcaseSeedData,
 });
+
+/**
+ * Runtime wiring for the external-datasource federation demo (ADR-0015).
+ *
+ * Code (fixture provisioning + live external-driver registration) can't live in
+ * the declarative artifact, so it runs here. The AppPlugin invokes `onEnable` at
+ * boot (Phase 2), before the external-validation gate fires on `kernel:ready`.
+ */
+export const onEnable = async (ctx: unknown): Promise<void> => {
+  await setupShowcaseExternalDatasource(ctx as Parameters<typeof setupShowcaseExternalDatasource>[0]);
+};

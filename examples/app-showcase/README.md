@@ -122,3 +122,31 @@ app-showcase/
 When you add a new variant to the platform, the coverage test will go red and
 point at the gap. Add a field/view/widget that uses it, reference it in
 `COVERAGE`, and the test goes green again.
+
+## External datasource federation (ADR-0015)
+
+The showcase ships a **code-defined external datasource** that demonstrates the
+full federation path with **no external server** — `os dev` just works.
+
+- `src/datasources/showcase-external.datasource.ts` — a second, read-only SQLite
+  database (`schemaMode: 'external'`), separate from the managed standalone DB.
+- `src/objects/external/{customer,order}.object.ts` — federated objects
+  (`showcase_ext_customer`, `showcase_ext_order`) bound to the remote tables
+  `customers` / `orders` via `external.remoteName`. The object names deliberately
+  differ from the table names to show the remote-table remap.
+- `src/datasources/external-fixture.ts` — the stack's `onEnable` hook. It
+  idempotently provisions the fixture SQLite file (tables + seed rows), registers
+  a live read-only driver under the datasource name, and registers the federated
+  objects' read metadata.
+
+**See it:**
+
+- `GET /api/v1/datasources` and `GET /api/v1/meta/datasource` include
+  `showcase_external`.
+- `GET /api/v1/data/showcase_ext_customer` returns the seeded rows — queried live
+  from the external table `customers`.
+- Sign in as a platform admin → **Setup → Integrations → Datasources** to see it
+  listed, and run the runtime **Sync objects** wizard against it.
+
+To showcase a masked **secret** credential field, uncomment the Postgres variant
+in `showcase-external.datasource.ts` and point it at a real warehouse.
