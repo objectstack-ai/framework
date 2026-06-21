@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type * as UI from '@objectstack/spec/ui';
+import { defineAction } from '@objectstack/spec/ui';
 
 /**
  * Row-level action on crm_lead — reassign the lead's owner.
@@ -11,7 +11,7 @@ import type * as UI from '@objectstack/spec/ui';
  * UndoManager — Ctrl+Z works too). Prompts for the new owner via one param
  * (pre-filled with "Triage Queue").
  */
-export const ParkLeadAction: UI.ActionInput = {
+export const ParkLeadAction = defineAction({
   name: 'crm_park_lead',
   label: 'Reassign Lead',
   icon: 'UserPlus',
@@ -32,4 +32,4 @@ export const ParkLeadAction: UI.ActionInput = {
   ],
   undoable: true,
   successMessage: 'Lead reassigned.',
-};
+});

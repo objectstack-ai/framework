@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Visualization gallery — one interface page per record visualization, each
@@ -25,7 +25,7 @@ const base = {
 
 const cols = ['title', 'assignee', 'status', 'priority', 'due_date'];
 
-export const TaskBoardPage: Page = {
+export const TaskBoardPage = definePage({
   ...base,
   name: 'showcase_task_board',
   label: 'Task Board',
@@ -36,9 +36,9 @@ export const TaskBoardPage: Page = {
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskCalendarPage: Page = {
+export const TaskCalendarPage = definePage({
   ...base,
   name: 'showcase_task_calendar',
   label: 'Task Calendar',
@@ -49,9 +49,9 @@ export const TaskCalendarPage: Page = {
     userActions: { sort: false, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskGalleryPage: Page = {
+export const TaskGalleryPage = definePage({
   ...base,
   name: 'showcase_task_gallery',
   label: 'Task Gallery',
@@ -62,9 +62,9 @@ export const TaskGalleryPage: Page = {
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskSchedulePage: Page = {
+export const TaskSchedulePage = definePage({
   ...base,
   name: 'showcase_task_schedule',
   label: 'Team Schedule (Gantt)',
@@ -75,9 +75,9 @@ export const TaskSchedulePage: Page = {
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskTimelinePage: Page = {
+export const TaskTimelinePage = definePage({
   ...base,
   name: 'showcase_task_timeline',
   label: 'Activity Timeline',
@@ -88,9 +88,9 @@ export const TaskTimelinePage: Page = {
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskMapPage: Page = {
+export const TaskMapPage = definePage({
   ...base,
   name: 'showcase_task_map',
   label: 'Work Map',
@@ -101,9 +101,9 @@ export const TaskMapPage: Page = {
     userActions: { sort: false, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});
 
-export const TaskAllViewsPage: Page = {
+export const TaskAllViewsPage = definePage({
   ...base,
   name: 'showcase_task_all_views',
   label: 'All Views',
@@ -119,4 +119,4 @@ export const TaskAllViewsPage: Page = {
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
     showRecordCount: true,
   },
-};
+});

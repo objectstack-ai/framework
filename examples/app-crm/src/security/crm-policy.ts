@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Policy } from '@objectstack/spec/security';
+import { definePolicy } from '@objectstack/spec/security';
 
 /**
  * Default CRM security policy applied to all users.
  * Enforces password complexity, session limits, and audit logging.
  */
-export const CrmDefaultPolicy: Policy = {
+export const CrmDefaultPolicy = definePolicy({
   name: 'crm_default_policy',
   password: {
     minLength: 12,
@@ -28,12 +28,12 @@ export const CrmDefaultPolicy: Policy = {
     captureRead: false,
   },
   isDefault: true,
-};
+});
 
 /**
  * Strict policy for Finance Approvers — requires MFA and shorter sessions.
  */
-export const CrmFinancePolicy: Policy = {
+export const CrmFinancePolicy = definePolicy({
   name: 'crm_finance_policy',
   password: {
     minLength: 16,
@@ -56,4 +56,4 @@ export const CrmFinancePolicy: Policy = {
   },
   isDefault: false,
   assignedProfiles: ['finance_approver'],
-};
+});

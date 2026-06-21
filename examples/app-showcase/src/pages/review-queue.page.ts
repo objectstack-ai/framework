@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Approvals · Review Queue — the human side of the approval / review flows.
@@ -12,7 +12,7 @@ import type { Page } from '@objectstack/spec/ui';
  * buttons (Mark done = approve & complete) and a drawer to inspect each item.
  * Tabs let the reviewer pivot to urgent or blocked work.
  */
-export const ReviewQueuePage: Page = {
+export const ReviewQueuePage = definePage({
   name: 'showcase_review_queue',
   label: 'Approvals',
   type: 'list',
@@ -35,4 +35,4 @@ export const ReviewQueuePage: Page = {
     recordAction: 'drawer',
     showRecordCount: true,
   },
-};
+});

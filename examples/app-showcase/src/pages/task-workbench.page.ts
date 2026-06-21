@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Task Workbench — the canonical **interface page** example (ADR-0047).
@@ -20,7 +20,7 @@ import type { Page } from '@objectstack/spec/ui';
  * Mirrors Airtable's Interfaces right panel: Data (source), User filters
  * (Elements: dropdowns), Appearance (Visualizations), User actions.
  */
-export const TaskWorkbenchPage: Page = {
+export const TaskWorkbenchPage = definePage({
   name: 'showcase_task_workbench',
   label: 'Task Workbench',
   type: 'list',
@@ -67,4 +67,4 @@ export const TaskWorkbenchPage: Page = {
 
     showRecordCount: true,
   },
-};
+});

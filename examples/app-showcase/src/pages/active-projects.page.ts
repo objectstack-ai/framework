@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Active Projects — interface page demonstrating the deeper list config:
@@ -10,7 +10,7 @@ import type { Page } from '@objectstack/spec/ui';
  *   • `addRecord` — a toolbar "add" entry point that opens a FORM.
  *   • dropdown user-filters layered on top of the base filter.
  */
-export const ActiveProjectsPage: Page = {
+export const ActiveProjectsPage = definePage({
   name: 'showcase_active_projects',
   label: 'Active Projects',
   type: 'list',
@@ -36,4 +36,4 @@ export const ActiveProjectsPage: Page = {
     addRecord: { enabled: true, position: 'top', mode: 'form', formView: 'default' },
     showRecordCount: true,
   },
-};
+});

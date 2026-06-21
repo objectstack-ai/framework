@@ -1,9 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Action } from '@objectstack/spec/ui';
+import { defineAction } from '@objectstack/spec/ui';
 
 /** Mark Task as Complete */
-export const CompleteTaskAction: Action = {
+export const CompleteTaskAction = defineAction({
   name: 'complete_task',
   label: 'Mark Complete',
   objectName: 'todo_task',
@@ -17,10 +17,10 @@ export const CompleteTaskAction: Action = {
     exposed: true,
     description: 'Mark a todo task as complete. Use when the user says a task is done or finished.',
   },
-};
+});
 
 /** Mark Task as In Progress */
-export const StartTaskAction: Action = {
+export const StartTaskAction = defineAction({
   name: 'start_task',
   label: 'Start Task',
   objectName: 'todo_task',
@@ -34,10 +34,10 @@ export const StartTaskAction: Action = {
     exposed: true,
     description: 'Mark a todo task as in progress. Use when the user says they are starting or working on a task.',
   },
-};
+});
 
 /** Defer Task */
-export const DeferTaskAction: Action = {
+export const DeferTaskAction = defineAction({
   name: 'defer_task',
   label: 'Defer Task',
   objectName: 'todo_task',
@@ -61,10 +61,10 @@ export const DeferTaskAction: Action = {
   ],
   successMessage: 'Task deferred successfully!',
   refreshAfter: true,
-};
+});
 
 /** Set Reminder */
-export const SetReminderAction: Action = {
+export const SetReminderAction = defineAction({
   name: 'set_reminder',
   label: 'Set Reminder',
   objectName: 'todo_task',
@@ -82,10 +82,10 @@ export const SetReminderAction: Action = {
   ],
   successMessage: 'Reminder set!',
   refreshAfter: true,
-};
+});
 
 /** Clone Task */
-export const CloneTaskAction: Action = {
+export const CloneTaskAction = defineAction({
   name: 'clone_task',
   label: 'Clone Task',
   objectName: 'todo_task',
@@ -99,10 +99,10 @@ export const CloneTaskAction: Action = {
     exposed: true,
     description: 'Duplicate an existing todo task, copying its fields into a new task record.',
   },
-};
+});
 
 /** Mass Complete Tasks */
-export const MassCompleteTasksAction: Action = {
+export const MassCompleteTasksAction = defineAction({
   name: 'mass_complete',
   label: 'Complete Selected',
   objectName: 'todo_task',
@@ -116,10 +116,10 @@ export const MassCompleteTasksAction: Action = {
     exposed: true,
     description: 'Mark all currently selected todo tasks as complete in one bulk operation.',
   },
-};
+});
 
 /** Delete Completed Tasks */
-export const DeleteCompletedAction: Action = {
+export const DeleteCompletedAction = defineAction({
   name: 'delete_completed',
   label: 'Delete Completed',
   objectName: 'todo_task',
@@ -141,10 +141,10 @@ export const DeleteCompletedAction: Action = {
     // confirmText + variant:'danger' default this to requiring HITL approval;
     // it registers only when enableActionApproval is on, then routes to the queue.
   },
-};
+});
 
 /** Export Tasks to CSV */
-export const ExportToCsvAction: Action = {
+export const ExportToCsvAction = defineAction({
   name: 'export_csv',
   label: 'Export to CSV',
   objectName: 'todo_task',
@@ -158,4 +158,4 @@ export const ExportToCsvAction: Action = {
     exposed: true,
     description: 'Export the current list of todo tasks to a downloadable CSV file.',
   },
-};
+});

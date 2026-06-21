@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Report } from '@objectstack/spec/ui';
+import { defineReport } from '@objectstack/spec/ui';
 
 const task = 'showcase_task';
 
@@ -10,7 +10,7 @@ const task = 'showcase_task';
 // not analytics, so it is no longer a report.
 
 /** 2 ── Summary: grouped down by status with a sum. */
-export const HoursByStatusReport: Report = {
+export const HoursByStatusReport = defineReport({
   name: 'showcase_hours_by_status',
   label: 'Hours by Status (Summary)',
   description: 'Estimated hours grouped by task status.',
@@ -20,10 +20,10 @@ export const HoursByStatusReport: Report = {
   dataset: 'showcase_task_metrics',
   rows: ['status'],
   values: ['est_hours'],
-};
+});
 
 /** 3 ── Matrix: status (down) × priority (across) cross-tab. */
-export const StatusPriorityMatrixReport: Report = {
+export const StatusPriorityMatrixReport = defineReport({
   name: 'showcase_status_priority_matrix',
   label: 'Status × Priority (Matrix)',
   description: 'Task counts cross-tabulated by status and priority.',
@@ -34,10 +34,10 @@ export const StatusPriorityMatrixReport: Report = {
   rows: ['status'],
   columns: ['priority'],
   values: ['est_hours'],
-};
+});
 
 /** 4 ── Joined: multiple stacked blocks in one report. */
-export const TaskOverviewReport: Report = {
+export const TaskOverviewReport = defineReport({
   name: 'showcase_task_overview',
   label: 'Task Overview (Joined)',
   description: 'Multiple task sub-reports stacked into one joined view.',
@@ -66,7 +66,7 @@ export const TaskOverviewReport: Report = {
       runtimeFilter: { done: true },
     },
   ],
-};
+});
 
 export const allReports = [
   HoursByStatusReport,

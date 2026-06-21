@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { ReportInput } from '@objectstack/spec/ui';
+import { defineReport } from '@objectstack/spec/ui';
 
 // ADR-0021 Phase 2: each report below carries a `task_metrics` dataset binding
 // (`dataset` + `rows` + `values`, measures referenced BY NAME) alongside the
@@ -10,7 +10,7 @@ import type { ReportInput } from '@objectstack/spec/ui';
 // drilldown (per the migration decision); `overdue_tasks` becomes a ListView.
 
 /** Tasks by Status Report */
-export const TasksByStatusReport: ReportInput = {
+export const TasksByStatusReport = defineReport({
   name: 'tasks_by_status',
   label: 'Tasks by Status',
   description: 'Summary of tasks grouped by status',
@@ -18,10 +18,10 @@ export const TasksByStatusReport: ReportInput = {
   dataset: 'task_metrics',
   rows: ['status'],
   values: ['task_count'],
-};
+});
 
 /** Tasks by Priority Report */
-export const TasksByPriorityReport: ReportInput = {
+export const TasksByPriorityReport = defineReport({
   name: 'tasks_by_priority',
   label: 'Tasks by Priority',
   description: 'Summary of tasks grouped by priority level',
@@ -30,10 +30,10 @@ export const TasksByPriorityReport: ReportInput = {
   rows: ['priority'],
   values: ['task_count'],
   runtimeFilter: { is_completed: false },
-};
+});
 
 /** Tasks by Owner Report */
-export const TasksByOwnerReport: ReportInput = {
+export const TasksByOwnerReport = defineReport({
   name: 'tasks_by_owner',
   label: 'Tasks by Owner',
   description: 'Task summary by assignee',
@@ -42,7 +42,7 @@ export const TasksByOwnerReport: ReportInput = {
   rows: ['owner'],
   values: ['est_hours', 'actual_hours'],
   runtimeFilter: { is_completed: false },
-};
+});
 
 // ADR-0021 Phase 2: the former `OverdueTasksReport` (a flat record list, no
 // grouping/aggregation) is now the `overdue` ListView on todo_task — see
@@ -50,7 +50,7 @@ export const TasksByOwnerReport: ReportInput = {
 // (ADR-0017), not a dataset report.
 
 /** Completed Tasks Report */
-export const CompletedTasksReport: ReportInput = {
+export const CompletedTasksReport = defineReport({
   name: 'completed_tasks',
   label: 'Completed Tasks',
   description: 'All completed tasks with time tracking',
@@ -59,10 +59,10 @@ export const CompletedTasksReport: ReportInput = {
   rows: ['category'],
   values: ['est_hours', 'actual_hours'],
   runtimeFilter: { is_completed: true },
-};
+});
 
 /** Time Tracking Report */
-export const TimeTrackingReport: ReportInput = {
+export const TimeTrackingReport = defineReport({
   name: 'time_tracking',
   label: 'Time Tracking Report',
   description: 'Estimated vs actual hours analysis',
@@ -74,4 +74,4 @@ export const TimeTrackingReport: ReportInput = {
   rows: ['owner', 'category'],
   values: ['est_hours', 'actual_hours'],
   runtimeFilter: { is_completed: true },
-};
+});

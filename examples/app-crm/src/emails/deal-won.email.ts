@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { EmailTemplateDefinitionInput } from '@objectstack/spec/system';
+import { defineEmailTemplateDefinition } from '@objectstack/spec/system';
 
 /**
  * Sent when an opportunity moves to Closed Won.
  * Referenced by the `notify_owner_deal_won` workflow action.
  */
-export const DealWonEmail: EmailTemplateDefinitionInput = {
+export const DealWonEmail = defineEmailTemplateDefinition({
   name: 'crm.deal_won',
   label: 'Deal Won — Owner Congrats',
   category: 'workflow',
@@ -33,4 +33,4 @@ Nice work!`,
   ],
   active: true,
   description: 'Internal congrats email fired by the High-Value Deal workflow when stage = Closed Won.',
-};
+});

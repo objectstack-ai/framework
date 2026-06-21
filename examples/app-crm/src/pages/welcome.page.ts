@@ -1,11 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type * as UI from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Example custom page — a CRM landing page.
  */
-export const CrmWelcomePage: UI.Page = {
+export const CrmWelcomePage = definePage({
   name: 'crm_welcome',
   label: 'CRM Welcome',
   type: 'home',
@@ -40,4 +40,4 @@ export const CrmWelcomePage: UI.Page = {
       ],
     },
   ],
-};
+});

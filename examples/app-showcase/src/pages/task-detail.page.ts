@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Task Detail — a record page that exercises the record-layout component set
@@ -15,7 +15,7 @@ import type { Page } from '@objectstack/spec/ui';
  * `kind: 'full'` — this page fully owns the record layout (vs the slotted
  * Project page which only overrides the tabs slot).
  */
-export const TaskDetailPage: Page = {
+export const TaskDetailPage = definePage({
   name: 'showcase_task_detail',
   label: 'Task',
   type: 'record',
@@ -77,4 +77,4 @@ export const TaskDetailPage: Page = {
       ],
     },
   ],
-};
+});

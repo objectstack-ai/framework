@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type * as UI from '@objectstack/spec/ui';
+import { defineAction } from '@objectstack/spec/ui';
 
 /**
  * Row-level action on crm_lead — launches the Convert Lead screen flow wizard.
  * Shown as a button in the lead list row menu and in the lead record header.
  */
-export const ConvertLeadAction: UI.ActionInput = {
+export const ConvertLeadAction = defineAction({
   name: 'crm_convert_lead',
   label: 'Convert Lead',
   icon: 'ArrowRightCircle',
@@ -20,4 +20,4 @@ export const ConvertLeadAction: UI.ActionInput = {
   // hitting the flow's "already converted" guard screen. The flow keeps that
   // guard as a server-side backstop.
   visible: 'record.status != "converted"',
-};
+});

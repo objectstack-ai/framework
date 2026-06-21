@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Account 360 — the flagship "object 360" record page every enterprise app has,
@@ -20,7 +20,7 @@ import type { Page } from '@objectstack/spec/ui';
  * slotted path; the same shape inside a full-page region does not — mirror the
  * working Project Detail page.)
  */
-export const AccountDetailPage: Page = {
+export const AccountDetailPage = definePage({
   name: 'showcase_account_detail',
   label: 'Account',
   type: 'record',
@@ -103,4 +103,4 @@ export const AccountDetailPage: Page = {
       },
     },
   },
-};
+});

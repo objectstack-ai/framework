@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * My Work — a role-aware workspace home that *composes* live data the way a
@@ -10,7 +10,7 @@ import type { Page } from '@objectstack/spec/ui';
  *     via the `{current_user_id}` token (records I own);
  *   • sidebar shortcuts + a per-user `visible`-gated note on `user.email`.
  */
-export const MyWorkPage: Page = {
+export const MyWorkPage = definePage({
   name: 'showcase_my_work',
   label: 'My Work',
   type: 'home',
@@ -86,4 +86,4 @@ export const MyWorkPage: Page = {
       ],
     },
   ],
-};
+});

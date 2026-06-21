@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { TranslationBundle } from '@objectstack/spec/system';
+import { defineTranslationBundle } from '@objectstack/spec/system';
 
 /**
  * CRM translation bundle — English + Simplified Chinese.
@@ -8,7 +8,7 @@ import type { TranslationBundle } from '@objectstack/spec/system';
  * Provides display labels for all CRM objects, apps, and common UI messages
  * so the Studio i18n pipeline has real data to render.
  */
-export const CrmTranslationBundle: TranslationBundle = {
+export const CrmTranslationBundle = defineTranslationBundle({
   en: {
     objects: {
       crm_account: {
@@ -186,4 +186,4 @@ export const CrmTranslationBundle: TranslationBundle = {
       'crm.activity.due_today': '您今天有 {count} 个活动待处理。',
     },
   },
-};
+});

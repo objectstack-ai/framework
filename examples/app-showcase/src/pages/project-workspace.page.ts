@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { Page } from '@objectstack/spec/ui';
+import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Project Workspace — a master-detail (header + line items) entry scenario.
@@ -10,7 +10,7 @@ import type { Page } from '@objectstack/spec/ui';
  * `showcase_task.project` is a `master_detail` field, so the children are
  * created with the parent FK set in a single client-orchestrated transaction.
  */
-export const ProjectWorkspacePage: Page = {
+export const ProjectWorkspacePage = definePage({
   name: 'showcase_project_workspace',
   label: 'New Project + Tasks',
   type: 'app',
@@ -63,4 +63,4 @@ export const ProjectWorkspacePage: Page = {
       ],
     },
   ],
-};
+});
