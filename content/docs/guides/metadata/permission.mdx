@@ -170,13 +170,13 @@ rowLevelSecurity: [
     name: 'own_records_only',
     object: 'opportunity',
     operation: 'select',
-    using: "owner_id = current_user.id",
+    using: "owner_id == current_user.id",
   },
   {
     name: 'same_department',
     object: 'account',
     operation: 'select',
-    using: "department = current_user.department",
+    using: "department == current_user.department",
   },
 ]
 ```
@@ -271,7 +271,7 @@ const salesManagerPermission = {
       name: 'team_accounts',
       object: 'account',
       operation: 'select',
-      using: "team = current_user.team",
+      using: "team == current_user.team",
     },
   ],
 };

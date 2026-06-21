@@ -439,20 +439,24 @@ rowLevelSecurity: [
   {
     name: 'own_records',
     operations: ['select', 'update', 'delete'],
-    using: 'owner_id = current_user.id',   // read scope
-    check: 'owner_id = current_user.id',   // write scope
+    using: 'owner_id == current_user.id',   // read scope
+    check: 'owner_id == current_user.id',   // write scope
   },
   {
     name: 'org_isolation',
     operations: ['all'],
-    using: 'organization_id = current_user.organization_id',
+    using: 'organization_id == current_user.organization_id',
   },
 ]
 ```
 
-Predicates use a **restricted grammar** (not arbitrary CEL): `field = current_user.<prop>`,
-`field = 'literal'`, `field IN (current_user.<array>)`, or `1=1`. The
-compiler resolves these `current_user.*` placeholders:
+Predicates are **canonical CEL** (ADR-0058): `field == current_user.<prop>`,
+`field == 'literal'`, `field in current_user.<array>`, comparisons (`>`/`<`/`>=`/`<=`),
+`&&`/`||`/`!`, and `== null` checks all lower to a pushdown filter. **No** cross-object
+traversal or subqueries — those are a compile error (ADR-0055), never silently dropped.
+A legacy SQL-style `=` / `IN (...)` predicate still compiles via a **deprecated** bridge
+(emits a warning) but should be authored in CEL. The compiler resolves these
+`current_user.*` placeholders:
 
 | Placeholder | Resolves to |
 |:--|:--|
