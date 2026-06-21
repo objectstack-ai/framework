@@ -357,3 +357,158 @@ hallmark and is **not** required to build a secure app (explicit RLS + sharing r
 The commercial boundary ADR lives in `cloud/docs/adr/`; this note records only the
 open-side technical seam. Proof: `showcase-scope-depth.dogfood` (reference resolver +
 fail-closed case).
+
+---
+
+## Addendum — org-structure surfacing & edition tiering (2026-06-21)
+
+ADR-0057 settled the authorization **model** (BU partition, scope-depth grants, rollup,
+open/paid resolver seam). It did **not** settle how the three org-shaped objects are
+**surfaced** in the Setup app, nor how they tier across editions:
+
+- `sys_organization` (better-auth) — the **tenant container**;
+- `sys_business_unit` (platform, D2) — the **hierarchical data-partition tree**;
+- `sys_team` (better-auth) — the **flat collaboration grouping**.
+
+Left unaddressed, all three land flat in the Setup `group_people_org` menu
+(`packages/platform-objects/src/apps/setup-nav.contributions.ts:48-55`) and read as three
+competing "organisation" concepts — the ambiguity is sharpest in a single-tenant install,
+where `sys_organization` is a single, un-creatable row. This addendum closes that gap. One
+decision per gap (ADR-0049 discipline); no model change, only surfacing + one denormalised
+projection field.
+
+### Context — three objects, three different questions, three editions
+
+| Object | Question it answers | Hierarchy | `managedBy` | Distinguishing capability | Works in OSS? |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| `sys_team` | "who collaborates / who is this shared with" | flat | better-auth | `TeamGraphService` flat expansion | **yes — now** |
+| `sys_business_unit` | "where in the org tree does this record sit / who sees down the subtree" | tree | platform | scope-depth rollup (`unit*`) | model yes; **rollup = paid** |
+| `sys_organization` | "which tenant" | none | better-auth | multi-tenant isolation | degenerate single-row unless multi-org |
+
+Cross-platform consensus that grounds the tiering: **Salesforce** never surfaces the tenant
+container ("Org") as a managed list, and keeps flat Public Groups *alongside* its role
+hierarchy; **Dataverse** keeps Business Units **and** Teams as deliberately distinct axes
+(Teams exist precisely to cross BU boundaries); **ServiceNow** keeps flat Groups even with a
+Department/Cost-Center structure, and isolates tenancy on a *separate* axis (domain
+separation), not on the org dimensions. The invariant: **the flat grouping is the floor; the
+partition tree and the tenant container are conditional surfaces.**
+
+This yields the **floor / ceiling / tenant** framing:
+
+```
+floor   (all editions)   Users + Teams + manager_id     <- baseline, auth-native, no resolver
+ceiling (enterprise)     + Business Units                <- object open; nav + rollup gated
+tenant  (multi-org)      + Organizations + Invitations   <- surfaced only when multi-org on
+```
+
+### D9 — Edition tiering of the org surface (floor / ceiling / tenant)
+
+- **Teams = floor (all editions).** It is the better-auth-native flat primitive, its
+  `TeamGraphService` expansion works open with no resolver, and a tree cannot express a
+  flat cross-cutting / matrix set or a group-owned record — there is no structural
+  substitute. It stays in the `group_people_org` baseline. (Teams is the *harder* of the
+  two to remove, not the easier: removing it means fighting the auth layer for the one
+  capability that is not paywalled.)
+- **Business Units = ceiling.** Per the open/paid seam above, the BU **object + graph +
+  explicit `business_unit` sharing recipient** are OPEN, but the **hierarchy rollup** is
+  paid. Its Setup *surface* is therefore gated on the capability (D10) so a vanilla OSS
+  deployment that does not use BU is not shown a tree whose distinguishing power (subtree
+  rollup) is dormant.
+- **Organizations = tenant-only surface.** Surfaced only when multi-org is enabled
+  (`features.multiOrgEnabled != false` — the predicate already gating the
+  `create_organization` action, `sys-organization.object.ts`). In single-tenant it is a
+  degenerate single un-creatable row and is hidden (D10).
+
+### D10 — Setup-nav surfacing follows the capability (ADR-0029 K2); the object stays open
+
+The objects remain registered **open** in every edition (data continuity, no upgrade
+migration; BU stays usable as owning-unit coordinate, explicit sharing recipient, and
+people-picker filter even when its nav is hidden). Only the **nav entries** tier:
+
+- **Business Units.** `nav_business_units` today carries `requiresObject: 'sys_business_unit'`
+  (`setup-nav.contributions.ts:50`), but `platform-objects` registers that object
+  unconditionally, so the gate is **inert (always true)**. Move the entry **out** of
+  `SETUP_NAV_CONTRIBUTIONS` and contribute it from the capability that gives BU teeth —
+  the hierarchy-security capability (`@objectstack/security-enterprise` when present), or an
+  explicit app opt-in feature `business-units` — exactly the ADR-0029 K2 pattern already
+  used for webhooks/approvals/sharing ("nav lives and dies with the capability").
+- **Organizations / Invitations.** `nav_organizations` / `nav_invitations`
+  (`setup-nav.contributions.ts:52-53`) carry no gate at all today. Add a
+  `multiOrgEnabled != false` visibility gate (same predicate as the create action).
+- **Mechanism gap to close first (ADR-0049 — gated, never silently inert).** The
+  `create_organization` *action* gates via a `visible` CEL string, but a `NavigationItem`
+  today exposes only `requiresObject` / `requiredPermissions`. Either extend the nav
+  contribution schema with a `visible` predicate (or a `requiresFeature` key) — a small
+  `spec` addition — or the gate is unimplementable and must not be claimed.
+
+### D11 — Resolve the `team` naming collision: drop `team` from `sys_business_unit.kind`
+
+`sys_business_unit.kind` includes `team` (`sys-business-unit.object.ts:96`,
+`company | division | department | team | office | cost_center`), colliding head-on with the
+first-class `sys_team`: a `kind='team'` BU walks `BusinessUnitGraphService` (hierarchical)
+while `sys_team` walks `TeamGraphService` (flat) — two "teams", different semantics, no UI
+distinction. This collision is the single largest source of the "teams vs BU feel
+redundant" perception.
+
+- **Decision:** remove `team` from the enum. `kind` is display-only by its own description
+  ("Categorisation hint — does not change graph semantics"), so this is semantically free.
+  Repo-wide usage of `kind: 'team'` is **0** (seeds included) → no data migration. New enum:
+  `company | division | department | office | cost_center`. Per D7 alias discipline, a
+  one-release read-tolerance mapping stray `team` -> `department` may be kept, though no rows
+  exist to need it.
+
+### D12 — `sys_user.primary_business_unit_id` — denormalised projection for "pick people by BU"
+
+"Pick people by business unit" (Dataverse **filtered lookup**, ServiceNow **reference
+qualifier**, Workday org-scoped picker) is a baseline ERP interaction and needs **no** rollup
+engine — it is a plain equality filter, valid in OSS. But it is not configurable today:
+
+- Lookup fields filter only on the **target object's own fields** (`lookupFilters`,
+  `dependsOn`; `packages/spec/src/data/field.zod.ts`), and `sys_user` has **no** BU column —
+  membership lives in the junction `sys_business_unit_member`.
+- The query layer cannot traverse the junction in a single filter (no `$exists` / reverse
+  relationship; `expand.where` is schema-accepted but **engine-ignored** — tracked
+  separately as a latent ObjectQL gap).
+
+**Decision:** add a denormalised `sys_user.primary_business_unit_id` (lookup to
+`sys_business_unit`), maintained from `sys_business_unit_member.is_primary` via a sync hook
++ one-time backfill. This mirrors the `manager_id` precedent (commit `94fedcccc`, ADR-0057),
+which likewise denormalised an org coordinate onto the better-auth-managed `sys_user`. Then
+`lookupFilters: [{ field: 'primary_business_unit_id', operator: 'eq', value: X }]` and
+`dependsOn: ['primary_business_unit_id']` work with **zero query-engine change**, OSS-safe.
+
+- **Scope limit:** the projection captures the **primary** BU only; matrix / multi-BU
+  pickers still use the two-step junction expansion (`BusinessUnitGraphService` pattern).
+  `sys_business_unit_member` remains the effective-dated source of truth; the field is a
+  maintained projection of `is_primary`, not a second source.
+
+### Forward note — interaction with `feat/slim-remove-multitenant-runtime`
+
+The in-flight breaking change `feat/slim-remove-multitenant-runtime` (`5d820cb5e`,
+`feat(runtime)!: remove multi-tenant runtime; keep single-env + contracts`) moves multi-tenant
+routing out of the OSS framework to the cloud distribution. If it lands, D9/D10's
+`multiOrgEnabled` predicate simply resolves **false** in OSS (single-env), so Organizations /
+Invitations never surface in the OSS Setup app and become a cloud-distribution concern that
+re-contributes the org nav. The `multiOrgEnabled != false` framing is therefore
+**forward-compatible with both worlds** and needs no rework when that branch lands — which is
+why this addendum keeps the mode-gate rather than hard-coding single-tenant (per decision of
+2026-06-21).
+
+### Surfacing conformance (extends D8)
+
+One proof per surfacing decision, ratcheted with its PR:
+
+- single-tenant Setup nav **omits** Organizations / Invitations; multi-org on -> present;
+- BU nav **absent** without the hierarchy-security capability, **present** with it (object
+  registered in both);
+- `sys_business_unit.kind` **rejects** `team`;
+- a `sys_user` lookup with `lookupFilters` on `primary_business_unit_id` returns **only**
+  members of that BU.
+
+### Phasing
+
+- **PS-1 (low risk, no engine change).** D11 (`kind` enum) + D10 Organizations/Invitations
+  gate (after the nav `visible`/`requiresFeature` mechanism lands).
+- **PS-2.** D10 — relocate `nav_business_units` to the hierarchy-security capability
+  (ADR-0029 K2), retiring the inert `requiresObject` gate.
+- **PS-3.** D12 — `primary_business_unit_id` field + sync hook + backfill + picker proof.
