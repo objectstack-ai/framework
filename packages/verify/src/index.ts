@@ -18,3 +18,8 @@ export type { VerifyReport, ObjectVerifyResult } from './verify.js';
 
 export { runRlsProofs, formatRlsReport } from './rls.js';
 export type { RlsReport, RlsResult } from './rls.js';
+
+// ADR-0060 — reusable conformance-ledger helper (static complement to the
+// runtime harness): classify every declarable property, fail closed on drift.
+export { checkLedger } from './conformance.js';
+export type { ConformanceRow, ConformanceState, CheckLedgerOptions } from './conformance.js';
