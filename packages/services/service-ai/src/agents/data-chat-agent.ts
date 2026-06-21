@@ -96,12 +96,5 @@ Always answer in the same language the user is using. Detailed tool-usage guidan
     maxIterations: 10,
     allowReplan: true,
   },
-
-  memory: {
-    shortTerm: {
-      maxMessages: 20,
-      maxTokens: 4096,
-    },
-  },
 };
 

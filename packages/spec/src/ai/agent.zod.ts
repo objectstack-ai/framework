@@ -173,14 +173,12 @@ export const AgentSchema = lazySchema(() => z.object({
 
   /** Memory Management */
   memory: z.object({
-    /** Short-term (working) memory configuration */
-    shortTerm: z.object({
-      /** Maximum number of recent messages to retain */
-      maxMessages: z.number().int().min(1).default(50).describe('Max recent messages in working memory'),
-
-      /** Maximum token budget for short-term context */
-      maxTokens: z.number().int().min(100).optional().describe('Max tokens for short-term context window'),
-    }).optional().describe('Short-term / working memory'),
+    // NOTE: `shortTerm` ({maxMessages,maxTokens}) was removed (ADR-0013 D3,
+    // cloud#339). It declared a working-memory window that NOTHING in the
+    // runtime consumed — a config that lies. Cross-turn grounding is done by
+    // tools reading live state, and the context budget is governed elsewhere
+    // (the per-request token guardrail), not by this field. `longTerm` /
+    // `reflectionInterval` are kept as forward-looking, off-by-default config.
 
     /** Long-term (persistent) memory configuration */
     longTerm: z.object({

@@ -589,10 +589,6 @@ Be precise, data-driven, and clear in your explanations.`,
         role: 'Persistent Assistant',
         instructions: 'Remember across sessions.',
         memory: {
-          shortTerm: {
-            maxMessages: 100,
-            maxTokens: 4096,
-          },
           longTerm: {
             enabled: true,
             store: 'vector',
@@ -602,7 +598,6 @@ Be precise, data-driven, and clear in your explanations.`,
         },
       });
 
-      expect(agent.memory?.shortTerm?.maxMessages).toBe(100);
       expect(agent.memory?.longTerm?.enabled).toBe(true);
       expect(agent.memory?.longTerm?.store).toBe('vector');
       expect(agent.memory?.reflectionInterval).toBe(5);
