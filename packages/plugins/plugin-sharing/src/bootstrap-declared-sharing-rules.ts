@@ -23,6 +23,7 @@
 
 import type { SharingRuleService } from './sharing-rule-service.js';
 import type { SharingRuleRecipientType, ShareAccessLevel } from '@objectstack/spec/contracts';
+import { compileCelToFilter } from '@objectstack/formula';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
@@ -42,29 +43,22 @@ function mapRecipientType(t: unknown): SharingRuleRecipientType | null {
 }
 
 /**
- * Reduce a simple CEL predicate to a JSON FilterCondition. Handles the common
- * `record.field == <literal>` shape (string/number/bool). Anything else (AND/OR,
- * comparisons, `current_user.*`, functions) returns null → caller skips.
+ * Compile a sharing-rule CEL `condition` into the runtime `criteria_json`
+ * FilterCondition (ADR-0058 D1, the substance of #1887).
+ *
+ * Delegates to the ONE canonical CEL → FilterCondition pushdown compiler in
+ * `@objectstack/formula`. A sharing condition is a pure record predicate — no
+ * `current_user.*` — so it resolves with the default `record` field root and an
+ * empty variable scope. This lowers the full pushdown subset (`==`/`!=`,
+ * comparisons, `in`, `&&`/`||`/`!`, `== null`, string ops), not just the former
+ * `record.field == <literal>` shape, so compound criteria now SEED and ENFORCE
+ * instead of being skipped as experimental. Anything non-pushdownable (functions,
+ * cross-object traversal) still returns null → the caller skips it (logged),
+ * never seeding a permissive match-all (ADR-0049).
  */
 export function celToFilter(cel: unknown): Record<string, unknown> | null {
-  // The spec coerces `condition` to an ExpressionInput object
-  // ({ dialect: 'cel', source: '...' }); accept that or a raw string.
-  let src: string | null = null;
-  if (typeof cel === 'string') src = cel;
-  else if (cel && typeof cel === 'object' && typeof (cel as any).source === 'string') src = (cel as any).source;
-  if (!src) return null;
-  const m = src.trim().match(/^record\.([A-Za-z_][A-Za-z0-9_]*)\s*==\s*(.+)$/);
-  if (!m) return null;
-  const field = m[1];
-  const raw = m[2].trim();
-  let val: unknown;
-  if ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"'))) {
-    val = raw.slice(1, -1);
-  } else if (raw === 'true') val = true;
-  else if (raw === 'false') val = false;
-  else if (/^-?\d+(\.\d+)?$/.test(raw)) val = Number(raw);
-  else return null; // references / non-literal → not statically translatable
-  return { [field]: val };
+  const result = compileCelToFilter(cel as string | { source?: string }, { variables: {} });
+  return result.ok ? (result.filter as Record<string, unknown>) : null;
 }
 
 function readDeclared(engine: any, type: string): any[] {

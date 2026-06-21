@@ -1199,17 +1199,28 @@ describe('RLSCompiler', () => {
 // ---------------------------------------------------------------------------
 describe('RLSCompiler D4 — uncompilable predicates are surfaced', () => {
   it('isSupportedRlsExpression accepts the compilable shapes', () => {
+    // Legacy SQL-ish subset (bridged `=`/`IN`).
     expect(isSupportedRlsExpression('owner_id = current_user.id')).toBe(true);
     expect(isSupportedRlsExpression('owner = current_user.email')).toBe(true);
     expect(isSupportedRlsExpression("status = 'published'")).toBe(true);
     expect(isSupportedRlsExpression('id IN (current_user.org_user_ids)')).toBe(true);
     expect(isSupportedRlsExpression('1 = 1')).toBe(true);
+    // ADR-0058: the canonical compiler lowers a broader pushdown subset, so the
+    // shape gate now (correctly) reports these as enforceable — `==`/`!=`,
+    // comparisons, and CEL compound predicates all compile to a FilterCondition.
+    expect(isSupportedRlsExpression('owner == current_user.id')).toBe(true);   // `==`
+    expect(isSupportedRlsExpression('amount > 100')).toBe(true);               // comparison
+    expect(isSupportedRlsExpression('region != null')).toBe(true);             // null check
+    expect(isSupportedRlsExpression('a == 1 && b == 2')).toBe(true);           // CEL compound
   });
 
-  it('isSupportedRlsExpression rejects shapes the runtime would drop', () => {
-    expect(isSupportedRlsExpression('owner == current_user.name')).toBe(false); // `==`
-    expect(isSupportedRlsExpression('a = current_user.id AND b = 1')).toBe(false); // AND
-    expect(isSupportedRlsExpression('amount > 100')).toBe(false); // range
+  it('isSupportedRlsExpression rejects genuinely non-pushdownable shapes', () => {
+    // These cannot lower to a FilterCondition for ANY input, so the gate must
+    // reject them (ADR-0055 / ADR-0056 D4) — they fail closed at runtime.
+    expect(isSupportedRlsExpression('a = current_user.id AND b = 1')).toBe(false); // SQL AND ≠ CEL && (unparseable)
+    expect(isSupportedRlsExpression('amount + 1 > 2')).toBe(false);                // arithmetic
+    expect(isSupportedRlsExpression('id IN (SELECT id FROM users)')).toBe(false);  // subquery
+    expect(isSupportedRlsExpression('record.a.b == 1')).toBe(false);              // cross-object traversal
     expect(isSupportedRlsExpression('')).toBe(false);
   });
 
@@ -1217,7 +1228,9 @@ describe('RLSCompiler D4 — uncompilable predicates are surfaced', () => {
     const warned: string[] = [];
     const compiler = new RLSCompiler();
     compiler.setLogger({ warn: (message: string) => warned.push(message) });
-    const policy: any = { name: 'bad', object: 'thing', operation: 'select', using: 'owner == current_user.name' };
+    // ADR-0058: a genuinely non-pushdownable shape (arithmetic) — no input can
+    // lower it, so it must WARN (vs a valid shape whose var is merely absent).
+    const policy: any = { name: 'bad', object: 'thing', operation: 'select', using: 'amount + 1 > 2' };
     const filter = compiler.compileFilter([policy], { userId: 'u1' } as any);
     expect(filter).toEqual(RLS_DENY_FILTER); // only policy dropped → fail-closed
     expect(warned.length).toBe(1);

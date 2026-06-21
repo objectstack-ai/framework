@@ -2,6 +2,7 @@
 
 import type { RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
+import { compileCelToFilter, isPushdownableCel } from '@objectstack/formula';
 
 /**
  * RLS User Context
@@ -71,13 +72,48 @@ export const RLS_DENY_FILTER: Record<string, unknown> = Object.freeze({
  * object unprotected. A `false` here means "this predicate will never enforce".
  */
 export function isSupportedRlsExpression(expression: string): boolean {
-  if (!expression) return false;
-  const e = expression.trim();
-  if (/^\s*1\s*=\s*1\s*$/.test(e)) return true;
-  if (/^\s*\w+\s*=\s*current_user\.\w+\s*$/.test(e)) return true;
-  if (/^\s*\w+\s*=\s*'[^']*'\s*$/.test(e)) return true;
-  if (/^\s*\w+\s+IN\s+\(\s*current_user\.\w+\s*\)\s*$/i.test(e)) return true;
-  return false;
+  if (!expression || !expression.trim()) return false;
+  // ADR-0058 D1: a single canonical shape gate. We bridge the legacy SQL-ish
+  // subset (`=`, `IN`) to canonical CEL, then ask the ONE pushdown compiler
+  // whether the shape lowers to a FilterCondition at all. This is broader than
+  // the historical 4 forms — comparisons (`amount > 100`) and `==` now ENFORCE
+  // (the compiler lowers them), so the gate correctly reports them supported.
+  // It is SHAPE-only: whether a referenced `current_user.*` variable is exposed
+  // at runtime is a separate availability concern (an unexposed var fails closed
+  // at resolution — see compileExpression).
+  return isPushdownableCel(sqlPredicateToCel(expression)).ok;
+}
+
+/**
+ * Bridge the legacy SQL-ish RLS `using` subset to canonical CEL so it flows
+ * through the ONE compiler: `=` → `==`, `IN` → `in`. Quoted string literals are
+ * left untouched. Only this historically-supported subset is bridged — compound
+ * predicates should be authored in canonical CEL (`&&` / `||`); anything outside
+ * the subset (subqueries, SQL `AND`/`OR`, `LIKE`) stays unparseable and so fails
+ * closed, exactly as before.
+ */
+export function sqlPredicateToCel(expression: string): string {
+  return expression.replace(/'[^']*'|\bIN\b|(?<![<>=!])=(?!=)/gi, (m) => {
+    if (m[0] === "'") return m; // quoted literal — never rewrite its contents
+    if (m === '=') return '==';
+    return 'in'; // IN / in / In → CEL membership operator
+  });
+}
+
+/**
+ * Does this filter consist solely of an empty membership (`{ field: { $in: [] } }`)?
+ * Used to preserve the legacy "empty pre-resolved set drops the policy" semantics
+ * so the single-policy path fails closed via the deny sentinel rather than an
+ * always-false `$in: []`.
+ */
+function isEmptyMembershipFilter(filter: Record<string, unknown>): boolean {
+  const keys = Object.keys(filter);
+  if (keys.length !== 1) return false;
+  const inner = filter[keys[0]];
+  if (!inner || typeof inner !== 'object') return false;
+  const innerKeys = Object.keys(inner as Record<string, unknown>);
+  return innerKeys.length === 1 && Array.isArray((inner as Record<string, unknown>).$in)
+    && ((inner as Record<string, unknown>).$in as unknown[]).length === 0;
 }
 
 /**
@@ -171,71 +207,40 @@ export class RLSCompiler {
   }
 
   /**
-   * Compile a single RLS expression into a query filter.
+   * Compile a single RLS predicate into a query filter (ADR-0058 D1/D2).
    *
-   * This reference compiler recognizes exactly four forms — anything else
-   * returns `null` and (via {@link compileFilter}) fails closed:
-   * - `field = current_user.property`     → `{ field: <value> }`
-   * - `field = 'literal_value'`           → `{ field: 'literal_value' }`
-   * - `field IN (current_user.array)`     → `{ field: { $in: [...] } }`
-   *   (the array may be a §7.3.1 pre-resolved membership set)
-   * - `1 = 1`                             → `{}` (always-true / no restriction)
-   *
-   * There is intentionally no support for subqueries, `LIKE`/`ILIKE`,
-   * regex, `ANY`/`ALL`, `AND`/`OR`/`NOT`, or `NULL` checks — express those
-   * needs as a `current_user.*` property the runtime pre-resolves instead.
+   * Delegates to the ONE canonical CEL → FilterCondition pushdown compiler in
+   * `@objectstack/formula`, after bridging the legacy SQL-ish subset to CEL
+   * ({@link sqlPredicateToCel}). `current_user.*` references resolve against the
+   * pre-resolved {@link RLSUserContext} (incl. §7.3.1 membership sets). The
+   * supported subset is now broader than the historical four forms — `==`/`!=`,
+   * comparisons, `in`, `&&`/`||`/`!`, null checks and string ops all lower — but
+   * the security contract is unchanged:
+   *   - a non-pushdownable shape (subquery, arithmetic, cross-object, SQL `AND`)
+   *     → `null` → {@link compileFilter} fails closed;
+   *   - an unresolved/absent `current_user.*` variable → `null` → fail closed
+   *     (the "no active organization" path);
+   *   - an empty pre-resolved membership set → `null` so the single-policy case
+   *     yields the deny sentinel upstream rather than a permissive `$in: []`.
    */
   compileExpression(
     expression: string,
     userCtx: RLSUserContext
   ): Record<string, unknown> | null {
     if (!expression) return null;
-
-    // Always-true literal: "1 = 1" → no restriction (match every row).
-    // Lets RLS.allowAllPolicy ('1 = 1' for privileged roles) grant access
-    // instead of silently failing closed. An empty filter AND's onto the
-    // caller's where clause as a no-op.
-    if (/^\s*1\s*=\s*1\s*$/.test(expression)) {
-      return {};
-    }
-
-    // Handle simple equality: "field = current_user.property"
-    const eqMatch = expression.match(/^\s*(\w+)\s*=\s*current_user\.(\w+)\s*$/);
-    if (eqMatch) {
-      const [, field, prop] = eqMatch;
-      const value = userCtx[prop];
-      // Skip when the user-context value is missing (undefined or null).
-      // A `null` `organization_id` means "no active organization" — applying
-      // the filter as `organization_id IS NULL` would silently expose every
-      // un-tenanted row across tenants and break system tables that lack the
-      // column entirely. Treating null as "skip this policy" makes the
-      // tenant_isolation rule safely opt-out for users without an active org
-      // while still applying when one is set.
-      if (value === undefined || value === null) return null;
-      return { [field]: value };
-    }
-
-    // Handle literal equality: "field = 'value'"
-    const litMatch = expression.match(/^\s*(\w+)\s*=\s*'([^']*)'\s*$/);
-    if (litMatch) {
-      const [, field, value] = litMatch;
-      return { [field]: value };
-    }
-
-    // Handle IN: "field IN (current_user.array_property)"
-    const inMatch = expression.match(/^\s*(\w+)\s+IN\s+\(\s*current_user\.(\w+)\s*\)\s*$/i);
-    if (inMatch) {
-      const [, field, prop] = inMatch;
-      const value = userCtx[prop];
-      if (!Array.isArray(value) || value.length === 0) return null;
-      return { [field]: { $in: value } };
-    }
-
-    // Unsupported expression: return null (no additional RLS filter applied).
-    // Note: callers should treat absence of RLS policies as "allow all" only when
-    // no policies are defined. If policies exist but cannot be compiled, the caller
-    // may want to deny access as a safety measure.
-    return null;
+    const result = compileCelToFilter(sqlPredicateToCel(expression), {
+      variables: { current_user: userCtx as Record<string, unknown> },
+    });
+    // Any fault — unsupported shape, parse error, or an unresolved/null
+    // `current_user.*` variable — drops the policy. With a single applicable
+    // policy this surfaces as RLS_DENY_FILTER upstream (fail closed).
+    if (!result.ok) return null;
+    // Parity: an empty pre-resolved membership (`field in current_user.<empty>`)
+    // compiles to `{ field: { $in: [] } }`. The legacy compiler dropped the
+    // policy in this case; preserve that so the deny sentinel (not a literal
+    // empty-IN) is what the single-policy path returns.
+    if (isEmptyMembershipFilter(result.filter as Record<string, unknown>)) return null;
+    return result.filter as Record<string, unknown>;
   }
 
   /**
