@@ -44,7 +44,22 @@ export const Invoice = ObjectSchema.create({
 
   fields: {
     name: Field.text({ label: 'Invoice Number', required: true, searchable: true, maxLength: 60 }),
-    account: Field.lookup('showcase_account', { label: 'Account', required: true }),
+    // Forward record-picker config (spec lookup* props). The renderer
+    // auto-derives columns from the Account schema, but here we curate them and
+    // — crucially — SCOPE the picker so a rep can't invoice a churned account.
+    // `lookupFilters` is the structured, picker-honoured form of referenceFilters.
+    account: Field.lookup('showcase_account', {
+      label: 'Account',
+      required: true,
+      descriptionField: 'industry',
+      lookupColumns: [
+        'name',
+        { field: 'industry', label: 'Industry', type: 'select' },
+        { field: 'status', label: 'Lifecycle', type: 'select' },
+        { field: 'annual_revenue', label: 'Annual Revenue', type: 'currency' },
+      ],
+      lookupFilters: [{ field: 'status', operator: 'ne', value: 'churned' }],
+    }),
     // Owner email — the row-level-security anchor. The `showcase_contributor`
     // permission set scopes invoice SELECT to `owner = current_user.email` (email
     // is the unique, seedable identifier), so a contributor sees only their own

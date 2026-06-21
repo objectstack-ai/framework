@@ -445,6 +445,35 @@ export const FieldSchema = lazySchema(() => z.object({
   /** Optional explicit columns for the detail-page related list (derived from the child object when omitted). */
   relatedListColumns: z.array(z.any()).optional().describe('Explicit columns for the detail-page related list (derived from the child object when omitted)'),
 
+  /**
+   * LOOKUP PICKER (forward) config — how THIS lookup/master_detail field's
+   * record picker presents and scopes candidate records when the user selects a
+   * related record. Read-side mirror is relatedList* (the PARENT's detail-page
+   * list of children); these configure the CHILD-side picker that chooses the
+   * parent. All optional: the renderer auto-derives a sensible multi-column
+   * result from the referenced object's schema when omitted (objectui
+   * packages/fields: LookupField / RecordPickerDialog / deriveLookupColumns,
+   * which read both these camelCase keys and their snake_case aliases).
+   */
+  displayField: z.string().optional().describe("Field shown as each candidate's label in the picker/popover (defaults to the referenced object's name/title)."),
+  descriptionField: z.string().optional().describe('Secondary field shown under the label in the quick-select popover.'),
+  lookupColumns: z.array(z.union([z.string(), z.object({
+    field: z.string(),
+    label: z.string().optional(),
+    width: z.string().optional(),
+    type: z.string().optional(),
+  })])).optional().describe('Explicit columns for the record-picker table; auto-derived from the referenced object when omitted.'),
+  lookupPageSize: z.number().int().positive().optional().describe('Rows per page in the record-picker dialog (default 10).'),
+  lookupFilters: z.array(z.object({
+    field: z.string(),
+    operator: z.enum(['eq', 'ne', 'gt', 'lt', 'gte', 'lte', 'contains', 'in', 'notIn']),
+    value: z.any(),
+  })).optional().describe('Base filters restricting which records are selectable (e.g. only active). Structured, picker-honoured form of referenceFilters.'),
+  dependsOn: z.array(z.union([z.string(), z.object({
+    field: z.string(),
+    param: z.string().optional(),
+  })])).optional().describe('Dependent lookup: restrict candidates by the value of other field(s) on the same record. String = same local/remote key; {field,param} when the remote filter key differs.'),
+
   /** Calculation — CEL formula. Plain string accepted for back-compat; build emits canonical envelope. */
   expression: ExpressionInputSchema.optional().describe('Formula expression (CEL). e.g. F`record.amount * 0.1`'),
   summaryOperations: z.object({

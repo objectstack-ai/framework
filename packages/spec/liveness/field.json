@@ -151,9 +151,33 @@
     },
     "referenceFilters": {
       "status": "dead",
-      "evidence": "lookup dialog reads lookup_filters (LookupField.tsx:171) — entirely dead as authored (naming drift)",
+      "evidence": "lookup dialog reads lookup_filters/lookupFilters (LookupField.tsx) — the string[] referenceFilters form is not read (naming drift)",
       "authorWarn": true,
-      "authorHint": "The lookup dialog reads `lookup_filters`, not `referenceFilters` — as authored this filters nothing. Use the supported lookup-filter key, or remove it to avoid implying a constrained lookup."
+      "authorHint": "The picker reads the structured `lookupFilters` ({field,operator,value}), not the string[] `referenceFilters` — as authored this filters nothing. Use `lookupFilters`, or remove this to avoid implying a constrained lookup."
+    },
+    "displayField": {
+      "status": "live",
+      "note": "objectui LookupField/RecordPickerDialog — candidate label field in the record picker (reads displayField || display_field)."
+    },
+    "descriptionField": {
+      "status": "live",
+      "note": "objectui LookupField — secondary line under each option in the quick-select popover (reads descriptionField || description_field)."
+    },
+    "lookupColumns": {
+      "status": "live",
+      "note": "objectui RecordPickerDialog — record-picker table columns; renderer auto-derives from the referenced object when omitted (reads lookupColumns || lookup_columns)."
+    },
+    "lookupPageSize": {
+      "status": "live",
+      "note": "objectui RecordPickerDialog — rows per page in the record-picker dialog (reads lookupPageSize || lookup_page_size)."
+    },
+    "lookupFilters": {
+      "status": "live",
+      "note": "objectui LookupField + RecordPickerDialog — base scoping filters honoured by BOTH popover and dialog; structured supported form of referenceFilters (reads lookupFilters || lookup_filters)."
+    },
+    "dependsOn": {
+      "status": "live",
+      "note": "objectui LookupField — dependent/cascading lookup; restricts candidates by another field's value (reads dependsOn || depends_on)."
     },
     "maxRating": {
       "status": "dead",
