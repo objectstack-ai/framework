@@ -391,6 +391,23 @@ export class SqlDriver implements IDataDriver {
     // Ensure the database directory exists before any query can trigger
     // better-sqlite3 to open the file (e.g. loadMetaFromDb on startup).
     await this.ensureDatabaseExists();
+
+    // SQLite space hygiene (ADR-0057). With the default `auto_vacuum=NONE`,
+    // freed pages are never returned to the OS — a database that briefly grew
+    // (e.g. high-frequency telemetry before retention sweeps run) stays at its
+    // high-water mark forever. INCREMENTAL lets a later `PRAGMA incremental_vacuum`
+    // (run by the lifecycle Reaper, or manually) reclaim that space without a
+    // full blocking VACUUM. NOTE: auto_vacuum only changes layout on a *fresh*
+    // database or after a one-time full VACUUM, so this benefits new dev DBs;
+    // existing files need a single `VACUUM` to adopt it. Harmless / no-op on
+    // :memory: and on already-incremental databases.
+    if (this.isSqlite) {
+      try {
+        await this.knex.raw('PRAGMA auto_vacuum = INCREMENTAL');
+      } catch (e) {
+        this.logger.warn('Failed to set PRAGMA auto_vacuum=INCREMENTAL', e);
+      }
+    }
   }
 
   async checkHealth(): Promise<boolean> {
