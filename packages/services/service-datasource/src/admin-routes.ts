@@ -37,6 +37,14 @@ export function registerDatasourceAdminRoutes(
     }
   };
 
+  const externalService = (): any => {
+    try {
+      return ctx.getService<any>('external-datasource');
+    } catch {
+      return undefined;
+    }
+  };
+
   const unavailable = (res: any) =>
     res.status(503).json({ error: 'datasource_admin_unavailable' });
 
@@ -69,6 +77,50 @@ export function registerDatasourceAdminRoutes(
   // is always available even before any datasource-admin service is wired.
   server.get(`${root}/drivers`, async (_req: any, res: any) => {
     res.json({ drivers: DRIVER_CATALOG });
+  });
+
+  // Read-only schema introspection for the Studio "sync objects" flow.
+  // `GET /datasources/:name/remote-tables` lists the datasource's remote tables;
+  // `POST /datasources/:name/object-draft` generates an ObjectStack object
+  // definition draft for one table (introspect + type-map, no persistence —
+  // the caller creates the object through the normal metadata channel).
+  server.get(`${root}/:name/remote-tables`, async (req: any, res: any) => {
+    const svc = externalService();
+    if (!svc?.listRemoteTables) return unavailable(res);
+    try {
+      const tables = await svc.listRemoteTables(req.params.name);
+      res.json({ tables });
+    } catch (err) {
+      badRequest(res, err);
+    }
+  });
+
+  // Test a *saved* datasource by name with a live round-trip (backs the
+  // `datasource` `test_connection` action). Distinct from `POST /datasources/test`
+  // which probes an unsaved draft carried inline. Registered before the generic
+  // `:name` mutation routes.
+  server.post(`${root}/:name/test`, async (req: any, res: any) => {
+    const svc = externalService();
+    if (!svc?.testConnection) return unavailable(res);
+    try {
+      const result = await svc.testConnection(req.params.name);
+      res.json(result);
+    } catch (err) {
+      badRequest(res, err);
+    }
+  });
+
+  server.post(`${root}/:name/object-draft`, async (req: any, res: any) => {
+    const svc = externalService();
+    if (!svc?.generateObjectDraft) return unavailable(res);
+    const { table, ...opts } = (req.body as Record<string, unknown>) ?? {};
+    if (!table) return badRequest(res, new Error('Body field "table" is required.'));
+    try {
+      const draft = await svc.generateObjectDraft(req.params.name, String(table), opts);
+      res.json({ draft });
+    } catch (err) {
+      badRequest(res, err);
+    }
   });
 
   // Probe a connection without persisting anything. Registered before the
