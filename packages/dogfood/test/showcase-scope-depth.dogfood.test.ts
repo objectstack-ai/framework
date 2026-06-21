@@ -6,6 +6,11 @@
 // → my BU plus all descendant BUs (BFS). Sharing still widens on top; cross-BU
 // stays isolated. ('own' depth is already proven by showcase-private-owd.)
 //
+// NOTE: hierarchy-scope resolution is an ENTERPRISE capability (lives in
+// @objectstack/security-enterprise). The open edition fails closed to owner-only.
+// This test registers a REFERENCE resolver (a test fixture) to prove the seam +
+// the contract end-to-end; production ships the enterprise resolver.
+//
 // @proof: showcase-scope-depth
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -37,7 +42,7 @@ interface World { stack: VerifyStack; tokens: Record<Who, string>; }
 
 // Build a BU world: bu_parent ⊃ bu_child (sibling bu_other is separate).
 // alice+carol ∈ bu_parent, bob ∈ bu_child, dave ∈ bu_other. Each owns one note.
-async function bootScopeWorld(scope: 'unit' | 'unit_and_below'): Promise<World> {
+async function bootScopeWorld(scope: 'unit' | 'unit_and_below', withResolver = true): Promise<World> {
   const stack = await bootStack(showcaseStack, {
     security: new SecurityPlugin({
       defaultPermissionSets: [...securityDefaultPermissionSets, scopeProfile(scope)],
@@ -49,6 +54,42 @@ async function bootScopeWorld(scope: 'unit' | 'unit_and_below'): Promise<World> 
 
   const ql: any = await stack.kernel.getServiceAsync('objectql');
   const sys = (o: string, d: any) => ql.insert(o, d, { context: { isSystem: true } });
+
+  // Reference hierarchy-scope resolver (test fixture; prod = @objectstack/security-enterprise).
+  // Inlined (no plugin-sharing import) — proves the IHierarchyScopeResolver seam end-to-end.
+  const refResolver = {
+    async resolveOwnerIds(c: any, sc: string): Promise<string[]> {
+      const meId = c.userId as string;
+      const ids = new Set<string>([meId]);
+      if (sc === 'own_and_reports') {
+        let frontier: string[] = [meId]; const seen = new Set<string>([meId]);
+        for (let d = 0; d < 20 && frontier.length; d++) {
+          const rows = await ql.find('sys_user', { where: { manager_id: { $in: frontier } }, fields: ['id'], context: { isSystem: true } });
+          const next: string[] = [];
+          for (const r of rows ?? []) { const id = String(r.id ?? ''); if (id && !seen.has(id)) { seen.add(id); ids.add(id); next.push(id); } }
+          frontier = next;
+        }
+        return [...ids];
+      }
+      const myBus = await ql.find('sys_business_unit_member', { where: { user_id: meId }, fields: ['business_unit_id'], context: { isSystem: true } });
+      let buIds: string[] = [...new Set((myBus ?? []).map((r: any) => String(r.business_unit_id ?? '')).filter(Boolean))] as string[];
+      if (!buIds.length) return [meId];
+      if (sc === 'unit_and_below') {
+        const allBu = new Set<string>(buIds); let frontier: string[] = [...buIds];
+        for (let d = 0; d < 20 && frontier.length; d++) {
+          const kids = await ql.find('sys_business_unit', { where: { parent_business_unit_id: { $in: frontier } }, fields: ['id'], context: { isSystem: true } });
+          const next: string[] = [];
+          for (const k of kids ?? []) { const id = String(k.id ?? ''); if (id && !allBu.has(id)) { allBu.add(id); next.push(id); } }
+          frontier = next;
+        }
+        buIds = [...allBu];
+      }
+      const m = await ql.find('sys_business_unit_member', { where: { business_unit_id: { $in: buIds } }, fields: ['user_id'], context: { isSystem: true } });
+      for (const x of m ?? []) { const u = String(x.user_id ?? ''); if (u) ids.add(u); }
+      return [...ids];
+    },
+  };
+  if (withResolver) (stack.kernel as any).registerService('hierarchy-scope-resolver', refResolver);
   const uid = async (who: Who) =>
     (await ql.findOne('sys_user', { where: { email: `scope-${who}-${scope}@verify.test` }, context: { isSystem: true } }))?.id;
   const id = {} as Record<Who, string>;
@@ -117,5 +158,19 @@ describe('showcase: scope-depth read — `unit_and_below` (ADR-0057 D1)', () => 
   it('the child member does NOT roll up into the parent', async () => {
     const t = await titles(world.stack, world.tokens.bob);
     expect(t.sort()).toEqual(['bob note']); // child has no descendants; no upward visibility
+  });
+});
+
+describe('open edition — hierarchy scope fails CLOSED without the enterprise resolver (ADR-0057)', () => {
+  let world: World;
+  beforeAll(async () => { world = await bootScopeWorld('unit', /* withResolver */ false); }, 120_000);
+  afterAll(async () => { await world?.stack?.stop(); });
+
+  it('a `unit` grant degrades to owner-only — no widening, never fail-open', async () => {
+    const t = await titles(world.stack, world.tokens.alice);
+    expect(t).toContain('alice note');      // own still works
+    expect(t).not.toContain('carol note');  // NO unit widening without @objectstack/security-enterprise
+    expect(t).not.toContain('bob note');
+    expect(t).not.toContain('dave note');
   });
 });

@@ -87,9 +87,9 @@ export class PermissionEvaluator {
     opClass: 'read' | 'write',
     objectName: string,
     permissionSets: PermissionSet[],
-  ): 'own' | 'unit' | 'unit_and_below' | 'org' {
-    const RANK = { own: 0, unit: 1, unit_and_below: 2, org: 3 } as const;
-    const ORDER = ['own', 'unit', 'unit_and_below', 'org'] as const;
+  ): 'own' | 'own_and_reports' | 'unit' | 'unit_and_below' | 'org' {
+    const RANK = { own: 0, own_and_reports: 1, unit: 2, unit_and_below: 3, org: 4 } as const;
+    const ORDER = ['own', 'own_and_reports', 'unit', 'unit_and_below', 'org'] as const;
     let widest = -1;
     let matched = false;
     for (const ps of permissionSets) {

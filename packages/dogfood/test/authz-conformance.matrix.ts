@@ -45,8 +45,8 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },
 
   // ── ADR-0057 — ERP authorization core (enforced + e2e proven) ──────────
-  { id: 'scope-depth', summary: 'permission-grant access DEPTH (own/unit/unit_and_below/org)', state: 'enforced',
-    enforcement: 'plugin-security getEffectiveScope (stash) + plugin-sharing resolveOwnerScopeIds (owner IN unit-set) — ADR-0057 D1', proof: 'showcase-scope-depth.dogfood.test.ts' },
+  { id: 'scope-depth', summary: 'permission-grant access DEPTH (own/own_and_reports/unit/unit_and_below/org)', state: 'enforced',
+    enforcement: 'plugin-security getEffectiveScope (stash) + plugin-sharing delegates HIERARCHY scopes to a pluggable IHierarchyScopeResolver (open: fail-closed to own; enterprise @objectstack/security-enterprise; reference resolver in this proof) — ADR-0057 D1', proof: 'showcase-scope-depth.dogfood.test.ts' },
   { id: 'declarative-rbac-seeding', summary: 'stack-declared roles + sharingRules seeded at boot (#2077)', state: 'enforced',
     enforcement: 'plugin-security bootstrapDeclaredRoles + plugin-sharing bootstrapDeclaredSharingRules — ADR-0057 D6', proof: 'showcase-declarative-rbac-seeding.dogfood.test.ts' },
   { id: 'rbac-role-assignment', summary: 'platform-owned RBAC assignment (sys_user_role, decoupled from better-auth membership)', state: 'enforced',

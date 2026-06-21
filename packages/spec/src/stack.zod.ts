@@ -792,6 +792,40 @@ function mergeActionsIntoObjects(config: ObjectStackDefinition): ObjectStackDefi
  * const stack = defineStack({ manifest: { ... }, objects: [...], views: [...] }, { strict: true });
  * ```
  */
+/**
+ * [ADR-0057] HIERARCHY access scopes (`unit` / `unit_and_below` /
+ * `own_and_reports`) are an ENTERPRISE capability — their enforcement ships in
+ * `@objectstack/security-enterprise`, not the open edition. A stack that uses
+ * one MUST declare `requires: ['hierarchy-security']`; otherwise the open
+ * runtime would silently fail closed to owner-only (the metadata would lie,
+ * ADR-0049). This makes that an authoring-time error instead.
+ */
+function validateHierarchyScopeCapability(data: unknown): string[] {
+  const errors: string[] = [];
+  const d = data as { requires?: unknown; permissions?: unknown };
+  const requires = Array.isArray(d?.requires) ? (d.requires as string[]) : [];
+  if (requires.includes('hierarchy-security')) return errors;
+  const HIER = new Set(['unit', 'unit_and_below', 'own_and_reports']);
+  const perms = Array.isArray(d?.permissions) ? (d.permissions as any[]) : [];
+  for (const ps of perms) {
+    const objs = ps?.objects && typeof ps.objects === 'object' ? ps.objects : {};
+    for (const [objName, grant] of Object.entries(objs)) {
+      const g = grant as Record<string, unknown>;
+      for (const key of ['readScope', 'writeScope']) {
+        const v = g?.[key];
+        if (typeof v === 'string' && HIER.has(v)) {
+          errors.push(
+            `permission set '${ps?.name ?? '?'}' grant on '${objName}' uses ${key}='${v}', a HIERARCHY scope. ` +
+            `Declare \`requires: ['hierarchy-security']\` (provided by @objectstack/security-enterprise) — ` +
+            `the open edition cannot enforce it and would fail closed to owner-only.`,
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 export function defineStack(
   config: ObjectStackDefinitionInput,
   options?: DefineStackOptions,
@@ -835,6 +869,13 @@ export function defineStack(
   if (appErrors.length > 0) {
     const header = `defineStack single-app validation failed (${appErrors.length} issue${appErrors.length === 1 ? '' : 's'}):`;
     const lines = appErrors.map((e) => `  ✗ ${e}`);
+    throw new Error(`${header}\n\n${lines.join('\n')}`);
+  }
+
+  const hierErrors = validateHierarchyScopeCapability(result.data);
+  if (hierErrors.length > 0) {
+    const header = `defineStack hierarchy-scope capability validation failed (${hierErrors.length} issue${hierErrors.length === 1 ? '' : 's'}):`;
+    const lines = hierErrors.map((e) => `  ✗ ${e}`);
     throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 

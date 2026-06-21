@@ -335,3 +335,25 @@ Landed incrementally on branch `adr/0057-erp-authz-core`, each with a runtime pr
 **Deferred (evidence-gated, P4):** `sys_member.role`→`org_membership_level` relabel; manager-chain
 rollup (`subordinate_user_ids`); position hierarchy; record-owning teams; matrix cross-BU sharing;
 a full CEL→FilterCondition compiler (#1887) beyond the field-equality subset.
+
+### Open/paid seam — hierarchy scopes are a pluggable enterprise capability (2026-06-21)
+
+Hierarchy-relative visibility (scope `unit` / `unit_and_below` / `own_and_reports` —
+"you see records by where you sit in the org") is the Salesforce/Dynamics commercial
+hallmark and is **not** required to build a secure app (explicit RLS + sharing rules +
+`own`/`org` scope suffice). It is therefore an **enterprise** capability, not open-core:
+
+- **Open (framework):** the `IHierarchyScopeResolver` contract (`spec/contracts`),
+  `own`/`org` scope, the BU data model + graph + `business_unit` *explicit* sharing
+  recipient, roles, `#2077` seeding, the (future) predicate compiler. `SharingService`
+  delegates hierarchy scopes to the resolver and **fails closed to owner-only** when none
+  is registered — never fail-open. `defineStack` **errors** if a grant uses a hierarchy
+  scope without `requires: ['hierarchy-security']` (no silent lie, ADR-0049).
+- **Paid (`@objectstack/security-enterprise`, private cloud repo):** the
+  `hierarchy-scope-resolver` implementation (BU subtree + manager-chain rollup), plus the
+  P4 heavy org-modeling (position hierarchy, matrix cross-BU, owner-teams) and governance
+  (SSO/SCIM, audit/access-review, SoD).
+
+The commercial boundary ADR lives in `cloud/docs/adr/`; this note records only the
+open-side technical seam. Proof: `showcase-scope-depth.dogfood` (reference resolver +
+fail-closed case).

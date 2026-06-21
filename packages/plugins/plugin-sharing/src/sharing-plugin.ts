@@ -137,6 +137,12 @@ export class SharingServicePlugin implements Plugin {
       this.service = new SharingService({
         engine: engine as SharingEngine,
         bypassObjects: this.options.bypassObjects,
+        // [ADR-0057] Late-bound lookup of the enterprise hierarchy resolver.
+        // Open edition: not registered → hierarchy scopes fail closed to own.
+        hierarchyResolver: () => {
+          try { return ctx.getService<any>('hierarchy-scope-resolver'); }
+          catch { return null; }
+        },
       });
       ctx.registerService('sharing', this.service);
 

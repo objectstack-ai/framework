@@ -249,3 +249,32 @@ export interface IBusinessUnitGraphService {
   /** Return the manager id for a user — proxy to {@link ITeamGraphService.managerOf}. */
   managerOf(userId: string, organizationId?: string): Promise<string | null>;
 }
+
+
+/**
+ * [ADR-0057] HIERARCHY access scopes (the Dataverse-style "see records by where
+ * you sit in the org"). `own`/`org` are resolved by the open sharing layer
+ * itself; these three require a pluggable resolver.
+ */
+export type HierarchyScope = 'unit' | 'unit_and_below' | 'own_and_reports';
+
+export interface HierarchyScopeContext {
+  userId: string;
+  organizationId?: string | null;
+  tenantId?: string | null;
+}
+
+/**
+ * Pluggable resolver for {@link HierarchyScope}s. The OPEN edition ships no
+ * implementation; the ENTERPRISE package `@objectstack/security-enterprise`
+ * registers one under the `hierarchy-scope-resolver` kernel service. When
+ * absent, the sharing layer fails CLOSED to owner-only (a hierarchy scope never
+ * widens without the resolver).
+ */
+export interface IHierarchyScopeResolver {
+  /**
+   * Owner ids whose records the caller may see under `scope` (must include the
+   * caller). Empty/throw → caller falls back to owner-only.
+   */
+  resolveOwnerIds(context: HierarchyScopeContext, scope: HierarchyScope): Promise<string[]>;
+}
