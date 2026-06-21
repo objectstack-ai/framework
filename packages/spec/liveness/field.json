@@ -179,6 +179,10 @@
       "status": "live",
       "note": "objectui LookupField — dependent/cascading lookup; restricts candidates by another field's value (reads dependsOn || depends_on)."
     },
+    "allowCreate": {
+      "status": "live",
+      "note": "objectui LookupField — opt-in inline quick-create (dataSource.create from typed text) (reads allowCreate || allow_create)."
+    },
     "maxRating": {
       "status": "dead",
       "evidence": "RatingField reads `max` (RatingField.tsx:13) — dead + redundant with max",

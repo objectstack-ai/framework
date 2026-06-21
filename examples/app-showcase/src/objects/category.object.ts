@@ -15,7 +15,7 @@ export const Category = ObjectSchema.create({
 
   fields: {
     name: Field.text({ label: 'Name', required: true, searchable: true, maxLength: 120 }),
-    parent: Field.lookup('showcase_category', { label: 'Parent Category' }),
+    parent: Field.lookup('showcase_category', { label: 'Parent Category', allowCreate: true }),
     color: Field.color({ label: 'Color' }),
     sort_order: Field.number({ label: 'Sort Order', min: 0, defaultValue: 0 }),
   },

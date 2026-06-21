@@ -473,6 +473,7 @@ export const FieldSchema = lazySchema(() => z.object({
     field: z.string(),
     param: z.string().optional(),
   })])).optional().describe('Dependent lookup: restrict candidates by the value of other field(s) on the same record. String = same local/remote key; {field,param} when the remote filter key differs.'),
+  allowCreate: z.boolean().optional().describe('Allow inline quick-create from the record picker: when no match exists the user can create a record from the typed text (optimistic dataSource.create with the display field). Best for simple objects whose only required field is the display field.'),
 
   /** Calculation — CEL formula. Plain string accepted for back-compat; build emits canonical envelope. */
   expression: ExpressionInputSchema.optional().describe('Formula expression (CEL). e.g. F`record.amount * 0.1`'),
