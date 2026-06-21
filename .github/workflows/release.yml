@@ -21,7 +21,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          # 22 (not 20 like the other workflows): the downstream hotcrm smoke
+          # below clones hotcrm@v1.2.0, whose manifest pins engines.node >=22.
+          # pnpm install aborts with ERR_PNPM_UNSUPPORTED_ENGINE on Node 20.
+          node-version: '22'
 
       - name: Enable Corepack
         run: corepack enable
