@@ -45,6 +45,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       image: {
         label: "Imagen de perfil"
       },
+      manager_id: {
+        label: "Gerente"
+      },
       id: {
         label: "ID de usuario"
       },

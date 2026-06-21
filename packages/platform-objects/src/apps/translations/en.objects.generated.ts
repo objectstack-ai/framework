@@ -45,6 +45,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       image: {
         label: "Profile Image"
       },
+      manager_id: {
+        label: "Manager"
+      },
       id: {
         label: "User ID"
       },

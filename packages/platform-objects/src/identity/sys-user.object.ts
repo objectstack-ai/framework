@@ -402,6 +402,14 @@ export const SysUser = ObjectSchema.create({
       group: 'Profile',
     }),
 
+    // ── Organization ─────────────────────────────────────────────
+    manager_id: Field.lookup('sys_user', {
+      label: 'Manager',
+      required: false,
+      group: 'Organization',
+      description: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise).",
+    }),
+
     // ── System (auto-managed, hidden from create/edit forms) ─────
     id: Field.text({
       label: 'User ID',

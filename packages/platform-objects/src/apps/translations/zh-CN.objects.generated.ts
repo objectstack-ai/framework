@@ -45,6 +45,9 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       image: {
         label: "头像"
       },
+      manager_id: {
+        label: "经理"
+      },
       id: {
         label: "用户 ID"
       },

@@ -23,7 +23,7 @@ const OBJ = '/data/showcase_private_note';
 const WHO = ['alice', 'bob', 'carol', 'dave'] as const;
 type Who = (typeof WHO)[number];
 
-function scopeProfile(scope: 'unit' | 'unit_and_below') {
+function scopeProfile(scope: 'unit' | 'unit_and_below' | 'own_and_reports') {
   return PermissionSetSchema.parse({
     name: `scope_${scope}_profile`,
     label: `Scope ${scope}`,
@@ -42,7 +42,7 @@ interface World { stack: VerifyStack; tokens: Record<Who, string>; }
 
 // Build a BU world: bu_parent ⊃ bu_child (sibling bu_other is separate).
 // alice+carol ∈ bu_parent, bob ∈ bu_child, dave ∈ bu_other. Each owns one note.
-async function bootScopeWorld(scope: 'unit' | 'unit_and_below', withResolver = true): Promise<World> {
+async function bootScopeWorld(scope: 'unit' | 'unit_and_below' | 'own_and_reports', withResolver = true): Promise<World> {
   const stack = await bootStack(showcaseStack, {
     security: new SecurityPlugin({
       defaultPermissionSets: [...securityDefaultPermissionSets, scopeProfile(scope)],
@@ -109,6 +109,14 @@ async function bootScopeWorld(scope: 'unit' | 'unit_and_below', withResolver = t
   await sys('sys_business_unit_member', { id: `m_b_${p}`, business_unit_id: `bu_child_${p}`, user_id: id.bob });
   await sys('sys_business_unit_member', { id: `m_d_${p}`, business_unit_id: `bu_other_${p}`, user_id: id.dave });
 
+  // `own_and_reports` walks the sys_user.manager_id chain instead of the BU tree:
+  // alice ← bob ← carol (dave is off the chain). The BU rows above are inert for
+  // this scope — the resolver only reads manager_id here.
+  if (scope === 'own_and_reports') {
+    await ql.update('sys_user', { id: id.bob, manager_id: id.alice }, { context: { isSystem: true } });
+    await ql.update('sys_user', { id: id.carol, manager_id: id.bob }, { context: { isSystem: true } });
+  }
+
   for (const who of WHO) {
     const r = await stack.apiAs(tokens[who], 'POST', OBJ, { title: `${who} note` });
     expect(r.status, `${who} creates note`).toBeLessThan(300);
@@ -158,6 +166,25 @@ describe('showcase: scope-depth read — `unit_and_below` (ADR-0057 D1)', () => 
   it('the child member does NOT roll up into the parent', async () => {
     const t = await titles(world.stack, world.tokens.bob);
     expect(t.sort()).toEqual(['bob note']); // child has no descendants; no upward visibility
+  });
+});
+
+describe('showcase: scope-depth read — `own_and_reports` (ADR-0057 D1)', () => {
+  let world: World;
+  beforeAll(async () => { world = await bootScopeWorld('own_and_reports'); }, 120_000);
+  afterAll(async () => { await world?.stack?.stop(); });
+
+  it('widens down the manager chain (BFS), not laterally', async () => {
+    const t = await titles(world.stack, world.tokens.alice);
+    expect(t).toContain('alice note');    // own
+    expect(t).toContain('bob note');      // direct report
+    expect(t).toContain('carol note');    // report's report (chain descends)
+    expect(t).not.toContain('dave note'); // off the manager chain
+  });
+
+  it('a leaf report sees only their own', async () => {
+    const t = await titles(world.stack, world.tokens.carol);
+    expect(t.sort()).toEqual(['carol note']);
   });
 });
 

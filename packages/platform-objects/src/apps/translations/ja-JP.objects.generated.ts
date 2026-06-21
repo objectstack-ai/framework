@@ -45,6 +45,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       image: {
         label: "プロフィール画像"
       },
+      manager_id: {
+        label: "マネージャー"
+      },
       id: {
         label: "ユーザー ID"
       },
