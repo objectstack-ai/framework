@@ -46,6 +46,16 @@
         "modifyAllRecords": {
           "status": "live",
           "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts:60"
+        },
+        "readScope": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts (getEffectiveScope) + packages/plugins/plugin-sharing/src/sharing-service.ts (owner-match widened by readScope; hierarchy values delegated to IHierarchyScopeResolver)",
+          "note": "ADR-0057 D1 — read access DEPTH (own/own_and_reports/unit/unit_and_below/org). own/org enforced in open edition; hierarchy values via the enterprise hierarchy-scope-resolver (fail-closed to owner-only when absent; defineStack requires 'hierarchy-security'). Proven: packages/dogfood/test/showcase-scope-depth.dogfood.test.ts."
+        },
+        "writeScope": {
+          "status": "live",
+          "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts (getEffectiveScope) + packages/plugins/plugin-sharing/src/sharing-service.ts (canEdit owner-set widened by writeScope; hierarchy values delegated)",
+          "note": "ADR-0057 D1 — write access DEPTH (same enum as readScope)."
         }
       }
     },
