@@ -54,6 +54,28 @@ describe('registerDatasourceAdminRoutes (real HonoHttpServer)', () => {
     expect(sqlite!.configSchema?.properties?.filename?.type).toBe('string');
   });
 
+  it('GET /api/v1/datasources/:name/remote-tables lists remote tables', async () => {
+    const listRemoteTables = vi.fn().mockResolvedValue([{ name: 'customers', columnCount: 4 }]);
+    const app = mount({ listRemoteTables });
+    const res = await app.fetch(json('/api/v1/datasources/demo_ext/remote-tables'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tables: [{ name: 'customers', columnCount: 4 }] });
+    expect(listRemoteTables).toHaveBeenCalledWith('demo_ext');
+  });
+
+  it('POST /api/v1/datasources/:name/object-draft generates a draft (400 without table)', async () => {
+    const generateObjectDraft = vi.fn().mockResolvedValue({ name: 'customers', definition: { fields: { id: {} } } });
+    const app = mount({ generateObjectDraft });
+
+    const missing = await app.fetch(json('/api/v1/datasources/demo_ext/object-draft', { method: 'POST', body: JSON.stringify({}) }));
+    expect(missing.status).toBe(400);
+
+    const ok = await app.fetch(json('/api/v1/datasources/demo_ext/object-draft', { method: 'POST', body: JSON.stringify({ table: 'customers' }) }));
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).draft.name).toBe('customers');
+    expect(generateObjectDraft).toHaveBeenCalledWith('demo_ext', 'customers', {});
+  });
+
   it('POST /api/v1/datasources/test splits the inline secret out of the draft', async () => {
     const testConnection = vi.fn().mockResolvedValue({ ok: true });
     const app = mount({ testConnection });
