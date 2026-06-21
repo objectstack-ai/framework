@@ -599,7 +599,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           company: "company",
           division: "division",
           department: "department",
-          team: "team",
           office: "office",
           cost_center: "cost_center"
         }

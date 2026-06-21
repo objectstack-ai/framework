@@ -599,7 +599,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           company: "会社",
           division: "事業部",
           department: "部門",
-          team: "チーム",
           office: "オフィス",
           cost_center: "コストセンター"
         }
