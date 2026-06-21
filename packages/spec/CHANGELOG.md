@@ -1,5 +1,37 @@
 # @objectstack/spec
 
+## 9.12.0
+
+### Minor Changes
+
+- e16f2a8: ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
+  (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
+  → `sys_business_unit` (pre-launch, no aliases), introduces the platform-owned
+  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
+  owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
+  fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
+  `where`) — normalized `filter`→`where` in the engine.
+- 5f875fe: spec: add `defineX` factories for the remaining 16 writable domains and the 6
+  missing `XInput` aliases — one consistent, type-safe authoring entry per domain
+  (#2035).
+
+  New factories: `defineDatasource`, `defineConnector`, `definePolicy`,
+  `defineSharingRule`, `defineRole`, `definePermissionSet`,
+  `defineEmailTemplateDefinition`, `defineReport`, `defineWebhook`,
+  `defineObjectExtension`, `defineCube`, `defineMapping`, `defineTheme`,
+  `defineTranslationBundle`, `definePage`, `defineAction`. Each mirrors the 19
+  existing factories (`XSchema.parse(z.input<…>)`): input-shape ergonomics +
+  authoring-time validation. Because a factory is a _value_ import, a broken
+  import hard-errors instead of silently degrading to `any` (the #2023 failure
+  mode), and errors surface at `.parse()` time with field-level messages.
+
+  Also adds the previously-missing input aliases `PolicyInput`, `CubeInput`,
+  `MappingInput`, `ThemeInput`, `TranslationBundleInput`, `PageInput`.
+
+  Purely additive: no existing exports change.
+
 ## 9.11.0
 
 ### Minor Changes

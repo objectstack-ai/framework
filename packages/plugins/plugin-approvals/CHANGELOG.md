@@ -1,5 +1,26 @@
 # @objectstack/plugin-approvals
 
+## 9.12.0
+
+### Patch Changes
+
+- e16f2a8: ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
+  (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
+  → `sys_business_unit` (pre-launch, no aliases), introduces the platform-owned
+  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
+  owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
+  fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
+  `where`) — normalized `filter`→`where` in the engine.
+- Updated dependencies [e16f2a8]
+- Updated dependencies [5f875fe]
+  - @objectstack/spec@9.12.0
+  - @objectstack/platform-objects@9.12.0
+  - @objectstack/core@9.12.0
+  - @objectstack/formula@9.12.0
+  - @objectstack/metadata-core@9.12.0
+
 ## 9.11.0
 
 ### Patch Changes

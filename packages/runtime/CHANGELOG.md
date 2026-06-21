@@ -1,5 +1,40 @@
 # @objectstack/runtime
 
+## 9.12.0
+
+### Minor Changes
+
+- e16f2a8: ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
+  (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
+  → `sys_business_unit` (pre-launch, no aliases), introduces the platform-owned
+  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
+  owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
+  fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
+  `where`) — normalized `filter`→`where` in the engine.
+
+### Patch Changes
+
+- Updated dependencies [e16f2a8]
+- Updated dependencies [5f875fe]
+  - @objectstack/spec@9.12.0
+  - @objectstack/plugin-security@9.12.0
+  - @objectstack/objectql@9.12.0
+  - @objectstack/core@9.12.0
+  - @objectstack/formula@9.12.0
+  - @objectstack/metadata@9.12.0
+  - @objectstack/observability@9.12.0
+  - @objectstack/driver-memory@9.12.0
+  - @objectstack/driver-sql@9.12.0
+  - @objectstack/driver-sqlite-wasm@9.12.0
+  - @objectstack/plugin-auth@9.12.0
+  - @objectstack/plugin-org-scoping@9.12.0
+  - @objectstack/rest@9.12.0
+  - @objectstack/service-cluster@9.12.0
+  - @objectstack/service-i18n@9.12.0
+  - @objectstack/types@9.12.0
+
 ## 9.11.0
 
 ### Patch Changes

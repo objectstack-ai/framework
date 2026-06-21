@@ -1,5 +1,17 @@
 # @objectstack/example-showcase
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [e16f2a8]
+- Updated dependencies [5f875fe]
+  - @objectstack/spec@9.12.0
+  - @objectstack/runtime@9.12.0
+  - @objectstack/cloud-connection@9.12.0
+  - @objectstack/connector-rest@9.12.0
+  - @objectstack/connector-slack@9.12.0
+
 ## 0.2.0
 
 ### Minor Changes

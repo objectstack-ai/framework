@@ -1,5 +1,12 @@
 # @objectstack/fastify
 
+## 9.12.0
+
+### Patch Changes
+
+- Updated dependencies [e16f2a8]
+  - @objectstack/runtime@9.12.0
+
 ## 9.11.0
 
 ### Patch Changes
