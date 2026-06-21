@@ -82,13 +82,13 @@ describe('default permission sets', () => {
       'tenant_isolation',
     ]);
     const tenantPolicy = (member.rowLevelSecurity ?? []).find((p) => p.name === 'tenant_isolation')!;
-    expect(tenantPolicy.using).toBe('organization_id = current_user.organization_id');
+    expect(tenantPolicy.using).toBe('organization_id == current_user.organization_id');
     const orgSelf = (member.rowLevelSecurity ?? []).find((p) => p.name === 'sys_organization_self')!;
     expect(orgSelf.object).toBe('sys_organization');
-    expect(orgSelf.using).toBe('id = current_user.organization_id');
+    expect(orgSelf.using).toBe('id == current_user.organization_id');
     const sessionSelf = (member.rowLevelSecurity ?? []).find((p) => p.name === 'sys_session_self')!;
     expect(sessionSelf.object).toBe('sys_session');
-    expect(sessionSelf.using).toBe('user_id = current_user.id');
+    expect(sessionSelf.using).toBe('user_id == current_user.id');
   });
 
   it('viewer_readonly denies writes', () => {

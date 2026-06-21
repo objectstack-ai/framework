@@ -1321,8 +1321,47 @@ describe('RLSCompiler D4 — uncompilable predicates are surfaced', () => {
     const compiler = new RLSCompiler();
     compiler.setLogger({ warn: (message: string) => warned.push(message) });
     // valid shape; `department` simply isn't in the context → intentional fail-closed skip.
-    const policy: any = { name: 'dept', object: 'thing', operation: 'select', using: 'dept = current_user.department' };
+    // CEL form (SQL `=` would now additionally emit a deprecation warn).
+    const policy: any = { name: 'dept', object: 'thing', operation: 'select', using: 'dept == current_user.department' };
     compiler.compileFilter([policy], { userId: 'u1' } as any);
+    expect(warned.length).toBe(0);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// ADR-0058 D1 — SQL→CEL deprecation bridge: legacy SQL-style RLS predicates
+// still COMPILE (back-compat for stored predicates) but emit a deprecation warn;
+// canonical CEL passes through silently (idempotent bridge).
+// ---------------------------------------------------------------------------
+describe('RLSCompiler — SQL→CEL deprecation bridge (ADR-0058 D1)', () => {
+  it('a legacy SQL-style predicate still compiles AND warns deprecation', () => {
+    const warned: string[] = [];
+    const compiler = new RLSCompiler();
+    compiler.setLogger({ warn: (m: string) => warned.push(m) });
+    const policy: any = { object: 'task', operation: 'select', using: 'owner_id = current_user.id' };
+    const filter = compiler.compileFilter([policy], { userId: 'u1' } as any);
+    expect(filter).toEqual({ owner_id: 'u1' }); // bridge keeps it working
+    expect(warned.some((m) => m.includes('DEPRECATED SQL-style'))).toBe(true);
+  });
+
+  it('a legacy SQL `IN (...)` predicate still compiles AND warns', () => {
+    const warned: string[] = [];
+    const compiler = new RLSCompiler();
+    compiler.setLogger({ warn: (m: string) => warned.push(m) });
+    const policy: any = { object: 'p', operation: 'select', using: 'id IN (current_user.org_user_ids)' };
+    const filter = compiler.compileFilter([policy], { userId: 'u1', org_user_ids: ['u1', 'u2'] } as any);
+    expect(filter).toEqual({ id: { $in: ['u1', 'u2'] } });
+    expect(warned.some((m) => m.includes('DEPRECATED SQL-style'))).toBe(true);
+  });
+
+  it('canonical CEL passes through with NO deprecation warn (idempotent bridge)', () => {
+    const warned: string[] = [];
+    const compiler = new RLSCompiler();
+    compiler.setLogger({ warn: (m: string) => warned.push(m) });
+    const policy: any = { object: 'task', operation: 'select', using: 'owner_id == current_user.id' };
+    const filter = compiler.compileFilter([policy], { userId: 'u1' } as any);
+    expect(filter).toEqual({ owner_id: 'u1' }); // identical result to the SQL form
     expect(warned.length).toBe(0);
   });
 });

@@ -159,7 +159,7 @@ export const PermissionSetSchema = lazySchema(() => z.object({
    *   name: 'tenant_filter',
    *   object: 'account',
    *   operation: 'select',
-   *   using: 'organization_id = current_user.organization_id'
+   *   using: 'organization_id == current_user.organization_id'
    * }]
    * ```
    */

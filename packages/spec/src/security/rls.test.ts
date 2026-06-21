@@ -33,7 +33,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'tenant_isolation',
         object: 'account',
         operation: 'select',
-        using: 'organization_id = current_user.organization_id',
+        using: 'organization_id == current_user.organization_id',
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
@@ -66,7 +66,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'valid_policy_name',
         object: 'account',
         operation: 'select',
-        using: 'owner_id = current_user.id',
+        using: 'owner_id == current_user.id',
       };
 
       expect(() => RowLevelSecurityPolicySchema.parse(validPolicy)).not.toThrow();
@@ -75,7 +75,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'InvalidPolicyName', // camelCase not allowed
         object: 'account',
         operation: 'select',
-        using: 'owner_id = current_user.id',
+        using: 'owner_id == current_user.id',
       };
 
       expect(() => RowLevelSecurityPolicySchema.parse(invalidPolicy)).toThrow();
@@ -113,7 +113,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'test_policy',
         object: 'account',
         operation: 'select',
-        using: 'owner_id = current_user.id',
+        using: 'owner_id == current_user.id',
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
@@ -125,7 +125,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'test_policy',
         object: 'account',
         operation: 'select',
-        using: 'owner_id = current_user.id',
+        using: 'owner_id == current_user.id',
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
@@ -137,8 +137,8 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'tenant_all_ops',
         object: 'account',
         operation: 'all',
-        using: 'organization_id = current_user.organization_id',
-        check: 'organization_id = current_user.organization_id',
+        using: 'organization_id == current_user.organization_id',
+        check: 'organization_id == current_user.organization_id',
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
@@ -360,14 +360,14 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.name).toBe('opportunity_owner_access');
         expect(policy.object).toBe('opportunity');
         expect(policy.operation).toBe('all');
-        expect(policy.using).toBe('owner_id = current_user.id');
+        expect(policy.using).toBe('owner_id == current_user.id');
         expect(policy.enabled).toBe(true);
       });
 
       it('should create owner-based policy with custom owner field', () => {
         const policy = RLS.ownerPolicy('task', 'assigned_to_id');
 
-        expect(policy.using).toBe('assigned_to_id = current_user.id');
+        expect(policy.using).toBe('assigned_to_id == current_user.id');
       });
     });
 
@@ -378,16 +378,16 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.name).toBe('account_tenant_isolation');
         expect(policy.object).toBe('account');
         expect(policy.operation).toBe('all');
-        expect(policy.using).toBe('organization_id = current_user.organization_id');
-        expect(policy.check).toBe('organization_id = current_user.organization_id');
+        expect(policy.using).toBe('organization_id == current_user.organization_id');
+        expect(policy.check).toBe('organization_id == current_user.organization_id');
         expect(policy.enabled).toBe(true);
       });
 
       it('should create tenant isolation policy with custom field', () => {
         const policy = RLS.tenantPolicy('order', 'workspace_id');
 
-        expect(policy.using).toBe('workspace_id = current_user.organization_id');
-        expect(policy.check).toBe('workspace_id = current_user.organization_id');
+        expect(policy.using).toBe('workspace_id == current_user.organization_id');
+        expect(policy.check).toBe('workspace_id == current_user.organization_id');
       });
     });
 
@@ -415,7 +415,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.name).toBe('account_ceo_cfo_full_access');
         expect(policy.object).toBe('account');
         expect(policy.operation).toBe('all');
-        expect(policy.using).toBe('1 = 1'); // Always true
+        expect(policy.using).toBe('1 == 1'); // Always true
         expect(policy.roles).toEqual(['ceo', 'cfo']);
         expect(policy.enabled).toBe(true);
       });
@@ -430,8 +430,8 @@ describe('Row-Level Security (RLS) Protocol', () => {
         description: 'Ensure users only access data from their own organization',
         object: 'customer',
         operation: 'all',
-        using: 'organization_id = current_user.organization_id',
-        check: 'organization_id = current_user.organization_id',
+        using: 'organization_id == current_user.organization_id',
+        check: 'organization_id == current_user.organization_id',
         enabled: true,
         tags: ['multi-tenant', 'security'],
       };
@@ -529,14 +529,14 @@ describe('Row-Level Security (RLS) Protocol', () => {
         description: 'C-level executives can view all data',
         object: 'financial_data',
         operation: 'all',
-        using: '1 = 1', // Always true - see everything
+        using: '1 == 1', // Always true - see everything
         roles: ['ceo', 'cfo', 'cto'],
         enabled: true,
         priority: 100, // Highest priority
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
-      expect(result.using).toBe('1 = 1');
+      expect(result.using).toBe('1 == 1');
       expect(result.priority).toBe(100);
     });
   });
@@ -561,7 +561,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         name: 'prevent_backdating',
         object: 'transaction',
         operation: 'insert',
-        using: '1 = 1',
+        using: '1 == 1',
         check: 'transaction_date >= CURRENT_DATE - INTERVAL "30 days"',
         enabled: true,
       };
@@ -599,13 +599,13 @@ describe('Row-Level Security (RLS) Protocol', () => {
         policyName: 'owner_access',
         granted: false,
         evaluationDurationMs: 15.3,
-        matchedCondition: 'owner_id = current_user.id',
+        matchedCondition: 'owner_id == current_user.id',
         rowCount: 0,
         metadata: { source: 'api', requestId: 'req-789' },
       });
 
       expect(event.granted).toBe(false);
-      expect(event.matchedCondition).toBe('owner_id = current_user.id');
+      expect(event.matchedCondition).toBe('owner_id == current_user.id');
       expect(event.rowCount).toBe(0);
       expect(event.metadata?.source).toBe('api');
     });

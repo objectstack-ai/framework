@@ -18,25 +18,25 @@ import { z } from 'zod';
  * 
  * 1. **Multi-Tenant Data Isolation**
  *    - Users only see records from their organization
- *    - `using: "organization_id = current_user.organization_id"`
+ *    - `using: "organization_id == current_user.organization_id"`
  * 
  * 2. **Ownership-Based Access**
  *    - Users only see records they own
- *    - `using: "owner_id = current_user.id"`
+ *    - `using: "owner_id == current_user.id"`
  * 
  * 3. **Organization Member Visibility**
  *    - Users see fellow members of their active organization
- *    - `using: "id IN (current_user.org_user_ids)"`
+ *    - `using: "id in current_user.org_user_ids"`
  *      (`org_user_ids` is pre-resolved by the runtime)
  *
  * 4. **Territory / Regional Access (§7.3.1 dynamic membership)**
  *    - Sales reps only see accounts in their assigned territories
- *    - `using: "account_id IN (current_user.territory_account_ids)"`
+ *    - `using: "account_id in current_user.territory_account_ids"`
  *      (the runtime stages `territory_account_ids` in `ExecutionContext.rlsMembership`)
  *
  * 5. **Manager / Hierarchy Access (§7.3.1 dynamic membership)**
  *    - Managers see records assigned to anyone they manage
- *    - `using: "assigned_to_id IN (current_user.team_member_ids)"`
+ *    - `using: "assigned_to_id in current_user.team_member_ids"`
  *      (the runtime pre-resolves `team_member_ids`, no subquery needed)
  * 
  * ## PostgreSQL RLS Comparison
@@ -58,7 +58,7 @@ import { z } from 'zod';
  *   name: 'tenant_isolation',
  *   object: 'account',
  *   operation: 'select',
- *   using: 'organization_id = current_user.organization_id'
+ *   using: 'organization_id == current_user.organization_id'
  * }
  * ```
  * 
@@ -125,7 +125,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   label: 'Multi-Tenant Data Isolation',
  *   object: 'account',
  *   operation: 'select',
- *   using: 'organization_id = current_user.organization_id',
+ *   using: 'organization_id == current_user.organization_id',
  *   enabled: true
  * }
  * ```
@@ -137,7 +137,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   label: 'Users Can View Their Own Records',
  *   object: 'opportunity',
  *   operation: 'select',
- *   using: 'owner_id = current_user.id',
+ *   using: 'owner_id == current_user.id',
  *   enabled: true
  * }
  * ```
@@ -151,7 +151,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   operation: 'select',
  *   // The runtime resolves the manager's reports into
  *   // ExecutionContext.rlsMembership.team_member_ids — no subquery needed.
- *   using: 'assigned_to_id IN (current_user.team_member_ids)',
+ *   using: 'assigned_to_id in current_user.team_member_ids',
  *   roles: ['manager', 'director'],
  *   enabled: true
  * }
@@ -164,7 +164,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   label: 'Prevent Cross-Tenant Data Creation',
  *   object: 'account',
  *   operation: 'insert',
- *   check: 'organization_id = current_user.organization_id',
+ *   check: 'organization_id == current_user.organization_id',
  *   enabled: true
  * }
  * ```
@@ -178,7 +178,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   operation: 'select',
  *   // The runtime stages the rep's territory accounts in
  *   // ExecutionContext.rlsMembership.territory_account_ids.
- *   using: 'id IN (current_user.territory_account_ids)',
+ *   using: 'id in current_user.territory_account_ids',
  *   roles: ['sales_rep'],
  *   enabled: true
  * }
@@ -203,7 +203,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   label: 'Executives See All Records',
  *   object: 'account',
  *   operation: 'all',
- *   using: '1 = 1', // Always true - see everything
+ *   using: '1 == 1', // Always true - see everything
  *   roles: ['ceo', 'cfo', 'cto'],
  *   enabled: true
  * }
@@ -739,7 +739,7 @@ export const RLS = {
     label: `Owner Access for ${object}`,
     object,
     operation: 'all',
-    using: `${ownerField} = current_user.id`,
+    using: `${ownerField} == current_user.id`,
     enabled: true,
     priority: 0,
   }),
@@ -758,8 +758,8 @@ export const RLS = {
     label: `Tenant Isolation for ${object}`,
     object,
     operation: 'all',
-    using: `${tenantField} = current_user.organization_id`,
-    check: `${tenantField} = current_user.organization_id`,
+    using: `${tenantField} == current_user.organization_id`,
+    check: `${tenantField} == current_user.organization_id`,
     enabled: true,
     priority: 0,
   }),
@@ -786,7 +786,7 @@ export const RLS = {
     label: `Full Access for ${roles.join(', ')}`,
     object,
     operation: 'all',
-    using: '1 = 1', // Always true
+    using: '1 == 1', // Always true
     roles,
     enabled: true,
     priority: 0,

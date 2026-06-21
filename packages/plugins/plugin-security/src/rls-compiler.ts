@@ -85,9 +85,12 @@ export function isSupportedRlsExpression(expression: string): boolean {
 }
 
 /**
- * Bridge the legacy SQL-ish RLS `using` subset to canonical CEL so it flows
+ * @deprecated Transitional bridge (ADR-0058 D1). Canonical RLS predicates are
+ * CEL; this exists ONLY so stored/legacy SQL-ish `using`/`check` keeps compiling
+ * until it is migrated. Bridge the legacy SQL subset to canonical CEL so it flows
  * through the ONE compiler: `=` → `==`, `IN` → `in`. Quoted string literals are
- * left untouched. Only this historically-supported subset is bridged — compound
+ * left untouched. It is IDEMPOTENT on CEL input (a `==`/`in` predicate is
+ * unchanged), so authored-CEL seeds pass through as no-ops (no deprecation warn). Only this historically-supported subset is bridged — compound
  * predicates should be authored in canonical CEL (`&&` / `||`); anything outside
  * the subset (subqueries, SQL `AND`/`OR`, `LIKE`) stays unparseable and so fails
  * closed, exactly as before.
@@ -243,7 +246,17 @@ export class RLSCompiler {
     userCtx: RLSUserContext
   ): Record<string, unknown> | null {
     if (!expression) return null;
-    const result = compileCelToFilter(sqlPredicateToCel(expression), {
+    // [ADR-0058 D1] CEL is canonical. The legacy SQL-ish form still compiles via
+    // the transitional bridge, but we surface it so authored policies migrate to
+    // CEL — the bridge will be removed once no stored predicate needs it.
+    const cel = sqlPredicateToCel(expression);
+    if (cel !== expression) {
+      this.logger?.warn?.(
+        `[RLS] DEPRECATED SQL-style predicate "${expression}" — author RLS using/check in ` +
+          `canonical CEL (\`==\`, \`in\`). The SQL compatibility bridge is transitional.`,
+      );
+    }
+    const result = compileCelToFilter(cel, {
       variables: { current_user: userCtx as Record<string, unknown> },
     });
     // Any fault — unsupported shape, parse error, or an unresolved/null
