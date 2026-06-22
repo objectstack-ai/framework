@@ -563,6 +563,8 @@ cd my-app && pnpm install
 os dev --ui          # dev server + Studio (auto-hops port if taken)
 os validate          # metadata cross-reference checks
 os compile           # produce dist/ artifact
+os migrate plan      # preview metadata↔DB schema drift (additive sync never alters existing columns)
+os migrate apply     # reconcile DB to metadata (loosening only; --allow-destructive for drops/tightenings)
 PORT=8080 os start   # production — pin the port explicitly (see Ports & networking)
 ```
 

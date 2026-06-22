@@ -419,6 +419,49 @@ os info --json         # JSON output for tooling
   Loaded in 90ms
 ```
 
+### Schema migrations
+
+The metadata→database sync is **additive-only**: on boot it creates missing
+tables and adds new columns, but never alters or drops existing ones. So a
+*non-additive* change to an object already backed by a database — relaxing
+`required` (drop `NOT NULL`), changing a field's type/length, or removing a
+field — silently diverges from the live schema, and the physical column wins at
+write time. `os migrate` reconciles the database to the metadata (the source of
+truth).
+
+| Command | Description |
+|---------|-------------|
+| `os migrate plan` | Dry-run: show how the database has drifted from metadata, categorised safe / needs-confirm / destructive (no changes applied) |
+| `os migrate apply` | Reconcile the database to metadata. Applies loosening changes; destructive ones require `--allow-destructive` |
+
+```bash
+os migrate plan                              # Preview drift (no changes)
+os migrate apply                             # Apply safe (loosening) changes, with a confirm prompt
+os migrate apply --yes                       # Skip the prompt (CI / scripts)
+os migrate apply --allow-destructive --yes   # Also drop orphaned columns, tighten NOT NULL, narrow types
+os migrate plan --json                       # Machine-readable output
+```
+
+| Category | Examples | Applied by |
+|----------|----------|------------|
+| `safe` | relax `NOT NULL` → nullable, widen a `varchar` | `os migrate apply` (and dev auto-reconcile) |
+| `needs_confirm` | non-narrowing type change | `os migrate apply` |
+| `destructive` | drop an orphaned column, tighten `NOT NULL`, narrow a type | `os migrate apply --allow-destructive` |
+
+<Callout type="tip">
+**Dev self-heal.** `os dev` runs the SQL driver with `autoMigrate: 'safe'`, so
+loosening changes (e.g. you just made a field optional) are applied to your
+existing dev database automatically on restart — no `os migrate` needed, no data
+loss. Auto-reconcile is **dev-only and never destructive**; it is force-disabled
+under `NODE_ENV=production`, where you run `os migrate` deliberately.
+</Callout>
+
+<Callout type="warn">
+`os migrate` only sees objects in your **compiled artifact** — run `os build`
+first. It never drops a table that is absent from your metadata, and on SQLite
+it reconciles via a table rebuild (copy → swap) that preserves your data.
+</Callout>
+
 ### Scaffolding
 
 | Command | Alias | Description |
