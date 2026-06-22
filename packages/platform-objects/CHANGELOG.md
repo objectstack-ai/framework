@@ -1,5 +1,12 @@
 # @objectstack/platform-objects
 
+## 10.1.0
+
+### Patch Changes
+
+- @objectstack/spec@10.1.0
+- @objectstack/metadata-core@10.1.0
+
 ## 10.0.0
 
 ### Major Changes

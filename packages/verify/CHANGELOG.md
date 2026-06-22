@@ -1,5 +1,25 @@
 # @objectstack/verify
 
+## 10.1.0
+
+### Patch Changes
+
+- Updated dependencies [517dad9]
+  - @objectstack/rest@10.1.0
+  - @objectstack/driver-sqlite-wasm@10.1.0
+  - @objectstack/runtime@10.1.0
+  - @objectstack/spec@10.1.0
+  - @objectstack/core@10.1.0
+  - @objectstack/objectql@10.1.0
+  - @objectstack/plugin-auth@10.1.0
+  - @objectstack/plugin-hono-server@10.1.0
+  - @objectstack/plugin-org-scoping@10.1.0
+  - @objectstack/plugin-security@10.1.0
+  - @objectstack/plugin-sharing@10.1.0
+  - @objectstack/service-analytics@10.1.0
+  - @objectstack/service-automation@10.1.0
+  - @objectstack/service-settings@10.1.0
+
 ## 10.0.0
 
 ### Minor Changes

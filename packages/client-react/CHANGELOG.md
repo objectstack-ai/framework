@@ -1,5 +1,13 @@
 # @objectstack/client-react
 
+## 10.1.0
+
+### Patch Changes
+
+- @objectstack/client@10.1.0
+- @objectstack/spec@10.1.0
+- @objectstack/core@10.1.0
+
 ## 10.0.0
 
 ### Patch Changes

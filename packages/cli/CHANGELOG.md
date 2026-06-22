@@ -1,5 +1,101 @@
 # @objectstack/cli
 
+## 10.1.0
+
+### Minor Changes
+
+- 7cf283a: Make `os validate` the author-time verification gate and steer scaffolds toward it.
+
+  - **`os validate`** now runs the same CEL/predicate gate as `os build`/`os compile`
+    (ADR-0032): every `visible`/`disabled`/`requiredWhen`/validation/flow/sharing
+    predicate is checked for CEL syntax and `record.<field>` existence on the target
+    object. It already ran the protocol schema and widget-binding checks; the
+    expression gate closes the gap so a bare field ref (`done` instead of
+    `record.done`) — which silently hides an action on every record at runtime
+    (#2183/#2185) — fails validation instead of shipping. `os validate` is now a
+    read-only superset of the build's checks (no artifact emitted).
+  - **`create-objectstack`** now emits an `AGENTS.md` (and `.github/copilot-instructions.md`)
+    into every generated project instructing coding agents to run `npm run validate`
+    after editing metadata, aligns the blank template's `dev`/`start` scripts with the
+    example apps (`objectstack dev`/`objectstack start`), and sharpens the post-create
+    "Next steps" output.
+
+- 517dad9: Schema drift detection + `os migrate` for non-additive metadata changes (#2186).
+
+  The metadata→DB schema sync was additive-only: it created tables and added
+  columns but never altered/dropped existing ones, so relaxing `required`,
+  changing a type/length, or dropping a field silently diverged from an existing
+  database. The physical column won at write time, surfacing a misleading
+  `organization_id is required` 400 even though `/meta` reported the field
+  optional.
+
+  - **driver-sql** — the SQL driver now detects managed-schema drift (metadata is
+    the source of truth) and categorises each divergence `safe` / `needs_confirm`
+    / `destructive`. `initObjects` warns once per divergence with an actionable
+    hint. A new opt-in `SqlDriverConfig.autoMigrate: 'safe'` auto-applies the
+    _loosening_ subset (relax `NOT NULL`, widen varchar) so an existing dev DB
+    self-heals on restart — never destructive, force-disabled under
+    `NODE_ENV=production`. New public methods `detectManagedDrift()` /
+    `applyMigrationEntries()`. SQLite reconciles via the official table-rebuild
+    (copy → swap), preserving data; Postgres/MySQL alter in place.
+  - **cli** — new `os migrate plan` (dry-run, categorised diff) and
+    `os migrate apply` (`--allow-destructive` for drops/tightenings, confirm gate,
+    `--json`). `os dev`/`serve` now pass `autoMigrate: 'safe'` in dev only.
+  - **rest** — a `NOT NULL` violation that reaches the driver (metadata validation
+    already passed) now carries a drift-aware `hint` pointing at `os migrate`,
+    instead of only the misleading "field is required" message. The
+    `VALIDATION_FAILED` / `fields` envelope is unchanged for back-compat.
+
+### Patch Changes
+
+- Updated dependencies [517dad9]
+  - @objectstack/driver-sql@10.1.0
+  - @objectstack/rest@10.1.0
+  - @objectstack/driver-sqlite-wasm@10.1.0
+  - @objectstack/runtime@10.1.0
+  - @objectstack/service-datasource@10.1.0
+  - @objectstack/verify@10.1.0
+  - @objectstack/client@10.1.0
+  - @objectstack/cloud-connection@10.1.0
+  - @objectstack/spec@10.1.0
+  - @objectstack/console@10.1.0
+  - @objectstack/core@10.1.0
+  - @objectstack/types@10.1.0
+  - @objectstack/objectql@10.1.0
+  - @objectstack/observability@10.1.0
+  - @objectstack/formula@10.1.0
+  - @objectstack/platform-objects@10.1.0
+  - @objectstack/studio@10.1.0
+  - @objectstack/setup@10.1.0
+  - @objectstack/driver-memory@10.1.0
+  - @objectstack/driver-mongodb@10.1.0
+  - @objectstack/plugin-approvals@10.1.0
+  - @objectstack/plugin-audit@10.1.0
+  - @objectstack/plugin-auth@10.1.0
+  - @objectstack/plugin-email@10.1.0
+  - @objectstack/plugin-hono-server@10.1.0
+  - @objectstack/mcp@10.1.0
+  - @objectstack/plugin-org-scoping@10.1.0
+  - @objectstack/plugin-reports@10.1.0
+  - @objectstack/plugin-security@10.1.0
+  - @objectstack/plugin-sharing@10.1.0
+  - @objectstack/plugin-webhooks@10.1.0
+  - @objectstack/trigger-record-change@10.1.0
+  - @objectstack/trigger-api@10.1.0
+  - @objectstack/trigger-schedule@10.1.0
+  - @objectstack/service-ai@10.1.0
+  - @objectstack/service-analytics@10.1.0
+  - @objectstack/service-automation@10.1.0
+  - @objectstack/service-cache@10.1.0
+  - @objectstack/service-job@10.1.0
+  - @objectstack/service-messaging@10.1.0
+  - @objectstack/service-package@10.1.0
+  - @objectstack/service-queue@10.1.0
+  - @objectstack/service-realtime@10.1.0
+  - @objectstack/service-settings@10.1.0
+  - @objectstack/service-storage@10.1.0
+  - @objectstack/account@10.1.0
+
 ## 10.0.0
 
 ### Minor Changes

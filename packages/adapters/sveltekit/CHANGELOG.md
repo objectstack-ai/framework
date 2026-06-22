@@ -1,5 +1,11 @@
 # @objectstack/sveltekit
 
+## 10.1.0
+
+### Patch Changes
+
+- @objectstack/runtime@10.1.0
+
 ## 10.0.0
 
 ### Patch Changes
