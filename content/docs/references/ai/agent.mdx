@@ -76,6 +76,7 @@ const result = AIKnowledge.parse(data);
 | **instructions** | `string` | ✅ | System Prompt / Prime Directives |
 | **model** | `Object` | optional |  |
 | **lifecycle** | `Object` | optional | State machine defining the agent conversation follow and constraints |
+| **surface** | `Enum<'ask' \| 'build'>` | ✅ | Product surface this agent binds ('ask' | 'build') — ADR-0063 §1 |
 | **skills** | `string[]` | optional | Skill names to attach (Agent→Skill→Tool architecture) |
 | **tools** | `Object[]` | optional | Direct tool references (legacy fallback) |
 | **knowledge** | `Object` | optional | RAG access |

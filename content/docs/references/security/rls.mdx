@@ -25,31 +25,37 @@ permissions (CRUD), RLS provides record-level filtering.
 
 - Users only see records from their organization
 
-- `using: "organization_id = current_user.organization_id"`
+- `using: "organization_id == current_user.organization_id"`
 
 2. **Ownership-Based Access**
 
 - Users only see records they own
 
-- `using: "owner_id = current_user.id"`
+- `using: "owner_id == current_user.id"`
 
-3. **Department-Based Access**
+3. **Organization Member Visibility**
 
-- Users only see records from their department
+- Users see fellow members of their active organization
 
-- `using: "department = current_user.department"`
+- `using: "id in current_user.org_user_ids"`
 
-4. **Regional Access Control**
+(`org_user_ids` is pre-resolved by the runtime)
 
-- Sales reps only see accounts in their territory
+4. **Territory / Regional Access (§7.3.1 dynamic membership)**
 
-- `using: "region IN (current_user.assigned_regions)"`
+- Sales reps only see accounts in their assigned territories
 
-5. **Time-Based Access**
+- `using: "account_id in current_user.territory_account_ids"`
 
-- Users can only access active records
+(the runtime stages `territory_account_ids` in `ExecutionContext.rlsMembership`)
 
-- `using: "status = 'active' AND expiry_date > NOW()"`
+5. **Manager / Hierarchy Access (§7.3.1 dynamic membership)**
+
+- Managers see records assigned to anyone they manage
+
+- `using: "assigned_to_id in current_user.team_member_ids"`
+
+(the runtime pre-resolves `team_member_ids`, no subquery needed)
 
 ## PostgreSQL RLS Comparison
 
@@ -83,7 +89,7 @@ object: 'account',
 
 operation: 'select',
 
-using: 'organization_id = current_user.organization_id'
+using: 'organization_id == current_user.organization_id'
 
 \}
 
@@ -105,11 +111,11 @@ Salesforce:
 
 ObjectStack RLS:
 
-- More flexible formula-based conditions
+- A small, fixed expression grammar (equality, set-membership, always-true)
 
-- Direct SQL-like syntax
+- Subquery-shaped needs are pre-resolved by the runtime (§7.3.1)
 
-- Supports complex logic with AND/OR/NOT
+- Multiple policies OR-combine for union (any-match-allows) semantics
 
 ## Best Practices
 
@@ -265,7 +271,7 @@ const result = RLSAuditConfig.parse(data);
 | **description** | `string` | optional | Policy description and business justification |
 | **object** | `string` | ✅ | Target object name |
 | **operation** | `Enum<'select' \| 'insert' \| 'update' \| 'delete' \| 'all'>` | ✅ | Database operation this policy applies to |
-| **using** | `string` | optional | Filter condition for SELECT/UPDATE/DELETE (PostgreSQL SQL WHERE clause syntax with parameterized context variables). Optional for INSERT-only policies. |
+| **using** | `string` | optional | Filter condition for SELECT/UPDATE/DELETE. One of the four compiler-supported forms: `field = current_user.<prop>`, `field = 'literal'`, `field IN (current_user.<array>)`, or `1 = 1`. Optional for INSERT-only policies. |
 | **check** | `string` | optional | Validation condition for INSERT/UPDATE (defaults to USING clause if not specified - enforced at application level) |
 | **roles** | `string[]` | optional | Roles this policy applies to (omit for all roles) |
 | **enabled** | `boolean` | ✅ | Whether this policy is active |

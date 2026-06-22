@@ -24,8 +24,8 @@ Refined with enterprise data lifecycle controls:
 ## TypeScript Usage
 
 ```typescript
-import { FieldPermission, ObjectPermission, PermissionSet } from '@objectstack/spec/security';
-import type { FieldPermission, ObjectPermission, PermissionSet } from '@objectstack/spec/security';
+import { FieldPermission, ObjectAccessScope, ObjectPermission, PermissionSet } from '@objectstack/spec/security';
+import type { FieldPermission, ObjectAccessScope, ObjectPermission, PermissionSet } from '@objectstack/spec/security';
 
 // Validate data
 const result = FieldPermission.parse(data);
@@ -45,6 +45,19 @@ const result = FieldPermission.parse(data);
 
 ---
 
+## ObjectAccessScope
+
+### Allowed Values
+
+* `own`
+* `own_and_reports`
+* `unit`
+* `unit_and_below`
+* `org`
+
+
+---
+
 ## ObjectPermission
 
 ### Properties
@@ -60,6 +73,8 @@ const result = FieldPermission.parse(data);
 | **allowPurge** | `boolean` | ✅ | [EXPERIMENTAL — not enforced] Permanently delete (Hard Delete/GDPR) |
 | **viewAllRecords** | `boolean` | ✅ | View All Data (Bypass Sharing) |
 | **modifyAllRecords** | `boolean` | ✅ | Modify All Data (Bypass Sharing) |
+| **readScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Read depth: own|unit|unit_and_below|org |
+| **writeScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Write depth: own|unit|unit_and_below|org |
 
 
 ---
@@ -73,6 +88,7 @@ const result = FieldPermission.parse(data);
 | **name** | `string` | ✅ | Permission set unique name (lowercase snake_case) |
 | **label** | `string` | optional | Display label |
 | **isProfile** | `boolean` | ✅ | Whether this is a user profile |
+| **isDefault** | `boolean` | ✅ | [ADR-0056 D7] When true, this profile is the FALLBACK assigned to authenticated users who have no explicit grants — an app declares its default access posture here instead of relying on the built-in member_default. Foundation for SSO/JIT provisioning. |
 | **objects** | `Record<string, Object>` | ✅ | Entity permissions |
 | **fields** | `Record<string, Object>` | optional | Field level security |
 | **systemPermissions** | `string[]` | optional | System level capabilities |

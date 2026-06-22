@@ -48,12 +48,18 @@ const result = ExecutionContext.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **userId** | `string` | optional |  |
+| **actor** | `string` | optional |  |
+| **email** | `string` | optional |  |
 | **tenantId** | `string` | optional |  |
+| **timezone** | `string` | optional |  |
+| **locale** | `string` | optional |  |
+| **currency** | `string` | optional |  |
 | **roles** | `string[]` | ✅ |  |
 | **permissions** | `string[]` | ✅ |  |
 | **systemPermissions** | `string[]` | optional |  |
 | **tabPermissions** | `Record<string, Enum<'visible' \| 'hidden' \| 'default_on' \| 'default_off'>>` | optional |  |
 | **org_user_ids** | `string[]` | optional |  |
+| **rlsMembership** | `Record<string, string[]>` | optional |  |
 | **isSystem** | `boolean` | ✅ |  |
 | **accessToken** | `string` | optional |  |
 | **transaction** | `any` | optional |  |

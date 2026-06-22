@@ -36,6 +36,7 @@ const result = Skill.parse(data);
 | **name** | `string` | ✅ | Skill unique identifier (snake_case) |
 | **label** | `string` | ✅ | Skill display name |
 | **description** | `string` | optional | Skill description |
+| **surface** | `Enum<'ask' \| 'build' \| 'both'>` | ✅ | Agent surface this skill binds to ('ask' | 'build' | 'both') — ADR-0063 §3 |
 | **instructions** | `string` | optional | LLM instructions when skill is active |
 | **tools** | `string[]` | ✅ | Tool names belonging to this skill (supports trailing wildcard, e.g. `action_*`) |
 | **triggerPhrases** | `string[]` | optional | Phrases that activate this skill |

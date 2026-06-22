@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -41,19 +41,6 @@ const result = ApiMethod.parse(data);
 * `purge`
 * `import`
 * `export`
-
-
----
-
-## CDCConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **enabled** | `boolean` | ✅ | Enable Change Data Capture |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Event types to capture |
-| **destination** | `string` | ✅ | Destination endpoint (e.g., "kafka://topic", "webhook://url") |
 
 
 ---

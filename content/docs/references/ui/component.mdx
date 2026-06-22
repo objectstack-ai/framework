@@ -14,8 +14,8 @@ Empty Properties Schema
 ## TypeScript Usage
 
 ```typescript
-import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
-import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AIChatWindowProps.parse(data);
@@ -80,6 +80,22 @@ const result = AIChatWindowProps.parse(data);
 | **alt** | `string` | optional | Alt text for accessibility |
 | **fit** | `Enum<'cover' \| 'contain' \| 'fill'>` | ✅ | Image object-fit mode |
 | **height** | `number` | optional | Fixed height in pixels |
+| **aria** | `Object` | optional | ARIA accessibility attributes |
+
+
+---
+
+## ElementMetadataViewerProps
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `Enum<'state_machine' \| 'flow' \| 'permission'>` | ✅ | Metadata view kind (ADR-0051): state_machine | flow | permission |
+| **name** | `string` | ✅ | Target metadata item name; resolved package-scoped (ADR-0048), then dependencies (ADR-0046 §3.3) |
+| **object** | `string` | optional | Owning object — required for object-scoped kinds: state_machine is a rule ON an object (ADR-0020), permission renders a matrix FOR one; omit for top-level flow |
+| **mode** | `Enum<'diagram' \| 'matrix' \| 'summary'>` | optional | Render form; defaults per type (diagram for flow/state_machine, matrix for permission) |
+| **detail** | `Enum<'business' \| 'technical'>` | ✅ | Authoring altitude (ADR-0051 §3.4): business collapses technical flow nodes to business steps + approvals. NOT access (cf. book.audience); permission projection is automatic and render-time, never set here |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
 
 

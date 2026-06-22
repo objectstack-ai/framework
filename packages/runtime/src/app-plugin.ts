@@ -298,11 +298,11 @@ export class AppPlugin implements Plugin {
             // A fail-fast (external + onMismatch:'fail') connect error propagates
             // to brick boot as intended (ADR-0062 D5); other errors are already
             // degraded inside the connection service. Re-throw so the kernel
-            // surfaces the real cause.
-            ctx.logger.error('[AppPlugin] declared-datasource auto-connect failed', {
-                appId,
-                error: (err as Error)?.message ?? String(err),
-            });
+            // surfaces the real cause. (Single-string message: the context
+            // logger types `error(message, error?)`, not a meta object.)
+            ctx.logger.error(
+                `[AppPlugin] declared-datasource auto-connect failed for app '${appId}': ${(err as Error)?.message ?? String(err)}`,
+            );
             throw err;
         }
 

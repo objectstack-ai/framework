@@ -16,8 +16,8 @@ Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
 ## TypeScript Usage
 
 ```typescript
-import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
-import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GanttQuickFilter, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, TreeConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GanttQuickFilter, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, TreeConfig, UserActionsConfig, UserFilterField, UserFilters, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AddRecordConfig.parse(data);
@@ -50,7 +50,7 @@ Appearance and visualization configuration
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **showDescription** | `boolean` | ✅ | Show the view description text |
-| **allowedVisualizations** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart'>[]` | optional | Whitelist of visualization types users can switch between (e.g. ["grid", "gallery", "kanban"]) |
+| **allowedVisualizations** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart' \| 'tree'>[]` | optional | Whitelist of visualization types users can switch between (e.g. ["grid", "gallery", "kanban"]) |
 
 
 ---
@@ -118,6 +118,32 @@ Gallery/card view configuration
 | **titleField** | `string` | ✅ |  |
 | **progressField** | `string` | optional |  |
 | **dependenciesField** | `string` | optional |  |
+| **colorField** | `string` | optional | Field that drives the bar color |
+| **parentField** | `string` | optional | Field holding the parent task id (builds the summary → step tree) |
+| **typeField** | `string` | optional | Field whose value maps to task/summary/milestone |
+| **baselineStartField** | `string` | optional | Baseline (planned) start field |
+| **baselineEndField** | `string` | optional | Baseline (planned) end field |
+| **groupByField** | `string` | optional | Field to group leaf tasks by (synthesized summary rows) |
+| **resourceView** | `boolean` | optional | Render a per-resource workload histogram instead of the timeline |
+| **assigneeField** | `string` | optional | Resource field to bucket load by (resource view) |
+| **effortField** | `string` | optional | Per-task load units (resource view; default 1) |
+| **capacity** | `number` | optional | Per-resource capacity ceiling; loads above this flag overload |
+| **tooltipFields** | `string \| Object[]` | optional | Fields to surface in the hover tooltip, in display order |
+| **quickFilters** | `Object[]` | optional | Multi-select filter dropdowns rendered above the chart |
+| **autoZoomToFilter** | `boolean` | optional | When true (default), filtering zooms the range to the filtered tasks |
+
+
+---
+
+## GanttQuickFilter
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **field** | `string` | ✅ | Record field / dot-path the dimension filters on |
+| **label** | `string` | optional | Trigger label (falls back to the field label) |
+| **options** | `string \| Object[]` | optional | Explicit option override for fixed enums |
 
 
 ---
@@ -296,6 +322,20 @@ Timeline view configuration
 | **groupByField** | `string` | optional | Field to group timeline rows |
 | **colorField** | `string` | optional | Field to determine item color |
 | **scale** | `Enum<'hour' \| 'day' \| 'week' \| 'month' \| 'quarter' \| 'year'>` | ✅ | Default timeline scale |
+
+
+---
+
+## TreeConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **parentField** | `string` | optional | Single-parent pointer field (auto-detected from the object schema when omitted) |
+| **labelField** | `string` | optional | Field rendered indented in the first column (defaults to "name") |
+| **fields** | `string[]` | optional | Additional fields rendered as flat columns alongside the label |
+| **defaultExpandedDepth** | `integer` | optional | Initial expansion depth (0 = roots only; omit = expand all) |
 
 
 ---
@@ -499,6 +539,7 @@ Visualization type that users can switch to
 * `gantt`
 * `map`
 * `chart`
+* `tree`
 
 
 ---
