@@ -728,6 +728,7 @@ describe('defineStack - Map Format Support', () => {
         approve_deal: {
           label: 'Approve Deal',
           type: 'script',
+          target: 'noop',
         },
       },
     };
@@ -1062,7 +1063,7 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'task', fields: { title: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'approve_task', label: 'Approve', objectName: 'task' },
+        { name: 'approve_task', label: 'Approve', objectName: 'task', target: 'noop' },
       ],
     };
 
@@ -1078,8 +1079,8 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'deal', fields: { amount: { type: 'number' as const } } },
       ],
       actions: [
-        { name: 'close_deal', label: 'Close Deal', objectName: 'deal' },
-        { name: 'reopen_deal', label: 'Reopen Deal', objectName: 'deal' },
+        { name: 'close_deal', label: 'Close Deal', objectName: 'deal', target: 'noop' },
+        { name: 'reopen_deal', label: 'Reopen Deal', objectName: 'deal', target: 'noop' },
       ],
     };
 
@@ -1096,8 +1097,8 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'project', fields: { name: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'complete_task', label: 'Complete', objectName: 'task' },
-        { name: 'archive_project', label: 'Archive', objectName: 'project' },
+        { name: 'complete_task', label: 'Complete', objectName: 'task', target: 'noop' },
+        { name: 'archive_project', label: 'Archive', objectName: 'project', target: 'noop' },
       ],
     };
 
@@ -1115,7 +1116,7 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'task', fields: { title: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'global_action', label: 'Global' },
+        { name: 'global_action', label: 'Global', target: 'noop' },
       ],
     };
 
@@ -1130,8 +1131,8 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'task', fields: { title: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'approve_task', label: 'Approve', objectName: 'task' },
-        { name: 'global_search', label: 'Search' },
+        { name: 'approve_task', label: 'Approve', objectName: 'task', target: 'noop' },
+        { name: 'global_search', label: 'Search', target: 'noop' },
       ],
     };
 
@@ -1149,11 +1150,11 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         {
           name: 'task',
           fields: { title: { type: 'text' as const } },
-          actions: [{ name: 'inline_action', label: 'Inline' }],
+          actions: [{ name: 'inline_action', label: 'Inline', target: 'noop' }],
         },
       ],
       actions: [
-        { name: 'merged_action', label: 'Merged', objectName: 'task' },
+        { name: 'merged_action', label: 'Merged', objectName: 'task', target: 'noop' },
       ],
     };
 
@@ -1170,7 +1171,7 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'task', fields: { title: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'approve_task', label: 'Approve', objectName: 'task' },
+        { name: 'approve_task', label: 'Approve', objectName: 'task', target: 'noop' },
       ],
     };
 
@@ -1186,7 +1187,7 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
         { name: 'task', fields: { title: { type: 'text' as const } } },
       ],
       actions: [
-        { name: 'approve_deal', label: 'Approve', objectName: 'nonexistent_object' },
+        { name: 'approve_deal', label: 'Approve', objectName: 'nonexistent_object', target: 'noop' },
       ],
     };
 
@@ -1198,7 +1199,7 @@ describe('defineStack - Action Auto-Merge into Objects', () => {
     const config = {
       manifest: baseManifest,
       actions: [
-        { name: 'approve_deal', label: 'Approve', objectName: 'deal' },
+        { name: 'approve_deal', label: 'Approve', objectName: 'deal', target: 'noop' },
       ],
     };
 

@@ -468,6 +468,21 @@ export const ActionSchema = lazySchema(() => z.object({
   message: "Action 'target' is required when type is 'url', 'flow', 'modal', 'api', or 'form'.",
   path: ['target'],
 }).refine((data) => {
+  // A `script` action must be *executable*: it needs either an inline `body`
+  // (the runtime invokes it in the sandbox) or a `target` naming a registered
+  // bundle function. With neither, AppPlugin registers no engine handler and
+  // the action fails at runtime with `Action '<name>' on object '*' not found`
+  // (the #2169 Mark Done bug) — a soft failure invisible to build & shape
+  // tests. Reject it at author/compile time instead.
+  if (data.type === 'script' && !data.body && !data.target) {
+    return false;
+  }
+  return true;
+}, {
+  message:
+    "A 'script' action requires either an inline `body` (sandboxed L1/L2 handler) or a `target` (a registered bundle function name).",
+  path: ['body'],
+}).refine((data) => {
   // ADR-0011: an exposed action must carry an LLM-facing description.
   if (data.ai?.exposed === true && !data.ai.description) {
     return false;

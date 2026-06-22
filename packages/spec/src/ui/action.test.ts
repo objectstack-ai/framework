@@ -43,9 +43,12 @@ describe('ActionParamSchema', () => {
 describe('ActionSchema', () => {
   describe('Basic Action Properties', () => {
     it('should accept minimal action', () => {
+      // A `script` action (the default type) must be bound to something
+      // runnable — here a `target` naming a registered handler.
       const action: ActionType = {
         name: 'approve',
         label: 'Approve',
+        target: 'approve_handler',
       };
 
       const result = ActionSchema.parse(action);
@@ -56,12 +59,12 @@ describe('ActionSchema', () => {
     it('should enforce snake_case for action name', () => {
       const validNames = ['approve_record', 'send_email', 'close_case'];
       validNames.forEach(name => {
-        expect(() => ActionSchema.parse({ name, label: 'Test' })).not.toThrow();
+        expect(() => ActionSchema.parse({ name, label: 'Test', target: 'h' })).not.toThrow();
       });
 
       const invalidNames = ['approveRecord', 'Approve-Record', '123action', '_internal'];
       invalidNames.forEach(name => {
-        expect(() => ActionSchema.parse({ name, label: 'Test' })).toThrow();
+        expect(() => ActionSchema.parse({ name, label: 'Test', target: 'h' })).toThrow();
       });
     });
 
@@ -70,6 +73,7 @@ describe('ActionSchema', () => {
         name: 'delete_record',
         label: 'Delete',
         icon: 'trash-2',
+        target: 'delete_handler',
       };
 
       expect(() => ActionSchema.parse(action)).not.toThrow();
@@ -91,12 +95,23 @@ describe('ActionSchema', () => {
       });
     });
 
-    it('should accept script type without target', () => {
+    it('should accept a script action bound by inline body (no target)', () => {
       expect(() => ActionSchema.parse({
         name: 'test_action',
         label: 'Test',
         type: 'script',
+        body: { language: 'expression', source: 'true' },
       })).not.toThrow();
+    });
+
+    it('should reject a script action with neither body nor target', () => {
+      // Regression guard for #2169: a body-less, target-less script action
+      // registers no runtime handler and fails on invocation.
+      expect(() => ActionSchema.parse({
+        name: 'test_action',
+        label: 'Test',
+        type: 'script',
+      })).toThrow(/body|target/);
     });
 
     it('should reject url/flow/modal/api types without target', () => {
@@ -114,6 +129,7 @@ describe('ActionSchema', () => {
       const action = {
         name: 'custom_action',
         label: 'Custom',
+        target: 'custom_handler',
       };
 
       const result = ActionSchema.parse(action);
@@ -135,6 +151,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'multi_location',
         label: 'Multi Location',
+        target: 'noop',
         locations,
       };
 
@@ -145,6 +162,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'toolbar_action',
         label: 'Toolbar Action',
+        target: 'noop',
         locations: ['list_toolbar'],
       };
 
@@ -157,6 +175,7 @@ describe('ActionSchema', () => {
       const action = {
         name: 'approve_task',
         label: 'Approve Task',
+        target: 'noop',
         objectName: 'task',
       };
 
@@ -168,6 +187,7 @@ describe('ActionSchema', () => {
       const action = {
         name: 'global_search',
         label: 'Global Search',
+        target: 'noop',
       };
 
       const result = ActionSchema.parse(action);
@@ -185,6 +205,7 @@ describe('ActionSchema', () => {
         name: 'test_action',
         label: 'Test',
         objectName: 'my_object',
+        target: 'noop',
       })).not.toThrow();
     });
   });
@@ -229,6 +250,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'transfer_ownership',
         label: 'Transfer Ownership',
+        target: 'noop',
         type: 'script',
         params: [
           {
@@ -253,6 +275,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'change_status',
         label: 'Change Status',
+        target: 'noop',
         params: [
           {
             name: 'status',
@@ -276,6 +299,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'delete_all',
         label: 'Delete All',
+        target: 'noop',
         confirmText: 'Are you sure you want to delete all records? This cannot be undone.',
       };
 
@@ -286,6 +310,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'send_notification',
         label: 'Send Notification',
+        target: 'noop',
         successMessage: 'Notification sent successfully!',
       };
 
@@ -296,6 +321,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'update_status',
         label: 'Update Status',
+        target: 'noop',
         refreshAfter: true,
       };
 
@@ -306,6 +332,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'complete_task',
         label: 'Complete Task',
+        target: 'noop',
         confirmText: 'Mark this task as complete?',
         successMessage: 'Task completed successfully!',
         refreshAfter: true,
@@ -320,6 +347,7 @@ describe('ActionSchema', () => {
       const action: ActionType = {
         name: 'approve',
         label: 'Approve',
+        target: 'approve_handler',
         visible: 'status == "pending" && user.can_approve',
       };
 
@@ -487,6 +515,7 @@ describe('Action Factory', () => {
     const action = Action.create({
       name: 'test_action',
       label: 'Test Action',
+      target: 'noop',
     });
     
     expect(action.name).toBe('test_action');
@@ -510,6 +539,7 @@ describe('Action Factory', () => {
     const action = Action.create({
       name: 'update_record',
       label: 'Update',
+      target: 'noop',
       refreshAfter: true,
     });
     
@@ -525,6 +555,7 @@ describe('Action Factory', () => {
     expect(() => Action.create({
       name: 'valid_name',
       label: 'Valid',
+      target: 'noop',
     })).not.toThrow();
   });
 });
@@ -576,13 +607,14 @@ describe('ActionSchema - ai block (ADR-0011)', () => {
     const result = ActionSchema.parse({
       name: 'maybe_expose',
       label: 'Maybe',
+      target: 'noop',
       ai: {},
     });
     expect(result.ai?.exposed).toBe(false);
   });
 
   it('accepts an action with no ai block (not exposed)', () => {
-    const result = ActionSchema.parse({ name: 'plain', label: 'Plain' });
+    const result = ActionSchema.parse({ name: 'plain', label: 'Plain', target: 'noop' });
     expect(result.ai).toBeUndefined();
   });
 
@@ -610,6 +642,7 @@ describe('ActionSchema - ai block (ADR-0011)', () => {
     const result = ActionSchema.parse({
       name: 'triage_case',
       label: 'Triage Case',
+      target: 'noop',
       objectName: 'crm_case',
       params: [{ name: 'priority', type: 'text' }],
       ai: {
@@ -652,6 +685,7 @@ describe('ActionSchema - ai block (ADR-0011)', () => {
       ActionSchema.parse({
         name: 'hint_record_id',
         label: 'Hint',
+        target: 'noop',
         objectName: 'task',
         locations: ['record_header'],
         ai: { exposed: true, description: longDescription, paramHints: { recordId: { description: 'The task id.' } } },
@@ -661,7 +695,7 @@ describe('ActionSchema - ai block (ADR-0011)', () => {
 
   it('does not require a description when exposed is false', () => {
     expect(() =>
-      ActionSchema.parse({ name: 'opted_out', label: 'Out', ai: { exposed: false } }),
+      ActionSchema.parse({ name: 'opted_out', label: 'Out', target: 'noop', ai: { exposed: false } }),
     ).not.toThrow();
   });
 });
@@ -671,6 +705,7 @@ describe('Action ARIA Integration', () => {
     expect(() => ActionSchema.parse({
       name: 'accessible_action',
       label: 'Delete',
+      target: 'noop',
       aria: { ariaLabel: 'Delete this record permanently', role: 'button' },
     })).not.toThrow();
   });
@@ -687,6 +722,7 @@ describe('ActionSchema - variant', () => {
       const result = ActionSchema.parse({
         name: 'test_action',
         label: 'Test',
+        target: 'noop',
         variant,
       });
       expect(result.variant).toBe(variant);
@@ -697,6 +733,7 @@ describe('ActionSchema - variant', () => {
     const result = ActionSchema.parse({
       name: 'no_variant',
       label: 'Action',
+      target: 'noop',
     });
     expect(result.variant).toBeUndefined();
   });
@@ -713,6 +750,7 @@ describe('ActionSchema - variant', () => {
     const result = ActionSchema.parse({
       name: 'delete_record',
       label: 'Delete',
+      target: 'delete_handler',
       variant: 'danger',
       confirmText: 'Are you sure?',
       icon: 'trash',
@@ -748,11 +786,21 @@ describe('ActionSchema - execute → target migration', () => {
     expect(result.target).toBe('preferredHandler');
   });
 
-  it('should allow script type without target or execute', () => {
+  it('should reject a script with neither target/execute nor body', () => {
+    // #2169: a script action with no handler binding registers nothing.
     expect(() => ActionSchema.parse({
       name: 'inline_script',
       label: 'Inline',
       type: 'script',
+    })).toThrow(/body|target/);
+  });
+
+  it('should allow a script bound by inline body (no target/execute)', () => {
+    expect(() => ActionSchema.parse({
+      name: 'inline_body_script',
+      label: 'Inline',
+      type: 'script',
+      body: { language: 'expression', source: 'true' },
     })).not.toThrow();
   });
 });
