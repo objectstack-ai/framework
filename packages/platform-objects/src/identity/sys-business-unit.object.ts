@@ -33,6 +33,24 @@ export const SysBusinessUnit = ObjectSchema.create({
   compactLayout: ['name', 'kind', 'parent_business_unit_id', 'manager_user_id'],
 
   listViews: {
+    // Org chart — the hierarchy view. Surfaces the self-referencing
+    // `parent_business_unit_id` tree (ADR-0057 D2) as an indented, expand/
+    // collapse tree-grid. Listed first so it's the default tab; the grids
+    // below stay for search / filter / bulk edit.
+    org_chart: {
+      type: 'tree',
+      name: 'org_chart',
+      label: 'Org Chart',
+      data: { provider: 'object', object: 'sys_business_unit' },
+      columns: ['name', 'kind', 'manager_user_id', 'active'],
+      tree: {
+        parentField: 'parent_business_unit_id',
+        labelField: 'name',
+        fields: ['kind', 'manager_user_id', 'active'],
+        defaultExpandedDepth: 1,
+      },
+      sort: [{ field: 'name', order: 'asc' }],
+    },
     active: {
       type: 'grid',
       name: 'active',
