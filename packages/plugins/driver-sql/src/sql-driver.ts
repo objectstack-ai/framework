@@ -207,6 +207,10 @@ export class SqlDriver implements IDataDriver {
   protected physicalTableByObject: Record<string, string> = {};
   protected physicalSchemaByObject: Record<string, string> = {};
   protected objectByPhysicalTable: Record<string, string> = {};
+  /** External columnMap (ADR-0015): logical field -> physical remote column (for WHERE/ORDER BY/writes). */
+  protected fieldColumnByObject: Record<string, Record<string, string>> = {};
+  /** External columnMap inverse: physical remote column -> logical field (for read output remap). */
+  protected columnFieldByObject: Record<string, Record<string, string>> = {};
   protected tablesWithTimestamps: Set<string> = new Set();
   /**
    * Autonumber field configs per table, captured during initObjects.
@@ -453,7 +457,7 @@ export class SqlDriver implements IDataDriver {
       if (query.orderBy && Array.isArray(query.orderBy)) {
         for (const item of query.orderBy) {
           if (item.field) {
-            b.orderBy(this.mapSortField(item.field), item.order || 'asc');
+            b.orderBy(this.remoteColumn(object, item.field, this.mapSortField(item.field)), item.order || 'asc');
           }
         }
       }
@@ -567,7 +571,7 @@ export class SqlDriver implements IDataDriver {
     await this.fillAutoNumberFields(object, toInsert, options);
 
     const builder = this.getBuilder(object, options);
-    const formatted = this.formatInput(object, toInsert);
+    const formatted = this.applyWriteColumnMap(object, this.formatInput(object, toInsert));
 
     const result = await builder.insert(formatted).returning('*');
     return this.formatOutput(object, result[0]);
@@ -881,7 +885,7 @@ export class SqlDriver implements IDataDriver {
     this.auditMissingTenant(object, 'update', options);
     const builder = this.getBuilder(object, options).where('id', id);
     this.applyTenantScope(builder, object, options);
-    const formatted = this.formatInput(object, data);
+    const formatted = this.applyWriteColumnMap(object, this.formatInput(object, data));
 
     if (this.tablesWithTimestamps.has(object)) {
       if (this.isSqlite) {
@@ -914,7 +918,7 @@ export class SqlDriver implements IDataDriver {
     this.injectTenantOnInsert(object, toUpsert, options);
     await this.fillAutoNumberFields(object, toUpsert, options);
 
-    const formatted = this.formatInput(object, toUpsert);
+    const formatted = this.applyWriteColumnMap(object, this.formatInput(object, toUpsert));
     const mergeKeys = conflictKeys && conflictKeys.length > 0 ? conflictKeys : ['id'];
 
     const builder = this.getBuilder(object, options);
@@ -1283,7 +1287,7 @@ export class SqlDriver implements IDataDriver {
     name: string;
     fields?: Record<string, any>;
     tenancy?: any;
-    external?: { remoteName?: string; remoteSchema?: string };
+    external?: { remoteName?: string; remoteSchema?: string; columnMap?: Record<string, string> };
   }): void {
     const key = schema.name;
     const remoteName = schema.external?.remoteName || schema.name;
@@ -1298,6 +1302,23 @@ export class SqlDriver implements IDataDriver {
       } else {
         this.physicalSchemaByObject[key] = remoteSchema;
       }
+    }
+
+    // External columnMap (ADR-0015) is declared as { remoteColumn -> localField }.
+    // Keep it for read-output remap, and invert to { localField -> remoteColumn }
+    // for WHERE/ORDER BY/write translation. Absent => managed-identical behavior.
+    const columnMap = schema.external?.columnMap;
+    if (columnMap && typeof columnMap === 'object' && Object.keys(columnMap).length > 0) {
+      const fieldToCol: Record<string, string> = {};
+      const colToField: Record<string, string> = {};
+      for (const [remoteCol, localField] of Object.entries(columnMap)) {
+        if (typeof localField === 'string' && localField) {
+          fieldToCol[localField] = remoteCol;
+          colToField[remoteCol] = localField;
+        }
+      }
+      this.fieldColumnByObject[key] = fieldToCol;
+      this.columnFieldByObject[key] = colToField;
     }
 
     const jsonCols: string[] = [];
@@ -1944,7 +1965,7 @@ export class SqlDriver implements IDataDriver {
 
       for (const [key, value] of Object.entries(filters)) {
         if (['limit', 'offset', 'fields', 'orderBy'].includes(key)) continue;
-        builder.where(key, this.coerceFilterValue(table, key, value) as any);
+        builder.where(this.remoteColumn(table, key, key), this.coerceFilterValue(table, key, value) as any);
       }
       return;
     }
@@ -1965,8 +1986,9 @@ export class SqlDriver implements IDataDriver {
         const isCriterion = typeof fieldRaw === 'string' && typeof op === 'string';
 
         if (isCriterion) {
-          const field = this.mapSortField(fieldRaw);
-          const coerced = this.coerceFilterValue(table, field, value);
+          const localField = this.mapSortField(fieldRaw);
+          const field = this.remoteColumn(table, fieldRaw, localField);
+          const coerced = this.coerceFilterValue(table, localField, value);
           const apply = (b: any) => {
             const method = nextJoin === 'or' ? 'orWhere' : 'where';
             const methodIn = nextJoin === 'or' ? 'orWhereIn' : 'whereIn';
@@ -2044,10 +2066,11 @@ export class SqlDriver implements IDataDriver {
           }
         });
       } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        const field = this.mapSortField(key);
+        const localField = this.mapSortField(key);
+        const field = this.remoteColumn(table, key, localField);
         for (const [op, opValue] of Object.entries(value as Record<string, any>)) {
           const method = logicalOp === 'or' ? 'orWhere' : 'where';
-          const coerced = this.coerceFilterValue(table, field, opValue);
+          const coerced = this.coerceFilterValue(table, localField, opValue);
           switch (op) {
             case '$eq':
               (builder as any)[method](field, coerced);
@@ -2085,9 +2108,10 @@ export class SqlDriver implements IDataDriver {
           }
         }
       } else {
-        const field = this.mapSortField(key);
+        const localField = this.mapSortField(key);
+        const field = this.remoteColumn(table, key, localField);
         const method = logicalOp === 'or' ? 'orWhere' : 'where';
-        (builder as any)[method](field, this.coerceFilterValue(table, field, value) as any);
+        (builder as any)[method](field, this.coerceFilterValue(table, localField, value) as any);
       }
     }
   }
@@ -2098,6 +2122,30 @@ export class SqlDriver implements IDataDriver {
     if (field === 'createdAt') return 'created_at';
     if (field === 'updatedAt') return 'updated_at';
     return field;
+  }
+
+  /**
+   * Physical column for a logical field on an external object that declares an
+   * `external.columnMap` (ADR-0015). Returns `fallback` (the caller's existing
+   * per-site resolution) when the object has no columnMap, so managed objects
+   * and external objects without a columnMap are byte-for-byte unchanged.
+   */
+  protected remoteColumn(object: string | null | undefined, field: string, fallback: string): string {
+    const m = object ? this.fieldColumnByObject[object] : undefined;
+    return (m && m[field]) || fallback;
+  }
+
+  /**
+   * Remap a write payload's logical field keys to physical remote columns for an
+   * external object with a columnMap. No-op otherwise. Applied AFTER formatInput
+   * (whose value coercion is keyed by logical field name).
+   */
+  protected applyWriteColumnMap(object: string, data: any): any {
+    const m = this.fieldColumnByObject[object];
+    if (!m || !data || typeof data !== 'object') return data;
+    const out: any = {};
+    for (const [k, v] of Object.entries(data)) out[m[k] ?? k] = v;
+    return out;
   }
 
   protected mapAggregateFunc(func: string): string {
@@ -2411,6 +2459,21 @@ export class SqlDriver implements IDataDriver {
 
   protected formatOutput(object: string, data: any): any {
     if (!data) return data;
+
+    // External columnMap (ADR-0015): rename physical remote-column keys to local
+    // field names BEFORE coercion (which is keyed by local field). No-op for
+    // managed objects and external objects without a columnMap.
+    const colToField = this.columnFieldByObject[object];
+    if (colToField && typeof data === 'object') {
+      for (const [remoteCol, localField] of Object.entries(colToField)) {
+        if (remoteCol !== localField && Object.prototype.hasOwnProperty.call(data, remoteCol)) {
+          // Explicit columnMap wins: the remote column is the source of truth for
+          // this local field, even if a same-named native column also exists.
+          data[localField] = data[remoteCol];
+          delete data[remoteCol];
+        }
+      }
+    }
 
     if (this.isSqlite) {
       const jsonFields = this.jsonFields[object];

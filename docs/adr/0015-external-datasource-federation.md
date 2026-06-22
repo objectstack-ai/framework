@@ -929,13 +929,21 @@ contract validated green and then queried the wrong (non-existent) table.
   is driven purely by the declared field types. Keep external object fields to
   well-understood scalar types.
 
+### `external.columnMap` (added in a follow-up)
+
+`external.columnMap` ({ remoteColumn → localField }) is now honored on the read +
+write paths. `registerExternalObject` inverts it to localField → remoteColumn;
+`SqlDriver` translates WHERE + ORDER BY to the physical remote column (coercion
+stays keyed by the local field), `formatOutput` renames remote-column keys back to
+local field names, and write payloads are key-remapped after `formatInput`.
+Managed objects and external objects without a columnMap are unchanged (the
+resolver falls back to the existing per-site behavior). `field.columnName`
+reconciliation (its inverse) is left untouched — `columnMap` is the
+external-binding mechanism.
+
 ### Explicitly out of scope (separate follow-ups)
 
-1. **`external.columnMap`** (remote column name ≠ local field key). The driver's
-   `select` / `where` / `orderBy` do not currently apply column-name translation,
-   and `columnMap` is the inverse of per-field `field.columnName` — reconciling
-   the two into one source of truth is its own change.
-2. **Native-analytics SQL over external objects** — the analytics service compiles
+1. **Native-analytics SQL over external objects** — the analytics service compiles
    its own `FROM "<table>"` outside the driver and needs the same remote-table
    awareness.
 3. **Auto-connecting declared datasources** as queryable ObjectQL drivers in the
