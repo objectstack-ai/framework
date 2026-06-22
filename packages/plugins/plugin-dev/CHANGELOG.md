@@ -1,5 +1,26 @@
 # @objectstack/plugin-dev
 
+## 10.2.0
+
+### Patch Changes
+
+- Updated dependencies [b496498]
+  - @objectstack/spec@10.2.0
+  - @objectstack/account@10.2.0
+  - @objectstack/setup@10.2.0
+  - @objectstack/studio@10.2.0
+  - @objectstack/core@10.2.0
+  - @objectstack/objectql@10.2.0
+  - @objectstack/driver-memory@10.2.0
+  - @objectstack/plugin-auth@10.2.0
+  - @objectstack/plugin-hono-server@10.2.0
+  - @objectstack/plugin-org-scoping@10.2.0
+  - @objectstack/plugin-security@10.2.0
+  - @objectstack/rest@10.2.0
+  - @objectstack/runtime@10.2.0
+  - @objectstack/service-i18n@10.2.0
+  - @objectstack/types@10.2.0
+
 ## 10.1.0
 
 ### Patch Changes
