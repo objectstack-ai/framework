@@ -1,5 +1,33 @@
 # @objectstack/rest
 
+## 10.0.0
+
+### Minor Changes
+
+- 220ce5b: Resolve the tenant default currency onto ExecutionContext.
+
+  Adds `ExecutionContext.currency` (ISO 4217) and resolves it from the
+  `localization.currency` setting alongside `timezone`/`locale` — in both the
+  runtime `resolveExecutionContext` and the REST mirror. This is the foundation
+  for the documented "applied when a currency field omits its own" fallback: the
+  tenant default is now carried on every request context, so analytics enrichment,
+  formatters, and renderers can resolve a measure/field currency down to the org
+  default instead of hard-coding it. Undefined when no tenant default is
+  configured (consumers then render a plain number).
+
+### Patch Changes
+
+- Updated dependencies [2a1b16b]
+- Updated dependencies [e16f2a8]
+- Updated dependencies [a581385]
+- Updated dependencies [220ce5b]
+- Updated dependencies [3efe334]
+- Updated dependencies [6ca20b3]
+- Updated dependencies [5f875fe]
+  - @objectstack/spec@10.0.0
+  - @objectstack/core@10.0.0
+  - @objectstack/service-package@10.0.0
+
 ## 9.11.0
 
 ### Patch Changes
