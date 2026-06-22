@@ -1,5 +1,24 @@
 # Changelog
 
+## 10.0.0
+
+### Patch Changes
+
+- Updated dependencies [2a1b16b]
+- Updated dependencies [7108ff3]
+- Updated dependencies [e16f2a8]
+- Updated dependencies [61ed5c7]
+- Updated dependencies [a581385]
+- Updated dependencies [220ce5b]
+- Updated dependencies [3efe334]
+- Updated dependencies [6ca20b3]
+- Updated dependencies [5f875fe]
+- Updated dependencies [47d978a]
+  - @objectstack/spec@10.0.0
+  - @objectstack/platform-objects@10.0.0
+  - @objectstack/core@10.0.0
+  - @objectstack/types@10.0.0
+
 ## 9.11.0
 
 ### Patch Changes

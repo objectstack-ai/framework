@@ -1,5 +1,30 @@
 # @objectstack/driver-sql
 
+## 10.0.0
+
+### Patch Changes
+
+- 2a1b16b: fix(ADR-0015): honor `external.remoteName` / `external.remoteSchema` on the federation read path.
+
+  The query path previously resolved an external object's physical table from the
+  object name, ignoring its `external` binding — so a federated object bound to a
+  differently-named remote table failed with `no such table`, and ADR-0015's own
+  `wh_order` → `mart.fact_orders` example was unqueryable. The SQL driver now
+  resolves the remote table (`remoteName`, plus `remoteSchema` via `.withSchema()`
+  on pg/mysql) and registers external objects' read-coercion metadata without DDL
+  (`SqlDriver.registerExternalObject`, routed from the engine/plugin schema-sync).
+  The managed path is unchanged. See ADR-0015 §18.
+
+- Updated dependencies [2a1b16b]
+- Updated dependencies [e16f2a8]
+- Updated dependencies [a581385]
+- Updated dependencies [220ce5b]
+- Updated dependencies [3efe334]
+- Updated dependencies [6ca20b3]
+- Updated dependencies [5f875fe]
+  - @objectstack/spec@10.0.0
+  - @objectstack/core@10.0.0
+
 ## 9.11.0
 
 ### Minor Changes
