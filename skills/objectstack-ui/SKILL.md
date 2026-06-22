@@ -562,6 +562,9 @@ which contain components.
 |:---------------------|:----|
 | `page:header`        | Title + subtitle + breadcrumb + inline `actions: Action[]` |
 | `page:card`          | Bordered/un-bordered card with `body: Component[]` |
+| `flex`               | Generic styleable box (`properties.children`) — the workhorse for custom layout; style via `responsiveStyles` (see Styling below) |
+| `element:text`       | Text node — `properties.content`; style via `responsiveStyles` |
+| `element:button`     | Button — `properties.label` + `variant`/`size` + optional `action` |
 | `record:highlights`  | Salesforce highlights panel — strip of key fields |
 | `record:path`        | Stage progress bar driven by a status field |
 | `record:related`     | Related-list (child records via lookup) |
@@ -629,6 +632,67 @@ export const LeadDetailPage = definePage({
 > **Actions in header** — pass full `Action` objects into
 > `page:header.properties.actions`; do **not** create a sibling action node.
 > The header renders them inline in the action slot.
+
+### Styling a page (ADR-0065) — `responsiveStyles`, NOT `className`
+
+To style a metadata-authored block, give it a **`responsiveStyles`** object — a
+per-breakpoint map of CSS properties. The renderer compiles each styled node to
+**id-scoped CSS** at render time. **Do NOT put Tailwind classes in `className`**
+expecting them to render: Tailwind is compiled at the *renderer's* build over the
+*renderer's* source, never over your metadata, so a class only happens to work if
+objectui already uses it — arbitrary classes (`text-[27px]`, `bg-[#1a2b3c]`,
+`grid-cols-7`) silently do nothing. `responsiveStyles` has no such trap (values
+are compiled from your data at render).
+
+Rules:
+- **`responsiveStyles` and `id` are top-level** envelope fields; **child nodes go
+  in `properties.children`** (the renderer hoists `properties` to schema level).
+- Every styled node **needs a stable `id`** (the CSS is scoped to it).
+- **Values should be design tokens** for consistency: spacing `var(--space-1..12)`,
+  radius `var(--radius)` / `var(--radius-xl)`, shadow `var(--shadow-sm|md|lg)`,
+  colors `var(--surface)` / `var(--surface-sunken)` / `var(--text-strong)` /
+  `var(--text-muted)` / `var(--brand)` / `var(--brand-foreground)` /
+  `var(--hairline)`, or `hsl(var(--primary))` etc. (theme tokens track light/dark).
+- **Responsive lives in the breakpoint maps** — `large` (base, desktop-first),
+  then `medium` / `small` / `xsmall` as `max-width` overrides. **Never** author
+  `md:`-style variant classes.
+- **Compose from generic styleable blocks** — `flex`, `element:text`,
+  `element:button` — and style each block's root. (`page:card` etc. are fine for
+  structure but style what you control.)
+
+```typescript
+// A styled pricing card — every block carries responsiveStyles + tokens.
+{
+  id: 'plan_solo', type: 'flex',
+  responsiveStyles: {
+    large: {
+      display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+      padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)',
+      backgroundColor: 'var(--surface)', border: '1px solid hsl(var(--primary))',
+      boxShadow: '0 0 0 3px hsl(var(--primary) / 0.25), var(--shadow-lg)',
+    },
+    small: { padding: 'var(--space-4)', gap: 'var(--space-3)' },  // responsive via the model
+  },
+  properties: {
+    children: [
+      { id: 'plan_solo_price', type: 'element:text',
+        responsiveStyles: { large: { fontSize: '40px', fontWeight: '700', color: 'var(--text-strong)' }, small: { fontSize: '32px' } },
+        properties: { content: '$29' } },
+      { id: 'cta_solo', type: 'element:button',
+        responsiveStyles: { large: { marginTop: 'auto', width: '100%' } },  // pin CTA to card bottom
+        properties: { label: 'Upgrade', variant: 'primary', size: 'large' } },
+    ],
+  },
+}
+```
+
+Why this model: it's **build-independent** (no Tailwind compile dependency),
+**collision-free** (per-node scoped, beats base utilities without `@layer`
+games), and **responsive-correct** (breakpoint maps → generated `@media`). The
+spec field is `PageComponentSchema.responsiveStyles` (`@objectstack/spec`,
+`ResponsiveStylesSchema`). Full worked example:
+`examples/app-showcase/src/pages/styling-gallery.page.ts` (the "Styling
+(ADR-0065)" nav entry). See [ADR-0065](../../docs/adr/0065-sdui-styling-model.md).
 
 ---
 
