@@ -347,22 +347,36 @@ function rewriteProjectIdentity(
 // so a curated template can override the default.
 function writeAgentGuides(targetDir: string, title: string, projectName: string) {
   const templatePath = path.join(BUNDLED_TEMPLATES_DIR, 'AGENTS.md');
-  if (!fs.existsSync(templatePath)) return;
+  let template: string;
+  try {
+    template = fs.readFileSync(templatePath, 'utf8');
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return; // bundled template absent — nothing to emit
+    throw err;
+  }
 
-  const rendered = fs
-    .readFileSync(templatePath, 'utf8')
+  const rendered = template
     .replace(/\{\{PROJECT_TITLE\}\}/g, title)
     .replace(/\{\{PROJECT_NAME\}\}/g, projectName);
 
-  const agentsPath = path.join(targetDir, 'AGENTS.md');
-  if (!fs.existsSync(agentsPath)) {
-    fs.writeFileSync(agentsPath, rendered);
-  }
+  // Atomic exclusive-create (the `wx` flag) instead of existsSync()+writeFileSync():
+  // it fails with EEXIST if the file already exists, so a curated template that
+  // ships its own guide is preserved — without the check-then-write TOCTOU race a
+  // separate existence check introduces.
+  writeIfAbsent(path.join(targetDir, 'AGENTS.md'), rendered);
 
   const copilotPath = path.join(targetDir, '.github', 'copilot-instructions.md');
-  if (!fs.existsSync(copilotPath)) {
-    fs.mkdirSync(path.dirname(copilotPath), { recursive: true });
-    fs.writeFileSync(copilotPath, rendered);
+  fs.mkdirSync(path.dirname(copilotPath), { recursive: true });
+  writeIfAbsent(copilotPath, rendered);
+}
+
+// Create a file only if it does not already exist, atomically — no time-of-check
+// to time-of-use gap between an existence test and the write.
+function writeIfAbsent(filePath: string, contents: string) {
+  try {
+    fs.writeFileSync(filePath, contents, { flag: 'wx' });
+  } catch (err: any) {
+    if (err?.code !== 'EEXIST') throw err;
   }
 }
 
