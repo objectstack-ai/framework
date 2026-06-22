@@ -23,6 +23,7 @@
       "@objectstack/objectql",
       "@objectstack/observability",
       "@objectstack/formula",
+      "@objectstack/lint",
       "@objectstack/platform-objects",
       "@objectstack/studio",
       "@objectstack/setup",
