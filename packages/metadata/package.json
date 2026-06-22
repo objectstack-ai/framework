@@ -51,7 +51,7 @@
     "@objectstack/types": "workspace:*",
     "chokidar": "^5.0.0",
     "glob": "^13.0.6",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^5.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

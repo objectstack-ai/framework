@@ -946,8 +946,8 @@ importers:
         specifier: ^13.0.6
         version: 13.0.6
       js-yaml:
-        specifier: ^4.2.0
-        version: 4.2.0
+        specifier: ^5.0.0
+        version: 5.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -5538,8 +5538,8 @@ packages:
     resolution: {integrity: sha512-Ap6G0WQwcU/LHsvLwON1fAQX9Zp0A2Y6Y/cJBl9r/JbW90Zyg4/zbG6zzKa2OTALELarYHmKu0GhpM5EO+7T0g==}
     engines: {node: '>=0.10'}
 
-  esrap@2.2.11:
-    resolution: {integrity: sha512-gPdx+I+BjYEinNMQaBXFjbaJVyoPMU4ZODg5mE+M4DqVG9VusAVHHjcBX+zqyITlI0DIARwDMMzZwAWj36dRoQ==}
+  esrap@2.2.12:
+    resolution: {integrity: sha512-On0QbLyaiAkVC4eXtgnXK9Kh2opit+3rcUSOc45DqJ2s/X2eXAHsGOKRSJ6IDagQEW5vPyivANfXUiqgXC67Rw==}
     peerDependencies:
       '@typescript-eslint/types': ^8.2.0
     peerDependenciesMeta:
@@ -6331,6 +6331,10 @@ packages:
 
   js-yaml@4.2.0:
     resolution: {integrity: sha512-ePWsvanv0DWuDRsW8dnt+R4jQ31SCRCQ7hhNcPXZPsoBZiemuZNYGf7adZdqX2D86j6rvKp3RpCxVTSb8WQlOw==}
+    hasBin: true
+
+  js-yaml@5.0.0:
+    resolution: {integrity: sha512-GSvaPUbk1U+FMZ7rJzF+F8e5YVtu7KnD40et/5rBXXRBv2jCO9L3qCewvIDDdudC0QycTFlf6EAA+h3kxBsuUw==}
     hasBin: true
 
   json-buffer@3.0.1:
@@ -7332,8 +7336,8 @@ packages:
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
-  pg-connection-string@2.13.0:
-    resolution: {integrity: sha512-EMnU9E2fSULdsbErBbMaXJvFeD9B4+nPcM3f+4lsiCR0BHLPrLVjv3DbyM2hgQQviKJaTWIRRTjKjWlHg3p2ig==}
+  pg-connection-string@2.14.0:
+    resolution: {integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==}
 
   pg-connection-string@2.6.2:
     resolution: {integrity: sha512-ch6OwaeaPYcova4kKZ15sbJ2hKb/VP48ZD2gE7i1J+L4MspCtBMAx8nMgz7bksc7IojCIIWuEhHibSMFH8m8oA==}
@@ -7347,8 +7351,8 @@ packages:
     peerDependencies:
       pg: '>=8.0'
 
-  pg-protocol@1.14.0:
-    resolution: {integrity: sha512-n5taZ1kO3s9ngDTVxsEznOqCyToTgz0FLuPq0B33COy5pPpuWJpY3/2oRBVETuOgzdqRXfWpM9HIhp2LBBT1BA==}
+  pg-protocol@1.15.0:
+    resolution: {integrity: sha512-cq9sECI5s0+uPUXjbz8ioyPJni6RzsRib0US67i5IoTZKw8fNeYlVE7u8F4dG7vEJJtc5wdD1K189lCCUwqWTQ==}
 
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
@@ -12087,7 +12091,7 @@ snapshots:
     dependencies:
       estraverse: 5.3.0
 
-  esrap@2.2.11(@typescript-eslint/types@8.61.1):
+  esrap@2.2.12(@typescript-eslint/types@8.61.1):
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
     optionalDependencies:
@@ -13031,6 +13035,10 @@ snapshots:
       esprima: 4.0.1
 
   js-yaml@4.2.0:
+    dependencies:
+      argparse: 2.0.1
+
+  js-yaml@5.0.0:
     dependencies:
       argparse: 2.0.1
 
@@ -14237,7 +14245,7 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.13.0: {}
+  pg-connection-string@2.14.0: {}
 
   pg-connection-string@2.6.2: {}
 
@@ -14247,7 +14255,7 @@ snapshots:
     dependencies:
       pg: 8.21.0
 
-  pg-protocol@1.14.0: {}
+  pg-protocol@1.15.0: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -14259,9 +14267,9 @@ snapshots:
 
   pg@8.21.0:
     dependencies:
-      pg-connection-string: 2.13.0
+      pg-connection-string: 2.14.0
       pg-pool: 3.14.0(pg@8.21.0)
-      pg-protocol: 1.14.0
+      pg-protocol: 1.15.0
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
@@ -15142,7 +15150,7 @@ snapshots:
       clsx: 2.1.1
       devalue: 5.8.1
       esm-env: 1.2.2
-      esrap: 2.2.11(@typescript-eslint/types@8.61.1)
+      esrap: 2.2.12(@typescript-eslint/types@8.61.1)
       is-reference: 3.0.3
       locate-character: 3.0.0
       magic-string: 0.30.21
