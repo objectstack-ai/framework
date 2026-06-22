@@ -36,9 +36,9 @@
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/gateway": "^3.0.131",
+    "@ai-sdk/gateway": "^3.0.133",
     "@objectstack/cli": "workspace:*",
-    "ai": "^6.0.205",
+    "ai": "^6.0.208",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

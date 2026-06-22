@@ -39,10 +39,10 @@
     "topicSeparator": " "
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.84",
-    "@ai-sdk/gateway": "^3.0.131",
-    "@ai-sdk/google": "^3.0.82",
-    "@ai-sdk/openai": "^3.0.71",
+    "@ai-sdk/anthropic": "^3.0.85",
+    "@ai-sdk/gateway": "^3.0.133",
+    "@ai-sdk/google": "^3.0.83",
+    "@ai-sdk/openai": "^3.0.73",
     "@objectstack/account": "workspace:*",
     "@objectstack/client": "workspace:*",
     "@objectstack/cloud-connection": "workspace:*",
@@ -89,7 +89,7 @@
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "@objectstack/verify": "workspace:*",
-    "@oclif/core": "^4.11.4",
+    "@oclif/core": "^4.11.9",
     "bundle-require": "^5.1.0",
     "chalk": "^5.6.2",
     "chokidar": "^5.0.0",

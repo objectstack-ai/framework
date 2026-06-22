@@ -21,10 +21,10 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "knex": "^3.2.10",
-    "nanoid": "^5.1.11"
+    "nanoid": "^5.1.15"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.10.1"
+    "better-sqlite3": "^12.11.1"
   },
   "peerDependencies": {
     "mysql2": "^3.0.0",
@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
-    "better-sqlite3": "^12.10.1",
+    "better-sqlite3": "^12.11.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
