@@ -560,12 +560,13 @@ describe('AgentRuntime', () => {
   });
 
   describe('loadAgent', () => {
-    it('should return agent definition from metadata service', async () => {
+    it('should return agent definition from metadata service (legacy name resolves via alias)', async () => {
       (metadataService.get as any).mockResolvedValue(DATA_CHAT_AGENT);
       const agent = await runtime.loadAgent('data_chat');
 
-      expect(metadataService.get).toHaveBeenCalledWith('agent', 'data_chat');
-      expect(agent?.name).toBe('data_chat');
+      // Path A: `data_chat` is an alias for the renamed `ask` agent.
+      expect(metadataService.get).toHaveBeenCalledWith('agent', 'ask');
+      expect(agent?.name).toBe('ask');
       expect(agent?.role).toBe('Business Application Assistant');
     });
 
@@ -717,7 +718,7 @@ describe('AgentRuntime', () => {
       ]);
       const agents = await runtime.listAgents();
       expect(agents).toHaveLength(2);
-      expect(agents[0]).toEqual({ name: 'data_chat', label: 'Assistant', role: 'Business Application Assistant' });
+      expect(agents[0]).toEqual({ name: 'ask', label: 'Assistant', role: 'Business Application Assistant' });
       expect(agents[1]).toEqual({ name: 'metadata_assistant', label: 'Metadata Assistant', role: 'Schema Architect' });
     });
 
@@ -728,7 +729,7 @@ describe('AgentRuntime', () => {
       ]);
       const agents = await runtime.listAgents();
       expect(agents).toHaveLength(1);
-      expect(agents[0].name).toBe('data_chat');
+      expect(agents[0].name).toBe('ask');
     });
 
     it('should return empty array when no agents registered', async () => {
@@ -744,7 +745,7 @@ describe('AgentRuntime', () => {
       ]);
       const agents = await runtime.listAgents();
       expect(agents).toHaveLength(1);
-      expect(agents[0].name).toBe('data_chat');
+      expect(agents[0].name).toBe('ask');
     });
   });
 });
@@ -765,7 +766,8 @@ describe('Agent Routes', () => {
     aiService = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
     metadataService = createMockMetadataService({
       get: vi.fn(async (_type, name) => {
-        if (name === 'data_chat') return DATA_CHAT_AGENT;
+        // Canonical name after Path A rename; `data_chat` resolves here via alias.
+        if (name === 'ask') return DATA_CHAT_AGENT;
         if (name === 'inactive_agent') return { ...DATA_CHAT_AGENT, name: 'inactive_agent', active: false };
         return undefined;
       }),
@@ -791,7 +793,7 @@ describe('Agent Routes', () => {
     expect(resp.status).toBe(200);
     const body = resp.body as { agents: Array<{ name: string; label: string; role: string }> };
     expect(body.agents).toHaveLength(2);
-    expect(body.agents[0].name).toBe('data_chat');
+    expect(body.agents[0].name).toBe('ask');
     expect(body.agents[1].name).toBe('metadata_assistant');
   });
 
@@ -1047,7 +1049,8 @@ describe('Agent Routes', () => {
 
 describe('DATA_CHAT_AGENT', () => {
   it('should be a valid agent definition', () => {
-    expect(DATA_CHAT_AGENT.name).toBe('data_chat');
+    // Path A rename: canonical id is now `ask` (was `data_chat`).
+    expect(DATA_CHAT_AGENT.name).toBe('ask');
     expect(DATA_CHAT_AGENT.role).toBe('Business Application Assistant');
     expect(DATA_CHAT_AGENT.active).toBe(true);
     expect(DATA_CHAT_AGENT.visibility).toBe('global');
