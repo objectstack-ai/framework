@@ -517,7 +517,31 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             }, 400);
         }
 
-        // Persist flag flip
+        const inserted = summary.seeded.inserted ?? 0;
+        const updated = summary.seeded.updated ?? 0;
+        const errors = summary.seeded.errors ?? 0;
+        const wrote = inserted + updated > 0;
+
+        // HONEST RESULT: the loader runs row-by-row and counts write failures
+        // (locked DB, missing table, validation reject) into `errors` rather
+        // than throwing. Previously this handler returned success — and flipped
+        // `withSampleData` to true — even when every row failed, so the UI said
+        // "done" while the database stayed empty. Treat a run that landed no
+        // rows as a failure and report why.
+        if (!wrote) {
+            return c.json({
+                success: false,
+                error: {
+                    code: 'reseed_no_rows',
+                    message: errors > 0
+                        ? `Reseed wrote no rows (${errors} error${errors === 1 ? '' : 's'}).${summary.seeded.errorSample ? ` First error: ${summary.seeded.errorSample}` : ''}`
+                        : 'Reseed wrote no rows. The package declares no seedable records for this runtime.',
+                    details: { inserted, updated, errors },
+                },
+            }, 422);
+        }
+
+        // Only mark the install as carrying sample data once rows actually landed.
         try {
             entry.withSampleData = true;
             this.ledger.write(entry);
@@ -527,9 +551,9 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             success: true,
             data: {
                 manifestId,
-                inserted: summary.seeded.inserted ?? 0,
-                updated: summary.seeded.updated ?? 0,
-                errors: summary.seeded.errors ?? 0,
+                inserted,
+                updated,
+                errors,
                 withSampleData: true,
             },
         }, 200);
@@ -644,7 +668,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         ctx: PluginContext,
         manifest: any,
         opts: { seedNow: boolean; c?: any },
-    ): Promise<{ translationsLoaded: number; seeded: { mode: 'inline' | 'replayer' | 'skipped'; inserted?: number; updated?: number; errors?: number; reason?: string } }> => {
+    ): Promise<{ translationsLoaded: number; seeded: { mode: 'inline' | 'replayer' | 'skipped'; inserted?: number; updated?: number; errors?: number; reason?: string; errorSample?: string } }> => {
         const appId = String(manifest?.id ?? 'unknown');
         let translationsLoaded = 0;
         let seedSummary: any = { mode: 'skipped', reason: 'no-datasets' };
@@ -758,6 +782,11 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
                             inserted: result.summary.totalInserted,
                             updated: result.summary.totalUpdated,
                             errors: result.errors.length,
+                            // Surface the first write/resolution failure so the
+                            // caller can report WHY nothing landed (e.g. a locked
+                            // DB, a missing table, a failed validation) instead of
+                            // a bare "0 rows".
+                            errorSample: result.errors[0]?.message,
                         };
                         ctx.logger?.info?.(`[MarketplaceInstallLocal] inline seed for ${appId}${organizationId ? ` (org=${organizationId})` : ''}: inserted=${seedSummary.inserted} updated=${seedSummary.updated} errors=${seedSummary.errors}`);
                     }
