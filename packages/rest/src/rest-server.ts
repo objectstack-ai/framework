@@ -1107,6 +1107,15 @@ export class RestServer {
      */
     private filterAppForUser(item: any, sysPerms: Set<string>, serviceGate?: (name: string) => boolean): any | null {
         if (!item || typeof item !== 'object') return item;
+        // getMetaItem returns an envelope { type, name, item: <app>, ... } while the
+        // list path passes the raw app. Unwrap + re-wrap so gating runs on both —
+        // filtering the envelope directly is a silent no-op (its .navigation is
+        // undefined), which would bypass BOTH requiredPermissions and the ADR-0057
+        // D10 requiresService gate.
+        if (isMetaEnvelope(item)) {
+            const body = this.filterAppForUser((item as any).item, sysPerms, serviceGate);
+            return body == null ? null : { ...(item as any), item: body };
+        }
         // ADR-0045: an unpublished app (`hidden: true`) is externally
         // unobservable — only builders (studio/setup access) receive it at all,
         // for direct-URL preview. The launcher's client-side hidden filter is a
@@ -1172,6 +1181,7 @@ export class RestServer {
         const wanted = new Set<string>();
         const walk = (e: any): void => {
             if (!e || typeof e !== 'object') return;
+            if (isMetaEnvelope(e)) { walk((e as any).item); return; }
             if (typeof e.requiresService === 'string') wanted.add(e.requiresService);
             const kids = Array.isArray(e.navigation) ? e.navigation
                 : Array.isArray(e.children) ? e.children : null;

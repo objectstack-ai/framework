@@ -1923,6 +1923,20 @@ describe('filterAppForUser — ADR-0057 D10 requiresService gate', () => {
     expect(reg.has('org-scoping')).toBe(true);
     expect(reg.size).toBe(1);
   });
+
+  it('unwraps the getMetaItem envelope and gates the inner app (regression)', () => {
+    const rest: any = make();
+    const envelope = {
+      type: 'app', name: 'setup', lock: 'none',
+      item: { name: 'setup', navigation: [
+        { id: 'nav_users', type: 'object' },
+        { id: 'nav_organizations', type: 'object', requiresService: 'org-scoping' },
+      ] },
+    };
+    const out = rest.filterAppForUser(envelope, new Set<string>(), (n: string) => n !== 'org-scoping');
+    expect(out.type).toBe('app');
+    expect((out.item.navigation as any[]).map((e: any) => e.id)).toEqual(['nav_users']);
+  });
 });
 
 // ---------------------------------------------------------------------------
