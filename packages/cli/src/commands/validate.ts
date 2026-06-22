@@ -5,8 +5,8 @@ import chalk from 'chalk';
 import { ZodError } from 'zod';
 import { ObjectStackDefinitionSchema, normalizeStackInput } from '@objectstack/spec';
 import { loadConfig } from '../utils/config.js';
-import { validateStackExpressions } from '../utils/validate-expressions.js';
-import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { validateStackExpressions } from '@objectstack/lint';
+import { validateWidgetBindings } from '@objectstack/lint';
 import {
   printHeader,
   printKV,

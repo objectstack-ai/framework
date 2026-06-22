@@ -8,7 +8,7 @@ import path from 'path';
 import { normalizeStackInput } from '@objectstack/spec';
 import { printHeader, printSuccess, printWarning, printError, printStep, printInfo } from '../utils/format.js';
 import { loadConfig, configExists } from '../utils/config.js';
-import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { validateWidgetBindings } from '@objectstack/lint';
 
 interface HealthCheckResult {
   name: string;

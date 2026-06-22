@@ -1,0 +1,56 @@
+{
+  "name": "@objectstack/lint",
+  "version": "10.0.0",
+  "license": "Apache-2.0",
+  "description": "Static, build-time validation for an ObjectStack metadata graph — dashboard widget bindings, CEL/predicate expressions, and more. Pure (stack) => Issue[] functions shared by the CLI's `os validate` and any other consumer (e.g. AI authoring). Depends on @objectstack/spec; never on a runtime.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts",
+    "dev": "tsc -w",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/formula": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "keywords": [
+    "objectstack",
+    "lint",
+    "validation",
+    "metadata",
+    "static-analysis"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/lint"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

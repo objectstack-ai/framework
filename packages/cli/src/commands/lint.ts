@@ -7,7 +7,7 @@ import { normalizeStackInput } from '@objectstack/spec';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
-import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
+import { validateWidgetBindings } from '@objectstack/lint';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
