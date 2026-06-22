@@ -14,12 +14,27 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { createRequire } from 'module';
 import {
   resolveConsolePath,
   isConsoleVersionCompatible,
 } from '../src/utils/console.js';
 
-const CLI_VERSION = '9.2.0';
+// resolveConsolePath() also discovers the real, version-locked workspace
+// @objectstack/console via the CLI's own module location (createRequire on
+// import.meta.url), and that package shares the CLI's fixed-group version.
+// Pin the guard's reference version to the live major — read from the CLI's
+// own package.json — so these fixtures don't go stale and warn-mismatch on
+// every major bump (the 9.x -> 10.0.0 release broke them once already).
+const CLI_MAJOR = Number.parseInt(
+  createRequire(import.meta.url)('../package.json').version,
+  10,
+);
+const CLI_VERSION = `${CLI_MAJOR}.2.0`;
+/** Same major as the CLI — a healthy, version-locked install. */
+const MATCHING_VERSION = `${CLI_MAJOR}.0.0`;
+/** A different major — the stale, out-of-workspace install shape. */
+const STALE_VERSION = `${CLI_MAJOR - 1}.8.0`;
 
 function writeConsolePackage(
   dir: string,
@@ -78,7 +93,7 @@ describe('resolveConsolePath version guard', () => {
     const { home, project } = makeSandbox();
     // The incident shape: ~/node_modules/@objectstack/console@7.8.0 with a
     // built dist, reachable from the project cwd by climbing node_modules.
-    const stale = writeConsolePackage(home, { version: '7.8.0' });
+    const stale = writeConsolePackage(home, { version: STALE_VERSION });
 
     const warnings: string[] = [];
     const result = resolveConsolePath({
@@ -88,12 +103,12 @@ describe('resolveConsolePath version guard', () => {
     });
 
     expect(result).not.toBe(stale);
-    expect(warnings.some((m) => m.includes('7.8.0') && m.includes(stale))).toBe(true);
+    expect(warnings.some((m) => m.includes(STALE_VERSION) && m.includes(stale))).toBe(true);
   });
 
   it('accepts a same-major install climbed to from the project cwd', () => {
     const { home, project } = makeSandbox();
-    const ok = writeConsolePackage(home, { version: '9.0.0' });
+    const ok = writeConsolePackage(home, { version: MATCHING_VERSION });
 
     const warnings: string[] = [];
     const result = resolveConsolePath({
@@ -108,8 +123,8 @@ describe('resolveConsolePath version guard', () => {
 
   it('prefers a matching local install over a stale parent-directory one', () => {
     const { home, project } = makeSandbox();
-    writeConsolePackage(home, { version: '7.8.0' });
-    const local = writeConsolePackage(project, { version: '9.2.0' });
+    writeConsolePackage(home, { version: STALE_VERSION });
+    const local = writeConsolePackage(project, { version: MATCHING_VERSION });
 
     const result = resolveConsolePath({
       cwd: project,

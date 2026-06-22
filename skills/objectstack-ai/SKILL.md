@@ -57,24 +57,62 @@ Agent  →  Skill  →  Tool
 > agents is supported but considered legacy. Skills provide better
 > discoverability, instruction scoping, and reuse.
 
-### Built-in Unified Assistant (ADR-0040)
+### Built-in agents: `ask` & `build` (ADR-0063 / ADR-0064)
 
-The runtime ships a unified persona agent **`data_chat`** (`DEFAULT_DATA_AGENT_NAME`)
-— the implicit default copilot for any app that doesn't pin `app.defaultAgent`
-(Studio overrides to `metadata_assistant`). It attaches built-in skills:
+The runtime ships **exactly two** platform agents, bound by *surface* — the user
+never picks from a roster; the surface they are in selects the agent:
 
-- **`data_explorer`** — read-only data Q&A: `list_objects`, `describe_object`,
-  `query_data` / `query_records`, `get_record`, `aggregate_data`, `visualize_data`.
-- **`metadata_authoring`** + **`solution_design`** — app-building, **cloud/EE only**.
+- **`ask`** — the **data product** (≈ Claude Chat). Conversational read / query /
+  explore over records, plus running the business **actions** the app already
+  exposes. End-user audience, RLS-bounded. Canonical id `ask` (`ASK_AGENT_NAME`).
+  Open-source · free — ships in `@objectstack/service-ai`, and is the implicit
+  copilot for any app that does not pin `app.defaultAgent`.
+- **`build`** — the **authoring product** (≈ Claude Code). Agentic authoring of
+  *metadata* (objects, fields, views, flows) through plan → draft → verify →
+  publish. Builder audience, governance-gated. Canonical id `build`. Cloud-only ·
+  paid — ships in the cloud AI Studio plugin; Studio pins it via `app.defaultAgent`.
 
-To grant data exploration to your own agent, add `data_explorer` to its `skills[]`;
-deactivating that skill (`active: false`) revokes data Q&A for every agent that
-references it.
+There is **no per-turn intent classifier**: a `build`-shaped request arriving at
+`ask` is declined and redirected to the Builder, never silently re-routed into
+authoring (ADR-0063 §1/§5).
 
-> **Edition gate (#1803):** when neither `metadata_authoring` nor `solution_design`
-> is registered — the open single-env framework — the assistant is **query-only**
-> and declines build/authoring requests. App-building tools are supplied entirely
-> by the cloud AI Studio plugin; do not assume they resolve in the open framework.
+> **Legacy names are aliases only.** `data_chat`→`ask` and
+> `metadata_assistant`→`build` resolve through the alias table for old bookmarks
+> and persisted `agent_id`s; they are **not** vocabulary — always write `ask` /
+> `build`. `*.agent.ts` is closed to third parties (`agent` type is
+> `allowRuntimeCreate:false, allowOrgOverride:false`): you extend the platform
+> with **skills**, never by authoring an agent (ADR-0063 §2).
+
+#### Skill → agent affinity: the `surface` field (ADR-0063 §3)
+
+Every skill declares which surface it binds to via
+`surface: 'ask' | 'build' | 'both'` (defaults to `'ask'`). A skill may bind only
+to an agent whose surface it matches; `'both'` binds to either. The runtime
+enforces this in `resolveActiveSkills` at load time — an incompatible binding is a
+**fast load error**, not a silent mis-scope. An agent's tool set is the **union of
+its surface-compatible skills' tools** — there is no global fall-through
+(ADR-0064), so `ask` cannot author by construction.
+
+The built-in skills and their affinities:
+
+| Skill | `surface` | Owns | Edition |
+|---|---|---|---|
+| `schema_reader` | `both` | `list_objects`, `describe_object`, `query_data` | OSS |
+| `data_explorer` | `ask` | `query_records`, `get_record`, `aggregate_data`, `visualize_data` | OSS |
+| `actions_executor` | `ask` | `action_*` (the business actions an object exposes) | OSS |
+| `metadata_authoring` + `solution_design` | `build` | metadata draft / verify / publish + blueprint propose / apply | **cloud only** |
+
+To grant data exploration to your own (platform-internal) agent, add
+`data_explorer` / `schema_reader` to its `skills[]`; deactivating a skill
+(`active: false`) revokes that capability for every agent that references it.
+
+> **`surface:'build'` skills are inert on OSS — by design, not a bug.** The open
+> single-env framework ships only the `ask` agent; `metadata_authoring` /
+> `solution_design` (and any third-party `surface:'build'` skill) are supplied by
+> the cloud AI Studio plugin and simply do not resolve in OSS. A `build`-intent
+> turn on OSS degrades gracefully ("authoring lives in the cloud Build assistant")
+> instead of dead-ending — this is intentional tiering. Do not assume authoring
+> tools resolve in the open framework.
 
 > **`visualize_data` (#1820/#1821):** the only built-in tool that draws a chart —
 > it aggregates an object and emits an inline `data-chart` part. Auto-registered
