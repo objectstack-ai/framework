@@ -237,6 +237,20 @@ describe('GanttConfigSchema', () => {
     expect(() => GanttConfigSchema.parse(config)).not.toThrow();
     expect(GanttConfigSchema.parse(config)).toMatchObject({ parentField: 'parent_id', typeField: 'row_type' });
   });
+
+  it('should passthrough unknown renderer fields ahead of this schema', () => {
+    const config = {
+      startDateField: 'start_date',
+      endDateField: 'end_date',
+      titleField: 'name',
+      // Newer renderer knobs not yet declared here (e.g. objectui plugin-gantt).
+      lockField: 'is_locked',
+      defaultCollapsedDepth: 2,
+    };
+
+    expect(() => GanttConfigSchema.parse(config)).not.toThrow();
+    expect(GanttConfigSchema.parse(config)).toMatchObject({ lockField: 'is_locked', defaultCollapsedDepth: 2 });
+  });
 });
 
 describe('ListViewSchema', () => {

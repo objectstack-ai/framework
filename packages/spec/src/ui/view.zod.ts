@@ -427,7 +427,11 @@ export const GanttConfigSchema = lazySchema(() => z.object({
   ])).optional().describe('Fields to surface in the hover tooltip, in display order'),
   quickFilters: z.array(GanttQuickFilterSchema).optional().describe('Multi-select filter dropdowns rendered above the chart'),
   autoZoomToFilter: z.boolean().optional().describe('When true (default), filtering zooms the range to the filtered tasks'),
-}));
+// Forward-compatible: the gantt renderer (objectui plugin-gantt) keeps adding
+// config knobs (e.g. lockField / defaultCollapsedDepth) ahead of this schema.
+// Passthrough lets those extra fields reach the renderer instead of being
+// stripped here, so a renderer release no longer has to wait on a spec release.
+}).passthrough());
 
 /**
  * Navigation Mode Enum
