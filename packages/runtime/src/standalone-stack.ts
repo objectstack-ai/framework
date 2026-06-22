@@ -155,63 +155,78 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         ?? (process.env.OS_DATABASE_DRIVER?.trim() as ResolvedDriverKind | undefined);
     const dbDriver: ResolvedDriverKind = explicitDriver ?? detectDriverFromUrl(dbUrl);
 
+    // Build the default driver. The user-facing kinds (memory / postgres /
+    // better-sqlite3 / mongodb) go through the SHARED datasource driver factory
+    // (ADR-0062) — the SAME `create({driver,config})` used for declared/runtime
+    // datasources — so adding a dialect or changing connection/pool defaults
+    // happens in ONE place instead of being mirrored here by hand. This stack
+    // still owns what's standalone-specific: URL→config translation, filesystem
+    // prep (`mkdir`), and `DriverPlugin` registration (pre-engine — unchanged).
     let driverPlugin: any;
-    if (dbDriver === 'memory') {
-        const { InMemoryDriver } = await import('@objectstack/driver-memory');
-        driverPlugin = new DriverPlugin(new InMemoryDriver());
-    } else if (dbDriver === 'postgres') {
-        const { SqlDriver } = await import('@objectstack/driver-sql');
-        driverPlugin = new DriverPlugin(
-            new SqlDriver({
-                client: 'pg',
-                connection: dbUrl,
-                pool: { min: 0, max: 5 },
-            }) as any,
-        );
-    } else if (dbDriver === 'mongodb') {
-        // MongoDB driver is an optional peer dependency. Importing it lazily
-        // avoids forcing every standalone consumer to install the mongo SDK.
-        let MongoDBDriver: any;
-        try {
-            ({ MongoDBDriver } = await import('@objectstack/driver-mongodb' as any));
-        } catch (err: any) {
-            throw new Error(
-                `[StandaloneStack] mongodb URL detected but @objectstack/driver-mongodb is not installed. ` +
-                `Add it as a dependency or pass an explicit driverPlugin. (${err?.message ?? err})`
-            );
-        }
-        driverPlugin = new DriverPlugin(new MongoDBDriver({ url: dbUrl }) as any);
-    } else if (dbDriver === 'sqlite-wasm') {
+    if (dbDriver === 'sqlite-wasm') {
+        // The pure-JS WASM sqlite driver is the standalone-specific, CI-safe
+        // (no native build) default — NOT a user-creatable runtime datasource
+        // type, so it isn't part of the shared factory's surface. Construct it
+        // directly here (this is its only construction site, so no duplication).
         const { SqliteWasmDriver } = await import('@objectstack/driver-sqlite-wasm' as any);
         const filename = dbUrl
             .replace(/^wasm-sqlite:(\/\/)?/i, '')
-            .replace(/^file:(\/\/)?/i, '');
-        if (filename && filename !== ':memory:') {
+            .replace(/^file:(\/\/)?/i, '') || ':memory:';
+        if (filename !== ':memory:') {
             mkdirSync(resolvePath(filename, '..'), { recursive: true });
         }
         driverPlugin = new DriverPlugin(
             new SqliteWasmDriver({
-                filename: filename || ':memory:',
-                persist: filename && filename !== ':memory:' ? 'on-write' : undefined,
+                filename,
+                persist: filename !== ':memory:' ? 'on-write' : undefined,
             }) as any,
         );
     } else {
-        // sqlite
-        const { SqlDriver } = await import('@objectstack/driver-sql');
-        const filename = dbUrl.replace(/^file:(\/\/)?/, '');
-        if (!filename || /^[a-z][a-z0-9+.-]*:\/\//i.test(filename)) {
-            throw new Error(
-                `[StandaloneStack] sqlite driver was selected but the URL does not look like a file path: "${dbUrl}". ` +
-                `Use file:/path/to/db.sqlite, or set OS_DATABASE_DRIVER explicitly.`
-            );
+        const { createDefaultDatasourceDriverFactory } = await import('@objectstack/service-datasource');
+        let driverId: string;
+        let driverConfig: Record<string, unknown>;
+        if (dbDriver === 'memory') {
+            driverId = 'memory';
+            driverConfig = {};
+        } else if (dbDriver === 'postgres') {
+            // Factory applies the pg pool default ({ min: 0, max: 5 }) internally.
+            driverId = 'postgres';
+            driverConfig = { url: dbUrl };
+        } else if (dbDriver === 'mongodb') {
+            driverId = 'mongodb';
+            driverConfig = { url: dbUrl };
+        } else {
+            // sqlite (better-sqlite3)
+            driverId = 'sqlite';
+            const filename = dbUrl.replace(/^file:(\/\/)?/, '');
+            if (!filename || /^[a-z][a-z0-9+.-]*:\/\//i.test(filename)) {
+                throw new Error(
+                    `[StandaloneStack] sqlite driver was selected but the URL does not look like a file path: "${dbUrl}". ` +
+                    `Use file:/path/to/db.sqlite, or set OS_DATABASE_DRIVER explicitly.`
+                );
+            }
+            mkdirSync(resolvePath(filename, '..'), { recursive: true });
+            driverConfig = { filename };
         }
-        mkdirSync(resolvePath(filename, '..'), { recursive: true });
+
+        let driverHandle: { driver?: unknown } | unknown;
+        try {
+            driverHandle = await createDefaultDatasourceDriverFactory().create({ driver: driverId, config: driverConfig });
+        } catch (err: any) {
+            // Preserve the actionable hint the bespoke path gave for the optional
+            // mongo peer dep (the factory throws a generic "not installed" message).
+            if (dbDriver === 'mongodb') {
+                throw new Error(
+                    `[StandaloneStack] mongodb URL detected but @objectstack/driver-mongodb is not installed. ` +
+                    `Add it as a dependency or pass an explicit driverPlugin. (${err?.message ?? err})`
+                );
+            }
+            throw err;
+        }
+        // The factory returns a handle whose `.driver` is the concrete engine
+        // driver (falls back to the handle itself for structural drivers).
         driverPlugin = new DriverPlugin(
-            new SqlDriver({
-                client: 'better-sqlite3',
-                connection: { filename },
-                useNullAsDefault: true,
-            }),
+            ((driverHandle as { driver?: unknown })?.driver ?? driverHandle) as any,
         );
     }
 

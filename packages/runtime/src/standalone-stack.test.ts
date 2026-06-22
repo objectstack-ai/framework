@@ -121,3 +121,62 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
     expect(r.roles!.map((x: any) => x.name).sort()).toEqual(['contributor', 'manager']);
   }, BOOT_TIMEOUT);
 });
+
+// ADR-0062 (Variant A) — the standalone `default` driver's CONSTRUCTION is
+// unified: the user-facing kinds (memory / better-sqlite3 / postgres / mongodb)
+// go through the SAME `createDefaultDatasourceDriverFactory` used for
+// declared/runtime datasources, so there is one "driver kind → instance" path.
+// The pure-JS WASM sqlite driver stays bespoke (it's the standalone-specific
+// CI-safe default, not a user-creatable datasource type — its only construction
+// site). These tests extract the constructed driver from the stack's
+// `DriverPlugin` and exercise it directly (connect → syncSchema → create →
+// find), proving the right driver is built per kind AND that it actually
+// connects + does I/O — without booting the full kernel (the MetadataPlugin
+// file-artifact boot doesn't play well with vitest's module runner, and isn't
+// what this test is about). postgres/mongodb need a live server, so they're
+// covered by the factory's own usage + the runtime-admin path.
+describe('createStandaloneStack — default driver construction unified via the factory (ADR-0062)', () => {
+  let dir: string;
+  beforeAll(() => { dir = mkdtempSync(join(tmpdir(), 'os-standalone-driver-')); });
+  afterAll(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ } });
+
+  const NOTE = { name: 'note', fields: { id: { type: 'text' }, title: { type: 'text' } } };
+
+  async function driverRoundTrip(
+    cfg: Parameters<typeof createStandaloneStack>[0],
+  ): Promise<{ kind: string | undefined; titles: string[] }> {
+    const stack = await createStandaloneStack(cfg);
+    const plugin = stack.plugins.find(
+      (p: any) => p?.driver && typeof p.driver.find === 'function',
+    ) as { driver: any } | undefined;
+    const driver = plugin!.driver;
+    const kind = driver?.constructor?.name as string | undefined;
+    await driver.connect?.();
+    try {
+      await driver.syncSchema('note', NOTE);
+      await driver.create('note', { id: 'n1', title: 'hello-driver' });
+      const rows = (await driver.find('note', {})) as Array<{ title?: string }>;
+      return { kind, titles: rows.map((r) => r.title as string) };
+    } finally {
+      try { await driver.disconnect?.(); } catch { /* noop */ }
+    }
+  }
+
+  it('memory:// → InMemoryDriver (factory), connects + round-trips', async () => {
+    const r = await driverRoundTrip({ databaseUrl: 'memory://default-driver' });
+    expect(r.kind).toMatch(/InMemoryDriver$/);
+    expect(r.titles).toContain('hello-driver');
+  }, BOOT_TIMEOUT);
+
+  it('file: → better-sqlite3 SqlDriver (factory), connects + round-trips', async () => {
+    const r = await driverRoundTrip({ databaseUrl: `file:${join(dir, 'better.db')}` });
+    expect(r.kind).toMatch(/SqlDriver$/);
+    expect(r.titles).toContain('hello-driver');
+  }, BOOT_TIMEOUT);
+
+  it('databaseDriver:sqlite-wasm → SqliteWasmDriver (bespoke), connects + round-trips', async () => {
+    const r = await driverRoundTrip({ databaseDriver: 'sqlite-wasm', databaseUrl: `file:${join(dir, 'wasm.db')}` });
+    expect(r.kind).toMatch(/SqliteWasmDriver$/);
+    expect(r.titles).toContain('hello-driver');
+  }, BOOT_TIMEOUT);
+});

@@ -32,6 +32,7 @@
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/rest": "workspace:*",
     "@objectstack/service-cluster": "workspace:*",
+    "@objectstack/service-datasource": "workspace:*",
     "@objectstack/service-i18n": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",

@@ -1683,6 +1683,9 @@ importers:
       '@objectstack/service-cluster':
         specifier: workspace:*
         version: link:../services/service-cluster
+      '@objectstack/service-datasource':
+        specifier: workspace:*
+        version: link:../services/service-datasource
       '@objectstack/service-i18n':
         specifier: workspace:*
         version: link:../services/service-i18n
@@ -1699,9 +1702,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@objectstack/service-datasource':
-        specifier: workspace:*
-        version: link:../services/service-datasource
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
