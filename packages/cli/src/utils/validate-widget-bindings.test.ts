@@ -7,6 +7,7 @@ import {
   WIDGET_MEASURE_UNKNOWN,
   CHART_FIELD_UNKNOWN,
   CHART_CONFIG_MISSING,
+  MEASURE_AGGREGATE_INCOHERENT,
 } from './validate-widget-bindings.js';
 
 /** The downstream repro from issue #1719 — dataset with a count AND a sum
@@ -318,5 +319,64 @@ describe('validateWidgetBindings (table-count-only, issue #1719)', () => {
   it('is silent on stacks without dashboards or datasets', () => {
     expect(validateWidgetBindings({})).toHaveLength(0);
     expect(validateWidgetBindings({ dashboards: [], datasets: [] })).toHaveLength(0);
+  });
+});
+
+describe('validateWidgetBindings (measure-aggregate-incoherent — rate aggregation)', () => {
+  /** A dataset whose `probability` measure aggregates a percent field. */
+  function crmStack(aggregate: string) {
+    return {
+      objects: [{
+        name: 'opportunity',
+        fields: [
+          { name: 'amount', type: 'currency' },
+          { name: 'probability', type: 'percent' },
+          { name: 'stage', type: 'select' },
+        ],
+      }],
+      datasets: [{
+        name: 'opportunity_ds',
+        object: 'opportunity',
+        measures: [
+          { name: 'count', aggregate: 'count' },
+          { name: 'total_amount', aggregate: 'sum', field: 'amount' },
+          { name: 'win_probability', aggregate, field: 'probability' },
+        ],
+        dimensions: [{ name: 'stage', field: 'stage' }],
+      }],
+    };
+  }
+
+  it('warns when a measure SUMs a percentage field', () => {
+    const findings = validateWidgetBindings(crmStack('sum'));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('warning');
+    expect(findings[0].rule).toBe(MEASURE_AGGREGATE_INCOHERENT);
+    expect(findings[0].where).toContain('opportunity_ds');
+    expect(findings[0].where).toContain('win_probability');
+    expect(findings[0].path).toBe('datasets[0].measures[2]');
+    expect(findings[0].message).toContain('percent field "probability"');
+    expect(findings[0].hint).toMatch(/avg/i);
+  });
+
+  it('is clean when the percentage field is AVG’d', () => {
+    expect(validateWidgetBindings(crmStack('avg'))).toHaveLength(0);
+  });
+
+  it('also flags count_distinct of a percentage field', () => {
+    const findings = validateWidgetBindings(crmStack('count_distinct'));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(MEASURE_AGGREGATE_INCOHERENT);
+  });
+
+  it('does not flag SUM of a currency/amount field', () => {
+    // total_amount sums `amount` (currency) — additive, perfectly fine.
+    expect(validateWidgetBindings(crmStack('avg')).filter((f) => f.rule === MEASURE_AGGREGATE_INCOHERENT)).toHaveLength(0);
+  });
+
+  it('cannot judge — and never false-positives — without the object field types', () => {
+    const stack = crmStack('sum');
+    delete (stack as { objects?: unknown }).objects;
+    expect(validateWidgetBindings(stack)).toHaveLength(0);
   });
 });

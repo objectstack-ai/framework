@@ -1,5 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { isIncoherentAggregate } from '@objectstack/spec/data';
+
 /**
  * Build-time dashboard widget binding diagnostics (issues #1719, #1721).
  *
@@ -37,6 +39,11 @@
  *   means the author wanted a per-record listing, which is not an
  *   analytics dataset at all (model it as an object-bound ListView,
  *   ADR-0017). Evaluated on the WIDGET's binding, not the dataset.
+ * - `measure-aggregate-incoherent` — a dataset measure aggregates its field
+ *   in a way that produces a meaningless number: today, SUM (or
+ *   `count_distinct`) of a `percent`/rate field, whose total routinely
+ *   exceeds 100%. Rates must AVG. Checked once per dataset (independent of
+ *   any widget) when the bound object's field types are known.
  *
  * Warnings can be deliberately suppressed per widget via
  * `suppressWarnings: ['<rule-id>']`; errors cannot — they describe a
@@ -49,6 +56,7 @@ export const WIDGET_MEASURE_UNKNOWN = 'widget-measure-unknown';
 export const CHART_FIELD_UNKNOWN = 'chart-field-unknown';
 export const CHART_CONFIG_MISSING = 'chart-config-missing';
 export const TABLE_COUNT_ONLY = 'table-count-only';
+export const MEASURE_AGGREGATE_INCOHERENT = 'measure-aggregate-incoherent';
 
 export type WidgetBindingSeverity = 'error' | 'warning';
 
@@ -157,6 +165,50 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingFinding[] {
   const datasets = new Map<string, AnyRec>();
   for (const ds of asArray(stack.datasets)) {
     if (typeof ds.name === 'string') datasets.set(ds.name, ds);
+  }
+
+  // ── (0) dataset measures aggregate their field coherently ──
+  // A measure that SUMs a percentage/rate field produces a meaningless total
+  // (it can exceed 100%); rates must AVG. This is a dataset-level defect (it
+  // does not depend on any widget), so it is checked once over every dataset
+  // whose object's field types are known. Advisory — the page still renders.
+  const objectFieldTypes = new Map<string, Map<string, string>>();
+  for (const o of asArray(stack.objects)) {
+    if (typeof o.name !== 'string') continue;
+    const fm = new Map<string, string>();
+    for (const f of asArray(o.fields)) {
+      if (typeof f.name === 'string' && typeof f.type === 'string') fm.set(f.name, f.type);
+    }
+    objectFieldTypes.set(o.name, fm);
+  }
+  const datasetList = asArray(stack.datasets);
+  for (let i = 0; i < datasetList.length; i++) {
+    const ds = datasetList[i];
+    const fieldTypes = typeof ds.object === 'string' ? objectFieldTypes.get(ds.object) : undefined;
+    if (!fieldTypes) continue; // cannot judge without the object's field types
+    const dsMeasures = asArray(ds.measures);
+    for (let k = 0; k < dsMeasures.length; k++) {
+      const m = dsMeasures[k];
+      const field = typeof m.field === 'string' ? m.field : undefined;
+      const aggregate = typeof m.aggregate === 'string' ? m.aggregate : undefined;
+      if (!field || !aggregate) continue; // count(*) and underivable measures are fine
+      const ftype = fieldTypes.get(field);
+      if (ftype && isIncoherentAggregate(aggregate, ftype)) {
+        findings.push({
+          severity: 'warning',
+          rule: MEASURE_AGGREGATE_INCOHERENT,
+          where: `dataset "${typeof ds.name === 'string' ? ds.name : `(dataset ${i})`}" › measure "${typeof m.name === 'string' ? m.name : `(measure ${k})`}"`,
+          path: `datasets[${i}].measures[${k}]`,
+          message:
+            `measure "${m.name}" applies ${aggregate} to ${ftype} field "${field}" — ` +
+            `summed percentages are meaningless (they can exceed 100%).`,
+          hint:
+            `Use aggregate "avg" for percentage/rate fields (or "count" of records). ` +
+            `If a running total is genuinely intended, suppress with: ` +
+            `suppressWarnings: ['${MEASURE_AGGREGATE_INCOHERENT}'] on the measure.`,
+        });
+      }
+    }
   }
 
   const dashboards = asArray(stack.dashboards);

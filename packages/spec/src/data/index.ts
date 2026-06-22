@@ -39,6 +39,10 @@ export * from './external-catalog.zod';
 // Analytics Protocol (Semantic Layer)
 export * from './analytics.zod';
 
+// Field → aggregation semantics (rates AVG, amounts SUM) — shared by authoring
+// and build-time coherence validation.
+export * from './aggregation-policy';
+
 // Feed & Activity Protocol
 export * from './feed.zod';
 
