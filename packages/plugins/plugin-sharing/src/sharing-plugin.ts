@@ -10,6 +10,7 @@ import { SharingRuleService } from './sharing-rule-service.js';
 import { ShareLinkService } from './share-link-service.js';
 import { registerShareLinkRoutes } from './share-link-routes.js';
 import { bindRuleHooks, unbindAllRuleHooks } from './rule-hooks.js';
+import { bindPrimaryBuHooks, backfillPrimaryBu } from './primary-bu-projection.js';
 import { bootstrapDeclaredSharingRules } from './bootstrap-declared-sharing-rules.js';
 
 export interface SharingPluginOptions {
@@ -145,6 +146,19 @@ export class SharingServicePlugin implements Plugin {
         },
       });
       ctx.registerService('sharing', this.service);
+
+      // [ADR-0057 D12] Maintain sys_user.primary_business_unit_id as a
+      // denormalised projection of sys_business_unit_member.is_primary so a
+      // user-lookup can filter candidates by business unit. Bound regardless of
+      // `enforce` — it is a data projection, not an access-control surface.
+      try {
+        if (typeof engine.registerHook === 'function' && typeof engine.unregisterHooksByPackage === 'function') {
+          bindPrimaryBuHooks(engine, ctx.logger as any);
+          await backfillPrimaryBu(engine, ctx.logger as any);
+        }
+      } catch (err: any) {
+        ctx.logger.warn('SharingServicePlugin: primary-bu projection not started', { error: err?.message });
+      }
 
       // Enforcement (read-filter middleware + sharing-rule hooks) is opt-out
       // via `enforce: false`. The share-link service below is registered

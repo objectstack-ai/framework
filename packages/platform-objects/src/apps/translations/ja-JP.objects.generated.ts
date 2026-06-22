@@ -48,6 +48,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       manager_id: {
         label: "マネージャー"
       },
+      primary_business_unit_id: {
+        label: "主所属ビジネスユニット"
+      },
       id: {
         label: "ユーザー ID"
       },

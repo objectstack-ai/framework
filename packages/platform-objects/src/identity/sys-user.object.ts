@@ -410,6 +410,13 @@ export const SysUser = ObjectSchema.create({
       description: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise).",
     }),
 
+    primary_business_unit_id: Field.lookup('sys_business_unit', {
+      label: 'Primary Business Unit',
+      required: false,
+      group: 'Organization',
+      description: "The user's primary business unit — a denormalised projection of sys_business_unit_member.is_primary, maintained by plugin-sharing (ADR-0057 addendum D12). Lets a user-lookup filter candidates by business unit without traversing the membership junction. Do not edit directly; set it via business-unit membership.",
+    }),
+
     // ── System (auto-managed, hidden from create/edit forms) ─────
     id: Field.text({
       label: 'User ID',

@@ -48,6 +48,9 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       manager_id: {
         label: "经理"
       },
+      primary_business_unit_id: {
+        label: "主属业务单元"
+      },
       id: {
         label: "用户 ID"
       },

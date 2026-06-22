@@ -48,6 +48,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       manager_id: {
         label: "Manager"
       },
+      primary_business_unit_id: {
+        label: "Primary Business Unit"
+      },
       id: {
         label: "User ID"
       },

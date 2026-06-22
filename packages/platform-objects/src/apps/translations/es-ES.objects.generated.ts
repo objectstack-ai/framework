@@ -48,6 +48,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       manager_id: {
         label: "Gerente"
       },
+      primary_business_unit_id: {
+        label: "Unidad de negocio principal"
+      },
       id: {
         label: "ID de usuario"
       },
