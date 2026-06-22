@@ -6,7 +6,7 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
 import { SortItemSchema } from '../shared/enums.zod';
 import { FilterConditionSchema } from '../data/filter.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
-import { ResponsiveConfigSchema } from './responsive.zod';
+import { ResponsiveConfigSchema, ResponsiveStylesSchema } from './responsive.zod';
 import {
   UserActionsConfigSchema,
   AppearanceConfigSchema,
@@ -87,6 +87,15 @@ export const PageComponentSchema = lazySchema(() => z.object({
   /** Appearance */
   style: z.record(z.string(), z.string()).optional().describe('Inline styles or utility classes'),
   className: z.string().optional().describe('CSS class names'),
+
+  /**
+   * SDUI scoped responsive styles (ADR-0065). Per-breakpoint CSS-property maps
+   * compiled to id-scoped CSS at render. The preferred styling channel for
+   * metadata-authored pages — build-independent and collision-free, unlike raw
+   * `className`. Prefer design-token values (`var(--space-6)`, `var(--surface)`).
+   */
+  responsiveStyles: ResponsiveStylesSchema.optional()
+    .describe('Per-breakpoint scoped style maps (ADR-0065)'),
 
   /** Visibility Rule */
   visibility: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),

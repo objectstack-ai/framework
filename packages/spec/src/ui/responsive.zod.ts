@@ -75,6 +75,40 @@ export const ResponsiveConfigSchema = lazySchema(() => z.object({
 export type ResponsiveConfig = z.infer<typeof ResponsiveConfigSchema>;
 
 /**
+ * Style Map Schema (ADR-0065)
+ *
+ * A CSS property → value map (camelCase keys, e.g. `flexDirection`). Values are
+ * arbitrary CSS strings/numbers but authors should prefer design tokens
+ * (`var(--space-6)`, `var(--surface)`) for consistency and AI-safety.
+ */
+export const StyleMapSchema = lazySchema(() =>
+  z.record(z.string(), z.union([z.string(), z.number()]))
+    .describe('CSS property → value map (camelCase keys; design tokens encouraged)'));
+
+export type StyleMap = z.infer<typeof StyleMapSchema>;
+
+/**
+ * Responsive Styles Schema (ADR-0065)
+ *
+ * Per-breakpoint CSS-property maps for the SDUI scoped-styling model. Compiled
+ * to **id-scoped CSS at render** (objectui `SchemaRenderer`) — build-independent,
+ * collision-free, responsive-correct. Desktop-first: `large` is the
+ * unconditional base; `medium`/`small`/`xsmall` are `max-width` overrides.
+ *
+ * Distinct from {@link ResponsiveConfigSchema}, which configures *layout* (grid
+ * columns / visibility / order) on the Tailwind `xs..2xl` axis. This styles a
+ * node's own box; that arranges a node within a grid.
+ */
+export const ResponsiveStylesSchema = lazySchema(() => z.object({
+  large: StyleMapSchema.optional().describe('Unconditional base (desktop-first)'),
+  medium: StyleMapSchema.optional().describe('Applied at ≤ medium breakpoint'),
+  small: StyleMapSchema.optional().describe('Applied at ≤ small breakpoint'),
+  xsmall: StyleMapSchema.optional().describe('Applied at ≤ xsmall breakpoint'),
+}).describe('Per-breakpoint scoped style maps (ADR-0065)'));
+
+export type ResponsiveStyles = z.infer<typeof ResponsiveStylesSchema>;
+
+/**
  * Performance Configuration Schema
  *
  * Defines performance optimization settings for UI components
