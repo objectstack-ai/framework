@@ -35,7 +35,7 @@ verified in step 3):
 
 ```bash
 curl http://localhost:3000/api/v1/ai/agents
-# → { "agents": [{ "name": "data_chat", ... }, ...] }
+# → { "agents": [{ "name": "ask", ... }, ...] }
 
 curl http://localhost:3000/api/v1/ai/models
 # → { "models": [...] }   ← may be empty until the adapter lists models
@@ -82,7 +82,7 @@ import { useObjectChat } from '@object-ui/plugin-chatbot';
 const chat = useObjectChat({
   api: 'http://localhost:3000/api/v1/ai/assistant/chat',
   headers: { 'X-Environment-Id': 'env_local' },
-  body: { agent: 'data_chat' },
+  body: { agent: 'ask' },
 });
 ```
 

@@ -1,6 +1,8 @@
 # ADR-0040: Unified Assistant — the end user never picks an agent
 
-**Status**: Proposed (2026-06-11)
+> **⚠️ Superseded by [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)** (2026-06-22). Its core decision — a *single* unified assistant carrying all skills, switched by a per-turn intent classifier — was **reversed**: the kernel now ships two agents (`ask` / `build`) bound by *surface*, and `*.agent.ts` is closed to third parties (skills are the extension primitive). The UX win it established (the user never picks from a roster) is kept, re-grounded as surface binding. Kept below as a historical record of the decision and the incident that motivated it.
+
+**Status**: **Superseded by [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)** — original: Proposed (2026-06-11)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring tools the assistant drives), [ADR-0038](./0038-build-verification-loop.md) (the verify-fix-reverify discipline carried by skills), ADR-0037 / [framework#1694](https://github.com/objectstack-ai/framework/pull/1694) (Live Canvas — the surface the unified assistant builds into)
 **Consumers**: `@objectstack/spec` (agent/skill types — clarified, not changed), `@objectstack/service-ai` (default agent composition), `../cloud/service-ai-studio` (authoring skills attach to the platform assistant), `../objectui` (chat surfaces drop the agent picker)

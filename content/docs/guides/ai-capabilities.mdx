@@ -42,15 +42,41 @@ ObjectStack provides a comprehensive AI platform:
 
 ## AI Agents
 
-AI agents are autonomous actors that perform tasks on behalf of users.
+Per [ADR-0063](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0063-two-kernel-agents-skills-are-the-extension-primitive.md)
+the kernel ships **exactly two** platform agents, bound by the *surface* the user
+is in — the user never picks from a roster:
 
-### How agents are shaped
+| Agent | Surface | Does | Edition |
+|---|---|---|---|
+| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | open-source · free |
+| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud · paid |
 
-An agent is plain metadata validated by `AgentSchema` and created with the
-`defineAgent()` factory. The key fields are:
+There is no per-turn intent classifier and no agent dropdown: the surface binds
+the agent (data console → `ask`, Studio → `build`). A `build`-shaped request that
+reaches `ask` is declined and redirected to the Builder, never silently re-routed.
+
+### You extend the platform with **skills**, not agents
+
+`*.agent.ts` is **closed to third parties** — the `agent` metadata type is
+`allowRuntimeCreate:false, allowOrgOverride:false`, reserved for the two platform
+agents and platform-owned subagents (ADR-0063 §2). To give the `ask` agent a new
+capability you author a **skill** (`*.skill.ts`) whose `tools` reference your
+Actions / Flows / queries; it then attaches to `ask`. Every skill declares
+`surface: 'ask' | 'build' | 'both'`, and an agent's tool set is the **union of its
+surface-compatible skills' tools** — there is no global fall-through, so a skill
+reaches an agent only when their surfaces match
+([ADR-0064](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
+`surface:'build'` skills are inert on the open-source framework (the `build` agent
+is cloud-only) — intentional tiering, not a bug.
+
+### The shape of an agent
+
+An agent is metadata validated by `AgentSchema` (the platform's own `ask` / `build`
+records use exactly these fields):
 
 | Field | Meaning |
 |------|---------|
+| `surface` | `'ask'` \| `'build'` — the product surface this agent binds (ADR-0063 §1) |
 | `role` | Free-text **persona** string (e.g. `"Senior Support Engineer"`) — not an enum |
 | `instructions` | System prompt / prime directives |
 | `model` | Provider + model config (`provider`: `openai` \| `azure_openai` \| `anthropic` \| `local`) |
@@ -58,17 +84,25 @@ An agent is plain metadata validated by `AgentSchema` and created with the
 | `tools` | Direct tool **references** `{ type, name, description }` — `type` is `action` \| `flow` \| `query` \| `vector_search`; `name` points at an existing Action/Flow/query |
 | `knowledge` | RAG access: `{ topics: string[], indexes: string[] }` |
 
-There is no `type` field and no fixed agent "type" taxonomy — the way an agent
-behaves comes from its persona, instructions, skills, and tools. Likewise there
-are no `triggers` or `schedule` fields on an agent; drive agents from
-[Flows/Workflows](./automation) or invoke them via the chat endpoint when you
-need event- or time-based behaviour.
+There is no `type` field and no fixed agent "type" taxonomy — behaviour comes from
+persona, instructions, skills, and tools. There are no `triggers` / `schedule`
+fields on an agent; drive agents from [Flows/Workflows](./automation) or invoke
+them via the chat endpoint.
 
 <Callout type="info">
 Agent tools are **references** to existing Actions, Flows, or queries — you do
 not define ad-hoc tool names with inline parameter schemas here. See
 [Actions as Tools](#actions-as-tools-explicit-opt-in) for how an Action becomes
 LLM-callable.
+</Callout>
+
+<Callout type="warning">
+The agent definitions below illustrate agent **anatomy** — they show how an
+`AgentSchema` record is shaped, *not* a tenant-authoring tutorial. On today's
+platform you do not ship your own agents (`*.agent.ts` is platform-internal); you
+add capability by authoring a **skill** that attaches to the built-in `ask` agent.
+Read the examples for structure, then express your own capability as a skill plus
+the Actions/Flows its tools reference.
 </Callout>
 
 ### Sales Assistant Agent
