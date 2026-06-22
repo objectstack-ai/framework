@@ -49,8 +49,8 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
       { id: 'nav_users', type: 'object', label: 'Users', objectName: 'sys_user', icon: 'user' },
       { id: 'nav_business_units', type: 'object', label: 'Business Units', objectName: 'sys_business_unit', icon: 'building', requiresObject: 'sys_business_unit' },
       { id: 'nav_teams', type: 'object', label: 'Teams', objectName: 'sys_team', icon: 'users-round' },
-      { id: 'nav_organizations', type: 'object', label: 'Organizations', objectName: 'sys_organization', icon: 'building-2' },
-      { id: 'nav_invitations', type: 'object', label: 'Invitations', objectName: 'sys_invitation', icon: 'mail' },
+      { id: 'nav_organizations', type: 'object', label: 'Organizations', objectName: 'sys_organization', icon: 'building-2', requiresService: 'org-scoping' },
+      { id: 'nav_invitations', type: 'object', label: 'Invitations', objectName: 'sys_invitation', icon: 'mail', requiresService: 'org-scoping' },
     ],
   },
   {

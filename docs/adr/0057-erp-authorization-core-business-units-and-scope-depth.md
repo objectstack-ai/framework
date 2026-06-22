@@ -512,3 +512,34 @@ One proof per surfacing decision, ratcheted with its PR:
 - **PS-2.** D10 — relocate `nav_business_units` to the hierarchy-security capability
   (ADR-0029 K2), retiring the inert `requiresObject` gate.
 - **PS-3.** D12 — `primary_business_unit_id` field + sync hook + backfill + picker proof.
+
+### PS-2 implementation note (2026-06-22) — D10 realized via server-enforced `requiresService`
+
+Implementing D10 refined the mechanism (no cross-repo relocation needed):
+
+- The Setup nav is filtered **server-side** (`rest-server` `filterAppForUser`), which
+  previously honoured only `requiredPermissions`. `requiresObject` is a **client-side**
+  (objectui) gate, not enforced in this repo.
+- The spec already carries `NavigationItem.requiresService` (a kernel-service capability
+  gate). PS-2 gives it **server-side teeth**: gated entries are dropped from the served
+  payload (fail-open when the kernel can't be probed). Satisfies ADR-0049 (enforced, not
+  merely declared-for-frontend), in-repo and testable.
+- **Organizations / Invitations** → `requiresService: 'org-scoping'`. `org-scoping` is the
+  canonical multi-org probe (SecurityPlugin already uses it), registered only in
+  multi-tenant mode → single-tenant hides both entries.
+- **Business Units is deliberately NOT gated.** The only available signal would be
+  `hierarchy-security` (the **paid** rollup resolver), and gating on it would hide the
+  management UI for functionality that is **open**: BU as owning-unit, the explicit
+  `business_unit` sharing recipient, and the D12 "pick people by BU" projection. The
+  "ceiling" in D9 refers to the **hierarchy rollup capability**, not BU's data/management
+  surface. With Organizations hidden in single-tenant and the `kind='team'` collision
+  removed (D11), the residual community menu is Users + Teams + Business Units — two
+  distinct, legitimately co-present concepts, which was never the ambiguity this addendum
+  set out to remove. If hiding BU in vanilla deployments later proves desirable, gate it on
+  an explicit `business-units` opt-in, never on the paid resolver.
+
+Proof: `filterAppForUser` unit tests (rest.test.ts) — requiresService entries drop when the
+gate reports the service absent, persist when present, fail-open with no gate, and
+requiresObject entries are untouched. An end-to-end Setup-nav test is not feasible in the
+verify harness: the platform Setup app's navigation is not materialized there (`/meta/app`
+lists only the business app; `/meta/app/setup` returns a protection stub).

@@ -542,6 +542,10 @@ export class RestServer {
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    /** Sync probe: is a kernel service registered? Single-env path for nav
+     *  capability gates (ADR-0057 D10) — resolveExecCtx sets no kernel in
+     *  single-kernel deployments, so this prevents the gate failing open. */
+    private serviceExistsProvider?: (name: string) => boolean;
 
     constructor(
         server: IHttpServer,
@@ -560,6 +564,7 @@ export class RestServer {
         i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        serviceExistsProvider?: (name: string) => boolean,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -577,6 +582,7 @@ export class RestServer {
         this.i18nServiceProvider = i18nServiceProvider;
         this.analyticsServiceProvider = analyticsServiceProvider;
         this.settingsServiceProvider = settingsServiceProvider;
+        this.serviceExistsProvider = serviceExistsProvider;
     }
 
     /**
@@ -1076,6 +1082,10 @@ export class RestServer {
                 ...(timezone ? { timezone } : {}),
                 ...(locale ? { locale } : {}),
                 ...(currency ? { currency } : {}),
+                // Internal: resolved kernel so the nav-serving path can probe
+                // requiresService capability gates (ADR-0057 D10). NOT an
+                // authorization input — never read by RLS/permission logic.
+                __kernel: kernel,
             } as any;
         } catch {
             return undefined;
@@ -1095,7 +1105,7 @@ export class RestServer {
      * shallow copy with a filtered `navigation` tree otherwise — the original
      * is never mutated so cached metadata stays clean.
      */
-    private filterAppForUser(item: any, sysPerms: Set<string>): any | null {
+    private filterAppForUser(item: any, sysPerms: Set<string>, serviceGate?: (name: string) => boolean): any | null {
         if (!item || typeof item !== 'object') return item;
         // ADR-0045: an unpublished app (`hidden: true`) is externally
         // unobservable — only builders (studio/setup access) receive it at all,
@@ -1108,6 +1118,11 @@ export class RestServer {
         if (reqApp.length > 0 && !reqApp.every((p: string) => sysPerms.has(p))) {
             return null;
         }
+        // ADR-0057 D10 — capability gate: hide when the named kernel service is
+        // absent. Fail-open when the gate can't be probed (serviceGate undefined).
+        if (typeof item.requiresService === 'string' && serviceGate && serviceGate(item.requiresService) === false) {
+            return null;
+        }
         const nav = Array.isArray(item.navigation) ? item.navigation : null;
         if (!nav) return item;
 
@@ -1117,6 +1132,7 @@ export class RestServer {
                 if (!e || typeof e !== 'object') continue;
                 const req = Array.isArray(e.requiredPermissions) ? e.requiredPermissions : [];
                 if (req.length > 0 && !req.every((p: string) => sysPerms.has(p))) continue;
+                if (typeof e.requiresService === 'string' && serviceGate && serviceGate(e.requiresService) === false) continue;
                 if (Array.isArray(e.children) && e.children.length > 0) {
                     const kids = filterNav(e.children);
                     // Drop empty groups so the sidebar doesn't render a label
@@ -1131,6 +1147,41 @@ export class RestServer {
         };
 
         return { ...item, navigation: filterNav(nav) };
+    }
+
+    /**
+     * Probe which `requiresService` capability gates referenced anywhere in
+     * `items` are actually registered in the runtime kernel. Returns `null`
+     * when the kernel can't be probed — callers then SKIP service gating
+     * (fail-open, matching the prior "send everything, let the client hide"
+     * behaviour). ADR-0057 addendum D10.
+     */
+    private async resolveRegisteredServices(kernel: any, items: any[]): Promise<Set<string> | null> {
+        // Prefer the per-request kernel (multi-env, resolved via kernelManager).
+        // Fall back to the single-env service-existence provider — in single-kernel
+        // deployments resolveExecCtx never sets a kernel, so without this the gate
+        // would fail open (ADR-0057 D10).
+        let probe: ((name: string) => Promise<boolean>) | null = null;
+        if (kernel && typeof kernel.getServiceAsync === 'function') {
+            probe = async (name) => { try { return (await kernel.getServiceAsync(name)) != null; } catch { return false; } };
+        } else if (this.serviceExistsProvider) {
+            const exists = this.serviceExistsProvider;
+            probe = async (name) => { try { return exists(name) === true; } catch { return false; } };
+        }
+        if (!probe) return null;
+        const wanted = new Set<string>();
+        const walk = (e: any): void => {
+            if (!e || typeof e !== 'object') return;
+            if (typeof e.requiresService === 'string') wanted.add(e.requiresService);
+            const kids = Array.isArray(e.navigation) ? e.navigation
+                : Array.isArray(e.children) ? e.children : null;
+            if (kids) for (const k of kids) walk(k);
+        };
+        for (const it of items) walk(it);
+        if (wanted.size === 0) return new Set();
+        const registered = new Set<string>();
+        for (const name of wanted) { if (await probe(name)) registered.add(name); }
+        return registered;
     }
 
     /**
@@ -1918,8 +1969,10 @@ export class RestServer {
                                     const sysPerms = new Set<string>(
                                         Array.isArray(ctx.systemPermissions) ? ctx.systemPermissions : [],
                                     );
+                                    const registered = await this.resolveRegisteredServices((ctx as any).__kernel, list);
+                                    const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
                                     const filtered = list
-                                        .map((it: any) => this.filterAppForUser(it, sysPerms))
+                                        .map((it: any) => this.filterAppForUser(it, sysPerms, serviceGate))
                                         .filter((it: any) => it != null);
                                     visible = Array.isArray(raw)
                                         ? filtered
@@ -2239,7 +2292,9 @@ export class RestServer {
                                     const sysPerms = new Set<string>(
                                         Array.isArray(ctx.systemPermissions) ? ctx.systemPermissions : [],
                                     );
-                                    visible = this.filterAppForUser(item, sysPerms);
+                                    const registered = await this.resolveRegisteredServices((ctx as any).__kernel, [item]);
+                                    const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
+                                    visible = this.filterAppForUser(item, sysPerms, serviceGate);
                                     if (visible == null) {
                                         res.status(404).json({
                                             error: 'not_found',
