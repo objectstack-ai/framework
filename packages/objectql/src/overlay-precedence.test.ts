@@ -314,7 +314,10 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             expect(allowedFromRegistry.has('flow')).toBe(true);
             // ADR-0020: `workflow` retired as a metadata type.
             expect(allowedFromRegistry.has('workflow')).toBe(false);
-            expect(allowedFromRegistry.has('agent')).toBe(true);
+            // ADR-0063 §2: tenant custom agents withdrawn — `agent` is now
+            // allowOrgOverride:false (no per-org agent fork). The kernel ships
+            // exactly two platform agents; tenants extend via skills + tools.
+            expect(allowedFromRegistry.has('agent')).toBe(false);
             expect(allowedFromRegistry.has('permission')).toBe(true);
             expect(allowedFromRegistry.has('role')).toBe(true);
             expect(allowedFromRegistry.has('profile')).toBe(true);
