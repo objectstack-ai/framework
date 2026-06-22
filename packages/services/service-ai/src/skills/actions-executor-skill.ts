@@ -16,16 +16,16 @@ import type { Skill } from '@objectstack/spec/ai';
  * invoke business actions"); the registry expands it into actual tools
  * after metadata is loaded.
  *
- * The `tools` array is intentionally empty — Phase 1 lets the
- * skill-registry resolver fall through to the global tool list when an
- * agent's skill bundle would otherwise filter out the dynamically
- * registered `action_*` tools. Skills that want to restrict the set
- * should be authored project-side with the specific `action_<name>`
- * tools they want to expose.
+ * The skill claims the `action_*` wildcard (ADR-0064): the SkillRegistry
+ * resolver expands it against the registered tools whose names start with
+ * `action_`. There is NO global fall-through — a tool reaches the agent only
+ * because a bound, surface-compatible skill claims its name (or pattern).
+ * Skills that want a narrower set should claim specific `action_<name>` tools.
  */
 export const ACTIONS_EXECUTOR_SKILL: Skill = {
   name: 'actions_executor',
   label: 'Action Executor',
+  surface: 'ask',
   description:
     "Perform business operations on the user's data — invoke actions like " +
     "'mark as complete', 'start task', 'clone record' through natural language.",

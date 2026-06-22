@@ -19,18 +19,24 @@ import { AgentRuntime } from '../agent-runtime.js';
 import { SkillRegistry } from '../skill-registry.js';
 import type { AgentChatContext } from '../agent-runtime.js';
 import { buildAgentRoutes } from '../routes/agent-routes.js';
-import { DATA_CHAT_AGENT } from '../agents/data-chat-agent.js';
+import { ASK_AGENT } from '../agents/ask-agent.js';
+import { registerAgentAlias } from '../agents/agent-aliases.js';
 
-// The real metadata_assistant agent moved to the cloud-only
-// @objectstack/service-ai-studio package (AI authoring is a commercial
-// feature). This local stub stands in as a generic "second agent" fixture
-// for the runtime/route agent-listing tests below. It derives from the real
-// data_chat agent so it satisfies AgentSchema, then overrides identity fields.
-const METADATA_ASSISTANT_AGENT = {
-  ...DATA_CHAT_AGENT,
-  name: 'metadata_assistant',
-  label: 'Metadata Assistant',
+// The real `build` agent moved to the cloud-only @objectstack/service-ai-studio
+// package (AI authoring is a commercial feature). This local stub stands in as
+// the second PLATFORM agent for the runtime/route agent-listing tests below. It
+// derives from the `ask` agent so it satisfies AgentSchema, then overrides
+// identity fields. Registering the `metadata_assistant`→`build` alias (as the
+// cloud plugin does at init) makes `build` a recognised platform agent so the
+// runtime catalog surfaces it (ADR-0063 §2).
+registerAgentAlias('metadata_assistant', 'build');
+const BUILD_AGENT = {
+  ...ASK_AGENT,
+  name: 'build',
+  label: 'Builder',
   role: 'Schema Architect',
+  surface: 'build',
+  skills: [],
   active: true,
   visibility: 'global',
 } as any;
@@ -561,7 +567,7 @@ describe('AgentRuntime', () => {
 
   describe('loadAgent', () => {
     it('should return agent definition from metadata service (legacy name resolves via alias)', async () => {
-      (metadataService.get as any).mockResolvedValue(DATA_CHAT_AGENT);
+      (metadataService.get as any).mockResolvedValue(ASK_AGENT);
       const agent = await runtime.loadAgent('data_chat');
 
       // Path A: `data_chat` is an alias for the renamed `ask` agent.
@@ -585,7 +591,7 @@ describe('AgentRuntime', () => {
 
   describe('buildSystemMessages', () => {
     it('should create system message from agent instructions', () => {
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT);
+      const messages = runtime.buildSystemMessages(ASK_AGENT);
       expect(messages).toHaveLength(1);
       expect(messages[0].role).toBe('system');
       expect(messages[0].content).toContain('assistant for this business application platform');
@@ -597,46 +603,47 @@ describe('AgentRuntime', () => {
         recordId: 'rec_123',
         viewName: 'all_accounts',
       };
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, context);
+      const messages = runtime.buildSystemMessages(ASK_AGENT, context);
       expect(messages[0].content).toContain('Current object: account');
       expect(messages[0].content).toContain('Selected record ID: rec_123');
       expect(messages[0].content).toContain('Current view: all_accounts');
     });
 
     it('should not include context section when no context fields set', () => {
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, {});
+      const messages = runtime.buildSystemMessages(ASK_AGENT, {});
       expect(messages[0].content).not.toContain('Current Context');
     });
 
     it('tells the agent builds are live when the environment auto-publishes', () => {
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, { autoPublishAiBuilds: true });
+      const messages = runtime.buildSystemMessages(ASK_AGENT, { autoPublishAiBuilds: true });
       expect(messages[0].content).toContain('publish AUTOMATICALLY');
       expect(messages[0].content).toContain('is live');
     });
 
     it('stays silent on publishing when auto-publish is off/absent', () => {
       for (const ctx of [{}, { autoPublishAiBuilds: false }]) {
-        const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, ctx);
+        const messages = runtime.buildSystemMessages(ASK_AGENT, ctx);
         expect(messages[0].content).not.toContain('publish AUTOMATICALLY');
       }
     });
 
-    it('constrains to data-only when the authoring (build) skills are absent', () => {
-      // Open single-env framework: no AI Studio plugin → no authoring skills.
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, undefined, [
+    it('injects no runtime capability-gating block (ADR-0063: surfaces are separated)', () => {
+      // The per-deployment `buildRegisterActive` shim was removed: `ask` never
+      // advertises authoring, so there is nothing to walk back at runtime. The
+      // decline-to-build guidance lives in the agent's own persona, not in an
+      // injected capability block keyed off skill presence.
+      const messages = runtime.buildSystemMessages(ASK_AGENT, undefined, [
         { name: 'data_explorer', label: 'Data Explorer', tools: [] } as never,
-      ]);
-      expect(messages[0].content).toContain('BUILDING / AUTHORING is NOT available');
-      expect(messages[0].content).toContain('do NOT design or');
-    });
-
-    it('drops the data-only constraint when an authoring skill is active', () => {
-      // Cloud / EE: AI Studio plugin registered metadata_authoring → full build UX.
-      const messages = runtime.buildSystemMessages(DATA_CHAT_AGENT, undefined, [
-        { name: 'data_explorer', label: 'Data Explorer', tools: [] } as never,
-        { name: 'metadata_authoring', label: 'Metadata Authoring', tools: [] } as never,
       ]);
       expect(messages[0].content).not.toContain('BUILDING / AUTHORING is NOT available');
+      expect(messages[0].content).not.toContain('Capabilities in this deployment');
+    });
+
+    it('the ask persona itself declines app-building and points at the Builder', () => {
+      // Affinity is carried by the persona, not a runtime gate.
+      expect(ASK_AGENT.instructions).toContain('do NOT build');
+      expect(ASK_AGENT.instructions.toLowerCase()).toContain('builder');
+      expect(ASK_AGENT.surface).toBe('ask');
     });
   });
 
@@ -674,7 +681,7 @@ describe('AgentRuntime', () => {
 
   describe('buildRequestOptions', () => {
     it('should derive model config from agent', () => {
-      const options = runtime.buildRequestOptions(DATA_CHAT_AGENT, []);
+      const options = runtime.buildRequestOptions(ASK_AGENT, []);
       expect(options.model).toBe('gpt-4');
       expect(options.temperature).toBe(0.2);
       expect(options.maxTokens).toBe(4096);
@@ -687,9 +694,11 @@ describe('AgentRuntime', () => {
         { name: 'unrelated_tool', description: 'Not in any skill', parameters: {} },
       ];
 
-      // DATA_CHAT_AGENT now references the data_explorer skill which carries the tools.
+      // ASK_AGENT's tool set is the union of its skills' claimed tools:
+      // schema_reader owns list_objects, data_explorer owns query_records.
       const { DATA_EXPLORER_SKILL } = await import('../skills/data-explorer-skill.js');
-      const options = runtime.buildRequestOptions(DATA_CHAT_AGENT, availableTools, [DATA_EXPLORER_SKILL]);
+      const { SCHEMA_READER_SKILL } = await import('../skills/schema-reader-skill.js');
+      const options = runtime.buildRequestOptions(ASK_AGENT, availableTools, [SCHEMA_READER_SKILL, DATA_EXPLORER_SKILL]);
 
       const resolvedNames = options.tools?.map(t => t.name) ?? [];
       expect(resolvedNames).toContain('list_objects');
@@ -698,13 +707,13 @@ describe('AgentRuntime', () => {
     });
 
     it('should handle agent with no tools', () => {
-      const agent = { ...DATA_CHAT_AGENT, tools: undefined };
+      const agent = { ...ASK_AGENT, tools: undefined };
       const options = runtime.buildRequestOptions(agent, []);
       expect(options.tools).toBeUndefined();
     });
 
     it('should handle agent with no model config', () => {
-      const agent = { ...DATA_CHAT_AGENT, model: undefined };
+      const agent = { ...ASK_AGENT, model: undefined };
       const options = runtime.buildRequestOptions(agent, []);
       expect(options.model).toBeUndefined();
     });
@@ -713,19 +722,19 @@ describe('AgentRuntime', () => {
   describe('listAgents', () => {
     it('should return summaries of all active agents', async () => {
       (metadataService.list as any).mockResolvedValue([
-        DATA_CHAT_AGENT,
-        METADATA_ASSISTANT_AGENT,
+        ASK_AGENT,
+        BUILD_AGENT,
       ]);
       const agents = await runtime.listAgents();
       expect(agents).toHaveLength(2);
       expect(agents[0]).toEqual({ name: 'ask', label: 'Assistant', role: 'Business Application Assistant' });
-      expect(agents[1]).toEqual({ name: 'metadata_assistant', label: 'Metadata Assistant', role: 'Schema Architect' });
+      expect(agents[1]).toEqual({ name: 'build', label: 'Builder', role: 'Schema Architect' });
     });
 
     it('should filter out inactive agents', async () => {
       (metadataService.list as any).mockResolvedValue([
-        DATA_CHAT_AGENT,
-        { ...METADATA_ASSISTANT_AGENT, active: false },
+        ASK_AGENT,
+        { ...BUILD_AGENT, active: false },
       ]);
       const agents = await runtime.listAgents();
       expect(agents).toHaveLength(1);
@@ -740,7 +749,7 @@ describe('AgentRuntime', () => {
 
     it('should skip malformed agent metadata', async () => {
       (metadataService.list as any).mockResolvedValue([
-        DATA_CHAT_AGENT,
+        ASK_AGENT,
         { name: 'bad', label: 'Bad' }, // missing required fields
       ]);
       const agents = await runtime.listAgents();
@@ -767,11 +776,11 @@ describe('Agent Routes', () => {
     metadataService = createMockMetadataService({
       get: vi.fn(async (_type, name) => {
         // Canonical name after Path A rename; `data_chat` resolves here via alias.
-        if (name === 'ask') return DATA_CHAT_AGENT;
-        if (name === 'inactive_agent') return { ...DATA_CHAT_AGENT, name: 'inactive_agent', active: false };
+        if (name === 'ask') return ASK_AGENT;
+        if (name === 'inactive_agent') return { ...ASK_AGENT, name: 'inactive_agent', active: false };
         return undefined;
       }),
-      list: vi.fn(async () => [DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT]),
+      list: vi.fn(async () => [ASK_AGENT, BUILD_AGENT]),
     });
     runtime = new AgentRuntime(metadataService);
     routes = buildAgentRoutes(aiService, runtime, silentLogger);
@@ -794,7 +803,7 @@ describe('Agent Routes', () => {
     const body = resp.body as { agents: Array<{ name: string; label: string; role: string }> };
     expect(body.agents).toHaveLength(2);
     expect(body.agents[0].name).toBe('ask');
-    expect(body.agents[1].name).toBe('metadata_assistant');
+    expect(body.agents[1].name).toBe('build');
   });
 
   // ── POST /api/v1/ai/agents/:agentName/chat ──
@@ -1047,31 +1056,129 @@ describe('Agent Routes', () => {
 // Data Chat Agent Spec
 // ═══════════════════════════════════════════════════════════════════
 
-describe('DATA_CHAT_AGENT', () => {
+describe('ASK_AGENT', () => {
   it('should be a valid agent definition', () => {
     // Path A rename: canonical id is now `ask` (was `data_chat`).
-    expect(DATA_CHAT_AGENT.name).toBe('ask');
-    expect(DATA_CHAT_AGENT.role).toBe('Business Application Assistant');
-    expect(DATA_CHAT_AGENT.active).toBe(true);
-    expect(DATA_CHAT_AGENT.visibility).toBe('global');
+    expect(ASK_AGENT.name).toBe('ask');
+    expect(ASK_AGENT.role).toBe('Business Application Assistant');
+    expect(ASK_AGENT.active).toBe(true);
+    expect(ASK_AGENT.visibility).toBe('global');
   });
 
-  it('should reference the data_explorer skill (capability bundle moved to skill metadata)', () => {
-    expect(DATA_CHAT_AGENT.tools ?? []).toHaveLength(0);
-    expect(DATA_CHAT_AGENT.skills).toEqual(['data_explorer', 'actions_executor', 'metadata_authoring', 'solution_design']);
+  it('should bind only ask-surface skills — no authoring skills (ADR-0063)', () => {
+    expect(ASK_AGENT.tools ?? []).toHaveLength(0);
+    // schema_reader (both) + data_explorer/actions_executor (ask). The build
+    // skills (metadata_authoring/solution_design) are NOT here — they live on
+    // the cloud `build` agent.
+    expect(ASK_AGENT.skills).toEqual(['schema_reader', 'data_explorer', 'actions_executor']);
+    expect(ASK_AGENT.skills).not.toContain('metadata_authoring');
+    expect(ASK_AGENT.skills).not.toContain('solution_design');
+  });
+
+  it('declares surface "ask"', () => {
+    expect(ASK_AGENT.surface).toBe('ask');
   });
 
   it('should have guardrails configured', () => {
-    expect(DATA_CHAT_AGENT.guardrails).toBeDefined();
-    expect(DATA_CHAT_AGENT.guardrails!.maxTokensPerInvocation).toBeGreaterThan(0);
-    expect(DATA_CHAT_AGENT.guardrails!.blockedTopics).toBeDefined();
+    expect(ASK_AGENT.guardrails).toBeDefined();
+    expect(ASK_AGENT.guardrails!.maxTokensPerInvocation).toBeGreaterThan(0);
+    expect(ASK_AGENT.guardrails!.blockedTopics).toBeDefined();
   });
 
   it('should have model config', () => {
-    expect(DATA_CHAT_AGENT.model).toBeDefined();
-    expect(DATA_CHAT_AGENT.model!.temperature).toBeLessThanOrEqual(0.5); // low temp for data queries
+    expect(ASK_AGENT.model).toBeDefined();
+    expect(ASK_AGENT.model!.temperature).toBeLessThanOrEqual(0.5); // low temp for data queries
   });
 });
 
-// NOTE: the METADATA_ASSISTANT_AGENT spec tests moved with the agent to the
+// ═══════════════════════════════════════════════════════════════════
+// ADR-0063 §3 / ADR-0064 — surface affinity & tool scoping
+// ═══════════════════════════════════════════════════════════════════
+
+describe('surface affinity & tool scoping (ADR-0063/0064)', () => {
+  it('tools(ask) excludes every authoring tool — ask cannot author by construction', async () => {
+    const { SCHEMA_READER_SKILL } = await import('../skills/schema-reader-skill.js');
+    const { DATA_EXPLORER_SKILL } = await import('../skills/data-explorer-skill.js');
+    const { ACTIONS_EXECUTOR_SKILL } = await import('../skills/actions-executor-skill.js');
+    const askSkills = [SCHEMA_READER_SKILL, DATA_EXPLORER_SKILL, ACTIONS_EXECUTOR_SKILL];
+
+    const availableTools: AIToolDefinition[] = [
+      // shared reads + ask tools
+      { name: 'query_data', description: '', parameters: {} },
+      { name: 'describe_object', description: '', parameters: {} },
+      { name: 'list_objects', description: '', parameters: {} },
+      { name: 'query_records', description: '', parameters: {} },
+      { name: 'visualize_data', description: '', parameters: {} },
+      { name: 'action_complete_task', description: '', parameters: {} },
+      // authoring tools that MUST NOT leak into the ask agent
+      { name: 'create_metadata', description: '', parameters: {} },
+      { name: 'update_metadata', description: '', parameters: {} },
+      { name: 'add_field', description: '', parameters: {} },
+      { name: 'apply_blueprint', description: '', parameters: {} },
+    ];
+
+    const registry = new SkillRegistry(createMockMetadataService());
+    const tools = registry.flattenToTools(askSkills, availableTools).map((t) => t.name);
+
+    // shared/ask tools present
+    expect(tools).toContain('describe_object');
+    expect(tools).toContain('query_data');
+    expect(tools).toContain('query_records');
+    expect(tools).toContain('action_complete_task');
+    // no create_* / *_metadata / blueprint tools (issue acceptance criterion)
+    for (const t of ['create_metadata', 'update_metadata', 'add_field', 'apply_blueprint']) {
+      expect(tools).not.toContain(t);
+    }
+    expect(
+      tools.some((n) => n.startsWith('create_') || /_metadata$/.test(n) || n.includes('blueprint')),
+    ).toBe(false);
+  });
+
+  it('binding a surface:build skill to the ask agent is a fast load error (ADR-0064 §3)', async () => {
+    const md = createMockMetadataService({
+      list: vi.fn(async (type: string) =>
+        type === 'skill'
+          ? [
+              {
+                name: 'metadata_authoring',
+                label: 'Metadata Authoring',
+                surface: 'build',
+                tools: ['create_metadata'],
+                active: true,
+              },
+            ]
+          : [],
+      ) as any,
+    });
+    const runtime = new AgentRuntime(md, new SkillRegistry(md));
+    const askAgent = { ...ASK_AGENT, skills: ['metadata_authoring'] } as any;
+    await expect(runtime.resolveActiveSkills(askAgent)).rejects.toThrow(
+      /incompatible affinity|cannot bind/,
+    );
+  });
+
+  it('a surface:both skill binds to the ask agent without error', async () => {
+    const md = createMockMetadataService({
+      list: vi.fn(async (type: string) =>
+        type === 'skill'
+          ? [
+              {
+                name: 'schema_reader',
+                label: 'Schema Reader',
+                surface: 'both',
+                tools: ['describe_object'],
+                active: true,
+              },
+            ]
+          : [],
+      ) as any,
+    });
+    const runtime = new AgentRuntime(md, new SkillRegistry(md));
+    const askAgent = { ...ASK_AGENT, skills: ['schema_reader'] } as any;
+    const skills = await runtime.resolveActiveSkills(askAgent);
+    expect(skills.map((s) => s.name)).toContain('schema_reader');
+  });
+});
+
+// NOTE: the BUILD_AGENT spec tests moved with the agent to the
 // cloud-only @objectstack/service-ai-studio package (metadata-assistant-agent.test.ts).

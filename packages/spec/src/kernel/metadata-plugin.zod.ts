@@ -681,7 +681,14 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // `agent`: executionPinned — long-running conversations must stick to the
   // agent version (prompt template + tool set) they started under.
   // (Mirrors OpenAI Assistants v2 / Anthropic Messages assistant pinning.)
-  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: true, loadOrder: 90, domain: 'ai' },
+  //
+  // ADR-0063 §2 — `*.agent.ts` is CLOSED to third parties. The kernel ships
+  // exactly two platform-owned agents (`ask`/`build`); tenants extend the
+  // platform by authoring skills + tools, never agents. Hence
+  // allowRuntimeCreate:false (no runtime "create agent") and
+  // allowOrgOverride:false (no per-org agent fork). The runtime catalog
+  // additionally filters out any non-platform agent record (see service-ai).
+  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: true, executionPinned: true, loadOrder: 90, domain: 'ai' },
   { type: 'tool', label: 'AI Tool', filePatterns: ['**/*.tool.ts', '**/*.tool.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 85, domain: 'ai' },
   { type: 'skill', label: 'AI Skill', filePatterns: ['**/*.skill.ts', '**/*.skill.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 88, domain: 'ai' },
 ];

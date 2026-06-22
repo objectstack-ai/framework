@@ -3,21 +3,26 @@
 import type { Skill } from '@objectstack/spec/ai';
 
 /**
- * Built-in `data_explorer` skill — the read-only data-Q&A capability
- * bundle that the `data_chat` agent (and any other agent that wants
- * data-exploration powers) attaches to its `skills[]`.
+ * Built-in `data_explorer` skill — the records + aggregation + charting
+ * capability bundle the `ask` agent attaches to its `skills[]`.
  *
- * Following the platform's metadata-driven philosophy, the agent
- * itself no longer hardcodes which tools it can call; instead it
- * names this skill and the SkillRegistry resolves the tool list at
- * request time. Disabling this skill via the metadata service
- * disables data exploration for every agent that references it,
- * without code changes.
+ * ADR-0063 §3 affinity: `surface: 'ask'`. The shared read-only schema
+ * tools (`describe_object`/`list_objects`/`query_data`) are NOT owned here
+ * — they live on the `surface:'both'` `schema_reader` skill so the `build`
+ * agent can reuse them without dual-listing (ADR-0064 §2). This skill keeps
+ * the `ask`-only exploration tools (record lookups, aggregation, charts).
+ * Its instructions still reference `describe_object`/`query_data` because
+ * those resolve from the sibling `schema_reader` skill on the same agent.
+ *
+ * Following the platform's metadata-driven philosophy, the agent itself
+ * does not hardcode which tools it can call; it names this skill and the
+ * SkillRegistry resolves the tool list at request time.
  */
 export const DATA_EXPLORER_SKILL: Skill = {
   name: 'data_explorer',
   label: 'Data Explorer',
-  description: 'Read-only Q&A over the user\'s business data — schema discovery, filtered queries, lookups, and aggregations.',
+  surface: 'ask',
+  description: 'Read-only Q&A over the user\'s business data — filtered record lookups, aggregations, and charts.',
   instructions: `You can explore the user's business data through these tools.
 
 Capabilities:
@@ -41,10 +46,9 @@ Guidelines:
 7. If a query returns no results, suggest possible reasons and alternative queries.
 8. Never expose internal IDs unless the user explicitly asks for them.
 9. Always answer in the same language the user is using.`,
+  // Read schema/query tools (describe_object, list_objects, query_data) are
+  // owned by the `schema_reader` (surface:'both') skill — not re-listed here.
   tools: [
-    'query_data',
-    'list_objects',
-    'describe_object',
     'query_records',
     'get_record',
     'aggregate_data',

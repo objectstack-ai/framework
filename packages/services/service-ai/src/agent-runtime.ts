@@ -10,8 +10,8 @@ import type { Agent, Skill } from '@objectstack/spec/ai';
 import { AgentSchema } from '@objectstack/spec/ai';
 import { SkillRegistry, type SkillContext } from './skill-registry.js';
 import { SchemaRetriever, type ObjectShape } from './schema-retriever.js';
-import { DEFAULT_DATA_AGENT_NAME } from './agents/index.js';
-import { resolveAgentAlias } from './agents/agent-aliases.js';
+import { ASK_AGENT_NAME } from './agents/index.js';
+import { resolveAgentAlias, platformAgentNames } from './agents/agent-aliases.js';
 
 /**
  * Context passed alongside a user message when chatting with an agent.
@@ -74,9 +74,15 @@ export class AgentRuntime {
     const rawItems = await this.metadataService.list('agent');
     const agents: Array<{ name: string; label: string; role: string }> = [];
 
+    // ADR-0063 §2 — the runtime catalog surfaces only platform-owned agents
+    // (`ask`/`build`). Tenant custom agents are withdrawn; any stray custom
+    // record persisted before the withdrawal is filtered out here so it never
+    // appears in the picker or the agents list.
+    const platform = platformAgentNames();
+
     for (const raw of rawItems) {
       const result = AgentSchema.safeParse(raw);
-      if (result.success && result.data.active) {
+      if (result.success && result.data.active && platform.has(result.data.name)) {
         agents.push({
           name: result.data.name,
           label: result.data.label,
@@ -165,33 +171,12 @@ export class AgentRuntime {
       if (block) parts.push(block);
     }
 
-    // Authoring (build) register availability. The unified `data_chat` persona
-    // (ADR-0040) advertises that it can BUILD or CHANGE the application, but
-    // that capability is supplied ENTIRELY by the cloud AI Studio plugin's
-    // `metadata_authoring` / `solution_design` skills (and their tools). On the
-    // open single-env framework those skills are not registered, so the
-    // authoring tools never resolve — yet the LLM, still reading the "you can
-    // build" persona, will role-play designing a whole system (emitting design
-    // docs it has no tools to execute). When the build register is absent,
-    // constrain the assistant to data/query and have it decline build requests
-    // instead of pretending. Keyed off actual skill presence so cloud/EE
-    // (AI Studio loaded) keeps the full build UX with no extra wiring.
-    const buildRegisterActive = !!activeSkills?.some(
-      (s) => s.name === 'metadata_authoring' || s.name === 'solution_design',
-    );
-    if (!buildRegisterActive) {
-      parts.push(
-        '\n--- Capabilities in this deployment ---\n' +
-          'Application BUILDING / AUTHORING is NOT available here. You can ONLY answer questions ' +
-          "about the user's existing data (query, list, count, aggregate, search) and run actions " +
-          'the application already exposes. You CANNOT create, change, or design objects, fields, ' +
-          'views, dashboards, pages, or whole apps — and you have no tools to do so. If the user ' +
-          'asks you to build, create, develop, or modify the application itself, do NOT design or ' +
-          'outline a system and do NOT pretend to build one: briefly say that AI app-building is ' +
-          'not available in this edition, then offer to help explore or report on existing data ' +
-          "instead. Answer in the user's language.",
-      );
-    }
+    // NOTE (ADR-0063): the per-deployment "build register availability"
+    // degradation shim was removed here. The two agents are now separated by
+    // surface — `ask` never advertises authoring (its persona and tool set
+    // carry none), so there is no "you can build" claim to walk back when the
+    // cloud authoring skills are absent. `build` only exists where the cloud
+    // package is loaded. No runtime capability-gating is needed.
 
     return [{ role: 'system' as const, content: parts.join('\n') }];
   }
@@ -322,7 +307,24 @@ export class AgentRuntime {
   async resolveActiveSkills(agent: Agent, context?: AgentChatContext): Promise<Skill[]> {
     if (!this.skillRegistry) return [];
     if (!agent.skills || agent.skills.length === 0) return [];
-    return this.skillRegistry.listActiveSkills(context ?? {}, agent.skills);
+    const skills = await this.skillRegistry.listActiveSkills(context ?? {}, agent.skills);
+    // ADR-0064 §3 — affinity is a checked invariant, not an emergent property.
+    // A skill may only bind to an agent whose surface it matches (`'both'`
+    // binds to either). An incompatible binding is a fast load error so that
+    // "ask can't author" can never regress to a silent mis-scope. Default
+    // both sides to `'ask'` for records that predate the `surface` field.
+    const agentSurface = agent.surface ?? 'ask';
+    for (const skill of skills) {
+      const skillSurface = skill.surface ?? 'ask';
+      if (skillSurface !== 'both' && skillSurface !== agentSurface) {
+        throw new Error(
+          `Skill "${skill.name}" (surface: '${skillSurface}') cannot bind to agent ` +
+            `"${agent.name}" (surface: '${agentSurface}') — incompatible affinity (ADR-0064 §3). ` +
+            `A skill may only bind to an agent whose surface it matches, or declare surface: 'both'.`,
+        );
+      }
+    }
+    return skills;
   }
 
   /**
@@ -331,12 +333,12 @@ export class AgentRuntime {
    *
    * Resolution order:
    * 1. The `defaultAgent` of the app named by `context.appName`
-   *    (e.g. Studio → `metadata_assistant`).
-   * 2. The platform data-query agent (`data_chat`) — the implicit
-   *    copilot bound to every app that doesn't pin its own. This is
-   *    what end users get by default, so they never have to choose.
+   *    (e.g. Studio → the `build` agent).
+   * 2. The platform `ask` (data) agent — the implicit copilot bound to
+   *    every app that doesn't pin its own. This is what end users get by
+   *    default, so they never have to choose.
    * 3. The first active agent in the registry (last-resort fallback,
-   *    e.g. in stripped-down deployments without the data agent).
+   *    e.g. in stripped-down deployments without the `ask` agent).
    * 4. `undefined` if no agents are registered.
    */
   async resolveDefaultAgent(context?: AgentChatContext): Promise<Agent | undefined> {
@@ -349,11 +351,11 @@ export class AgentRuntime {
       }
     }
 
-    // Platform default: the data-query agent is the implicit copilot for
+    // Platform default: the `ask` (data) agent is the implicit copilot for
     // every app without an explicit `defaultAgent`. Resolve it by name so
     // the fallback is deterministic rather than registration-order
     // dependent.
-    const dataAgent = await this.loadAgent(DEFAULT_DATA_AGENT_NAME);
+    const dataAgent = await this.loadAgent(ASK_AGENT_NAME);
     if (dataAgent && dataAgent.active !== false) return dataAgent;
 
     // Last resort: first active agent in declaration order.

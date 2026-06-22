@@ -139,6 +139,18 @@ export const AgentSchema = lazySchema(() => z.object({
   model: AIModelConfigSchema.optional(),
   lifecycle: StateMachineSchema.optional().describe('State machine defining the agent conversation follow and constraints'),
 
+  /**
+   * ADR-0063 §1 / ADR-0064 — the product surface this agent IS. The kernel
+   * ships exactly two: `ask` (data product, surface `'ask'`) and `build`
+   * (authoring product, surface `'build'`). A skill may only bind to an
+   * agent whose surface it matches (`'both'` skills bind to either), and the
+   * agent's tool set is the union of those skills' tools — nothing falls
+   * through to the global registry. Defaults to `'ask'`.
+   */
+  surface: z.enum(['ask', 'build']).default('ask').describe(
+    "Product surface this agent binds ('ask' | 'build') — ADR-0063 §1",
+  ),
+
   /** Capabilities — Skill-based (primary) */
   skills: z.array(z.string().regex(/^[a-z_][a-z0-9_]*$/)).optional().describe('Skill names to attach (Agent→Skill→Tool architecture)'),
 

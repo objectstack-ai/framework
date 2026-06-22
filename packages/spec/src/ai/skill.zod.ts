@@ -65,6 +65,25 @@ export const SkillSchema = lazySchema(() => z.object({
   description: z.string().optional().describe('Skill description'),
 
   /**
+   * ADR-0063 §3 / ADR-0064 — skill ↔ agent affinity. Which kernel agent
+   * surface this skill belongs to:
+   *
+   * - `'ask'`   — the data product (read/query/explore + run actions).
+   * - `'build'` — the authoring product (metadata draft → verify → publish).
+   * - `'both'`  — genuinely shared, read-only capability (e.g. a
+   *               `schema_reader` exposing `describe_object`/`list_objects`).
+   *
+   * A skill may only bind to an agent whose surface it matches (`'both'`
+   * matches either); the runtime enforces this at load time. An agent's
+   * tool set is the union of its surface-compatible skills' tools — there
+   * is no global fall-through (ADR-0064). Defaults to `'ask'`, the
+   * open-source/free surface.
+   */
+  surface: z.enum(['ask', 'build', 'both']).default('ask').describe(
+    "Agent surface this skill binds to ('ask' | 'build' | 'both') — ADR-0063 §3",
+  ),
+
+  /**
    * Instructions injected into the system prompt when this skill is active.
    * Guides the LLM on how and when to use the skill's tools.
    */
