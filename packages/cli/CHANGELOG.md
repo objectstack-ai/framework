@@ -1,5 +1,83 @@
 # @objectstack/cli
 
+## 10.2.0
+
+### Patch Changes
+
+- 63f3219: feat(lint): extract static metadata validators into @objectstack/lint (ADR-0019 P3)
+
+  New public package `@objectstack/lint` holds the pure, build-time metadata
+  validators as `(stack) => Finding[]` functions, so the same rules run wherever a
+  stack can be assembled — the CLI's `os validate`/`compile` and any other
+  consumer (notably AI-driven authoring), instead of being trapped in CLI
+  internals where only the CLI could reach them.
+
+  First release moves the two validators the AI build needs:
+
+  - `validateWidgetBindings` — dashboard widget → dataset → measure/dimension
+    reference integrity + measure-aggregation coherence (ADR-0021).
+  - `validateStackExpressions` — CEL/predicate validity for field conditionals,
+    sharing rules, action visible/disabled, lifecycle hooks (ADR-0032).
+
+  `@objectstack/cli` now imports both from `@objectstack/lint` (was `./utils/*`);
+  pure move, no behavior change. Dependency direction is one-way `lint → spec`;
+  the package never depends on a runtime and is never bundled into a frontend
+  (that is why the validators do NOT live in the frontend-facing `@objectstack/spec`).
+
+  Filesystem-coupled checks (`lint-liveness-properties`) and CLI-command-coupled
+  ones (`score` → `lintConfig`) deliberately stay in the CLI for now; they can
+  move in a later increment.
+
+- Updated dependencies [63f3219]
+- Updated dependencies [b496498]
+  - @objectstack/lint@10.2.0
+  - @objectstack/spec@10.2.0
+  - @objectstack/account@10.2.0
+  - @objectstack/setup@10.2.0
+  - @objectstack/studio@10.2.0
+  - @objectstack/client@10.2.0
+  - @objectstack/cloud-connection@10.2.0
+  - @objectstack/core@10.2.0
+  - @objectstack/formula@10.2.0
+  - @objectstack/mcp@10.2.0
+  - @objectstack/objectql@10.2.0
+  - @objectstack/observability@10.2.0
+  - @objectstack/platform-objects@10.2.0
+  - @objectstack/driver-memory@10.2.0
+  - @objectstack/driver-mongodb@10.2.0
+  - @objectstack/driver-sql@10.2.0
+  - @objectstack/driver-sqlite-wasm@10.2.0
+  - @objectstack/plugin-approvals@10.2.0
+  - @objectstack/plugin-audit@10.2.0
+  - @objectstack/plugin-auth@10.2.0
+  - @objectstack/plugin-email@10.2.0
+  - @objectstack/plugin-hono-server@10.2.0
+  - @objectstack/plugin-org-scoping@10.2.0
+  - @objectstack/plugin-reports@10.2.0
+  - @objectstack/plugin-security@10.2.0
+  - @objectstack/plugin-sharing@10.2.0
+  - @objectstack/plugin-webhooks@10.2.0
+  - @objectstack/rest@10.2.0
+  - @objectstack/runtime@10.2.0
+  - @objectstack/service-ai@10.2.0
+  - @objectstack/service-analytics@10.2.0
+  - @objectstack/service-automation@10.2.0
+  - @objectstack/service-cache@10.2.0
+  - @objectstack/service-datasource@10.2.0
+  - @objectstack/service-job@10.2.0
+  - @objectstack/service-messaging@10.2.0
+  - @objectstack/service-package@10.2.0
+  - @objectstack/service-queue@10.2.0
+  - @objectstack/service-realtime@10.2.0
+  - @objectstack/service-settings@10.2.0
+  - @objectstack/service-storage@10.2.0
+  - @objectstack/trigger-api@10.2.0
+  - @objectstack/trigger-record-change@10.2.0
+  - @objectstack/trigger-schedule@10.2.0
+  - @objectstack/types@10.2.0
+  - @objectstack/verify@10.2.0
+  - @objectstack/console@10.2.0
+
 ## 10.1.0
 
 ### Minor Changes
