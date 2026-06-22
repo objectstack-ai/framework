@@ -639,6 +639,22 @@ export default {
 
 ---
 
+## Verify your work
+
+After editing a `*.translation.ts` bundle:
+
+```bash
+os i18n check   # translation coverage vs the default locale (missing-key report)
+os validate     # the bundle conforms to the protocol schema (no artifact)
+# or: os build  # the same schema gate, plus emits dist/
+```
+
+`os i18n check` lists keys missing per locale; `os lint --i18n-strict` turns
+coverage gaps into hard errors. In a scaffolded project the schema gate is
+`npm run validate`. See objectstack-platform → **Verify your work**.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

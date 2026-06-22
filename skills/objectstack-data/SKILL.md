@@ -878,6 +878,28 @@ on parents, `select` options, and a name/title field per object.
 
 ---
 
+## Verify your work
+
+After authoring or editing any `*.object.ts` / `*.seed.ts`, run the author-time
+gate before reporting done:
+
+```bash
+os validate     # Zod schema + CEL predicates (record.<field> existence) + bindings
+# or: os build  # the same gates, plus emits dist/
+```
+
+It catches what otherwise fails **silently at runtime**: a bare field ref in a
+`requiredWhen` / `readonlyWhen` / `visibleWhen`, a validation rule, a formula, or
+a row-level-security/sharing predicate (`done` instead of `record.done`) that
+evaluates to `null` and never fires (#2183/#2185). `os lint` is a *separate*
+pass that additionally checks the data model against the conventions in this
+skill (relationships, master-detail, roll-ups) — run it too, but it does **not**
+replace `os validate`. (Reminder: two consecutive `os build` runs with no source
+change must be byte-identical — see the determinism gate above.) In a scaffolded
+project the gate is `npm run validate`.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

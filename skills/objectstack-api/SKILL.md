@@ -364,6 +364,23 @@ const aiService = kernel.resolve<AIService>('ai');
 
 ---
 
+## Verify your work
+
+After adding a `*.endpoint.ts`, a custom route, or an auth provider, run the
+author-time gate before reporting done:
+
+```bash
+os validate     # Zod schema + CEL predicate validation + bindings (no artifact)
+# or: os build  # the same gates, plus emits dist/
+```
+
+Route-guard and auth predicates are CEL; the gate parses them and fails
+non-zero with a located message instead of letting a malformed guard fall
+through at runtime. In a scaffolded project the gate is `npm run validate`. See
+objectstack-platform → **Verify your work** for the full gate list.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

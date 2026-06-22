@@ -1290,6 +1290,31 @@ the selected row in `list_item` contexts.
 
 ---
 
+## Verify your work
+
+After authoring any `*.view.ts` / `*.action.ts` / `*.dashboard.ts`, run the
+author-time gate before reporting done:
+
+```bash
+os validate     # CEL predicates (record.<field>) + widget bindings + schema
+# or: os build  # the same gates, plus emits dist/
+```
+
+Two UI-specific traps it catches, both **silent at runtime** otherwise:
+
+- **Action / field predicate** — a bare field ref in an action `visible` /
+  `disabled` or a field `visibleWhen` (`done` instead of `record.done`)
+  evaluates to `null` and hides the control on *every* record (the #2183/#2185
+  "button never shows" trap).
+- **Dashboard widget binding** — a widget `dataset` / `dimensions` / `values`
+  that doesn't resolve to a declared dataset/field renders an empty chart
+  (ADR-0021).
+
+Don't report a view/action/dashboard done until `os validate` passes. In a
+scaffolded project the gate is `npm run validate`.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

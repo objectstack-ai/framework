@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { ZodError } from 'zod';
 import { ObjectStackDefinitionSchema, normalizeStackInput } from '@objectstack/spec';
 import { loadConfig } from '../utils/config.js';
+import { validateStackExpressions } from '../utils/validate-expressions.js';
 import { validateWidgetBindings } from '../utils/validate-widget-bindings.js';
 import {
   printHeader,
@@ -19,7 +20,8 @@ import {
 } from '../utils/format.js';
 
 export default class Validate extends Command {
-  static override description = 'Validate ObjectStack configuration against the protocol schema';
+  static override description =
+    'Validate ObjectStack configuration against the protocol schema, CEL expressions, and widget bindings (no artifact emitted)';
 
   static override args = {
     config: Args.string({ description: 'Configuration file path', required: false }),
@@ -70,6 +72,37 @@ export default class Validate extends Command {
         this.exit(1);
       }
 
+      // 2b. Expression validation (ADR-0032 §1a/1b) — the same gate `os build`
+      //     runs, brought to the read-only check so authors catch it without
+      //     emitting an artifact. CEL predicates in actions/validations/flows/
+      //     sharing/hooks are checked for syntax AND that `record.<field>`
+      //     references resolve on the target object. This is what catches a
+      //     BARE field ref (`done` instead of `record.done`) that would
+      //     otherwise silently hide an action on every record (#2183/#2185).
+      if (!flags.json) printStep('Validating expressions (ADR-0032)...');
+      const exprIssues = validateStackExpressions(result.data as Record<string, unknown>);
+      const exprErrors = exprIssues.filter((i) => i.severity !== 'warning');
+      const exprWarnings = exprIssues.filter((i) => i.severity === 'warning');
+
+      if (exprErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: exprErrors,
+            warnings: exprWarnings,
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Expression validation failed (${exprErrors.length} issue${exprErrors.length > 1 ? 's' : ''})`);
+        for (const i of exprErrors.slice(0, 50)) {
+          console.log(`  • ${i.where}: ${i.message}`);
+          console.log(chalk.dim(`      source: \`${i.source}\``));
+        }
+        this.exit(1);
+      }
+
       // 3. Dashboard widget reference integrity (issue #1721) — a semantic
       //    cross-reference pass the protocol schema cannot express: every
       //    widget's `dataset`/`dimensions`/`values` and chartConfig
@@ -108,7 +141,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: widgetWarnings,
+          warnings: [...exprWarnings, ...widgetWarnings],
           duration: timer.elapsed(),
         }, null, 2));
         return;
@@ -117,6 +150,9 @@ export default class Validate extends Command {
       // 5. Warnings (non-blocking)
       const warnings: string[] = [];
 
+      for (const i of exprWarnings) {
+        warnings.push(`${i.where}: ${i.message}`);
+      }
       for (const f of widgetWarnings) {
         warnings.push(`${f.where}: ${f.message}`);
       }

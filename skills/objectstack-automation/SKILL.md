@@ -611,6 +611,27 @@ metadata first; reserve custom code for edge-case integrations.
 
 ---
 
+## Verify your work
+
+Flow/workflow predicates fail **silently at runtime** when malformed: a bare
+field ref in a `start`/`decision` condition or an edge guard (`status == 'open'`
+instead of `record.status == 'open'`) resolves to `null`/`false`, so the flow
+"fires" but does nothing — and nothing errors at edit time. Catch it at author
+time before reporting a flow done:
+
+```bash
+os validate     # CEL/predicate validation (record.<field> existence) + schema
+# or: os build  # the same gates, plus emits dist/
+```
+
+This runs the ADR-0032 expression gate over every flow condition, edge guard,
+workflow predicate, validation rule and sharing rule, exiting non-zero with a
+located, corrective message. Remember conditions are **bare CEL**
+(`record.status == 'x'`); only string node fields use `{…}` templates — see
+objectstack-formula. In a scaffolded project this is `npm run validate`.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod
