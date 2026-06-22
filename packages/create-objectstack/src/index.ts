@@ -335,6 +335,35 @@ function rewriteProjectIdentity(
     md = md.replace(/^#\s+.*$/m, `# ${title}`);
     fs.writeFileSync(readmePath, md);
   }
+
+  writeAgentGuides(targetDir, title, projectName);
+}
+
+// Emit the cross-agent guidance file (AGENTS.md) and the GitHub Copilot variant
+// (.github/copilot-instructions.md) from the shared template. This is what tells
+// the coding agent to run `npm run validate` after editing metadata — the gate
+// that catches bare-field predicates and dangling bindings that otherwise fail
+// silently at runtime. Skip either file if the template already shipped its own,
+// so a curated template can override the default.
+function writeAgentGuides(targetDir: string, title: string, projectName: string) {
+  const templatePath = path.join(BUNDLED_TEMPLATES_DIR, 'AGENTS.md');
+  if (!fs.existsSync(templatePath)) return;
+
+  const rendered = fs
+    .readFileSync(templatePath, 'utf8')
+    .replace(/\{\{PROJECT_TITLE\}\}/g, title)
+    .replace(/\{\{PROJECT_NAME\}\}/g, projectName);
+
+  const agentsPath = path.join(targetDir, 'AGENTS.md');
+  if (!fs.existsSync(agentsPath)) {
+    fs.writeFileSync(agentsPath, rendered);
+  }
+
+  const copilotPath = path.join(targetDir, '.github', 'copilot-instructions.md');
+  if (!fs.existsSync(copilotPath)) {
+    fs.mkdirSync(path.dirname(copilotPath), { recursive: true });
+    fs.writeFileSync(copilotPath, rendered);
+  }
 }
 
 // ─── CLI Program ────────────────────────────────────────────────────
@@ -450,7 +479,8 @@ const program = new Command()
         console.log(chalk.dim('    npm install'));
       }
       console.log(chalk.dim('    npm run dev           # Start development server'));
-      console.log(chalk.dim('    npm run validate      # Check configuration'));
+      console.log(chalk.dim('    npm run validate      # Verify metadata: schema + predicates + bindings'));
+      console.log(chalk.dim('                          # (run after every metadata edit — see AGENTS.md)'));
       if (options.skipInstall || options.skipSkills) {
         console.log('');
         console.log(chalk.bold('  AI Skills (recommended):'));

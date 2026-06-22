@@ -47,7 +47,7 @@ Open [http://localhost:3000/_console/](http://localhost:3000/_console/) — you'
 ### Validate & Build
 
 ```bash
-os validate          # Check schema correctness
+os validate          # Check schema + CEL predicates + widget bindings (no artifact)
 os compile           # Build production artifact → dist/objectstack.json
 ```
 
@@ -303,7 +303,7 @@ shape they accept. See [Source vs Artifact](#source-vs-artifact) below.
 | Command | Description |
 |---------|-------------|
 | `os compile [config]` | Compile configuration to a JSON artifact (`dist/objectstack.json`) |
-| `os validate [config]` | Validate configuration against the ObjectStack Protocol schema |
+| `os validate [config]` | Validate schema, CEL predicates, and widget bindings — the same gates as `os compile`/`os build`, no artifact emitted |
 | `os info [config]` | Display metadata summary (objects, fields, apps, agents, etc.) |
 
 #### `os compile`
@@ -346,7 +346,9 @@ over HTTP from another runtime. See [`os start`](#os-start) and
 
 #### `os validate`
 
-Standalone schema validation with rich error output. Use to check your configuration without compiling.
+The fast, artifact-free verification gate. It runs the **same structural and
+semantic checks as `os compile`/`os build`** but writes no `dist/`, so it is the
+command to run after every metadata edit. Use it before reporting a change done.
 
 ```bash
 os validate                  # Validate current directory
@@ -355,15 +357,36 @@ os validate --json           # JSON output for CI
 os validate path/to/config   # Validate specific file
 ```
 
+**Gates run (each exits non-zero with a located, corrective message):**
+1. **Protocol schema** — the stack conforms to `ObjectStackDefinitionSchema`
+   (`@objectstack/spec`).
+2. **CEL / predicate validation (ADR-0032)** — every `visible` / `disabled` /
+   `requiredWhen` / validation rule / flow condition / sharing rule is parsed
+   for CEL syntax **and** checked that each `record.<field>` reference exists on
+   the target object. This catches a **bare field ref** (`done` instead of
+   `record.done`) that would otherwise evaluate to `null` and silently hide an
+   action on every record (#2183/#2185).
+3. **Widget-binding integrity (ADR-0021)** — every dashboard widget's
+   `dataset` / `dimensions` / `values` resolves to a declared dataset/field, so
+   a dangling binding fails here instead of rendering an empty chart.
+
 **Options:**
 - `--strict` — Treat warnings as errors (exit code 1)
 - `--json` — Output results as JSON
 
-**Warnings checked:**
+**Warnings checked (advisory, non-blocking unless `--strict`):**
 - Missing `manifest.id` (required for deployment)
 - Missing `manifest.namespace` (required for multi-app hosting)
 - No objects defined
 - No apps or plugins defined
+
+<Callout type="tip">
+`os validate` and `os build` share one validator, so a config that passes
+`os validate` will not fail the build on schema/predicate/binding grounds. In a
+scaffolded project these are wired as `npm run validate` and `npm run build`;
+your `AGENTS.md` tells coding agents to run `npm run validate` after editing
+metadata. See [Validating metadata](/docs/guides/validating-metadata).
+</Callout>
 
 #### `os info`
 

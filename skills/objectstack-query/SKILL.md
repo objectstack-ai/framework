@@ -539,6 +539,23 @@ only fall back to custom query code when schema limits require it.
 
 ---
 
+## Verify your work
+
+Most queries run at runtime (smoke-test them with `os data query` or a vitest
+test), but query *metadata* — list-view filter specs and report/dashboard
+datasets — is validated statically. After editing those, run:
+
+```bash
+os validate     # schema + CEL predicates + widget/dataset bindings (no artifact)
+# or: os build  # the same gates, plus emits dist/
+```
+
+A dashboard widget whose `dataset` / `dimensions` / `values` don't resolve fails
+here instead of rendering an empty chart (ADR-0021). In a scaffolded project the
+gate is `npm run validate`. See objectstack-platform → **Verify your work**.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

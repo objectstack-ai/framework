@@ -469,6 +469,23 @@ logic into **skills**, and wire domain knowledge through **RAG pipelines**.
 
 ---
 
+## Verify your work
+
+After authoring a `*.agent.ts` / `*.tool.ts` / `*.skill.ts` or a model-registry
+entry, run the author-time gate before reporting done:
+
+```bash
+os validate     # Zod schema + CEL predicate validation + bindings (no artifact)
+# or: os build  # the same gates, plus emits dist/
+```
+
+It confirms the agent/tool/model metadata conforms to the protocol and that any
+CEL predicate (e.g. a tool's availability condition) parses and resolves. In a
+scaffolded project the gate is `npm run validate`. See objectstack-platform →
+**Verify your work**.
+
+---
+
 ## References
 
 See [references/_index.md](./references/_index.md) for the full list of Zod

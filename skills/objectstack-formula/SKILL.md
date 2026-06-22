@@ -421,6 +421,19 @@ CI runs `objectstack build` twice and asserts SHA-1 match.
 
 ---
 
+## Verify your work
+
+A malformed expression no longer fails silently (ADR-0032, see the note near the
+top of this skill): both `os validate` and `os build` run the shared validator
+over every formula and predicate in the stack — CEL syntax **plus**
+`record.<field>` existence on the target object — and fail non-zero with a
+did-you-mean. Use `os validate` as the fast post-edit check (no artifact emitted;
+`npm run validate` in a scaffolded project). To check a *single* expression
+before saving it, call the `validate_expression` agent tool, which runs the same
+validator inline.
+
+---
+
 ## See also
 
 - [`content/docs/guides/formula.mdx`](../../content/docs/guides/formula.mdx) — human-facing guide

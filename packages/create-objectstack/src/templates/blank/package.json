@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "objectstack serve --watch",
-    "start": "objectstack serve",
+    "dev": "objectstack dev",
+    "start": "objectstack start",
     "build": "objectstack build",
     "validate": "objectstack validate",
     "typecheck": "tsc --noEmit"

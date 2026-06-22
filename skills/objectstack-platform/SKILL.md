@@ -1072,7 +1072,7 @@ be re-run when commands are added.
 | `os init` | Scaffold a new project (alternative to `npx create-objectstack`) |
 | `os dev` | Start the dev server with hot metadata reload. `--fresh` = ephemeral clean DB + auto `--seed-admin`, which POSTs a sign-up after boot (default `admin@objectos.ai` / `admin123`; override with `--admin-email` / `--admin-password`). The seeded human is auto-promoted to **platform admin**, so Setup/Studio work on first login. |
 | `os studio` | Launch Studio UI against the local stack |
-| `os validate` | Validate `objectstack.config.ts` (Zod + cross-reference checks) |
+| `os validate` | Validate `objectstack.config.ts` — Zod protocol schema, CEL/predicate validation (`record.<field>` existence), and widget-binding integrity. Same gates as `os build`, no artifact emitted. See [Verify your work](#verify-your-work). |
 | `os lint` | Style/convention lint on metadata files |
 | `os info` | Print resolved stack info (env, drivers, adapter, plugin list) |
 | `os doctor` | Diagnose common setup issues |
@@ -1086,6 +1086,39 @@ be re-run when commands are added.
 | `os serve` | Serve a compiled stack in production mode |
 | `os start` | Production-grade boot (validates env, applies migrations, starts adapter) |
 | `os generate <kind>` | Scaffold an object / view / flow / agent from a template |
+
+## Verify your work
+
+ObjectStack metadata mistakes fail **silently at runtime**, not at edit time:
+a bare field ref in a predicate (`done` instead of `record.done`) evaluates to
+`null` and silently hides an action/validation on every record (#2183/#2185); a
+dangling dashboard widget binding renders an empty chart (ADR-0021). Both are
+caught at author time by one command:
+
+```bash
+os validate     # Zod schema + CEL predicates + widget bindings — no artifact
+# or
+os build        # the same three gates, plus emits dist/objectstack.json
+```
+
+`os validate` and `os build` run the **same** structural + semantic gates:
+
+1. **Zod protocol schema** — the stack conforms to `@objectstack/spec`.
+2. **CEL / predicate validation (ADR-0032)** — every `visible` / `disabled` /
+   `requiredWhen` / validation rule / flow condition / sharing rule is parsed
+   for CEL syntax *and* checked that each `record.<field>` reference exists on
+   the target object. A bare `field` (missing `record.`) fails here.
+3. **Widget-binding integrity (ADR-0021)** — every dashboard widget's
+   `dataset` / `dimensions` / `values` resolves to a declared dataset/field.
+
+Both exit non-zero with a located, corrective message; `os build` additionally
+emits the artifact. Use `os validate` as the fast inner-loop check after editing
+metadata and `os build` when you need `dist/`. In a scaffolded project these are
+`npm run validate` / `npm run build`.
+
+**Rule of thumb: never report a metadata change as done until `os validate`
+passes.** (`os lint` is a *separate* style/convention pass — naming, labels,
+namespace prefixes — and does not replace `os validate`.)
 
 ## Ports & networking
 
