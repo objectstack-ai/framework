@@ -260,6 +260,27 @@ export default ObjectSchema.create({
 
 ---
 
+## Schema evolution on an existing database
+
+The metadata→DB sync is **additive-only**: new tables/columns are created on
+boot, but existing columns are **never** altered or dropped. A non-additive
+change to an object that already has data silently diverges from the physical
+schema, and the **database column wins at write time** (#2186):
+
+| Change | Existing DB on restart |
+|--------|------------------------|
+| add object / field / index | ✅ applied automatically (additive) |
+| `required: true → false` (relax `NOT NULL`) | dev auto-heals (`autoMigrate:'safe'`); otherwise `os migrate apply` |
+| type / length change, drop field, rename | `os migrate apply` (`--allow-destructive` for drops / tightenings) |
+
+Tell-tale: `/meta` reports a field optional but a write still 400s
+`"<field> is required"` — that is a stale `NOT NULL` column (physical drift),
+**not** a validator bug. `os dev` reconciles loosening automatically; otherwise
+`os migrate plan` to preview and `os migrate apply` to reconcile. CLI details:
+see **objectstack-platform**.
+
+---
+
 ## Common Patterns
 
 ### Naming Rules Summary
