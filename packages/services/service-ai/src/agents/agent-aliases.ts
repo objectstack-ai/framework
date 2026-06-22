@@ -46,3 +46,17 @@ export function resolveAgentAlias(name: string): string {
 export function agentAliasEntries(): Array<[string, string]> {
   return Array.from(AGENT_NAME_ALIASES.entries());
 }
+
+/**
+ * The set of platform-owned, canonical agent ids known to this process.
+ *
+ * ADR-0063 §2 closes `*.agent.ts` to third parties: the kernel ships exactly
+ * the two platform agents (`ask`, and — where the cloud package is loaded —
+ * `build`), each of which registers its own legacy→canonical alias. The alias
+ * table's *values* are therefore precisely the canonical platform-agent ids,
+ * so the runtime catalog can use this set to filter out any stray custom
+ * agent record (e.g. one persisted before tenant agents were withdrawn).
+ */
+export function platformAgentNames(): Set<string> {
+  return new Set(AGENT_NAME_ALIASES.values());
+}
