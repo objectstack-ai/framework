@@ -1699,6 +1699,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@objectstack/service-datasource':
+        specifier: workspace:*
+        version: link:../services/service-datasource
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

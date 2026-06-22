@@ -210,6 +210,18 @@ function createMetadataStub() {
         store.get(type)!.set(nameOrDef, data);
       }
     },
+    // Mirror MetadataManager.registerInMemory — AppPlugin gates code-defined
+    // datasource / stack-RBAC registration on its presence (see
+    // packages/core/src/fallbacks/memory-metadata.ts).
+    registerInMemory(type: string, nameOrDef: string | Record<string, any>, data?: unknown) {
+      if (!store.has(type)) store.set(type, new Map());
+      if (typeof nameOrDef === 'object' && nameOrDef !== null) {
+        const key = nameOrDef.name ?? nameOrDef.id ?? 'unknown';
+        store.get(type)!.set(key, nameOrDef);
+      } else {
+        store.get(type)!.set(nameOrDef, data);
+      }
+    },
     get(type: string, name: string) { return store.get(type)?.get(name); },
     list(type: string) { return [...(store.get(type)?.values() ?? [])]; },
     unregister(type: string, name: string) { store.get(type)?.delete(name); },

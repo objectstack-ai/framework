@@ -25,6 +25,19 @@ export function createMemoryMetadata() {
     async register(type: string, name: string, data: any): Promise<void> {
       getTypeMap(type).set(name, data);
     },
+    // Mirror MetadataManager.registerInMemory (synchronous, no persistence).
+    // AppPlugin gates code-defined-datasource / stack-RBAC registration on
+    // `typeof metadata.registerInMemory === 'function'` (it must register
+    // GitOps-managed artefacts *listably* but never persist them). Without this
+    // method the guard was false on the host-config / standalone boot path —
+    // where this fallback (not MetadataPlugin) provides the `metadata` service —
+    // so `defineStack({ datasources })` entries silently never reached the
+    // registry and were absent from GET /api/v1/datasources and
+    // GET /api/v1/meta/datasource (ADR-0015 §18). This store is already
+    // in-memory only, so registerInMemory and register share an implementation.
+    registerInMemory(type: string, name: string, data: any): void {
+      getTypeMap(type).set(name, data);
+    },
     async get(type: string, name: string): Promise<any> {
       return getTypeMap(type).get(name);
     },
