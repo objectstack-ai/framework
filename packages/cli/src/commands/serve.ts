@@ -531,10 +531,23 @@ export default class Serve extends Command {
         }),
       };
 
+      // Cluster wiring: env-driven driver selection (mirrors OS_DATABASE_URL).
+      // The remote driver self-registers on import; import it dynamically so it
+      // works in BOTH config-boot and compiled-artifact mode. Open-core ships
+      // only the in-memory driver — remote drivers (e.g. redis) come from the EE
+      // distribution; if absent we fall back to the in-memory cluster.
+      let clusterConfig: { driver: string; url?: string } | undefined;
+      const __clusterDriver = process.env.OS_CLUSTER_DRIVER?.trim();
+      if (__clusterDriver && __clusterDriver !== 'memory') {
+        try { await import(`@objectstack/service-cluster-${__clusterDriver}`); }
+        catch { /* may already be registered by the loaded config */ }
+        clusterConfig = { driver: __clusterDriver, url: process.env.OS_REDIS_URL };
+      }
       const runtime = new Runtime({
         kernel: {
             logger: loggerConfig
-        }
+        },
+        cluster: clusterConfig as any,
       });
       const kernel = runtime.getKernel();
 
