@@ -60,7 +60,7 @@ refreshed (see §4).
 | 0046 package docs as metadata | `src/docs` → `manifest.docs` | unbuilt, but P0/P1 cheap | S–M | med |
 | 0010 protection L4 / unlock | `frozenPaths` evaluator + unlock RBAC | L3 + audit shipped; **no escape hatch** | M | med |
 | 0017 view Phase 5 | view RLS backend + designer | RLS still **client-enforced**; designer in objectui | S (backend) | med |
-| 0040 unified assistant | tool-scoping enforcement + blueprint scale gate | still advisory; scale gate **not implemented** | M | med-high |
+| 0063/0064 (supersedes 0040) | blueprint object-count scale gate | tool-scoping **shipped** (ADR-0064, #2181 — tools = skills' tools, no global fall-through; affinity is a load error); blueprint scale gate still **not implemented** | S | med |
 | 0029 K4 | remove migration-era empty barrels | cleanup only | S | low-med |
 
 ---
