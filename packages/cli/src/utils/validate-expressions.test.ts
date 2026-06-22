@@ -233,4 +233,58 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
       expect(issues[0].severity).toBe('error');
     });
   });
+
+  describe('action visible/disabled predicates (record-scoped) — #2183 class', () => {
+    it('flags a bare-field `visible` on a stack action (the trap that hid Mark Done)', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'showcase_task', fields: { done: { type: 'boolean' }, status: { type: 'select' } } }],
+        actions: [{ name: 'mark_done', objectName: 'showcase_task', type: 'script', locations: ['record_header'], visible: '!done' }],
+      });
+      const v = issues.filter(i => i.where.includes("action 'mark_done' visible"));
+      expect(v).toHaveLength(1);
+      expect(v[0].severity).toBe('error');
+      expect(v[0].message).toMatch(/bare reference `done`/);
+    });
+
+    it('accepts the record-qualified form', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'showcase_task', fields: { done: { type: 'boolean' } } }],
+        actions: [{ name: 'mark_done', objectName: 'showcase_task', type: 'script', visible: '!record.done' }],
+      });
+      expect(issues).toHaveLength(0);
+    });
+
+    it('accepts ambient globals (ctx / features / user) used by platform actions', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'sys_user', fields: { id: { type: 'text' }, email_verified: { type: 'boolean' } } }],
+        actions: [{ name: 'verify_email', objectName: 'sys_user', visible: 'record.id == ctx.user.id && record.email_verified == false && features.x != true' }],
+      });
+      expect(issues).toHaveLength(0);
+    });
+
+    it('flags a bare-field `disabled` predicate but ignores a boolean `disabled`', () => {
+      const bad = validateStackExpressions({
+        objects: [{ name: 'crm_lead', fields: { status: { type: 'select' } } }],
+        actions: [{ name: 'park', objectName: 'crm_lead', disabled: 'status == "converted"' }],
+      });
+      expect(bad.filter(i => i.where.includes("action 'park' disabled"))).toHaveLength(1);
+
+      const ok = validateStackExpressions({
+        objects: [{ name: 'crm_lead', fields: { status: { type: 'select' } } }],
+        actions: [{ name: 'park', objectName: 'crm_lead', disabled: true }],
+      });
+      expect(ok).toHaveLength(0);
+    });
+
+    it('validates an action attached to an object (record scope = parent object)', () => {
+      const issues = validateStackExpressions({
+        objects: [{
+          name: 'showcase_task',
+          fields: { done: { type: 'boolean' } },
+          actions: [{ name: 'mark_done', type: 'script', visible: '!done' }],
+        }],
+      });
+      expect(issues.filter(i => i.where.includes("action 'mark_done' visible"))).toHaveLength(1);
+    });
+  });
 });

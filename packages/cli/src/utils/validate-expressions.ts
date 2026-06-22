@@ -10,8 +10,9 @@
  * agent `validate_expression` tool exactly.
  *
  * Scope (v1): flow predicates (start/decision `config.condition` + edge
- * `condition`) and object validation-rule / formula predicates. Each error is
- * located (flow/object + node/edge/field) with a corrective message.
+ * `condition`), object validation-rule / formula predicates, and UI action
+ * `visible` / `disabled` predicates. Each error is located (flow/object/action
+ * + node/edge/field) with a corrective message.
  */
 
 import { validateExpression } from '@objectstack/formula';
@@ -157,6 +158,38 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
         for (const e of res.errors) issues.push({ where: fieldWhere, message: e.message, source: e.source, severity: 'error' });
         for (const w of res.warnings) issues.push({ where: fieldWhere, message: w.message, source: w.source, severity: 'warning' });
       }
+    }
+  }
+
+  // ── Action `visible` / `disabled` predicates ───────────────────────
+  // Record-scoped, same as validation rules: a record-header / row action's
+  // `visible` is evaluated by ActionEngine against `{ record, recordId,
+  // objectName, user, … }` with fail-closed semantics, so a BARE field ref
+  // (`done` instead of `record.done`) throws and the action is silently hidden
+  // on every record (the trap behind the #2183 "Mark Done never hides" hunt).
+  // Flagging it here turns that into a build error with a corrective message.
+  // `disabled` may be a boolean (skip) or a predicate (check).
+  const seenActions = new Set<string>();
+  const checkAction = (where: string, action: AnyRec, objectName?: string): void => {
+    const obj = objectName
+      ?? (typeof action.objectName === 'string' ? action.objectName : undefined)
+      ?? (typeof action.object === 'string' ? action.object : undefined);
+    const name = typeof action.name === 'string' ? action.name : '?';
+    const key = `${obj ?? ''}:${name}`;
+    if (seenActions.has(key)) return; // de-dup (actions are merged onto objects AND kept top-level)
+    seenActions.add(key);
+    check(`${where} · action '${name}' visible`, action.visible, obj, 'record');
+    if (typeof action.disabled !== 'boolean') {
+      check(`${where} · action '${name}' disabled`, action.disabled, obj, 'record');
+    }
+  };
+  for (const action of asArray(stack.actions)) {
+    checkAction('stack', action);
+  }
+  for (const obj of objects) {
+    const objectName = typeof obj.name === 'string' ? obj.name : undefined;
+    for (const action of asArray(obj.actions)) {
+      checkAction(`object '${objectName}'`, action, objectName);
     }
   }
 

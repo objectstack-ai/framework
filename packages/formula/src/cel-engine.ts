@@ -53,6 +53,9 @@ const SCOPE_ROOTS = [
   'record', 'previous', 'input', 'output', 'os', 'vars', 'variables',
   'automation', 'context', 'args', 'item', 'env', 'user', 'step', 'result',
   'trigger', 'event', 'payload', 'data', 'params', 'config', 'settings',
+  // UI action / predicate context (ActionEngine, renderers): the current
+  // record plus ambient globals exposed to `visible`/`disabled` predicates.
+  'ctx', 'features',
 ] as const;
 
 /**
