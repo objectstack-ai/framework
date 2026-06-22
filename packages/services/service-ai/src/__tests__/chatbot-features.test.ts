@@ -756,6 +756,39 @@ describe('AgentRuntime', () => {
       expect(agents).toHaveLength(1);
       expect(agents[0].name).toBe('ask');
     });
+
+    // ── Catalog membership is decoupled from the in-memory alias table ──────
+    // A platform agent must surface from an INTRINSIC, persisted signal so a
+    // missed `registerAgentAlias` call (bundle load ordering) never hides it.
+
+    it('surfaces a platform agent carrying the `_provenance:"package"` envelope even when its name is NOT alias-registered', async () => {
+      const unaliased = { ...BUILD_AGENT, name: 'buildx', _provenance: 'package' };
+      (metadataService.list as any).mockResolvedValue([unaliased]);
+      const agents = await runtime.listAgents();
+      expect(agents.map((a) => a.name)).toContain('buildx');
+    });
+
+    it('surfaces an agent carrying a `_lock` envelope when not alias-registered', async () => {
+      const locked = { ...BUILD_AGENT, name: 'buildz', _lock: 'full' };
+      (metadataService.list as any).mockResolvedValue([locked]);
+      const agents = await runtime.listAgents();
+      expect(agents.map((a) => a.name)).toContain('buildz');
+    });
+
+    it('surfaces an agent carrying the pre-translation `protection` block when not alias-registered', async () => {
+      const withBlock = { ...BUILD_AGENT, name: 'buildy', protection: { lock: 'full', reason: 'x' } };
+      (metadataService.list as any).mockResolvedValue([withBlock]);
+      const agents = await runtime.listAgents();
+      expect(agents.map((a) => a.name)).toContain('buildy');
+    });
+
+    it('hides a stray tenant custom agent (no platform envelope, not alias-registered)', async () => {
+      const { protection: _omit, ...buildNoProtection } = BUILD_AGENT;
+      const tenant = { ...buildNoProtection, name: 'tenant_custom_agent' };
+      (metadataService.list as any).mockResolvedValue([ASK_AGENT, tenant]);
+      const agents = await runtime.listAgents();
+      expect(agents.map((a) => a.name)).toEqual(['ask']);
+    });
   });
 });
 

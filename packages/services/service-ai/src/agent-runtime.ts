@@ -14,6 +14,36 @@ import { ASK_AGENT_NAME } from './agents/index.js';
 import { resolveAgentAlias, platformAgentNames } from './agents/agent-aliases.js';
 
 /**
+ * True when an agent record is platform-owned and therefore belongs in the
+ * runtime catalog (ADR-0063 §2 — only `ask`/`build` surface; stray tenant
+ * custom agents are hidden).
+ *
+ * Catalog membership is decided from an INTRINSIC, persisted signal so it does
+ * NOT depend on an in-memory `registerAgentAlias` call having run (a missed
+ * alias must never hide a real platform agent like `build`):
+ *  - the runtime protection envelope stamped on built-ins at registration —
+ *    `_provenance === 'package'` / `_lock` / `_packageId`; or
+ *  - a still-public `protection` block — the same envelope before the loader
+ *    translates it, which is how it lands on records written through the direct
+ *    `metadataService.register` path that does not run `applyProtection`.
+ *
+ * Falls back to the canonical platform-agent name set (the alias-table values)
+ * so prior behaviour is strictly extended, never narrowed. A runtime-created
+ * tenant agent carries none of these, so it stays filtered out.
+ */
+function isPlatformAgentRecord(raw: unknown, name: string, platform: Set<string>): boolean {
+  if (platform.has(name)) return true;
+  if (!raw || typeof raw !== 'object') return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    r._provenance === 'package' ||
+    r._lock != null ||
+    r._packageId != null ||
+    (typeof r.protection === 'object' && r.protection != null)
+  );
+}
+
+/**
  * Context passed alongside a user message when chatting with an agent.
  *
  * UI clients set these fields to tell the agent which object, record,
@@ -74,21 +104,26 @@ export class AgentRuntime {
     const rawItems = await this.metadataService.list('agent');
     const agents: Array<{ name: string; label: string; role: string }> = [];
 
-    // ADR-0063 §2 — the runtime catalog surfaces only platform-owned agents
-    // (`ask`/`build`). Tenant custom agents are withdrawn; any stray custom
-    // record persisted before the withdrawal is filtered out here so it never
-    // appears in the picker or the agents list.
+    // ADR-0063 §2 — the runtime catalog surfaces only PLATFORM-OWNED agents
+    // (`ask`/`build`); a stray tenant custom record (e.g. one persisted before
+    // tenant agents were withdrawn) is filtered out so it never shows in the
+    // picker. Membership is driven by an INTRINSIC, persisted package-provenance
+    // signal (see {@link isPlatformAgentRecord}), NOT by the in-memory alias
+    // table alone: coupling the catalog to the alias map made a missed
+    // `registerAgentAlias` call (bundle load ordering) silently drop a real agent
+    // like `build` from the list even though its record exists and chat works.
+    // The alias-table values stay in the union as a belt-and-suspenders fallback.
     const platform = platformAgentNames();
 
     for (const raw of rawItems) {
       const result = AgentSchema.safeParse(raw);
-      if (result.success && result.data.active && platform.has(result.data.name)) {
-        agents.push({
-          name: result.data.name,
-          label: result.data.label,
-          role: result.data.role,
-        });
-      }
+      if (!result.success || !result.data.active) continue;
+      if (!isPlatformAgentRecord(raw, result.data.name, platform)) continue;
+      agents.push({
+        name: result.data.name,
+        label: result.data.label,
+        role: result.data.role,
+      });
     }
 
     return agents;

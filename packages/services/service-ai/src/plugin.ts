@@ -5,6 +5,7 @@ import { readEnvWithDeprecation } from '@objectstack/types';
 import type { IAIService, IAIConversationService, IAnalyticsService, IAutomationService, IDataEngine, IEmbedder, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
 import { EMBEDDER_SERVICE } from '@objectstack/spec/contracts';
 import type * as AI from '@objectstack/spec/ai';
+import { applyProtection } from '@objectstack/spec/shared';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
@@ -847,7 +848,14 @@ export class AIServicePlugin implements Plugin {
               ctx.logger.warn(`[AI] Failed to register built-in ${type} ${name}`, err instanceof Error ? { error: err.message } : { error: String(err) });
             }
           };
-          await upsertBuiltin('agent', ASK_AGENT.name, ASK_AGENT);
+          // Translate the agent's author `protection` block into the runtime
+          // `_lock`/`_provenance:'package'` envelope before persisting (the
+          // direct `metadataService.register` path does NOT run the loader's
+          // `applyProtection`, so do it here). That envelope is both the
+          // ADR-0010 lock and the intrinsic signal `AgentRuntime.listAgents()`
+          // uses to keep `ask` in the catalog independent of the alias table.
+          // Clone first so the shared `ASK_AGENT` export is never mutated.
+          await upsertBuiltin('agent', ASK_AGENT.name, applyProtection({ ...ASK_AGENT }));
           // Path A rename (`data_chat`→`ask`): drop the stale legacy agent
           // record on upgrade so the catalog doesn't list the agent twice. The
           // legacy NAME stays resolvable for chat via the alias table; this only

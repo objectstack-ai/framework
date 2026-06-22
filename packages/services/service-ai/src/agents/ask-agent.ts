@@ -99,4 +99,17 @@ Always answer in the same language the user is using. Detailed tool-usage guidan
     maxIterations: 10,
     allowReplan: true,
   },
+
+  // ADR-0063 §2 / ADR-0010 §3.7 — built-in platform agent. Tenants extend the
+  // platform with skills + tools, never by editing this persona, so it is fully
+  // locked against overlay edits/deletes. (The platform's own boot-time refresh
+  // writes through the authoritative register path, which the lock does not gate.)
+  // This author-protection envelope is ALSO the intrinsic, persisted signal that
+  // `AgentRuntime.listAgents()` keys off to keep `ask` in the catalog regardless
+  // of whether the in-memory alias table happened to be populated — a missed
+  // alias registration must never hide a real platform agent.
+  protection: {
+    lock: 'full',
+    reason: 'Built-in platform assistant shipped by @objectstack/service-ai.',
+  },
 };

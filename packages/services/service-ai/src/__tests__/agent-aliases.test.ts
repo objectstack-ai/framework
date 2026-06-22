@@ -46,6 +46,21 @@ describe('agent-aliases', () => {
     registerAgentAlias('same', 'same');
     expect(resolveAgentAlias('same')).toBe('same');
   });
+
+  it('anchors the registry on globalThis so the ESM and CJS builds share one table', () => {
+    // The package ships dual builds; a module-level `new Map()` would give each
+    // its own copy and silently drop a cross-build alias (the real cause of the
+    // `metadata_assistant`→`build` 404). The table must live on a well-known
+    // global Symbol so both builds resolve to the SAME instance.
+    registerAgentAlias('legacy_probe', 'ask');
+    const shared = (globalThis as Record<symbol, unknown>)[
+      Symbol.for('@objectstack/service-ai#agentNameAliases')
+    ] as Map<string, string> | undefined;
+    expect(shared).toBeInstanceOf(Map);
+    expect(shared!.get('legacy_probe')).toBe('ask');
+    // A second "build copy" reading via the same global key sees the alias.
+    expect(shared!.get('data_chat')).toBe('ask');
+  });
 });
 
 describe('AgentRuntime.loadAgent (alias-aware)', () => {
