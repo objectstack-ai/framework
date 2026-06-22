@@ -1,5 +1,17 @@
 # @objectstack/metadata
 
+## 10.2.0
+
+### Patch Changes
+
+- Updated dependencies [b496498]
+  - @objectstack/spec@10.2.0
+  - @objectstack/core@10.2.0
+  - @objectstack/metadata-core@10.2.0
+  - @objectstack/platform-objects@10.2.0
+  - @objectstack/types@10.2.0
+  - @objectstack/metadata-fs@10.2.0
+
 ## 10.1.0
 
 ### Patch Changes
