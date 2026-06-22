@@ -7,6 +7,7 @@ import { Preference } from '../objects/preference.object.js';
 import { Project } from '../objects/project.object.js';
 import { Task } from '../objects/task.object.js';
 import { Category } from '../objects/category.object.js';
+import { BusinessUnit } from '../objects/business-unit.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
 import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
@@ -80,6 +81,24 @@ const categories = defineSeed(Category, {
     { name: 'Frontend', parent: 'Engineering', sort_order: 1, color: '#06B6D4' },
     { name: 'Backend', parent: 'Engineering', sort_order: 2, color: '#8B5CF6' },
     { name: 'Operations', sort_order: 2, color: '#10B981' },
+  ],
+});
+
+// Org-chart hierarchy seeded by `name` external id; `parent` references another
+// record's name, building a 3-level tree the `tree` view renders.
+const businessUnits = defineSeed(BusinessUnit, {
+  mode: 'upsert',
+  externalId: 'name',
+  records: [
+    { name: 'Acme Corporation', kind: 'company', manager: 'Dana Wong', headcount: 0 },
+    { name: 'Product & Engineering', parent: 'Acme Corporation', kind: 'division', manager: 'Lena Ortiz', headcount: 0 },
+    { name: 'Platform', parent: 'Product & Engineering', kind: 'department', manager: 'Sam Patel', headcount: 12 },
+    { name: 'Frontend Guild', parent: 'Product & Engineering', kind: 'department', manager: 'Yuki Tan', headcount: 9 },
+    { name: 'Design Systems', parent: 'Frontend Guild', kind: 'team', manager: 'Priya Rao', headcount: 4 },
+    { name: 'Go-To-Market', parent: 'Acme Corporation', kind: 'division', manager: 'Marcus Bell', headcount: 0 },
+    { name: 'Sales', parent: 'Go-To-Market', kind: 'department', manager: 'Erin Cole', headcount: 18 },
+    { name: 'Enterprise Sales', parent: 'Sales', kind: 'team', manager: 'Tom Nyx', headcount: 7 },
+    { name: 'Marketing', parent: 'Go-To-Market', kind: 'department', manager: 'Aria Kim', headcount: 6 },
   ],
 });
 
@@ -195,4 +214,4 @@ const preferences = defineSeed(Preference, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];
+export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, businessUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];

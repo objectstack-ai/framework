@@ -39,6 +39,7 @@ export const ShowcaseApp = App.create({
         { id: 'nav_products', type: 'object', objectName: 'showcase_product', label: 'Products', icon: 'package' },
         { id: 'nav_teams', type: 'object', objectName: 'showcase_team', label: 'Teams', icon: 'users' },
         { id: 'nav_categories', type: 'object', objectName: 'showcase_category', label: 'Categories', icon: 'list-tree' },
+        { id: 'nav_business_units', type: 'object', objectName: 'showcase_business_unit', label: 'Business Units', icon: 'network' },
         { id: 'nav_field_zoo', type: 'object', objectName: 'showcase_field_zoo', label: 'Field Zoo', icon: 'shapes' },
       ],
     },

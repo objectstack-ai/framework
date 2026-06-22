@@ -16,7 +16,7 @@ import { ShowcaseExternalDatasource } from './src/datasources/showcase-external.
 import { ExternalCustomer, ExternalOrder } from './src/objects/external/index.js';
 import { setupShowcaseExternalDatasource } from './src/datasources/external-fixture.js';
 import { registerRecalcEndpoint } from './src/server/recalc-endpoint.js';
-import { TaskViews, ProjectViews, InquiryViews } from './src/views/index.js';
+import { TaskViews, ProjectViews, InquiryViews, BusinessUnitViews } from './src/views/index.js';
 import { ShowcaseApp } from './src/apps/index.js';
 import { ChartGalleryDashboard, OpsDashboard } from './src/dashboards/index.js';
 import { ShowcaseTaskDataset, ShowcaseProjectDataset } from './src/datasets/index.js';
@@ -153,7 +153,7 @@ export default defineStack({
   // UI
   apps: [ShowcaseApp],
   portals: allPortals,
-  views: [TaskViews, ProjectViews, InquiryViews],
+  views: [TaskViews, ProjectViews, InquiryViews, BusinessUnitViews],
   pages: [ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, AccountDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage],
   dashboards: [ChartGalleryDashboard, OpsDashboard],
   books: allBooks,

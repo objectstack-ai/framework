@@ -225,6 +225,7 @@ export const VisualizationTypeSchema = lazySchema(() => z.enum([
   'gantt',
   'map',
   'chart',
+  'tree',
 ]).describe('Visualization type that users can switch to'));
 
 /**
@@ -434,6 +435,23 @@ export const GanttConfigSchema = lazySchema(() => z.object({
 }).passthrough());
 
 /**
+ * Tree (tree-grid) Settings
+ *
+ * Renders a self-referencing object as an indented, expand/collapse tree-grid.
+ * Flat records are nested via a single-parent pointer field (`parentField`).
+ * Unlike a fixed-depth `grouping`, a tree handles arbitrary depth (org charts,
+ * category trees, BOMs, nested comments). When `parentField` is omitted the
+ * renderer auto-detects the object's `tree`/self-reference field.
+ */
+export const TreeConfigSchema = lazySchema(() => z.object({
+  parentField: z.string().optional().describe('Single-parent pointer field (auto-detected from the object schema when omitted)'),
+  labelField: z.string().optional().describe('Field rendered indented in the first column (defaults to "name")'),
+  fields: z.array(z.string()).optional().describe('Additional fields rendered as flat columns alongside the label'),
+  defaultExpandedDepth: z.number().int().min(0).optional().describe('Initial expansion depth (0 = roots only; omit = expand all)'),
+// Forward-compatible: let renderer-ahead config knobs reach plugin-tree.
+}).passthrough());
+
+/**
  * Navigation Mode Enum
  * Defines how to navigate to the detail view from a list item.
  */
@@ -502,7 +520,8 @@ export const ListViewSchema = lazySchema(() => z.object({
     'timeline',   // Chronological Stream (Feed)
     'gantt',      // Project Timeline
     'map',        // Geospatial
-    'chart'       // Aggregate visualisation
+    'chart',      // Aggregate visualisation
+    'tree'        // Self-referencing hierarchy (tree-grid)
   ]).default('grid'),
   
   /** Data Source Configuration */
@@ -552,6 +571,7 @@ export const ListViewSchema = lazySchema(() => z.object({
   gallery: GalleryConfigSchema.optional(),
   timeline: TimelineConfigSchema.optional(),
   chart: ListChartConfigSchema.optional(),
+  tree: TreeConfigSchema.optional(),
 
   /** View Metadata (Airtable-style view management) */
   description: I18nLabelSchema.optional().describe('View description for documentation/tooltips'),
