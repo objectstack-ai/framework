@@ -1,0 +1,34 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { ObjectSchema, Field } from '@objectstack/spec/data';
+
+/**
+ * Business Unit — a self-referencing org-chart hierarchy. `parent` points back
+ * at the same object, so the tree has arbitrary depth (company → division →
+ * department → team). This is the canonical case for the `tree` view type:
+ * fixed-depth grouping can't express an unbounded self-referencing hierarchy.
+ */
+export const BusinessUnit = ObjectSchema.create({
+  name: 'showcase_business_unit',
+  label: 'Business Unit',
+  pluralLabel: 'Business Units',
+  icon: 'network',
+  description: 'Org-chart hierarchy — demonstrates the tree / tree-grid view over a self-referencing object.',
+
+  fields: {
+    name: Field.text({ label: 'Name', required: true, searchable: true, maxLength: 120 }),
+    parent: Field.lookup('showcase_business_unit', { label: 'Parent Unit', allowCreate: true }),
+    kind: Field.select({
+      label: 'Type',
+      options: [
+        { label: 'Company', value: 'company' },
+        { label: 'Division', value: 'division' },
+        { label: 'Department', value: 'department' },
+        { label: 'Team', value: 'team' },
+      ],
+      defaultValue: 'department',
+    }),
+    manager: Field.text({ label: 'Manager', maxLength: 120 }),
+    headcount: Field.number({ label: 'Headcount', min: 0, defaultValue: 0 }),
+  },
+});
