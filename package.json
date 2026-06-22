@@ -15,7 +15,7 @@
     "clean": "turbo run clean && rm -rf dist",
     "setup": "pnpm install && pnpm --filter @objectstack/spec build",
     "version": "changeset version",
-    "release": "pnpm run build && bash scripts/build-console.sh && changeset publish",
+    "release": "pnpm run build && bash scripts/build-console.sh && bash scripts/release-publish.sh",
     "docs:dev": "pnpm --filter @objectstack/docs dev",
     "docs:build": "pnpm --filter @objectstack/docs build",
     "docs:start": "pnpm --filter @objectstack/docs start",

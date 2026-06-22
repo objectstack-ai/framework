@@ -77,6 +77,11 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
+          # publish (pnpm run release) ends in scripts/release-publish.sh,
+          # which pushes all new version tags in ONE atomic git push. This
+          # pre-empts changesets/action's own concurrent per-tag pushes, which
+          # otherwise race GitHub's ref backend (remote: fatal error in
+          # commit_refs) and reject ~half the tags on a large fixed-group bump (#2191).
           publish: pnpm run release
           version: pnpm run version
           commit: 'chore: version packages'
