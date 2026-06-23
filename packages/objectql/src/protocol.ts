@@ -4100,6 +4100,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         packageId: string;
         organizationId?: string;
         actor?: string;
+        /** ADR-0067 — commit message (for AI turns: the user's instruction). */
+        message?: string;
+        /** ADR-0067 — AI model that authored the turn (absent for human/CLI). */
+        aiModel?: string;
     }): Promise<{
         success: boolean;
         publishedCount: number;
@@ -4232,7 +4236,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 orgId,
                 packageId: request.packageId,
                 operation: 'apply',
+                ...(request.message ? { message: request.message } : {}),
                 ...(request.actor ? { actor: request.actor } : {}),
+                ...(request.aiModel ? { aiModel: request.aiModel } : {}),
                 items: commitItems.filter((it) => publishedKeys.has(`${it.type}/${it.name}`)),
                 ...(publishedSeqs.length
                     ? { eventSeqStart: Math.min(...publishedSeqs), eventSeqEnd: Math.max(...publishedSeqs) }

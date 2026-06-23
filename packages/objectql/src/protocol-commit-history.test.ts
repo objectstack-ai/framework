@@ -156,3 +156,37 @@ describe('ADR-0067 — rollbackToPackageCommit', () => {
     await expect(p.rollbackToPackageCommit({ commitId: 'ghost' })).rejects.toMatchObject({ code: 'commit_not_found' });
   });
 });
+
+describe('ADR-0067 — publishPackageDrafts records a commit', () => {
+  it('records an apply commit carrying the message + aiModel + revert plan', async () => {
+    const commits: any[] = [];
+    const engine: any = {
+      insert: vi.fn(async (t: string, d: any) => { if (t === 'sys_metadata_commit') commits.push(d); }),
+      findOne: vi.fn(async () => null), // no active rows → every draft is a CREATE
+      find: vi.fn(async () => []),
+    };
+    const protocol = new ObjectStackProtocolImplementation(engine as never);
+    (protocol as any).ensureOverlayIndex = async () => {};
+    (protocol as any).getOverlayRepo = () => ({
+      listDrafts: async () => [{ type: 'object', name: 'course' }],
+      get: async () => null,
+    });
+    vi.spyOn(protocol, 'publishMetaItem' as never).mockResolvedValue({ success: true, version: 'h', seq: 7 } as never);
+
+    const res: any = await (protocol as any).publishPackageDrafts({
+      packageId: 'app.edu',
+      message: 'build an education app',
+      aiModel: 'claude-opus-4-8',
+      actor: 'ai:claude',
+    });
+
+    expect(res.commitId).toBeTruthy();
+    const apply = commits.find((c) => c.operation === 'apply');
+    expect(apply).toBeTruthy();
+    expect(apply.message).toBe('build an education app');
+    expect(apply.ai_model).toBe('claude-opus-4-8');
+    expect(apply.item_count).toBe(1);
+    const items = JSON.parse(apply.items);
+    expect(items[0]).toMatchObject({ type: 'object', name: 'course', existedBefore: false });
+  });
+});
