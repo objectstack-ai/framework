@@ -3,44 +3,41 @@
 import { definePage } from '@objectstack/spec/ui';
 
 /**
- * Operations Command Center (大屏) — a dense, full-bleed "big screen" built as a
- * pure SDUI micro-page that FOLLOWS the console theme (light ↔ dark).
+ * Operations Command Center (大屏) — a full-bleed SDUI "big screen" that follows
+ * the console theme (light ↔ dark). It exercises the data-screen customization
+ * primitives added to objectui (#1922 + follow-up):
+ *   • object-metric `variant:'bare'` → live KPIs as big tinted numbers (no card
+ *     chrome) — data-bound, not hand-typed.
+ *   • object-chart `colors` → one cohesive brand palette across every chart
+ *     (replaces the old `--chart-1..5` override hack).
+ *   • object-chart `chartType:'donut'` → first-class (was an untyped string).
+ *   • full-bleed page + container-scaled donuts + gradient bars/areas.
  *
- * Density: object-chart's ChartContainer is `h-[350px]` by default, but it
- * honours a consumer className (→ AdvancedChartImpl → ChartContainer), so each
- * chart node carries a `responsiveStyles` height that shrinks it toward the
- * ~280px floor. Compact title + KPI strip + tight 2-col rows then fit the whole
- * board — KPIs, five charts and the work queue — without a long scroll.
+ * Composition: centred title → full-width KPI hero strip (6 live metrics) →
+ * two equal chart rows (throughput trend spans 2) → work queue on its own
+ * full-width row (height never knocks a chart row out of alignment).
  *
- * Theme-adaptive: every colour is a theme token (`hsl(var(--card))` panels,
- * `hsl(var(--foreground))` text, `hsl(var(--border))`). The root overrides
- * `--chart-1..5` with one cohesive mid-lightness ramp (reads on light AND dark);
- * KPI numbers reuse it.
- *
- * Layout note: object-chart must sit in a `display: block` panel, and the root
- * column needs `align-items: stretch` or children shrink to content width.
+ * Theme-adaptive: panels/text/hairlines are theme tokens (`hsl(var(--card))` …).
+ * Layout note: object-chart must sit in a `display:block` panel (a flex child
+ * collapses to width:0 and recharts won't draw).
  */
 
-const CHART_RAMP = {
-  '--chart-1': '192 86% 46%',
-  '--chart-2': '214 84% 56%',
-  '--chart-3': '256 72% 62%',
-  '--chart-4': '168 76% 42%',
-  '--chart-5': '322 72% 56%',
-};
+// One cohesive brand palette, mid-lightness so it reads on light AND dark.
+const PALETTE = ['hsl(192 86% 46%)', 'hsl(214 84% 56%)', 'hsl(256 72% 62%)', 'hsl(168 76% 42%)', 'hsl(322 72% 56%)'];
+const A = { c1: PALETTE[0], c2: PALETTE[1], c3: PALETTE[2], c4: PALETTE[3], c5: PALETTE[4] };
 
 function head(id: string, title: string, accent: string, badge?: string): any {
   return {
     id: id + '_h', type: 'flex',
-    responsiveStyles: { large: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', paddingBottom: '7px', borderBottom: '1px solid hsl(var(--border))' } },
+    responsiveStyles: { large: { display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid hsl(var(--border))' } },
     properties: {
       children: [
-        { id: id + '_bar', type: 'flex', responsiveStyles: { large: { width: '4px', height: '13px', borderRadius: '2px', background: accent, boxShadow: '0 0 9px ' + accent } }, properties: { children: [] } },
-        { id: id + '_t', type: 'element:text', responsiveStyles: { large: { fontSize: '13px', fontWeight: '700', letterSpacing: '0.03em', color: 'hsl(var(--foreground))' } }, properties: { content: title } },
+        { id: id + '_bar', type: 'flex', responsiveStyles: { large: { width: '4px', height: '15px', borderRadius: '2px', background: accent, boxShadow: '0 0 10px ' + accent } }, properties: { children: [] } },
+        { id: id + '_t', type: 'element:text', responsiveStyles: { large: { fontSize: '14px', fontWeight: '700', letterSpacing: '0.03em', color: 'hsl(var(--foreground))' } }, properties: { content: title } },
         ...(badge
           ? [
               { id: id + '_sp', type: 'flex', responsiveStyles: { large: { flex: '1 1 auto' } }, properties: { children: [] } },
-              { id: id + '_b', type: 'element:text', responsiveStyles: { large: { fontSize: '10px', fontWeight: '700', color: 'hsl(var(--chart-2))', background: 'hsl(var(--chart-2) / 0.12)', border: '1px solid hsl(var(--chart-2) / 0.4)', borderRadius: '999px', padding: '2px 9px' } }, properties: { content: badge } },
+              { id: id + '_b', type: 'element:text', responsiveStyles: { large: { fontSize: '11px', fontWeight: '700', color: A.c2, background: 'hsl(214 84% 56% / 0.12)', border: '1px solid hsl(214 84% 56% / 0.4)', borderRadius: '999px', padding: '3px 11px' } }, properties: { content: badge } },
             ]
           : []),
       ],
@@ -53,20 +50,20 @@ function panel(o: { id: string; title?: string; accent: string; badge?: string; 
     id: o.id, type: 'flex',
     responsiveStyles: {
       large: {
-        display: 'block', minWidth: '0', minHeight: o.minHeight ?? '0px',
+        display: 'block', minWidth: '0', minHeight: o.minHeight ?? '240px',
         ...(o.span ? { gridColumn: o.span } : {}),
-        padding: o.pad ?? '12px 14px 12px', borderRadius: '14px',
+        padding: o.pad ?? '15px 17px 17px', borderRadius: '16px',
         background: 'hsl(var(--card))',
         border: '1px solid hsl(var(--border))',
-        boxShadow: '0 14px 34px -24px rgba(2,6,23,0.45), inset 0 1px 0 hsl(var(--foreground) / 0.04)',
+        boxShadow: '0 16px 40px -24px rgba(2,6,23,0.45), inset 0 1px 0 hsl(var(--foreground) / 0.04)',
       },
-      small: { padding: '12px' },
+      small: { padding: '12px', minHeight: '200px' },
     },
     properties: { children: [...(o.title ? [head(o.id, o.title, o.accent, o.badge)] : []), o.child] },
   };
 }
 
-function band(id: string, cols: number, children: any[], gap = '12px'): any {
+function band(id: string, cols: number, children: any[], gap = '16px'): any {
   return {
     id, type: 'flex',
     responsiveStyles: {
@@ -78,26 +75,21 @@ function band(id: string, cols: number, children: any[], gap = '12px'): any {
   };
 }
 
-function stat(id: string, value: string, label: string, chartVar: string): any {
+/** A LIVE KPI — object-metric in the new `bare` variant (big tinted number + label). */
+function kpi(id: string, object: string, label: string, colorVariant: string, aggregate: any, filter?: any, format?: string): any {
   return {
-    id, type: 'flex',
-    responsiveStyles: { large: { display: 'flex', flexDirection: 'column', gap: '1px', padding: '2px 4px' } },
-    properties: {
-      children: [
-        { id: id + '_v', type: 'element:text', responsiveStyles: { large: { fontSize: '30px', fontWeight: '800', lineHeight: '1.05', color: 'hsl(var(' + chartVar + '))', fontVariantNumeric: 'tabular-nums' } }, properties: { content: value } },
-        { id: id + '_l', type: 'element:text', responsiveStyles: { large: { fontSize: '11px', fontWeight: '500', letterSpacing: '0.04em', color: 'hsl(var(--muted-foreground))' } }, properties: { content: label } },
-      ],
-    },
+    id, type: 'object-metric',
+    responsiveStyles: { large: { minWidth: '0' } },
+    properties: { objectName: object, label, colorVariant, variant: 'bare', aggregate, ...(filter ? { filter } : {}), ...(format ? { format } : {}) },
   };
 }
 
-// Each chart node carries a height → shrinks the ChartContainer toward its
-// ~280px floor (denser than the default h-[350px]).
+/** A dataset-bound chart with the shared brand palette. */
 function chart(id: string, chartType: string, dataset: string, dimensions: string[], values: string[]): any {
-  return { id, type: 'object-chart', responsiveStyles: { large: { width: '100%', minWidth: '0', height: '200px' } }, properties: { dataset, dimensions, values, chartType } };
+  return { id, type: 'object-chart', responsiveStyles: { large: { width: '100%', minWidth: '0' } }, properties: { dataset, dimensions, values, chartType, colors: PALETTE } };
 }
 
-const A = { c1: 'hsl(var(--chart-1))', c2: 'hsl(var(--chart-2))', c3: 'hsl(var(--chart-3))', c4: 'hsl(var(--chart-4))', c5: 'hsl(var(--chart-5))' };
+const CHART_H = '376px';
 
 export const CommandCenterPage = definePage({
   name: 'showcase_command_center',
@@ -116,59 +108,60 @@ export const CommandCenterPage = definePage({
           type: 'flex',
           responsiveStyles: {
             large: {
-              ...CHART_RAMP,
-              minHeight: '100%', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '10px',
-              padding: '10px 20px 18px',
+              minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '16px',
+              padding: '22px 26px 32px',
               background:
-                'radial-gradient(1200px 520px at 50% -16%, hsl(var(--chart-1) / 0.10) 0%, transparent 60%), ' +
+                'radial-gradient(1200px 540px at 50% -14%, hsl(192 86% 46% / 0.10) 0%, transparent 60%), ' +
+                'radial-gradient(900px 460px at 100% 0%, hsl(256 72% 62% / 0.08) 0%, transparent 55%), ' +
                 'hsl(var(--background))',
               color: 'hsl(var(--foreground))',
             },
-            small: { padding: '12px', gap: '10px' },
+            small: { padding: '14px 12px 24px', gap: '12px' },
           },
           properties: {
             children: [
-              // ── Title (compact) ─────────────────────────────────────────
+              // ── Title ────────────────────────────────────────────────────
               {
                 id: 'cc_titlebar', type: 'flex',
-                responsiveStyles: { large: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', padding: '0' } },
+                responsiveStyles: { large: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '2px 0 2px' } },
                 properties: {
                   children: [
-                    { id: 'cc_title', type: 'element:text', responsiveStyles: { large: { fontSize: '23px', fontWeight: '800', letterSpacing: '0.36em', color: 'hsl(var(--foreground))', textShadow: '0 0 22px hsl(var(--chart-1) / 0.45)' }, small: { fontSize: '17px', letterSpacing: '0.14em' } }, properties: { content: '交 付 运 营 数 据 大 屏' } },
-                    { id: 'cc_subtitle', type: 'element:text', responsiveStyles: { large: { fontSize: '10px', fontWeight: '600', letterSpacing: '0.34em', color: 'hsl(var(--muted-foreground))' } }, properties: { content: 'DELIVERY OPERATIONS · COMMAND CENTER' } },
+                    { id: 'cc_title', type: 'element:text', responsiveStyles: { large: { fontSize: '27px', fontWeight: '800', letterSpacing: '0.4em', color: 'hsl(var(--foreground))', textShadow: '0 0 26px hsl(192 86% 46% / 0.45)' }, small: { fontSize: '18px', letterSpacing: '0.16em' } }, properties: { content: '交 付 运 营 数 据 大 屏' } },
+                    { id: 'cc_subtitle', type: 'element:text', responsiveStyles: { large: { fontSize: '11px', fontWeight: '600', letterSpacing: '0.36em', color: 'hsl(var(--muted-foreground))' } }, properties: { content: 'DELIVERY OPERATIONS · COMMAND CENTER' } },
+                    { id: 'cc_rule', type: 'flex', responsiveStyles: { large: { width: 'min(640px, 60%)', height: '1px', marginTop: '4px', background: 'linear-gradient(90deg, transparent, hsl(192 86% 46% / 0.55), transparent)' } }, properties: { children: [] } },
                   ],
                 },
               },
 
-              // ── KPI hero strip — 6 metrics across the full width ─────────
+              // ── KPI hero strip — 6 LIVE metrics (bare variant) ───────────
               panel({
-                id: 'cc_kpi', accent: A.c3, pad: '10px 16px',
+                id: 'cc_kpi', title: '核心指标 · Key Metrics', accent: A.c3, minHeight: '0px', pad: '14px 18px 16px',
                 child: band('cc_kpi_grid', 6, [
-                  stat('cc_k1', '5', '项目 Projects', '--chart-1'),
-                  stat('cc_k2', '10', '任务 Tasks', '--chart-2'),
-                  stat('cc_k3', '13', '客户 Accounts', '--chart-3'),
-                  stat('cc_k4', '8', '待办 Open', '--chart-4'),
-                  stat('cc_k5', '2', '复审 Review', '--chart-5'),
-                  stat('cc_k6', '1.09M', '预算 Budget', '--chart-1'),
-                ], '8px'),
+                  kpi('cc_k1', 'showcase_project', '活跃项目 Active', 'blue', { field: 'id', function: 'count' }, { status: 'active' }),
+                  kpi('cc_k2', 'showcase_task', '待办任务 Open', 'teal', { field: 'id', function: 'count' }, { status: { $ne: 'done' } }),
+                  kpi('cc_k3', 'showcase_task', '待复审 Review', 'purple', { field: 'id', function: 'count' }, { status: 'in_review' }),
+                  kpi('cc_k4', 'showcase_project', '风险项目 At-Risk', 'danger', { field: 'id', function: 'count' }, { health: 'red' }),
+                  kpi('cc_k5', 'showcase_account', '客户 Accounts', 'orange', { field: 'id', function: 'count' }),
+                  kpi('cc_k6', 'showcase_project', '总预算 Budget', 'success', { field: 'budget', function: 'sum' }, undefined, '0.0a'),
+                ], '10px'),
               }),
 
-              // ── Row 1 — trend (wide) + status ───────────────────────────
-              band('cc_r1', 3, [
-                panel({ id: 'cc_throughput', title: '任务吞吐趋势 (月)', accent: A.c2, span: 'span 2', child: chart('cc_thr_c', 'area', 'showcase_task_metrics', ['created_at'], ['task_count']) }),
-                panel({ id: 'cc_status', title: '任务状态分布', accent: A.c1, child: chart('cc_status_c', 'bar', 'showcase_task_metrics', ['status'], ['task_count']) }),
+              // ── Row A — three equal chart panels ─────────────────────────
+              band('cc_rowA', 3, [
+                panel({ id: 'cc_status', title: '任务状态分布', accent: A.c1, minHeight: CHART_H, child: chart('cc_status_c', 'bar', 'showcase_task_metrics', ['status'], ['task_count']) }),
+                panel({ id: 'cc_health', title: '项目健康度', accent: A.c4, minHeight: CHART_H, child: chart('cc_health_c', 'donut', 'showcase_project_metrics', ['health'], ['project_count']) }),
+                panel({ id: 'cc_priority', title: '优先级分布', accent: A.c5, minHeight: CHART_H, child: chart('cc_pri_c', 'bar', 'showcase_task_metrics', ['priority'], ['task_count']) }),
               ]),
 
-              // ── Row 2 — three charts ────────────────────────────────────
-              band('cc_r2', 3, [
-                panel({ id: 'cc_priority', title: '优先级分布', accent: A.c5, child: chart('cc_pri_c', 'bar', 'showcase_task_metrics', ['priority'], ['task_count']) }),
-                panel({ id: 'cc_budget', title: '预算 vs 支出 (按客户)', accent: A.c4, child: chart('cc_bud_c', 'bar', 'showcase_project_metrics', ['account'], ['budget_sum', 'spent_sum']) }),
-                panel({ id: 'cc_health', title: '项目健康度', accent: A.c4, child: chart('cc_health_c', 'donut', 'showcase_project_metrics', ['health'], ['project_count']) }),
+              // ── Row B — wide trend (span 2) + spend ──────────────────────
+              band('cc_rowB', 3, [
+                panel({ id: 'cc_throughput', title: '任务吞吐趋势 (月)', accent: A.c2, span: 'span 2', minHeight: CHART_H, child: chart('cc_thr_c', 'area', 'showcase_task_metrics', ['created_at'], ['task_count']) }),
+                panel({ id: 'cc_budget', title: '预算 vs 支出 (按客户)', accent: A.c4, minHeight: CHART_H, child: chart('cc_bud_c', 'bar', 'showcase_project_metrics', ['account'], ['budget_sum', 'spent_sum']) }),
               ]),
 
-              // ── Row 3 — work queue, full width, compact ─────────────────
+              // ── Work queue — its own full-width row at the bottom ────────
               panel({
-                id: 'cc_queue', title: '待审核列表 · Work Queue', accent: A.c1, badge: '审批中', pad: '12px 14px 8px',
+                id: 'cc_queue', title: '待审核列表 · Work Queue', accent: A.c1, badge: '审批中', minHeight: '0px',
                 child: { id: 'cc_queue_g', type: 'object-grid', responsiveStyles: { large: { minWidth: '0', display: 'block' } }, properties: { objectName: 'showcase_task', columns: ['title', 'project', 'status', 'priority', 'due_date'] } },
               }),
             ],
