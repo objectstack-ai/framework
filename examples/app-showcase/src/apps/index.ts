@@ -49,6 +49,7 @@ export const ShowcaseApp = App.create({
       label: 'Analytics',
       icon: 'chart-bar',
       children: [
+        { id: 'nav_command_center', type: 'page', pageName: 'showcase_command_center', label: 'Command Center (大屏)', icon: 'monitor-dot' },
         { id: 'nav_ops', type: 'dashboard', dashboardName: 'showcase_ops_dashboard', label: 'Delivery Operations', icon: 'gauge' },
         { id: 'nav_charts', type: 'dashboard', dashboardName: 'showcase_chart_gallery', label: 'Chart Gallery', icon: 'layout-dashboard' },
         { id: 'nav_report_tabular', type: 'object', objectName: 'showcase_task', viewName: 'tabular', label: 'Task List', icon: 'table' },

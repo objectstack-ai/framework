@@ -14,6 +14,7 @@ export { NewProjectWizardPage } from './new-project-wizard.page.js';
 export { MyWorkPage } from './my-work.page.js';
 export { SettingsPage } from './settings.page.js';
 export { StylingGalleryPage } from './styling-gallery.page.js';
+export { CommandCenterPage } from './command-center.page.js';
 export {
   TaskBoardPage,
   TaskCalendarPage,
