@@ -1170,6 +1170,31 @@ export class RestServer {
     }
 
     /**
+     * ADR-0057 D10 (dashboards): strip dashboard widgets whose `requiresService`
+     * capability gate names a kernel service that isn't registered — the same
+     * "server is the authoritative visibility gate" rule already applied to app
+     * nav entries (see {@link filterAppForUser}). Without this, a widget bound to
+     * an optional service renders a dead tile in deployments where the service is
+     * off (e.g. the Organizations KPI under multi-tenant `org-scoping`, which is
+     * absent in a single-tenant runtime while its nav entry is correctly hidden).
+     *
+     * Fail-open when the gate can't be probed (serviceGate undefined). Never
+     * mutates the original — returns a shallow copy only when a widget is dropped.
+     */
+    private filterDashboardForUser(item: any, serviceGate?: (name: string) => boolean): any {
+        if (!item || typeof item !== 'object' || !serviceGate) return item;
+        if (isMetaEnvelope(item)) {
+            const body = this.filterDashboardForUser((item as any).item, serviceGate);
+            return body === (item as any).item ? item : { ...(item as any), item: body };
+        }
+        if (!Array.isArray(item.widgets)) return item;
+        const widgets = item.widgets.filter(
+            (w: any) => !(w && typeof w.requiresService === 'string' && serviceGate(w.requiresService) === false),
+        );
+        return widgets.length === item.widgets.length ? item : { ...item, widgets };
+    }
+
+    /**
      * Probe which `requiresService` capability gates referenced anywhere in
      * `items` are actually registered in the runtime kernel. Returns `null`
      * when the kernel can't be probed — callers then SKIP service gating
@@ -1195,7 +1220,9 @@ export class RestServer {
             if (isMetaEnvelope(e)) { walk((e as any).item); return; }
             if (typeof e.requiresService === 'string') wanted.add(e.requiresService);
             const kids = Array.isArray(e.navigation) ? e.navigation
-                : Array.isArray(e.children) ? e.children : null;
+                : Array.isArray(e.children) ? e.children
+                // Dashboard widgets carry their own `requiresService` gate.
+                : Array.isArray(e.widgets) ? e.widgets : null;
             if (kids) for (const k of kids) walk(k);
         };
         for (const it of items) walk(it);
@@ -2002,6 +2029,28 @@ export class RestServer {
                             }
                         }
 
+                        // ADR-0057 D10: gate dashboard widgets by `requiresService`
+                        // the same way app nav entries are gated above.
+                        if (req.params.type === 'dashboard') {
+                            const raw = visible as unknown;
+                            const list: any[] | null = Array.isArray(raw)
+                                ? (raw as any[])
+                                : (raw && typeof raw === 'object' && Array.isArray((raw as any).items))
+                                    ? ((raw as any).items as any[])
+                                    : null;
+                            if (list) {
+                                const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+                                const registered = await this.resolveRegisteredServices((ctx as any)?.__kernel, list);
+                                const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
+                                if (serviceGate) {
+                                    const filtered = list.map((it: any) => this.filterDashboardForUser(it, serviceGate));
+                                    visible = Array.isArray(raw)
+                                        ? filtered
+                                        : { ...(raw as any), items: filtered };
+                                }
+                            }
+                        }
+
                         // View switcher query: GET /meta/view?object=<object>
                         // returns ONLY the independent ViewItems bound to that
                         // object (the `package` layer of "Object has-many
@@ -2324,6 +2373,16 @@ export class RestServer {
                                         return;
                                     }
                                 }
+                            }
+
+                            // ADR-0057 D10: gate dashboard widgets by `requiresService`
+                            // (mirrors the app-nav gate above) so the console never
+                            // renders a tile bound to an absent optional service.
+                            if (req.params.type === 'dashboard' && visible) {
+                                const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+                                const registered = await this.resolveRegisteredServices((ctx as any)?.__kernel, [visible]);
+                                const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
+                                if (serviceGate) visible = this.filterDashboardForUser(visible, serviceGate);
                             }
 
                             // ADR-0046 i18n: collapse the doc to the request

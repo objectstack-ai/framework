@@ -90,6 +90,37 @@ describe('settings-routes', () => {
     expect(state.status).toBe(404);
   });
 
+  it('PUT accepts the {values:{...}} envelope (flat inner) symmetrically with GET', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc);
+
+    const h = http.routes.get('PUT /api/settings/:namespace')!;
+    const { req, res, state } = makeReqRes({ params: { namespace: 'branding' }, body: { values: { workspace_name: 'My Co' } } });
+    await h(req, res);
+    expect(state.body.error).toBeUndefined();
+    expect(state.body.values.workspace_name.value).toBe('My Co');
+    expect(state.body.values.workspace_name.source).toBe('tenant');
+  });
+
+  it('PUT accepts the read-shape envelope echoed back from GET', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc);
+
+    const h = http.routes.get('PUT /api/settings/:namespace')!;
+    // Exactly what GET returns: { values: { key: { value, source, ... } } }
+    const { req, res, state } = makeReqRes({
+      params: { namespace: 'branding' },
+      body: { values: { workspace_name: { value: 'Echoed', source: 'tenant', locked: false } } },
+    });
+    await h(req, res);
+    expect(state.body.error).toBeUndefined();
+    expect(state.body.values.workspace_name.value).toBe('Echoed');
+  });
+
   it('POST action invokes service.runAction', async () => {
     const http = new MockHttp();
     const svc = new SettingsService({ env: {} });

@@ -34,6 +34,7 @@ export const zhCN: TranslationData = {
         group_apps: { label: '应用' },
         nav_marketplace_browse: { label: '浏览应用市场' },
         nav_marketplace_installed: { label: '已安装应用' },
+        nav_cloud_connection: { label: '云连接' },
         group_people_org: { label: '人员与组织' },
         group_access_control: { label: '访问控制' },
         group_approvals: { label: '审批' },
@@ -51,6 +52,7 @@ export const zhCN: TranslationData = {
         nav_invitations: { label: '邀请' },
 
         nav_roles: { label: '角色' },
+        nav_capabilities: { label: '能力' },
         nav_permission_sets: { label: '权限集' },
         nav_sharing_rules: { label: '共享规则' },
         nav_record_shares: { label: '记录共享' },
@@ -61,6 +63,8 @@ export const zhCN: TranslationData = {
         nav_approval_actions: { label: '审批历史' },
 
         nav_settings_hub: { label: '全部设置' },
+        nav_settings_localization: { label: '本地化' },
+        nav_settings_company: { label: '公司信息' },
         nav_settings_mail: { label: '邮件' },
         nav_settings_branding: { label: '品牌' },
         nav_settings_auth: { label: '认证' },
@@ -75,6 +79,8 @@ export const zhCN: TranslationData = {
         nav_sessions: { label: '会话' },
         nav_audit_logs: { label: '审计日志' },
         nav_notifications: { label: '通知' },
+
+        nav_datasources: { label: '数据源' },
 
         nav_oauth_apps: { label: 'OAuth 应用' },
         nav_jwks: { label: '签名密钥 (JWKS)' },

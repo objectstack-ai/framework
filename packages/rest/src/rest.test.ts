@@ -1945,6 +1945,62 @@ describe('filterAppForUser — ADR-0057 D10 requiresService gate', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ADR-0057 D10 — requiresService capability gate for DASHBOARD WIDGETS
+// (filterDashboardForUser) — server is the authoritative visibility gate.
+// ---------------------------------------------------------------------------
+
+describe('filterDashboardForUser — ADR-0057 D10 widget requiresService gate', () => {
+  const make = () => new RestServer(createMockServer() as any, createMockProtocol() as any);
+  const dash = () => ({
+    name: 'system_overview',
+    widgets: [
+      { id: 'widget_total_users' },
+      { id: 'widget_packages_installed', requiresObject: 'sys_package_installation' },
+      { id: 'widget_organizations', requiresService: 'org-scoping' },
+    ],
+  });
+  const ids = (d: any): string[] => (d?.widgets ?? []).map((w: any) => w.id);
+
+  it('drops widgets whose requiresService gate reports the service absent', () => {
+    const rest: any = make();
+    const out = rest.filterDashboardForUser(dash(), (n: string) => n !== 'org-scoping');
+    expect(ids(out)).toEqual(['widget_total_users', 'widget_packages_installed']);
+  });
+
+  it('keeps requiresService widgets when the service is present', () => {
+    const rest: any = make();
+    expect(ids(rest.filterDashboardForUser(dash(), () => true))).toContain('widget_organizations');
+  });
+
+  it('fail-open: with no service gate, widgets are untouched', () => {
+    const rest: any = make();
+    expect(ids(rest.filterDashboardForUser(dash(), undefined))).toContain('widget_organizations');
+  });
+
+  it('does not touch requiresObject widgets (client-side concern)', () => {
+    const rest: any = make();
+    const out = rest.filterDashboardForUser(dash(), () => false);
+    expect(ids(out)).toContain('widget_packages_installed');
+    expect(ids(out)).not.toContain('widget_organizations');
+  });
+
+  it('unwraps the getMetaItem envelope and gates the inner dashboard', () => {
+    const rest: any = make();
+    const envelope = { type: 'dashboard', name: 'system_overview', item: dash() };
+    const out = rest.filterDashboardForUser(envelope, (n: string) => n !== 'org-scoping');
+    expect(out.type).toBe('dashboard');
+    expect(ids(out.item)).not.toContain('widget_organizations');
+  });
+
+  it('resolveRegisteredServices discovers requiresService declared on widgets', async () => {
+    const rest: any = make();
+    const kernel = { getServiceAsync: async (n: string) => { if (n === 'org-scoping') return {}; throw new Error('absent'); } };
+    const reg = await rest.resolveRegisteredServices(kernel, [dash()]);
+    expect(reg.has('org-scoping')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Object API exposure — enable.apiEnabled / enable.apiMethods (ADR-0049 #1889)
 // ---------------------------------------------------------------------------
 
