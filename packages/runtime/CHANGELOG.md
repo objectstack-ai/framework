@@ -1,5 +1,39 @@
 # @objectstack/runtime
 
+## 10.3.0
+
+### Patch Changes
+
+- 8cf4f7c: fix(runtime): mount `GET /ready` so the readiness probe is reachable over HTTP
+
+  The dispatcher's `/ready` branch (seam #2) was only reachable when calling
+  `dispatch()` directly — no `server.get('${prefix}/ready')` registration existed,
+  so a real server returned the Hono not-found 404 before the handler ran (the same
+  class of bug as `/mcp` and `/keys`). `/ready` is now mounted alongside `/health`,
+  returning 200 while the kernel is `running` and 503 while it is booting or
+  draining — the contract the EE multi-node rolling-restart drain gate polls
+  (cloud ADR-0018). Adds a registration assertion plus an integration test that
+  hits the endpoint through a real HTTP server.
+
+- Updated dependencies [211425e]
+  - @objectstack/objectql@10.3.0
+  - @objectstack/spec@10.3.0
+  - @objectstack/core@10.3.0
+  - @objectstack/types@10.3.0
+  - @objectstack/metadata@10.3.0
+  - @objectstack/observability@10.3.0
+  - @objectstack/formula@10.3.0
+  - @objectstack/rest@10.3.0
+  - @objectstack/driver-memory@10.3.0
+  - @objectstack/driver-sql@10.3.0
+  - @objectstack/driver-sqlite-wasm@10.3.0
+  - @objectstack/plugin-auth@10.3.0
+  - @objectstack/plugin-org-scoping@10.3.0
+  - @objectstack/plugin-security@10.3.0
+  - @objectstack/service-cluster@10.3.0
+  - @objectstack/service-datasource@10.3.0
+  - @objectstack/service-i18n@10.3.0
+
 ## 10.2.0
 
 ### Patch Changes
