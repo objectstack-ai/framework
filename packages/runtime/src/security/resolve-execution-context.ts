@@ -287,16 +287,25 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   }
 
   // Resolve user-scoped permission sets.
-  const upsRows = await tryFind(
-    ql,
-    'sys_user_permission_set',
-    tenantId
-      ? { user_id: userId, organization_id: tenantId }
-      : { user_id: userId },
-    100,
-  );
+  //
+  // [ADR-0066] A platform-scoped grant (`organization_id IS NULL`) is GLOBAL and
+  // must apply regardless of the caller's active org. Querying with
+  // `organization_id = tenantId` dropped null-org grants the moment a user had
+  // an active org — so a platform admin who also owns an org silently lost
+  // `admin_full_access` (and its `systemPermissions`), which then locked them
+  // out of a `requiredPermissions`-gated control-plane object (e.g. sys_license).
+  // Mirror the role-binding logic above (null org = global, cross-org): fetch the
+  // user's grants and keep null-org + active-org ones, dropping only grants
+  // scoped to a DIFFERENT org.
+  const upsRows = await tryFind(ql, 'sys_user_permission_set', { user_id: userId }, 100);
   const psIds = new Set<string>(
-    upsRows.map((r) => r.permission_set_id ?? r.permissionSetId).filter(Boolean),
+    upsRows
+      .filter((r) => {
+        const org = (r.organization_id ?? r.organizationId) ?? null;
+        return !(org && tenantId && org !== tenantId);
+      })
+      .map((r) => r.permission_set_id ?? r.permissionSetId)
+      .filter(Boolean),
   );
 
   // Resolve role-bound permission sets.
