@@ -76,6 +76,17 @@ export type {
 
 // Host glue: dev driver factory + fail-closed secret binder.
 export { createDefaultDatasourceDriverFactory } from './default-datasource-driver-factory.js';
+// Shared native-better-sqlite3 → wasm → in-memory step-down (#2229).
+export {
+  resolveSqliteDriver,
+  NATIVE_SQLITE_WASM_FALLBACK_WARNING,
+  NATIVE_SQLITE_MEMORY_FALLBACK_WARNING,
+} from './sqlite-driver-fallback.js';
+export type {
+  ResolveSqliteDriverOptions,
+  ResolvedSqliteDriver,
+  SqliteFallbackEngine,
+} from './sqlite-driver-fallback.js';
 export {
   createDatasourceSecretBinder,
   toCredentialsRef,

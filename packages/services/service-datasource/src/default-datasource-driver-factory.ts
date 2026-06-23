@@ -113,7 +113,19 @@ function buildMongoUrl(spec: DatasourceConnectionSpec): string {
  * lazily so a host that never builds (e.g.) a mongo connection doesn't pay for
  * the mongo SDK.
  */
-export function createDefaultDatasourceDriverFactory(): IDatasourceDriverFactory {
+export interface DefaultDatasourceDriverFactoryOptions {
+  /**
+   * Enables the dev-only native-`better-sqlite3` → wasm → in-memory step-down
+   * for sqlite construction (#2229). When omitted, defaults per call to
+   * `process.env.NODE_ENV === 'development'`. In production a native load
+   * failure is NOT silently swapped for a different engine (fail-closed).
+   */
+  dev?: boolean;
+}
+
+export function createDefaultDatasourceDriverFactory(
+  options: DefaultDatasourceDriverFactoryOptions = {},
+): IDatasourceDriverFactory {
   return {
     supports(driverId: string): boolean {
       return resolveKind(driverId) !== undefined;
@@ -140,14 +152,19 @@ export function createDefaultDatasourceDriverFactory(): IDatasourceDriverFactory
       }
 
       if (kind === 'sqlite') {
-        const { SqlDriver } = await import('@objectstack/driver-sql');
-        const driver = new SqlDriver({
-          client: 'better-sqlite3',
-          connection: buildSqlConnection(spec, 'better-sqlite3') as any,
-          useNullAsDefault: true,
-          ...(schemaMode ? { schemaMode: schemaMode as any } : {}),
-        } as any);
-        return toHandle(driver, () => sqlServerVersion(driver, 'sqlite'));
+        // better-sqlite3 loads its native addon lazily (first query), so an ABI
+        // mismatch is invisible at construction and crashes later. resolveSqliteDriver
+        // probes up-front and, IN DEV ONLY, steps down to wasm SQLite (real SQL +
+        // on-disk persistence) then in-memory; in production it returns the native
+        // driver unprobed so a failure surfaces loudly (fail-closed). (#2229)
+        const conn = buildSqlConnection(spec, 'better-sqlite3') as { filename?: string };
+        const { resolveSqliteDriver } = await import('./sqlite-driver-fallback.js');
+        const resolved = await resolveSqliteDriver({
+          filename: conn.filename ?? ':memory:',
+          dev: options.dev,
+          ...(schemaMode ? { schemaMode } : {}),
+        });
+        return toHandle(resolved.driver, () => sqlServerVersion(resolved.driver, 'sqlite'));
       }
 
       if (kind === 'mongodb') {

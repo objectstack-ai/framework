@@ -71,6 +71,13 @@ export const StandaloneStackConfigSchema = z.object({
      * precedence over this default.
      */
     projectRoot: z.string().optional(),
+    /**
+     * Dev gate for the sqlite driver factory's native-better-sqlite3 → wasm →
+     * in-memory step-down (#2229). When omitted, defaults to
+     * `process.env.NODE_ENV === 'development'`. In production a native load
+     * failure is NOT silently swapped for wasm/mingo (fail-closed).
+     */
+    dev: z.boolean().optional(),
 });
 
 export type StandaloneStackConfig = z.input<typeof StandaloneStackConfigSchema>;
@@ -183,6 +190,10 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         );
     } else {
         const { createDefaultDatasourceDriverFactory } = await import('@objectstack/service-datasource');
+        // #2229: in dev, a native better-sqlite3 ABI/load failure steps down to
+        // wasm SQLite (real SQL + on-disk persistence) then in-memory; in prod it
+        // fails loudly. Falls back to NODE_ENV when the caller did not pass `dev`.
+        const factoryDev = cfg.dev ?? process.env.NODE_ENV === 'development';
         let driverId: string;
         let driverConfig: Record<string, unknown>;
         if (dbDriver === 'memory') {
@@ -211,7 +222,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
 
         let driverHandle: { driver?: unknown } | unknown;
         try {
-            driverHandle = await createDefaultDatasourceDriverFactory().create({ driver: driverId, config: driverConfig });
+            driverHandle = await createDefaultDatasourceDriverFactory({ dev: factoryDev }).create({ driver: driverId, config: driverConfig });
         } catch (err: any) {
             // Preserve the actionable hint the bespoke path gave for the optional
             // mongo peer dep (the factory throws a generic "not installed" message).

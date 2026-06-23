@@ -32,6 +32,7 @@
   "devDependencies": {
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-sql": "workspace:*",
+    "@objectstack/driver-sqlite-wasm": "workspace:*",
     "@objectstack/plugin-hono-server": "workspace:*",
     "@types/node": "^26.0.0",
     "tsup": "^8.5.1",
