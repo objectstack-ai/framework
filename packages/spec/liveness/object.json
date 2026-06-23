@@ -87,6 +87,16 @@
       "evidence": "packages/objectql/src/registry.ts:208",
       "note": "default perms; ui crudAffordances."
     },
+    "access": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts",
+      "note": "ADR-0066 D2 secure-by-default posture. access.default:'private' → resolveObjectPermission excludes the object from non-super-user '*' wildcard grants (needs an explicit grant or View/Modify All Data), and security-plugin computeRlsFilter/computeWriteCheckFilter apply the posture-gated super-user RLS bypass. Unit + full-middleware proven in plugin-security/security-plugin.test.ts."
+    },
+    "requiredPermissions": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-security/src/security-plugin.ts",
+      "note": "ADR-0066 D3 object capability contract — the security middleware denies unless the caller's systemPermissions union covers it (AND-gate, before the CRUD grant). Mirrors App.requiredPermissions. Unit + full-middleware proven in plugin-security/security-plugin.test.ts."
+    },
     "userActions": {
       "status": "live",
       "note": "objectui ObjectGrid per-object CRUD."
