@@ -486,6 +486,22 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // ── Readiness ───────────────────────────────────────────────
+            // Like /health, the dispatcher owns the /ready branch but it is
+            // only reachable over HTTP once mounted EXPLICITLY here (there is
+            // no catch-all). 200 while the kernel is `running`, 503 while it is
+            // booting or shutting down — the contract the EE multi-node
+            // rolling-restart drain gate polls (cloud ADR-0018) so a load
+            // balancer stops routing to a replica before it closes.
+            server.get(`${prefix}/ready`, async (_req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('GET', '/ready', undefined, {}, { request: _req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Auth ────────────────────────────────────────────────────
             // NOTE: /auth/* wildcard is mounted by AuthProxyPlugin (cloud)
             // or AuthPlugin (single-tenant) directly on the raw Hono app —
