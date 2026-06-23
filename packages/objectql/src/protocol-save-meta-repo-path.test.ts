@@ -262,4 +262,97 @@ describe('saveMetaItem — repository write path (post PR-10d.6)', () => {
         const afterBody = (Array.from(rows.values())[0] as any).metadata;
         expect(afterBody).toBe(beforeBody);
     });
+
+    // ── runtime-only writes must not be stamped into a code package ──────
+    // Regression: a custom object authored in Studio while a CODE package was
+    // selected in the dropdown (`?package=`) was persisted with
+    // `package_id = <code package>`, then read back as "code-provided" and
+    // locked read-only after publish. saveMetaItem now coerces such a
+    // runtime-only write to an org-owned overlay (`package_id = null`).
+    //
+    // We spy on the `sys_metadata` insert rather than reading back the stub
+    // row map (whose key ignores the table, so lineage/history inserts can
+    // collide with — and clobber — the parent row's `package_id`).
+    function spyInserts(engine: any): Array<Record<string, unknown>> {
+        const captured: Array<Record<string, unknown>> = [];
+        const orig = engine.insert.bind(engine);
+        engine.insert = async (t: string, data: Record<string, unknown>, opts?: unknown) => {
+            if (t === 'sys_metadata') captured.push(data);
+            return orig(t, data, opts);
+        };
+        return captured;
+    }
+
+    it('runtime-only create while a LOADED code package is selected drops the binding (package_id = null)', async () => {
+        // The bug: a brand-new object authored while a loaded code package was
+        // selected in Studio's dropdown got `package_id = <that package>`. The
+        // object is NOT artifact-backed (intent = 'runtime-only') and the
+        // package IS loaded (its manifest is registered), so the binding must
+        // be dropped — otherwise it reads back as code-provided / read-only.
+        const { engine } = makeStubEngine();
+        engine.manifests = new Map([['app.objectstack.hotcrm', { id: 'app.objectstack.hotcrm' }]]);
+        const inserts = spyInserts(engine);
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        const result = await protocol.saveMetaItem({
+            type: 'object',
+            name: 'maint_asset',
+            organizationId: 'org_alpha',
+            packageId: 'app.objectstack.hotcrm', // Studio had a code package selected
+            mode: 'draft',
+            item: { name: 'maint_asset', label: 'Asset', fields: { name: { type: 'text', label: 'Name' } } },
+        });
+        expect(result.success).toBe(true);
+        const create = inserts.find((d) => d.type === 'object' && d.name === 'maint_asset');
+        expect(create).toBeTruthy();
+        // brand-new org object must NOT carry the package binding → stays editable.
+        expect(create!.package_id ?? null).toBeNull();
+        expect(create!.package_id).not.toBe('app.objectstack.hotcrm');
+    });
+
+    it('runtime-only create into a NON-loaded package keeps its binding (ADR-0048 #1824 authoring scope)', async () => {
+        // A package *authoring workspace* is a bare id with no booted manifest
+        // and no registered metadata. Per-package authoring scope must survive,
+        // so the guard must leave such a binding intact.
+        const { engine } = makeStubEngine();
+        // No manifests map / empty → isLoadedPackage('com.acme.beta') is false.
+        const inserts = spyInserts(engine);
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({
+            type: 'object',
+            name: 'maint_ticket',
+            organizationId: 'org_alpha',
+            packageId: 'com.acme.beta',
+            mode: 'draft',
+            item: { name: 'maint_ticket', label: 'Ticket', fields: { name: { type: 'text', label: 'Name' } } },
+        });
+        const create = inserts.find((d) => d.type === 'object' && d.name === 'maint_ticket');
+        expect(create).toBeTruthy();
+        expect(create!.package_id).toBe('com.acme.beta');
+    });
+
+    it('override-artifact write keeps its package binding (guard only touches runtime-only creates)', async () => {
+        // An org overlay OF a packaged item (intent = 'override-artifact') must
+        // stay bound to that package even though the package is loaded. Make the
+        // packaged view artifact-backed so the write is an override, not a fresh
+        // create. (Objects are not override-allowed, so the control uses a view.)
+        const { engine } = makeStubEngine();
+        engine.manifests = new Map([['app.objectstack.hotcrm', { id: 'app.objectstack.hotcrm' }]]);
+        engine.registry.getArtifactItem = (type: string, name: string) =>
+            type === 'view' && name === 'case_grid'
+                ? { _packageId: 'app.objectstack.hotcrm', name, type: 'grid' }
+                : undefined;
+        const inserts = spyInserts(engine);
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({
+            type: 'view',
+            name: 'case_grid',
+            organizationId: 'org_alpha',
+            packageId: 'app.objectstack.hotcrm',
+            mode: 'draft',
+            item: { name: 'case_grid', type: 'grid', label: 'Cases (org overlay)', columns: ['id', 'title'] },
+        });
+        const create = inserts.find((d) => d.type === 'view' && d.name === 'case_grid');
+        expect(create).toBeTruthy();
+        expect(create!.package_id).toBe('app.objectstack.hotcrm');
+    });
 });

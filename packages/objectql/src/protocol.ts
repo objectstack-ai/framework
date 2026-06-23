@@ -3148,6 +3148,44 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     /**
+     * True when `packageId` refers to a **loaded code package** — one that
+     * booted and registered a manifest (and typically objects/apps) into the
+     * engine. Such packages are read-only artifacts; runtime-authored items
+     * must not be bound to them (see {@link saveMetaItem}).
+     *
+     * A bare ADR-0048 *authoring-workspace* package id (no booted manifest,
+     * no registered metadata) returns `false`, so per-package authoring scope
+     * is preserved. Reads the engine's manifest map first (authoritative,
+     * O(1) — every `registerApp` call records the manifest there), then falls
+     * back to "owns ≥1 registered object" for defense in depth.
+     */
+    private isLoadedPackage(packageId: string): boolean {
+        const engine = this.engine as any;
+        if (engine?.manifests?.has?.(packageId)) return true;
+        const registry = engine?.registry;
+        if (!registry) return false;
+        try {
+            // Objects contributed by the package (real data packages).
+            if (typeof registry.getAllObjects === 'function'
+                && registry.getAllObjects(packageId).length > 0) {
+                return true;
+            }
+            // UI / logic metadata bound to the package id. ADR-0048 — a code
+            // package registers its app via `registerApp(app, packageId)`, so
+            // the app item's `_packageId` is the package id; UI-only packages
+            // (no objects) are still detected here.
+            if (typeof registry.listItems === 'function') {
+                for (const t of ['app', 'view', 'page', 'flow', 'report', 'dashboard', 'agent', 'skill', 'role', 'permission']) {
+                    if (registry.listItems(t, packageId).length > 0) return true;
+                }
+            }
+        } catch {
+            // A partial registry (test mocks) → treat as "not loaded".
+        }
+        return false;
+    }
+
+    /**
      * Resolve the effective `_lock` for an item by consulting the
      * artifact registry first, then the persisted overlay row. Artifact
      * always wins — by design, an overlay cannot loosen a packaged
@@ -3672,6 +3710,40 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const intent: 'override-artifact' | 'runtime-only' = artifactBacked
                 ? 'override-artifact'
                 : 'runtime-only';
+            // GUARD — a brand-new, DB-only ("runtime-only") metadata item must
+            // not be bound to a *loaded code package*. Studio sends the
+            // currently-selected package via `?package=`; when a user authors a
+            // new object while browsing a code package (e.g. `app.objectstack.hotcrm`),
+            // persisting that id as the new row's `package_id` makes the org
+            // object read back as "provided by a code package" and become
+            // read-only after publish — the user can no longer edit what they
+            // just created. Drop the binding so it is a plain org overlay
+            // (`package_id = null`, editable).
+            //
+            // Two scopes are deliberately left bound:
+            //   • `override-artifact` writes — an org overlay OF a packaged item
+            //     must keep pointing at that package.
+            //   • runtime writes into a package that is NOT loaded as code — an
+            //     ADR-0048 #1824 package *authoring workspace* is a bare id with
+            //     no registered manifest, and per-package scoping must survive.
+            // `isLoadedPackage` distinguishes the two: only a booted code
+            // package has a manifest / registered artifacts.
+            // Mutate `request.packageId` (not a local copy) so every downstream
+            // consumer — the repo write, the parent-version lookup, the live
+            // registry mutation on publish, and the audit record — sees the
+            // coerced value consistently. Coercing only the repo write left the
+            // in-memory object stamped with the code package, so it still read
+            // back as code-provided / read-only.
+            if (
+                intent === 'runtime-only' &&
+                request.packageId != null &&
+                this.isLoadedPackage(request.packageId)
+            ) {
+                console.warn(
+                    `[Protocol] dropping package binding '${request.packageId}' from runtime-authored ${singularTypeForRepo}/${request.name} (it belongs to a loaded code package); persisting as an org overlay (package_id = null) so it stays editable.`,
+                );
+                request.packageId = null;
+            }
             const orgId = request.organizationId ?? null;
             const repo = this.getOverlayRepo(orgId);
             const ref = {
