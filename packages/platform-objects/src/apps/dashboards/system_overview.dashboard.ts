@@ -42,6 +42,12 @@ export const SystemOverviewDashboard = Dashboard.create({
       dataset: 'sys_organization_metrics', values: ['org_count'],
       title: 'Organizations',
       type: 'metric',
+      // Organizations only exist under multi-tenant org-scoping. In a
+      // single-tenant runtime the count is always 0 and the matching
+      // nav entries (nav_organizations / nav_invitations) are hidden via
+      // `requiresService: 'org-scoping'` — gate this KPI the same way so the
+      // overview doesn't dangle a metric the admin can't act on.
+      requiresService: 'org-scoping',
       layout: { x: 3, y: 0, w: 3, h: 2 },
       colorVariant: 'orange',
       description: 'Total organizations on the platform',

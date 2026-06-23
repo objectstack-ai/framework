@@ -76,6 +76,16 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
     priority: BASE_PRIORITY,
     items: [
       { id: 'nav_settings_hub', type: 'url', label: 'All Settings', url: '/apps/setup/system/settings', icon: 'settings-2', requiredPermissions: ['manage_platform_settings'] },
+      // Workspace identity first — Localization (order 2) and Company (order 3)
+      // are the lowest-`order` settings manifests and the first thing a new
+      // company admin configures. They ship as `service-settings` manifests
+      // (tenant scope, read=`setup.access`) but were never pinned here, so they
+      // were reachable only by drilling into the "All Settings" hub. Mainstream
+      // admin consoles (Salesforce "Company Information", ServiceNow) surface
+      // both directly. No `requiredPermissions` — matches Branding (read perm is
+      // the app's base `setup.access`).
+      { id: 'nav_settings_localization', type: 'url', label: 'Localization', url: '/apps/setup/system/settings/localization', icon: 'globe' },
+      { id: 'nav_settings_company', type: 'url', label: 'Company', url: '/apps/setup/system/settings/company', icon: 'building-2' },
       { id: 'nav_settings_branding', type: 'url', label: 'Branding', url: '/apps/setup/system/settings/branding', icon: 'palette' },
       { id: 'nav_settings_auth', type: 'url', label: 'Authentication', url: '/apps/setup/system/settings/auth', icon: 'lock-keyhole', requiredPermissions: ['manage_platform_settings'] },
       { id: 'nav_settings_mail', type: 'url', label: 'Email', url: '/apps/setup/system/settings/mail', icon: 'mail', requiredPermissions: ['manage_platform_settings'] },

@@ -88,7 +88,27 @@ export function registerSettingsRoutes(
 
   http.put(`${base}/:namespace`, (async (req, res) => {
     const ns = req.params.namespace;
-    const body = (req.body ?? {}) as Record<string, unknown>;
+    let body = (req.body ?? {}) as Record<string, unknown>;
+    // DX symmetry: GET returns `{ values: { key: { value, source, … } } }`.
+    // Accept that same envelope on PUT (sole top-level `values` object) so a
+    // caller can write back exactly what it read instead of tripping a
+    // confusing UNKNOWN_KEY('values'). Per-key, unwrap the read-shape
+    // `{ value, … }` wrapper to the bare value; flat `{ key: value }` bodies
+    // (and a manifest that genuinely declares a `values` key alongside others)
+    // are untouched.
+    if (
+      Object.keys(body).length === 1 &&
+      body.values && typeof body.values === 'object' && !Array.isArray(body.values)
+    ) {
+      const inner = body.values as Record<string, unknown>;
+      body = Object.fromEntries(
+        Object.entries(inner).map(([k, v]) =>
+          v && typeof v === 'object' && !Array.isArray(v) && 'value' in (v as object)
+            ? [k, (v as { value: unknown }).value]
+            : [k, v],
+        ),
+      );
+    }
     try {
       const ctx = ctxOf(req);
       const result = await service.setMany(ns, body, ctx);
