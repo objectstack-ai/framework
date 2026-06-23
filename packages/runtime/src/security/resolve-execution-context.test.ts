@@ -263,3 +263,64 @@ describe('resolveExecutionContext — localization (timezone + locale)', () => {
     expect(ctx.locale).toBeUndefined();
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// ADR-0066 — platform-scoped (null-org) permission-set grants are GLOBAL and
+// must resolve even when the caller has an active org. Regression for the gap
+// where `organization_id = tenantId` dropped a platform admin's null-org
+// admin_full_access grant (and its systemPermissions) the moment they owned an
+// org — which then locked them out of a requiredPermissions-gated object.
+// ---------------------------------------------------------------------------
+describe('resolveExecutionContext — platform-scoped (null-org) grants (ADR-0066)', () => {
+  const RAW = 'osk_admin';
+  function makeAuthQl(extraGrants = []) {
+    const tables = {
+      sys_api_key: [{ id: 'k1', key: hashApiKey(RAW), revoked: false, user_id: 'u1', organization_id: 'orgA', expires_at: FUTURE }],
+      sys_member: [{ user_id: 'u1', organization_id: 'orgA', role: 'owner' }],
+      sys_user_permission_set: [
+        { id: 'ups_global', user_id: 'u1', permission_set_id: 'ps_admin', organization_id: null },
+        ...extraGrants,
+      ],
+      sys_permission_set: [
+        { id: 'ps_admin', name: 'admin_full_access', system_permissions: '["manage_platform_settings","manage_users"]', object_permissions: '{}' },
+        { id: 'ps_other', name: 'other_org_set', system_permissions: '["should_not_appear"]', object_permissions: '{}' },
+      ],
+      sys_role: [],
+      sys_role_permission_set: [],
+      sys_user_role: [],
+    };
+    return {
+      async find(object, opts) {
+        const rows = tables[object] ?? [];
+        const where = opts?.where ?? {};
+        return rows.filter((row) => {
+          for (const [k, v] of Object.entries(where)) {
+            if (v !== null && typeof v === 'object') {
+              if (Array.isArray(v.$in) && !v.$in.includes(row[k])) return false;
+              continue;
+            }
+            if ((v ?? null) !== (row[k] ?? null)) return false;
+          }
+          return true;
+        });
+      },
+    };
+  }
+  const opts = (ql) => ({ getService: async () => undefined, getQl: async () => ql, request: { headers: { 'x-api-key': RAW } } });
+
+  it('resolves a null-org admin grant + its systemPermissions even with an active org', async () => {
+    const ctx = await resolveExecutionContext(opts(makeAuthQl()));
+    expect(ctx.tenantId).toBe('orgA');
+    expect(ctx.permissions).toContain('admin_full_access');
+    expect(ctx.systemPermissions).toContain('manage_platform_settings');
+  });
+
+  it('still drops a grant scoped to a DIFFERENT org', async () => {
+    const ql = makeAuthQl([{ id: 'ups_otherorg', user_id: 'u1', permission_set_id: 'ps_other', organization_id: 'orgB' }]);
+    const ctx = await resolveExecutionContext(opts(ql));
+    expect(ctx.permissions).toContain('admin_full_access'); // global grant kept
+    expect(ctx.permissions).not.toContain('other_org_set'); // foreign-org grant dropped
+    expect(ctx.systemPermissions).not.toContain('should_not_appear');
+  });
+});

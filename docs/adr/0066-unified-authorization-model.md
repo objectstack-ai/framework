@@ -45,8 +45,12 @@ Promote capabilities from bare strings to **first-class records** (`sys_permissi
 ### D2 — Secure-by-default object/field posture [new] (data-model posture, NOT a permission)
 Add an object (and field) flag that opts it **out of blanket wildcard grants** — e.g. `access: { default: 'private' }` (vs the implicit `'public'`). A `private` object is **not** covered by `'*': {allowRead:true}`; access requires an **explicit** permission-set grant. Mirrors Salesforce "new object = no access until granted." This is a posture like `tenancy`, declared on the object — it is **not** an assignment and names no principal. `admin_full_access` (the superuser `'*'` grant) still covers private objects unless it too is excluded (rare).
 
+**Enforcement — RLS exemption via the superuser bypass (revised ①).** A `private` (or `tenancy.enabled:false`, i.e. platform-global) object must also be exempt from the wildcard RLS policies (`tenant_isolation`, owner scoping) so a platform admin — *including one who is also an org admin*, whose `organization_admin` set contributes a narrowing `tenant_isolation` policy that the OR-union would otherwise apply — sees **all** rows. The general principle (Salesforce *View All Data* / Dataverse *Organization* access level): **`viewAllRecords` bypasses read-side RLS and `modifyAllRecords` bypasses write-side RLS for that object** — but *only* when the object's posture permits it (platform-global or `private`). The posture gates the bypass so that in a shared multi-tenant DB a platform admin is **not** silently granted cross-tenant visibility on ordinary *tenant business* objects; the bypass applies to control-plane / global / private objects, which is exactly where it is wanted. This replaces the original narrower "a `private` object skips the wildcard `tenant_isolation`" wording: same outcome for `sys_license`, but one explainable rule that also covers the write path.
+
+**When `private` vs `requiredPermissions` (D3) — author guidance (③).** `private` is a *data-model posture* — "no ambient grant; needs an explicit grant" — use it when the default answer should be *nobody*. `requiredPermissions` (D3) is a *capability contract* — "needs a named capability" — use it when the answer is *whoever holds capability X*. Either one alone secures a sensitive object; using both (as `sys_license` does) is defence-in-depth, not a requirement.
+
 ### D3 — Resource→capability requirement [existing concept, new placement]
-Extend `requiredPermissions` (today only on `App`/nav, **[existing]**) to **Object**, **Field**, and **Action**. A resource references the capability (D1) needed to access/invoke it — a contract, not an assignment. The security engine enforces it alongside permission-set grants. sys_license becomes: `access:{default:'private'}` + `requiredPermissions:['manage_licenses']`.
+Extend `requiredPermissions` (today only on `App`/nav, **[existing]**) to **Object**, **Field**, and **Action**. A resource references the capability (D1) needed to access/invoke it — a contract, not an assignment. The security engine enforces it as an **AND-gate** — checked *in addition to* (not instead of) the permission-set CRUD grant; see *Precedence / combination semantics*. sys_license becomes: `access:{default:'private'}` + `requiredPermissions:['manage_licenses']`.
 
 ### D4 — Dual-surface action gates [new]
 An action declaring `requiredPermissions` is enforced in **one place, two surfaces**: the ActionRunner hides/disables it in the UI **and** the server rejects the call when the caller lacks the capability. Removes the "UI-gated but server-open" footgun (and the inverse). Server enforcement is the source of truth; UI gating is derived from the same declaration.
@@ -76,10 +80,29 @@ Cloud seeds (D5): `manage_licenses` capability + an `admin_full_access` grant. R
 3. **D1** — capability registry (string→record), back-compat seeded.
 4. **D3 (field) + D5** — field-level requirements + package secure-default seeding; delegated admin (#9).
 
+## Precedence / combination semantics (②)
+
+Authorization resolves in a fixed order, adopted from shapes proven elsewhere — ServiceNow ACLs (required-role **AND** condition), Odoo record rules (global-**AND**, group-**OR**), Salesforce (union grants):
+
+1. **AND-gates (hard prerequisites).** A resource's `requiredPermissions` (D3) and its `private` posture (D2) are prerequisites, not grants. The caller must clear every gate *before* any grant is consulted: missing a required capability, or lacking an explicit grant on a `private` object, **denies** regardless of how permissive the rest of the configuration is.
+2. **Grants union (most-permissive).** Within the gates, object-CRUD and field grants combine most-permissively across the caller's permission sets — any set that allows wins (the existing semantics).
+3. **RLS: OR within an object, AND with tenant-global.** Multiple row policies for the same object/operation are OR-combined (any matching policy admits the row); the wildcard tenant-isolation policy AND-s on top as a global scope. The **superuser bypass** (D2: `viewAllRecords`/`modifyAllRecords`, gated by posture) short-circuits RLS for the object.
+4. **Explicit deny overrides (when introduced).** If/when a per-resource deny is added (Salesforce permission-set-group *muting*; see Future refinements) it sits at the top and overrides any union grant. Until then there is no implicit deny except the gates in (1) and fail-closed defaults (an applicable-but-uncompilable RLS policy denies).
+
 ## Open-core boundary
 All of this is **open mechanism** (framework `spec` + `plugin-security`): schema fields, the registry, the enforcement engine. The *policies* (which capabilities, which grants) are **data** — shipped by distributions/packages and maintained by admins. No commercial policy is encoded in the framework.
 
 ## Consequences
 - **+** Security becomes declarative metadata co-located with the resource (single source of truth); generalizes to every object + third-party app; capabilities are admin-extensible records; sensitive resources are secure-by-default.
 - **−** Migration: string capabilities → records (seeded, back-compat); a `private` default flips the implicit allow-by-default for objects that adopt it (opt-in, no forced migration).
-- **−** Combination edge cases (explicit deny vs union) need a defined precedence; specify deny-overrides only where a resource is `private`.
+- **−** Combination/precedence is now **explicitly specified** (see *Precedence / combination semantics*) rather than left as an open edge case; explicit deny (muting) is deferred to Future refinements.
+
+
+## Future refinements (beyond the phased plan)
+
+Captured for the record; **out of scope for Phases 1–4 above**. Each is anchored to a mainstream-platform precedent.
+
+- **④ Deny-by-default target for sensitive objects.** Salesforce / Dataverse / ServiceNow / SAP are all deny-by-default; ObjectStack stays allow-by-default for *tenant business* objects (low-code ergonomics, à la Airtable/Notion within a workspace) but should make **system / control-plane / sensitive** objects `private` by default, ship genuine reference data (countries, currencies, picklists) as explicit `public`, and surface each object's posture visibly in Studio. The `access` flag (D2) is the primitive; this is a defaults + visibility call, staged per object — no forced migration.
+- **⑤ Per-operation `requiredPermissions`.** Today object-level `requiredPermissions` gates all of CRUD. ERP routinely needs "read-open / write-gated" (Salesforce & Dataverse separate capability by operation). Allow `requiredPermissions` to be either `string[]` (all operations) or a per-operation map `{ read, create, update, delete }`. Field-level (D3) and action-level (D4) requirements already give finer control; this closes the object-level gap.
+- **⑥ Capabilities in the expression surface.** Salesforce *Custom Permissions* are referenceable in formulas / validation / flows (`$Permission.X`). Expose the caller's held capabilities to the CEL/predicate surface (ADR-0058) so `visible` / validation / sharing predicates can branch on a capability. High-leverage once D1 makes capabilities first-class.
+- **⑦ Permission-set groups + subtractive *muting*.** Pure union does not scale governance ("permission-set explosion"); Salesforce added permission-set-group *muting* precisely to allow taking access away. Roles→permission-sets already bundle; a subtractive/deny layer (precedence step 4) is the missing piece for large-org administration. Pairs with delegated admin (#9).
