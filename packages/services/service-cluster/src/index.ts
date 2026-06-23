@@ -66,3 +66,10 @@ export type {
     CounterIncrOptions,
     ClusterCallContext,
 } from '@objectstack/spec/contracts';
+
+export {
+    registerMultiNodeGate,
+    checkMultiNodeAllowed,
+    __resetMultiNodeGate,
+    type MultiNodeGate,
+} from './multi-node-gate.js';

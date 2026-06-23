@@ -539,9 +539,26 @@ export default class Serve extends Command {
       let clusterConfig: { driver: string; url?: string } | undefined;
       const __clusterDriver = process.env.OS_CLUSTER_DRIVER?.trim();
       if (__clusterDriver && __clusterDriver !== 'memory') {
-        try { await import(`@objectstack/service-cluster-${__clusterDriver}`); }
-        catch { /* may already be registered by the loaded config */ }
-        clusterConfig = { driver: __clusterDriver, url: process.env.OS_REDIS_URL };
+        // Multi-node authorization gate (open mechanism): a distribution (e.g.
+        // an EE license) may deny multi-node. On denial, downgrade to
+        // single-node rather than fail — multi-node is an add-on, never brick.
+        // Dynamic, non-literal specifier so the CLI does not statically depend
+        // on the cluster package (mirrors the remote-driver import below).
+        const __clusterPkg: string = '@objectstack/service-cluster';
+        const { checkMultiNodeAllowed } = (await import(__clusterPkg)) as {
+          checkMultiNodeAllowed: () => { allowed: boolean; reason?: string };
+        };
+        const __gate = checkMultiNodeAllowed();
+        if (!__gate.allowed) {
+          console.warn(
+            `[cluster] multi-node not authorized (${__gate.reason ?? 'denied'}) — ` +
+            `downgrading to single-node (in-memory cluster). Remove OS_CLUSTER_DRIVER to silence.`,
+          );
+        } else {
+          try { await import(`@objectstack/service-cluster-${__clusterDriver}`); }
+          catch { /* may already be registered by the loaded config */ }
+          clusterConfig = { driver: __clusterDriver, url: process.env.OS_REDIS_URL };
+        }
       }
       const runtime = new Runtime({
         kernel: {
