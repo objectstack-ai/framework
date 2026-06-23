@@ -22,6 +22,7 @@ export { reportForm } from './report.form';
 export { viewForm } from './view.form';
 export { appForm } from './app.form';
 export { dashboardForm } from './dashboard.form';
+export { datasetForm } from './dataset.form';
 export { actionForm } from './action.form';
 export { pageForm } from './page.form';
 export * from './action.zod';
