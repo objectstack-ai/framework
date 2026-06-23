@@ -1915,6 +1915,9 @@ importers:
       '@objectstack/driver-sql':
         specifier: workspace:*
         version: link:../../plugins/driver-sql
+      '@objectstack/driver-sqlite-wasm':
+        specifier: workspace:*
+        version: link:../../plugins/driver-sqlite-wasm
       '@objectstack/plugin-hono-server':
         specifier: workspace:*
         version: link:../../plugins/plugin-hono-server
