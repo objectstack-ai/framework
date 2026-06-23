@@ -411,6 +411,13 @@ export interface ToolExecutionContext {
     /** Active environment (multi-tenant project) id, if known. */
     environmentId?: string;
     /**
+     * The agent this chat runs as (e.g. the `:agentName` from
+     * `/api/v1/ai/agents/:agentName/chat`). Stamped onto an auto-created
+     * conversation's `agent_id` so downstream analytics / per-agent metering can
+     * attribute usage to the right agent instead of leaving it null.
+     */
+    agentId?: string;
+    /**
      * Object the user is currently viewing in the UI (e.g. the list/detail
      * page they have open). Built-in data tools use this as a fallback target
      * when the user refers to "this object" / "the current object" and the
