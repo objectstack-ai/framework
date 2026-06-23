@@ -315,6 +315,8 @@
     "NormalizedFilter (type)",
     "NormalizedFilterSchema (const)",
     "NotificationChannel (type)",
+    "ObjectAccessConfig (type)",
+    "ObjectAccessConfigSchema (const)",
     "ObjectCapabilities (type)",
     "ObjectDependencyGraph (type)",
     "ObjectDependencyGraphSchema (const)",
