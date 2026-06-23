@@ -1824,6 +1824,72 @@ export class HttpDispatcher {
                 return { handled: true, response: this.error('Draft discarding not supported', 501) };
             }
 
+            // ── ADR-0067: package-scoped commit history & rollback ──────────
+
+            // GET /packages/:id/commits → the commit timeline (newest-first).
+            if (parts.length === 2 && parts[1] === 'commits' && m === 'GET') {
+                const id = decodeURIComponent(parts[0]);
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).listCommits === 'function') {
+                    try {
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const commits = await (protocol as any).listCommits({
+                            packageId: id,
+                            ...(organizationId ? { organizationId } : {}),
+                        });
+                        return { handled: true, response: this.success({ commits }) };
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+                return { handled: true, response: this.error('Commit history not supported', 501) };
+            }
+
+            // POST /packages/:id/commits/:commitId/revert → revert ONE commit
+            // (ADR-0067). Created artifacts are soft-removed, edited ones are
+            // restored to their pre-commit version; the revert is itself a commit.
+            if (parts.length === 4 && parts[1] === 'commits' && parts[3] === 'revert' && m === 'POST') {
+                const commitId = decodeURIComponent(parts[2]);
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).revertCommit === 'function') {
+                    try {
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const result = await (protocol as any).revertCommit({
+                            commitId,
+                            ...(organizationId ? { organizationId } : {}),
+                            ...(body?.actor ? { actor: body.actor } : {}),
+                        });
+                        return { handled: true, response: this.success(result) };
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+                return { handled: true, response: this.error('Commit revert not supported', 501) };
+            }
+
+            // POST /packages/:id/rollback  body { commitId } → roll the package
+            // back THROUGH every commit newer than `commitId` (ADR-0067).
+            if (parts.length === 2 && parts[1] === 'rollback' && m === 'POST') {
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).rollbackToPackageCommit === 'function') {
+                    if (!body?.commitId) {
+                        return { handled: true, response: this.error('Body { commitId } is required', 400) };
+                    }
+                    try {
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const result = await (protocol as any).rollbackToPackageCommit({
+                            commitId: String(body.commitId),
+                            ...(organizationId ? { organizationId } : {}),
+                            ...(body?.actor ? { actor: body.actor } : {}),
+                        });
+                        return { handled: true, response: this.success(result) };
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+                return { handled: true, response: this.error('Commit rollback not supported', 501) };
+            }
+
             // POST /packages/:id/revert → revert package to last published state
             if (parts.length === 2 && parts[1] === 'revert' && m === 'POST') {
                 const id = decodeURIComponent(parts[0]);

@@ -983,6 +983,79 @@ describe('HttpDispatcher', () => {
             expect(result.response?.status).toBe(501);
         });
 
+        // ── ADR-0067: commit history & rollback routes ──────────────────
+        it('GET /packages/:id/commits routes to protocol.listCommits', async () => {
+            const listCommits = vi.fn().mockResolvedValue([
+                { id: 'cmt_2', operation: 'apply', itemCount: 1, items: [], createdAt: '2026-06-24T00:00:02.000Z' },
+                { id: 'cmt_1', operation: 'apply', itemCount: 2, items: [], createdAt: '2026-06-24T00:00:01.000Z' },
+            ]);
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ listCommits });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.edu/commits', 'GET', {}, {}, { request: {} });
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(listCommits).toHaveBeenCalledWith(expect.objectContaining({ packageId: 'app.edu' }));
+            expect((result.response as any)?.body?.data?.commits).toHaveLength(2);
+        });
+
+        it('POST /packages/:id/commits/:commitId/revert routes to protocol.revertCommit', async () => {
+            const revertCommit = vi.fn().mockResolvedValue({ success: true, revertedCount: 1, failedCount: 0, reverted: [], failed: [] });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ revertCommit });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.edu/commits/cmt_1/revert', 'POST', { actor: 'ai:claude' }, {}, { request: {} });
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(revertCommit).toHaveBeenCalledWith(expect.objectContaining({ commitId: 'cmt_1', actor: 'ai:claude' }));
+        });
+
+        it('POST /packages/:id/rollback routes to protocol.rollbackToPackageCommit', async () => {
+            const rollbackToPackageCommit = vi.fn().mockResolvedValue({ success: true, revertedCommits: ['c2', 'c3'], failed: [] });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ rollbackToPackageCommit });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.edu/rollback', 'POST', { commitId: 'c1' }, {}, { request: {} });
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(rollbackToPackageCommit).toHaveBeenCalledWith(expect.objectContaining({ commitId: 'c1' }));
+        });
+
+        it('POST /packages/:id/rollback returns 400 without a commitId', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ rollbackToPackageCommit: vi.fn() });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/app.edu/rollback', 'POST', {}, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(400);
+        });
+
+        it('GET /packages/:id/commits returns 501 when protocol lacks listCommits', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({});
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+            const result = await dispatcher.handlePackages('/app.edu/commits', 'GET', {}, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(501);
+        });
+
         // Integration: publishing a `seed` draft must LOAD its rows. This
         // exercises applyPublishedSeeds end-to-end against the REAL
         // SeedLoaderService (only the engine/metadata are mocked), so it pins
