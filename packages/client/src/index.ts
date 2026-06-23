@@ -867,18 +867,6 @@ export class ObjectStackClient {
     },
 
     /**
-     * Activate (rollback to) a previously-published revision by commit id.
-     * Marks the target revision is_current=true and demotes the prior one.
-     */
-    activateRevision: async (id: string, commitId: string) => {
-      const res = await this.fetch(
-        `${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/revisions/${encodeURIComponent(commitId)}/activate`,
-        { method: 'POST' },
-      );
-      return this.unwrapResponse<{ environmentId: string; commitId: string; activated: boolean; previousCommitId: string | null }>(res);
-    },
-
-    /**
      * Retry provisioning for a project stuck in `failed` (or
      * `provisioning`) state. The server re-runs the driver handshake; on
      * success the project flips to `active`, on failure it stays

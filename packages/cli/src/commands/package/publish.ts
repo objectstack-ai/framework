@@ -12,10 +12,10 @@
  *      into sys_package_version.manifest_json (status=published).
  *   3. (optional) auto-install into a target environment via --env.
  *
- * This is the "upload my local code to my org" path. It does NOT write
- * sys_environment_revision (that's the legacy `objectstack publish` path,
- * which still exists for backward compatibility while ADR-0006 v4 Phase B
- * transitions complete).
+ * This is the "upload my local code to my org" path — the single supported
+ * way to publish. (The legacy direct-to-environment `os publish` / `os
+ * rollback` commands, which wrote sys_environment_revision, have been
+ * removed.)
  */
 
 import { readFile } from 'node:fs/promises';
