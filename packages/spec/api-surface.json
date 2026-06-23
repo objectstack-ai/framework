@@ -3342,6 +3342,7 @@
     "actionForm (const)",
     "appForm (const)",
     "dashboardForm (const)",
+    "datasetForm (const)",
     "defineAction (function)",
     "defineApp (function)",
     "defineDataset (function)",

@@ -108,3 +108,51 @@ describe('NativeSQLStrategy — D-C RLS hardening', () => {
     expect(sql).toContain('$2');
   });
 });
+
+describe('NativeSQLStrategy — base-column qualification under joins', () => {
+  // Regression: a joined dataset whose base table and joined table share a
+  // column name (e.g. `status`) produced `GROUP BY status` → "ambiguous column
+  // name" at runtime. Base columns must be qualified with the base table when
+  // the cube can join. (Found by dogfooding a joined dataset in Studio.)
+  const joinCube: Cube = {
+    name: 'sales',
+    title: 'Sales',
+    sql: 'opportunity',
+    measures: { revenue: { name: 'revenue', label: 'Revenue', type: 'sum', sql: 'amount' } },
+    dimensions: {
+      status: { name: 'status', label: 'Status', type: 'string', sql: 'status' },
+      region: { name: 'region', label: 'Region', type: 'string', sql: 'account.region' },
+    },
+    joins: { account: { name: 'account', relationship: 'many_to_one', sql: '' } },
+    public: false,
+  };
+
+  it('qualifies a base-table dimension with the base table when the cube has joins', async () => {
+    const strategy = new NativeSQLStrategy();
+    const ctx = ctxWith({
+      getCube: (n) => (n === 'sales' ? joinCube : undefined),
+      getAllowedRelationships: () => new Set(['account']),
+    });
+    const q: AnalyticsQuery = { cube: 'sales', measures: ['revenue'], dimensions: ['status', 'region'], timezone: 'UTC' };
+    const { sql } = await strategy.generateSql(q, ctx);
+    expect(sql).toContain('"opportunity"."status"'); // base column qualified (was bare `status`)
+    expect(sql).toContain('"account"."region"');      // relationship column still qualified
+    expect(sql).toContain('LEFT JOIN "account"');
+    expect(sql).not.toMatch(/GROUP BY\s+status\b/);    // no bare, ambiguous base column
+  });
+
+  it('leaves base columns BARE for a single-object cube (no joins) — generated SQL unchanged', async () => {
+    const soloCube: Cube = {
+      name: 'tasks', title: 'Tasks', sql: 'task',
+      measures: { c: { name: 'c', label: 'Count', type: 'count', sql: '*' } },
+      dimensions: { status: { name: 'status', label: 'Status', type: 'string', sql: 'status' } },
+      public: false,
+    };
+    const strategy = new NativeSQLStrategy();
+    const ctx = ctxWith({ getCube: (n) => (n === 'tasks' ? soloCube : undefined) });
+    const q: AnalyticsQuery = { cube: 'tasks', measures: ['c'], dimensions: ['status'], timezone: 'UTC' };
+    const { sql } = await strategy.generateSql(q, ctx);
+    expect(sql).toContain('GROUP BY status'); // bare — unchanged for single-object cubes
+    expect(sql).not.toContain('"task"."status"');
+  });
+});

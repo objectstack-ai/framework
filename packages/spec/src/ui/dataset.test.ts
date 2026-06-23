@@ -88,3 +88,26 @@ describe('DatasetSchema', () => {
     expect(d).toBe(base);
   });
 });
+
+describe('DatasetSchema — derived measure aggregate optionality', () => {
+  // Regression: a derived measure had to carry a meaningless `aggregate` or
+  // validation failed, even though `aggregate` is ignored for derived measures.
+  it('accepts a derived measure with NO aggregate', () => {
+    expect(() =>
+      DatasetSchema.parse({
+        ...base,
+        measures: [
+          { name: 'won_amount', aggregate: 'sum', field: 'amount' },
+          { name: 'win_rate', derived: { op: 'ratio', of: ['won_amount', 'revenue'] } },
+          { name: 'revenue', aggregate: 'sum', field: 'amount' },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('still rejects a NON-derived measure with no aggregate', () => {
+    expect(() =>
+      DatasetSchema.parse({ ...base, measures: [{ name: 'revenue', field: 'amount' }] }),
+    ).toThrowError(/requires `aggregate`/);
+  });
+});

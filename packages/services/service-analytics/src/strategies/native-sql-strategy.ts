@@ -234,7 +234,19 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     joins: Map<string, string>,
     cube?: Cube,
   ): string {
-    if (!rawSql.includes('.')) return rawSql;
+    if (!rawSql.includes('.')) {
+      // Base-table column. When the cube can join other tables, a bare column
+      // that also exists on a joined table (e.g. base `status` vs joined
+      // `account.status`) makes the SQL engine raise "ambiguous column name".
+      // Qualify plain identifiers with the base table; leave SQL expressions
+      // and `*` untouched. Single-object cubes (no joins) keep bare columns so
+      // their generated SQL is byte-for-byte unchanged.
+      const canJoin = !!cube?.joins && Object.keys(cube.joins).length > 0;
+      if (canJoin && /^[A-Za-z_][A-Za-z0-9_]*$/.test(rawSql)) {
+        return `"${parentTable}"."${rawSql}"`;
+      }
+      return rawSql;
+    }
     // Only the first dotted hop is supported (single-level relation).
     const [alias, ...rest] = rawSql.split('.');
     if (!alias || rest.length === 0) return rawSql;

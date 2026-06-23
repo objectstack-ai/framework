@@ -65,7 +65,7 @@ export const DatasetMeasureSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Measure name — e.g. "revenue"; defined once'),
   label: I18nLabelSchema.optional(),
   /** Aggregation function — reuses the canonical query.zod enum. */
-  aggregate: AggregationFunction.describe('Aggregation (sum/avg/count/...)'),
+  aggregate: AggregationFunction.optional().describe('Aggregation (sum/avg/count/...); omit when `derived` is set'),
   /** Base or `relationship.field`. Optional for `count` (count(*)). */
   field: z.string().optional().describe('Aggregated field; optional for count(*)'),
   /** Measure-scoped filter (e.g. only won deals for "won_amount"). */
@@ -152,8 +152,16 @@ export const DatasetSchema = lazySchema(() => z.object({
   // Derived measures may only reference OTHER measures declared in this dataset.
   for (const m of ds.measures) {
     if (!m.derived) {
-      // A non-derived measure needs a field unless it is a plain count.
-      if (!m.field && m.aggregate !== 'count') {
+      // A non-derived measure must declare an aggregate (a derived measure
+      // omits it — it combines other measures by name instead).
+      if (!m.aggregate) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `measure "${m.name}" requires \`aggregate\` (or a \`derived\` spec)`,
+          path: ['measures'],
+        });
+      } else if (!m.field && m.aggregate !== 'count') {
+        // A non-derived measure needs a field unless it is a plain count.
         ctx.addIssue({
           code: 'custom',
           message: `measure "${m.name}" requires \`field\` (only \`count\` may omit it)`,

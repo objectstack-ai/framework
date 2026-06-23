@@ -58,6 +58,11 @@ export type RelationshipResolver = (
 
 /** Map a dataset measure's aggregate to the Cube metric `type`. */
 function aggregateToMetricType(m: DatasetMeasure): Metric['type'] {
+  // Only reached for non-derived measures, where the spec refinement guarantees
+  // an aggregate; guard defensively so the type narrows from `optional`.
+  if (!m.aggregate) {
+    throw new Error(`[dataset-compiler] non-derived measure "${m.name}" has no aggregate`);
+  }
   if (UNSUPPORTED_AGGREGATES.has(m.aggregate)) {
     throw new Error(
       `[dataset-compiler] measure "${m.name}" uses aggregate "${m.aggregate}" which is ` +
