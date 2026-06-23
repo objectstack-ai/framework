@@ -11,6 +11,7 @@ import type {
     NotificationDeliveryRecord,
 } from './outbox.js';
 import { hashPartition } from './backoff.js';
+import { toEpochMs } from './audit-timestamp.js';
 
 export const DELIVERY_OBJECT = 'sys_notification_delivery';
 
@@ -38,8 +39,11 @@ interface DeliveryRow {
     last_attempted_at?: number | null;
     error?: string | null;
     digest_key?: string | null;
-    created_at: number;
-    updated_at: number;
+    // Builtin audit columns (native TIMESTAMP on Postgres/MySQL): WRITTEN as
+    // `Date`s. Read-back form is dialect-dependent (epoch-ms on SQLite, a
+    // `Date`/ISO string on Postgres); `toRecord` normalises via `toEpochMs`.
+    created_at: number | string | Date;
+    updated_at: number | string | Date;
 }
 
 /**
@@ -70,7 +74,9 @@ export class SqlNotificationOutbox implements INotificationOutbox {
         if (existing?.id) return String(existing.id);
 
         const id = randomUUID();
-        const now = Date.now();
+        // `Date`, not epoch-ms: `created_at` / `updated_at` are native TIMESTAMP
+        // columns and a real timestamp column rejects a bare number on Postgres.
+        const now = new Date();
         const row: DeliveryRow = {
             id,
             notification_id: input.notificationId,
@@ -254,8 +260,8 @@ export class SqlNotificationOutbox implements INotificationOutbox {
             lastAttemptedAt: r.last_attempted_at ?? undefined,
             error: r.error ?? undefined,
             digestKey: r.digest_key ?? undefined,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
+            createdAt: toEpochMs(r.created_at),
+            updatedAt: toEpochMs(r.updated_at),
         };
     }
 }

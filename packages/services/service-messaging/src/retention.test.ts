@@ -30,7 +30,7 @@ function captureEngine(deleteImpl?: (object: string, opts: any) => any) {
 const FIXED_NOW = 1_700_000_000_000; // fixed clock for deterministic cutoffs
 
 describe('NotificationRetention', () => {
-    it('prunes every target older than the cutoff, formatting the cutoff per target', async () => {
+    it('prunes every target older than an ISO-8601 cutoff (never a bare epoch-ms number)', async () => {
         const { engine, deletes } = captureEngine();
         const retention = new NotificationRetention({
             getData: () => engine,
@@ -50,12 +50,17 @@ describe('NotificationRetention', () => {
             // Cross-tenant system context — retention is an operator policy.
             expect(d.context).toEqual({ isSystem: true });
         }
-        // The delivery row stores epoch-ms; everything else stores ISO strings.
+        // Every target's `created_at` is a native timestamp column, so the cutoff
+        // is an ISO-8601 string — NEVER a bare epoch-ms number (a bigint compared
+        // to a timestamp column makes Postgres throw "date/time field value out of
+        // range"; SQLite's lenient affinity used to hide it for the delivery outbox).
         const byObject = Object.fromEntries(deletes.map((d) => [d.object, d.where]));
-        expect(byObject['sys_notification_delivery']).toEqual({ created_at: { $lt: cutoffMs } });
-        expect(byObject['sys_notification']).toEqual({ created_at: { $lt: cutoffIso } });
-        expect(byObject['sys_inbox_message']).toEqual({ created_at: { $lt: cutoffIso } });
-        expect(byObject['sys_notification_receipt']).toEqual({ created_at: { $lt: cutoffIso } });
+        for (const obj of DEFAULT_RETENTION_TARGETS.map((t) => t.object)) {
+            expect(byObject[obj]).toEqual({ created_at: { $lt: cutoffIso } });
+            const lt = (byObject[obj].created_at as { $lt: unknown }).$lt;
+            expect(typeof lt).toBe('string');
+            expect(lt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        }
 
         expect(outcomes.every((o) => o.deleted === 1 && !o.error)).toBe(true);
     });
@@ -100,7 +105,7 @@ describe('NotificationRetention', () => {
             getData: () => engine,
             logger: silentLogger(),
             now: () => FIXED_NOW,
-            targets: [{ object: 'sys_notification', tsField: 'created_at', format: 'iso' }],
+            targets: [{ object: 'sys_notification', tsField: 'created_at' }],
         });
         const outcomes = await retention.prune(1);
         expect(outcomes).toEqual([{ object: 'sys_notification', deleted: undefined }]);

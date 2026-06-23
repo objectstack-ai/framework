@@ -149,8 +149,11 @@ export const HttpDelivery = ObjectSchema.create({
         response_body: Field.textarea({ label: 'Response Body (capped)', required: false }),
         error: Field.textarea({ label: 'Error', required: false }),
 
-        created_at: Field.number({ label: 'Created At (ms)', required: true }),
-        updated_at: Field.number({ label: 'Updated At (ms)', required: true }),
+        // Builtin audit columns are native TIMESTAMP columns (Postgres/MySQL),
+        // so declare them `datetime` and write `Date`s (not epoch-ms numbers,
+        // which a real timestamp column rejects). See SqlHttpOutbox.
+        created_at: Field.datetime({ label: 'Created At', required: true }),
+        updated_at: Field.datetime({ label: 'Updated At', required: true }),
     },
 
     indexes: [

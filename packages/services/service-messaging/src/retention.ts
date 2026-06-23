@@ -21,16 +21,17 @@ interface RetentionLogger {
 }
 
 /**
- * One object the sweeper prunes, plus how to read its age. The pipeline stores
- * timestamps two ways: the event / inbox / receipt rows carry ISO-8601 strings
- * (`created_at`), while the delivery outbox rows carry epoch-ms numbers — so the
- * cutoff value is formatted per target. `$lt` works for both (ISO-8601 sorts
- * lexicographically; epoch-ms numerically).
+ * One object the sweeper prunes, plus the field that carries its age. Every
+ * target's `created_at` is a builtin audit column — a native `TIMESTAMP` on
+ * Postgres/MySQL — so the cutoff is always an ISO-8601 string. (An earlier
+ * version passed an epoch-ms number for the delivery outbox; that compared a
+ * bigint to a timestamp column and Postgres rejected it with "date/time field
+ * value out of range". SQLite's lenient column affinity hid the bug.) The
+ * driver coerces the ISO comparand to the column's storage form per dialect.
  */
 export interface RetentionTarget {
     readonly object: string;
     readonly tsField: string;
-    readonly format: 'iso' | 'epoch';
 }
 
 /**
@@ -42,10 +43,10 @@ export interface RetentionTarget {
  * unaffected.
  */
 export const DEFAULT_RETENTION_TARGETS: readonly RetentionTarget[] = [
-    { object: RECEIPT_OBJECT, tsField: 'created_at', format: 'iso' },
-    { object: INBOX_OBJECT, tsField: 'created_at', format: 'iso' },
-    { object: DELIVERY_OBJECT, tsField: 'created_at', format: 'epoch' },
-    { object: NOTIFICATION_EVENT_OBJECT, tsField: 'created_at', format: 'iso' },
+    { object: RECEIPT_OBJECT, tsField: 'created_at' },
+    { object: INBOX_OBJECT, tsField: 'created_at' },
+    { object: DELIVERY_OBJECT, tsField: 'created_at' },
+    { object: NOTIFICATION_EVENT_OBJECT, tsField: 'created_at' },
 ];
 
 export interface NotificationRetentionOptions {
@@ -103,15 +104,16 @@ export class NotificationRetention {
             return [];
         }
 
-        const cutoffMs = this.now() - retentionDays * 86_400_000;
-        const cutoffIso = new Date(cutoffMs).toISOString();
+        const cutoffIso = new Date(this.now() - retentionDays * 86_400_000).toISOString();
         const outcomes: PruneOutcome[] = [];
 
         for (const t of this.targets) {
-            const cutoff = t.format === 'epoch' ? cutoffMs : cutoffIso;
             try {
                 const res = await data.delete(t.object, {
-                    where: { [t.tsField]: { $lt: cutoff } },
+                    // ISO-8601 cutoff for every target: `created_at` is a native
+                    // timestamp column, which rejects a bare epoch-ms number on
+                    // Postgres. The driver coerces this per dialect on the way down.
+                    where: { [t.tsField]: { $lt: cutoffIso } },
                     multi: true,
                     // System context: retention is an operator policy that spans
                     // tenants, so it must not be scoped by the caller's RLS.

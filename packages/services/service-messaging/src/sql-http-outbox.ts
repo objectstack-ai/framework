@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import { hashPartition } from './backoff.js';
+import { toEpochMs } from './audit-timestamp.js';
 import {
     HttpRedeliverError,
     type EnqueueHttpInput,
@@ -46,8 +47,11 @@ interface DeliveryRow {
     response_code?: number | null;
     response_body?: string | null;
     error?: string | null;
-    created_at: number;
-    updated_at: number;
+    // Builtin audit columns (native TIMESTAMP on Postgres/MySQL): WRITTEN as
+    // `Date`s. Read-back form is dialect-dependent; `toRecord` normalises via
+    // `toEpochMs`.
+    created_at: number | string | Date;
+    updated_at: number | string | Date;
 }
 
 /**
@@ -83,7 +87,9 @@ export class SqlHttpOutbox implements IHttpOutbox {
         if (existing?.id) return existing.id as string;
 
         const id = randomUUID();
-        const now = Date.now();
+        // `Date`, not epoch-ms: `created_at` / `updated_at` are native TIMESTAMP
+        // columns and a real timestamp column rejects a bare number on Postgres.
+        const now = new Date();
         const row: DeliveryRow = {
             id,
             source: input.source,
@@ -270,8 +276,8 @@ export class SqlHttpOutbox implements IHttpOutbox {
             responseCode: r.response_code ?? undefined,
             responseBody: r.response_body ?? undefined,
             error: r.error ?? undefined,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
+            createdAt: toEpochMs(r.created_at),
+            updatedAt: toEpochMs(r.updated_at),
         };
     }
 }

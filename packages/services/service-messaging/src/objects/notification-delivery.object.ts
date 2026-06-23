@@ -13,7 +13,9 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *
  * `payload` snapshots the rendered notification content at enqueue time so a
  * later edit of the L2 event can't rewrite an in-flight delivery (and so the
- * dispatcher needs no second read to send). Timestamps are epoch ms.
+ * dispatcher needs no second read to send). Scheduling fields (`claimed_at`,
+ * `next_attempt_at`, `last_attempted_at`) are epoch ms; the builtin
+ * `created_at` / `updated_at` audit columns are native timestamps.
  */
 export const NotificationDelivery = ObjectSchema.create({
     name: 'sys_notification_delivery',
@@ -67,8 +69,12 @@ export const NotificationDelivery = ObjectSchema.create({
         last_attempted_at: Field.number({ label: 'Last Attempted At (ms)' }),
         error: Field.textarea({ label: 'Error' }),
 
-        created_at: Field.number({ label: 'Created At (ms)', readonly: true }),
-        updated_at: Field.number({ label: 'Updated At (ms)' }),
+        // Builtin audit columns: the SQL driver provisions `created_at` /
+        // `updated_at` as native TIMESTAMP columns (Postgres/MySQL), so they are
+        // declared `datetime` and written as `Date`s — a bare epoch-ms number is
+        // rejected by a real timestamp column. See SqlNotificationOutbox.
+        created_at: Field.datetime({ label: 'Created At', readonly: true }),
+        updated_at: Field.datetime({ label: 'Updated At' }),
     },
 
     indexes: [
