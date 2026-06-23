@@ -136,6 +136,32 @@ export const TenancyConfigSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * [ADR-0066 D2] Secure-by-default object posture.
+ *
+ * Declares whether the object participates in blanket wildcard permission
+ * grants — a data-model posture like {@link TenancyConfigSchema}, NOT an
+ * assignment (it names no principal).
+ *
+ * - `public` (default) — covered by a permission set's `'*'` wildcard object
+ *   grant; today's allow-by-default behaviour.
+ * - `private` — NOT covered by the `'*'` wildcard grant; access requires an
+ *   EXPLICIT per-object grant (Salesforce "new object = no access until
+ *   granted"). A `private` object is ALSO exempt from wildcard RLS
+ *   (`tenant_isolation`, owner scoping): the posture-gated superuser bypass
+ *   (`viewAllRecords`/`modifyAllRecords`) short-circuits RLS, so a platform
+ *   admin — incl. one who is also an org admin whose `tenant_isolation` would
+ *   otherwise narrow the result — sees all rows, while non-admins without an
+ *   explicit grant see none.
+ *
+ * Pair with the object's `requiredPermissions` (D3) to additionally gate access
+ * on holding a capability.
+ */
+export const ObjectAccessConfigSchema = lazySchema(() => z.object({
+  default: z.enum(['public', 'private']).default('public')
+    .describe('Default exposure posture: public (covered by wildcard grants) | private (needs explicit grant; exempt from wildcard RLS).'),
+}));
+
+/**
  * Soft Delete Configuration Schema
  * Implements recycle bin / trash functionality
  * 
@@ -487,6 +513,25 @@ const ObjectSchemaBase = z.object({
   
   // Multi-tenancy configuration
   tenancy: TenancyConfigSchema.optional().describe('Multi-tenancy configuration for SaaS applications'),
+
+  /**
+   * [ADR-0066 D2] Secure-by-default object posture. `access.default: 'private'`
+   * opts the object OUT of blanket wildcard (`'*'`) permission grants (access
+   * then needs an explicit per-object grant) and exempts it from wildcard RLS
+   * via the posture-gated superuser bypass. Absent ⇒ `public` (today's
+   * allow-by-default behaviour; no migration for existing objects).
+   */
+  access: ObjectAccessConfigSchema.optional().describe('[ADR-0066 D2] Object exposure posture (public-by-default vs private secure-by-default).'),
+
+  /**
+   * [ADR-0066 D3] Capability contract — capability name(s) (permission-set
+   * `systemPermissions`; D1 records) a caller MUST hold to access this object at
+   * all. Mirrors `App.requiredPermissions`. Enforced by plugin-security as an
+   * AND-gate: checked IN ADDITION to permission-set CRUD grants — a caller
+   * missing any listed capability is denied regardless of grants. Absent/empty
+   * ⇒ no capability gate.
+   */
+  requiredPermissions: z.array(z.string()).optional().describe('[ADR-0066 D3] Capabilities required to access this object (AND-gate, checked alongside CRUD grants).'),
   
   // Soft delete configuration
   softDelete: SoftDeleteConfigSchema.optional().describe('Soft delete (trash/recycle bin) configuration'),
@@ -867,6 +912,7 @@ export type ServiceObjectInput = z.input<typeof ObjectSchemaBase>;
 export type ObjectCapabilities = z.infer<typeof ObjectCapabilities>;
 export type ObjectIndex = z.infer<typeof IndexSchema>;
 export type TenancyConfig = z.infer<typeof TenancyConfigSchema>;
+export type ObjectAccessConfig = z.infer<typeof ObjectAccessConfigSchema>;
 export type SoftDeleteConfig = z.infer<typeof SoftDeleteConfigSchema>;
 export type VersioningConfig = z.infer<typeof VersioningConfigSchema>;
 export type PartitioningConfig = z.infer<typeof PartitioningConfigSchema>;

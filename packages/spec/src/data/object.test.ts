@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, type ServiceObject } from './object.zod';
+import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
   it('should apply default values correctly', () => {
@@ -951,5 +951,41 @@ describe('ObjectSchema.fieldGroups', () => {
         ObjectExternalBindingSchema.parse({ introspectedAt: 'yesterday' }),
       ).toThrow();
     });
+  });
+});
+
+
+describe('ADR-0066 — object access posture (D2) + requiredPermissions (D3)', () => {
+  it('ObjectAccessConfigSchema defaults to public', () => {
+    expect(ObjectAccessConfigSchema.parse({}).default).toBe('public');
+  });
+
+  it('accepts an explicit private posture', () => {
+    expect(ObjectAccessConfigSchema.parse({ default: 'private' }).default).toBe('private');
+  });
+
+  it('rejects an unknown posture value', () => {
+    expect(() => ObjectAccessConfigSchema.parse({ default: 'secret' })).toThrow();
+  });
+
+  it('round-trips access + requiredPermissions on an object', () => {
+    const obj = ObjectSchema.create({
+      name: 'sys_license',
+      tenancy: { enabled: false, strategy: 'shared' },
+      access: { default: 'private' },
+      requiredPermissions: ['manage_licenses'],
+      fields: { signed_token: { type: 'text' } },
+    });
+    expect(obj.access?.default).toBe('private');
+    expect(obj.requiredPermissions).toEqual(['manage_licenses']);
+  });
+
+  it('leaves access undefined (public by convention) when omitted', () => {
+    const obj = ObjectSchema.create({
+      name: 'crm_account',
+      fields: { name: { type: 'text' } },
+    });
+    expect(obj.access).toBeUndefined();
+    expect(obj.requiredPermissions).toBeUndefined();
   });
 });
