@@ -59,6 +59,20 @@ describe('createDispatcherPlugin — HTTP route registration', () => {
     expect(routes).toContain('POST /api/v1/keys');
   });
 
+  // Regression (framework #2217 seam #2): /ready shipped with a dispatch()
+  // branch but NO server.<verb>() registration, so it 404'd over HTTP before
+  // reaching the handler — the same class of bug as /mcp and /keys. /health and
+  // /ready are the k8s / load-balancer probes the EE rolling-restart drain gate
+  // polls (cloud ADR-0018); both must be mounted to be reachable.
+  it('mounts /health and /ready so the liveness/readiness probes reach dispatch()', async () => {
+    const { server, routes } = makeFakeServer();
+    const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });
+    await plugin.start?.(makeCtx(server));
+
+    expect(routes).toContain('GET /api/v1/health');
+    expect(routes).toContain('GET /api/v1/ready');
+  });
+
   it('also mounts a known existing route (sanity that start() ran)', async () => {
     const { server, routes } = makeFakeServer();
     const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });
