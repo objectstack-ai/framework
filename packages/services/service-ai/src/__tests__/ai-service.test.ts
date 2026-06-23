@@ -394,6 +394,27 @@ describe('AIService', () => {
     expect(after?.messages[1].content).toBe('hello back');
   });
 
+  it('auto-creates the conversation with the agentId from the execution context', async () => {
+    const conversationService = new InMemoryConversationService();
+    const adapter: LLMAdapter = {
+      name: 'agentid-test',
+      chat: async () => ({ content: 'ok', model: 'test' }),
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, conversationService, logger: silentLogger });
+
+    // No conversationId → autoCreateConversation fires (needs an actor); it must
+    // stamp agent_id so downstream per-agent attribution/metering isn't null.
+    await service.chatWithTools(
+      [{ role: 'user', content: 'hi' }],
+      { toolExecutionContext: { actor: { id: 'u1' }, agentId: 'ask' } },
+    );
+
+    const mine = await conversationService.list({ agentId: 'ask' });
+    expect(mine.length).toBe(1);
+    expect(mine[0].agentId).toBe('ask');
+  });
+
   it('chatWithTools persists assistant + tool turns across iterations', async () => {
     const conversationService = new InMemoryConversationService();
     const toolRegistry = new ToolRegistry();

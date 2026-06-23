@@ -256,6 +256,9 @@ export function buildAgentRoutes(
                     typeof chatContext?.environmentId === 'string'
                       ? chatContext.environmentId
                       : undefined,
+                  // The agent this chat runs as → stamped onto an auto-created
+                  // conversation's agent_id (per-agent attribution / metering).
+                  agentId: agentName,
                   // The object/view the user has open — lets built-in data
                   // tools fall back to "this object" when the request doesn't
                   // name one (ADR-aligned with the schema injection above).

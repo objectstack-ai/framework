@@ -322,13 +322,16 @@ export class AIService implements IAIService {
    * which case we silently fall back to non-persisted chat).
    */
   private async autoCreateConversation(
-    ctx: { actor?: { id?: string }; environmentId?: string } | undefined,
+    ctx: { actor?: { id?: string }; environmentId?: string; agentId?: string } | undefined,
   ): Promise<string | undefined> {
     const actorId = ctx?.actor?.id;
     if (!actorId) return undefined;
     try {
       const conv = await this.conversationService.create({
         userId: actorId,
+        // Stamp the agent so the conversation (and its messages' usage) is
+        // attributable per-agent instead of null (e.g. cloud per-agent metering).
+        agentId: ctx?.agentId,
         metadata: ctx?.environmentId ? { environmentId: ctx.environmentId } : undefined,
       });
       this.logger.debug('[AI] auto-created conversation', { conversationId: conv.id, actorId });
