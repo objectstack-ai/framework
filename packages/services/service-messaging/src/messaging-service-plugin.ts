@@ -175,6 +175,22 @@ export class MessagingServicePlugin implements Plugin {
             ],
         });
 
+        // Provision the physical tables for this service's system objects
+        // up-front, once the engine is ready. The inbox channel materializes
+        // sys_inbox_message + sys_notification_receipt rows on first delivery,
+        // so the tables are otherwise lazy-created on first WRITE — a freshly
+        // provisioned env that READS the inbox / notifications before any
+        // message has been delivered hits "no such table", logged as a
+        // `Find operation failed` ERROR on every page load. Runs independently
+        // of `reliableDelivery` (the inbox tables are needed either way) and is
+        // idempotent. See {@link provisionSystemTables}.
+        if (typeof ctx.hook === 'function') {
+            ctx.hook('kernel:ready', async () => {
+                const engine = getData();
+                if (engine) await this.provisionSystemTables(engine, ctx);
+            });
+        }
+
         // Email channel (ADR-0030 P3): register when an `email` service is
         // present. Resolved at kernel:ready so init order with the email plugin
         // doesn't matter; absent email ⇒ no channel (a notify(channels:['email'])
@@ -276,6 +292,41 @@ export class MessagingServicePlugin implements Plugin {
         ctx.logger.info(
             `[messaging] service registered with channels: ${service.getRegisteredChannels().join(', ') || '(none)'}`,
         );
+    }
+
+    /**
+     * Provision the physical tables for this service's system objects up-front.
+     *
+     * These objects are lazy-created on first WRITE (the SQL driver issues DDL
+     * when the first row is inserted), so an env that READS them first — the
+     * Console bell / inbox queries sys_inbox_message + sys_notification_receipt
+     * before any notification has been delivered — hits "no such table", which
+     * the engine logs as a `Find operation failed` ERROR on every page load.
+     * Creating the tables at kernel:ready makes a new env consistent from the
+     * start. Idempotent (the driver only creates a table when absent), so it is
+     * safe on every boot; per-object failures are isolated.
+     */
+    private async provisionSystemTables(engine: IDataEngine, ctx: PluginContext): Promise<void> {
+        // `syncObjectSchema` lives on the concrete ObjectQL engine, not the
+        // IDataEngine contract; engines without on-demand DDL skip provisioning.
+        const sync = (engine as unknown as { syncObjectSchema?: (name: string) => Promise<void> }).syncObjectSchema;
+        if (typeof sync !== 'function') return;
+        const objects = [
+            InboxMessage,
+            NotificationReceipt,
+            NotificationDelivery,
+            NotificationPreference,
+            NotificationSubscription,
+            NotificationTemplate,
+            HttpDelivery,
+        ];
+        for (const obj of objects) {
+            try {
+                await sync.call(engine, (obj as { name: string }).name);
+            } catch (err) {
+                ctx.logger.warn(`[messaging] could not provision ${(obj as { name: string }).name} storage — ${(err as Error)?.message ?? err}`);
+            }
+        }
     }
 
     /** Stop the dispatcher loop + retention sweep on shutdown. */

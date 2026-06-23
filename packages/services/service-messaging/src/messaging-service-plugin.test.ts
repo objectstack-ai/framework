@@ -93,3 +93,59 @@ describe('MessagingServicePlugin', () => {
         expect(messaging.getRegisteredChannels()).toEqual([]);
     });
 });
+
+/**
+ * A ctx that supports `kernel:ready` hooks plus an engine modelling the
+ * lazy-table behavior: `find()` throws "no such table" until
+ * `syncObjectSchema()` has created it. Mirrors the audit-plugin coverage.
+ */
+function provisionCtx() {
+    const tables = new Set<string>();
+    const synced: string[] = [];
+    const engine = {
+        async syncObjectSchema(name: string) { synced.push(name); tables.add(name); },
+        async find(object: string) {
+            if (!tables.has(object)) throw new Error(`no such table: ${object}`);
+            return [] as unknown[];
+        },
+        async insert() { return {}; },
+        async findOne() { return null; },
+        async update() { return {}; },
+        async delete() { return {}; },
+    };
+    const services = new Map<string, unknown>([
+        ['data', engine],
+        ['manifest', { register() {} }],
+    ]);
+    const readyHooks: Array<() => Promise<void> | void> = [];
+    const logger = { info() {}, warn() {}, error() {}, debug() {}, child() { return logger; } };
+    const ctx = {
+        logger,
+        getService(name: string) { return services.get(name); },
+        registerService(name: string, svc: unknown) { services.set(name, svc); },
+        hook(event: string, fn: () => Promise<void> | void) {
+            if (event === 'kernel:ready') readyHooks.push(fn);
+        },
+    } as any;
+    return { ctx, engine, synced, fireReady: async () => { for (const fn of readyHooks) await fn(); } };
+}
+
+describe('MessagingServicePlugin — system table provisioning', () => {
+    it('creates the inbox + receipt tables on kernel:ready', async () => {
+        const { ctx, engine, synced, fireReady } = provisionCtx();
+        // reliableDelivery/retention off so only the provisioning hook runs.
+        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+
+        // Before kernel:ready the inbox read throws the "no such table" the
+        // engine logs as `Find operation failed`.
+        await expect(engine.find('sys_inbox_message')).rejects.toThrow(/no such table/);
+
+        await fireReady();
+
+        expect(synced).toEqual(
+            expect.arrayContaining(['sys_inbox_message', 'sys_notification_receipt']),
+        );
+        await expect(engine.find('sys_inbox_message')).resolves.toEqual([]);
+        await expect(engine.find('sys_notification_receipt')).resolves.toEqual([]);
+    });
+});

@@ -93,6 +93,10 @@ export class AuditPlugin implements Plugin {
         ctx.logger.warn('AuditPlugin: ObjectQL engine not available — audit writers NOT installed');
         return;
       }
+      // Create the physical tables for this plugin's system objects up-front so
+      // a freshly provisioned env is consistent from the start (see
+      // provisionSystemTables).
+      await this.provisionSystemTables(engine, ctx);
       // Resolve the messaging service lazily at hook time so collaboration
       // @mention / assignment notifications go through the ADR-0030 single
       // ingress (emit) instead of writing sys_notification directly. Messaging
@@ -108,5 +112,37 @@ export class AuditPlugin implements Plugin {
       process.stderr.write('[AuditPlugin] writers installed\n');
       ctx.logger.info('AuditPlugin: audit + activity writers installed');
     });
+  }
+
+  /**
+   * Provision the physical tables for this plugin's system objects up-front.
+   *
+   * sys_audit_log / sys_activity / sys_comment are otherwise lazy-created on
+   * first WRITE (the SQL driver issues DDL when the first row is inserted). A
+   * freshly provisioned env that READS one first — the home page's recent-
+   * activity feed queries sys_activity before any mutation has happened — hits
+   * SQLite "no such table", which the engine logs as a `Find operation failed`
+   * ERROR on every load. The UI degrades to an empty feed, but the log is noisy
+   * and can mask real errors. Creating the tables at kernel:ready (once the
+   * engine + registry are ready) makes a new env consistent from the start.
+   *
+   * `syncObjectSchema` is idempotent — the SQL driver only creates a table when
+   * it is absent (and alters to add columns) — so this is safe on every boot,
+   * and a no-op for objects whose table already exists. Per-object failures are
+   * isolated so one bad object can't block the rest.
+   */
+  private async provisionSystemTables(engine: IDataEngine, ctx: PluginContext): Promise<void> {
+    // `syncObjectSchema` lives on the concrete ObjectQL engine, not the
+    // IDataEngine contract; engines/drivers without on-demand DDL (e.g. an
+    // in-memory test double) simply skip provisioning.
+    const sync = (engine as unknown as { syncObjectSchema?: (name: string) => Promise<void> }).syncObjectSchema;
+    if (typeof sync !== 'function') return;
+    for (const obj of [SysAuditLog, SysActivity, SysComment]) {
+      try {
+        await sync.call(engine, obj.name);
+      } catch (err) {
+        ctx.logger.warn(`AuditPlugin: could not provision ${obj.name} storage — ${(err as Error)?.message ?? err}`);
+      }
+    }
   }
 }
