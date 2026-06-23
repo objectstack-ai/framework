@@ -3,6 +3,7 @@
 import type { PluginContext } from '@objectstack/core';
 import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { AutomationEngine } from '../engine.js';
+import { interpolate } from './template.js';
 
 /**
  * Logic built-in nodes — decision / assignment.
@@ -38,7 +39,18 @@ export function registerLogicNodes(engine: AutomationEngine, ctx: PluginContext)
             },
         });
 
-        // assignment node — set variables
+        // assignment node — set variables.
+        //
+        // Authors reach this node through three surfaces that each emit a
+        // DIFFERENT config shape, so the executor normalizes all three (a
+        // mismatch here silently sets a variable literally named `assignments`
+        // instead of the intended ones — passes build, no-ops at run time):
+        //   • Studio visual builder → `{ assignments: { <var>: <value> } }`
+        //   • bundled example flows → `{ assignments: [{ variable, value }] }`
+        //   • legacy / hand-authored → `{ <var>: <value> }` (config keys ARE
+        //     the variables).
+        // Values interpolate `{var}` against the live flow variables, matching
+        // the CRUD / screen nodes (so `value: '{record.amount}'` resolves).
         engine.registerNodeExecutor({
             type: 'assignment',
             descriptor: defineActionDescriptor({
@@ -46,10 +58,30 @@ export function registerLogicNodes(engine: AutomationEngine, ctx: PluginContext)
                 description: 'Set flow variables.',
                 icon: 'variable', category: 'logic', source: 'builtin',
             }),
-            async execute(node, variables, _context) {
+            async execute(node, variables, context) {
                 const config = (node.config ?? {}) as Record<string, unknown>;
-                for (const [key, value] of Object.entries(config)) {
-                    variables.set(key, value);
+                const raw = config.assignments;
+                const pairs: Array<[string, unknown]> = [];
+
+                if (Array.isArray(raw)) {
+                    // [{ variable | name | key, value }, …]
+                    for (const item of raw) {
+                        if (item && typeof item === 'object') {
+                            const e = item as Record<string, unknown>;
+                            const name = (e.variable ?? e.name ?? e.key) as unknown;
+                            if (typeof name === 'string' && name) pairs.push([name, e.value]);
+                        }
+                    }
+                } else if (raw && typeof raw === 'object') {
+                    // { <var>: <value>, … }
+                    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) pairs.push([k, v]);
+                } else {
+                    // No `assignments` wrapper — top-level config keys ARE the variables.
+                    for (const [k, v] of Object.entries(config)) pairs.push([k, v]);
+                }
+
+                for (const [key, value] of pairs) {
+                    variables.set(key, interpolate(value, variables, context));
                 }
                 return { success: true };
             },
