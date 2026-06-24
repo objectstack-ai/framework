@@ -1,0 +1,74 @@
+{
+  "type": "page",
+  "_note": "PageSchema (UI). Renderers live in objectui, so consumers are cited as prose in `note` (not `evidence`, which resolves framework file:line). Seeded from the Studio page-design dogfood (framework#2254/#2261/#2265). Containers (variables/regions/interfaceConfig/slots/aria) classified at top level — one drill level, no divergent sub-statuses. `recordReview`/`blankLayout` are `dead`: their page types (record_review/blank) were removed from PageTypeSchema (framework#2265) and objectui dropped all references (objectui#1949); the fields remain @deprecated pending hard-removal.",
+  "props": {
+    "name": {
+      "status": "live",
+      "note": "page identity; objectui page renderer + runtime route/metadata key."
+    },
+    "label": {
+      "status": "live",
+      "note": "display title (nav + page header) — objectui renderers."
+    },
+    "description": {
+      "status": "live",
+      "note": "navigation description — objectui."
+    },
+    "icon": {
+      "status": "live",
+      "note": "navigation icon — objectui."
+    },
+    "type": {
+      "status": "live",
+      "note": "objectui PageView (app-shell/src/views/PageView.tsx) + components/renderers/layout/page.tsx dispatch on the page kind (record/home/app/utility/list). Only these render — roadmap types removed (PAGE_TYPE_ROADMAP, framework#2265)."
+    },
+    "variables": {
+      "status": "experimental",
+      "note": "Page-local state. objectui mounts PageVariablesProvider + usePageVariables (react/src/hooks/usePageVariables.tsx) with default-value init, but no shipped consumer reads/writes them end-to-end (no element:record_picker writer; not injected into the visible/CEL context). Spec field is @experimental. Complete-or-remove tracked separately."
+    },
+    "object": {
+      "status": "live",
+      "note": "record-page binding + interfaceConfig source object — objectui PageView / InterfaceListPage."
+    },
+    "recordReview": {
+      "status": "dead",
+      "note": "Config for the removed `record_review` page type (no renderer; dropped from PageTypeSchema, framework#2265; objectui refs removed in objectui#1949). Field kept @deprecated — enforce-or-remove: slated for hard-removal."
+    },
+    "blankLayout": {
+      "status": "dead",
+      "note": "Config for the removed `blank` page type (no renderer; dropped from PageTypeSchema, framework#2265; objectui refs removed in objectui#1949). Field kept @deprecated — enforce-or-remove: slated for hard-removal."
+    },
+    "template": {
+      "status": "live",
+      "note": "layout template (e.g. header-sidebar-main) selects the region arrangement — objectui components/renderers/layout/page.tsx + containers.tsx."
+    },
+    "regions": {
+      "status": "live",
+      "note": "region → component tree rendering (header/main/sidebar/footer) — objectui components/renderers/layout/page.tsx + containers.tsx."
+    },
+    "isDefault": {
+      "status": "live",
+      "note": "default-page selection for an object/page-type — objectui page resolution."
+    },
+    "assignedProfiles": {
+      "status": "live",
+      "note": "profile-scoped page audience; objectui bridges it (react/src/spec-bridge/bridges/page.ts) to PageLayout.assignedProfiles. End-to-end enforcement not independently verified (necessary-not-sufficient, ADR-0054)."
+    },
+    "interfaceConfig": {
+      "status": "live",
+      "note": "the entire Airtable-parity list surface (source/columns/filterBy/appearance/userFilters/userActions/addRecord/buttons/recordAction/...) — objectui app-shell/src/views/InterfaceListPage.tsx + PageView.tsx. Verified in browser during the dogfood (grid+kanban+filters)."
+    },
+    "aria": {
+      "status": "live",
+      "note": "ARIA attributes applied by objectui renderers."
+    },
+    "kind": {
+      "status": "live",
+      "note": "full vs slotted record-page composition — objectui plugin-detail/src/index.tsx (buildDefaultPageSchema)."
+    },
+    "slots": {
+      "status": "live",
+      "note": "slotted-page override map (header/actions/alerts/highlights/details/tabs/discussion) — objectui plugin-detail; Preview render in objectui#1948. Verified in the Studio Design slot editor during the dogfood."
+    }
+  }
+}
