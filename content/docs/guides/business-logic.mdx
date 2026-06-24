@@ -386,8 +386,8 @@ Formula fields are CEL. Use ternary `cond ? a : b` for conditionals and
 // Tiered pricing
 Field.formula({
   label: 'Discount Tier',
-  type: 'text',
-  formula: `
+  returnType: 'text',
+  expression: `
     record.amount > 1000000 ? "Platinum" :
     record.amount > 500000 ? "Gold" :
     record.amount > 100000 ? "Silver" : "Bronze"
@@ -397,8 +397,8 @@ Field.formula({
 // Status indicator
 Field.formula({
   label: 'Health Score',
-  type: 'text',
-  formula: `
+  returnType: 'text',
+  expression: `
     record.is_active && record.days_since_contact < 30 ? "Healthy" :
     record.days_since_contact < 90 ? "At Risk" : "Critical"
   `,
@@ -411,49 +411,50 @@ Field.formula({
 // Days until close
 Field.formula({
   label: 'Days to Close',
-  type: 'number',
-  formula: 'daysBetween(record.close_date, today())',
+  returnType: 'number',
+  expression: 'daysBetween(record.close_date, today())',
 })
 
 // Contract end in 30 days
 Field.formula({
   label: 'Expiring Soon',
-  type: 'boolean',
-  formula: 'record.status == "active" && daysBetween(record.end_date, today()) <= 30',
+  returnType: 'boolean',
+  expression: 'record.status == "active" && daysBetween(record.end_date, today()) <= 30',
 })
 
 // Age in days
 Field.formula({
   label: 'Age (Days)',
-  type: 'number',
-  formula: 'daysBetween(today(), record.created_date)',
+  returnType: 'number',
+  expression: 'daysBetween(today(), record.created_date)',
 })
 ```
 
 ### Financial Calculations
 
 ```typescript
-// Gross margin
+// Gross margin (computes a number; a formula's type is always 'formula' —
+// declare the value type with returnType, and decimal places with scale)
 Field.formula({
   label: 'Gross Margin %',
-  type: 'percent',
-  formula: 'record.revenue > 0 ? ((record.revenue - record.cost) / record.revenue) * 100 : 0',
+  returnType: 'number',
+  expression: 'record.revenue > 0 ? ((record.revenue - record.cost) / record.revenue) * 100 : 0',
   scale: 2,
 })
 
 // Weighted pipeline
 Field.formula({
   label: 'Weighted Amount',
-  type: 'currency',
-  formula: 'record.amount * (record.probability / 100)',
+  returnType: 'number',
+  expression: 'record.amount * (record.probability / 100)',
   scale: 2,
 })
 
 // Total with tax
 Field.formula({
   label: 'Total with Tax',
-  type: 'currency',
-  formula: 'record.subtotal * 1.0825', // 8.25% tax
+  returnType: 'number',
+  expression: 'record.subtotal * 1.0825', // 8.25% tax
   scale: 2,
 })
 ```
@@ -464,22 +465,22 @@ Field.formula({
 // Full name
 Field.formula({
   label: 'Full Name',
-  type: 'text',
-  formula: 'record.first_name + " " + record.last_name',
+  returnType: 'text',
+  expression: 'record.first_name + " " + record.last_name',
 })
 
 // Uppercase
 Field.formula({
   label: 'Code',
-  type: 'text',
-  formula: 'upper(record.sku)',
+  returnType: 'text',
+  expression: 'upper(record.sku)',
 })
 
 // Has a company email
 Field.formula({
   label: 'Internal',
-  type: 'boolean',
-  formula: 'endsWith(lower(record.email), "@example.com")',
+  returnType: 'boolean',
+  expression: 'endsWith(lower(record.email), "@example.com")',
 })
 ```
 
@@ -609,8 +610,8 @@ flows: [
 // Formula: Lead score
 Field.formula({
   label: 'Lead Score',
-  type: 'number',
-  formula: `
+  returnType: 'number',
+  expression: `
     (record.rating == "hot" ? 30 : record.rating == "warm" ? 20 : 10) +
     (record.annual_revenue > 1000000 ? 25 : 0) +
     (record.number_of_employees > 500 ? 20 : 0) +

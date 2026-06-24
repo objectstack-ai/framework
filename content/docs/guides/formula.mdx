@@ -89,7 +89,7 @@ export const Invoice = ObjectSchema.create({
   titleFormat: tmpl`Invoice {{record.invoice_no}} – {{record.customer.name}}`,
   fields: {
     total: Field.formula({
-      type: 'currency',
+      returnType: 'number',
       expression: F`record.subtotal + record.subtotal * record.tax_rate`,
     }),
     po_number: Field.text({
@@ -102,6 +102,18 @@ export const Invoice = ObjectSchema.create({
   },
 });
 ```
+
+<Callout type="warn">
+**A formula field's `type` is always `formula`** — that is the key the runtime
+evaluates (`objectql` computes a formula virtual field from its `expression`
+only). Do **not** pass `type: 'currency' | 'number' | …` to `Field.formula` — it
+is rejected by the typed `FieldInput` and, untyped, would override `type:'formula'`
+so the field silently never computes. To declare what the formula returns, set
+**`returnType`** (`'number' | 'text' | 'boolean' | 'date'`); it is inferred and
+stamped automatically by the AI build path, and consumers (dashboard measures,
+formatting) read it instead of re-parsing the expression. The CEL source is the
+**`expression`** key (the `formula` alias is normalized to it on save).
+</Callout>
 
 The three CEL tagged-template helpers — `cel`, `F` (formula alias), `P`
 (predicate alias) — are interchangeable; pick whichever reads best at the
