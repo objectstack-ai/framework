@@ -23,8 +23,8 @@
       "note": "objectui PageView (app-shell/src/views/PageView.tsx) + components/renderers/layout/page.tsx dispatch on the page kind (record/home/app/utility/list). Only these render — roadmap types removed (PAGE_TYPE_ROADMAP, framework#2265)."
     },
     "variables": {
-      "status": "experimental",
-      "note": "Page-local state. objectui mounts PageVariablesProvider + usePageVariables (react/src/hooks/usePageVariables.tsx) with default-value init, but no shipped consumer reads/writes them end-to-end (no element:record_picker writer; not injected into the visible/CEL context). Spec field is @experimental. Complete-or-remove tracked separately."
+      "status": "live",
+      "note": "Page-local state (ADR-0049). objectui injects variables into the visible/CEL expression context as `page.<var>` (react/src/SchemaRenderer.tsx) and ships element:record_picker, which writes its selection into the variable named by PageVariableSchema.source (components/src/renderers/basic/record-picker.tsx); usePageVariableBinding resolves writer->variable. Showcase: showcase_page_variables (master/detail — picker drives a detail panel's visibility). objectui#1957."
     },
     "object": {
       "status": "live",

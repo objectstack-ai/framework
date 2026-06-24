@@ -120,15 +120,26 @@ export const PageComponentSchema = lazySchema(() => z.object({
 
 /**
  * Page Variable Schema
- * Defines local state for the page.
- * Variables can be bound to interactive elements (e.g. element:record_picker, element:filter).
+ * Local, in-memory page state. Runtime-live (ADR-0049): the renderer mounts the
+ * declared variables, exposes them to expressions as `page.<name>`, and lets an
+ * interactive element write one via `source`. A write re-evaluates dependent
+ * `visibility` / binding predicates immediately — the master/detail and
+ * filtered-dashboard pattern with no custom code.
+ *
+ * Binding direction: a variable names the **writer** component, not the other
+ * way round. `{ name: 'selectedProjectId', source: 'project_picker' }` means the
+ * component whose `id` is `project_picker` (e.g. an `element:record_picker`)
+ * writes the user's selection into `selectedProjectId`; predicates then read it
+ * as `page.selectedProjectId`.
  */
 export const PageVariableSchema = lazySchema(() => z.object({
-  name: z.string().describe('Variable name'),
+  name: z.string().describe('Variable name. Exposed to expressions as `page.<name>`.'),
   type: z.enum(['string', 'number', 'boolean', 'object', 'array', 'record_id']).default('string'),
-  defaultValue: z.unknown().optional(),
-  /** Source element binding (e.g. element:record_picker writes to this variable) */
-  source: z.string().optional().describe('Component ID that writes to this variable'),
+  defaultValue: z.unknown().optional()
+    .describe('Initial value. Defaults to a type-appropriate empty value when omitted.'),
+  /** Source element binding — the component id that writes this variable. */
+  source: z.string().optional()
+    .describe('Component id that writes this variable (e.g. an element:record_picker whose `id` matches).'),
 }));
 
 // BlankPageLayoutItemSchema / BlankPageLayoutSchema removed — the `blank` page
@@ -292,17 +303,15 @@ export const PageSchema = lazySchema(() => z.object({
   type: PageTypeSchema.default('record').describe('Page type'),
   
   /**
-   * Page-local state variables.
-   *
-   * @experimental The state container is wired (the runtime mounts a
-   * `PageVariablesProvider` + `usePageVariables` hook with default-value init),
-   * but the end-to-end loop is not proven: no shipped element writes a variable
-   * (e.g. `element:record_picker` → `source`) and page variables are not yet
-   * injected into the `visible`/binding expression context. Authoring variables
-   * is therefore mostly inert today — treat as a preview surface until a
-   * consumer + an example/proof land.
+   * Page-local state variables (ADR-0049). Runtime-live: the renderer mounts the
+   * declared variables, exposes each to expressions as `page.<name>`, and lets an
+   * interactive element write one via its `source` binding (e.g.
+   * `element:record_picker` → `source`). A write re-evaluates dependent
+   * `visibility` / binding predicates immediately — the master/detail and
+   * filtered-dashboard pattern, with no custom code. See {@link PageVariableSchema}.
    */
-  variables: z.array(PageVariableSchema).optional().describe('Local page state variables (experimental — see schema doc)'),
+  variables: z.array(PageVariableSchema).optional()
+    .describe('Local page state, exposed to expressions as `page.<name>` and writable by interactive elements via `source` (master/detail, filtered dashboards).'),
 
   /** Context */
   object: z.string().optional().describe('Bound object (for Record pages)'),
