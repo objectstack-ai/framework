@@ -180,6 +180,7 @@ export const GetMetaTypesResponseSchema = lazySchema(() => z.object({
     loadOrder: z.number().int().describe('Loading priority (lower = earlier)'),
     domain: z.enum(['data', 'ui', 'automation', 'system', 'security', 'ai']).describe('Protocol domain'),
     overrideSource: z.enum(['registry', 'env']).describe('Whether allowOrgOverride is set in the static registry or via OBJECTSTACK_METADATA_WRITABLE env var'),
+    createSeed: z.unknown().optional().describe('Authoritative minimal valid create seed for this type — Studio/CLI/API derive create defaults from it (single source of truth in @objectstack/spec). Absent for canvas-create types whose shape is built interactively.'),
   })).optional().describe('Enriched per-type registry entries (Phase 3a)'),
 }));
 

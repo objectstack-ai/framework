@@ -31,3 +31,4 @@ export * from './startup-orchestrator.zod';
 export * from './plugin-registry.zod';
 export * from './plugin-security.zod';
 export * from './execution-context.zod';
+export * from './metadata-create-seeds';

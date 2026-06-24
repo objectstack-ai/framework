@@ -20,7 +20,7 @@ import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 import { type FormView, isAggregatedViewContainer } from '@objectstack/spec/ui';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
-import { DEFAULT_METADATA_TYPE_REGISTRY, getMetadataTypeSchema, getMetadataTypeActions } from '@objectstack/spec/kernel';
+import { DEFAULT_METADATA_TYPE_REGISTRY, getMetadataTypeSchema, getMetadataTypeActions, getMetadataCreateSeed } from '@objectstack/spec/kernel';
 import {
     extractProtection,
     evaluateLockForWrite,
@@ -992,6 +992,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const schema = (zodSchema ? toJsonSchemaSafe(zodSchema) : undefined)
                 ?? HAND_CRAFTED_SCHEMAS[singular];
             const form = TYPE_TO_FORM[singular];
+            // Phase 2: the authoritative minimal create seed (single source of
+            // truth in @objectstack/spec). Studio/CLI derive create defaults
+            // from this via /meta/types instead of re-inventing them.
+            const createSeed = getMetadataCreateSeed(singular);
 
             // Type-level actions: merge the registry's declarative actions
             // with any plugin-registered overlay (`registerMetadataTypeActions`).
@@ -1014,6 +1018,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         : 'registry' as const,
                     schema,
                     form,
+                    ...(createSeed !== undefined ? { createSeed } : {}),
                     // Override the spread `base.actions` with the merged view
                     // (declarative + plugin-registered). Omit when empty to
                     // preserve the prior "no actions key" response shape.
@@ -1038,6 +1043,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 overrideSource: writableOverrides.has(singular) ? 'env' as const : 'registry' as const,
                 schema,
                 form,
+                ...(createSeed !== undefined ? { createSeed } : {}),
                 // Plugin-registered actions on a type with no registry entry.
                 ...(typeActions.length ? { actions: typeActions } : {}),
             };
