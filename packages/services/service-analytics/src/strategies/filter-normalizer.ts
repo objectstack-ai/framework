@@ -38,10 +38,20 @@ const MONGO_TO_CUBE_OP: Record<string, string> = {
   $exists: 'set',
 };
 
-/** Stringify a filter value as the internal pipeline requires `values: string[]`. */
+/**
+ * Stringify a filter value as the internal pipeline requires `values: string[]`.
+ *
+ * Booleans serialize as the tokens `'true'`/`'false'` (NOT `'1'`/`'0'`) so the
+ * boolean identity survives the string roundtrip: the consuming strategies can
+ * recover a real boolean for the ObjectQL engine (which compares against the
+ * stored boolean type) while still binding `1`/`0` for SQL. Stringifying to
+ * `'1'`/`'0'` was indistinguishable from a numeric 1/0 and made every boolean
+ * equality filter / boolean group-by compare a number against a boolean — and
+ * never match.
+ */
 function stringifyForCube(v: unknown): string {
   if (v == null) return '';
-  if (typeof v === 'boolean') return v ? '1' : '0';
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
   if (v instanceof Date) return v.toISOString();
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
@@ -118,23 +128,38 @@ export function normalizeAnalyticsFilters(query: { where?: unknown } | unknown):
   return out;
 }
 
+/** Recover a finite number from a purely-numeric token, else undefined. */
+function recoverNumber(s: string): number | undefined {
+  if (/^-?\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
 /**
  * Coerce a stringified filter value back into a runtime type for SQL
- * parameter binding. Better-sqlite3 (and most drivers) bind JS
- * booleans/numbers as their native SQL types, so we recover them here
- * to avoid string-vs-number mismatches against typed columns.
+ * parameter binding. Better-sqlite3 (and most drivers) cannot bind a JS
+ * boolean, so booleans are recovered as `1`/`0` integers; numbers are
+ * recovered as numbers — avoiding string-vs-number mismatches against typed
+ * columns.
  */
 export function coerceFilterValueForSql(s: string): unknown {
   if (s === 'true') return 1;
   if (s === 'false') return 0;
   if (s === 'null') return null;
-  if (/^-?\d+$/.test(s)) {
-    const n = Number(s);
-    if (Number.isFinite(n)) return n;
-  }
-  if (/^-?\d+\.\d+$/.test(s)) {
-    const n = Number(s);
-    if (Number.isFinite(n)) return n;
-  }
-  return s;
+  return recoverNumber(s) ?? s;
+}
+
+/**
+ * Coerce a stringified filter value back into a runtime type for the ObjectQL
+ * aggregate engine. Unlike the SQL path, the engine compares against the
+ * *stored* runtime type, so a boolean field holds a real `true`/`false` — bind
+ * the boolean itself, NOT `1`/`0`, or the equality never matches.
+ */
+export function coerceFilterValueForObjectQL(s: string): unknown {
+  if (s === 'true') return true;
+  if (s === 'false') return false;
+  if (s === 'null') return null;
+  return recoverNumber(s) ?? s;
 }

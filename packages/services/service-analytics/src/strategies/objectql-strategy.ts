@@ -3,7 +3,7 @@
 import type { AnalyticsQuery, AnalyticsResult } from '@objectstack/spec/contracts';
 import type { Cube } from '@objectstack/spec/data';
 import type { AnalyticsStrategy, StrategyContext } from './types.js';
-import { normalizeAnalyticsFilters, coerceFilterValueForSql } from './filter-normalizer.js';
+import { normalizeAnalyticsFilters, coerceFilterValueForObjectQL } from './filter-normalizer.js';
 
 /**
  * ObjectQLStrategy — Priority 2
@@ -232,8 +232,8 @@ export class ObjectQLStrategy implements AnalyticsStrategy {
     if (operator === 'notSet') return null;
     if (!values || values.length === 0) return undefined;
 
-    const v0 = coerceFilterValueForSql(values[0]);
-    const all = values.map(coerceFilterValueForSql);
+    const v0 = coerceFilterValueForObjectQL(values[0]);
+    const all = values.map(coerceFilterValueForObjectQL);
     switch (operator) {
       case 'equals': return v0;
       case 'notEquals': return { $ne: v0 };
