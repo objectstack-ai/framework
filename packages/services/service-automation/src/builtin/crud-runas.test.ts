@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { AutomationEngine } from '../engine.js';
 import { registerCrudNodes } from './crud-nodes.js';
-import { resolveRunDataContext } from '../runtime-identity.js';
+import { resolveRunDataContext, runIsUnscopedUserMode, flowTouchesData } from '../runtime-identity.js';
 import type { AutomationContext } from '@objectstack/spec/contracts';
 
 function makeLogger(): any {
@@ -191,5 +191,104 @@ describe('resolveRunDataContext (#1888 unit)', () => {
   it('returns undefined for a user-mode run with no user (e.g. schedule trigger)', () => {
     expect(resolveRunDataContext({ runAs: 'user' })).toBeUndefined();
     expect(resolveRunDataContext(undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * #1888 FOLLOW-UP — the user-less fail-open. A schedule-triggered run carries no
+ * trigger user, so an effective `runAs:'user'` (the default) resolves no identity
+ * → CRUD nodes omit `options.context` → the data security middleware skips → the
+ * run executes UNSCOPED (effectively elevated). Denying would break legitimate
+ * scheduled CRUD and silently elevating would hide the author's intent, so the
+ * engine keeps the run working but makes the fail-open AUDIBLE: one clear warning
+ * per run, recommending `runAs:'system'` (ADR-0049). These tests pin both the
+ * (unchanged, non-breaking) data behavior AND the new warning.
+ */
+function recordingLogger(): { logger: any; warns: string[] } {
+  const warns: string[] = [];
+  const l: any = { info() {}, warn: (m: string) => warns.push(m), error() {}, debug() {} };
+  l.child = () => l;
+  return { logger: l, warns };
+}
+const runAsWarns = (warns: string[]) => warns.filter((w) => w.includes('[runAs]'));
+
+describe('schedule/user-less runs surface the unscoped fail-open (#1888 follow-up)', () => {
+  it('warns ONCE when a user-mode run has no trigger user and the flow touches data', async () => {
+    const { logger, warns } = recordingLogger();
+    const engine = new AutomationEngine(logger);
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sched', allOpsFlow('sched')); // no runAs → default 'user'
+
+    // Simulate a schedule trigger's context: an event, but NO userId.
+    const res = await engine.execute('sched', { event: 'schedule', params: { jobId: 'j1' } });
+    expect(res.success).toBe(true);
+
+    // Non-breaking: the run still executes, but every data op is UNSCOPED (no ctx).
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) expect(c.ctx, `${c.op} should be unscoped (no identity)`).toBeUndefined();
+
+    // ...and the fail-open is AUDIBLE: exactly one runAs warning, naming the flow + the fix.
+    const w = runAsWarns(warns);
+    expect(w).toHaveLength(1);
+    expect(w[0]).toContain("flow 'sched'");
+    expect(w[0]).toMatch(/UNSCOPED/);
+    expect(w[0]).toMatch(/runAs:'system'/);
+  });
+
+  it("does NOT warn when a user-less run declares runAs:'system' (explicit elevation)", async () => {
+    const { logger, warns } = recordingLogger();
+    const engine = new AutomationEngine(logger);
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sys', allOpsFlow('sys', 'system'));
+
+    await engine.execute('sys', { event: 'schedule', params: {} });
+    expect(runAsWarns(warns)).toHaveLength(0);
+    // Elevation is REAL + explicit (isSystem), not the accidental no-context skip.
+    for (const c of calls) expect(c.ctx?.isSystem).toBe(true);
+  });
+
+  it('does NOT warn when a user IS present (a normal REST/record trigger), even in user mode', async () => {
+    const { logger, warns } = recordingLogger();
+    const engine = new AutomationEngine(logger);
+    const { data } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('usr', allOpsFlow('usr', 'user'));
+    await engine.execute('usr', { userId: 'u1' });
+    expect(runAsWarns(warns)).toHaveLength(0);
+  });
+
+  it('does NOT warn for a user-less run when the flow touches NO data (runAs is moot)', async () => {
+    const { logger, warns } = recordingLogger();
+    const engine = new AutomationEngine(logger);
+    const { data } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('noop', {
+      name: 'noop', label: 'noop', type: 'schedule',
+      nodes: [{ id: 'start', type: 'start', label: 'Start' }, { id: 'end', type: 'end', label: 'End' }],
+      edges: [{ id: 'e1', source: 'start', target: 'end' }],
+    } as any);
+    await engine.execute('noop', { event: 'schedule' });
+    expect(runAsWarns(warns)).toHaveLength(0);
+  });
+});
+
+describe('runtime-identity unscoped-run predicates (#1888 follow-up unit)', () => {
+  it('runIsUnscopedUserMode: true ONLY for a non-system run with no user', () => {
+    expect(runIsUnscopedUserMode({ runAs: 'user' })).toBe(true);   // explicit user, no userId
+    expect(runIsUnscopedUserMode({})).toBe(true);                  // unset runAs, no userId
+    expect(runIsUnscopedUserMode(undefined)).toBe(true);
+    expect(runIsUnscopedUserMode({ runAs: 'user', userId: 'u1' })).toBe(false); // has a user
+    expect(runIsUnscopedUserMode({ runAs: 'system' })).toBe(false);            // elevated
+    expect(runIsUnscopedUserMode({ runAs: 'system', userId: 'u1' })).toBe(false);
+  });
+
+  it('flowTouchesData: true iff the flow contains a data-op node', () => {
+    expect(flowTouchesData({ nodes: [{ type: 'start' }, { type: 'create_record' }] })).toBe(true);
+    expect(flowTouchesData({ nodes: [{ type: 'get_record' }] })).toBe(true);
+    expect(flowTouchesData({ nodes: [{ type: 'start' }, { type: 'notify' }, { type: 'script' }] })).toBe(false);
+    expect(flowTouchesData({ nodes: [] })).toBe(false);
+    expect(flowTouchesData(undefined)).toBe(false);
   });
 });

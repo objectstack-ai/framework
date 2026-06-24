@@ -53,6 +53,21 @@ export const FLOW_BARE_DOLLAR_REF = 'flow-bare-dollar-reference';
 export const FLOW_APPROVAL_REVISE_DEAD_END = 'flow-approval-revise-dead-end';
 export const FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE = 'flow-approval-revise-unmarked-backedge';
 export const FLOW_APPROVAL_REVISE_DISABLED = 'flow-approval-revise-disabled';
+export const FLOW_SCHEDULE_RUNAS_UNSCOPED = 'flow-schedule-runas-unscoped';
+
+/** Node types that perform a data operation — the ones `flow.runAs` governs (#1888). */
+const DATA_NODE_TYPES = new Set(['get_record', 'create_record', 'update_record', 'delete_record']);
+
+/**
+ * Does this flow auto-launch on a SCHEDULE (so a run carries no trigger user)?
+ * Accepts the three author-time signals: `flow.type === 'schedule'`, a start-node
+ * `config.triggerType === 'schedule'`, or a start-node `config.schedule` descriptor.
+ */
+function isScheduleTriggered(flow: AnyRec, startCfg: AnyRec): boolean {
+  if (flow.type === 'schedule') return true;
+  if (typeof startCfg.triggerType === 'string' && startCfg.triggerType === 'schedule') return true;
+  return startCfg.schedule != null;
+}
 
 /**
  * Node-config keys that name a capability the automation engine does NOT have.
@@ -278,6 +293,35 @@ export function lintFlowPatterns(stack: AnyRec): FlowLintFinding[] {
             `Use a SCHEDULE trigger (daily cron) + a range query instead — e.g. a scheduled flow whose ` +
             `get_record filters \`end_date\` BETWEEN {TODAY()} and {TODAY()+N}. (#1874)`,
           rule: FLOW_TIME_RELATIVE_ANTIPATTERN,
+        });
+      }
+    }
+
+    // (a4) #1888 / ADR-0049 — a SCHEDULE-triggered flow has no trigger user at
+    //      runtime, so an effective `runAs:'user'` (explicit, or unset → the spec
+    //      default 'user') run executes its data nodes UNSCOPED (elevated,
+    //      RLS-bypassing) rather than restricted — the data security middleware
+    //      skips when there is no identity. An author who left `runAs` at the
+    //      default expecting a restricted run gets a fail-open one. Only flagged
+    //      when the flow actually performs a data operation (otherwise runAs is
+    //      moot). The robust shape is an explicit `runAs:'system'`, which makes
+    //      the elevation intentional + audit-attributable; a schedule cannot scope
+    //      to a user because there is none.
+    const runAs = typeof flow.runAs === 'string' ? flow.runAs : 'user';
+    if (isScheduleTriggered(flow, startCfg) && runAs !== 'system') {
+      const dataNode = nodes.find((n) => DATA_NODE_TYPES.has(typeof n.type === 'string' ? (n.type as string) : ''));
+      if (dataNode) {
+        const declared = typeof flow.runAs === 'string' ? `\`runAs:'${runAs}'\`` : `the default \`runAs:'user'\``;
+        findings.push({
+          where: `flow '${flowName}' · runAs`,
+          message:
+            `schedule-triggered flow runs as ${declared}, but a scheduled run has no trigger user — so its ` +
+            `data node '${dataNode.id}' (${dataNode.type}) executes UNSCOPED (elevated, RLS-bypassing), not ` +
+            `restricted to a user.`,
+          hint:
+            `Declare \`runAs:'system'\` to make the elevation explicit and intended (the run reads/writes ` +
+            `every record). A scheduled flow cannot scope to a user — there is none. (ADR-0049, #1888)`,
+          rule: FLOW_SCHEDULE_RUNAS_UNSCOPED,
         });
       }
     }

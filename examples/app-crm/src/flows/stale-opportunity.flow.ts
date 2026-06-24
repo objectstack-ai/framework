@@ -17,6 +17,10 @@ export const StaleOpportunityFlow: Flow = {
   label: 'Stale Opportunity Sweep',
   description: 'Daily sweep that notifies owners of open opportunities untouched for 30+ days and opens a follow-up task.',
   type: 'schedule',
+  // A scheduled run has no trigger user, so it must declare its elevation: this
+  // sweep spans every owner's opportunities and opens follow-up tasks across
+  // them. Without this it would run UNSCOPED by default. (ADR-0049 / #1888)
+  runAs: 'system',
 
   nodes: [
     {

@@ -273,7 +273,8 @@ export const FlowSchema = lazySchema(() => z.object({
     .enum(['system', 'user'])
     .default('user')
     .describe(
-      'Execution identity for the run: system = elevated (bypasses RLS), user = the triggering user (RLS-respecting).',
+      'Execution identity for the run: system = elevated (bypasses RLS), user = the triggering user (RLS-respecting). ' +
+        'A schedule-triggered run has no trigger user, so under user it runs UNSCOPED (elevated) — declare system to make that explicit.',
     ),
 
   /** Error Handling Strategy */

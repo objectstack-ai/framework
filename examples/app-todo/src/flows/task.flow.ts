@@ -8,6 +8,9 @@ export const TaskReminderFlow: Flow = {
   label: 'Task Reminder Notification',
   description: 'Automated flow to send reminders for tasks approaching their due date',
   type: 'schedule',
+  // A scheduled run has no trigger user, so it must declare its elevation: this
+  // daily sweep reads every user's tasks to remind them. (ADR-0049 / #1888)
+  runAs: 'system',
 
   variables: [
     { name: 'tasksToRemind', type: 'record_collection', isInput: false, isOutput: false },
@@ -52,6 +55,9 @@ export const OverdueEscalationFlow: Flow = {
   label: 'Overdue Task Escalation',
   description: 'Escalates tasks that have been overdue for more than 3 days',
   type: 'schedule',
+  // A scheduled run has no trigger user; this daily sweep reads + escalates every
+  // user's overdue tasks, so it must run elevated. (ADR-0049 / #1888)
+  runAs: 'system',
 
   variables: [
     { name: 'overdueTasks', type: 'record_collection', isInput: false, isOutput: false },

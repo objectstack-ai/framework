@@ -58,3 +58,41 @@ export function resolveRunDataContext(context: AutomationContext | undefined): R
   if (context.tenantId) out.tenantId = context.tenantId;
   return out;
 }
+
+/**
+ * Node types that perform an ObjectQL data operation — the ones that thread
+ * {@link resolveRunDataContext} into the data engine as `options.context`. A
+ * run's `runAs` only has teeth for a flow that contains at least one of these:
+ * a flow that merely sends email / waits / branches touches no data, so its
+ * execution identity is moot.
+ */
+export const DATA_NODE_TYPES: ReadonlySet<string> = new Set([
+  'get_record',
+  'create_record',
+  'update_record',
+  'delete_record',
+]);
+
+/** True when `flow` contains at least one data-operation node ({@link DATA_NODE_TYPES}). */
+export function flowTouchesData(flow: { nodes?: ReadonlyArray<{ type?: string }> } | undefined): boolean {
+  return !!flow?.nodes?.some((n) => typeof n?.type === 'string' && DATA_NODE_TYPES.has(n.type));
+}
+
+/**
+ * True when a run's effective identity is the fail-open *unscoped* case: an
+ * effective `runAs:'user'` (explicit or defaulted) with NO resolvable trigger
+ * user — e.g. a schedule-triggered run, which has no user to scope to (#1888).
+ *
+ * {@link resolveRunDataContext} returns `undefined` for this case, so the CRUD
+ * node omits `options.context` and the data security middleware — which *skips*
+ * when there is no identity (delegating auth to the auth layer) — runs the
+ * operation UNSCOPED (effectively elevated). An author who left `runAs` at the
+ * `'user'` default expecting a restricted run instead gets an unscoped one. The
+ * engine uses this predicate to surface the footgun at run time (a loud warning,
+ * not a silent elevation); the build-time lint `flow-schedule-runas-unscoped`
+ * catches it earlier, and declaring `runAs:'system'` makes the elevation
+ * explicit and intended (ADR-0049).
+ */
+export function runIsUnscopedUserMode(context: AutomationContext | undefined): boolean {
+  return context?.runAs !== 'system' && !context?.userId;
+}

@@ -11,13 +11,20 @@ import {
   FLOW_APPROVAL_REVISE_DEAD_END,
   FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE,
   FLOW_APPROVAL_REVISE_DISABLED,
+  FLOW_SCHEDULE_RUNAS_UNSCOPED,
 } from './lint-flow-patterns.js';
 
 const CEL = (source: string) => ({ dialect: 'cel', source });
-/** A scheduled flow with a get_record node carrying `filter`. */
+/**
+ * A scheduled flow with a get_record node carrying `filter`. Declares
+ * `runAs: 'system'` so it is the correct shape for a scheduled data flow and
+ * does not also trip the schedule-runAs lint (FLOW_SCHEDULE_RUNAS_UNSCOPED) —
+ * keeping these date-equality cases focused on the filter rule.
+ */
 const filterFlow = (filter: unknown) => ({
   flows: [{
     name: 'expiry_alert',
+    runAs: 'system',
     nodes: [
       { id: 'start', type: 'start', config: { triggerType: 'schedule', schedule: 'cron:0 9 * * *' } },
       { id: 'query', type: 'get_record', config: { objectName: 'contract', filter } },
@@ -250,5 +257,82 @@ describe('lintFlowPatterns — approval revise loop (ADR-0044)', () => {
       { source: 'mgr', target: 'no', label: 'reject' },
     ];
     expect(lintFlowPatterns(approvalFlow(edges))).toEqual([]);
+  });
+});
+
+describe('lintFlowPatterns — schedule runAs unscoped (#1888 / ADR-0049)', () => {
+  /** A schedule-triggered flow that performs a data op, parameterized by runAs / detection signal. */
+  const scheduledDataFlow = (opts: {
+    runAs?: 'system' | 'user';
+    flowType?: string;
+    startConfig?: Record<string, unknown>;
+    nodeType?: string;
+  } = {}) => ({
+    flows: [{
+      name: 'nightly_sweep',
+      ...(opts.flowType !== undefined ? { type: opts.flowType } : { type: 'schedule' }),
+      ...(opts.runAs ? { runAs: opts.runAs } : {}),
+      nodes: [
+        { id: 'start', type: 'start', config: opts.startConfig ?? { triggerType: 'schedule', cron: '0 8 * * *' } },
+        { id: 'op', type: opts.nodeType ?? 'create_record', config: { objectName: 'thing', fields: { a: 1 } } },
+      ],
+      edges: [],
+    }],
+  });
+
+  it('flags a schedule flow whose runAs is unset (defaults to user → unscoped)', () => {
+    const fnds = lintFlowPatterns(scheduledDataFlow());
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_SCHEDULE_RUNAS_UNSCOPED);
+    expect(fnds[0].where).toContain('nightly_sweep');
+    expect(fnds[0].message).toMatch(/default .*runAs:'user'/);
+    expect(fnds[0].message).toMatch(/UNSCOPED/);
+    expect(fnds[0].hint).toMatch(/runAs:'system'/);
+  });
+
+  it("flags an EXPLICIT runAs:'user' on a schedule (incoherent — no user to scope to)", () => {
+    const fnds = lintFlowPatterns(scheduledDataFlow({ runAs: 'user' }));
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_SCHEDULE_RUNAS_UNSCOPED);
+    expect(fnds[0].message).toMatch(/runAs:'user'/);
+  });
+
+  it('detects the schedule trigger via any of the three signals', () => {
+    // (a) flow.type === 'schedule' (default in the helper)
+    expect(lintFlowPatterns(scheduledDataFlow({ startConfig: {} }))).toHaveLength(1);
+    // (b) start config.triggerType === 'schedule'
+    expect(lintFlowPatterns(scheduledDataFlow({ flowType: 'autolaunched', startConfig: { triggerType: 'schedule' } }))).toHaveLength(1);
+    // (c) start config carries a schedule descriptor
+    expect(lintFlowPatterns(scheduledDataFlow({ flowType: 'autolaunched', startConfig: { schedule: { type: 'interval', intervalMs: 60000 } } }))).toHaveLength(1);
+  });
+
+  it('flags each data-op node type (get/create/update/delete)', () => {
+    for (const t of ['get_record', 'create_record', 'update_record', 'delete_record']) {
+      const fnds = lintFlowPatterns(scheduledDataFlow({ nodeType: t }));
+      expect(fnds.map((f) => f.rule), `node ${t}`).toContain(FLOW_SCHEDULE_RUNAS_UNSCOPED);
+    }
+  });
+
+  describe('does NOT flag (false-positive guards)', () => {
+    it("a schedule flow that declares runAs:'system' (the correct shape)", () => {
+      expect(lintFlowPatterns(scheduledDataFlow({ runAs: 'system' }))).toHaveLength(0);
+    });
+    it('a schedule flow with NO data node (runAs is moot — e.g. a notify-only digest)', () => {
+      expect(lintFlowPatterns({
+        flows: [{
+          name: 'digest',
+          type: 'schedule',
+          nodes: [
+            { id: 'start', type: 'start', config: { schedule: { type: 'interval', intervalMs: 60000 } } },
+            { id: 'notify', type: 'notify', config: { topic: 'x' } },
+          ],
+          edges: [],
+        }],
+      })).toHaveLength(0);
+    });
+    it('a NON-schedule flow with a data op (record-change / screen runs carry a user)', () => {
+      expect(lintFlowPatterns(scheduledDataFlow({ flowType: 'record_change', startConfig: { triggerType: 'record-after-update', objectName: 'thing' } }))).toHaveLength(0);
+      expect(lintFlowPatterns(scheduledDataFlow({ flowType: 'screen', startConfig: {} }))).toHaveLength(0);
+    });
   });
 });

@@ -15,6 +15,7 @@ import { ConnectorSchema } from '@objectstack/spec/integration';
 // `previous.*`, `budget > 100000`, …) skipped its flow. A static import binds the
 // engine at module load in both ESM and CJS builds.
 import { ExpressionEngine, validateExpression } from '@objectstack/formula';
+import { runIsUnscopedUserMode, flowTouchesData } from './runtime-identity.js';
 
 // ─── Node Executor Interface (Plugin Extension Point) ───────────────
 
@@ -915,6 +916,36 @@ export class AutomationEngine implements IAutomationService {
         return this.executionLogs.find(l => l.id === runId) ?? null;
     }
 
+    /**
+     * Build the run's effective {@link AutomationContext} from `flow.runAs` — a
+     * COPY, never mutating the caller's context, so the elevation is scoped to
+     * this run and the caller's identity is restored when the run returns
+     * (ADR-0049 / #1888). The single construction point shared by `execute()` and
+     * `executeWithoutRetry()`.
+     *
+     * Also surfaces the user-less **fail-open** footgun (#1888 follow-up): a flow
+     * whose effective `runAs` is `'user'` but whose trigger carries no user — e.g.
+     * a schedule-triggered run — has no user to scope to, so its data nodes run
+     * UNSCOPED (the data security middleware skips when there is no identity).
+     * Denying would break legitimate scheduled CRUD and silently elevating would
+     * hide the author's intent, so the run proceeds — but we log a clear warning so
+     * the elevation is *audible* rather than silent. Authors should declare
+     * `runAs:'system'` to make scheduled elevation explicit (the build-time lint
+     * `flow-schedule-runas-unscoped` flags the same shape earlier).
+     */
+    private resolveRunContext(flow: FlowParsed, context?: AutomationContext): AutomationContext {
+        const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+        if (runIsUnscopedUserMode(runContext) && flowTouchesData(flow)) {
+            this.logger.warn(
+                `[runAs] flow '${flow.name}' executes with runAs:'user' but its trigger carries no user ` +
+                `(e.g. a schedule) — its data operations run UNSCOPED (elevated, RLS-bypassing), not ` +
+                `restricted. Declare runAs:'system' to make the elevation explicit and intended ` +
+                `(ADR-0049, #1888).`,
+            );
+        }
+        return runContext;
+    }
+
     async execute(flowName: string, context?: AutomationContext): Promise<AutomationResult> {
         const startTime = Date.now();
         const flow = this.flows.get(flowName);
@@ -967,11 +998,10 @@ export class AutomationEngine implements IAutomationService {
         const steps: StepLogEntry[] = [];
 
         // ADR-0049 / #1888 — establish the run's effective execution identity
-        // from flow.runAs. Thread a COPY (never mutating the caller's context)
-        // so the elevation is scoped to this run; the caller's identity is
-        // restored (unchanged) when execute() returns. Data nodes translate
-        // context.runAs into the ObjectQL context they pass (resolveRunDataContext).
-        const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+        // from flow.runAs (a COPY, never mutating the caller's context, so the
+        // elevation is scoped to this run and the caller's identity is restored
+        // when execute() returns). Surfaces the user-less fail-open (see helper).
+        const runContext = this.resolveRunContext(flow, context);
 
         try {
             // Find the start node
@@ -2226,8 +2256,8 @@ export class AutomationEngine implements IAutomationService {
         const steps: StepLogEntry[] = [];
 
         // ADR-0049 / #1888 — establish the run's effective execution identity
-        // from flow.runAs (see execute()); threaded to node executors below.
-        const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+        // from flow.runAs (see execute() / resolveRunContext); threaded below.
+        const runContext = this.resolveRunContext(flow, context);
 
         try {
             const startNode = flow.nodes.find(n => n.type === 'start');
