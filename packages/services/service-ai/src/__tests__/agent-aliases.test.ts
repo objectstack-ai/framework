@@ -9,8 +9,26 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataService } from '@objectstack/spec/contracts';
 import { AgentRuntime } from '../agent-runtime.js';
-import { ASK_AGENT, ASK_AGENT_NAME, LEGACY_DATA_AGENT_NAME } from '../agents/index.js';
-import { registerAgentAlias, resolveAgentAlias } from '../agents/agent-aliases.js';
+import {
+  ASK_AGENT_NAME,
+  LEGACY_DATA_AGENT_NAME,
+  registerAgentAlias,
+  resolveAgentAlias,
+} from '../agents/agent-aliases.js';
+import type { Agent } from '@objectstack/spec/ai';
+
+// The real `ask` PERSONA moved to the cloud-only @objectstack/service-ai-studio
+// package; the framework now exports only the NAME CONSTANTS + the alias
+// registry (the mechanism). This minimal local stub stands in for the persona so
+// the alias-aware `AgentRuntime.loadAgent` resolution is still exercised here.
+const ASK_AGENT_STUB: Agent = {
+  name: ASK_AGENT_NAME,
+  label: 'Assistant',
+  role: 'Business Application Assistant',
+  instructions: 'Stub ask persona for alias resolution tests.',
+  active: true,
+  visibility: 'global',
+};
 
 function mockMetadata(overrides: Partial<IMetadataService> = {}): IMetadataService {
   return {
@@ -66,7 +84,7 @@ describe('agent-aliases', () => {
 describe('AgentRuntime.loadAgent (alias-aware)', () => {
   it('resolves a legacy name to the renamed agent record', async () => {
     const get = vi.fn(async (_type: string, name: string) =>
-      name === ASK_AGENT_NAME ? ASK_AGENT : undefined,
+      name === ASK_AGENT_NAME ? ASK_AGENT_STUB : undefined,
     );
     const runtime = new AgentRuntime(mockMetadata({ get: get as never }));
 

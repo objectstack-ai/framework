@@ -33,6 +33,25 @@
  * Studio had "registered" the alias. Anchoring the Map (and its seed) on a
  * `Symbol.for` key makes the two builds share ONE table.
  */
+/**
+ * Canonical name of the platform's `ask` (data) agent.
+ *
+ * This is the implicit default copilot for every application that does not pin
+ * its own `app.defaultAgent`. The `ASK_AGENT` persona itself is a commercial
+ * feature and now ships in the cloud-only `@objectstack/service-ai-studio`
+ * package (it attaches via the `ai:ready` hook); the NAME stays here in the
+ * open framework so the runtime can resolve the default/fallback deterministically
+ * and so the legacy alias below has a canonical target even on a headless OSS
+ * runtime where the persona is absent.
+ *
+ * Renamed from `data_chat`→`ask`; the legacy name stays resolvable via the
+ * alias table seeded below.
+ */
+export const ASK_AGENT_NAME = 'ask';
+
+/** Legacy id the data agent was renamed from (kept for back-compat / migrations). */
+export const LEGACY_DATA_AGENT_NAME = 'data_chat';
+
 const ALIAS_REGISTRY_KEY: unique symbol = Symbol.for('@objectstack/service-ai#agentNameAliases');
 
 /** The single process-wide alias table, created (and seeded) on first touch. */
@@ -41,7 +60,7 @@ function aliasRegistry(): Map<string, string> {
   let map = g[ALIAS_REGISTRY_KEY];
   if (!map) {
     // Seed the framework's own data agent rename on first access.
-    map = new Map<string, string>([['data_chat', 'ask']]);
+    map = new Map<string, string>([[LEGACY_DATA_AGENT_NAME, ASK_AGENT_NAME]]);
     g[ALIAS_REGISTRY_KEY] = map;
   }
   return map;

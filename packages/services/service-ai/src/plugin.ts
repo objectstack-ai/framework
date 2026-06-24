@@ -2,10 +2,9 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { readEnvWithDeprecation } from '@objectstack/types';
-import type { IAIService, IAIConversationService, IAnalyticsService, IAutomationService, IDataEngine, IEmbedder, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, IDataEngine, IEmbedder, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
 import { EMBEDDER_SERVICE } from '@objectstack/spec/contracts';
 import type * as AI from '@objectstack/spec/ai';
-import { applyProtection } from '@objectstack/spec/shared';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
@@ -19,14 +18,8 @@ import { AiConversationObject, AiMessageObject, AiPendingActionObject, AiTraceOb
 import { DailyMessageQuota, type AgentChatQuota } from './quota/agent-chat-quota.js';
 import { AiTraceView, AiMessageView, AiPendingActionView, AiEvalCaseView, AiEvalRunView } from './views/index.js';
 import { EvalRunner } from './eval/index.js';
-import { registerDataTools } from './tools/data-tools.js';
-import { registerQueryDataTool } from './tools/query-data.tool.js';
-import { registerVisualizeDataTool, VISUALIZE_DATA_TOOL } from './tools/visualize-data.tool.js';
-import { registerActionsAsTools } from './tools/action-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
 import { SkillRegistry } from './skill-registry.js';
-import { ASK_AGENT, LEGACY_DATA_AGENT_NAME } from './agents/index.js';
-import { SCHEMA_READER_SKILL, DATA_EXPLORER_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
 import { VercelLLMAdapter } from './adapters/vercel-adapter.js';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ModelRegistry } from './model-registry.js';
@@ -682,202 +675,16 @@ export class AIServicePlugin implements Plugin {
       }
     }
 
-    // Resolve protocol shim once — used by data, metadata, and query_data
-    // tools so they can see ObjectQL SchemaRegistry items (sys_user, etc.)
-    // in addition to MetadataManager registry items.
-    let protocolService: { getMetaItems(req: { type: string; packageId?: string; organizationId?: string }): Promise<unknown[]> } | undefined;
-    try {
-      const p = ctx.getService<any>('protocol');
-      if (p && typeof p.getMetaItems === 'function') protocolService = p;
-    } catch {
-      protocolService = undefined;
-    }
-
-    // Data tools require only the data engine. When metadata service is
-    // wired we also pass it (+ protocol) so the tools can validate
-    // field references at runtime and reject hallucinated field names
-    // with a structured error instead of silently returning empty data.
-    try {
-      const dataEngine = ctx.getService<IDataEngine>('data');
-      if (dataEngine) {
-        registerDataTools(this.service.toolRegistry, {
-          dataEngine,
-          metadataService,
-          protocol: protocolService,
-        });
-        ctx.logger.info('[AI] Built-in data tools registered');
-
-        // Register visualize_data when an analytics service is available — it
-        // turns an aggregation into an SDUI chart that renders inline in chat
-        // (emitted as a `data-chart` stream part). Only needs analytics, so it
-        // sits outside the metadata gate below.
-        let analyticsService: IAnalyticsService | undefined;
-        try {
-          analyticsService = ctx.getService<IAnalyticsService>('analytics');
-        } catch {
-          analyticsService = undefined;
-        }
-        if (analyticsService) {
-          registerVisualizeDataTool(this.service.toolRegistry, { analytics: analyticsService });
-          ctx.logger.info('[AI] visualize_data tool registered');
-        } else {
-          ctx.logger.debug('[AI] No analytics service — visualize_data tool not registered');
-        }
-
-        // Register query_data tool when metadata service is also available —
-        // it composes AI + Metadata + Data into a single NL-to-records call.
-        if (metadataService) {
-          registerQueryDataTool(this.service.toolRegistry, {
-            ai: this.service,
-            metadata: metadataService,
-            dataEngine,
-            protocol: protocolService,
-          });
-          ctx.logger.info('[AI] query_data tool registered');
-
-          // Register actions-as-tools: enumerate every object's actions[]
-          // and surface the script-type ones as `action_<name>` tools.
-          // This is what gives agents the ability to *do things* (mark
-          // task complete, clone record, ...) — the write-side counterpart
-          // to query_data.
-          try {
-            // Resolve automation service (optional — flow actions get
-            // skipped gracefully if unavailable).
-            let automation: IAutomationService | undefined;
-            try {
-              automation = ctx.getService<IAutomationService>('automation');
-            } catch {
-              automation = undefined;
-            }
-            const apiBaseUrl =
-              this.options.apiActionBaseUrl ?? process.env.OS_AI_ACTION_API_BASE_URL;
-            const apiHeaders = this.options.apiActionHeaders;
-            const { registered, skipped, warnings } = await registerActionsAsTools(
-              this.service.toolRegistry,
-              {
-                metadata: metadataService,
-                dataEngine,
-                automation,
-                apiBaseUrl,
-                apiHeaders,
-                enableActionApproval: this.options.enableActionApproval ?? false,
-                aiService: this.service,
-              },
-            );
-            if (registered.length > 0) {
-              ctx.logger.info(
-                `[AI] ${registered.length} action tool(s) registered: ${registered.join(', ')}`,
-              );
-            }
-            if (skipped.length > 0) {
-              ctx.logger.debug(
-                `[AI] Skipped ${skipped.length} action(s) for AI exposure`,
-                { skipped },
-              );
-            }
-            for (const w of warnings) {
-              ctx.logger.warn(`[AI] action '${w.action}': ${w.warning}`);
-            }
-          } catch (err) {
-            ctx.logger.warn(
-              '[AI] Failed to register action tools',
-              err instanceof Error ? { error: err.message } : { error: String(err) },
-            );
-          }
-        }
-
-        // Register data tools as metadata (for Studio visibility)
-        if (metadataService) {
-          const { DATA_TOOL_DEFINITIONS } = await import('./tools/data-tools.js');
-          // visualize_data is only usable (and only registered above) when an
-          // analytics service is present — persist it as metadata in lockstep.
-          const toolDefsToPersist = analyticsService
-            ? [...DATA_TOOL_DEFINITIONS, VISUALIZE_DATA_TOOL]
-            : DATA_TOOL_DEFINITIONS;
-          for (const toolDef of toolDefsToPersist) {
-            const toolExists =
-              typeof metadataService.exists === 'function'
-                ? await withTimeout(metadataService.exists('tool', toolDef.name))
-                : false;
-
-            if (toolExists === null) {
-              ctx.logger.warn('[AI] Metadata service timed out checking tool existence (non-fatal), skipping persistence');
-              break;
-            }
-
-            if (!toolExists) {
-              try {
-                // `ToolSchema` requires a `label`; the bare `AIToolDefinition`
-                // used for LLM function-calling may omit it. Fall back to a
-                // name-derived label so persisted tool metadata always validates.
-                const label = toolDef.label ?? toToolLabel(toolDef.name);
-                await withTimeout(metadataService.register('tool', toolDef.name, { ...toolDef, label }));
-              } catch (err) {
-                ctx.logger.warn('[AI] Failed to persist tool metadata (non-fatal)',
-                  err instanceof Error ? { tool: toolDef.name, error: err.message } : { tool: toolDef.name });
-              }
-            }
-          }
-          ctx.logger.info(`[AI] ${toolDefsToPersist.length} data tools registered as metadata`);
-        }
-
-        // Register the built-in agent + skills (requires metadata service).
-        //
-        // UPSERT, not exists-gate (ADR-0040): built-in records are
-        // platform-owned — when the shipped definition changes (new skills,
-        // new instructions), existing environments must pick it up on next
-        // boot. The old exists-gate froze the FIRST shipped version forever
-        // once sys_metadata became durable, which silently stranded every
-        // persona/skill improvement on existing envs. Tenants who want a
-        // different assistant define a CUSTOM agent and bind it via
-        // app.defaultAgent — editing built-ins in place is not a supported
-        // path, so an unconditional content-refresh clobbers nothing legit.
-        if (metadataService) {
-          const upsertBuiltin = async (type: string, name: string, def: unknown): Promise<void> => {
-            try {
-              const stored = await withTimeout(metadataService.get(type, name));
-              if (stored !== null && stored !== undefined && JSON.stringify(stored) === JSON.stringify(def)) {
-                ctx.logger.debug(`[AI] built-in ${type} ${name} up to date`);
-                return;
-              }
-              await withTimeout(metadataService.register(type, name, def));
-              ctx.logger.info(
-                stored ? `[AI] built-in ${type} ${name} refreshed (shipped definition changed)` : `[AI] built-in ${type} ${name} registered`,
-              );
-            } catch (err) {
-              ctx.logger.warn(`[AI] Failed to register built-in ${type} ${name}`, err instanceof Error ? { error: err.message } : { error: String(err) });
-            }
-          };
-          // Translate the agent's author `protection` block into the runtime
-          // `_lock`/`_provenance:'package'` envelope before persisting (the
-          // direct `metadataService.register` path does NOT run the loader's
-          // `applyProtection`, so do it here). That envelope is both the
-          // ADR-0010 lock and the intrinsic signal `AgentRuntime.listAgents()`
-          // uses to keep `ask` in the catalog independent of the alias table.
-          // Clone first so the shared `ASK_AGENT` export is never mutated.
-          await upsertBuiltin('agent', ASK_AGENT.name, applyProtection({ ...ASK_AGENT }));
-          // Path A rename (`data_chat`→`ask`): drop the stale legacy agent
-          // record on upgrade so the catalog doesn't list the agent twice. The
-          // legacy NAME stays resolvable for chat via the alias table; this only
-          // removes the now-duplicate registry entry. Idempotent on fresh installs.
-          if (ASK_AGENT.name !== LEGACY_DATA_AGENT_NAME) {
-            try {
-              if (await withTimeout(metadataService.exists('agent', LEGACY_DATA_AGENT_NAME))) {
-                await withTimeout(metadataService.unregister('agent', LEGACY_DATA_AGENT_NAME));
-                ctx.logger.info(`[AI] removed legacy agent record "${LEGACY_DATA_AGENT_NAME}" (renamed → "${ASK_AGENT.name}")`);
-              }
-            } catch (err) {
-              ctx.logger.warn('[AI] Failed to remove legacy data agent record', err instanceof Error ? { error: err.message } : { error: String(err) });
-            }
-          }
-          await upsertBuiltin('skill', SCHEMA_READER_SKILL.name, SCHEMA_READER_SKILL);
-          await upsertBuiltin('skill', DATA_EXPLORER_SKILL.name, DATA_EXPLORER_SKILL);
-          await upsertBuiltin('skill', ACTIONS_EXECUTOR_SKILL.name, ACTIONS_EXECUTOR_SKILL);
-        }
-      }
-    } catch {
-      ctx.logger.debug('[AI] Data engine not available, skipping data tools');
-    }
+    // NOTE: data Q&A intelligence — the `ask` agent + the data-explorer /
+    // actions-executor skills, AND the data tools (query/get/aggregate,
+    // query_data, visualize_data, action_* tools) + the schema_reader skill —
+    // is a commercial feature and now ships in the cloud-only
+    // @objectstack/service-ai-studio package; it attaches via the `ai:ready`
+    // hook below (the same extension point any third-party tool plugin uses), so
+    // the open-source AI runtime is HEADLESS — it registers no built-in
+    // agent/skills/tools. The data tools, schema_reader skill, and the
+    // agent-name alias registry stay open in this package as the mechanism the
+    // cloud persona imports and registers against.
 
     // NOTE: AI-driven metadata authoring (the metadata_assistant agent, the
     // metadata/blueprint/package authoring tools, and the metadata_authoring /
@@ -895,8 +702,10 @@ export class AIServicePlugin implements Plugin {
     //    them. Agents declared via defineStack({ agents: [...] }) are stored
     //    in the ObjectQL registry by the AppPlugin, but the MetadataManager
     //    keeps an independent in-memory store. Without this bridge,
-    //    /api/v1/ai/agents would only return agents the AI plugin registered
-    //    itself (data_chat, metadata_assistant).
+    //    /api/v1/ai/agents would miss stack-defined agents entirely — the
+    //    open-source AI plugin itself now registers NONE (the `ask`/`build`
+    //    personas ship in the cloud @objectstack/service-ai-studio package and
+    //    attach via `ai:ready`).
     if (metadataService) {
       try {
         const objectql = ctx.getService<any>('objectql');
@@ -1336,19 +1145,6 @@ export class AIServicePlugin implements Plugin {
   async destroy(): Promise<void> {
     this.service = undefined;
   }
-}
-
-/**
- * Derive a human-readable label from a snake_case tool name, e.g.
- * `query_records` → `Query Records`. Used as a fallback when persisting
- * an `AIToolDefinition` as `tool` metadata that has no explicit `label`.
- */
-function toToolLabel(name: string): string {
-  return name
-    .split('_')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 /**

@@ -56,18 +56,19 @@ export type { AgentChatContext } from './agent-runtime.js';
 export { SkillRegistry } from './skill-registry.js';
 export type { SkillContext, SkillSummary } from './skill-registry.js';
 
-// Built-in agents
-export { ASK_AGENT, ASK_AGENT_NAME, LEGACY_DATA_AGENT_NAME } from './agents/index.js';
+// Built-in agent NAME CONSTANTS (the `ASK_AGENT` persona itself moved to the
+// cloud-only @objectstack/service-ai-studio package; the names stay open so the
+// runtime resolves the default/fallback deterministically and the legacy alias
+// has a canonical target on a headless OSS runtime).
+export { ASK_AGENT_NAME, LEGACY_DATA_AGENT_NAME } from './agents/index.js';
 // Back-compat agent-name aliases (Path A rename). Other packages register their
 // own renames (e.g. cloud AI Studio: `metadata_assistant`→`build`).
 export { registerAgentAlias, resolveAgentAlias, agentAliasEntries } from './agents/index.js';
 
-// Built-in skills
-export {
-  SCHEMA_READER_SKILL,
-  DATA_EXPLORER_SKILL,
-  ACTIONS_EXECUTOR_SKILL,
-} from './skills/index.js';
+// Built-in skills — only the shared, read-only `schema_reader` (surface:'both')
+// stays open as the mechanism. The `data_explorer` + `actions_executor` skills
+// (the `ask` data product) moved to @objectstack/service-ai-studio.
+export { SCHEMA_READER_SKILL } from './skills/index.js';
 
 // Object definitions
 export { AiConversationObject, AiMessageObject, AiTraceObject } from './objects/index.js';
