@@ -415,13 +415,12 @@ export const PageSchema = lazySchema(() => z.object({
       message: 'blankLayout is required when type is "blank"',
     });
   }
-  if (data.kind === 'slotted' && !data.slots) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['slots'],
-      message: 'slots is required when kind is "slotted"',
-    });
-  }
+  // NOTE: `kind: 'slotted'` does NOT require `slots`. A slotted page with no
+  // overrides renders the synthesized default layout (every slot falls through
+  // to the default) — the natural starting point: create the slotted shell,
+  // then add slot overrides in the editor. Requiring `slots` up front made the
+  // Studio "New Page" form a dead-end the moment you picked "slotted" (the form
+  // can't author a slot map), the same trap as the old required `regions`.
 }));
 
 export type Page = z.infer<typeof PageSchema>;
