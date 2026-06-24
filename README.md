@@ -5,11 +5,13 @@
 ![Version](https://img.shields.io/badge/version-v4.0.1-green.svg)
 ![Tests](https://img.shields.io/badge/tests-6%2C507%20passing-brightgreen.svg)
 
-> The AI-native business backend: define business objects, permissions, workflows, APIs, UI metadata, and agent tools once as structured Zod metadata.
+> **Open-source, AI-native backend for real business apps.** Describe a business app and AI builds the whole thing — objects, APIs, UI, workflows, and permissions — as version-controlled Zod metadata on a database you own. Self-host it; AI agents then operate it within RBAC / RLS and audit.
+
+**Try it in ~30s** — boot the [HotCRM](https://github.com/objectstack-ai/hotcrm) reference app on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install). · Hosted platform: **[ObjectOS](https://cloud.objectos.app)**.
 
 ## What is ObjectStack?
 
-ObjectStack is a metadata-driven backend for building business applications that AI agents can understand, operate, and audit safely.
+ObjectStack is an **open-source**, metadata-driven backend for building business applications that AI agents can understand, operate, and audit safely — self-hostable, with your data on your own database.
 
 Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScript strings, ObjectStack makes the business system explicit:
 
