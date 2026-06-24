@@ -131,14 +131,21 @@ describe('resolveExecutionContext — API key verify path', () => {
     expect(ctx.permissions).toEqual([]);
   });
 
-  it('ignores Bearer tokens on the API-key path (no key resolution)', async () => {
+  it('resolves a Bearer api-key (osk_ prefix) but not a bare session Bearer', async () => {
     const raw = 'osk_valid';
     const rows = [{ id: 'k1', key: hashApiKey(raw), revoked: false, user_id: 'u1' }];
-    // Bearer is a session token, not an API key — must not resolve here.
-    const ctx = await resolveExecutionContext(
+    // A Bearer carrying the osk_ api-key prefix DOES resolve — remote MCP clients
+    // (Claude Desktop / Cursor / Claude Code) send the key as a Bearer.
+    const keyed = await resolveExecutionContext(
       makeOpts(rows, { authorization: `Bearer ${raw}` }),
     );
-    expect(ctx.userId).toBeUndefined();
+    expect(keyed.userId).toBe('u1');
+    // A bare Bearer (a better-auth session token) is NOT an api-key — no key
+    // resolution here; it falls through to the session path.
+    const session = await resolveExecutionContext(
+      makeOpts(rows, { authorization: 'Bearer some-session-token' }),
+    );
+    expect(session.userId).toBeUndefined();
   });
 });
 
