@@ -4464,6 +4464,122 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
+    /**
+     * ADR-0070 D4 — duplicate a writable base into a NEW package (the Airtable
+     * "duplicate base" gesture). Clones every ACTIVE item the source owns into
+     * `targetPackageId`, RE-NAMESPACING object names — the blueprint prefixes a
+     * base's object names with its namespace (e.g. `iojn_repair_ticket`), and
+     * `sys_metadata` keys on (type,name,org), so a same-name copy would collide
+     * with the source — and rewriting every intra-package reference (lookup
+     * `reference`, view `object`, expressions, etc.) to the new names. Per-item
+     * best-effort; one failure never aborts the whole clone.
+     */
+    async duplicatePackage(request: {
+        sourcePackageId: string;
+        targetPackageId: string;
+        targetName?: string;
+        targetNamespace?: string;
+        organizationId?: string;
+        actor?: string;
+    }): Promise<{
+        success: boolean;
+        copiedCount: number;
+        failedCount: number;
+        targetPackageId: string;
+        copied: Array<{ type: string; name: string }>;
+        failed: Array<{ type: string; name: string; error: string }>;
+    }> {
+        const registry: any = (this.engine as any).registry;
+        const srcPkg = registry?.getPackage?.(request.sourcePackageId);
+        const sourceNs: string =
+            (srcPkg?.manifest?.namespace as string) ?? (request.sourcePackageId.split('.').pop() ?? '');
+        const targetNs: string =
+            request.targetNamespace ?? (request.targetPackageId.split('.').pop() ?? request.targetPackageId);
+
+        const where: Record<string, unknown> = { package_id: request.sourcePackageId, state: 'active' };
+        if (request.organizationId) where.organization_id = request.organizationId;
+        const rows = (await this.engine.find('sys_metadata', { where })) as any[];
+
+        // Map only OBJECT names that carry the source namespace prefix; views/etc.
+        // are renamed by the same prefix swap and reference-rewritten via the map.
+        const renameName = (name: string): string =>
+            sourceNs && typeof name === 'string' && name.startsWith(`${sourceNs}_`)
+                ? `${targetNs}_${name.slice(sourceNs.length + 1)}`
+                : name;
+        const renameMap = new Map<string, string>();
+        for (const row of rows) {
+            if (row?.type === 'object') {
+                const nn = renameName(row.name);
+                if (nn !== row.name) renameMap.set(row.name, nn);
+            }
+        }
+        // Longest-first, identifier-boundary rewrite so `iojn_task` never corrupts
+        // `iojn_task_log`, and `iojn_x` inside `record.iojn_x`/`iojn_x.view` matches.
+        const olds = [...renameMap.keys()].sort((a, b) => b.length - a.length);
+        const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = olds.length ? new RegExp(`(${olds.map(esc).join('|')})(?![A-Za-z0-9_])`, 'g') : null;
+        const deepRewrite = (v: any): any => {
+            if (typeof v === 'string') return re ? v.replace(re, (m) => renameMap.get(m) ?? m) : v;
+            if (Array.isArray(v)) return v.map(deepRewrite);
+            if (v && typeof v === 'object') {
+                const o: any = {};
+                for (const [k, val] of Object.entries(v)) o[k] = deepRewrite(val);
+                return o;
+            }
+            return v;
+        };
+
+        if (srcPkg?.manifest && typeof registry?.installPackage === 'function') {
+            try {
+                registry.installPackage({
+                    ...srcPkg.manifest,
+                    id: request.targetPackageId,
+                    name: request.targetName ?? `${srcPkg.manifest.name ?? request.sourcePackageId} (copy)`,
+                    namespace: targetNs,
+                });
+            } catch {
+                /* best-effort — the per-item package binding still works without a manifest row */
+            }
+        }
+
+        const copied: Array<{ type: string; name: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string }> = [];
+        for (const row of rows) {
+            const newName = renameName(row.name);
+            let item: any;
+            try {
+                item = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata ?? {});
+            } catch {
+                failed.push({ type: row.type, name: row.name, error: 'unparseable metadata' });
+                continue;
+            }
+            const rewritten = deepRewrite(item);
+            if (rewritten && typeof rewritten === 'object' && !Array.isArray(rewritten)) rewritten.name = newName;
+            try {
+                await this.saveMetaItem({
+                    type: row.type,
+                    name: newName,
+                    item: rewritten,
+                    mode: 'publish',
+                    packageId: request.targetPackageId,
+                    ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                });
+                copied.push({ type: row.type, name: newName });
+            } catch (e: any) {
+                failed.push({ type: row.type, name: row.name, error: e?.message ?? 'copy failed' });
+            }
+        }
+        return {
+            success: failed.length === 0 && copied.length > 0,
+            copiedCount: copied.length,
+            failedCount: failed.length,
+            targetPackageId: request.targetPackageId,
+            copied,
+            failed,
+        };
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // ADR-0067 — package-scoped commit history & rollback
     // ─────────────────────────────────────────────────────────────────────

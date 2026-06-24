@@ -103,3 +103,77 @@ describe('protocol.deletePackage', () => {
         expect(res).toMatchObject({ success: false, deletedCount: 0 });
     });
 });
+
+describe('protocol.duplicatePackage (ADR-0070 D4)', () => {
+    function makeProtocol() {
+        const rows = [
+            {
+                type: 'object', name: 'iojn_repair_ticket', state: 'active',
+                metadata: JSON.stringify({
+                    name: 'iojn_repair_ticket', label: 'Ticket',
+                    fields: { title: { type: 'text' }, customer: { type: 'lookup', reference: 'iojn_customer' } },
+                }),
+            },
+            {
+                type: 'object', name: 'iojn_customer', state: 'active',
+                metadata: JSON.stringify({ name: 'iojn_customer', label: 'Customer', fields: { full_name: { type: 'text' } } }),
+            },
+            {
+                type: 'view', name: 'iojn_repair_ticket.all', state: 'active',
+                metadata: JSON.stringify({ name: 'iojn_repair_ticket.all', object: 'iojn_repair_ticket', viewKind: 'list' }),
+            },
+        ];
+        const installPackage = vi.fn();
+        const engine = {
+            find: vi.fn(async () => rows),
+            registry: {
+                getPackage: vi.fn(() => ({
+                    manifest: { id: 'app.iojn', name: 'Repair', namespace: 'iojn', version: '1.0.0', type: 'application', scope: 'environment' },
+                })),
+                installPackage,
+            },
+        };
+        const protocol = new ObjectStackProtocolImplementation(engine as never);
+        const saveMetaItem = vi.spyOn(protocol, 'saveMetaItem' as never);
+        (saveMetaItem as any).mockResolvedValue({ success: true } as never);
+        return { protocol, saveMetaItem, installPackage };
+    }
+
+    it('clones items into a new package, re-namespacing names AND rewriting references', async () => {
+        const { protocol, saveMetaItem, installPackage } = makeProtocol();
+        const res = await protocol.duplicatePackage({
+            sourcePackageId: 'app.iojn', targetPackageId: 'app.iojn2', targetNamespace: 'iojn2',
+        });
+
+        // target package installed as a writable copy (new id + namespace, scope kept)
+        expect(installPackage).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'app.iojn2', namespace: 'iojn2', scope: 'environment' }),
+        );
+
+        const calls = (saveMetaItem as any).mock.calls.map((c: any) => c[0]);
+        const ticket = calls.find((c: any) => c.name === 'iojn2_repair_ticket');
+        const customer = calls.find((c: any) => c.name === 'iojn2_customer');
+        const view = calls.find((c: any) => c.name === 'iojn2_repair_ticket.all');
+
+        expect(ticket).toBeTruthy();
+        expect(ticket.packageId).toBe('app.iojn2');
+        expect(ticket.mode).toBe('publish');
+        // the lookup reference was rewritten to the cloned object's new name
+        expect(ticket.item.fields.customer.reference).toBe('iojn2_customer');
+        expect(ticket.item.name).toBe('iojn2_repair_ticket');
+        expect(customer).toBeTruthy();
+        // the view's object binding + name were re-namespaced too
+        expect(view.item.object).toBe('iojn2_repair_ticket');
+
+        expect(res).toMatchObject({ success: true, copiedCount: 3, failedCount: 0, targetPackageId: 'app.iojn2' });
+    });
+
+    it('does NOT rewrite a same-prefix-but-distinct token incorrectly (boundary-safe)', async () => {
+        const { protocol, saveMetaItem } = makeProtocol();
+        await protocol.duplicatePackage({ sourcePackageId: 'app.iojn', targetPackageId: 'app.iojn2', targetNamespace: 'iojn2' });
+        const calls = (saveMetaItem as any).mock.calls.map((c: any) => c[0]);
+        // iojn_customer → iojn2_customer (exact), never iojn2_customer-with-leftover
+        expect(calls.some((c: any) => c.name === 'iojn2_customer')).toBe(true);
+        expect(calls.some((c: any) => /iojn_/.test(c.name))).toBe(false); // no un-renamed leftovers
+    });
+});
