@@ -187,7 +187,7 @@ describe('lintFlowPatterns — wrong interpolation syntax (#1315)', () => {
 
 
 describe('lintFlowPatterns — approval revise loop (ADR-0044)', () => {
-  const approvalFlow = (edges, approvalConfig = {}) => ({
+  const approvalFlow = (edges: Record<string, unknown>[], approvalConfig: Record<string, unknown> = {}) => ({
     flows: [{
       name: 'budget_approval',
       nodes: [
