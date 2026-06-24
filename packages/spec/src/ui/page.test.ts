@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PageSchema,
+  PAGE_TYPE_ROADMAP,
   PageComponentSchema,
   PageRegionSchema,
   PageTypeSchema,
@@ -199,12 +200,8 @@ describe('PageSchema', () => {
     expect(page.isDefault).toBe(true);
   });
 
-  it('should accept different page types', () => {
-    const types: Array<Page['type']> = [
-      'record', 'home', 'app', 'utility',
-      'dashboard', 'list', 'form', 'record_detail', 'overview',
-    ];
-
+  it('should accept the live page types', () => {
+    const types: Array<Page['type']> = ['record', 'home', 'app', 'utility', 'list'];
     types.forEach(type => {
       const page = PageSchema.parse({
         name: 'test_page',
@@ -214,29 +211,18 @@ describe('PageSchema', () => {
       });
       expect(page.type).toBe(type);
     });
+  });
 
-    // record_review requires recordReview config
-    const reviewPage = PageSchema.parse({
-      name: 'test_page',
-      label: 'Test Page',
-      type: 'record_review',
-      regions: [],
-      recordReview: {
-        object: 'case',
-        actions: [{ label: 'Approve', type: 'approve' }],
-      },
-    });
-    expect(reviewPage.type).toBe('record_review');
-
-    // blank requires blankLayout config
-    const blankPage = PageSchema.parse({
-      name: 'test_page',
-      label: 'Test Page',
-      type: 'blank',
-      regions: [],
-      blankLayout: { items: [] },
-    });
-    expect(blankPage.type).toBe('blank');
+  it('should reject roadmap page types that have no renderer (enforce-or-remove)', () => {
+    // dashboard / form / record_detail / record_review / overview / blank were
+    // removed from PageTypeSchema — authoring one used to pass validation then
+    // break at runtime ("Unknown component type"). The enum is now the live set.
+    for (const type of PAGE_TYPE_ROADMAP) {
+      expect(
+        () => PageSchema.parse({ name: 'test_page', label: 'Test Page', type, regions: [] }),
+        `roadmap type "${type}" must be rejected until it ships a renderer`,
+      ).toThrow();
+    }
   });
 
   it('should accept record page', () => {
@@ -483,13 +469,13 @@ describe('PageTypeSchema', () => {
     });
   });
 
-  it('should accept all interface page types', () => {
-    const types = [
-      'dashboard', 'list', 'form', 'record_detail', 'record_review', 'overview', 'blank',
-    ];
-
-    types.forEach(type => {
-      expect(() => PageTypeSchema.parse(type)).not.toThrow();
+  it('should accept the live interface page type and reject roadmap ones', () => {
+    // `list` is the only live interface page type. The rest were declared for
+    // "roadmap parity" but never rendered — removed from PageTypeSchema
+    // (enforce-or-remove, tracked in PAGE_TYPE_ROADMAP).
+    expect(() => PageTypeSchema.parse('list')).not.toThrow();
+    PAGE_TYPE_ROADMAP.forEach(type => {
+      expect(() => PageTypeSchema.parse(type), `roadmap type "${type}"`).toThrow();
     });
   });
 
@@ -587,25 +573,24 @@ describe('RecordReviewConfigSchema', () => {
 // PageSchema with page types
 // ---------------------------------------------------------------------------
 describe('PageSchema with page types', () => {
-  it('should accept minimal interface-style page', () => {
+  it('should accept a minimal live page', () => {
     const page: Page = PageSchema.parse({
       name: 'page_overview',
       label: 'Overview',
-      type: 'blank',
-      blankLayout: { items: [] },
+      type: 'home',
       regions: [],
     });
 
     expect(page.name).toBe('page_overview');
-    expect(page.type).toBe('blank');
+    expect(page.type).toBe('home');
     expect(page.template).toBe('default');
   });
 
-  it('should accept dashboard page', () => {
+  it('should accept an app page with components', () => {
     const page = PageSchema.parse({
       name: 'page_dashboard',
       label: 'Dashboard',
-      type: 'dashboard',
+      type: 'app',
       regions: [
         {
           name: 'main',
@@ -616,36 +601,15 @@ describe('PageSchema with page types', () => {
       ],
     });
 
-    expect(page.type).toBe('dashboard');
+    expect(page.type).toBe('app');
     expect(page.regions[0].components).toHaveLength(1);
-  });
-
-  it('should accept record_review page with config', () => {
-    const page = PageSchema.parse({
-      name: 'page_review',
-      label: 'Review Queue',
-      type: 'record_review',
-      object: 'order',
-      recordReview: {
-        object: 'order',
-        actions: [
-          { label: 'Approve', type: 'approve', field: 'status', value: 'approved' },
-          { label: 'Reject', type: 'reject', field: 'status', value: 'rejected' },
-        ],
-      },
-      regions: [],
-    });
-
-    expect(page.type).toBe('record_review');
-    expect(page.recordReview?.actions).toHaveLength(2);
   });
 
   it('should accept page with variables', () => {
     const page = PageSchema.parse({
       name: 'page_filtered',
       label: 'Filtered View',
-      type: 'blank',
-      blankLayout: { items: [] },
+      type: 'home',
       variables: [
         { name: 'selectedId', type: 'string' },
         { name: 'showArchived', type: 'boolean', defaultValue: false },
@@ -656,47 +620,11 @@ describe('PageSchema with page types', () => {
     expect(page.variables).toHaveLength(2);
   });
 
-  it('should accept all interface page types', () => {
-    const basicTypes = [
-      'dashboard', 'list', 'form', 'record_detail', 'overview',
-    ];
-
-    basicTypes.forEach(type => {
-      expect(() => PageSchema.parse({
-        name: 'test_page',
-        label: 'Test',
-        type,
-        regions: [],
-      })).not.toThrow();
-    });
-
-    // record_review requires recordReview config
-    expect(() => PageSchema.parse({
-      name: 'test_page',
-      label: 'Test',
-      type: 'record_review',
-      regions: [],
-      recordReview: {
-        object: 'case',
-        actions: [{ label: 'Approve', type: 'approve' }],
-      },
-    })).not.toThrow();
-
-    // blank requires blankLayout config
-    expect(() => PageSchema.parse({
-      name: 'test_page',
-      label: 'Test',
-      type: 'blank',
-      regions: [],
-      blankLayout: { items: [] },
-    })).not.toThrow();
-  });
-
   it('should accept page with icon', () => {
     const page = PageSchema.parse({
       name: 'page_with_icon',
       label: 'Dashboard',
-      type: 'dashboard',
+      type: 'home',
       icon: 'bar-chart',
       regions: [],
     });
@@ -839,7 +767,7 @@ describe('BlankPageLayoutSchema', () => {
     const page = PageSchema.parse({
       name: 'blank_canvas',
       label: 'Canvas',
-      type: 'blank',
+      type: 'home',
       regions: [
         {
           name: 'main',
@@ -888,7 +816,7 @@ describe('PageVariableSchema record_id type', () => {
     const page = PageSchema.parse({
       name: 'blank_picker',
       label: 'Picker Page',
-      type: 'blank',
+      type: 'home',
       blankLayout: { items: [] },
       variables: [
         { name: 'selected_id', type: 'record_id', source: 'account_picker' },
@@ -926,7 +854,7 @@ describe('Page end-to-end', () => {
     const page = PageSchema.parse({
       name: 'page_overview',
       label: 'Overview',
-      type: 'dashboard',
+      type: 'home',
       object: 'order',
       regions: [
         {
@@ -967,7 +895,7 @@ describe('Page end-to-end', () => {
     const page = PageSchema.parse({
       name: 'page_review',
       label: 'Review Queue',
-      type: 'record_review',
+      type: 'home',
       object: 'order',
       recordReview: {
         object: 'order',
@@ -1135,7 +1063,7 @@ describe('PageSchema with interfaceConfig', () => {
     const page = PageSchema.parse({
       name: 'sales_dashboard',
       label: 'Sales Dashboard',
-      type: 'dashboard',
+      type: 'home',
       interfaceConfig: {
         appearance: {
           showDescription: false,
@@ -1239,65 +1167,24 @@ describe('RecordReviewConfigSchema - Negative Validation', () => {
 });
 
 // ============================================================================
-// Issue #5: PageSchema conditional validation (superRefine)
+// PageSchema cross-field requirements — none by design (enforce-or-remove)
 // ============================================================================
-describe('PageSchema - conditional validation', () => {
-  it('should reject record_review page without recordReview config', () => {
-    expect(() => PageSchema.parse({
-      name: 'review_page',
-      label: 'Review',
-      type: 'record_review',
-      regions: [],
-    })).toThrow();
+describe('PageSchema - no cross-field requirements', () => {
+  // The old superRefine required `recordReview`/`blankLayout` for the
+  // record_review/blank types and `slots` for kind:'slotted'. All three are
+  // gone: record_review/blank are unrendered roadmap types removed from the
+  // enum (PAGE_TYPE_ROADMAP), and an empty slotted page validly renders the
+  // synthesized default. Each was a "required-but-unauthorable field blocks the
+  // Studio create form" trap.
+  it('parses a minimal page of each live type with no extra config', () => {
+    for (const type of ['record', 'home', 'app', 'utility', 'list'] as const) {
+      expect(() => PageSchema.parse({ name: 'test_page', label: 'P', type, regions: [] })).not.toThrow();
+    }
   });
 
-  it('should accept record_review page with recordReview config', () => {
+  it('parses a slotted record page with no slots', () => {
     expect(() => PageSchema.parse({
-      name: 'review_page',
-      label: 'Review',
-      type: 'record_review',
-      regions: [],
-      recordReview: {
-        object: 'order',
-        actions: [{ label: 'Approve', type: 'approve' }],
-      },
-    })).not.toThrow();
-  });
-
-  it('should reject blank page without blankLayout config', () => {
-    expect(() => PageSchema.parse({
-      name: 'blank_page',
-      label: 'Blank',
-      type: 'blank',
-      regions: [],
-    })).toThrow();
-  });
-
-  it('should accept blank page with blankLayout config', () => {
-    expect(() => PageSchema.parse({
-      name: 'blank_page',
-      label: 'Blank',
-      type: 'blank',
-      regions: [],
-      blankLayout: { items: [] },
-    })).not.toThrow();
-  });
-
-  it('should not require recordReview for non-record_review types', () => {
-    expect(() => PageSchema.parse({
-      name: 'list_page',
-      label: 'List',
-      type: 'list',
-      regions: [],
-    })).not.toThrow();
-  });
-
-  it('should not require blankLayout for non-blank types', () => {
-    expect(() => PageSchema.parse({
-      name: 'dashboard_page',
-      label: 'Dashboard',
-      type: 'dashboard',
-      regions: [],
+      name: 'test_page', label: 'P', type: 'record', kind: 'slotted', regions: [],
     })).not.toThrow();
   });
 });

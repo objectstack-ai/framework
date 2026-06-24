@@ -179,11 +179,16 @@ export const BlankPageLayoutSchema = lazySchema(() => z.object({
  *   `utility` is a floating utility panel (e.g. notes, phone), `blank` is a free-form canvas
  *   for custom composition. They serve distinct layout purposes.
  *
- * **Implementation status:** only `record`, `home`, `app`, `utility`, and `list` have
- * dedicated renderers today; the remaining interface types (`dashboard`, `form`,
- * `record_detail`, `record_review`, `overview`, `blank`) are declared for roadmap parity
- * but currently fall back to the list renderer. The authoring form only offers the
- * implemented set (see `page.form.ts`) to avoid presenting dead options.
+ * **Liveness (ADR-0049 enforce-or-remove):** only types with a dedicated
+ * renderer are authorizable. `record`, `home`, `app`, `utility`, and `list` are
+ * live. Types once declared for "roadmap parity" but never given a renderer
+ * (`dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`)
+ * have been REMOVED from this enum — a schema-valid-but-unrendered page type is
+ * a false affordance: it passes validation, then breaks at runtime ("Unknown
+ * component type"), which is especially dangerous when templates are AI-authored.
+ * They are tracked in {@link PAGE_TYPE_ROADMAP} and re-enter the enum only when a
+ * renderer ships. The `page-type-liveness` gate test asserts the enum never
+ * re-grows a roadmap type.
  */
 export const PageTypeSchema = lazySchema(() => z.enum([
   // Platform page types (Salesforce FlexiPage style) — region/component composition
@@ -191,17 +196,27 @@ export const PageTypeSchema = lazySchema(() => z.enum([
   'home',           // Platform-level home/landing page
   'app',            // App-level page with navigation context
   'utility',        // Floating utility panel (e.g. notes, phone dialer)
-  // Interface page types (Airtable Interface parity) — data-driven surfaces.
-  // NOTE: grid/kanban/calendar/gallery/timeline are NOT here — they are visualizations
-  // of a `list` page (interfaceConfig.appearance.allowedVisualizations), not page types.
+  // Interface page type (Airtable parity). NOTE: grid/kanban/calendar/gallery/
+  // timeline are NOT page types — they are visualizations of a `list` page
+  // (interfaceConfig.appearance.allowedVisualizations).
   'list',           // Record list/grid surface with switchable visualizations + quick actions
-  'dashboard',      // [roadmap] KPI summary with charts/metrics
-  'form',           // [roadmap] Data entry form
-  'record_detail',  // [roadmap] Auto-generated single record field display
-  'record_review',  // [roadmap] Sequential record review/approval
-  'overview',       // [roadmap] Interface-level navigation/landing hub
-  'blank',          // [roadmap] Free-form canvas for custom composition
-]).describe('Page type — the page KIND (platform or interface). Visualizations of a list page live in interfaceConfig, not here.'));
+]).describe('Page type — the page KIND. Only types with a dedicated renderer are authorizable; visualizations of a list page live in interfaceConfig, not here.'));
+
+/**
+ * Page types declared in the past for "roadmap parity" but removed from
+ * {@link PageTypeSchema} because they never shipped a renderer (authoring one
+ * produced a broken page at runtime). Kept here so the intent isn't lost: when a
+ * renderer lands, move the type back into the enum (and, for high-risk surfaces,
+ * add a liveness proof). ADR-0049 enforce-or-remove / spec liveness gate.
+ */
+export const PAGE_TYPE_ROADMAP = [
+  'dashboard',      // KPI summary with charts/metrics
+  'form',           // Data entry form
+  'record_detail',  // Auto-generated single record field display
+  'record_review',  // Sequential record review/approval (config: RecordReviewConfigSchema)
+  'overview',       // Interface-level navigation/landing hub
+  'blank',          // Free-form canvas (config: BlankPageLayoutSchema)
+] as const;
 
 /**
  * Record Review Config Schema
@@ -322,19 +337,34 @@ export const PageSchema = lazySchema(() => z.object({
   /** Page Type */
   type: PageTypeSchema.default('record').describe('Page type'),
   
-  /** Page State Definitions */
-  variables: z.array(PageVariableSchema).optional().describe('Local page state variables'),
+  /**
+   * Page-local state variables.
+   *
+   * @experimental The state container is wired (the runtime mounts a
+   * `PageVariablesProvider` + `usePageVariables` hook with default-value init),
+   * but the end-to-end loop is not proven: no shipped element writes a variable
+   * (e.g. `element:record_picker` → `source`) and page variables are not yet
+   * injected into the `visible`/binding expression context. Authoring variables
+   * is therefore mostly inert today — treat as a preview surface until a
+   * consumer + an example/proof land.
+   */
+  variables: z.array(PageVariableSchema).optional().describe('Local page state variables (experimental — see schema doc)'),
 
   /** Context */
   object: z.string().optional().describe('Bound object (for Record pages)'),
 
-  /** Record Review Configuration (only for record_review pages) */
+  /** @deprecated Config for the `record_review` page type, which is not yet
+   * rendered and has been removed from {@link PageTypeSchema} (see
+   * {@link PAGE_TYPE_ROADMAP}). Retained as an optional field for back-compat;
+   * slated for removal once the type ships a renderer or consumers drop it. */
   recordReview: RecordReviewConfigSchema.optional()
-    .describe('Record review configuration (required when type is "record_review")'),
+    .describe('@deprecated Record review configuration (record_review type is roadmap, not authorizable)'),
 
-  /** Blank Page Layout (only for blank pages) */
+  /** @deprecated Config for the `blank` page type, which is not yet rendered and
+   * has been removed from {@link PageTypeSchema} (see {@link PAGE_TYPE_ROADMAP}).
+   * Retained as an optional field for back-compat; slated for removal. */
   blankLayout: BlankPageLayoutSchema.optional()
-    .describe('Free-form grid layout for blank pages (used when type is "blank")'),
+    .describe('@deprecated Free-form grid layout (blank type is roadmap, not authorizable)'),
   
   /** Layout Template */
   template: z.string().default('default').describe('Layout template name (e.g. "header-sidebar-main")'),
@@ -400,28 +430,13 @@ export const PageSchema = lazySchema(() => z.object({
     tabs: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     discussion: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
   }).optional().describe('Slot override map for slotted pages'),
-}).superRefine((data, ctx) => {
-  if (data.type === 'record_review' && !data.recordReview) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['recordReview'],
-      message: 'recordReview is required when type is "record_review"',
-    });
-  }
-  if (data.type === 'blank' && !data.blankLayout) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['blankLayout'],
-      message: 'blankLayout is required when type is "blank"',
-    });
-  }
-  // NOTE: `kind: 'slotted'` does NOT require `slots`. A slotted page with no
-  // overrides renders the synthesized default layout (every slot falls through
-  // to the default) — the natural starting point: create the slotted shell,
-  // then add slot overrides in the editor. Requiring `slots` up front made the
-  // Studio "New Page" form a dead-end the moment you picked "slotted" (the form
-  // can't author a slot map), the same trap as the old required `regions`.
 }));
+// PageSchema has no cross-field (`superRefine`) requirements by design. It once
+// required `recordReview`/`blankLayout` for the `record_review`/`blank` types
+// (both removed — unrendered roadmap, see PAGE_TYPE_ROADMAP) and `slots` for
+// `kind: 'slotted'` (dropped — an empty slotted page validly renders the
+// synthesized default). Each of those was a "required-but-unauthorable field
+// blocks the Studio create form" trap; none survives.
 
 export type Page = z.infer<typeof PageSchema>;
 /** Authoring input for {@link Page} — defaulted fields are optional. */
