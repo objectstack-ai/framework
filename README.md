@@ -298,21 +298,6 @@ For the browser, the typed client SDK and React hooks (`useQuery` / `useMutation
 
 </details>
 
-## Codebase Metrics
-
-| Metric | Value |
-| :--- | :--- |
-| Source packages | 72 |
-| Apps | 2 (account, docs) |
-| Framework adapters | 7 (Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit) |
-| Database drivers | 3 (Memory, SQL, MongoDB) |
-| Zod schema files | 200 |
-| Exported schemas | 1,600+ |
-| `.describe()` annotations | 8,750+ |
-| Service contracts | 27 |
-| Test files | 676 |
-| Tests passing | 6,507 |
-
 ## Architecture
 
 ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three protocol layers sit above the kernel:
