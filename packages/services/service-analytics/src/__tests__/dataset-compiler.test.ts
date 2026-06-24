@@ -109,3 +109,111 @@ describe('compileDataset', () => {
     expect(() => compileDataset(ds)).toThrowError(/not supported by the v1 dataset runtime/);
   });
 });
+
+describe('compileDataset — multi-hop joins (ADR-0071)', () => {
+  /** opportunity → account (crm_account) → owner (core_user). All to-one. */
+  const chainResolver = (obj: string, rel: string) => {
+    const graph: Record<string, Record<string, { object: string; table: string }>> = {
+      opportunity: { account: { object: 'account', table: 'crm_account' } },
+      account: { owner: { object: 'user', table: 'core_user' } },
+    };
+    return graph[obj]?.[rel];
+  };
+
+  const twoHop = () =>
+    DatasetSchema.parse({
+      name: 'sales_by_owner_region',
+      label: 'Sales by owner region',
+      object: 'opportunity',
+      include: ['account', 'account.owner'],
+      dimensions: [
+        { name: 'owner_region', label: 'Owner Region', field: 'account.owner.region', type: 'string' },
+      ],
+      measures: [{ name: 'revenue', label: 'Revenue', aggregate: 'sum', field: 'amount' }],
+    });
+
+  it('emits one join per path prefix, keyed by the full dotted path', () => {
+    const { cube } = compileDataset(twoHop(), chainResolver);
+    expect(cube.joins?.['account']?.name).toBe('crm_account');
+    expect(cube.joins?.['account__owner']?.name).toBe('core_user');
+    // The deepest dimension keeps its full dotted sql for the strategy.
+    expect(cube.dimensions.owner_region.sql).toBe('account.owner.region');
+  });
+
+  it('allowlist is every prefix alias (declared path + intermediates)', () => {
+    const { allowedRelationships } = compileDataset(twoHop(), chainResolver);
+    expect(allowedRelationships.has('account')).toBe(true);
+    expect(allowedRelationships.has('account__owner')).toBe(true);
+    expect(allowedRelationships.size).toBe(2);
+  });
+
+  it('auto-includes the intermediate hop when only the deep path is declared', () => {
+    const ds = DatasetSchema.parse({
+      name: 'deep_only',
+      label: 'Deep only',
+      object: 'opportunity',
+      include: ['account.owner'], // intermediate `account` NOT explicitly declared
+      dimensions: [{ name: 'owner_region', field: 'account.owner.region', type: 'string' }],
+      measures: [{ name: 'cnt', aggregate: 'count' }],
+    });
+    const { cube, allowedRelationships } = compileDataset(ds, chainResolver);
+    expect(cube.joins?.['account']?.name).toBe('crm_account'); // auto-added intermediate
+    expect(cube.joins?.['account__owner']?.name).toBe('core_user');
+    expect(allowedRelationships.size).toBe(2);
+  });
+
+  it('rejects an include path beyond the 3-hop cap at parse time (spec refine)', () => {
+    expect(() =>
+      DatasetSchema.parse({
+        name: 'too_deep',
+        label: 'Too deep',
+        object: 'opportunity',
+        include: ['a.b.c.d'], // 4 hops
+        dimensions: [{ name: 'deep_name', field: 'a.b.c.d.name' }],
+        measures: [{ name: 'cnt', aggregate: 'count' }],
+      }),
+    ).toThrowError(/3-hop limit/);
+  });
+
+  it('the compiler also rejects an over-deep include path (defense in depth)', () => {
+    // Bypass the spec refine to exercise the compiler's OWN guard (for datasets
+    // built programmatically, not parsed through the schema).
+    const raw = {
+      name: 'too_deep',
+      label: 'Too deep',
+      object: 'opportunity',
+      include: ['a.b.c.d'],
+      dimensions: [{ name: 'deep_name', label: 'Deep', type: 'string', field: 'a.b.c.d.name' }],
+      measures: [{ name: 'cnt', label: 'Count', aggregate: 'count' }],
+    } as unknown as Parameters<typeof compileDataset>[0];
+    expect(() => compileDataset(raw)).toThrowError(/exceeds the 3-hop limit/);
+  });
+
+  it('rejects a deep field whose relationship path was not declared (D-C)', () => {
+    const bad = DatasetSchema.parse({
+      name: 'bad_deep',
+      label: 'Bad deep',
+      object: 'opportunity',
+      include: ['account'], // declared `account` but NOT `account.owner`
+      dimensions: [{ name: 'owner_region', field: 'account.owner.region' }],
+      measures: [{ name: 'cnt', aggregate: 'count' }],
+    });
+    expect(() => compileDataset(bad, chainResolver)).toThrowError(/relationship path "account.owner".*not declared/s);
+  });
+
+  it('accepts a resolver that returns a bare table string (object assumed equal)', () => {
+    const ds = DatasetSchema.parse({
+      name: 'str_resolver',
+      label: 'String resolver',
+      object: 'opportunity',
+      include: ['account.owner'],
+      dimensions: [{ name: 'owner_region', field: 'account.owner.region' }],
+      measures: [{ name: 'cnt', aggregate: 'count' }],
+    });
+    // Legacy string-returning resolver: object name == table name at each hop.
+    const stringResolver = (_obj: string, rel: string) => rel;
+    const { cube } = compileDataset(ds, stringResolver);
+    expect(cube.joins?.['account']?.name).toBe('account');
+    expect(cube.joins?.['account__owner']?.name).toBe('owner');
+  });
+});

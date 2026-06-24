@@ -40,11 +40,12 @@ export const DatasetDimensionSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Dimension name — referenced by presentations'),
   label: I18nLabelSchema.optional(),
   /**
-   * A field on the base object, OR a `relationship.field` path (e.g.
-   * `account.region`). The join is DERIVED from the declared relationship in
-   * `Dataset.include` — the author never writes a predicate.
+   * A field on the base object, OR a relationship path (one or more to-one hops)
+   * ending in a field — e.g. `account.region` or `account.owner.region`
+   * (ADR-0071 multi-hop). The join chain is DERIVED from the relationship(s)
+   * declared in `Dataset.include`; the author never writes a predicate.
    */
-  field: z.string().describe('Base field or `relationship.field` path'),
+  field: z.string().describe('Base field, or `relationship[.relationship].field` path'),
   type: z.enum(['string', 'number', 'date', 'boolean', 'lookup']).optional(),
   /** Default bucketing for date dimensions (day/week/month/quarter/year). */
   dateGranularity: DateGranularity.optional(),
@@ -66,7 +67,7 @@ export const DatasetMeasureSchema = lazySchema(() => z.object({
   label: I18nLabelSchema.optional(),
   /** Aggregation function — reuses the canonical query.zod enum. */
   aggregate: AggregationFunction.optional().describe('Aggregation (sum/avg/count/...); omit when `derived` is set'),
-  /** Base or `relationship.field`. Optional for `count` (count(*)). */
+  /** Base field, or `relationship[.relationship].field` path. Optional for `count` (count(*)). */
   field: z.string().optional().describe('Aggregated field; optional for count(*)'),
   /** Measure-scoped filter (e.g. only won deals for "won_amount"). */
   filter: FilterConditionSchema.optional(),
@@ -107,12 +108,23 @@ export const DatasetSchema = lazySchema(() => z.object({
   object: z.string().describe('Base object name'),
 
   /**
-   * Relationships to include, BY NAME (lookup / master_detail field names on
-   * the object graph). Joins are COMPILED from these — the author writes no ON
-   * clause. v1 (D-C): only declared relationships are joinable; no arbitrary
-   * predicates.
+   * Relationships to include, by NAME or by PATH — lookup / master_detail field
+   * names on the object graph, optionally chained through to-one relationships
+   * up to 3 hops (`account`, `account.owner`; ADR-0071 multi-hop). Joins are
+   * COMPILED from these — the author writes no ON clause. Declaring `a.b`
+   * implicitly includes the intermediate `a`. D-C: only declared paths are
+   * joinable; no arbitrary predicates, and to-many traversal is out of scope.
    */
-  include: z.array(z.string()).optional().describe('Relationship names to join (derived from object graph)'),
+  include: z
+    .array(
+      z
+        .string()
+        .refine((p) => p.split('.').length <= 3, {
+          message: 'include path exceeds the 3-hop limit (ADR-0071)',
+        }),
+    )
+    .optional()
+    .describe('Relationship names/paths to join (derived from object graph; max 3 hops)'),
 
   /** Definition-level filter (the dataset's intrinsic scope, e.g. non-deleted). */
   filter: FilterConditionSchema.optional().describe('Intrinsic dataset scope filter'),

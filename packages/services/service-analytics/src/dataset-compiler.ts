@@ -33,8 +33,9 @@ export interface CompiledDataset {
   /** The Cube the dataset compiles to (consumed by the strategy chain). */
   cube: Cube;
   /**
-   * Relationship names declared in `include`. The join allowlist (D-C):
-   * the NativeSQLStrategy rejects any join alias not in this set.
+   * Every join alias the dataset may use — each declared `include` path AND its
+   * intermediate prefixes (ADR-0071). The join allowlist (D-C): the
+   * NativeSQLStrategy rejects any join alias not in this set.
    */
   allowedRelationships: Set<string>;
   /** Derived measures, computed post-aggregation by the executor (Q1). */
@@ -46,15 +47,30 @@ export interface CompiledDataset {
 }
 
 /**
- * Resolves a relationship name on a base object to the related object/table
- * name, using the runtime's object graph. Optional: when omitted the compiler
- * trusts the declared `include` names (the NativeSQLStrategy convention assumes
- * the relationship name equals the related table name).
+ * The related object reached by traversing a relationship: its logical object
+ * name (used to resolve the NEXT hop in a multi-hop chain — ADR-0071) and its
+ * physical table name (the join target).
+ */
+export interface RelationshipTarget {
+  object: string;
+  table: string;
+}
+
+/**
+ * Resolves a relationship name on a base object to the related object/table,
+ * using the runtime's object graph. Optional: when omitted the compiler trusts
+ * the declared `include` names (the NativeSQLStrategy convention assumes the
+ * relationship name equals the related table name).
+ *
+ * May return a bare table-name `string` (legacy single-hop: object name is
+ * assumed equal to the table) or a {@link RelationshipTarget} (required to
+ * traverse further along a multi-hop path, where object differs from table for
+ * namespaced objects).
  */
 export type RelationshipResolver = (
   baseObject: string,
   relationshipName: string,
-) => string | undefined;
+) => string | RelationshipTarget | undefined;
 
 /** Map a dataset measure's aggregate to the Cube metric `type`. */
 function aggregateToMetricType(m: DatasetMeasure): Metric['type'] {
@@ -84,56 +100,93 @@ function dimensionType(d: DatasetDimension): CubeDimension['type'] {
   }
 }
 
-/** The relationship prefix of a dotted `relationship.field` path, or null. */
-function relationshipPrefix(field: string): string | null {
-  const idx = field.indexOf('.');
+/** The relationship PATH a dotted field traverses — all segments but the final
+ *  column — or null for a base-object field. E.g. `account.owner.region` →
+ *  `account.owner`; `account.region` → `account`; `region` → null. */
+function fieldRelationshipPath(field: string): string | null {
+  const idx = field.lastIndexOf('.');
   return idx > 0 ? field.slice(0, idx) : null;
 }
+
+/** Max relationship hops in one `include` path — base → 3 hops = 4 objects
+ *  (ADR-0071; Salesforce-report-type parity). To-one chains never fan out, so
+ *  this is a performance/complexity guard, not a correctness limit. */
+const MAX_JOIN_HOPS = 3;
+
+/** SQL-safe join alias for a relationship PATH. The dotted path is the author-
+ *  facing form; the alias replaces dots with `__` (Cube.js convention) so each
+ *  prefix is one valid identifier — quoted dotted identifiers are rejected by
+ *  the read-scope SQL guard (fail-closed). Single-segment paths are unchanged,
+ *  so single-hop joins stay byte-for-byte identical. */
+const joinAlias = (path: string): string => path.replace(/\./g, '__');
 
 export function compileDataset(
   dataset: Dataset,
   resolver?: RelationshipResolver,
 ): CompiledDataset {
   const include = dataset.include ?? [];
-  const allowedRelationships = new Set(include);
 
-  // Resolve each declared relationship to its TARGET TABLE and emit a Cube join.
-  // The relationship name (a lookup/master_detail field on the base object) is
-  // used as the join ALIAS, but the joined TABLE is the related object — these
-  // differ when objects are namespaced (e.g. lookup field `account` →
-  // table `crm_account`). Without resolving the table, the strategy would join a
-  // non-existent `"account"` table. When no resolver is supplied the relationship
-  // name is assumed to equal the table name (legacy convention / unit tests).
-  const joins: Record<string, CubeJoin> = {};
-  for (const rel of include) {
-    let targetTable: string = rel;
-    if (resolver) {
-      const resolved = resolver(dataset.object, rel);
-      if (!resolved) {
-        throw new Error(
-          `[dataset-compiler] dataset "${dataset.name}" includes relationship "${rel}" ` +
-          `which does not exist on object "${dataset.object}".`,
-        );
-      }
-      targetTable = resolved;
+  // Resolve each declared relationship PATH into its ordered join chain, emitting
+  // one Cube join per PATH PREFIX (ADR-0071 multi-hop, to-one only). The join
+  // ALIAS is the full dotted path (`account.owner`), which self-describes the
+  // chain: the parent alias is the path minus its last segment, the FK column is
+  // that last segment. So declaring `account.owner` auto-adds the intermediate
+  // `account` join, and the strategy can rebuild every `ON` from the alias alone.
+  // Without a resolver, each segment's relationship name is assumed to equal both
+  // the related object and its table (legacy convention / unit tests).
+  const resolveHop = (fromObject: string, rel: string): RelationshipTarget => {
+    if (!resolver) return { object: rel, table: rel };
+    const resolved = resolver(fromObject, rel);
+    if (!resolved) {
+      throw new Error(
+        `[dataset-compiler] dataset "${dataset.name}" includes relationship "${rel}" ` +
+        `which does not exist on object "${fromObject}".`,
+      );
     }
-    // `name` carries the join TABLE; the strategy derives the ON clause from the
-    // relationship-name convention (`<base>.<rel> = <rel>.id`).
-    joins[rel] = {
-      name: targetTable,
-      relationship: 'many_to_one',
-      sql: `${dataset.object}.${rel} = ${rel}.id`,
-    };
+    return typeof resolved === 'string' ? { object: resolved, table: resolved } : resolved;
+  };
+  const joins: Record<string, CubeJoin> = {};
+  for (const path of include) {
+    const segments = path.split('.');
+    if (segments.length > MAX_JOIN_HOPS) {
+      throw new Error(
+        `[dataset-compiler] dataset "${dataset.name}" include path "${path}" exceeds the ` +
+        `${MAX_JOIN_HOPS}-hop limit (${segments.length} hops). Deeper traversal is not supported.`,
+      );
+    }
+    let fromObject = dataset.object;
+    let parentAlias = dataset.object;
+    let prefix = '';
+    for (const seg of segments) {
+      prefix = prefix ? `${prefix}.${seg}` : seg;
+      const target = resolveHop(fromObject, seg);
+      const alias = joinAlias(prefix);
+      if (!joins[alias]) {
+        // KEY is the SQL-safe alias; `name` carries the join TABLE; the strategy
+        // rebuilds the ON clause from the alias convention (`<parent>.<seg> = <alias>.id`).
+        joins[alias] = {
+          name: target.table,
+          relationship: 'many_to_one',
+          sql: `${parentAlias}.${seg} = ${prefix}.id`,
+        };
+      }
+      fromObject = target.object;
+      parentAlias = prefix;
+    }
   }
 
-  // Assert any dotted field only traverses a DECLARED relationship (D-C).
+  // The join allowlist (D-C) is every registered alias — each declared path AND
+  // its intermediate prefixes — so a multi-hop field's intermediate joins pass.
+  const allowedRelationships = new Set(Object.keys(joins));
+
+  // Assert any dotted field only traverses a DECLARED relationship PATH (D-C).
   const assertDeclared = (field: string, ownerKind: string, ownerName: string) => {
-    const prefix = relationshipPrefix(field);
-    if (prefix && !allowedRelationships.has(prefix)) {
+    const relPath = fieldRelationshipPath(field);
+    if (relPath && !joins[joinAlias(relPath)]) {
       throw new Error(
-        `[dataset-compiler] ${ownerKind} "${ownerName}" references relationship "${prefix}" ` +
-        `via "${field}", but "${prefix}" is not declared in the dataset's \`include\`. ` +
-        `v1 only joins along declared relationships.`,
+        `[dataset-compiler] ${ownerKind} "${ownerName}" references relationship path "${relPath}" ` +
+        `via "${field}", but "${relPath}" is not declared in the dataset's \`include\`. ` +
+        `Only fields along a declared relationship path are joinable.`,
       );
     }
   };

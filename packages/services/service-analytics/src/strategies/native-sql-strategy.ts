@@ -210,14 +210,22 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     whereClauses.push(`(${rendered})`);
   }
 
+  /** SQL-safe join alias for a relationship path (dots → `__`); single-segment
+   *  paths are unchanged. Mirrors the dataset compiler's `cube.joins` keying so
+   *  alias, allowlist, and per-hop RLS all agree on one valid identifier. */
+  private joinAlias(path: string): string {
+    return path.replace(/\./g, '__');
+  }
+
   /**
    * Resolve a dimension/measure/filter SQL expression that may reference a
    * related table via dot notation (e.g. `account.industry`).
    *
-   * When the resolved `sql` contains a dot, treat the prefix as a lookup
-   * field on the cube's table and synthesise a `LEFT JOIN` against the
-   * related table. The convention (matching the auto-cube generator and
-   * ObjectStack object schemas) is:
+   * A dotted `sql` is a relationship PATH (ADR-0071 multi-hop): every segment
+   * but the last is a to-one relationship hop, the last is the column. Each hop
+   * synthesises a `LEFT JOIN` aliased by its full path prefix, chained
+   * parent→child. The convention (matching the auto-cube generator and
+   * ObjectStack object schemas) for a single hop is:
    *
    *   <parentTable>.<lookupField> = <lookupField>.id
    *
@@ -247,26 +255,36 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
       }
       return rawSql;
     }
-    // Only the first dotted hop is supported (single-level relation).
-    const [alias, ...rest] = rawSql.split('.');
-    if (!alias || rest.length === 0) return rawSql;
-    const column = rest.join('.');
-    if (!joins.has(alias)) {
-      // The relationship name is the join ALIAS; the joined TABLE is the
-      // related object. For datasets these differ when objects are namespaced
-      // (lookup `account` → table `crm_account`), so resolve the table from the
-      // Cube's `joins` map (emitted by the dataset compiler). Fall back to the
-      // alias as the table for legacy/same-name cubes.
-      const joinTable = cube?.joins?.[alias]?.name ?? alias;
-      // Only emit an explicit alias when the table differs from it; when they
-      // match, `LEFT JOIN "account" ON …` is cleaner (and back-compat).
-      const tableRef = joinTable === alias ? `"${alias}"` : `"${joinTable}" "${alias}"`;
-      joins.set(
-        alias,
-        `LEFT JOIN ${tableRef} ON "${parentTable}"."${alias}" = "${alias}"."id"`,
-      );
+    // Multi-hop (ADR-0071): the dotted path IS the join chain. Every segment but
+    // the last is a relationship hop; the last is the column. The join ALIAS at
+    // each hop is the full path PREFIX (`account`, then `account.owner`), which
+    // encodes its own parent (the prefix minus its last segment) and FK column
+    // (that segment). Register one LEFT JOIN per prefix, chaining parent→child.
+    const segments = rawSql.split('.');
+    const column = segments[segments.length - 1];
+    const hops = segments.slice(0, -1);
+    if (hops.length === 0 || !column) return rawSql;
+    let parentAlias = parentTable;
+    let prefix = '';
+    for (const seg of hops) {
+      prefix = prefix ? `${prefix}.${seg}` : seg;
+      const alias = this.joinAlias(prefix);
+      if (!joins.has(alias)) {
+        // The joined TABLE is resolved from the Cube's `joins` map (emitted by
+        // the dataset compiler, keyed by the same alias); fall back to the alias
+        // as the table for legacy/same-name cubes.
+        const joinTable = cube?.joins?.[alias]?.name ?? alias;
+        // Only emit an explicit alias when the table differs from it; when they
+        // match, `LEFT JOIN "account" ON …` is cleaner (and back-compat).
+        const tableRef = joinTable === alias ? `"${alias}"` : `"${joinTable}" "${alias}"`;
+        joins.set(
+          alias,
+          `LEFT JOIN ${tableRef} ON "${parentAlias}"."${seg}" = "${alias}"."id"`,
+        );
+      }
+      parentAlias = alias;
     }
-    return `"${alias}"."${column}"`;
+    return `"${parentAlias}"."${column}"`;
   }
 
   /**
@@ -384,9 +402,13 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
     const rawSql = dim?.sql ?? measure?.sql ?? (member.includes('.') ? member.split('.').slice(1).join('.') : member);
 
     if (rawSql.includes('.')) {
-      const [alias, ...rest] = rawSql.split('.');
-      const object = cube.joins?.[alias]?.name ?? alias;
-      return { object, field: rest.join('.') };
+      // Multi-hop (ADR-0071): the column's owning object is the join at the
+      // relationship PATH (all segments but the last); the column is the last.
+      const segments = rawSql.split('.');
+      const field = segments[segments.length - 1];
+      const relPath = segments.slice(0, -1).join('.');
+      const object = cube.joins?.[this.joinAlias(relPath)]?.name ?? relPath;
+      return { object, field };
     }
     return { object: baseTable, field: rawSql };
   }

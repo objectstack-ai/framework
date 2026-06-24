@@ -13,7 +13,7 @@ export { CubeRegistry } from './cube-registry.js';
 
 // Dataset semantic layer (ADR-0021)
 export { compileDataset } from './dataset-compiler.js';
-export type { CompiledDataset, DerivedMeasureSpec, RelationshipResolver } from './dataset-compiler.js';
+export type { CompiledDataset, DerivedMeasureSpec, RelationshipResolver, RelationshipTarget } from './dataset-compiler.js';
 
 export { resolveDimensionLabels, pickDisplayField } from './dimension-labels.js';
 export type { DimensionLabelDeps, FieldMetaLite } from './dimension-labels.js';

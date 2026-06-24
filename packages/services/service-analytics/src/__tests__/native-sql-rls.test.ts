@@ -156,3 +156,67 @@ describe('NativeSQLStrategy — base-column qualification under joins', () => {
     expect(sql).not.toContain('"task"."status"');
   });
 });
+
+describe('NativeSQLStrategy — multi-hop joins (ADR-0071)', () => {
+  // opportunity → account (crm_account) → owner (core_user); dimension two hops deep.
+  const mhCube: Cube = {
+    name: 'sales',
+    title: 'Sales',
+    sql: 'opportunity',
+    measures: { revenue: { name: 'revenue', label: 'Revenue', type: 'sum', sql: 'amount' } },
+    dimensions: {
+      owner_region: { name: 'owner_region', label: 'Owner Region', type: 'string', sql: 'account.owner.region' },
+    },
+    joins: {
+      account: { name: 'crm_account', relationship: 'many_to_one', sql: 'opportunity.account = account.id' },
+      'account__owner': { name: 'core_user', relationship: 'many_to_one', sql: 'account.owner = account__owner.id' },
+    },
+    public: false,
+  };
+  const mhQuery: AnalyticsQuery = {
+    cube: 'sales',
+    measures: ['revenue'],
+    dimensions: ['owner_region'],
+    timezone: 'UTC',
+  };
+  const mhCtx = (overrides: Partial<StrategyContext> = {}): StrategyContext => ({
+    getCube: (n) => (n === 'sales' ? mhCube : undefined),
+    queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
+    executeRawSql: async () => [],
+    getAllowedRelationships: () => new Set(['account', 'account__owner']),
+    ...overrides,
+  });
+
+  it('chains a LEFT JOIN per hop, each aliased by its full path prefix', async () => {
+    const { sql } = await new NativeSQLStrategy().generateSql(mhQuery, mhCtx());
+    // hop 1: base → account
+    expect(sql).toContain('LEFT JOIN "crm_account" "account" ON "opportunity"."account" = "account"."id"');
+    // hop 2: account → owner, parent is the hop-1 alias, child alias is the full path
+    expect(sql).toContain('LEFT JOIN "core_user" "account__owner" ON "account"."owner" = "account__owner"."id"');
+    // the deep column is qualified by the deepest alias
+    expect(sql).toContain('"account__owner"."region"');
+  });
+
+  it('injects the tenant read scope for the base AND every hop object (per-hop RLS)', async () => {
+    const { sql, params } = await new NativeSQLStrategy().generateSql(
+      mhQuery,
+      mhCtx({ getReadScope: (obj) => ({ organization_id: `org:${obj}` }) }),
+    );
+    // base + both hop aliases are scoped
+    expect(sql).toContain('"opportunity"."organization_id" =');
+    expect(sql).toContain('"account"."organization_id" =');
+    expect(sql).toContain('"account__owner"."organization_id" =');
+    // scope params resolve against each hop's TARGET object (alias → object name)
+    expect(params).toContain('org:opportunity');
+    expect(params).toContain('org:crm_account');
+    expect(params).toContain('org:core_user');
+  });
+
+  it('rejects when an intermediate hop is missing from the allowlist', async () => {
+    // `account.owner` is registered by the deep dimension but NOT allowed.
+    const ctx = mhCtx({ getAllowedRelationships: () => new Set(['account']) });
+    await expect(new NativeSQLStrategy().generateSql(mhQuery, ctx)).rejects.toThrow(
+      /join "account__owner" is not backed by a declared relationship/,
+    );
+  });
+});
