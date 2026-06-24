@@ -6,8 +6,13 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { Logger, IMetadataService, IDataEngine, AIToolDefinition } from '@objectstack/spec/contracts';
 import type { Agent } from '@objectstack/spec/ai';
 import type { ToolRegistry, ToolExecutionResult } from './types.js';
-import { registerObjectTools } from './mcp-http-tools.js';
-import type { McpDataBridge, RegisterObjectToolsOptions } from './mcp-http-tools.js';
+import { registerObjectTools, registerActionTools } from './mcp-http-tools.js';
+import type {
+  McpDataBridge,
+  McpActionBridge,
+  RegisterObjectToolsOptions,
+  RegisterActionToolsOptions,
+} from './mcp-http-tools.js';
 import { z } from 'zod';
 
 /**
@@ -507,27 +512,29 @@ export class MCPServerRuntime {
    * Stateless by design: a fresh {@link McpServer} + transport is built per
    * request (the SDK-recommended pattern for stateless HTTP — it avoids any
    * cross-request session/request-id collision and keeps each call isolated).
-   * The tool set is the object-CRUD bridge, bound to the **caller's principal**
+   * The tool set is the object-CRUD bridge plus — when the bridge can resolve
+   * the framework's action mechanism — the business-action tools
+   * (`list_actions` / `run_action`), all bound to the **caller's principal**
    * via `bridge`; the runtime wires that bridge to the existing permission +
    * RLS path, so an external agent can never exceed the key's authority.
    *
-   * Only the object-CRUD tools are exposed here — the internal AI/authoring
+   * Only these native tools are exposed here — the internal AI/authoring
    * toolRegistry (which can mutate metadata) is deliberately NOT bridged onto
    * the external surface.
    *
    * @param request    The inbound Web `Request` (headers/method/url).
-   * @param opts.bridge       Principal-bound data accessor (required to expose tools).
+   * @param opts.bridge       Principal-bound data (+ optional action) accessor (required to expose tools).
    * @param opts.parsedBody   Pre-parsed JSON-RPC body (the dispatcher already read it).
    * @param opts.authInfo     Optional auth info forwarded to message handlers.
-   * @param opts.toolOptions  Object-tool exposure options (system objects, limits).
+   * @param opts.toolOptions  Tool exposure options (system objects, query limits).
    */
   async handleHttpRequest(
     request: Request,
     opts: {
-      bridge?: McpDataBridge;
+      bridge?: McpDataBridge & Partial<McpActionBridge>;
       parsedBody?: unknown;
       authInfo?: unknown;
-      toolOptions?: RegisterObjectToolsOptions;
+      toolOptions?: RegisterObjectToolsOptions & RegisterActionToolsOptions;
     } = {},
   ): Promise<Response> {
     // Fresh, isolated server per request (stateless).
@@ -543,6 +550,16 @@ export class MCPServerRuntime {
 
     if (opts.bridge) {
       registerObjectTools(server, opts.bridge, opts.toolOptions);
+      // The action surface is wired by capability: only when the runtime's
+      // bridge can resolve + dispatch the framework's actions. A host with no
+      // action mechanism keeps serving object tools unchanged (graceful
+      // degradation, mirroring how record resources need a dataEngine).
+      if (
+        typeof opts.bridge.listActions === 'function' &&
+        typeof opts.bridge.runAction === 'function'
+      ) {
+        registerActionTools(server, opts.bridge as McpActionBridge, opts.toolOptions);
+      }
     }
 
     const transport = new WebStandardStreamableHTTPServerTransport({

@@ -29,6 +29,11 @@ function randomUUID(): string {
     });
 }
 
+/** A `sys_`-prefixed object is a system table — off-limits to external MCP agents. */
+function isSystemObjectName(name: string): boolean {
+    return /^sys_/i.test(name);
+}
+
 export interface HttpProtocolContext {
     request: any;
     response?: any;
@@ -534,7 +539,325 @@ export class HttpDispatcher {
                 await callData('update', { object, id, data }, driver, envId, ec),
             remove: async (object: string, id: string) =>
                 await callData('delete', { object, id }, driver, envId, ec),
+
+            // ── Business-action surface (McpActionBridge) ──────────────
+            // Resolution + dispatch flow through the framework's own action
+            // mechanism (engine.executeAction / automation flow runner) bound to
+            // THIS request's ExecutionContext — the same permission + RLS path
+            // the REST `/actions/...` route uses. No `@objectstack/service-ai`.
+            listActions: async () => {
+                const meta: any = await getMeta();
+                const objs: any[] = (await meta?.listObjects?.()) ?? [];
+                const hasAutomation = Boolean(
+                    await this.resolveService('automation', envId).catch(() => null),
+                );
+                const out: any[] = [];
+                for (const obj of objs) {
+                    const objectName: string | undefined = obj?.name;
+                    if (!objectName || isSystemObjectName(objectName)) continue; // fail-closed on sys_*
+                    const actions: any[] = Array.isArray(obj?.actions) ? obj.actions : [];
+                    for (const action of actions) {
+                        if (!action || typeof action.name !== 'string') continue;
+                        if (!this.isHeadlessInvokableAction(action, hasAutomation)) continue;
+                        // Hide actions the caller is not permitted to run.
+                        if (this.actionPermissionError(action, ec)) continue;
+                        out.push(this.summarizeAction(action, obj, objectName));
+                    }
+                }
+                return out;
+            },
+            runAction: async (
+                name: string,
+                input: { objectName?: string; recordId?: string; params?: Record<string, unknown> },
+            ) => this.invokeBusinessAction(name, input ?? {}, { driver, envId, ec, getMeta, callData }),
         };
+    }
+
+    // ── MCP action bridge helpers ──────────────────────────────────────
+
+    /**
+     * [ADR-0066 D4] Shared capability gate for an action invocation. Returns a
+     * human-readable error string when the caller's `systemPermissions` don't
+     * cover the action's declared `requiredPermissions`, or `null` when allowed.
+     * System/engine self-invocation (`isSystem`) bypasses; an action without
+     * `requiredPermissions` is ungated. Single-sourced so the REST `/actions/...`
+     * route and the MCP `run_action` bridge enforce the SAME declaration.
+     */
+    private actionPermissionError(actionDef: any, ec: any, objectName?: string): string | null {
+        const required: string[] = Array.isArray(actionDef?.requiredPermissions)
+            ? actionDef.requiredPermissions
+            : [];
+        if (required.length === 0) return null;
+        if (ec?.isSystem) return null;
+        const held = new Set<string>(ec?.systemPermissions ?? []);
+        const missing = required.filter((perm) => !held.has(perm));
+        if (missing.length === 0) return null;
+        const on = objectName ? ` on '${objectName}'` : '';
+        return (
+            `Action '${actionDef?.name ?? 'unknown'}'${on} requires capability ` +
+            `[${required.join(', ')}] — caller is missing [${missing.join(', ')}]`
+        );
+    }
+
+    /**
+     * Whether an action has a headless invocation path (so MCP can run it).
+     * Mirrors the supported-type set of the (now cloud-side) action-tools
+     * bridge: `script` needs a handler binding (`target`) or an inline `body`;
+     * `flow` needs a `target` and an automation service. UI-only types
+     * (`url`, `modal`, `form`) and `api` have no server dispatch here.
+     */
+    private isHeadlessInvokableAction(action: any, hasAutomation: boolean): boolean {
+        const type: string = action?.type ?? 'script';
+        if (type === 'script') return Boolean(action?.target || action?.body);
+        if (type === 'flow') return Boolean(action?.target) && hasAutomation;
+        return false;
+    }
+
+    /** True when an action is destructive by author signal/heuristic (HITL hint). */
+    private actionLooksDestructive(action: any): boolean {
+        if (action?.ai?.requiresConfirmation !== undefined) return Boolean(action.ai.requiresConfirmation);
+        return Boolean(action?.confirmText || action?.mode === 'delete' || action?.variant === 'danger');
+    }
+
+    /** Project an action's declarative metadata into a lean MCP summary. */
+    private summarizeAction(action: any, obj: any, objectName: string): any {
+        const requiresRecord =
+            Array.isArray(action?.locations) &&
+            action.locations.some(
+                (l: string) =>
+                    l === 'list_item' || l === 'record_header' || l === 'record_more' || l === 'record_related',
+            );
+        const description =
+            (typeof action?.ai?.description === 'string' ? action.ai.description : undefined) ??
+            (typeof action?.label === 'string' ? action.label : undefined);
+        const params = this.summarizeActionParams(action, obj);
+        return {
+            name: action.name,
+            objectName,
+            ...(typeof action?.label === 'string' ? { label: action.label } : {}),
+            ...(description ? { description } : {}),
+            type: action?.type ?? 'script',
+            requiresRecord: Boolean(requiresRecord),
+            requiresConfirmation: this.actionLooksDestructive(action),
+            ...(params.length > 0 ? { params } : {}),
+        };
+    }
+
+    /** Map an ObjectStack field type to a JSON-Schema primitive (conservative). */
+    private jsonTypeOf(t: string | undefined): 'string' | 'number' | 'boolean' | 'array' {
+        switch (t) {
+            case 'number': case 'currency': case 'percent': case 'rating': case 'slider': case 'autonumber':
+                return 'number';
+            case 'boolean': case 'toggle':
+                return 'boolean';
+            case 'multiselect': case 'checkboxes': case 'tags':
+                return 'array';
+            default:
+                return 'string';
+        }
+    }
+
+    /** Resolve an action's params into LLM-facing summaries (field-backed types resolved). */
+    private summarizeActionParams(action: any, obj: any): any[] {
+        const fields: Record<string, any> = obj?.fields ?? {};
+        const out: any[] = [];
+        for (const p of (Array.isArray(action?.params) ? action.params : [])) {
+            const fieldRef: string | undefined = p?.field;
+            const field = fieldRef ? fields[fieldRef] : undefined;
+            const name: string | undefined = p?.name ?? fieldRef;
+            if (!name) continue;
+            const type = this.jsonTypeOf(p?.type ?? field?.type);
+            const label = typeof p?.label === 'string' ? p.label : field?.label;
+            const help = p?.helpText ?? field?.description;
+            const description = [label, help].filter(Boolean).join(' — ') || undefined;
+            const optionSource = p?.options ?? field?.options;
+            const enumVals = Array.isArray(optionSource)
+                ? optionSource
+                      .map((o: any) => (typeof o === 'string' ? o : o?.value))
+                      .filter((v: any): v is string => typeof v === 'string')
+                : [];
+            out.push({
+                name,
+                type,
+                required: Boolean(p?.required ?? field?.required ?? false),
+                ...(description ? { description } : {}),
+                ...(enumVals.length > 0 ? { enum: enumVals } : {}),
+            });
+        }
+        return out;
+    }
+
+    /** Slim engine facade matching the ActionContext.engine shape handlers expect. */
+    private buildActionEngineFacade(ql: any): any {
+        return {
+            async insert(object: string, data: Record<string, unknown>): Promise<{ id: string }> {
+                const res = await ql.insert(object, data);
+                const id = (res && (res as any).id) ?? (data as any).id;
+                return { id };
+            },
+            async update(object: string, id: string, data: Record<string, unknown>): Promise<void> {
+                await ql.update(object, data, { where: { id } });
+            },
+            // Tolerant of both the single-id and array conventions handler suites
+            // use (CRM handlers pass one id; todo handlers pass an id array).
+            async delete(object: string, idOrIds: string | string[]): Promise<void> {
+                const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+                for (const id of ids) {
+                    if (id != null) await ql.delete(object, { where: { id } });
+                }
+            },
+            async find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>> {
+                const opts = query && Object.keys(query).length ? { where: query } : undefined;
+                const rows = await ql.find(object, opts as any);
+                return Array.isArray(rows) ? rows : ((rows as any)?.value ?? []);
+            },
+        };
+    }
+
+    /**
+     * Resolve + invoke a business action by its declarative name for the MCP
+     * `run_action` tool. Enforces the ADR-0066 D4 capability gate and RLS as the
+     * caller, loads the subject record under RLS for row-context actions, and
+     * dispatches through the framework's `engine.executeAction` (script/body) or
+     * automation flow runner (flow). Throws on denial / not-found / handler
+     * failure so the tool surfaces a clean tool-error. No service-ai dependency.
+     */
+    private async invokeBusinessAction(
+        name: string,
+        input: { objectName?: string; recordId?: string; params?: Record<string, unknown> },
+        wiring: {
+            driver: any;
+            envId?: string;
+            ec: any;
+            getMeta: () => any;
+            callData: (action: string, params: any, dataDriver?: any, scopeId?: string, ec?: ExecutionContext) => Promise<any>;
+        },
+    ): Promise<any> {
+        const { driver, envId, ec, getMeta, callData } = wiring;
+        const meta: any = await getMeta();
+        const params = input?.params && typeof input.params === 'object' ? input.params : {};
+        const recordId = typeof input?.recordId === 'string' && input.recordId.length > 0 ? input.recordId : undefined;
+
+        // Resolve the action def by declarative name (optionally scoped).
+        const resolved = await this.resolveActionByName(meta, name, input?.objectName);
+        if (!resolved) {
+            throw new Error(
+                input?.objectName
+                    ? `Action '${name}' not found on object '${input.objectName}'`
+                    : `Action '${name}' not found`,
+            );
+        }
+        const { action, objectName } = resolved;
+
+        // Fail-closed on system-object actions (mirrors the object-tool guard).
+        if (isSystemObjectName(objectName)) {
+            throw new Error(`Action '${name}' is on a system object and is not exposed via MCP`);
+        }
+        const hasAutomation = Boolean(await this.resolveService('automation', envId).catch(() => null));
+        if (!this.isHeadlessInvokableAction(action, hasAutomation)) {
+            throw new Error(
+                `Action '${name}' (type='${action?.type ?? 'script'}') cannot be invoked via MCP`,
+            );
+        }
+
+        // ADR-0066 D4 capability gate — same declaration the REST route enforces.
+        const gateError = this.actionPermissionError(action, ec, objectName);
+        if (gateError) throw new Error(gateError);
+
+        // Load the subject record under RLS when row-context (engages the same
+        // permission path as get_record — an unseen record reads as not-found).
+        let record: Record<string, unknown> = {};
+        if (recordId && objectName !== 'global') {
+            try {
+                const got: any = await callData('get', { object: objectName, id: recordId }, driver, envId, ec);
+                if (got?.record) record = got.record;
+            } catch {
+                /* new-record / record-less actions pass an empty record */
+            }
+        }
+        if (record && (record as any).id == null && recordId) (record as any).id = recordId;
+
+        const user = ec?.userId
+            ? { id: ec.userId, name: ec.userName ?? ec.userDisplayName ?? ec.userId }
+            : { id: 'system', name: 'system' };
+
+        // ── flow dispatch ──
+        if (action.type === 'flow') {
+            const automation: any = await this.resolveService('automation', envId).catch(() => null);
+            if (!automation || typeof automation.execute !== 'function') {
+                throw new Error(`Action '${name}' is a flow but no automation service is available`);
+            }
+            const result: any = await automation.execute(action.target, {
+                triggerData: { record, params, user, action: action.name },
+            });
+            if (result && typeof result === 'object' && 'success' in result && result.success === false) {
+                throw new Error(`Flow '${action.target}' failed: ${result.error ?? 'unknown error'}`);
+            }
+            return { ok: true, action: action.name, objectName, ...(recordId ? { recordId } : {}), result: result ?? null };
+        }
+
+        // ── script/body dispatch via the engine's executeAction ──
+        const ql: any = await this.getObjectQLService(envId);
+        if (!ql || typeof ql.executeAction !== 'function') {
+            throw new Error('Data engine not available for action dispatch');
+        }
+        const actionContext: any = {
+            record,
+            user,
+            engine: this.buildActionEngineFacade(ql),
+            params: { ...params, recordId, objectName },
+        };
+        // Handler key: body-based actions register under `name` (AppPlugin);
+        // target-bound script actions register under `target` (user code).
+        // Probe both, then the wildcard object, distinguishing the engine's
+        // "action not registered" miss from a genuine handler error.
+        const primary = action.body ? action.name : (action.target || action.name);
+        const candidates = [primary, action.target, action.name].filter(
+            (k: unknown, i: number, a: unknown[]): k is string => typeof k === 'string' && a.indexOf(k) === i,
+        );
+        const notRegistered = (err: any) => /Action '.+' on object '.+' not found/i.test(String(err?.message ?? err));
+        for (const obj of [objectName, '*']) {
+            for (const key of candidates) {
+                try {
+                    const result = await ql.executeAction(obj, key, actionContext);
+                    return { ok: true, action: action.name, objectName, ...(recordId ? { recordId } : {}), result: result ?? null };
+                } catch (err: any) {
+                    if (!notRegistered(err)) throw err; // real handler failure → surface
+                }
+            }
+        }
+        throw new Error(`No handler registered for action '${name}' on '${objectName}'`);
+    }
+
+    /**
+     * Find an action's declarative definition by name across object metadata,
+     * optionally scoped to a single object. Returns the action plus its owning
+     * object name, or `null`. Throws when the name is ambiguous across objects
+     * and no `objectName` was supplied (so `run_action` can ask for one).
+     */
+    private async resolveActionByName(
+        meta: any,
+        name: string,
+        objectName?: string,
+    ): Promise<{ action: any; objectName: string } | null> {
+        if (objectName) {
+            const def: any = await meta?.getObject?.(objectName);
+            const action = Array.isArray(def?.actions) ? def.actions.find((a: any) => a?.name === name) : undefined;
+            return action ? { action, objectName } : null;
+        }
+        const objs: any[] = (await meta?.listObjects?.()) ?? [];
+        const matches: Array<{ action: any; objectName: string }> = [];
+        for (const obj of objs) {
+            if (!obj?.name) continue;
+            const action = Array.isArray(obj?.actions) ? obj.actions.find((a: any) => a?.name === name) : undefined;
+            if (action) matches.push({ action, objectName: obj.name });
+        }
+        if (matches.length === 0) return null;
+        if (matches.length > 1) {
+            const where = matches.map((m) => m.objectName).join(', ');
+            throw new Error(`Action '${name}' exists on multiple objects (${where}); pass objectName to disambiguate`);
+        }
+        return matches[0];
     }
 
     /**
@@ -2722,25 +3045,9 @@ export class HttpDispatcher {
             const actionDef: any = Array.isArray(actionSchema?.actions)
                 ? actionSchema.actions.find((a: any) => a?.name === actionName)
                 : undefined;
-            const required: string[] = Array.isArray(actionDef?.requiredPermissions)
-                ? actionDef.requiredPermissions
-                : [];
-            if (required.length > 0) {
-                const execCtx: any = _context?.executionContext;
-                if (!execCtx?.isSystem) {
-                    const held = new Set<string>(execCtx?.systemPermissions ?? []);
-                    const missing = required.filter((perm) => !held.has(perm));
-                    if (missing.length > 0) {
-                        return {
-                            handled: true,
-                            response: this.error(
-                                `Action '${actionName}' on '${objectName}' requires capability ` +
-                                `[${required.join(', ')}] — caller is missing [${missing.join(', ')}]`,
-                                403,
-                            ),
-                        };
-                    }
-                }
+            const gateError = this.actionPermissionError(actionDef, _context?.executionContext, objectName);
+            if (gateError) {
+                return { handled: true, response: this.error(gateError, 403) };
             }
         } catch {
             /* schema unresolved → no declared gate to enforce (handler-only action) */

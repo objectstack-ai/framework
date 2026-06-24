@@ -60,6 +60,74 @@ export interface RegisterObjectToolsOptions {
   maxQueryLimit?: number;
 }
 
+/** One declared input parameter of a business action, LLM-facing. */
+export interface McpActionParamSummary {
+  name: string;
+  type?: 'string' | 'number' | 'boolean' | 'array';
+  required?: boolean;
+  description?: string;
+  /** Allowed values, when the param (or its backing field) is an enum. */
+  enum?: string[];
+}
+
+/**
+ * A business action the caller may invoke, as surfaced by `list_actions`.
+ * Mirrors {@link McpObjectSummary} for the action surface: enough for an agent
+ * to decide whether and how to call `run_action`, nothing engine-internal.
+ */
+export interface McpActionSummary {
+  /** Declarative action name — the identifier passed to `run_action`. */
+  name: string;
+  /** The object the action operates on (omitted for object-less actions). */
+  objectName?: string;
+  /** Human label. */
+  label?: string;
+  /** What the action does (the authored `ai.description` when present). */
+  description?: string;
+  /** Dispatch kind: `script` | `flow` | `api`. */
+  type?: string;
+  /** True when the action acts on a row and so needs a `recordId`. */
+  requiresRecord?: boolean;
+  /** True when the action is destructive / an author flagged it for confirmation. */
+  requiresConfirmation?: boolean;
+  /** Declared input parameters. */
+  params?: McpActionParamSummary[];
+}
+
+/**
+ * Action-execution seam for the HTTP MCP tools. Implemented by the runtime so
+ * resolution + dispatch flows through the framework's own action mechanism
+ * (`IDataEngine.executeAction` / automation flow runner) bound to the caller's
+ * ExecutionContext — the SAME permission + RLS path the REST `/actions/...`
+ * endpoint uses. Every method runs AS the authenticated principal.
+ *
+ * Deliberately decoupled from {@link McpDataBridge}: a runtime that cannot
+ * resolve the action mechanism simply does not implement this, and the action
+ * tools are then not registered (graceful degradation — see
+ * `registerActionTools`). Bridging here is direct framework-contract access; it
+ * does NOT depend on `@objectstack/service-ai`.
+ */
+export interface McpActionBridge {
+  /** Actions the caller may run, already filtered by permission + visibility. */
+  listActions(): Promise<McpActionSummary[]>;
+  /**
+   * Invoke an action by its declarative name. Resolves the action (optionally
+   * scoped by `objectName` to disambiguate), enforces its `requiredPermissions`
+   * as the caller, loads the subject record under RLS when row-context, then
+   * dispatches through the framework action runner. Throws on
+   * denial / not-found / handler failure so the tool surfaces a tool-error.
+   */
+  runAction(
+    name: string,
+    input: { objectName?: string; recordId?: string; params?: Record<string, unknown> },
+  ): Promise<unknown>;
+}
+
+export interface RegisterActionToolsOptions {
+  /** Expose actions on `sys_*` system objects too. Default false (fail-closed). */
+  allowSystemObjects?: boolean;
+}
+
 const DEFAULT_MAX_LIMIT = 50;
 
 /** A `sys_`-prefixed object is a system table — off-limits to external agents. */
@@ -266,6 +334,94 @@ export function registerObjectTools(
       if (bad) return errorResult(bad);
       try {
         return textResult(await bridge.remove(objectName, recordId));
+      } catch (err) {
+        return errorResult(messageOf(err));
+      }
+    },
+  );
+}
+
+/**
+ * Register the business-action tool set (`list_actions`, `run_action`) on a
+ * fresh per-request {@link McpServer}. This is the action analogue of
+ * {@link registerObjectTools}: it owns the tool *shape* and delegates all
+ * resolution + dispatch + security to `bridge`, which the runtime binds to the
+ * caller's principal.
+ *
+ * Symmetry with the object tools is deliberate — like `list_objects`/CRUD, the
+ * action surface exposes the *mechanism* and relies on the bridge's
+ * permission + RLS enforcement (not a separate AI opt-in flag) for safety,
+ * with `sys_*`-scoped actions held back fail-closed by default.
+ */
+export function registerActionTools(
+  server: McpServer,
+  bridge: McpActionBridge,
+  options: RegisterActionToolsOptions = {},
+): void {
+  const allowSystem = options.allowSystemObjects === true;
+
+  server.registerTool(
+    'list_actions',
+    {
+      description:
+        'List the business actions you can invoke in this app (e.g. "complete task", "convert lead"). ' +
+        'Returns each action\'s name, the object it operates on, a description, whether it needs a record id, ' +
+        'whether it is destructive, and its input parameters. Only actions the caller is permitted to run are returned. ' +
+        'Use run_action to invoke one.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const actions = await bridge.listActions();
+        const visible = allowSystem
+          ? actions
+          : actions.filter((a) => !a.objectName || !isSystemObject(a.objectName));
+        return textResult({ actions: visible, totalCount: visible.length });
+      } catch (err) {
+        return errorResult(messageOf(err));
+      }
+    },
+  );
+
+  server.registerTool(
+    'run_action',
+    {
+      description:
+        'Invoke a business action by name (see list_actions). Runs the app\'s registered business logic ' +
+        'under the caller\'s permissions and row-level security — this can mutate data or trigger flows. ' +
+        'Supply recordId for actions that operate on a specific record, and params for any declared inputs.',
+      inputSchema: {
+        actionName: z.string().describe('The action name from list_actions, e.g. "complete_task"'),
+        objectName: z
+          .string()
+          .optional()
+          .describe('The object the action belongs to. Optional; required only to disambiguate a name shared by multiple objects.'),
+        recordId: z
+          .string()
+          .optional()
+          .describe('The id of the record to act on (for record-scoped actions).'),
+        params: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe('Input parameters declared by the action.'),
+      },
+      // Actions execute app-defined business logic with side effects (writes,
+      // flows, outbound calls), so we mark the tool destructive + open-world:
+      // MCP clients should confirm before invoking. Per-action destructiveness
+      // is further surfaced via `requiresConfirmation` in list_actions.
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    },
+    async ({ actionName, objectName, recordId, params }) => {
+      if (!actionName || typeof actionName !== 'string') {
+        return errorResult('actionName is required');
+      }
+      if (objectName && !allowSystem && isSystemObject(objectName)) {
+        return errorResult(`Object "${objectName}" is a system object and its actions are not exposed via MCP`);
+      }
+      try {
+        const result = await bridge.runAction(actionName, { objectName, recordId, params });
+        return textResult(result);
       } catch (err) {
         return errorResult(messageOf(err));
       }

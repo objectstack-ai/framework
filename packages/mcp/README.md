@@ -93,6 +93,36 @@ ObjectStack automatically exposes these operations as MCP tools:
 'objectstack_listFields'       // List object fields
 ```
 
+### Native Tools (Streamable HTTP)
+
+Over the network-reachable Streamable HTTP transport, the server self-registers
+a native tool set bound to the **caller's principal** (the API key acts as the
+user, with full row-level security + permission enforcement). No
+`@objectstack/service-ai` and no cloud studio are required — these are part of
+the open framework.
+
+```typescript
+// Object data (RLS-enforced as the caller)
+'list_objects'      // List objects (system sys_* objects hidden by default)
+'describe_object'   // Object schema: fields + features
+'query_records'     // Filter / sort / paginate
+'get_record'        // Fetch one by id
+'create_record' / 'update_record' / 'delete_record'
+
+// Business actions — operate the app, not just its rows
+'list_actions'      // Invokable business actions the caller may run
+'run_action'        // Invoke an action by name with { recordId, params }
+```
+
+`list_actions` enumerates each object's headless-invokable actions (script /
+flow), filtered to what the caller is permitted to run — declared
+`requiredPermissions` (ADR-0066 D4) are enforced and `sys_*`-object actions are
+held back fail-closed. `run_action` resolves the action by name and dispatches
+it through the framework's own action mechanism (`engine.executeAction` /
+automation flow runner) as the caller, so a BYO-AI MCP client (Claude Code,
+Cursor, …) can trigger real business logic — e.g. "complete this task",
+"convert this lead" — exactly as the UI would, under the same guardrails.
+
 ### Custom Tools
 
 Register custom tools that AI models can call:
