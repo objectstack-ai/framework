@@ -36,6 +36,33 @@ export interface AutomationContext {
     event?: string;
     /** User who triggered the automation */
     userId?: string;
+    /**
+     * Role names of the triggering identity. Forwarded by the trigger surface
+     * (REST route / record-change hook) so a `runAs:'user'` run enforces RLS
+     * exactly as that user — not a member fallback. ADR-0049 / #1888.
+     */
+    roles?: string[];
+    /**
+     * Explicit permission-set names of the triggering identity (parity with a
+     * direct REST request). Forwarded alongside {@link roles}. ADR-0049 / #1888.
+     */
+    permissions?: string[];
+    /**
+     * Tenant/org id of the triggering identity, carried so a `runAs:'user'` run
+     * stays tenant-scoped. ADR-0049 / #1888.
+     */
+    tenantId?: string;
+    /**
+     * Effective execution identity for the run's DATA operations, established by
+     * the engine from {@link FlowParsed.runAs} at run setup (ADR-0049 / #1888):
+     *  - `'system'` runs elevated — a full-access, RLS-bypassing system principal;
+     *  - `'user'` (default) runs as {@link userId}, so CRUD nodes' ObjectQL
+     *    reads/writes respect that user's row-level security.
+     * Node executors translate this into the ObjectQL `context` they pass to the
+     * data engine (see `resolveRunDataContext` in @objectstack/service-automation).
+     * Callers do NOT set this — the engine derives it from the flow definition.
+     */
+    runAs?: 'system' | 'user';
     /** Additional contextual data */
     params?: Record<string, unknown>;
 }

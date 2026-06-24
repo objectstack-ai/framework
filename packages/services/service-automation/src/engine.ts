@@ -966,6 +966,13 @@ export class AutomationEngine implements IAutomationService {
         const startedAt = new Date().toISOString();
         const steps: StepLogEntry[] = [];
 
+        // ADR-0049 / #1888 — establish the run's effective execution identity
+        // from flow.runAs. Thread a COPY (never mutating the caller's context)
+        // so the elevation is scoped to this run; the caller's identity is
+        // restored (unchanged) when execute() returns. Data nodes translate
+        // context.runAs into the ObjectQL context they pass (resolveRunDataContext).
+        const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+
         try {
             // Find the start node
             const startNode = flow.nodes.find(n => n.type === 'start');
@@ -996,7 +1003,7 @@ export class AutomationEngine implements IAutomationService {
             this.validateNodeInputSchemas(flow, variables);
 
             // DAG traversal execution
-            await this.executeNode(startNode, flow, variables, context ?? {}, steps);
+            await this.executeNode(startNode, flow, variables, runContext, steps);
 
             // Collect output variables
             const output: Record<string, unknown> = {};
@@ -1046,7 +1053,7 @@ export class AutomationEngine implements IAutomationService {
                     nodeId: err.nodeId,
                     variables: Object.fromEntries(variables),
                     steps,
-                    context: context ?? {},
+                    context: runContext,
                     startedAt,
                     startTime,
                     correlation: err.correlation,
@@ -2218,13 +2225,17 @@ export class AutomationEngine implements IAutomationService {
         const startedAt = new Date().toISOString();
         const steps: StepLogEntry[] = [];
 
+        // ADR-0049 / #1888 — establish the run's effective execution identity
+        // from flow.runAs (see execute()); threaded to node executors below.
+        const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+
         try {
             const startNode = flow.nodes.find(n => n.type === 'start');
             if (!startNode) {
                 return { success: false, error: 'Flow has no start node' };
             }
 
-            await this.executeNode(startNode, flow, variables, context ?? {}, steps);
+            await this.executeNode(startNode, flow, variables, runContext, steps);
 
             const output: Record<string, unknown> = {};
             if (flow.variables) {

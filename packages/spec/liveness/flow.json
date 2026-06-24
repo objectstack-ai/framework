@@ -36,6 +36,12 @@
       "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/FlowPreview.tsx:105",
       "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
     },
+    "runAs": {
+      "status": "live",
+      "proof": "packages/dogfood/test/flow-runas.dogfood.test.ts#flow-runas-identity",
+      "evidence": "packages/services/service-automation/src/builtin/crud-nodes.ts: CRUD nodes pass the run identity to ObjectQL per flow.runAs; the engine sets context.runAs at run setup; resolveRunDataContext maps system->isSystem / user->trigger user (#1888)",
+      "note": "ENFORCED 2026-06-24 (#1888, ADR-0049): was marker-driven experimental; the engine now switches the data-layer execution identity and restores the caller context. Proof-backed by the dogfood gate."
+    },
     "template": {
       "status": "dead",
       "evidence": "no reader either layer"

@@ -2425,8 +2425,17 @@ export class HttpDispatcher {
                         object: objectName,
                         event: ctxBody.event ?? 'manual',
                     };
-                    const userIdFromAuth = (context as any)?.user?.id ?? (context as any)?.userId;
+                    // Forward the FULLY-RESOLVED caller identity (not just the
+                    // user id) so a `runAs:'user'` flow enforces RLS exactly as the
+                    // triggering user — their roles/tenant, not a member fallback
+                    // (#1888). The engine elevates to a system principal only when
+                    // the flow itself declares `runAs:'system'`.
+                    const ec = (context as any)?.executionContext;
+                    const userIdFromAuth = (context as any)?.user?.id ?? (context as any)?.userId ?? ec?.userId;
                     if (userIdFromAuth) automationContext.userId = userIdFromAuth;
+                    if (Array.isArray(ec?.roles) && ec.roles.length) automationContext.roles = ec.roles;
+                    if (Array.isArray(ec?.permissions) && ec.permissions.length) automationContext.permissions = ec.permissions;
+                    if (ec?.tenantId) automationContext.tenantId = ec.tenantId;
                     const result = await automationService.execute(name, automationContext);
                     return { handled: true, response: this.success(result) };
                 }

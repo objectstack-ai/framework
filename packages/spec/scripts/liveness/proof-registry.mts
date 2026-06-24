@@ -108,6 +108,17 @@ export const HIGH_RISK_CLASSES: HighRiskClass[] = [
     ledgerBindings: [{ type: 'flow', path: 'nodes.type' }],
   },
   {
+    id: 'flow-runas',
+    label: 'Flow runAs identity',
+    summary: 'flow.runAs switches the data-layer execution identity — system elevates (RLS-bypass), user de-elevates to the triggering user (#1888).',
+    proofId: 'flow-runas-identity',
+    proofRef: 'packages/dogfood/test/flow-runas.dogfood.test.ts#flow-runas-identity',
+    bound: true,
+    // `runAs` decides whether CRUD nodes run as an elevated system principal or
+    // the triggering user — the security property the proof guards in both directions.
+    ledgerBindings: [{ type: 'flow', path: 'runAs' }],
+  },
+  {
     id: 'form-widget',
     label: 'Form layout / section / widget',
     summary: 'server-side form resolution.',
