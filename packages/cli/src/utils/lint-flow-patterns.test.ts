@@ -8,6 +8,9 @@ import {
   FLOW_PHANTOM_AGGREGATION,
   FLOW_DOUBLE_BRACE_INTERP,
   FLOW_BARE_DOLLAR_REF,
+  FLOW_APPROVAL_REVISE_DEAD_END,
+  FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE,
+  FLOW_APPROVAL_REVISE_DISABLED,
 } from './lint-flow-patterns.js';
 
 const CEL = (source: string) => ({ dialect: 'cel', source });
@@ -179,5 +182,70 @@ describe('lintFlowPatterns — wrong interpolation syntax (#1315)', () => {
         { id: 'dec', type: 'decision', config: { condition: 'record.amount > 100' } },
       ], edges: [] }] })).toEqual([]);
     });
+  });
+});
+
+
+describe('lintFlowPatterns — approval revise loop (ADR-0044)', () => {
+  const approvalFlow = (edges, approvalConfig = {}) => ({
+    flows: [{
+      name: 'budget_approval',
+      nodes: [
+        { id: 'start', type: 'start', config: { triggerType: 'manual' } },
+        { id: 'mgr', type: 'approval', config: approvalConfig },
+        { id: 'wait', type: 'wait', config: { eventType: 'signal' } },
+        { id: 'ok', type: 'end' },
+        { id: 'no', type: 'end' },
+      ],
+      edges,
+    }],
+  });
+  const declaredLoop = [
+    { source: 'start', target: 'mgr' },
+    { source: 'mgr', target: 'ok', label: 'approve' },
+    { source: 'mgr', target: 'no', label: 'reject' },
+    { source: 'mgr', target: 'wait', label: 'revise' },
+    { source: 'wait', target: 'mgr', label: 'resubmit', type: 'back' },
+  ];
+
+  it('accepts a properly declared revise loop (closing edge type:back)', () => {
+    expect(lintFlowPatterns(approvalFlow(declaredLoop))).toEqual([]);
+  });
+
+  it('flags a revise loop whose closing edge is NOT type:back', () => {
+    const edges = declaredLoop.map((e) =>
+      e.source === 'wait' && e.target === 'mgr' ? { source: 'wait', target: 'mgr', label: 'resubmit' } : e,
+    );
+    const fnds = lintFlowPatterns(approvalFlow(edges));
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE);
+    expect(fnds[0].where).toContain('mgr');
+    expect(fnds[0].hint).toMatch(/back/i);
+  });
+
+  it('flags a revise branch that never loops back (dead-end; registerFlow would accept it)', () => {
+    const edges = [
+      { source: 'start', target: 'mgr' },
+      { source: 'mgr', target: 'ok', label: 'approve' },
+      { source: 'mgr', target: 'wait', label: 'revise' },
+    ];
+    const fnds = lintFlowPatterns(approvalFlow(edges));
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_APPROVAL_REVISE_DEAD_END);
+  });
+
+  it('flags maxRevisions:0 alongside a revise edge', () => {
+    const fnds = lintFlowPatterns(approvalFlow(declaredLoop, { maxRevisions: 0 }));
+    expect(fnds).toHaveLength(1);
+    expect(fnds[0].rule).toBe(FLOW_APPROVAL_REVISE_DISABLED);
+  });
+
+  it('does NOT flag a normal approval with no revise edge', () => {
+    const edges = [
+      { source: 'start', target: 'mgr' },
+      { source: 'mgr', target: 'ok', label: 'approve' },
+      { source: 'mgr', target: 'no', label: 'reject' },
+    ];
+    expect(lintFlowPatterns(approvalFlow(edges))).toEqual([]);
   });
 });

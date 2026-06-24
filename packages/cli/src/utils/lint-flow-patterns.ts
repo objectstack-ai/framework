@@ -50,6 +50,9 @@ export const FLOW_DATE_EQUALITY_FILTER = 'flow-date-equality-filter';
 export const FLOW_PHANTOM_AGGREGATION = 'flow-phantom-aggregation';
 export const FLOW_DOUBLE_BRACE_INTERP = 'flow-double-brace-interpolation';
 export const FLOW_BARE_DOLLAR_REF = 'flow-bare-dollar-reference';
+export const FLOW_APPROVAL_REVISE_DEAD_END = 'flow-approval-revise-dead-end';
+export const FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE = 'flow-approval-revise-unmarked-backedge';
+export const FLOW_APPROVAL_REVISE_DISABLED = 'flow-approval-revise-disabled';
 
 /**
  * Node-config keys that name a capability the automation engine does NOT have.
@@ -147,6 +150,107 @@ function collectTemplateStrings(value: unknown, key: string | undefined, out: st
   }
 }
 
+/** Edge `label`, normalized (trimmed, lowercased) for branch matching. */
+function edgeLabelOf(e: AnyRec): string {
+  return typeof e.label === 'string' ? e.label.trim().toLowerCase() : '';
+}
+
+/**
+ * ADR-0044 send-back-for-revision footguns on an approval node that declares a
+ * `revise` out-edge — the two shapes an AI authoring an approval flow gets wrong:
+ *  - the revise branch never loops back to the approval (the submitter reworks
+ *    the record with nowhere to resubmit). This is a VALID DAG, so `registerFlow`
+ *    ACCEPTS it — the linter is the only place that catches the dead end.
+ *  - the loop DOES return to the approval, but the closing edge isn't declared
+ *    `type: 'back'`, so `registerFlow` rejects it as an un-declared cycle. The
+ *    lint fires at compile time with the specific fix (mark the resubmit edge).
+ */
+function scanApprovalReviseLoops(
+  flowName: string,
+  nodes: AnyRec[],
+  edges: AnyRec[],
+  findings: FlowLintFinding[],
+): void {
+  const approvals = nodes.filter((n) => n.type === 'approval');
+  if (approvals.length === 0) return;
+  const nodeIds = new Set(nodes.map((n) => (typeof n.id === 'string' ? n.id : '')).filter(Boolean));
+  const outEdges = new Map<string, AnyRec[]>();
+  for (const e of edges) {
+    const src = typeof e.source === 'string' ? e.source : '';
+    if (!src) continue;
+    if (!outEdges.has(src)) outEdges.set(src, []);
+    outEdges.get(src)!.push(e);
+  }
+
+  for (const a of approvals) {
+    const aid = typeof a.id === 'string' ? a.id : '';
+    if (!aid) continue;
+    const reviseTargets = edges
+      .filter((e) => e.source === aid && edgeLabelOf(e) === 'revise')
+      .map((e) => (typeof e.target === 'string' ? e.target : ''))
+      .filter((t) => t && nodeIds.has(t));
+    if (reviseTargets.length === 0) continue; // only approvals that declare a revise branch
+    const where = `flow '${flowName}' \u00b7 approval '${aid}'`;
+
+    // maxRevisions:0 alongside a revise edge is self-contradictory — send-back is
+    // disabled, so the branch always auto-rejects and never actually runs.
+    const cfg = (a.config ?? {}) as AnyRec;
+    if (cfg.maxRevisions === 0) {
+      findings.push({
+        where,
+        message:
+          `declares a 'revise' out-edge but \`maxRevisions: 0\` disables send-back — every revise ` +
+          `auto-rejects, so the revise branch never runs.`,
+        hint:
+          `Set \`maxRevisions\` >= 1 to allow N send-backs before auto-reject, or drop the 'revise' edge ` +
+          `if send-back isn't intended (ADR-0044).`,
+        rule: FLOW_APPROVAL_REVISE_DISABLED,
+      });
+    }
+
+    // BFS from the revise target(s) over ALL edges; collect edges returning to
+    // the approval (target === aid). A declared loop has >=1 such edge typed `back`.
+    const seen = new Set<string>(reviseTargets);
+    const queue = [...reviseTargets];
+    const returnEdges: AnyRec[] = [];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const e of outEdges.get(cur) ?? []) {
+        if (e.target === aid) returnEdges.push(e);
+        const t = typeof e.target === 'string' ? e.target : '';
+        if (t && nodeIds.has(t) && !seen.has(t)) {
+          seen.add(t);
+          queue.push(t);
+        }
+      }
+    }
+
+    if (returnEdges.length === 0) {
+      findings.push({
+        where,
+        message:
+          `has a 'revise' out-edge but no path loops back to it — the submitter reworks the record with ` +
+          `nowhere to resubmit, so the revise branch dead-ends. (registerFlow accepts this — it's a valid DAG.)`,
+        hint:
+          `Close the loop: the 'revise' edge should reach a wait node whose resubmit edge returns to ` +
+          `'${aid}' marked \`type: 'back'\` (ADR-0044). See examples/app-showcase showcase_budget_approval.`,
+        rule: FLOW_APPROVAL_REVISE_DEAD_END,
+      });
+    } else if (!returnEdges.some((e) => e.type === 'back')) {
+      findings.push({
+        where,
+        message:
+          `has a 'revise' loop that returns to it, but the closing edge isn't declared \`type: 'back'\` — ` +
+          `registerFlow rejects this as an un-declared cycle.`,
+        hint:
+          `Mark the resubmit edge (whose target is '${aid}') \`type: 'back'\` so cycle validation skips it ` +
+          `while it still traverses at runtime; \`maxRevisions\` guards the loop (ADR-0044).`,
+        rule: FLOW_APPROVAL_REVISE_UNMARKED_BACKEDGE,
+      });
+    }
+  }
+}
+
 /**
  * Lint every flow's start node for known authoring anti-patterns. Returns a
  * (possibly empty) list of advisory findings — never throws, never fails a build.
@@ -156,6 +260,7 @@ export function lintFlowPatterns(stack: AnyRec): FlowLintFinding[] {
   for (const flow of asArray(stack.flows)) {
     const flowName = typeof flow.name === 'string' ? flow.name : '(unnamed flow)';
     const nodes = Array.isArray(flow.nodes) ? (flow.nodes as AnyRec[]) : [];
+    const edges = Array.isArray(flow.edges) ? (flow.edges as AnyRec[]) : [];
 
     // (a) #1874 — date-equality time condition on a record-change start node.
     const start = nodes.find((n) => n.type === 'start');
@@ -228,6 +333,9 @@ export function lintFlowPatterns(stack: AnyRec): FlowLintFinding[] {
         }
       }
     }
+
+    // (c) ADR-0044 — approval send-back-for-revision loop footguns.
+    scanApprovalReviseLoops(flowName, nodes, edges, findings);
   }
   return findings;
 }
