@@ -62,7 +62,11 @@ export const pageForm = defineForm({
       // the region designer is irrelevant here, so hide it for list pages.
       visibleOn: "data.type != 'list'",
       fields: [
-        { field: 'regions', type: 'repeater', required: true, helpText: 'Layout regions (header, main, sidebar, footer) with components' },
+        // Not required: an empty full page falls back to the synthesized default
+        // layout, slotted pages compose via `slots`, and list pages ignore regions
+        // entirely. Marking it required made the form unsatisfiable when no region
+        // editor was rendered (the metadata form can't yet edit a region tree).
+        { field: 'regions', type: 'repeater', helpText: 'Layout regions (header, main, sidebar, footer) with components' },
       ],
     },
     {

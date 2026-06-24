@@ -74,7 +74,15 @@ export const PageComponentSchema = lazySchema(() => z.object({
   
   /** Configuration */
   label: I18nLabelSchema.optional(),
-  properties: z.record(z.string(), z.unknown()).describe('Component props passed to the widget. See component.zod.ts for schemas.'),
+  // Optional with an empty-object default. Many components carry no props
+  // (record:activity, element:divider, …), and the platform's own default-page
+  // synthesizer (buildDefaultPageSchema) emits nodes with props at the top
+  // level rather than under `properties`. Requiring `properties` forced
+  // `properties: {}` boilerplate and — worse — made every Studio attempt to
+  // seed a record page from its object's synthesized default layout fail
+  // validation ("regions.N.components.M.properties: expected record"), which
+  // was the real reason record/home/app pages couldn't be created in Studio.
+  properties: z.record(z.string(), z.unknown()).optional().default({}).describe('Component props passed to the widget. See component.zod.ts for schemas.'),
   
   /** 
    * Event Handlers 
@@ -332,7 +340,16 @@ export const PageSchema = lazySchema(() => z.object({
   template: z.string().default('default').describe('Layout template name (e.g. "header-sidebar-main")'),
   
   /** Regions & Content */
-  regions: z.array(PageRegionSchema).describe('Defined regions with components'),
+  // Optional with an empty-array default. Not every page authors regions:
+  //   • list/interface pages render via `interfaceConfig` (regions unused);
+  //   • `kind: 'slotted'` record pages render via `slots`;
+  //   • a `kind: 'full'` record/home/app page with no regions falls back to
+  //     the synthesized default layout (same surface a slotted page starts from).
+  // Requiring it forced `regions: []` boilerplate on every list page and made
+  // the Studio "New Page" form a dead-end for record/home/app pages (the form
+  // has no region editor, so the required field could never be satisfied).
+  regions: z.array(PageRegionSchema).optional().default([])
+    .describe('Layout regions (header, main, sidebar, footer) with their components. Optional — list pages use interfaceConfig, slotted pages use slots, and an empty full page falls back to the synthesized default layout.'),
   
   /** Activation */
   isDefault: z.boolean().default(false),

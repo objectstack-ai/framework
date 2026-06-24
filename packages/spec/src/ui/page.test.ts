@@ -403,10 +403,9 @@ describe('PageSchema', () => {
       regions: [],
     })).toThrow();
 
-    expect(() => PageSchema.parse({
-      name: 'test_page',
-      label: 'Test Page',
-    })).toThrow();
+    // `regions` is intentionally NOT among the required fields — name + label
+    // alone is a valid page (regions defaults to [], type defaults to 'record').
+    // See the dedicated "accept page without regions" test below.
   });
 
   it('should reject invalid page type', () => {
@@ -1169,11 +1168,17 @@ describe('PageSchema - Negative Validation', () => {
     })).toThrow();
   });
 
-  it('should reject page without regions', () => {
-    expect(() => PageSchema.parse({
+  it('should accept page without regions (defaults to [])', () => {
+    // Optional with a [] default: list/interface pages render via
+    // interfaceConfig, slotted record pages via slots, and an empty full
+    // record/home/app page falls back to the synthesized default layout.
+    // Requiring regions forced `regions: []` boilerplate everywhere and made
+    // the Studio "New Page" form a dead-end for non-list pages.
+    const page = PageSchema.parse({
       name: 'no_regions',
       label: 'No Regions',
-    })).toThrow();
+    });
+    expect(page.regions).toEqual([]);
   });
 
   it('should reject page with camelCase name', () => {
@@ -1201,10 +1206,14 @@ describe('PageComponentSchema - Negative Validation', () => {
     })).toThrow();
   });
 
-  it('should reject component without properties', () => {
-    expect(() => PageComponentSchema.parse({
-      type: 'record:details',
-    })).toThrow();
+  it('should accept a component without properties (defaults to {})', () => {
+    // `properties` is optional with a {} default: many components carry no
+    // props (record:activity, element:divider) and the default-page
+    // synthesizer emits prop-at-top-level nodes. Requiring it broke seeding a
+    // record page's default layout in Studio (every block tripped
+    // "components.N.properties: expected record").
+    const comp = PageComponentSchema.parse({ type: 'record:details' });
+    expect(comp.properties).toEqual({});
   });
 });
 
