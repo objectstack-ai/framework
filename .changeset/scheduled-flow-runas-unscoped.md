@@ -2,6 +2,7 @@
 '@objectstack/service-automation': minor
 '@objectstack/cli': minor
 '@objectstack/spec': patch
+'@objectstack/trigger-schedule': patch
 ---
 
 fix(security): surface the schedule/user-less `runAs:'user'` fail-open (#1888 follow-up)
@@ -46,8 +47,11 @@ tracked as M2 follow-up.
 
 Proven by a service-automation unit test (the engine warns once for a user-less
 user-mode data run; stays silent for `system`, for an identified user, and for a
-data-less flow) and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that
-drives user-less runs through the real automation + security + data stack: a
+data-less flow), an end-to-end test wiring the **real `ScheduleTrigger` to the
+real engine** (`@objectstack/trigger-schedule`) that fires a job and asserts the
+user-less identity reaches the engine + trips the warning through the actual cron
+path, and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that drives
+user-less runs through the real automation + security + data stack: a
 `runAs:'user'` run reads + writes an owner-scoped note a member cannot — audibly —
 while `runAs:'system'` is the explicit, warning-free equivalent.
 

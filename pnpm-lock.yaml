@@ -2216,6 +2216,9 @@ importers:
         specifier: workspace:*
         version: link:../../spec
     devDependencies:
+      '@objectstack/service-automation':
+        specifier: workspace:*
+        version: link:../../services/service-automation
       '@types/node':
         specifier: ^26.0.0
         version: 26.0.0
