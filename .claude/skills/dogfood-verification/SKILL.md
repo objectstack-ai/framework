@@ -54,6 +54,18 @@ unsaved drafts that block navigation, and dirty the working tree. Isolate up fro
 - [ ] So: make **all** source edits first → `pnpm --filter <pkg...> build` →
       `preview_stop` + `preview_start`. Don't edit→build→restart per fix.
 - [ ] `dist/` is gitignored — safe; never commit build output.
+- [ ] **The `/_console` UI is a *vendored objectui build*, separate from framework `dist`.**
+      It's pinned by `.objectui-sha` and served as a pre-built bundle. A merged objectui
+      fix — *or even a bumped `.objectui-sha`* — is **not live at :3000 until the vendored
+      console is rebuilt**: the running server keeps serving the old build artifact (stale
+      BUILD ≠ stale PIN). So **before declaring a console/Studio UI bug found at
+      :3000/_console, check it against current objectui source or a fresh build** — the
+      vendored bundle may be stale and the bug already fixed upstream. Fastest authoritative
+      check = objectui's HMR console against your server:
+      `VITE_SERVER_URL=http://localhost:<port> DEV_PROXY_TARGET=http://localhost:<port> pnpm --filter @object-ui/console dev`
+      (separate origin → needs its own `admin@objectos.ai/admin123` login). Skipping this
+      cost a full spawn-a-fix cycle on an action-create dead-end that was already fixed in
+      objectui main.
 
 ## 3. Verify — visual / API first, DOM last (the anti-false-positive rule)
 
