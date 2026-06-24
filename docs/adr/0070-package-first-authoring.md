@@ -1,6 +1,6 @@
 # ADR-0070: Package-first authoring — every runtime-authored item lives in a writable package (base); no orphans
 
-**Status**: Proposed (2026-06-24)
+**Status**: Accepted (2026-06-24) — P1–P3 implemented, merged & live-verified (see *Implementation status*); D4–D6 remaining
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (`allowOrgOverride` / runtime overlay model; one Zod source per type), [ADR-0048](./0048-cross-package-metadata-collision.md) (one app per package; package id is the addressing unit), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (AI authors metadata as drafts), [ADR-0067](./0067-commit-history-and-rollback-for-ai-authoring.md) (commit history & rollback for AI authoring)
 **Consumers**: `@objectstack/objectql` (`protocol.saveMetaItem` write path), `@objectstack/spec` (metadata-type registry), `../objectui` (Studio create flow, package scope selector, `PackagesPage`), `../cloud` (`service-ai-studio` — `create_metadata` / `resolvePackageId` / `apply_blueprint`)
@@ -13,6 +13,16 @@
 > 3. **AI authoring can still orphan**: `../cloud`'s `service-ai-studio` resolves a target package with smart fallbacks (active package -> single-app package -> **auto-created `com.workspace`**) and rejects read-only code packages, but it never *requires* the user/agent to choose a base first — so it can silently default into a catch-all dumping ground.
 >
 > The fixes shipped so far (#2252, #1946) are deliberate **stopgaps**. This ADR replaces them with the proper model.
+
+## Implementation status (2026-06-24) — P1–P3 done, live-verified
+
+Built across the three surfaces and verified end-to-end in a real environment via the AI build flow.
+
+- **P1 — Kernel (D1/D2)** — `@objectstack/objectql` ([framework#2285](https://github.com/objectstack-ai/framework/pull/2285)): `isWritablePackage` predicate; a runtime-only create targeting a read-only code/installed package is **rejected** with `writable_package_required` (422) instead of coerced to `null`.
+- **P2 — Studio (D3)** — `../objectui` ([objectui#1970](https://github.com/objectstack-ai/objectui/pull/1970)): a create-flow gate that prompts/redirects to a writable base; `isLocalScope` / `writableBaseOptions` helpers; surfaces `writable_package_required` as an actionable error.
+- **P3 — AI (D3)** — `../cloud` `service-ai-studio` ([cloud#479](https://github.com/objectstack-ai/cloud/pull/479), [cloud#481](https://github.com/objectstack-ai/cloud/pull/481); tests [cloud#480](https://github.com/objectstack-ai/cloud/pull/480)): drops the shared `com.workspace` catch-all and auto-creates an **intentional named** base via `protocol.installPackage` (a real, Studio-visible package); single-writable-base coherence groups an incremental build into one base; an explicit platform/system `packageId` is discarded; empty field props are sanitized.
+- **Live dogfood (real LLM + runtime)**: a one-sentence magic build plus iterative business-user changes (add a related object, add a field) all landed in **one** app base (`app.iojn`), live and editable — no `com.workspace`, no orphans.
+- **Remaining**: **D4** (package-as-lifecycle-unit: delete-cascade / export / duplicate), **D5** (orphan migration + stopgap removal), **D6** (framing). The P1 kernel rejection becomes the runtime backstop once the framework release is consumed by the cloud runtime (today's runtime links the published framework).
 
 ## TL;DR
 
@@ -96,9 +106,9 @@ A metadata-customizable deployment is **single-tenant** (an *environment*; `proj
 
 ## Rollout (tracked separately — see the package-first epic)
 
-1. Kernel D1/D2 predicate + `writable_package_required` rejection (`@objectstack/objectql`).
-2. Studio D3 create-flow + selector default; PackagesPage delete/duplicate (`../objectui`).
-3. AI D3 enforcement in `service-ai-studio` (drop fallback, require package, update skills).
-4. D4 package-as-unit (delete-cascade, export/duplicate).
-5. D5 migration affordance; remove #2252/#1946 stopgaps.
-6. Dogfood-gate coverage for each.
+1. ✅ Kernel D1/D2 predicate + `writable_package_required` rejection (`@objectstack/objectql`) — [framework#2285](https://github.com/objectstack-ai/framework/pull/2285).
+2. ✅ Studio D3 create-flow + selector default (`../objectui`) — [objectui#1970](https://github.com/objectstack-ai/objectui/pull/1970). (PackagesPage delete/duplicate moves to D4.)
+3. ✅ AI D3 in `service-ai-studio` (drop fallback, named base, skills) — [cloud#479](https://github.com/objectstack-ai/cloud/pull/479), [cloud#481](https://github.com/objectstack-ai/cloud/pull/481); tests [cloud#480](https://github.com/objectstack-ai/cloud/pull/480).
+4. ⏳ D4 package-as-unit (delete-cascade, export/duplicate).
+5. ⏳ D5 migration affordance; remove #2252/#1946 stopgaps.
+6. ◐ Dogfood-gate coverage — live-verified end-to-end; automated gate pending.
