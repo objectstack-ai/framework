@@ -2120,4 +2120,63 @@ describe('HttpDispatcher — MCP action bridge (list_actions / run_action)', () 
     const { bridge } = makeBridge({ userId: 'u1', systemPermissions: [] });
     await expect(bridge.runAction('defer_task', { recordId: 't1' })).rejects.toThrow(/cannot be invoked/i);
   });
+
+  // ── flow dispatch (type:'flow' → automation flow runner) ──
+  const flowAction = {
+    name: 'escalate_ticket',
+    label: 'Escalate',
+    objectName: 'todo_task',
+    type: 'flow',
+    target: 'escalation_flow',
+    locations: ['record_header'],
+  };
+  const makeFlowBridge = (execCtx: any, automation: any) => {
+    const flowObject = { ...{ name: 'todo_task', label: 'Task', fields: {} }, actions: [flowAction] };
+    const ql: any = {
+      executeAction: vi.fn(),
+      registry: { getObject: () => flowObject },
+      find: vi.fn(async () => []),
+      insert: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    };
+    const metadata: any = {
+      listObjects: vi.fn(async () => [flowObject]),
+      getObject: vi.fn(async () => flowObject),
+    };
+    const kernel: any = {
+      context: {
+        getService: (n: string) =>
+          n === 'objectql' || n === 'data' ? ql : n === 'metadata' ? metadata : n === 'automation' ? automation : null,
+      },
+    };
+    const dispatcher = new HttpDispatcher(kernel);
+    const ctx: any = { request: {}, environmentId: 'platform', executionContext: execCtx };
+    return { bridge: (dispatcher as any).buildMcpBridge(ctx), ql };
+  };
+
+  it('list_actions includes a flow action only when an automation service is present', async () => {
+    const withAuto = makeFlowBridge({ userId: 'u1', systemPermissions: [] }, { execute: vi.fn() });
+    expect((await withAuto.bridge.listActions()).map((a: any) => a.name)).toContain('escalate_ticket');
+    const noAuto = makeFlowBridge({ userId: 'u1', systemPermissions: [] }, null);
+    expect((await noAuto.bridge.listActions()).map((a: any) => a.name)).not.toContain('escalate_ticket');
+  });
+
+  it('run_action dispatches a flow action through the automation flow runner', async () => {
+    const execute = vi.fn(async () => ({ success: true, output: { escalated: true } }));
+    const { bridge, ql } = makeFlowBridge({ userId: 'u1', systemPermissions: [] }, { execute });
+    const res = await bridge.runAction('escalate_ticket', { recordId: 't1', params: { reason: 'sla' } });
+    expect(res.ok).toBe(true);
+    expect(ql.executeAction).not.toHaveBeenCalled(); // flow path, not executeAction
+    expect(execute).toHaveBeenCalledWith(
+      'escalation_flow',
+      expect.objectContaining({ triggerData: expect.objectContaining({ action: 'escalate_ticket', params: { reason: 'sla' } }) }),
+    );
+  });
+
+  it('run_action surfaces a flow failure as an error', async () => {
+    const execute = vi.fn(async () => ({ success: false, error: 'boom' }));
+    const { bridge } = makeFlowBridge({ userId: 'u1', systemPermissions: [] }, { execute });
+    await expect(bridge.runAction('escalate_ticket', {})).rejects.toThrow(/boom/i);
+  });
 });
