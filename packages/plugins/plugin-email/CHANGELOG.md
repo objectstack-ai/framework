@@ -1,5 +1,31 @@
 # @objectstack/plugin-email
 
+## 10.4.0
+
+### Patch Changes
+
+- Updated dependencies [e8956b4]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+  - @objectstack/spec@10.4.0
+  - @objectstack/formula@10.4.0
+  - @objectstack/platform-objects@10.4.0
+  - @objectstack/core@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes

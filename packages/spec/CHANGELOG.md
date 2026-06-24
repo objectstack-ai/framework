@@ -1,5 +1,184 @@
 # @objectstack/spec
 
+## 10.4.0
+
+### Minor Changes
+
+- e8956b4: Add authoritative create seeds for agent / tool / skill / email_template / permission
+
+  Extends the spec-derived create-shape contract to the AI and integration metadata types. Each now has an authoritative minimal create seed (validated against its schema), so the Studio designer / CLI / API derive their create defaults from the spec via `/meta/types` — closing the "designer emits a minimal shape the spec rejects → create→save 422" gap for these types too (agent needs `role`+`instructions`, tool needs `description`+`parameters`, skill needs `tools`, email_template needs `subject`+`bodyHtml`, permission needs `objects`). `trigger` has no spec schema and is intentionally not seeded.
+
+- 715d667: feat(spec): dataset authoring form + derived measures without a dummy aggregate
+
+  `dataset` was the only UI-authorable metadata type without a `defineForm`
+  layout, so Studio's create surface fell back to the auto-generated flat layout
+  (free-text `object`, no grouping). Adds `dataset.form.ts` (registered in
+  `METADATA_FORM_REGISTRY`): sectioned Basics / Source / Dimensions / Measures
+  with an `object` picker (`ref:object`) and guidance — matching the sibling
+  `report` editor.
+
+  Also makes `DatasetMeasureSchema.aggregate` optional. A derived measure
+  (`derived: { op, of }`) combines other measures by name and `aggregate` is
+  ignored for it at compile time, but the schema still required it — so a derived
+  measure failed validation unless you added a meaningless aggregate. `aggregate`
+  is now required only for non-derived measures (enforced in the existing
+  `superRefine`). Backward compatible: existing measures that carry an aggregate
+  stay valid.
+
+- 5eef4cf: feat(analytics): multi-hop relationship joins for datasets (ADR-0071)
+
+  A dataset's `include` and dimension/measure `field` paths may now traverse up to
+  3 to-one relationship hops (`account.owner.region`), not just one. The compiler
+  expands each declared path into the ordered join chain (one `cube.join` per path
+  prefix, aliased dot-free as `account__owner` so it stays a single valid SQL
+  identifier), and the NativeSQLStrategy emits the chained `LEFT JOIN`s. Per-hop
+  tenant/RLS read-scope is enforced for EVERY object in the chain — the
+  alias-driven scope loop already generalizes, so no security path is rewritten.
+
+  Restricted to **to-one** (lookup / master_detail) relationships, which never fan
+  out — aggregates stay correct with no symmetric-aggregate machinery; to-many
+  traversal is out of scope. Single-hop datasets are byte-for-byte unchanged (the
+  dot-free alias is a no-op for a single segment). Undeclared paths are still
+  rejected (ADR-0021 D-C); paths beyond 3 hops are rejected at both parse and
+  compile time.
+
+- ef3ed67: Formula field typing: `inferExpressionType()` + a declared `returnType`.
+
+  - `@objectstack/formula`: new `inferExpressionType()` (and lower-level `inferCelType()`) surfaces the cel-js type-checker's result for a CEL value/formula expression, mapped to `number | text | boolean | date | unknown`. Conservative — two `dyn` operands stay `unknown`; typed literals/stdlib returns pin a concrete type.
+  - `@objectstack/spec`: `FieldSchema` gains an optional `returnType` (`number|text|boolean|date`) so a formula field can carry its declared value type (the way Salesforce/Airtable do), letting consumers (dataset measures, formatting, validation) read a declared type instead of re-parsing the expression.
+
+- cd51229: Expose authoritative create seeds via /meta/types (spec-derived create-shape contract, Phase 2)
+
+  The minimal valid create seeds added in `@objectstack/spec/kernel` (`getMetadataCreateSeed`) now reach consumers through the real `/meta/types` registry response: each entry carries an optional `createSeed`. The Studio designer / CLI / API clients derive their create defaults from this single source of truth instead of re-inventing them — closing the drift that produced the dashboard-`layout` and action-`body` create→save 422s.
+
+  - `@objectstack/spec`: barrel-export `getMetadataCreateSeed` / `listMetadataCreateSeedTypes` from `/kernel`; add optional `createSeed` to the `GetMetaTypesResponse` entry schema.
+  - `@objectstack/objectql`: `getMetaTypes()` attaches each type's seed (registry + runtime entries). Canvas-create types whose shape is built interactively (report) are intentionally absent.
+
+- 7697a0e: chore(spec): hard-remove the dead `blank`/`record_review` page config (enforce-or-remove)
+
+  Completes the enforce-or-remove started in framework#2265. The `blank` and
+  `record_review` page types were already removed from `PageTypeSchema` (no
+  renderer), their fields marked `@deprecated`, and objectui dropped all
+  references (objectui#1949). This deletes the now-unreachable surface:
+
+  - `BlankPageLayoutSchema`, `BlankPageLayoutItemSchema`, `RecordReviewConfigSchema`
+    (and their inferred types `BlankPageLayout`, `BlankPageLayoutItem`,
+    `RecordReviewConfig`).
+  - The `blankLayout` and `recordReview` fields on `PageSchema`.
+  - `page-builder.zod.ts` (the `blank`-type drag-drop canvas config:
+    `PageBuilderConfigSchema` / `CanvasSnapSettingsSchema` / `CanvasZoomSettingsSchema`
+    / `ElementPaletteItemSchema` / `InterfaceBuilderConfigSchema` and their types)
+    and its `@objectstack/spec/studio` re-exports — nothing consumed them.
+
+  The `page` liveness ledger drops to 15 properties (the 2 `dead` entries are gone).
+  No consumers in framework or objectui (objectui#1949 already merged).
+
+  **Version note (kept `minor`, not `major`).** These exports shipped in the
+  published `10.3.0`, so under ADR-0059 §4 (the freeze contract) a removal would
+  normally demand a major bump. It is kept `minor` as a deliberate, documented
+  exception: the removed symbols are config schemas for the renderless
+  `blank`/`record_review` page types — authoring those already failed at runtime
+  ("Unknown component type"), the frozen `@objectstack/downstream-contract`
+  fixture never referenced them, and the pre-publish hotcrm live gate guards
+  against any real consumer break. The `api-surface.json` snapshot is regenerated
+  alongside this so the removal is acknowledged, not silent.
+
+- cfd5ac4: fix(spec): remove unrendered roadmap page types from PageTypeSchema (enforce-or-remove)
+
+  `PageTypeSchema` advertised six page types that never shipped a renderer —
+  `dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`.
+  Authoring one passed schema validation but broke at runtime ("Unknown component
+  type"), a false affordance that's especially dangerous when templates are
+  AI-authored. Per ADR-0049 (enforce-or-remove), the enum is now the _live_ set
+  (`record`, `home`, `app`, `utility`, `list`) — authoring a removed type now
+  fails fast at parse instead of silently at render. The removed types are tracked
+  in the new `PAGE_TYPE_ROADMAP` export and re-enter the enum only when a renderer
+  ships. A `page-type-liveness` gate test asserts the enum never re-grows a
+  roadmap type.
+
+  The `recordReview`/`blankLayout` config schemas and fields are retained but
+  `@deprecated` (their page types are no longer authorizable) to avoid breaking
+  downstream imports; they will be removed in a coordinated follow-up. The
+  `variables` page field is documented `@experimental` — its state container is
+  wired but no consumer reads/writes it end-to-end yet.
+
+- 3d04e06: Add authoritative per-type create seeds (root-cause for the "designer shape ≠ spec" family)
+
+  New `metadata-create-seeds.ts`: a single source of truth for the minimal valid create shape of each metadata type (`getMetadataCreateSeed(type)`), co-located with the schemas and asserted valid against each type's schema by `metadata-create-seeds.test.ts`. This anchors the create-form's default shape to the spec so it can't drift — the root cause of the recurring family where a freshly-created item (dashboard without `layout`, script action without `body`, report with stale `objectName`/`columns`) failed validation on save (422) yet passed every other gate. Seeds the 9 core Studio-designer types (dashboard, action, page, view, flow, validation, hook, dataset, object); the test surfaces remaining schema-backed types still needing a seed. (Follow-up: expose `createSeed` via `/meta/types` so the Studio designer consumes it instead of hardcoding `createDefaults`.)
+
+### Patch Changes
+
+- c1a754a: feat(spec): type ChartConfig `colors` as a palette OR a value→color map
+
+  `ChartConfigSchema.colors` now accepts either a positional palette (`string[]`)
+  or an explicit value→color map (`Record<value, color>`, kanban-style). A
+  value→color map — and a select/lookup dimension's option colors — take
+  precedence over the positional palette per category, so semantic charts
+  (health, status) paint their own colors instead of the generic palette.
+
+- 6fbe91f: fix(spec): make dashboard widget `layout` optional (auto-flowed when omitted)
+
+  `DashboardWidgetSchema.layout` was required, but the entire runtime treats it as
+  optional: the renderer (`DashboardGridLayout`) auto-flows any widget without a
+  layout (`x: (i % 4) * 3, y: ⌊i/4⌋ * 4, w: 3, h: 4`), and the Studio dashboard
+  designer adds widgets **without** a layout by design.
+
+  The mismatch meant every dashboard authored in the Studio designer failed spec
+  validation the moment a widget was added — the draft `PUT /meta/dashboard/...`
+  returned **422** ("widgets: Invalid type: expected object, received undefined"),
+  so the draft never saved and **Publish stayed disabled**, even though the widget
+  rendered correctly in the canvas. Found by dogfooding the dashboard designer in
+  the browser.
+
+  `layout` is now optional; absence means "auto-place". Authors may still pin an
+  explicit grid position. Backward-compatible — existing dashboards that specify
+  `layout` are unaffected.
+
+- 72759e1: feat(spec): add the `back` edge style to the flow-builder canvas protocol
+
+  `FlowCanvasEdgeStyleSchema` gains a `back` value alongside `solid`/`dashed`/`dotted`/`bold`, marking an ADR-0044 declared back-edge (a `revise` loop's resubmit edge). Flow-builder-protocol consumers can now render it as a distinct curved/dashed return arc, set apart from forward flow — matching the objectui designer's hand-rolled canvas (objectstack-ai/objectui#1954). Part of #2274.
+
+- e7e04f1: chore(liveness): bring `page` under the spec liveness gate
+
+  Onboards the `page` metadata type to the ADR-0049/#1919 liveness ledger
+  (`packages/spec/liveness/page.json`) and adds it to the governed-types list in
+  `check-liveness.mts`. Every authorable PageSchema property now declares a
+  status with evidence: 17 properties — 14 `live` (objectui renderer consumers
+  cited as prose), 1 `experimental` (`variables` — provider/hook exist, no
+  end-to-end consumer), 2 `dead` (`recordReview` / `blankLayout` — their page
+  types were removed in framework#2265 and objectui dropped all references in
+  objectui#1949; the fields stay @deprecated pending hard-removal). CI now fails
+  if a new page property lands unclassified.
+
+- 2be5c1f: Promote `PageSchema.variables` from @experimental to live (ADR-0049)
+
+  Page-local state is now wired end-to-end (runtime in objectui#1957: page
+  variables are injected into the visible/CEL expression context as `page.<var>`,
+  and `element:record_picker` writes a variable via its `source` binding). The
+  spec docs are updated to describe the now-live behaviour and the binding
+  direction, and the liveness ledger entry is flipped `experimental → live`.
+
+- 8801c02: fix(spec): don't require `slots` on slotted pages
+
+  `PageSchema`'s superRefine rejected any `kind: 'slotted'` page that didn't
+  provide a `slots` map — but a slotted page with no overrides is valid: every
+  slot falls through to the synthesized default layout, the natural starting
+  point before you add overrides. Requiring `slots` up front made the Studio
+  "New Page" form a dead-end the moment you picked "slotted" (the form can't
+  author a slot map), the same trap as the old required `regions`.
+
+- 4a84c98: fix(spec): make page `regions` and component `properties` optional
+
+  `PageSchema.regions` and `PageComponentSchema.properties` were required, which
+  made it impossible to create record/home/app pages in the Studio editor: the
+  New Page form has no region editor, and the create-form seeds a record page's
+  default layout from `buildDefaultPageSchema`, whose nodes carry props at the top
+  level — so every seeded block tripped `regions.N.components.M.properties:
+expected record`. Both are now `.optional().default(...)`; an empty full page
+  falls back to the synthesized default layout, slotted pages compose via `slots`,
+  list pages ignore regions, and prop-less components (record:activity,
+  element:divider) no longer need `properties: {}`.
+
 ## 10.3.0
 
 ## 10.2.0

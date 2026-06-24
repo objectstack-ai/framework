@@ -1,5 +1,90 @@
 # @objectstack/cli
 
+## 10.4.0
+
+### Patch Changes
+
+- 84784fc: feat(cli): lint ADR-0044 approval revise-loop footguns at compile time
+
+  `objectstack compile` now warns on two send-back-for-revision shapes an AI (or human) authoring an approval flow commonly gets wrong:
+
+  - **Dead-end revise** — an approval node with a `revise` out-edge but no path looping back to it. This is a valid DAG, so `registerFlow` accepts it, yet the submitter reworks the record with nowhere to resubmit. The linter is the only place that catches the dead end.
+  - **Un-declared revise loop** — the loop returns to the approval but the closing edge isn't `type: 'back'`, so `registerFlow` rejects it as an un-declared cycle. The lint fires at compile time with the specific fix (mark the resubmit edge `type: 'back'`).
+
+  Also flags `maxRevisions: 0` alongside a `revise` edge (send-back disabled, so the branch always auto-rejects and never runs). Advisory only — never fails the build. Part of #2274 / ADR-0044.
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [61d441f]
+- Updated dependencies [d616e1d]
+- Updated dependencies [e8956b4]
+- Updated dependencies [910a8f0]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [b6a4972]
+- Updated dependencies [72759e1]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [359c0aa]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+  - @objectstack/objectql@10.4.0
+  - @objectstack/runtime@10.4.0
+  - @objectstack/spec@10.4.0
+  - @objectstack/service-analytics@10.4.0
+  - @objectstack/service-automation@10.4.0
+  - @objectstack/formula@10.4.0
+  - @objectstack/rest@10.4.0
+  - @objectstack/platform-objects@10.4.0
+  - @objectstack/service-settings@10.4.0
+  - @objectstack/plugin-approvals@10.4.0
+  - @objectstack/client@10.4.0
+  - @objectstack/plugin-sharing@10.4.0
+  - @objectstack/trigger-record-change@10.4.0
+  - @objectstack/verify@10.4.0
+  - @objectstack/cloud-connection@10.4.0
+  - @objectstack/account@10.4.0
+  - @objectstack/setup@10.4.0
+  - @objectstack/studio@10.4.0
+  - @objectstack/core@10.4.0
+  - @objectstack/lint@10.4.0
+  - @objectstack/mcp@10.4.0
+  - @objectstack/observability@10.4.0
+  - @objectstack/driver-memory@10.4.0
+  - @objectstack/driver-mongodb@10.4.0
+  - @objectstack/driver-sql@10.4.0
+  - @objectstack/driver-sqlite-wasm@10.4.0
+  - @objectstack/plugin-audit@10.4.0
+  - @objectstack/plugin-auth@10.4.0
+  - @objectstack/plugin-email@10.4.0
+  - @objectstack/plugin-hono-server@10.4.0
+  - @objectstack/plugin-org-scoping@10.4.0
+  - @objectstack/plugin-reports@10.4.0
+  - @objectstack/plugin-security@10.4.0
+  - @objectstack/plugin-webhooks@10.4.0
+  - @objectstack/service-ai@10.4.0
+  - @objectstack/service-cache@10.4.0
+  - @objectstack/service-datasource@10.4.0
+  - @objectstack/service-job@10.4.0
+  - @objectstack/service-messaging@10.4.0
+  - @objectstack/service-package@10.4.0
+  - @objectstack/service-queue@10.4.0
+  - @objectstack/service-realtime@10.4.0
+  - @objectstack/service-storage@10.4.0
+  - @objectstack/trigger-api@10.4.0
+  - @objectstack/trigger-schedule@10.4.0
+  - @objectstack/types@10.4.0
+  - @objectstack/console@10.4.0
+
 ## 10.3.0
 
 ### Minor Changes

@@ -1,5 +1,72 @@
 # @objectstack/runtime
 
+## 10.4.0
+
+### Minor Changes
+
+- 4d99a5c: Package-scoped commit history & rollback for AI authoring (ADR-0067)
+
+  Each authoring apply now lands as one revertible **commit** on a package timeline, on top of `sys_metadata_history`:
+
+  - New `sys_metadata_commit` object groups a turn's metadata changes (by `event_seq` range).
+  - `publishPackageDrafts` records each publish as one commit (best-effort) with a per-artifact revert plan and an optional `message` / `aiModel`.
+  - New protocol methods `listCommits`, `revertCommit`, `rollbackToPackageCommit` (reusing `restoreVersion` + delete; a revert is itself an append-only commit).
+  - New REST routes: `GET /packages/:id/commits`, `POST /packages/:id/commits/:commitId/revert`, `POST /packages/:id/rollback`.
+
+### Patch Changes
+
+- 61d441f: feat(objectql): duplicate a writable base — ADR-0070 D4 ("duplicate base")
+
+  `protocol.duplicatePackage` clones every ACTIVE item a base owns into a NEW
+  package, **re-namespacing** object names (the blueprint prefixes a base's object
+  names with its namespace, e.g. `iojn_repair_ticket`, and `sys_metadata` keys on
+  `(type,name,org)` so a same-name copy would collide with the source) and
+  **rewriting every intra-package reference** (lookup `reference`, view `object`,
+  expressions, …) to the new names via a longest-first, identifier-boundary
+  replace. Exposed as `POST /packages/:id/duplicate` (body
+  `{ targetPackageId, targetName?, targetNamespace? }`).
+
+  Completes ADR-0070 D4 (package = lifecycle unit): delete-cascade and export
+  already shipped; this adds the duplicate gesture.
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [61d441f]
+- Updated dependencies [d616e1d]
+- Updated dependencies [e8956b4]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [359c0aa]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [a619a3a]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+  - @objectstack/objectql@10.4.0
+  - @objectstack/spec@10.4.0
+  - @objectstack/formula@10.4.0
+  - @objectstack/rest@10.4.0
+  - @objectstack/metadata@10.4.0
+  - @objectstack/core@10.4.0
+  - @objectstack/observability@10.4.0
+  - @objectstack/driver-memory@10.4.0
+  - @objectstack/driver-sql@10.4.0
+  - @objectstack/driver-sqlite-wasm@10.4.0
+  - @objectstack/plugin-auth@10.4.0
+  - @objectstack/plugin-org-scoping@10.4.0
+  - @objectstack/plugin-security@10.4.0
+  - @objectstack/service-cluster@10.4.0
+  - @objectstack/service-datasource@10.4.0
+  - @objectstack/service-i18n@10.4.0
+  - @objectstack/types@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes
