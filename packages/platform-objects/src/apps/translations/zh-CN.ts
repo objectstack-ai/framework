@@ -84,8 +84,6 @@ export const zhCN: TranslationData = {
 
         nav_oauth_apps: { label: 'OAuth 应用' },
         nav_jwks: { label: '签名密钥 (JWKS)' },
-        nav_verifications: { label: '验证记录' },
-        nav_device_codes: { label: '设备代码' },
         nav_accounts: { label: '身份链接' },
         nav_user_preferences: { label: '用户偏好' },
         nav_metadata: { label: '全部元数据' },

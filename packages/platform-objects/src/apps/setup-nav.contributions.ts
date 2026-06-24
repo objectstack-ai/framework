@@ -113,8 +113,12 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
     items: [
       { id: 'nav_oauth_apps', type: 'object', label: 'OAuth Applications', objectName: 'sys_oauth_application', icon: 'app-window' },
       { id: 'nav_jwks', type: 'object', label: 'Signing Keys (JWKS)', objectName: 'sys_jwks', icon: 'key-round' },
-      { id: 'nav_verifications', type: 'object', label: 'Verifications', objectName: 'sys_verification', icon: 'mail-check' },
-      { id: 'nav_device_codes', type: 'object', label: 'Device Codes', objectName: 'sys_device_code', icon: 'qr-code' },
+      // `sys_verification` (email/phone tokens) and `sys_device_code` (OAuth
+      // device-grant codes) deliberately omit `list` from their `apiMethods`
+      // (sensitive, ephemeral secrets — not browsable), so an object/list-view
+      // nav entry for them can only ever render "failed to load". They're
+      // reachable by id (get) when needed; no browse menu. (Re-adding requires
+      // enabling `list` on the object — a security decision.)
       { id: 'nav_accounts', type: 'object', label: 'Identity Links', objectName: 'sys_account', icon: 'link-2' },
       { id: 'nav_user_preferences', type: 'object', label: 'User Preferences', objectName: 'sys_user_preference', icon: 'sliders' },
     ],
