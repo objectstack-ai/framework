@@ -82,23 +82,8 @@ export {
   defineObjectDesignerConfig,
 } from './object-designer.zod';
 
-export {
-  // Page Builder Schemas
-  CanvasSnapSettingsSchema,
-  CanvasZoomSettingsSchema,
-  ElementPaletteItemSchema,
-  PageBuilderConfigSchema,
-  /** @deprecated Use PageBuilderConfigSchema instead */
-  InterfaceBuilderConfigSchema,
-
-  // Page Builder Types
-  type CanvasSnapSettings,
-  type CanvasZoomSettings,
-  type ElementPaletteItem,
-  type PageBuilderConfig,
-  /** @deprecated Use PageBuilderConfig instead */
-  type InterfaceBuilderConfig,
-} from './page-builder.zod';
+// Page Builder schemas removed — they configured the `blank` page-type drag-drop
+// canvas, which has no renderer and was dropped from PageTypeSchema (framework#2265).
 
 export {
   // Flow Builder Schemas

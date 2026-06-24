@@ -5,16 +5,13 @@ import {
   PageComponentSchema,
   PageRegionSchema,
   PageTypeSchema,
-  RecordReviewConfigSchema,
   ElementDataSourceSchema,
-  BlankPageLayoutSchema,
   PageVariableSchema,
   InterfacePageConfigSchema,
   type Page,
   type PageComponent,
   type PageRegion,
   type ElementDataSource,
-  type RecordReviewConfig,
   type InterfacePageConfig,
 } from './page.zod';
 
@@ -493,83 +490,6 @@ describe('PageTypeSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RecordReviewConfigSchema
-// ---------------------------------------------------------------------------
-describe('RecordReviewConfigSchema', () => {
-  it('should accept minimal review config', () => {
-    const config: RecordReviewConfig = RecordReviewConfigSchema.parse({
-      object: 'order',
-      actions: [
-        { label: 'Approve', type: 'approve' },
-      ],
-    });
-
-    expect(config.object).toBe('order');
-    expect(config.actions).toHaveLength(1);
-    expect(config.navigation).toBe('sequential');
-    expect(config.showProgress).toBe(true);
-  });
-
-  it('should accept full review config', () => {
-    const config = RecordReviewConfigSchema.parse({
-      object: 'invoice',
-      filter: { status: 'pending' },
-      sort: [{ field: 'created_at', order: 'desc' }],
-      displayFields: ['amount', 'vendor', 'description'],
-      actions: [
-        { label: 'Approve', type: 'approve', field: 'status', value: 'approved', nextRecord: true },
-        { label: 'Reject', type: 'reject', field: 'status', value: 'rejected' },
-        { label: 'Skip', type: 'skip', nextRecord: true },
-        { label: 'Flag', type: 'custom', field: 'flagged', value: true },
-      ],
-      navigation: 'filtered',
-      showProgress: false,
-    });
-
-    expect(config.actions).toHaveLength(4);
-    expect(config.navigation).toBe('filtered');
-    expect(config.showProgress).toBe(false);
-    expect(config.displayFields).toEqual(['amount', 'vendor', 'description']);
-  });
-
-  it('should reject review config without object', () => {
-    expect(() => RecordReviewConfigSchema.parse({
-      actions: [{ label: 'Approve', type: 'approve' }],
-    })).toThrow();
-  });
-
-  it('should reject review config without actions', () => {
-    expect(() => RecordReviewConfigSchema.parse({
-      object: 'order',
-    })).toThrow();
-  });
-
-  it('should accept all action types', () => {
-    const types = ['approve', 'reject', 'skip', 'custom'] as const;
-
-    types.forEach(type => {
-      expect(() => RecordReviewConfigSchema.parse({
-        object: 'order',
-        actions: [{ label: 'Action', type }],
-      })).not.toThrow();
-    });
-  });
-
-  it('should accept all navigation modes', () => {
-    const modes = ['sequential', 'random', 'filtered'] as const;
-
-    modes.forEach(navigation => {
-      const config = RecordReviewConfigSchema.parse({
-        object: 'order',
-        actions: [{ label: 'Ok', type: 'approve' }],
-        navigation,
-      });
-      expect(config.navigation).toBe(navigation);
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
 // PageSchema with page types
 // ---------------------------------------------------------------------------
 describe('PageSchema with page types', () => {
@@ -723,75 +643,6 @@ describe('PageComponent dataSource integration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// BlankPageLayoutSchema — free-form canvas composition
-// ---------------------------------------------------------------------------
-describe('BlankPageLayoutSchema', () => {
-  it('should accept minimal layout with defaults', () => {
-    const layout = BlankPageLayoutSchema.parse({
-      items: [],
-    });
-    expect(layout.columns).toBe(12);
-    expect(layout.rowHeight).toBe(40);
-    expect(layout.gap).toBe(8);
-    expect(layout.items).toHaveLength(0);
-  });
-
-  it('should accept full layout config', () => {
-    const layout = BlankPageLayoutSchema.parse({
-      columns: 24,
-      rowHeight: 20,
-      gap: 4,
-      items: [
-        { componentId: 'text_1', x: 0, y: 0, width: 12, height: 2 },
-        { componentId: 'btn_1', x: 0, y: 2, width: 6, height: 1 },
-        { componentId: 'picker_1', x: 6, y: 2, width: 6, height: 3 },
-      ],
-    });
-    expect(layout.columns).toBe(24);
-    expect(layout.items).toHaveLength(3);
-    expect(layout.items[0].x).toBe(0);
-    expect(layout.items[2].width).toBe(6);
-  });
-
-  it('should reject item with invalid dimensions', () => {
-    expect(() => BlankPageLayoutSchema.parse({
-      items: [{ componentId: 'a', x: 0, y: 0, width: 0, height: 1 }],
-    })).toThrow();
-
-    expect(() => BlankPageLayoutSchema.parse({
-      items: [{ componentId: 'a', x: -1, y: 0, width: 1, height: 1 }],
-    })).toThrow();
-  });
-
-  it('should accept page with blankLayout', () => {
-    const page = PageSchema.parse({
-      name: 'blank_canvas',
-      label: 'Canvas',
-      type: 'home',
-      regions: [
-        {
-          name: 'main',
-          components: [
-            { id: 'text_1', type: 'element:text', properties: { content: 'Hello' } },
-            { id: 'btn_1', type: 'element:button', properties: { label: 'Click' } },
-          ],
-        },
-      ],
-      blankLayout: {
-        columns: 12,
-        items: [
-          { componentId: 'text_1', x: 0, y: 0, width: 12, height: 2 },
-          { componentId: 'btn_1', x: 0, y: 2, width: 4, height: 1 },
-        ],
-      },
-    });
-
-    expect(page.blankLayout?.items).toHaveLength(2);
-    expect(page.blankLayout?.columns).toBe(12);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // PageVariableSchema — record_picker variable binding
 // ---------------------------------------------------------------------------
 describe('PageVariableSchema record_id type', () => {
@@ -817,7 +668,6 @@ describe('PageVariableSchema record_id type', () => {
       name: 'blank_picker',
       label: 'Picker Page',
       type: 'home',
-      blankLayout: { items: [] },
       variables: [
         { name: 'selected_id', type: 'record_id', source: 'account_picker' },
         { name: 'show_details', type: 'boolean', defaultValue: false },
@@ -889,31 +739,6 @@ describe('Page end-to-end', () => {
 
     expect(page.name).toBe('page_overview');
     expect(page.regions[0].components).toHaveLength(5);
-  });
-
-  it('should accept a record_review page with full config', () => {
-    const page = PageSchema.parse({
-      name: 'page_review',
-      label: 'Review Queue',
-      type: 'home',
-      object: 'order',
-      recordReview: {
-        object: 'order',
-        filter: { status: 'pending_review' },
-        sort: [{ field: 'priority', order: 'desc' }],
-        displayFields: ['customer_name', 'total', 'items_count'],
-        actions: [
-          { label: 'Approve', type: 'approve', field: 'status', value: 'approved' },
-          { label: 'Reject', type: 'reject', field: 'status', value: 'rejected' },
-          { label: 'Skip', type: 'skip' },
-        ],
-        navigation: 'sequential',
-        showProgress: true,
-      },
-      regions: [],
-    });
-
-    expect(page.recordReview?.actions).toHaveLength(3);
   });
 
   it('should accept a list page bound to an object', () => {
@@ -1142,27 +967,6 @@ describe('PageComponentSchema - Negative Validation', () => {
     // "components.N.properties: expected record").
     const comp = PageComponentSchema.parse({ type: 'record:details' });
     expect(comp.properties).toEqual({});
-  });
-});
-
-describe('RecordReviewConfigSchema - Negative Validation', () => {
-  it('should reject review config without object', () => {
-    expect(() => RecordReviewConfigSchema.parse({
-      actions: [{ label: 'Approve', type: 'approve' }],
-    })).toThrow();
-  });
-
-  it('should reject review config without actions', () => {
-    expect(() => RecordReviewConfigSchema.parse({
-      object: 'lead',
-    })).toThrow();
-  });
-
-  it('should reject review action with invalid type enum', () => {
-    expect(() => RecordReviewConfigSchema.parse({
-      object: 'lead',
-      actions: [{ label: 'Bad', type: 'invalid_action' }],
-    })).toThrow();
   });
 });
 
