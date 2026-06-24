@@ -1912,6 +1912,35 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(manifest) };
             }
 
+            // POST /packages/:id/duplicate → clone this base into a NEW writable
+            // package, re-namespacing objects + rewriting references (ADR-0070 D4
+            // "duplicate base"). Body { targetPackageId, targetName?, targetNamespace? }.
+            if (parts.length === 2 && parts[1] === 'duplicate' && m === 'POST') {
+                const id = decodeURIComponent(parts[0]);
+                const protocol = await this.resolveService('protocol');
+                if (!protocol || typeof (protocol as any).duplicatePackage !== 'function') {
+                    return { handled: true, response: this.error('Package duplication not supported', 501) };
+                }
+                const targetPackageId = typeof body?.targetPackageId === 'string' ? body.targetPackageId.trim() : '';
+                if (!targetPackageId) {
+                    return { handled: true, response: this.error('Body { targetPackageId } is required', 400) };
+                }
+                try {
+                    const organizationId = await this.resolveActiveOrganizationId(_context);
+                    const result = await (protocol as any).duplicatePackage({
+                        sourcePackageId: id,
+                        targetPackageId,
+                        ...(typeof body?.targetName === 'string' ? { targetName: body.targetName } : {}),
+                        ...(typeof body?.targetNamespace === 'string' ? { targetNamespace: body.targetNamespace } : {}),
+                        ...(organizationId ? { organizationId } : {}),
+                        ...(body?.actor ? { actor: body.actor } : {}),
+                    });
+                    return { handled: true, response: this.success(result) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                }
+            }
+
             // GET /packages/:id → get package
             if (parts.length === 1 && m === 'GET') {
                 const id = decodeURIComponent(parts[0]);
