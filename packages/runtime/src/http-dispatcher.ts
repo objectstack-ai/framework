@@ -1912,6 +1912,28 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(manifest) };
             }
 
+            // POST /packages/:id/adopt-orphans → bulk-rebind package-less (legacy
+            // null / 'sys_metadata') metadata INTO this base (ADR-0070 D5 migration;
+            // lets the env retire the "Local / Custom" scope once it has no orphans).
+            if (parts.length === 2 && parts[1] === 'adopt-orphans' && m === 'POST') {
+                const id = decodeURIComponent(parts[0]);
+                const protocol = await this.resolveService('protocol');
+                if (!protocol || typeof (protocol as any).reassignOrphanedMetadata !== 'function') {
+                    return { handled: true, response: this.error('Orphan adoption not supported', 501) };
+                }
+                try {
+                    const organizationId = await this.resolveActiveOrganizationId(_context);
+                    const result = await (protocol as any).reassignOrphanedMetadata({
+                        targetPackageId: id,
+                        ...(organizationId ? { organizationId } : {}),
+                        ...(body?.actor ? { actor: body.actor } : {}),
+                    });
+                    return { handled: true, response: this.success(result) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                }
+            }
+
             // POST /packages/:id/duplicate → clone this base into a NEW writable
             // package, re-namespacing objects + rewriting references (ADR-0070 D4
             // "duplicate base"). Body { targetPackageId, targetName?, targetNamespace? }.

@@ -177,3 +177,32 @@ describe('protocol.duplicatePackage (ADR-0070 D4)', () => {
         expect(calls.some((c: any) => /iojn_/.test(c.name))).toBe(false); // no un-renamed leftovers
     });
 });
+
+describe('protocol.reassignOrphanedMetadata (ADR-0070 D5)', () => {
+    it('rebinds package-less orphans (null / "" / sys_metadata) into the target base; leaves owned rows', async () => {
+        const rows = [
+            { id: 'r1', type: 'object', name: 'loose_a', package_id: null },
+            { id: 'r2', type: 'view', name: 'loose_v', package_id: 'sys_metadata' },
+            { id: 'r3', type: 'object', name: 'blank', package_id: '' },
+            { id: 'r4', type: 'object', name: 'owned', package_id: 'app.existing' },
+        ];
+        const update = vi.fn(async () => ({ id: 'x' }));
+        const engine = { find: vi.fn(async () => rows), update };
+        const protocol = new ObjectStackProtocolImplementation(engine as never);
+        const res = await protocol.reassignOrphanedMetadata({ targetPackageId: 'app.home' });
+
+        expect(res).toMatchObject({ success: true, reassignedCount: 3, targetPackageId: 'app.home' });
+        const movedIds = update.mock.calls.map((c: any) => c[2].where.id);
+        expect(movedIds).toEqual(['r1', 'r2', 'r3']); // the 3 orphans, not the owned r4
+        expect(update).toHaveBeenCalledWith('sys_metadata', { package_id: 'app.home' }, { where: { id: 'r1' } });
+        expect(res.reassigned.some((x) => x.name === 'owned')).toBe(false);
+    });
+
+    it('no orphans → reassignedCount 0, success false', async () => {
+        const engine = { find: vi.fn(async () => [{ id: 'r1', type: 'object', name: 'x', package_id: 'app.a' }]), update: vi.fn() };
+        const protocol = new ObjectStackProtocolImplementation(engine as never);
+        const res = await protocol.reassignOrphanedMetadata({ targetPackageId: 'app.home' });
+        expect(res).toMatchObject({ success: false, reassignedCount: 0 });
+        expect((engine.update as any)).not.toHaveBeenCalled();
+    });
+});

@@ -4580,6 +4580,54 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
+    /**
+     * ADR-0070 D5 — adopt orphaned (package-less) metadata into a base. The
+     * pre-package-first stopgaps left runtime-authored items with
+     * `package_id = null` (or the `sys_metadata` sentinel). This bulk-rebinds
+     * every such orphan to `targetPackageId` so the env converges on the
+     * package-first model and the "Local / Custom" migration scope can be
+     * retired. Owned rows (already bound to a real package) are left untouched.
+     * Updates the durable column; the in-memory registry picks the new binding
+     * up on the next metadata reload.
+     */
+    async reassignOrphanedMetadata(request: {
+        targetPackageId: string;
+        organizationId?: string;
+        actor?: string;
+    }): Promise<{
+        success: boolean;
+        reassignedCount: number;
+        reassigned: Array<{ type: string; name: string }>;
+        targetPackageId: string;
+    }> {
+        const where: Record<string, unknown> = {};
+        if (request.organizationId) where.organization_id = request.organizationId;
+        const rows = (await this.engine.find('sys_metadata', { where })) as any[];
+        const orphans = rows.filter(
+            (r) => r?.package_id == null || r.package_id === '' || r.package_id === 'sys_metadata',
+        );
+
+        const reassigned: Array<{ type: string; name: string }> = [];
+        for (const row of orphans) {
+            try {
+                await this.engine.update(
+                    'sys_metadata',
+                    { package_id: request.targetPackageId },
+                    { where: { id: row.id } },
+                );
+                reassigned.push({ type: row.type, name: row.name });
+            } catch {
+                /* skip a row that fails to update; report only what moved */
+            }
+        }
+        return {
+            success: reassigned.length > 0,
+            reassignedCount: reassigned.length,
+            reassigned,
+            targetPackageId: request.targetPackageId,
+        };
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // ADR-0067 — package-scoped commit history & rollback
     // ─────────────────────────────────────────────────────────────────────
