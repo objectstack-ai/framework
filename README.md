@@ -5,18 +5,23 @@
 ![Version](https://img.shields.io/badge/version-v4.0.1-green.svg)
 ![Tests](https://img.shields.io/badge/tests-6%2C507%20passing-brightgreen.svg)
 
-> **Open-source, AI-native backend for real business apps.** Describe a business app and AI builds the whole thing — objects, APIs, UI, workflows, and permissions — as version-controlled Zod metadata on a database you own. Self-host it; AI agents then operate it within RBAC / RLS and audit.
+> **A metadata protocol and TypeScript toolkit for AI-native business apps.** Describe your objects, permissions, workflows, APIs, UI, and AI tools once as typed, version-controlled Zod metadata — and ObjectStack derives the TypeScript types, REST API, client SDK, UI, and MCP tools from that single definition.
 
-**Try it in ~30s** — boot the [HotCRM](https://github.com/objectstack-ai/hotcrm) reference app on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install). · Hosted platform: **[ObjectOS](https://cloud.objectos.app)**.
+```
+ObjectStack (this repo)  →  how a business app is described — the protocol + toolkit
+ObjectOS                 →  where it runs, and where AI plugs in — the runtime
+```
+
+This repo is the **framework**: the protocol, kernel, SDK, and CLI you build with. To *run* apps and let AI operate them under your permissions, deploy on **[ObjectOS](https://github.com/objectstack-ai/objectos)**. · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" width="900" alt="ObjectStack Console rendering an executive dashboard — KPI cards for revenue, accounts, contacts and leads, a revenue-trend area chart, and a revenue-by-industry donut, all defined as metadata">
-  <br><sub>The runtime <b>Console</b> rendering a dashboard defined entirely in metadata — KPI cards, charts, and scheduled reports.</sub>
+  <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents, governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
+  <br><sub>One typed definition → TypeScript types, REST API, client SDK, UI, and MCP tools.</sub>
 </p>
 
 ## What is ObjectStack?
 
-ObjectStack is an **open-source**, metadata-driven backend for building business applications that AI agents can understand, operate, and audit safely — self-hostable, with your data on your own database.
+ObjectStack is an **open-source** metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools. Apps run, and AI operates them under your permissions, on the [ObjectOS](https://github.com/objectstack-ai/objectos) runtime.
 
 Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScript strings, ObjectStack makes the business system explicit:
 
@@ -25,7 +30,7 @@ Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScr
 - **Business logic** is represented as analyzable metadata: flows, conditions, policies, and artifacts.
 - **Business runtime** is a microkernel that loads plugins, drivers, services, and compiled environment artifacts.
 
-The goal is not to be another low-code UI builder. ObjectStack is the structured execution layer for AI-native business software: agent-ready, permission-aware, versioned, and auditable.
+The goal is not to be another low-code UI builder. ObjectStack is the structured *definition* layer for AI-native business software — agent-ready, versioned, and analyzable; permissions and audit are enforced at runtime by ObjectOS.
 
 ObjectStack is built around three protocol layers:
 
@@ -37,40 +42,9 @@ All core definitions start with **Zod schemas** (1,600+ exported schemas across 
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation, and [content/docs/concepts/north-star.mdx](./content/docs/concepts/north-star.mdx) for the product north star (metadata protocols · environment-aware runtime · compiled app artifacts).
 
-## See it in action
+## Author your app — in code or in Studio
 
-ObjectStack ships a runtime **Console** and a visual **Studio** on top of the same metadata — every object, view, dashboard, flow, and permission you declare in code is immediately explorable, editable, and operable in the browser.
-
-**One object, every view.** The same `task` records — rendered as a board, a Gantt schedule, a calendar, or a cover gallery. View types are metadata, and the per-view bindings (kanban group-by, Gantt start/end/progress, calendar date, gallery cover) are auto-derived from the object, so switching layout takes no extra UI code.
-
-<p align="center">
-  <img src="docs/screenshots/kanban.png" width="49%" alt="Kanban board grouping tasks across Backlog, To Do, In Progress, In Review, and Done columns">
-  <img src="docs/screenshots/gantt.png" width="49%" alt="Gantt schedule with colored task bars, milestone diamonds, and a today marker">
-</p>
-<p align="center">
-  <img src="docs/screenshots/calendar.png" width="49%" alt="Month calendar with task events placed on their due dates">
-  <img src="docs/screenshots/gallery.png" width="49%" alt="Gallery of task cards with cover images, assignees, and status badges">
-</p>
-<p align="center"><sub><b>Board</b> · <b>Gantt</b> · <b>Calendar</b> · <b>Gallery</b> — the same records, four visualizations, zero extra UI code (grid, timeline, and map ship too).</sub></p>
-
-**Model and automate.**
-
-<p align="center">
-  <img src="docs/screenshots/modeling.png" width="49%" alt="Studio object designer showing the Opportunity object's typed fields, lookups, and layout sections">
-  <img src="docs/screenshots/automation.png" width="49%" alt="Studio flow designer showing a visual DAG that enrolls leads into a campaign">
-</p>
-<p align="center"><sub><b>Model</b> business objects as typed metadata — fields, relations, validation, sections &nbsp;·&nbsp; <b>Automate</b> with flows that compile to analyzable metadata.</sub></p>
-
-**Ask your data.**
-
-<p align="center">
-  <img src="docs/screenshots/ask-ai.png" width="860" alt="AI assistant answering questions about records using the same metadata and permissions">
-  <br><sub>AI agents act through the same objects, actions, and permissions you defined — agent-ready by construction, not bolted on.</sub>
-</p>
-
-## How it works
-
-Everything is **typed metadata**. Author a business object once — fields, a color-coded picklist, validation, all declarative:
+Everything is **typed metadata**. Define a business object once — fields, a color-coded picklist, validation — all declarative:
 
 ```ts
 import { ObjectSchema, Field } from '@objectstack/spec/data';
@@ -93,11 +67,17 @@ export const Task = ObjectSchema.create({
 });
 ```
 
-From that single schema, ObjectStack compiles a running backend — the database table, an auto-generated REST API and typed client SDK, the Console &amp; Studio UI (list, board, calendar, Gantt…), and MCP tools for agents — all behind the same permissions, over a database you host.
+From that single schema, ObjectStack derives the database table, an auto-generated REST API and typed client SDK, UI views (list, board, calendar, Gantt…), and MCP tools for agents — all from one definition.
+
+Prefer clicking? Author the same metadata visually in **Studio** — objects, relations, validation, and flows — and it compiles to the exact same artifacts:
 
 <p align="center">
-  <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel runtime compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents — all governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
+  <img src="docs/screenshots/modeling.png" width="49%" alt="Studio object designer showing the Opportunity object's typed fields, lookups, and layout sections">
+  <img src="docs/screenshots/automation.png" width="49%" alt="Studio flow designer showing a visual DAG that enrolls leads into a campaign">
 </p>
+<p align="center"><sub><b>Model</b> objects as typed metadata &nbsp;·&nbsp; <b>Automate</b> with visual flows — both produce the same analyzable metadata.</sub></p>
+
+> **Want to see it running?** Deploy on **[ObjectOS](https://github.com/objectstack-ai/objectos)** for the live Console — dashboards, boards, calendars, records, and AI working your data under your permissions.
 
 ## Key Features
 
@@ -125,7 +105,7 @@ The point isn't lines of code. The point is **fit in an agent's context window.*
 | AI maintainability | Agents must crawl sprawling app code | Whole app fits in an agent's context window |
 | Governance | App-level conventions | Auth, RBAC, RLS, FLS, audit, and versioned artifacts |
 
-This makes ObjectStack a backend substrate for AI-native business applications: CRM agents, support agents, operations agents, workflow agents, and internal tools that must act on real business data without bypassing permissions or audit trails.
+Described in ObjectStack and deployed on [ObjectOS](https://github.com/objectstack-ai/objectos), this is the substrate for AI-native business apps — CRM, support, operations, and workflow agents acting on real business data without bypassing permissions or audit.
 
 ## Quick Start
 
@@ -198,6 +178,17 @@ os explain        # Explain protocol concepts on the command line
 ```
 
 Cloud, package registry, and environment management subcommands (`os publish`, `os rollback`, `os package`, `os login`, `os whoami`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
+
+## Use the generated API
+
+Every object ships a REST API automatically — no controllers to write:
+
+```bash
+# CRUD endpoints for the `todo_task` object you defined above
+curl http://localhost:3000/api/v1/todo_task
+```
+
+For the browser, the typed client SDK and React hooks (`useQuery` / `useMutation` / `usePagination`) live in [`@objectstack/client-react`](packages/client-react). Need a new capability? Write a plugin, driver, or service against the same kernel APIs — every built-in is one (see below).
 
 ## Package Directory
 
