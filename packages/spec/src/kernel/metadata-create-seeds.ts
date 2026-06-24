@@ -104,6 +104,38 @@ const BUILTIN_METADATA_CREATE_SEEDS: Partial<Record<MetadataType, unknown>> = {
     pluralLabel: 'New Objects',
     fields: {},
   },
+  agent: {
+    name: 'new_agent',
+    label: 'New Agent',
+    // role + instructions are required — the agent's persona and behavior.
+    role: 'A helpful assistant.',
+    instructions: 'Describe what this agent should do.',
+  },
+  tool: {
+    name: 'new_tool',
+    label: 'New Tool',
+    // description + a (possibly empty) parameters record are required.
+    description: 'Describe what this tool does.',
+    parameters: {},
+  },
+  skill: {
+    name: 'new_skill',
+    label: 'New Skill',
+    // a skill bundles tools; an empty list is a valid starting point.
+    tools: [],
+  },
+  email_template: {
+    name: 'new_email_template',
+    label: 'New Email Template',
+    subject: 'Subject line',
+    bodyHtml: '<p>Email body</p>',
+  },
+  permission: {
+    name: 'new_permission',
+    label: 'New Permission',
+    // a permission set's per-object grant map; empty = no grants yet.
+    objects: {},
+  },
 };
 
 /**
