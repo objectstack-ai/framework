@@ -1,5 +1,42 @@
 # @objectstack/plugin-mcp-server
 
+## 10.4.0
+
+### Minor Changes
+
+- 7d7fee7: Native MCP business-action execution (`list_actions` / `run_action`)
+
+  The open-source MCP server now natively exposes the app's **business actions**, so a self-host / Community-Edition runtime (open framework + `@objectstack/mcp`, no cloud studio) can _operate_ an app over MCP — not just CRUD records. Previously action execution rode on `@objectstack/service-ai`'s tool registry, which is empty in a headless CE runtime after the in-UI `ask` agent moved to the cloud package.
+
+  - **`@objectstack/mcp`**: new `registerActionTools()` registering two native tools alongside the object-CRUD tools, plus a `McpActionBridge` seam (`McpActionSummary`, `RegisterActionToolsOptions`):
+    - `list_actions` — enumerate the invokable business actions the caller may run (permission- + visibility-filtered, system-object actions held back fail-closed).
+    - `run_action` — invoke an action by name with `recordId` / `params`.
+    - Wired into `handleHttpRequest` by capability: only registered when the runtime bridge can resolve the action mechanism (graceful degradation). No dependency on `@objectstack/service-ai`.
+  - **`@objectstack/runtime`**: the principal-bound MCP bridge (`buildMcpBridge`) now resolves + dispatches actions through the framework's own mechanism — `IDataEngine.executeAction` (script/body) / automation flow runner (flow) — bound to the caller's `ExecutionContext`, the same permission + RLS path the REST `/actions/...` route uses. The ADR-0066 D4 `requiredPermissions` capability gate is now single-sourced and enforced for both surfaces.
+
+### Patch Changes
+
+- Updated dependencies [e8956b4]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+  - @objectstack/spec@10.4.0
+  - @objectstack/core@10.4.0
+  - @objectstack/types@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @objectstack/nestjs
 
+## 10.4.0
+
+### Patch Changes
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [61d441f]
+- Updated dependencies [c224e18]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [7d7fee7]
+  - @objectstack/runtime@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes

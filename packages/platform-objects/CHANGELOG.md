@@ -1,5 +1,49 @@
 # @objectstack/platform-objects
 
+## 10.4.0
+
+### Patch Changes
+
+- 5737261: fix(setup): drop Advanced nav entries for non-listable objects (sys_verification, sys_device_code)
+
+  Dogfooding every Setup menu surfaced two Advanced entries that always render
+  "无法加载记录 / failed to load": **Verifications** (`sys_verification`) and
+  **Device Codes** (`sys_device_code`). Both objects deliberately omit `list`
+  from `apiMethods` (sensitive, ephemeral secrets — verification tokens and OAuth
+  device-grant codes are not meant to be browsed), so the generic object/list-view
+  menu can only ever 405. Removed both nav entries (and their orphaned zh labels);
+  the objects remain reachable by id. Re-adding a browse menu would require
+  enabling `list` on the object — a security decision, not a nav fix.
+
+- a619a3a: fix(setup): first-run admin polish — pin Company/Localization, gate dashboard widgets by `requiresService`, i18n + settings PUT envelope
+
+  Dogfooding the Setup app as a brand-new system administrator surfaced a cluster of small first-run gaps, now fixed:
+
+  - **platform-objects**: pin **Localization** and **Company** in the Setup sidebar's Configuration group — both are registered `service-settings` manifests (the two lowest-`order` Workspace settings) but were reachable only via the "All Settings" hub. Translate the previously-English nav labels Cloud Connection (云连接), Datasources (数据源) and Capabilities (能力). Tag the System Overview `widget_organizations` KPI with `requiresService: 'org-scoping'`.
+  - **rest**: extend the ADR-0057 D10 server-side visibility gate to **dashboard widgets** — strip widgets whose `requiresService` names an unregistered kernel service (mirrors the existing app-nav gate; `resolveRegisteredServices` now also discovers gates declared on widgets). In a single-tenant runtime this removes the orphan "Organizations" KPI, matching the already-hidden org nav entries.
+  - **service-settings**: add the missing zh `help` strings for the Localization manifest (number/currency/first-day-of-week/fiscal-year fields), and accept the `{ values: { … } }` envelope on `PUT /api/settings/:ns` symmetrically with what `GET` returns.
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [e8956b4]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+  - @objectstack/metadata-core@10.4.0
+  - @objectstack/spec@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes
