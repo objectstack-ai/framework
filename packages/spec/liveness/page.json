@@ -1,6 +1,6 @@
 {
   "type": "page",
-  "_note": "PageSchema (UI). Renderers live in objectui, so consumers are cited as prose in `note` (not `evidence`, which resolves framework file:line). Seeded from the Studio page-design dogfood (framework#2254/#2261/#2265). Containers (variables/regions/interfaceConfig/slots/aria) classified at top level — one drill level, no divergent sub-statuses. `recordReview`/`blankLayout` are `dead`: their page types (record_review/blank) were removed from PageTypeSchema (framework#2265) and objectui dropped all references (objectui#1949); the fields remain @deprecated pending hard-removal.",
+  "_note": "PageSchema (UI). Renderers live in objectui, so consumers are cited as prose in `note` (not `evidence`, which resolves framework file:line). Seeded from the Studio page-design dogfood (framework#2254/#2261/#2265). Containers (variables/regions/interfaceConfig/slots/aria) classified at top level — one drill level, no divergent sub-statuses. The removed roadmap page types (record_review/blank) and their config fields (recordReview/blankLayout) were hard-removed — no longer authorable.",
   "props": {
     "name": {
       "status": "live",
@@ -29,14 +29,6 @@
     "object": {
       "status": "live",
       "note": "record-page binding + interfaceConfig source object — objectui PageView / InterfaceListPage."
-    },
-    "recordReview": {
-      "status": "dead",
-      "note": "Config for the removed `record_review` page type (no renderer; dropped from PageTypeSchema, framework#2265; objectui refs removed in objectui#1949). Field kept @deprecated — enforce-or-remove: slated for hard-removal."
-    },
-    "blankLayout": {
-      "status": "dead",
-      "note": "Config for the removed `blank` page type (no renderer; dropped from PageTypeSchema, framework#2265; objectui refs removed in objectui#1949). Field kept @deprecated — enforce-or-remove: slated for hard-removal."
     },
     "template": {
       "status": "live",

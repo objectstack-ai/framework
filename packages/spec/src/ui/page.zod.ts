@@ -131,29 +131,9 @@ export const PageVariableSchema = lazySchema(() => z.object({
   source: z.string().optional().describe('Component ID that writes to this variable'),
 }));
 
-/**
- * Blank Page Layout Item Schema
- * Positions a component on a free-form grid canvas.
- */
-export const BlankPageLayoutItemSchema = lazySchema(() => z.object({
-  componentId: z.string().describe('Reference to a PageComponent.id in the page'),
-  x: z.number().int().min(0).describe('Grid column position (0-based)'),
-  y: z.number().int().min(0).describe('Grid row position (0-based)'),
-  width: z.number().int().min(1).describe('Width in grid columns'),
-  height: z.number().int().min(1).describe('Height in grid rows'),
-}));
-
-/**
- * Blank Page Layout Schema
- * Free-form canvas composition with grid-based positioning.
- * Used when page type is 'blank' to enable drag-and-drop element placement.
- */
-export const BlankPageLayoutSchema = lazySchema(() => z.object({
-  columns: z.number().int().min(1).default(12).describe('Number of grid columns'),
-  rowHeight: z.number().int().min(1).default(40).describe('Height of each grid row in pixels'),
-  gap: z.number().int().min(0).default(8).describe('Gap between grid items in pixels'),
-  items: z.array(BlankPageLayoutItemSchema).describe('Positioned components on the canvas'),
-}));
+// BlankPageLayoutItemSchema / BlankPageLayoutSchema removed — the `blank` page
+// type has no renderer and was dropped from PageTypeSchema (framework#2265,
+// enforce-or-remove); objectui dropped all references in objectui#1949.
 
 /**
  * Page Type Schema
@@ -218,35 +198,9 @@ export const PAGE_TYPE_ROADMAP = [
   'blank',          // Free-form canvas (config: BlankPageLayoutSchema)
 ] as const;
 
-/**
- * Record Review Config Schema
- * Configuration for a sequential record review/approval page.
- * Users navigate through records one-by-one, taking actions (approve/reject/skip).
- * Only applicable when page type is 'record_review'.
- */
-export const RecordReviewConfigSchema = lazySchema(() => z.object({
-  object: z.string().describe('Target object for review'),
-  filter: FilterConditionSchema.optional().describe('Filter criteria for review queue'),
-  sort: z.array(SortItemSchema).optional().describe('Sort order for review queue'),
-  displayFields: z.array(z.string()).optional()
-    .describe('Fields to display on the review page'),
-  actions: z.array(z.object({
-    label: z.string().describe('Action button label'),
-    type: z.enum(['approve', 'reject', 'skip', 'custom'])
-      .describe('Action type'),
-    field: z.string().optional()
-      .describe('Field to update on action'),
-    value: z.union([z.string(), z.number(), z.boolean()]).optional()
-      .describe('Value to set on action'),
-    nextRecord: z.boolean().optional().default(true)
-      .describe('Auto-advance to next record after action'),
-  })).describe('Review actions'),
-  navigation: z.enum(['sequential', 'random', 'filtered'])
-    .optional().default('sequential')
-    .describe('Record navigation mode'),
-  showProgress: z.boolean().optional().default(true)
-    .describe('Show review progress indicator'),
-}));
+// RecordReviewConfigSchema removed — the `record_review` page type has no
+// renderer and was dropped from PageTypeSchema (framework#2265, enforce-or-remove);
+// objectui dropped all references in objectui#1949.
 
 /**
  * Interface Page Configuration Schema (Airtable Interface parity)
@@ -353,19 +307,10 @@ export const PageSchema = lazySchema(() => z.object({
   /** Context */
   object: z.string().optional().describe('Bound object (for Record pages)'),
 
-  /** @deprecated Config for the `record_review` page type, which is not yet
-   * rendered and has been removed from {@link PageTypeSchema} (see
-   * {@link PAGE_TYPE_ROADMAP}). Retained as an optional field for back-compat;
-   * slated for removal once the type ships a renderer or consumers drop it. */
-  recordReview: RecordReviewConfigSchema.optional()
-    .describe('@deprecated Record review configuration (record_review type is roadmap, not authorizable)'),
+  // recordReview / blankLayout fields removed — the record_review/blank page
+  // types have no renderer and were dropped from PageTypeSchema (framework#2265);
+  // objectui dropped all references in objectui#1949.
 
-  /** @deprecated Config for the `blank` page type, which is not yet rendered and
-   * has been removed from {@link PageTypeSchema} (see {@link PAGE_TYPE_ROADMAP}).
-   * Retained as an optional field for back-compat; slated for removal. */
-  blankLayout: BlankPageLayoutSchema.optional()
-    .describe('@deprecated Free-form grid layout (blank type is roadmap, not authorizable)'),
-  
   /** Layout Template */
   template: z.string().default('default').describe('Layout template name (e.g. "header-sidebar-main")'),
   
@@ -455,7 +400,4 @@ export type PageComponent = z.infer<typeof PageComponentSchema>;
 export type PageRegion = z.infer<typeof PageRegionSchema>;
 export type PageVariable = z.infer<typeof PageVariableSchema>;
 export type ElementDataSource = z.infer<typeof ElementDataSourceSchema>;
-export type RecordReviewConfig = z.infer<typeof RecordReviewConfigSchema>;
-export type BlankPageLayoutItem = z.infer<typeof BlankPageLayoutItemSchema>;
-export type BlankPageLayout = z.infer<typeof BlankPageLayoutSchema>;
 export type InterfacePageConfig = z.infer<typeof InterfacePageConfigSchema>;
