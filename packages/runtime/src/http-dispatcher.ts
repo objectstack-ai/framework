@@ -292,7 +292,16 @@ export class HttpDispatcher {
         };
 
         if (action === 'create') {
-            if (ql) {
+            // Prefer the protocol service (validations + RLS + audit), mirroring
+            // the read paths below. The MCP bridge passes `context.dataDriver` as
+            // `ql`, which in the multi-env runtime is a RAW db driver with no ORM
+            // `insert` — so going straight to `ql.insert` broke MCP create_record
+            // ("ql.insert is not a function") while REST (which uses `createData`)
+            // worked. Routing writes through the protocol keeps them aligned.
+            if (protocol && typeof protocol.createData === 'function') {
+                return await protocol.createData({ object: params.object, data: params.data, ...(scopeId ? { environmentId: scopeId } : {}), context: executionContext });
+            }
+            if (ql && typeof ql.insert === 'function') {
                 const res = await ql.insert(params.object, params.data, qlOpts);
                 const record = { ...params.data, ...res };
                 return { object: params.object, id: record.id, record };
@@ -315,7 +324,10 @@ export class HttpDispatcher {
         }
 
         if (action === 'update') {
-            if (ql && params.id) {
+            if (protocol && typeof protocol.updateData === 'function') {
+                return await protocol.updateData({ object: params.object, id: params.id, data: params.data, ...(scopeId ? { environmentId: scopeId } : {}), context: executionContext });
+            }
+            if (ql && params.id && typeof ql.update === 'function') {
                 let all = await ql.find(params.object, findOpts({ where: { id: params.id }, limit: 1 }));
                 if (all && (all as any).value) all = (all as any).value;
                 if (!all) all = [];
@@ -328,7 +340,10 @@ export class HttpDispatcher {
         }
 
         if (action === 'delete') {
-            if (ql) {
+            if (protocol && typeof protocol.deleteData === 'function') {
+                return await protocol.deleteData({ object: params.object, id: params.id, ...(scopeId ? { environmentId: scopeId } : {}), context: executionContext });
+            }
+            if (ql && typeof ql.delete === 'function') {
                 await ql.delete(params.object, findOpts({ where: { id: params.id } }));
                 return { object: params.object, id: params.id, deleted: true };
             }
@@ -3499,7 +3514,23 @@ export class HttpDispatcher {
         try {
             context.executionContext = await resolveExecutionContext({
                 getService: (n: string) => this.resolveService(n, context.environmentId),
-                getQl: () => Promise.resolve(this.getObjectQLService(context.environmentId)),
+                // Resolve ObjectQL from the per-request kernel DIRECTLY. The scoped
+                // `resolveService('objectql', envId)` factory can return a different
+                // instance that doesn't see THIS env's rows (the gotcha
+                // `handleActions` works around) — which made the api-key lookup miss
+                // `sys_api_key` on the MCP path and reject valid keys with 401, while
+                // REST accepted them (rest-server resolves identity via
+                // `kernel.getServiceAsync('objectql')`). Resolving off `this.kernel`
+                // keeps REST + MCP identity resolution aligned; falls back to the
+                // scoped path when the kernel can't hand back an objectql directly.
+                getQl: async () => {
+                    const k: any = this.kernel;
+                    if (k && typeof k.getServiceAsync === 'function') {
+                        const ql = await k.getServiceAsync('objectql').catch(() => undefined);
+                        if (ql && (ql.registry || typeof ql.find === 'function')) return ql;
+                    }
+                    return this.getObjectQLService(context.environmentId);
+                },
                 request: context.request,
             });
         } catch {

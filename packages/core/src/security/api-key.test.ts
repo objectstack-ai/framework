@@ -39,10 +39,22 @@ describe('core api-key primitives', () => {
     expect(k.raw.startsWith(k.prefix)).toBe(true);
   });
 
-  it('extractApiKey: x-api-key / ApiKey scheme, not Bearer', () => {
+  it('extractApiKey: x-api-key / ApiKey, and Bearer only for osk_-prefixed keys', () => {
     expect(extractApiKey({ 'x-api-key': 'k' })).toBe('k');
     expect(extractApiKey({ authorization: 'ApiKey k' })).toBe('k');
+    // A bare Bearer (e.g. a better-auth session token) is NOT an api-key.
     expect(extractApiKey({ authorization: 'Bearer k' })).toBeUndefined();
+    // A Bearer carrying the api-key prefix IS accepted — remote MCP clients
+    // (Claude Desktop / Cursor / Claude Code) send the key this way.
+    expect(extractApiKey({ authorization: 'Bearer osk_abc123' })).toBe('osk_abc123');
+    expect(extractApiKey({ authorization: 'bearer osk_abc123' })).toBe('osk_abc123'); // scheme is case-insensitive
+  });
+
+  it('resolveApiKeyPrincipal resolves a Bearer osk_ key (remote MCP client path)', async () => {
+    const raw = 'osk_' + 'b'.repeat(24);
+    const ql = makeQl([{ key: hashApiKey(raw), revoked: false, user_id: 'u1' }]);
+    const p = await resolveApiKeyPrincipal(ql, { authorization: `Bearer ${raw}` });
+    expect(p?.userId).toBe('u1');
   });
 
   it('parseScopes + isExpired basics', () => {

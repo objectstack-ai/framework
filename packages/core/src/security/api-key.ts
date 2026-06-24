@@ -69,18 +69,27 @@ export function generateApiKey(prefix: string = API_KEY_PREFIX): GeneratedApiKey
 }
 
 /**
- * Extract an API key from request headers. Accepts `X-API-Key: <token>` or
- * `Authorization: ApiKey <token>` (case-insensitive scheme). Bearer tokens are
- * deliberately NOT treated as API keys — those flow through the session path.
+ * Extract an API key from request headers. Accepts, in order:
+ *  - `X-API-Key: <token>`
+ *  - `Authorization: ApiKey <token>` (case-insensitive scheme)
+ *  - `Authorization: Bearer <token>` ONLY when `<token>` carries the ObjectStack
+ *    api-key prefix (`osk_`). Remote MCP clients (Claude Desktop / Cursor /
+ *    Claude Code) authenticate to `/api/v1/mcp` with the key as a Bearer per the
+ *    MCP spec, so rejecting Bearer outright made every standard MCP client fail.
+ *    A better-auth *session* token never starts with `osk_`, so a session Bearer
+ *    still falls through to the session path — this can't shadow it.
  */
 export function extractApiKey(headers: any): string | undefined {
   const x = readHeader(headers, 'x-api-key');
   if (x && x.trim()) return x.trim();
   const auth = readHeader(headers, 'authorization');
   if (!auth) return undefined;
-  const m = auth.match(/^ApiKey\s+(.+)$/i);
-  const token = m?.[1]?.trim();
-  return token || undefined;
+  const apiKeyScheme = auth.match(/^ApiKey\s+(\S.*)$/i);
+  if (apiKeyScheme?.[1]?.trim()) return apiKeyScheme[1].trim();
+  // Bearer is accepted only for prefixed api-keys (never for session tokens).
+  const bearer = auth.match(/^Bearer\s+(\S.*)$/i)?.[1]?.trim();
+  if (bearer && bearer.startsWith(API_KEY_PREFIX)) return bearer;
+  return undefined;
 }
 
 /** Parse a `scopes` value that may be a JSON-string textarea or a real array. */
