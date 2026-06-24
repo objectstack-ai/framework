@@ -1,4 +1,4 @@
-# ADR-0069: Package-first authoring — every runtime-authored item lives in a writable package (base); no orphans
+# ADR-0070: Package-first authoring — every runtime-authored item lives in a writable package (base); no orphans
 
 **Status**: Proposed (2026-06-24)
 **Deciders**: ObjectStack Protocol Architects
