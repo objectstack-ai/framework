@@ -316,6 +316,74 @@ sort: [
 
 ---
 
+## Configuring Gantt Views
+
+```typescript
+{
+  type: 'gantt',
+  data: { provider: 'object', object: 'project_task' },
+  columns: ['name', 'assigned_to', 'status'],   // left-pane tree columns
+  startField: 'start_date',                       // task bar start
+  endField: 'end_date',                           // task bar end
+  progressField: 'progress',                      // 0–100 fill
+  dependencyField: 'depends_on',                  // FS dependency arrows
+  parentField: 'parent',                          // builds the summary-bar tree
+}
+```
+
+Rows with children (or `type: 'summary'`) render as **summary bars** — they
+move the whole group on drag and have **no resize handles**. Leaf tasks resize
+freely unless `locked: true`.
+
+### Shift segmentation — `timeSegments` (排班分段, ObjectUI extension)
+
+`timeSegments` splits each day column into ordered **bands** (e.g. 白班 / 夜班)
+for shift-based scheduling. It is an **ObjectUI display extension**, *not* part
+of the upstream `GanttConfigSchema` in `@objectstack/spec` — it lives only in
+the gantt view config and is read by the ObjectUI gantt runtime.
+
+```typescript
+{
+  type: 'gantt',
+  data: { provider: 'object', object: 'work_order' },
+  startField: 'start', endField: 'end',
+  timeSegments: {
+    dayStart: '08:00',                 // clock time the 排班日 begins (default '00:00')
+    bands: [
+      { key: 'day',   label: '白班', start: '08:00', end: '20:00' },
+      { key: 'night', label: '夜班', start: '20:00', end: '08:00', color: '#6366f1' },
+    ],
+  },
+}
+```
+
+Field shapes:
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `dayStart` | no | `'HH:mm'` (24h). The "day" column starts here and runs a full 24h, so a cross-midnight band sits wholly inside one column. Default `'00:00'`. |
+| `bands[].key` | no | Stable id (`'day'`/`'night'`); defaults to `band{index}`. |
+| `bands[].label` | yes | Header text for the band (白班 / 夜班). |
+| `bands[].start` / `bands[].end` | yes | `'HH:mm'`. When `end <= start` the band crosses midnight. Bands must tile the 24h day from `dayStart`. |
+| `bands[].color` | no | Any CSS color. Tints that band's column; **omit for no tint**. |
+
+Behavior:
+
+- **Day scale only.** `timeSegments` applies when the gantt is in `day` mode; in
+  week/month/quarter scales it is ignored (no-op).
+- **Two-tier header.** Top tier = the 排班日 date (starting at `dayStart`),
+  bottom tier = one cell per band (each half-width for two equal bands).
+- **Attribution by `start`.** A task is placed in the 排班日 its `start` falls
+  in, so a 夜班 spanning 20:00→次日08:00 stays in a single column.
+- **Drag-snaps to band boundaries** (the band duration, e.g. 12h) instead of
+  whole days.
+- **Calendar-midnight cue.** A subtle dashed vertical line marks local 0:00
+  *inside* a cross-midnight band — the 排班日 cell itself stays unbroken.
+- **Default off = zero regression.** Omit `timeSegments` and the gantt behaves
+  exactly as before. Tints render only for bands that declare `color`.
+
+---
+
 ## App Navigation
 
 An **App** groups objects, dashboards, reports, and custom pages into a
