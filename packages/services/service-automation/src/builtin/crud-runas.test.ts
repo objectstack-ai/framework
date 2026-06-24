@@ -1,0 +1,195 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * #1888 — the automation engine MUST switch the execution identity of a flow's
+ * data nodes based on `flow.runAs`, and pass it to ObjectQL as `options.context`:
+ *   • runAs:'system' → an elevated, RLS-bypassing system principal ({ isSystem: true }),
+ *   • runAs:'user'   → the triggering user ({ userId, roles, … }) so RLS applies.
+ *
+ * Before the fix the CRUD nodes passed NO context at all (the security middleware
+ * was skipped), so runAs was inert in both directions. These tests capture the
+ * exact `context` each data op receives, proving the switch — and the regression
+ * test fails loudly if the threading is ever removed (so it can't go dead again).
+ */
+import { describe, it, expect } from 'vitest';
+import { AutomationEngine } from '../engine.js';
+import { registerCrudNodes } from './crud-nodes.js';
+import { resolveRunDataContext } from '../runtime-identity.js';
+import type { AutomationContext } from '@objectstack/spec/contracts';
+
+function makeLogger(): any {
+  const l: any = { info() {}, warn() {}, error() {}, debug() {} };
+  l.child = () => l;
+  return l;
+}
+
+/** A data engine that records the `context` every op was called with. */
+function fakeData() {
+  const calls: Array<{ op: string; obj: string; ctx: any }> = [];
+  const data: any = {
+    async find(obj: string, q: any) { calls.push({ op: 'find', obj, ctx: q?.context }); return [{ id: 'r1' }]; },
+    async findOne(obj: string, q: any) { calls.push({ op: 'findOne', obj, ctx: q?.context }); return { id: 'r1' }; },
+    async insert(obj: string, _f: any, opts: any) { calls.push({ op: 'insert', obj, ctx: opts?.context }); return { id: `${obj}_1` }; },
+    async update(obj: string, _f: any, opts: any) { calls.push({ op: 'update', obj, ctx: opts?.context }); return { ok: true }; },
+    async delete(obj: string, opts: any) { calls.push({ op: 'delete', obj, ctx: opts?.context }); return { ok: true }; },
+  };
+  return { data, calls };
+}
+
+const ctxWith = (data: any): any => ({
+  logger: makeLogger(),
+  getService: (n: string) => (n === 'data' ? data : undefined),
+});
+
+/** A flow exercising all five data ops, parameterized by runAs. */
+function allOpsFlow(name: string, runAs?: 'system' | 'user') {
+  return {
+    name,
+    label: name,
+    type: 'autolaunched',
+    ...(runAs ? { runAs } : {}),
+    nodes: [
+      { id: 'start', type: 'start', label: 'Start' },
+      { id: 'mk', type: 'create_record', label: 'Create', config: { objectName: 'thing', fields: { a: 1 } } },
+      { id: 'up', type: 'update_record', label: 'Update', config: { objectName: 'thing', filter: { id: 'x' }, fields: { a: 2 } } },
+      { id: 'g1', type: 'get_record', label: 'GetOne', config: { objectName: 'thing', filter: { id: 'x' } } },
+      { id: 'gN', type: 'get_record', label: 'GetMany', config: { objectName: 'thing', filter: {}, limit: 5 } },
+      { id: 'del', type: 'delete_record', label: 'Delete', config: { objectName: 'thing', filter: { id: 'x' } } },
+      { id: 'end', type: 'end', label: 'End' },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'mk' },
+      { id: 'e2', source: 'mk', target: 'up' },
+      { id: 'e3', source: 'up', target: 'g1' },
+      { id: 'e4', source: 'g1', target: 'gN' },
+      { id: 'e5', source: 'gN', target: 'del' },
+      { id: 'e6', source: 'del', target: 'end' },
+    ],
+  } as any;
+}
+
+describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
+  it("runAs:'system' runs every data op as an elevated (isSystem) principal", async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sys', allOpsFlow('sys', 'system'));
+
+    // Triggered by a normal user — `runAs:'system'` must still elevate.
+    const res = await engine.execute('sys', { userId: 'u1' });
+    expect(res.success).toBe(true);
+
+    expect(calls.map((c) => c.op).sort()).toEqual(['delete', 'find', 'findOne', 'insert', 'update']);
+    for (const c of calls) {
+      expect(c.ctx, `${c.op} got no context`).toBeTruthy();
+      expect(c.ctx.isSystem, `${c.op} not elevated`).toBe(true);
+      // An elevated run is NOT attributed to the triggering user.
+      expect(c.ctx.userId).toBeUndefined();
+    }
+  });
+
+  it("runAs:'user' runs every data op as the triggering user (RLS-respecting)", async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('usr', allOpsFlow('usr', 'user'));
+
+    const res = await engine.execute('usr', { userId: 'u1', roles: ['sales'], tenantId: 'org1' });
+    expect(res.success).toBe(true);
+
+    for (const c of calls) {
+      expect(c.ctx, `${c.op} got no context`).toBeTruthy();
+      expect(c.ctx.isSystem, `${c.op} wrongly elevated`).toBe(false);
+      expect(c.ctx.userId, `${c.op} lost the user identity`).toBe('u1');
+      expect(c.ctx.roles).toEqual(['sales']);
+      expect(c.ctx.tenantId).toBe('org1');
+    }
+  });
+
+  it('defaults to user identity when runAs is omitted', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('def', allOpsFlow('def')); // no runAs → default 'user'
+
+    await engine.execute('def', { userId: 'u2' });
+    for (const c of calls) {
+      expect(c.ctx.userId).toBe('u2');
+      expect(c.ctx.isSystem).toBe(false);
+    }
+  });
+
+  it('restores the caller context: execute() never mutates the passed AutomationContext', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sys2', allOpsFlow('sys2', 'system'));
+
+    const trigger: AutomationContext = { userId: 'u1' };
+    await engine.execute('sys2', trigger);
+
+    // The run elevated internally, but the caller's object is untouched — the
+    // elevation is scoped to the run (no `runAs` leaked onto the trigger, userId intact).
+    expect(Object.prototype.hasOwnProperty.call(trigger, 'runAs')).toBe(false);
+    expect(trigger.userId).toBe('u1');
+  });
+
+  it('does not leak elevation across runs (a system run then a user run)', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sys3', allOpsFlow('sys3', 'system'));
+    engine.registerFlow('usr3', allOpsFlow('usr3', 'user'));
+
+    await engine.execute('sys3', { userId: 'u1' });
+    const afterSystem = calls.length;
+    await engine.execute('usr3', { userId: 'u3' });
+
+    for (const c of calls.slice(0, afterSystem)) expect(c.ctx.isSystem).toBe(true);
+    for (const c of calls.slice(afterSystem)) {
+      expect(c.ctx.isSystem).toBe(false);
+      expect(c.ctx.userId).toBe('u3');
+    }
+  });
+
+  it("REGRESSION: a runAs:'system' flow must reach the data layer elevated (fails if runAs is ignored)", async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('reg', {
+      name: 'reg', label: 'reg', type: 'autolaunched', runAs: 'system',
+      nodes: [
+        { id: 'start', type: 'start', label: 'Start' },
+        { id: 'mk', type: 'create_record', label: 'Create', config: { objectName: 'thing', fields: { a: 1 } } },
+        { id: 'end', type: 'end', label: 'End' },
+      ],
+      edges: [{ id: 'e1', source: 'start', target: 'mk' }, { id: 'e2', source: 'mk', target: 'end' }],
+    } as any);
+
+    // Trigger as a restricted user. If the engine ignored runAs, the insert would
+    // carry that user's identity (or none) instead of the elevated principal.
+    await engine.execute('reg', { userId: 'restricted' });
+    const insert = calls.find((c) => c.op === 'insert');
+    expect(insert?.ctx?.isSystem, 'runAs:system did not elevate the data op (#1888 regressed)').toBe(true);
+    expect(insert?.ctx?.userId).not.toBe('restricted');
+  });
+});
+
+describe('resolveRunDataContext (#1888 unit)', () => {
+  it("maps runAs:'system' to an elevated context", () => {
+    expect(resolveRunDataContext({ runAs: 'system', userId: 'u1' })).toEqual({
+      isSystem: true, roles: [], permissions: [],
+    });
+  });
+
+  it("maps runAs:'user' to the triggering user's identity", () => {
+    expect(resolveRunDataContext({ runAs: 'user', userId: 'u1', roles: ['r'], tenantId: 't' })).toEqual({
+      isSystem: false, userId: 'u1', roles: ['r'], permissions: [], tenantId: 't',
+    });
+  });
+
+  it('returns undefined for a user-mode run with no user (e.g. schedule trigger)', () => {
+    expect(resolveRunDataContext({ runAs: 'user' })).toBeUndefined();
+    expect(resolveRunDataContext(undefined)).toBeUndefined();
+  });
+});

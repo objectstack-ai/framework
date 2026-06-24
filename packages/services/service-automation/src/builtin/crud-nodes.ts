@@ -5,6 +5,7 @@ import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import type { AutomationEngine } from '../engine.js';
 import { interpolate } from './template.js';
+import { resolveRunDataContext } from '../runtime-identity.js';
 
 /**
  * CRUD built-in nodes — `get_record` / `create_record` / `update_record` /
@@ -56,13 +57,16 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                     return { success: true, output: { records: [], object: objectName } };
                 }
 
+                // #1888 — honor flow.runAs: read under the run's effective identity
+                // (system → RLS-bypassing; user → the triggering user).
+                const dataCtx = resolveRunDataContext(context);
                 try {
                     if (limit && limit > 1) {
-                        const records = await data.find(objectName, { where: filter, fields, limit });
+                        const records = await data.find(objectName, { where: filter, fields, limit, context: dataCtx });
                         if (outputVariable) variables.set(outputVariable, records);
                         return { success: true, output: { records, object: objectName } };
                     }
-                    const record = await data.findOne(objectName, { where: filter, fields });
+                    const record = await data.findOne(objectName, { where: filter, fields, context: dataCtx });
                     if (outputVariable) variables.set(outputVariable, record);
                     return { success: true, output: { record, id: record?.id, object: objectName } };
                 } catch (err) {
@@ -95,8 +99,10 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                     return { success: true, output: { id: mockId, object: objectName } };
                 }
 
+                // #1888 — honor flow.runAs (system → RLS-bypassing; user → trigger user).
+                const dataCtx = resolveRunDataContext(context);
                 try {
-                    const created = await data.insert(objectName, fields);
+                    const created = await data.insert(objectName, fields, { context: dataCtx });
                     const createdRecord = Array.isArray(created) ? created[0] : created;
                     const insertedId =
                         createdRecord && typeof createdRecord === 'object'
@@ -140,8 +146,10 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                     return { success: true };
                 }
 
+                // #1888 — honor flow.runAs (system → RLS-bypassing; user → trigger user).
+                const dataCtx = resolveRunDataContext(context);
                 try {
-                    const result = await data.update(objectName, fields, { where: filter });
+                    const result = await data.update(objectName, fields, { where: filter, context: dataCtx });
                     return { success: true, output: { result, object: objectName } };
                 } catch (err) {
                     return { success: false, error: `update_record(${objectName}) failed: ${(err as Error).message}` };
@@ -167,8 +175,10 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 const data = getData();
                 if (!data) return { success: true };
 
+                // #1888 — honor flow.runAs (system → RLS-bypassing; user → trigger user).
+                const dataCtx = resolveRunDataContext(context);
                 try {
-                    const result = await data.delete(objectName, { where: filter });
+                    const result = await data.delete(objectName, { where: filter, context: dataCtx });
                     return { success: true, output: { result, object: objectName } };
                 } catch (err) {
                     return { success: false, error: `delete_record(${objectName}) failed: ${(err as Error).message}` };

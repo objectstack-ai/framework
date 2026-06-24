@@ -262,11 +262,19 @@ export const FlowSchema = lazySchema(() => z.object({
   
   /** Execution Config */
   active: z.boolean().default(false).describe('Is active (Deprecated: use status)'),
-  // ⚠️ EXPERIMENTAL — NOT ENFORCED (ADR-0049, #1888). The service-automation
-  // engine ignores `runAs`: a flow declaring `runAs: system` does not elevate,
-  // and `user` does not de-elevate — steps run as the triggering context's
-  // identity regardless. Identity switching is tracked by #1888 (M2).
-  runAs: z.enum(['system', 'user']).default('user').describe('[EXPERIMENTAL — not enforced] Execution context'),
+  // ADR-0049 / #1888 — ENFORCED. The service-automation engine establishes the
+  // declared identity for the run's data operations and restores the caller's
+  // context afterward: `system` runs elevated (a full-access, RLS-bypassing
+  // system principal); `user` (default) runs as the triggering user, so CRUD
+  // nodes' ObjectQL reads/writes respect that user's row-level security. A
+  // schedule-triggered run with no user stays unscoped under `user` (there is no
+  // identity to scope to) — declare `system` to make elevation explicit.
+  runAs: z
+    .enum(['system', 'user'])
+    .default('user')
+    .describe(
+      'Execution identity for the run: system = elevated (bypasses RLS), user = the triggering user (RLS-respecting).',
+    ),
 
   /** Error Handling Strategy */
   errorHandling: z.object({

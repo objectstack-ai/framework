@@ -35,6 +35,12 @@ export { SysAutomationRun } from './sys-automation-run.object.js';
 export { AutomationServicePlugin } from './plugin.js';
 export type { AutomationServicePluginOptions } from './plugin.js';
 
+// Run identity (ADR-0049 / #1888). Maps a flow run's effective `runAs` to the
+// ObjectQL `context` its data nodes pass — `system` → elevated/RLS-bypassing,
+// `user` → the triggering user. Exported for hosts building custom data nodes.
+export { resolveRunDataContext } from './runtime-identity.js';
+export type { RunDataContext } from './runtime-identity.js';
+
 // Built-in node executors (ADR-0018). These are seeded by AutomationServicePlugin
 // and exported for advanced hosts that build a custom engine. They are functions,
 // not plugins — the platform's foundational nodes are built in, not installed.

@@ -105,6 +105,7 @@ describe('registry invariants', () => {
       [
         'field/type',
         'flow/nodes.type',
+        'flow/runAs',
         'permission/rowLevelSecurity.using',
         'dataset/dimensions.dateGranularity',
         'object/sharingModel',
