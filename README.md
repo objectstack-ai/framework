@@ -9,6 +9,11 @@
 
 **Try it in ~30s** — boot the [HotCRM](https://github.com/objectstack-ai/hotcrm) reference app on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install). · Hosted platform: **[ObjectOS](https://cloud.objectos.app)**.
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="900" alt="ObjectStack Console rendering an executive dashboard — KPI cards for revenue, accounts, contacts and leads, a revenue-trend area chart, and a revenue-by-industry donut, all defined as metadata">
+  <br><sub>The runtime <b>Console</b> rendering a dashboard defined entirely in metadata — KPI cards, charts, and scheduled reports.</sub>
+</p>
+
 ## What is ObjectStack?
 
 ObjectStack is an **open-source**, metadata-driven backend for building business applications that AI agents can understand, operate, and audit safely — self-hostable, with your data on your own database.
@@ -32,9 +37,71 @@ All core definitions start with **Zod schemas** (1,600+ exported schemas across 
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation, and [content/docs/concepts/north-star.mdx](./content/docs/concepts/north-star.mdx) for the product north star (metadata protocols · environment-aware runtime · compiled app artifacts).
 
+## See it in action
+
+ObjectStack ships a runtime **Console** and a visual **Studio** on top of the same metadata — every object, view, dashboard, flow, and permission you declare in code is immediately explorable, editable, and operable in the browser.
+
+**One object, every view.** The same `task` records — rendered as a board, a Gantt schedule, a calendar, or a cover gallery. View types are metadata, and the per-view bindings (kanban group-by, Gantt start/end/progress, calendar date, gallery cover) are auto-derived from the object, so switching layout takes no extra UI code.
+
+<p align="center">
+  <img src="docs/screenshots/kanban.png" width="49%" alt="Kanban board grouping tasks across Backlog, To Do, In Progress, In Review, and Done columns">
+  <img src="docs/screenshots/gantt.png" width="49%" alt="Gantt schedule with colored task bars, milestone diamonds, and a today marker">
+</p>
+<p align="center">
+  <img src="docs/screenshots/calendar.png" width="49%" alt="Month calendar with task events placed on their due dates">
+  <img src="docs/screenshots/gallery.png" width="49%" alt="Gallery of task cards with cover images, assignees, and status badges">
+</p>
+<p align="center"><sub><b>Board</b> · <b>Gantt</b> · <b>Calendar</b> · <b>Gallery</b> — the same records, four visualizations, zero extra UI code (grid, timeline, and map ship too).</sub></p>
+
+**Model and automate.**
+
+<p align="center">
+  <img src="docs/screenshots/modeling.png" width="49%" alt="Studio object designer showing the Opportunity object's typed fields, lookups, and layout sections">
+  <img src="docs/screenshots/automation.png" width="49%" alt="Studio flow designer showing a visual DAG that enrolls leads into a campaign">
+</p>
+<p align="center"><sub><b>Model</b> business objects as typed metadata — fields, relations, validation, sections &nbsp;·&nbsp; <b>Automate</b> with flows that compile to analyzable metadata.</sub></p>
+
+**Ask your data.**
+
+<p align="center">
+  <img src="docs/screenshots/ask-ai.png" width="860" alt="AI assistant answering questions about records using the same metadata and permissions">
+  <br><sub>AI agents act through the same objects, actions, and permissions you defined — agent-ready by construction, not bolted on.</sub>
+</p>
+
+## How it works
+
+Everything is **typed metadata**. Author a business object once — fields, a color-coded picklist, validation, all declarative:
+
+```ts
+import { ObjectSchema, Field } from '@objectstack/spec/data';
+
+export const Task = ObjectSchema.create({
+  name: 'todo_task',
+  label: 'Task',
+  fields: {
+    subject: Field.text({ label: 'Subject', required: true, searchable: true }),
+    status: Field.select({
+      label: 'Status',
+      required: true,
+      options: [
+        { label: 'In Progress', value: 'in_progress', color: '#3B82F6' },
+        { label: 'Completed', value: 'completed', color: '#10B981' },
+      ],
+    }),
+    due_date: Field.date({ label: 'Due Date' }),
+  },
+});
+```
+
+From that single schema, ObjectStack compiles a running backend — the database table, an auto-generated REST API and typed client SDK, the Console &amp; Studio UI (list, board, calendar, Gantt…), and MCP tools for agents — all behind the same permissions, over a database you host.
+
+<p align="center">
+  <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel runtime compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents — all governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
+</p>
+
 ## Key Features
 
-- **Built for AI, not retrofitted** — Business objects, permissions, flows, APIs, and UI are declared as typed metadata, not hand-written. A typical enterprise module collapses from tens of thousands of lines of CRUD/glue into a few hundred lines of declarative schema — **roughly two orders of magnitude less code**, small enough for an AI agent to load end-to-end and safely refactor across data, API, UI, and permissions in a single change.
+- **Built for AI, not retrofitted** — Objects, permissions, flows, APIs, and UI are declarative typed metadata, not hand-written code — small enough for an AI agent to load and safely refactor end-to-end.
 - **Agent-ready metadata** — Business objects, actions, and permissions are explicit enough for AI agents to inspect and use.
 - **Automatic tool surface** — Metadata can power REST APIs, client SDKs, UI views, and MCP tools without redefining each action by hand.
 - **Protocol-first schemas** — All schemas are defined with Zod; TypeScript types are derived via `z.infer<>`.
@@ -51,8 +118,6 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer arch
 - **CLI toolchain** — `os init`, `os dev`, `os start`, `os serve`, `os validate`, and more.
 
 ## Why AI-native?
-
-**Built for AI, not retrofitted.**
 
 Most internal-tool and low-code platforms were designed for humans clicking screens. AI support is usually added later as a chat box that can call a few predefined queries. ObjectStack starts from a different assumption: **AI agents need a structured, bounded, and auditable business backend before they can safely perform real work** — and the entire business system has to be small enough to fit in an agent's context window.
 
@@ -146,6 +211,9 @@ os explain        # Explain protocol concepts on the command line
 Cloud, package registry, and environment management subcommands (`os publish`, `os rollback`, `os package`, `os login`, `os whoami`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
 
 ## Package Directory
+
+<details>
+<summary><b>72 published packages</b> across core, engine, drivers, client, plugins, services, adapters, tools, and examples — click to expand.</summary>
 
 ### Core
 
@@ -248,11 +316,13 @@ Cloud, package registry, and environment management subcommands (`os publish`, `
 | [`@objectstack/example-crm`](examples/app-crm) | Minimal CRM smoke-test workspace — validates the metadata loading pipeline | Intermediate |
 | [HotCRM](https://github.com/objectstack-ai/hotcrm) | Full-featured enterprise CRM reference app (separate repo) | Advanced |
 
+</details>
+
 ## Codebase Metrics
 
 | Metric | Value |
 | :--- | :--- |
-| Source packages | 51 |
+| Source packages | 72 |
 | Apps | 2 (account, docs) |
 | Framework adapters | 7 (Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit) |
 | Database drivers | 3 (Memory, SQL, MongoDB) |
@@ -260,7 +330,7 @@ Cloud, package registry, and environment management subcommands (`os publish`, `
 | Exported schemas | 1,600+ |
 | `.describe()` annotations | 8,750+ |
 | Service contracts | 27 |
-| Test files | 229 |
+| Test files | 676 |
 | Tests passing | 6,507 |
 
 ## Architecture
