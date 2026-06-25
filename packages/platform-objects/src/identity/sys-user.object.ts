@@ -395,6 +395,19 @@ export const SysUser = ObjectSchema.create({
       description: 'When set, the ban auto-clears at this time.',
     }),
 
+    ai_access: Field.boolean({
+      label: 'AI Access',
+      defaultValue: false,
+      group: 'Admin',
+      description:
+        'Whether this user holds an AI seat — grants access to the in-UI AI ' +
+        'agents (build / ask). The framework synthesizes the `ai_seat` ' +
+        'capability from this flag (plugin-hono-server resolveCtx). Assignment ' +
+        'is capped by the licensed / purchased seat count (enforced by ' +
+        '@objectstack/security-enterprise AiSeatPlugin). Owned by objectql ' +
+        '(better-auth is oblivious to this column).',
+    }),
+
     // ── Profile ──────────────────────────────────────────────────
     image: Field.url({
       label: 'Profile Image',
