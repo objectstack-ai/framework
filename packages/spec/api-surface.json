@@ -3086,6 +3086,7 @@
     "ElementMetadataViewerPropsSchema (const)",
     "ElementNumberPropsSchema (const)",
     "ElementRecordPickerPropsSchema (const)",
+    "ElementTextInputPropsSchema (const)",
     "ElementTextPropsSchema (const)",
     "EmbedConfig (type)",
     "EmbedConfigSchema (const)",

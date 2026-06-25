@@ -16,6 +16,7 @@ export { SettingsPage } from './settings.page.js';
 export { StylingGalleryPage } from './styling-gallery.page.js';
 export { CommandCenterPage } from './command-center.page.js';
 export { PageVariablesPage } from './page-variables.page.js';
+export { ContactFormPage } from './contact-form.page.js';
 export {
   TaskBoardPage,
   TaskCalendarPage,

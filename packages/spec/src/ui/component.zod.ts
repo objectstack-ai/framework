@@ -297,6 +297,33 @@ export const ElementRecordPickerPropsSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * A single-line free-text input — the data-entry half of an SDUI page (Airtable
+ * "text"/"number" field parity). The console renderer binds the typed value into
+ * a page variable via the {@link PageVariableSchema} `source` convention (the
+ * variable whose `source` equals this component's `id`), exposing it to
+ * expressions as `page.<var>` and to submit actions as a `{{page.<var>}}` token.
+ * A whole free-text family lives under one element: `inputType` selects the
+ * native modality (text/email/number/…), keeping genuinely-distinct inputs
+ * (textarea, select, checkbox) free to arrive as their own elements later.
+ */
+export const ElementTextInputPropsSchema = lazySchema(() => z.object({
+  inputType: z.enum(['text', 'email', 'number', 'tel', 'url', 'password'])
+    .optional().default('text')
+    .describe('Native input type — drives keyboard/validation affordance and how the bound value is coerced (number → numeric).'),
+  label: I18nLabelSchema.optional().describe('Field label shown above the input'),
+  placeholder: I18nLabelSchema.optional().describe('Placeholder text shown when empty'),
+  defaultValue: z.union([z.string(), z.number()]).optional()
+    .describe('Initial value; seeds the bound page variable on mount'),
+  required: z.boolean().optional().default(false).describe('Mark the field as required'),
+  disabled: z.boolean().optional().default(false).describe('Disable the input'),
+  description: I18nLabelSchema.optional().describe('Helper text shown below the input'),
+  targetVariable: z.string().optional()
+    .describe('Page variable this input writes to. Declarative hint; the live binding resolves via the variable whose `source` equals this component id (see PageVariableSchema).'),
+  /** ARIA accessibility */
+  aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+}));
+
+/**
  * ----------------------------------------------------------------------
  * Component Props Map
  * Maps Component Type to its Property Schema
@@ -346,6 +373,7 @@ export const ComponentPropsMap = {
   'element:filter': ElementFilterPropsSchema,
   'element:form': ElementFormPropsSchema,
   'element:record_picker': ElementRecordPickerPropsSchema,
+  'element:text_input': ElementTextInputPropsSchema,
 } as const;
 
 /**

@@ -16,6 +16,7 @@ import {
   ElementFilterPropsSchema,
   ElementFormPropsSchema,
   ElementRecordPickerPropsSchema,
+  ElementTextInputPropsSchema,
 } from './component.zod';
 import { PageComponentSchema } from './page.zod';
 
@@ -557,6 +558,57 @@ describe('Interactive Elements — element:record_picker', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Interactive Elements — element:text_input
+// ---------------------------------------------------------------------------
+describe('Interactive Elements — element:text_input', () => {
+  it('should accept element:text_input component', () => {
+    expect(() => PageComponentSchema.parse({
+      type: 'element:text_input',
+      properties: { label: 'Workspace name' },
+    })).not.toThrow();
+  });
+
+  it('should parse text_input props with defaults', () => {
+    const props = ElementTextInputPropsSchema.parse({});
+    expect(props.inputType).toBe('text');
+    expect(props.required).toBe(false);
+    expect(props.disabled).toBe(false);
+  });
+
+  it('should accept full text_input props', () => {
+    const props = ElementTextInputPropsSchema.parse({
+      inputType: 'email',
+      label: 'Email',
+      placeholder: 'you@example.com',
+      defaultValue: 'a@b.com',
+      required: true,
+      disabled: false,
+      description: 'We never share it',
+      targetVariable: 'email',
+    });
+    expect(props.inputType).toBe('email');
+    expect(props.required).toBe(true);
+    expect(props.targetVariable).toBe('email');
+  });
+
+  it('should accept all input types', () => {
+    const types = ['text', 'email', 'number', 'tel', 'url', 'password'] as const;
+    types.forEach(inputType => {
+      expect(() => ElementTextInputPropsSchema.parse({ inputType })).not.toThrow();
+    });
+  });
+
+  it('should accept a numeric defaultValue', () => {
+    const props = ElementTextInputPropsSchema.parse({ inputType: 'number', defaultValue: 42 });
+    expect(props.defaultValue).toBe(42);
+  });
+
+  it('should reject an unknown input type', () => {
+    expect(() => ElementTextInputPropsSchema.parse({ inputType: 'color' })).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ComponentPropsMap — interactive elements
 // ---------------------------------------------------------------------------
 describe('ComponentPropsMap interactive elements', () => {
@@ -574,6 +626,10 @@ describe('ComponentPropsMap interactive elements', () => {
 
   it('should contain element:record_picker', () => {
     expect(ComponentPropsMap['element:record_picker']).toBeDefined();
+  });
+
+  it('should contain element:text_input', () => {
+    expect(ComponentPropsMap['element:text_input']).toBeDefined();
   });
 
   it('should parse element:button props', () => {
@@ -600,6 +656,11 @@ describe('ComponentPropsMap interactive elements', () => {
       displayField: 'name',
     });
     expect(result.object).toBe('account');
+  });
+
+  it('should parse element:text_input props', () => {
+    const result = ComponentPropsMap['element:text_input'].parse({ label: 'Name' });
+    expect(result.inputType).toBe('text');
   });
 });
 
