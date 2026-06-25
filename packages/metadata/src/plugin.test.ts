@@ -221,3 +221,60 @@ describe('MetadataPlugin._loadFromFileSystem — package provenance stamping', (
         expect(item._provenance).toBeUndefined();
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// ADR-0067 regression: the package-scoped commit log `sys_metadata_commit`
+// must be registered among the queryable system objects so per-project
+// (cloud) env kernels provision the table at boot. Every publish/apply
+// writes a commit row via `publishPackageDrafts`; the object was omitted
+// from `queryableMetadataObjects` (only the standalone ObjectQLPlugin
+// `environmentId === undefined` path had it), so env builds logged
+// `no such table: sys_metadata_commit` and the commit timeline recorded
+// nothing. init() must register it via the manifest — next to its
+// `sys_metadata_history` sibling — whenever registerSystemObjects is on.
+// ─────────────────────────────────────────────────────────────────────────
+describe('MetadataPlugin — system object provisioning (ADR-0067 commit log)', () => {
+    function fakeCtxWithManifest() {
+        const registered: any[] = [];
+        const manifest = { register: vi.fn((m: any) => registered.push(m)) };
+        const ctx = {
+            logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+            registerService: vi.fn(),
+            getService: vi.fn((name: string) => (name === 'manifest' ? manifest : undefined)),
+        } as any;
+        return { ctx, registered };
+    }
+
+    it('registers sys_metadata_commit alongside its history sibling (env kernel)', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'lazy' },
+            environmentId: 'proj_test',
+            // registerSystemObjects defaults to true → env-kernel provisioning path
+        });
+        const { ctx, registered } = fakeCtxWithManifest();
+
+        await plugin.init(ctx);
+
+        const names = registered.flatMap((m) => m.objects ?? []).map((o: any) => o.name);
+        // The bug: history present, commit absent → the table is never provisioned.
+        expect(names).toContain('sys_metadata_history');
+        expect(names).toContain('sys_metadata_commit');
+    });
+
+    it('registers NOTHING when registerSystemObjects=false (control-plane kernel)', async () => {
+        const plugin = new MetadataPlugin({
+            watch: false,
+            config: { bootstrap: 'lazy' },
+            environmentId: 'proj_test',
+            registerSystemObjects: false,
+        });
+        const { ctx, registered } = fakeCtxWithManifest();
+
+        await plugin.init(ctx);
+
+        // Control-plane owns these tables; per-ADR they must NOT leak into a
+        // kernel that opted out of system-object registration.
+        expect(registered).toHaveLength(0);
+    });
+});
