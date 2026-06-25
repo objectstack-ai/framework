@@ -161,6 +161,21 @@ function convertWhere(where: CleanedWhere[]): Record<string, any> {
  * @returns better-auth AdapterFactory
  */
 export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
+  // Field-name bridging for better-auth plugins that expose NO `schema` option
+  // (e.g. @better-auth/sso): when a model is remapped via AUTH_MODEL_TO_PROTOCOL,
+  // its camelCase model fields are also converted to snake_case columns on the
+  // way in and back to camelCase on the way out. SCOPED by `objectName !== model`
+  // so core / schema-declared models are byte-for-byte untouched.
+  const camelToSnake = (s: string): string => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+  const snakeToCamel = (s: string): string => s.replace(/_([a-z])/g, (_m, c) => c.toUpperCase());
+  const remapKeys = (obj: Record<string, any>, fn: (k: string) => string): Record<string, any> => {
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(obj)) out[fn(k)] = obj[k];
+    return out;
+  };
+  const remapWhere = (where: CleanedWhere[]): CleanedWhere[] =>
+    where.map((c) => ({ ...c, field: camelToSnake(c.field) }));
+
   return createAdapterFactory({
     config: {
       adapterId: 'objectql',
@@ -177,18 +192,25 @@ export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
       create: async <T extends Record<string, any>>(
         { model, data, select: _select }: { model: string; data: T; select?: string[] },
       ): Promise<T> => {
-        const result = await dataEngine.insert(model, data);
-        return normaliseLegacyDates(model, result) as T;
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const result = await dataEngine.insert(objectName, bridged ? remapKeys(data, camelToSnake) : data);
+        const norm = normaliseLegacyDates(model, result);
+        return (bridged ? remapKeys(norm, snakeToCamel) : norm) as T;
       },
 
       findOne: async <T>(
         { model, where, select, join: _join }: { model: string; where: CleanedWhere[]; select?: string[]; join?: any },
       ): Promise<T | null> => {
-        const filter = convertWhere(where);
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
+        const fields = bridged && select ? select.map(camelToSnake) : select;
 
-        const result = await dataEngine.findOne(model, { where: filter, fields: select });
-
-        return result ? (normaliseLegacyDates(model, result) as T) : null;
+        const result = await dataEngine.findOne(objectName, { where: filter, fields });
+        if (!result) return null;
+        const norm = normaliseLegacyDates(model, result);
+        return (bridged ? remapKeys(norm, snakeToCamel) : norm) as T;
       },
 
       findMany: async <T>(
@@ -197,51 +219,66 @@ export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
           offset?: number; sortBy?: { field: string; direction: 'asc' | 'desc' }; join?: any;
         },
       ): Promise<T[]> => {
-        const filter = where ? convertWhere(where) : {};
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = where ? convertWhere(bridged ? remapWhere(where) : where) : {};
 
         const orderBy = sortBy
-          ? [{ field: sortBy.field, order: sortBy.direction as 'asc' | 'desc' }]
+          ? [{ field: bridged ? camelToSnake(sortBy.field) : sortBy.field, order: sortBy.direction as 'asc' | 'desc' }]
           : undefined;
 
-        const results = await dataEngine.find(model, {
+        const results = await dataEngine.find(objectName, {
           where: filter,
           limit: limit || 100,
           offset,
           orderBy,
         });
 
-        return results.map((r) => normaliseLegacyDates(model, r as Record<string, any>)) as T[];
+        return results.map((r) => {
+          const norm = normaliseLegacyDates(model, r as Record<string, any>);
+          return bridged ? remapKeys(norm, snakeToCamel) : norm;
+        }) as T[];
       },
 
       count: async (
         { model, where }: { model: string; where?: CleanedWhere[] },
       ): Promise<number> => {
-        const filter = where ? convertWhere(where) : {};
-        return await dataEngine.count(model, { where: filter });
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = where ? convertWhere(bridged ? remapWhere(where) : where) : {};
+        return await dataEngine.count(objectName, { where: filter });
       },
 
       update: async <T>(
         { model, where, update }: { model: string; where: CleanedWhere[]; update: T },
       ): Promise<T | null> => {
-        const filter = convertWhere(where);
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
 
         // ObjectQL requires an ID for updates – find the record first
-        const record = await dataEngine.findOne(model, { where: filter });
+        const record = await dataEngine.findOne(objectName, { where: filter });
         if (!record) return null;
 
-        const result = await dataEngine.update(model, { ...(update as any), id: record.id });
-        return result ? (normaliseLegacyDates(model, result) as T) : null;
+        const patch = bridged ? remapKeys(update as any, camelToSnake) : (update as any);
+        const result = await dataEngine.update(objectName, { ...patch, id: record.id });
+        if (!result) return null;
+        const norm = normaliseLegacyDates(model, result);
+        return (bridged ? remapKeys(norm, snakeToCamel) : norm) as T;
       },
 
       updateMany: async (
         { model, where, update }: { model: string; where: CleanedWhere[]; update: Record<string, any> },
       ): Promise<number> => {
-        const filter = convertWhere(where);
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
 
         // Sequential updates: ObjectQL requires an ID per update
-        const records = await dataEngine.find(model, { where: filter });
+        const records = await dataEngine.find(objectName, { where: filter });
+        const patch = bridged ? remapKeys(update, camelToSnake) : update;
         for (const record of records) {
-          await dataEngine.update(model, { ...update, id: record.id });
+          await dataEngine.update(objectName, { ...patch, id: record.id });
         }
         return records.length;
       },
@@ -249,22 +286,26 @@ export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
       delete: async (
         { model, where }: { model: string; where: CleanedWhere[] },
       ): Promise<void> => {
-        const filter = convertWhere(where);
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
 
-        const record = await dataEngine.findOne(model, { where: filter });
+        const record = await dataEngine.findOne(objectName, { where: filter });
         if (!record) return;
 
-        await dataEngine.delete(model, { where: { id: record.id } });
+        await dataEngine.delete(objectName, { where: { id: record.id } });
       },
 
       deleteMany: async (
         { model, where }: { model: string; where: CleanedWhere[] },
       ): Promise<number> => {
-        const filter = convertWhere(where);
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
 
-        const records = await dataEngine.find(model, { where: filter });
+        const records = await dataEngine.find(objectName, { where: filter });
         for (const record of records) {
-          await dataEngine.delete(model, { where: { id: record.id } });
+          await dataEngine.delete(objectName, { where: { id: record.id } });
         }
         return records.length;
       },
