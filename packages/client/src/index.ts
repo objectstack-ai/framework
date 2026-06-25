@@ -880,64 +880,6 @@ export class ObjectStackClient {
     },
 
     /**
-     * List members of a project (per-project RBAC).
-     */
-    listMembers: async (id: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/members`);
-      return this.unwrapResponse<{ members: any[] }>(res);
-    },
-
-    /**
-     * Invite a member to a project. Caller must be `owner` or `admin`.
-     * Pass either `email` (resolved against the user table) or `user_id`.
-     * Returns `{ member, alreadyMember }` — `alreadyMember=true` means the
-     * row already existed; the call is idempotent.
-     */
-    addMember: async (
-      id: string,
-      payload: { email?: string; user_id?: string; role?: 'owner' | 'admin' | 'member' | 'viewer' },
-    ) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/members`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      return this.unwrapResponse<{ member: any; alreadyMember: boolean }>(res);
-    },
-
-    /**
-     * Update a member's role. Caller must be `owner` or `admin`. Demoting
-     * the last `owner` returns 409.
-     */
-    updateMemberRole: async (
-      id: string,
-      memberId: string,
-      role: 'owner' | 'admin' | 'member' | 'viewer',
-    ) => {
-      const res = await this.fetch(
-        `${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,
-        {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ role }),
-        },
-      );
-      return this.unwrapResponse<{ member: any }>(res);
-    },
-
-    /**
-     * Remove a member. Owners/admins may remove anyone; non-privileged
-     * users may only remove themselves. Removing the last `owner` returns 409.
-     */
-    removeMember: async (id: string, memberId: string) => {
-      const res = await this.fetch(
-        `${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,
-        { method: 'DELETE' },
-      );
-      return this.unwrapResponse<{ removed: boolean; memberId: string }>(res);
-    },
-
-    /**
      * List ObjectQL drivers registered on the server. Useful for populating a
      * driver selector when provisioning a new project (memory / turso /
      * future sql drivers). Returned `name` is the short alias (e.g. `memory`,
