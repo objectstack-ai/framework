@@ -354,7 +354,7 @@ export class MetadataPlugin implements Plugin {
                     const src = this.options.artifactSource;
                     if (src?.mode === 'local-file') {
                         try {
-                            await this._loadFromLocalFile(ctx, src.path, src.fetchTimeoutMs);
+                            await this._reloadAndAnnounce(ctx, src, body?.changed ?? [src.path]);
                             ctx.logger.info('[MetadataPlugin] artifact reloaded via HMR POST', {
                                 path: src.path,
                                 reason: body?.reason,
@@ -405,7 +405,7 @@ export class MetadataPlugin implements Plugin {
                             if (pending) return;
                             pending = true;
                             try {
-                                await this._loadFromLocalFile(ctx, src.path, src.fetchTimeoutMs);
+                                await this._reloadAndAnnounce(ctx, src, [src.path]);
                                 hub.broadcastReload('artifact-file-changed', [src.path]);
                                 ctx.logger.info('[MetadataPlugin] artifact auto-reloaded (file watcher)', {
                                     path: src.path,
@@ -593,6 +593,32 @@ export class MetadataPlugin implements Plugin {
         this.manager.registerLoader(memLoader);
         ctx.logger.info('[MetadataPlugin] Artifact metadata loaded', { source: label, totalRegistered });
         return totalRegistered;
+    }
+
+    /**
+     * Reload the artifact from disk into the MetadataManager, then announce a
+     * generic `metadata:reloaded` hook. Used by BOTH reload paths (the HMR POST
+     * handler and the server-side artifact-file watcher) — but NOT the initial
+     * boot load, which other plugins already consume directly.
+     *
+     * Runtime consumers that cached boot-time metadata re-sync on this signal.
+     * The automation engine subscribes to re-bind flow triggers it pulled ONCE
+     * at boot — notably scheduled jobs: without this, an edited
+     * schedule-triggered flow keeps firing its pre-edit definition (old runAs /
+     * schedule / logic) until a full process restart. A subscriber failure is
+     * logged but never blocks the reload.
+     */
+    private async _reloadAndAnnounce(
+        ctx: PluginContext,
+        src: { path: string; fetchTimeoutMs?: number },
+        changed: string[],
+    ): Promise<void> {
+        await this._loadFromLocalFile(ctx, src.path, src.fetchTimeoutMs);
+        try {
+            await ctx.trigger('metadata:reloaded', { changed });
+        } catch (e: any) {
+            ctx.logger.warn('[MetadataPlugin] metadata:reloaded subscriber failed', { error: e?.message });
+        }
     }
 
     private async _loadFromLocalFile(ctx: PluginContext, filePath: string, fetchTimeoutMs?: number): Promise<void> {

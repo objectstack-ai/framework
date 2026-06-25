@@ -72,6 +72,15 @@ export class AutomationServicePlugin implements Plugin {
 
     private engine?: AutomationEngine;
     private readonly options: AutomationServicePluginOptions;
+    /**
+     * Flow names this plugin has registered into the engine from the
+     * artifact / ObjectQL registry, tracked so a `metadata:reloaded` re-sync
+     * can tear down flows that were removed from the artifact (stopping their
+     * triggers/jobs). Seeded by the boot pull, then replaced on each re-sync.
+     * Plugin-contributed node packs never enter this set, so re-sync never
+     * unregisters them.
+     */
+    private syncedFlowNames = new Set<string>();
 
     constructor(options: AutomationServicePluginOptions = {}) {
         this.options = options;
@@ -201,6 +210,7 @@ export class AutomationServicePlugin implements Plugin {
                 if (!def?.name) continue;
                 try {
                     this.engine.registerFlow(def.name, def as never);
+                    this.syncedFlowNames.add(def.name);
                     registered++;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
@@ -214,6 +224,20 @@ export class AutomationServicePlugin implements Plugin {
             const msg = err instanceof Error ? err.message : String(err);
             ctx.logger.warn(`[Automation] flow pull from ObjectQL registry failed: ${msg}`);
         }
+
+        // ── Dev hot-reload: re-bind flow triggers when the artifact recompiles ──
+        // `os dev` recompiles dist/objectstack.json on a src edit; MetadataPlugin
+        // reloads it into the metadata service and fires 'metadata:reloaded'. The
+        // engine, however, still holds the flow definitions + trigger bindings it
+        // pulled ONCE above — including scheduled jobs bound through the schedule
+        // trigger. Without re-syncing, an edited schedule-triggered flow keeps
+        // firing its OLD definition (old runAs / schedule / logic) until a full
+        // restart. Re-register every current flow (registerFlow re-binds its
+        // trigger idempotently — ScheduleTrigger.start cancels + reschedules) and
+        // unregister flows that vanished from the artifact so their jobs stop.
+        ctx.hook('metadata:reloaded', async () => {
+            await this.resyncFlowsFromMetadata(ctx);
+        });
 
         // ADR-0019 follow-up: re-arm auto-resume timers for runs that were
         // suspended at a timer-`wait` node when the process went down. Must run
@@ -232,6 +256,79 @@ export class AutomationServicePlugin implements Plugin {
             } catch (err) {
                 ctx.logger.warn(`[Automation] wait-timer re-arm failed: ${(err as Error).message}`);
             }
+        }
+    }
+
+    /**
+     * Re-pull flow definitions from the metadata service and re-register them
+     * into the engine, so an `os dev` artifact recompile re-binds flow triggers
+     * (notably scheduled jobs) instead of leaving the engine executing the
+     * boot-time definitions. Driven by the `metadata:reloaded` hook that
+     * MetadataPlugin fires after reloading the artifact from disk.
+     *
+     * Pulls from the metadata service — NOT the ObjectQL schema registry used by
+     * the boot pull. The schema registry is a boot-time cache the artifact reload
+     * does not refresh; `MetadataManager.register()` (the reload's write path) IS
+     * refreshed, so the metadata service is the only source carrying the edited
+     * definitions.
+     *
+     * Idempotent and best-effort: registerFlow() re-binds the trigger
+     * (ScheduleTrigger.start cancels + reschedules), flows removed from the
+     * artifact are unregistered so their jobs stop firing, and any failure is
+     * logged without disturbing the rest of the runtime.
+     */
+    private async resyncFlowsFromMetadata(ctx: PluginContext): Promise<void> {
+        if (!this.engine) return;
+        let metadata: { list?(type: string): Promise<unknown[]> } | undefined;
+        try {
+            metadata = ctx.getService('metadata');
+        } catch {
+            // No metadata service (e.g. a bare engine / tests) — nothing to sync.
+            return;
+        }
+        if (!metadata || typeof metadata.list !== 'function') return;
+
+        let defs: unknown[];
+        try {
+            defs = await metadata.list('flow');
+        } catch (err) {
+            ctx.logger.warn(
+                `[Automation] flow re-sync skipped: metadata.list('flow') failed: ${(err as Error).message}`,
+            );
+            return;
+        }
+
+        const freshNames = new Set<string>();
+        let resynced = 0;
+        for (const d of defs) {
+            const def = d as { name?: string };
+            if (!def?.name) continue;
+            freshNames.add(def.name);
+            try {
+                this.engine.registerFlow(def.name, def as never);
+                resynced++;
+            } catch (err) {
+                ctx.logger.warn(
+                    `[Automation] flow re-sync: failed to register ${def.name}: ${(err as Error).message}`,
+                );
+            }
+        }
+
+        // Tear down flows that were synced from a prior artifact but are gone
+        // now, so their triggers/jobs (e.g. a scheduled job) stop firing.
+        for (const prev of this.syncedFlowNames) {
+            if (!freshNames.has(prev)) {
+                try {
+                    this.engine.unregisterFlow(prev);
+                } catch {
+                    /* best-effort */
+                }
+            }
+        }
+        this.syncedFlowNames = freshNames;
+
+        if (resynced > 0) {
+            ctx.logger.info(`[Automation] Re-synced ${resynced} flow(s) after metadata reload`);
         }
     }
 
