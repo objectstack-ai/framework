@@ -12,6 +12,39 @@ import { encodeVercelDataStream } from '../stream/vercel-stream-encoder.js';
 import { evaluateAgentAccess } from './agent-access.js';
 
 /**
+ * Best-effort detection of the user's language from their latest message, so the
+ * agent can be told it EXPLICITLY (generated labels then reliably match it).
+ * Only non-Latin scripts are claimed — Latin-script languages are left to the
+ * model, which matches them well and can't be told apart reliably by script.
+ */
+function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((p) => (typeof p === 'string' ? p : ((p as { text?: string })?.text ?? '')))
+      .join(' ');
+  }
+  return '';
+}
+
+function detectUserLanguage(messages: readonly unknown[]): string | undefined {
+  let text = '';
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: unknown } | undefined;
+    if (m?.role !== 'user') continue;
+    text = extractMessageText(m.content);
+    if (text) break;
+  }
+  if (!text) return undefined;
+  if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese';
+  if (/[\u3040-\u30ff]/.test(text)) return 'Japanese';
+  if (/[\uac00-\ud7af]/.test(text)) return 'Korean';
+  if (/[\u0400-\u04ff]/.test(text)) return 'Russian';
+  if (/[\u0600-\u06ff]/.test(text)) return 'Arabic';
+  return undefined;
+}
+
+/**
  * Allowed message roles for the agent chat endpoint.
  *
  * Only `user` and `assistant` are accepted from clients.
@@ -196,11 +229,18 @@ export function buildAgentRoutes(
         }
 
         try {
+          // Detect the user's language from their messages and make it explicit to
+          // the agent, so generated labels reliably match it (see AgentChatContext.userLanguage).
+          const detectedUserLanguage = detectUserLanguage(rawMessages);
+          const chatContextWithLang: AgentChatContext | undefined = detectedUserLanguage
+            ? { ...(chatContext ?? {}), userLanguage: detectedUserLanguage }
+            : chatContext;
+
           // Resolve active skills for this agent in the current context
-          const activeSkills = await agentRuntime.resolveActiveSkills(agent, chatContext);
+          const activeSkills = await agentRuntime.resolveActiveSkills(agent, chatContextWithLang);
 
           // Build system messages from agent instructions + UI context + skills
-          const systemMessages = agentRuntime.buildSystemMessages(agent, chatContext, activeSkills);
+          const systemMessages = agentRuntime.buildSystemMessages(agent, chatContextWithLang, activeSkills);
 
           // Inject the schema of the object the user is currently viewing so
           // "analyse / describe this object" works without a lookup tool and
