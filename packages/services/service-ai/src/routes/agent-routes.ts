@@ -115,9 +115,13 @@ export function buildAgentRoutes(
       description: 'List all active AI agents',
       auth: true,
       permissions: ['ai:chat'],
-      handler: async () => {
+      handler: async (req) => {
         try {
-          const agents = await agentRuntime.listAgents();
+          // Access-aware catalog: the caller only sees agents they may chat
+          // (so the UI hides AI surfaces for seat-less users instead of
+          // letting them click into a 403). req.user carries the resolved
+          // permission-set names + roles (ADR-0049).
+          const agents = await agentRuntime.listAgents(req.user);
           return { status: 200, body: { agents } };
         } catch (err) {
           logger.error(
