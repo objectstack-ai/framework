@@ -543,3 +543,68 @@ gate reports the service absent, persist when present, fail-open with no gate, a
 requiresObject entries are untouched. An end-to-end Setup-nav test is not feasible in the
 verify harness: the platform Setup app's navigation is not materialized there (`/meta/app`
 lists only the business app; `/meta/app/setup` returns a protection stub).
+
+---
+
+## Addendum (2026-06-25): D4's reverse path — `role → users` expansion still reads `sys_member.role`
+
+> This addendum records a follow-up gap found while adjudicating an approval-routing
+> question (can an approval `role` approver resolve a tenant RBAC role assigned via
+> `sys_user_role`?). It **extends, and does not revise**, D4. D4 stands: `sys_user_role`
+> is the platform-owned source of truth for role assignment.
+
+### The gap
+
+D4 made `sys_user_role` the source of truth and reframed `sys_member.role` to
+better-auth org-administration (owner/admin/member), and it migrated the **forward**
+direction — *given a user, which roles do they hold?* — into `ExecutionContext.roles`
+as the documented transition-window union `sys_user_role ∪ sys_member.role`
+(`resolve-execution-context`).
+
+The **reverse** direction — *given a role, which users hold it?* — was **not** migrated.
+Both consumers that need it still terminate in `sys_member.role` only, and neither unions
+`sys_user_role`:
+
+- **plugin-approvals** — `expandApprovers` dispatches a `role` approver to
+  `expandRoleUsers` (`approval-service.ts:306`), which queries `find('sys_member', { filter: { role } })`
+  (`approval-service.ts:380-389`; the doc comment at `:286` even pins the semantics to
+  "`sys_member.role = value`"). No `sys_role` / `sys_user_role` read.
+- **plugin-sharing** — a `role` recipient resolves via `teamGraph.expandRoleUsers`
+  (`role-graph.ts:100`, `team-graph.ts:144`), whose terminal query is
+  `find('sys_member', …)` (`team-graph.ts:70-80`; comment `:25` "`sys_member.role` for
+  tenant role expansion"). Sharing is *partially* further along — its
+  `RoleHierarchyGraph` walks `sys_role.parent` to find subordinate roles
+  (`role-graph.ts:57`) — but the final role→**user** hop is still `sys_member`.
+
+Note `plugin-approvals` is **not** in this ADR's Consumers list; `plugin-sharing` **is**.
+That both behave identically is the key signal below.
+
+### Consequence (measured against the D4 target model)
+
+A user who holds an RBAC role **only** through `sys_user_role` (the source-of-truth table)
+and was never written into better-auth's `sys_member.role` is **invisible** to approval
+routing and to sharing-rule role expansion. Against D4's stated target this is a **defect**:
+the source of truth is bypassed on the reverse path. It is **not** an intentional decision
+that "approval/sharing roles mean org-membership roles" — no such decision is recorded —
+and it is **not** an approval-specific accident, since the in-scope sibling
+`plugin-sharing` exhibits the same behaviour. The accurate characterisation is an
+**incomplete / phased migration**: D4 shipped the forward path under a transition-window
+union and left the reverse-lookup consumers on the legacy table.
+
+### Decision (follow-up, does not revise D4)
+
+1. Finish D4 on the reverse path: the `role → users` expansion must read the source of
+   truth, i.e. `sys_user_role ∪ sys_member.role` (the same union semantics D4 already
+   applies to `ctx.roles`), scoped by `organization_id` where present. Apply it in **both**
+   `plugin-approvals` `expandRoleUsers` and `plugin-sharing` `teamGraph.expandRoleUsers`
+   so the two stay consistent.
+2. When `sys_member.role` is eventually retired from the union (transition window closes),
+   retire it in the reverse path at the same time — track it as one migration, not two.
+3. Until (1) lands, the supported pattern for multi-entity, post-routed approvers
+   (e.g. four-level approval by 岗位/职务 across plants) is a `type: 'field'` approver fed
+   by a materialised 岗位→人 mapping (a submit-time hook writing `division.*_user`), which
+   sidesteps the reverse-lookup path entirely and gives 绑岗位不绑人 / 按工厂路由 / 换人不改流程.
+
+Proof obligation when (1) is implemented: a regression test asserting that a user assigned
+a role **only** via `sys_user_role` (no `sys_member.role` row) is returned by both
+`expandRoleUsers` paths.
