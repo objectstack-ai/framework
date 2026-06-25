@@ -1552,10 +1552,22 @@ export class RestServer {
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
             this.registerAnalyticsEndpoints(bp);
+            // Data-action routes (e.g. GET /data/:object/export, POST
+            // /data/:object/import) use static-literal action segments that
+            // MUST be registered BEFORE the greedy GET /data/:object/:id
+            // matcher in registerCrudEndpoints — the router is first-match-wins
+            // with no specificity sorting (see route-manager.ts), so otherwise
+            // a request to `.../export` is captured by `:id` and "export" is
+            // treated as a record id (404 RECORD_NOT_FOUND). This mirrors the
+            // /meta/:type/:name/references-before-/meta/:type/:name convention.
+            // Safe in the other direction too: registerDataActionEndpoints has
+            // no greedy 2-segment `:object/:id` routes (only literal actions and
+            // deeper `:id/clone`, `:id/shares` paths), so it cannot shadow any
+            // CRUD literal.
+            this.registerDataActionEndpoints(bp);
             if (this.config.api.enableCrud) {
                 this.registerCrudEndpoints(bp);
             }
-            this.registerDataActionEndpoints(bp);
             if (this.config.api.enableBatch) {
                 this.registerBatchEndpoints(bp);
             }

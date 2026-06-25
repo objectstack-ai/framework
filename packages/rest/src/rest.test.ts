@@ -904,6 +904,29 @@ describe('RestServer', () => {
       // 1 header + 50 000 rows.
       expect(lines.length).toBe(50_001);
     });
+
+    // Regression: the router is first-match-wins with no specificity sorting,
+    // so the static-literal `GET /data/:object/export` route MUST be registered
+    // BEFORE the greedy `GET /data/:object/:id` matcher. Otherwise a request to
+    // `/data/<object>/export` is captured by `:id` ("export" treated as a record
+    // id) and 404s with RECORD_NOT_FOUND instead of streaming the export.
+    it('registers GET /export ahead of the greedy GET /:object/:id matcher', () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+      const routes = rest.getRoutes();
+
+      const exportIdx = routes.findIndex(
+        (r: any) => r.method === 'GET' && r.path === '/api/v1/data/:object/export',
+      );
+      const getByIdIdx = routes.findIndex(
+        (r: any) => r.method === 'GET' && r.path === '/api/v1/data/:object/:id',
+      );
+
+      expect(exportIdx).toBeGreaterThanOrEqual(0);
+      expect(getByIdIdx).toBeGreaterThanOrEqual(0);
+      // First match wins → the more-specific export route must come first.
+      expect(exportIdx).toBeLessThan(getByIdIdx);
+    });
   });
 
   // -----------------------------------------------------------------------
