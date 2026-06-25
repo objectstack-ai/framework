@@ -1462,6 +1462,14 @@ export class AuthManager {
     // frontend will render UI for endpoints that 404.
     const oidcEnv = (globalThis as any)?.process?.env?.OS_OIDC_PROVIDER_ENABLED;
     const oidcFromEnv = oidcEnv != null ? String(oidcEnv).toLowerCase() === 'true' : undefined;
+    // Enterprise SSO (@better-auth/sso, domain-routed). Resolve it with the
+    // EXACT logic that decides whether the plugin is wired in `buildPlugins()`
+    // (`sso: ssoFromEnv ?? pluginConfig.sso ?? false`) so the two can never
+    // disagree. Surfacing it lets the login UI hide the "Sign in with SSO"
+    // button when `/sign-in/sso` isn't mounted, instead of rendering a button
+    // that only reveals "no SSO provider configured" at click time.
+    const ssoEnv = (globalThis as any)?.process?.env?.OS_SSO_ENABLED;
+    const ssoFromEnv = ssoEnv != null ? String(ssoEnv).toLowerCase() === 'true' : undefined;
     const twoFactorFromEnv = readBooleanEnv('OS_AUTH_TWO_FACTOR');
 
     const features = {
@@ -1471,6 +1479,7 @@ export class AuthManager {
       organization: pluginConfig.organization ?? true,
       multiOrgEnabled,
       oidcProvider: oidcFromEnv ?? pluginConfig.oidcProvider ?? false,
+      sso: ssoFromEnv ?? (pluginConfig as any).sso ?? false,
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
       admin: pluginConfig.admin ?? false,
       ...(termsUrl ? { termsUrl } : {}),

@@ -1046,12 +1046,55 @@ describe('AuthManager', () => {
         magicLink: false,
         organization: true,
         oidcProvider: false,
+        sso: false,
         deviceAuthorization: false,
         admin: false,
         multiOrgEnabled: false,
         privacyUrl: 'https://objectstack.ai/privacy',
         termsUrl: 'https://objectstack.ai/terms',
       });
+    });
+
+    // Enterprise SSO (@better-auth/sso) is opt-in: the plugin is only wired
+    // when `plugins.sso` / `OS_SSO_ENABLED` is on. The public config MUST
+    // report the same value so the login UI can hide the "Sign in with SSO"
+    // button when the `/sign-in/sso` route isn't mounted (otherwise the
+    // button only fails at click time with "No SSO provider is configured").
+    it('should report features.sso=false by default', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+      });
+      warnSpy.mockRestore();
+
+      expect(manager.getPublicConfig().features.sso).toBe(false);
+    });
+
+    it('should report features.sso=true when enabled via plugins config', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        plugins: { sso: true } as any,
+      });
+      warnSpy.mockRestore();
+
+      expect(manager.getPublicConfig().features.sso).toBe(true);
+    });
+
+    it('should let OS_SSO_ENABLED env override the config (matches buildPlugins wiring)', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const prev = process.env.OS_SSO_ENABLED;
+      process.env.OS_SSO_ENABLED = 'true';
+      try {
+        const manager = new AuthManager({
+          secret: 'test-secret-at-least-32-chars-long',
+        });
+        expect(manager.getPublicConfig().features.sso).toBe(true);
+      } finally {
+        if (prev === undefined) delete process.env.OS_SSO_ENABLED;
+        else process.env.OS_SSO_ENABLED = prev;
+        warnSpy.mockRestore();
+      }
     });
 
     it('should filter out disabled providers', () => {
