@@ -12,6 +12,8 @@ import { SkillRegistry, type SkillContext } from './skill-registry.js';
 import { SchemaRetriever, type ObjectShape } from './schema-retriever.js';
 import { ASK_AGENT_NAME } from './agents/index.js';
 import { resolveAgentAlias, platformAgentNames } from './agents/agent-aliases.js';
+import { evaluateAgentAccess } from './routes/agent-access.js';
+import type { RouteUserContext } from './routes/ai-routes.js';
 
 /**
  * True when an agent record is platform-owned and therefore belongs in the
@@ -107,7 +109,7 @@ export class AgentRuntime {
    * Returns a summary for each agent (name, label, role) suitable
    * for populating an agent selector dropdown in the UI.
    */
-  async listAgents(): Promise<Array<{ name: string; label: string; role: string }>> {
+  async listAgents(caller?: RouteUserContext): Promise<Array<{ name: string; label: string; role: string }>> {
     const rawItems = await this.metadataService.list('agent');
     const agents: Array<{ name: string; label: string; role: string }> = [];
 
@@ -126,6 +128,11 @@ export class AgentRuntime {
       const result = AgentSchema.safeParse(raw);
       if (!result.success || !result.data.active) continue;
       if (!isPlatformAgentRecord(raw, result.data.name, platform)) continue;
+      // ADR-0049 / ADR-0068 — when a caller context is supplied, hide agents
+      // they cannot access (per-agent `permissions`/`access`, e.g. the per-user
+      // AI-seat gate) so the UI never lists an agent that would 403 on chat.
+      // No caller (internal default-agent resolution) → unfiltered (unchanged).
+      if (caller && !evaluateAgentAccess(result.data, caller).allowed) continue;
       agents.push({
         name: result.data.name,
         label: result.data.label,
