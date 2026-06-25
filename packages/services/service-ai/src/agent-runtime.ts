@@ -67,6 +67,13 @@ export interface AgentChatContext extends SkillContext {
    * "publish it to make it live". Absent/false keeps the conservative framing.
    */
   autoPublishAiBuilds?: boolean;
+  /**
+   * Detected language of the user's own messages (e.g. "Chinese"). When set,
+   * the agent is told to write ALL generated labels in it — relying on the
+   * model to infer "the same language" produced English labels on non-English
+   * apps, which then broke same-language object resolution on later turns.
+   */
+  userLanguage?: string;
 }
 
 /**
@@ -196,6 +203,13 @@ export class AgentRuntime {
             'user their app is built and live (e.g. "your app is ready — open it from the launcher"). ' +
             'Do NOT tell them to "publish it to make it live" for a whole-app build. Smaller ' +
             'incremental edits are still staged for review — the chat panel shows each change\'s status.',
+        );
+      }
+      // Make the user's language EXPLICIT so generated labels reliably match it.
+      if (context.userLanguage) {
+        parts.push(
+          '\n--- User language ---\n' +
+            `The user is communicating in ${context.userLanguage}. EVERY user-facing label you generate or change — object labels, field labels, select/multiselect option labels, and view/dashboard titles — MUST be written in ${context.userLanguage}, even though these instructions are written in English. Only machine names stay snake_case ASCII. For example, in Chinese a field is label "标题" with machine name "title" — never an English label like "Title" on a non-English app.`,
         );
       }
     }
