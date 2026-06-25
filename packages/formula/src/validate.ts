@@ -159,7 +159,12 @@ function levenshtein(a: string, b: string): number {
 // `.role`). Matched names are validated against the closed role catalog.
 const ROLE_IN_RE = /(['"])([a-z0-9_]+)\1\s+in\s+(?:current_user|user|ctx\.user)\.roles\b/g;
 const ROLE_CONTAINS_RE = /(?:current_user|user|ctx\.user)\.roles\s*\.\s*contains\(\s*(['"])([a-z0-9_]+)\1\s*\)/g;
-const ROLE_EXISTS_RE = /(?:current_user|user|ctx\.user)\.roles\s*\.\s*exists\s*\([^,]*,\s*[^)]*?==\s*(['"])([a-z0-9_]+)\1/g;
+// Bounded quantifiers ({0,N}, not * / *?) keep this linear: a CEL `exists`
+// body is tiny in practice, and unbounded greedy/lazy scanners here backtrack
+// polynomially (O(n^2)) on adversarial input like repeated `user.roles.exists(`
+// (ADR-0068 D4 ReDoS hardening). The pre-`==` class excludes `=` so the bounded
+// run stops cleanly before the operator without a lazy quantifier.
+const ROLE_EXISTS_RE = /(?:current_user|user|ctx\.user)\.roles\s*\.\s*exists\s*\([^,)]{0,64},[^)=]{0,128}==\s*(['"])([a-z0-9_]+)\1/g;
 const ROLE_EQ_RE = /(?:current_user|user|ctx\.user)\.role\s*==\s*(['"])([a-z0-9_]+)\1/g;
 
 /**
