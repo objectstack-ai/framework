@@ -11,6 +11,7 @@ import { applyProtection } from '@objectstack/spec/shared';
 import {
     SysMetadataObject,
     SysMetadataHistoryObject,
+    SysMetadataCommitObject,
     SysMetadataAuditObject,
     SysViewDefinitionObject,
 } from '@objectstack/metadata-core';
@@ -28,9 +29,21 @@ import {
 // metadata write decisions — provisioned alongside the storage tables so
 // `_lock` enforcement always has a place to record decisions, even when
 // the deployment skipped @objectstack/plugin-audit.
+//
+// `SysMetadataCommitObject` (ADR-0067) is the package-scoped commit log that
+// GROUPS a turn's `sys_metadata_history` events (the unit `revertCommit`
+// operates on). It MUST be provisioned alongside its history sibling: every
+// publish/apply writes a commit row, so a per-project (cloud) env kernel that
+// omitted it hit `no such table: sys_metadata_commit` on the first AI build —
+// the write is best-effort so the build still landed, but the error spammed
+// logs and the commit timeline silently recorded nothing. Registered here
+// (not only in the ObjectQLPlugin `environmentId === undefined` standalone
+// path) so env kernels — the only place this table is written — get it.
 const queryableMetadataObjects = [
     SysMetadataObject,
     SysMetadataHistoryObject,
+    // ADR-0067 commit log — sibling of sys_metadata_history (see note above).
+    SysMetadataCommitObject,
     SysMetadataAuditObject,
     // Runtime view storage (shared / personal). Must always be provisioned so
     // end-user view creation via the generic data API has a place to write —
