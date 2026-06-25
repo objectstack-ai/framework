@@ -14,11 +14,6 @@ import * as emails from './src/emails/index.js';
 import { allHooks } from './src/hooks/index.js';
 import { allFlows } from './src/flows/index.js';
 import {
-  SalesAssistantAgent,
-  LookupContactTool,
-  DealManagementSkill,
-} from './src/agents/index.js';
-import {
   SalesRepRole,
   SalesManagerRole,
   FinanceApproverRole,
@@ -136,19 +131,6 @@ export default defineStack({
   // Integrations
   connectors: [HubSpotConnector, SlackConnector],
 
-  // AI
-  agents: [SalesAssistantAgent],
-  skills: [DealManagementSkill],
-
   // Seed data
   data: CrmSeedData,
 });
-
-/**
- * Reference templates for metadata types not (yet) wired into a
- * top-level defineStack collection. The Studio metadata-admin UI
- * can copy from these when authoring.
- */
-export const referenceMetadata = {
-  tools: [LookupContactTool],
-};
