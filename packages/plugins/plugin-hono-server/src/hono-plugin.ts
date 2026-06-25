@@ -490,6 +490,30 @@ export class HonoServerPlugin implements Plugin {
                         /* fall back to self-only */
                     }
                 }
+                // Env-side AI-seat marker (simple model). The single-org env
+                // DB has no permission-set/org dimension for this — the seat is
+                // the boolean `sys_user.ai_access`. Read it with a GUARDED system
+                // query (NOT a better-auth additionalField: sys_user is
+                // better-auth-managed and better-auth SELECTs explicit columns,
+                // so an additionalField would make getSession query a possibly-
+                // missing column → broken auth; a guarded read can only no-op).
+                // When true, synthesize the `ai_seat` capability so the per-agent
+                // gate (evaluateAgentAccess → requires `ai_seat`) admits the user
+                // with no permission-set grant. Absent/false/missing-column →
+                // no synthesis (deny, as before).
+                if (!permissions.includes('ai_seat')) {
+                    try {
+                        const ql = getObjectQL();
+                        const sysCtx = { context: { isSystem: true } };
+                        const uRows = await ql?.find?.(
+                            'sys_user',
+                            { where: { id: userId }, limit: 1, ...sysCtx } as any,
+                        ).catch(() => []);
+                        if ((uRows?.[0] as any)?.ai_access === true) permissions.push('ai_seat');
+                    } catch {
+                        /* no ai_access column / query failed → no seat (safe) */
+                    }
+                }
                 return {
                     userId,
                     tenantId,

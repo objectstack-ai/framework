@@ -324,6 +324,14 @@ export class AuthManager {
       // createAdapterFactory.
       user: {
         ...AUTH_USER_CONFIG,
+        // NOTE: the env-side AI-seat marker `sys_user.ai_access` is deliberately
+        // NOT declared as a better-auth additionalField. sys_user is a
+        // better-auth-MANAGED table and better-auth SELECTs explicit columns, so
+        // declaring it here would make getSession query a column that may not
+        // exist on every env yet → broken auth. Instead the column is owned by
+        // the objectql `SysUser` object def (provisioned by boot schema-sync)
+        // and read by a GUARDED system query in resolveCtx (can only no-op,
+        // never break auth). better-auth stays oblivious to the extra column.
       },
       account: {
         ...AUTH_ACCOUNT_CONFIG,
