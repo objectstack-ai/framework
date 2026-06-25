@@ -682,17 +682,11 @@ export const AUTH_SSO_PROVIDER_SCHEMA = {
   },
 } as const;
 
-/**
- * Builds the `schema` option for `@better-auth/sso`'s `sso()` plugin, pointing
- * its single `ssoProvider` model at ObjectStack's `sys_sso_provider` table.
- *
- * @returns An object suitable for `sso({ schema: … })`
- */
-export function buildSsoPluginSchema() {
-  return {
-    ssoProvider: AUTH_SSO_PROVIDER_SCHEMA,
-  };
-}
+// NOTE: there is intentionally no `buildSsoPluginSchema()`. Unlike
+// `oauthProvider`, the @better-auth/sso plugin exposes NO `schema` option
+// (verified vs 1.6.20), so the mapping above cannot be handed to the plugin —
+// it must be consumed at the ADAPTER layer (AUTH_MODEL_TO_PROTOCOL + field
+// resolution in objectql-adapter.ts). See ADR-0024.
 
 // ---------------------------------------------------------------------------
 // Helper: build device-authorization plugin schema option
