@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createObjectQLAdapter,
   createObjectQLAdapterFactory,
+  withSystemReadContext,
   AUTH_MODEL_TO_PROTOCOL,
   resolveProtocolName,
 } from './objectql-adapter';
@@ -277,5 +278,59 @@ describe('createObjectQLAdapter – legacy model name mapping', () => {
     const adapter = createObjectQLAdapter(mockEngine);
     await adapter.create({ model: 'organization', data: { name: 'Acme' } });
     expect(mockEngine.insert).toHaveBeenCalledWith('organization', { name: 'Acme' });
+  });
+});
+
+
+describe('withSystemReadContext – system-scoped reads (org-scope bypass)', () => {
+  let mockEngine: IDataEngine;
+
+  beforeEach(() => {
+    mockEngine = {
+      insert: vi.fn().mockResolvedValue({ id: '1' }),
+      findOne: vi.fn().mockResolvedValue({ id: '1' }),
+      find: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+      update: vi.fn().mockResolvedValue({ id: '1' }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    } as unknown as IDataEngine;
+  });
+
+  it('injects context.isSystem into find / findOne / count', async () => {
+    const e = withSystemReadContext(mockEngine);
+    await e.find('sys_member', { where: { user_id: 'u1' } } as any);
+    await e.findOne('sys_organization', { where: { id: 'o1' } } as any);
+    await e.count('sys_member', { where: { user_id: 'u1' } } as any);
+    expect(mockEngine.find).toHaveBeenCalledWith('sys_member', expect.objectContaining({ context: { isSystem: true } }));
+    expect(mockEngine.findOne).toHaveBeenCalledWith('sys_organization', expect.objectContaining({ context: { isSystem: true } }));
+    expect(mockEngine.count).toHaveBeenCalledWith('sys_member', expect.objectContaining({ context: { isSystem: true } }));
+  });
+
+  it('merges isSystem with a caller-supplied context', async () => {
+    const e = withSystemReadContext(mockEngine);
+    await e.find('sys_member', { where: {}, context: { transaction: 'tx1' } } as any);
+    expect(mockEngine.find).toHaveBeenCalledWith('sys_member', expect.objectContaining({ context: { transaction: 'tx1', isSystem: true } }));
+  });
+
+  it('does NOT alter writes (insert / update / delete pass straight through)', async () => {
+    const e = withSystemReadContext(mockEngine);
+    await e.insert('sys_member', { id: 'm1' } as any);
+    await e.update('sys_member', { id: 'm1' } as any);
+    await e.delete('sys_member', { where: { id: 'm1' } } as any);
+    expect(mockEngine.insert).toHaveBeenCalledWith('sys_member', { id: 'm1' });
+    expect(mockEngine.update).toHaveBeenCalledWith('sys_member', { id: 'm1' });
+    expect(mockEngine.delete).toHaveBeenCalledWith('sys_member', { where: { id: 'm1' } });
+  });
+});
+
+describe('createObjectQLAdapter – reads bypass control-plane org-scope (regression)', () => {
+  it('findMany on member runs as a system read so org-scope hooks pass through', async () => {
+    const mockEngine = {
+      insert: vi.fn(), findOne: vi.fn(), find: vi.fn().mockResolvedValue([]),
+      count: vi.fn(), update: vi.fn(), delete: vi.fn(),
+    } as unknown as IDataEngine;
+    const adapter = createObjectQLAdapter(mockEngine);
+    await adapter.findMany({ model: 'account', limit: 10 });
+    expect(mockEngine.find).toHaveBeenCalledWith('sys_account', expect.objectContaining({ context: { isSystem: true } }));
   });
 });

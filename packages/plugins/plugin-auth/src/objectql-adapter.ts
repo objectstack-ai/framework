@@ -136,6 +136,30 @@ function convertWhere(where: CleanedWhere[]): Record<string, any> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Wrap a data engine so its READ operations (find / findOne / count) run as
+ * SYSTEM reads — injecting `context.isSystem: true` (merged; any caller-supplied
+ * context still wins on other keys). better-auth has already authenticated the
+ * session and scopes every query by its OWN where-clauses (e.g. member.userId =
+ * session.user). A deployment's control-plane org-scope read hook, however, keys
+ * off the CALLER's user id, and these adapter reads carry no caller context — so
+ * without isSystem that hook filters sys_member / sys_organization reads down to
+ * zero and `organization.list()` returns no orgs for a real member. Writes pass
+ * through untouched (org-scope is a read-only hook).
+ */
+export function withSystemReadContext(engine: IDataEngine): IDataEngine {
+  const e = engine as any;
+  const asSystem = (q: any) => ({ ...(q ?? {}), context: { isSystem: true, ...(q?.context ?? {}) } });
+  return {
+    insert: (m: string, d: any) => e.insert(m, d),
+    update: (m: string, d: any) => e.update(m, d),
+    delete: (m: string, q?: any) => e.delete(m, q),
+    find: (m: string, q?: any) => e.find(m, asSystem(q)),
+    findOne: (m: string, q?: any) => e.findOne(m, asSystem(q)),
+    count: (m: string, q?: any) => e.count(m, asSystem(q)),
+  } as unknown as IDataEngine;
+}
+
+/**
  * Create an ObjectQL adapter **factory** for better-auth.
  *
  * Uses better-auth's official `createAdapterFactory` so that model-name and
@@ -151,7 +175,8 @@ function convertWhere(where: CleanedWhere[]): Record<string, any> {
  * @param dataEngine - ObjectQL data engine instance
  * @returns better-auth AdapterFactory
  */
-export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
+export function createObjectQLAdapterFactory(rawDataEngine: IDataEngine) {
+  const dataEngine = withSystemReadContext(rawDataEngine);
   return createAdapterFactory({
     config: {
       adapterId: 'objectql',
@@ -281,7 +306,8 @@ export function createObjectQLAdapterFactory(dataEngine: IDataEngine) {
  * @param dataEngine - ObjectQL data engine instance
  * @returns better-auth CustomAdapter (raw, without factory wrapping)
  */
-export function createObjectQLAdapter(dataEngine: IDataEngine) {
+export function createObjectQLAdapter(rawDataEngine: IDataEngine) {
+  const dataEngine = withSystemReadContext(rawDataEngine);
   return {
     create: async <T extends Record<string, any>>({ model, data, select: _select }: { model: string; data: T; select?: string[] }): Promise<T> => {
       const objectName = resolveProtocolName(model);
