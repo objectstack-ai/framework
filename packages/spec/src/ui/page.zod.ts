@@ -44,7 +44,7 @@ export const PageComponentType = z.enum([
   // Content Elements (Airtable Interface parity)
   'element:text', 'element:number', 'element:image', 'element:divider',
   // Interactive Elements (Phase B — Element Library)
-  'element:button', 'element:filter', 'element:form', 'element:record_picker'
+  'element:button', 'element:filter', 'element:form', 'element:record_picker', 'element:text_input'
 ]);
 
 /**
