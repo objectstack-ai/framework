@@ -2,7 +2,7 @@
 
 **Status**: Proposed (2026-06-25)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-mark gate; stage by whether the feature exists), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (`sys_role` is platform-native; `ExecutionContext.roles`; scheduled/lifecycle jobs), [ADR-0066](./0066-unified-authorization-model.md) (capability / assignment / requirement separation — resources declare a capability, never "who"), [ADR-0068](./0068-unified-user-context-and-built-in-identity-roles.md) (`EvalUser` / `current_user`; **identities are roles, not booleans**)
+**Builds on**: [ADR-0002](./0002-environment-database-isolation.md) (**environment-per-database** isolation; Control-Plane / Data-Plane split), [ADR-0004](./0004-cloud-multi-kernel.md) (`ObjectKernel` per environment), [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-mark gate; stage by whether the feature exists), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (`sys_role` is platform-native; `ExecutionContext.roles`; scheduled/lifecycle jobs), [ADR-0066](./0066-unified-authorization-model.md) (capability / assignment / requirement separation — resources declare a capability, never "who"), [ADR-0068](./0068-unified-user-context-and-built-in-identity-roles.md) (`EvalUser` / `current_user`; **identities are roles, not booleans**)
 **Consumers**: `@objectstack/spec` (the identity contract + `runAs` semantics), `@objectstack/cli` (author-time validation), `@objectstack/plugin-security` (`resolve-execution-context`, RLS, seeded roles — M2), `@objectstack/service-automation` (the engine's `runAs` resolution — M2), `@objectstack/trigger-schedule` + `@objectstack/trigger-api` (user-less trigger surfaces), `@objectstack/plugin-reports` (the report scheduler — today hand-rolls `SYSTEM_CTX`), `@objectstack/runtime` (audit actor), and the ADR-0057 lifecycle/retention jobs.
 
 **Premise**: pre-launch — specify the target end-state, then land only the non-speculative slice now (ADR-0049). This ADR **completes** the identity model: ADR-0068 unified the *human* identity surface (`current_user`, identities-as-roles); this ADR adds the **non-human / automation** identity that user-less runs need, in the same idiom. **It is deliberately mostly a decision record**: the acute risk is already mitigated (see Severity), so v1 builds almost nothing — it pins semantics before the AI authors a large body of metadata against the wrong model, and ships one author-time guardrail.
@@ -13,12 +13,12 @@
 
 ## TL;DR
 
-1. **[model] Automation is a first-class non-human identity, expressed as built-in roles** (the ADR-0068 idiom): `automation` (org-scoped — app-authored scheduled/user-less flows) and `platform_automation` (unscoped — platform-internal jobs only). A user-less run resolves to an `EvalUser` whose `id` is a stable automation principal and whose `roles` carry the automation role. There is **no anonymous run**.
+1. **[model] Automation is a first-class non-human identity, expressed as a built-in role** (the ADR-0068 idiom): the **environment's `automation` principal** — a Data-Plane identity living in that environment's own kernel/DB. A user-less run resolves to an `EvalUser` whose `id` is the env's stable automation principal and whose `roles` carry the `automation` role. There is **no anonymous run**. (Cross-environment, platform-wide automation is a **Control-Plane** concern — ADR-0002/0004 — out of scope; see D4.)
 2. **[model] `runAs` declares *authorization posture*, not identity** — decoupling the two axes the platform conflates today:
    - `user` — run as the triggering human (only valid when one exists);
    - **`automation`** (the target default for user-less triggers) — run as the automation principal **with RLS enforced** against its grants (Salesforce "with sharing"; the safe middle);
    - `system` — full elevation (`isSystem`, RLS-bypassing) — explicit opt-in, **back-compat unchanged**, always audited.
-3. **[model] Attribution is always concrete** — every run carries an identity, so the **audit actor** is the human, the automation principal, or `platform_automation`. **No more `created_by = NULL` automation writes.** Attribution is recorded at the audit layer and is **decoupled from record ownership** (automation must not silently *own* the rows it writes, or owner-RLS would hide them from humans).
+3. **[model] Attribution is always concrete** — every run carries an identity, so the **audit actor** is the human or the environment's automation principal. **No more `created_by = NULL` automation writes.** Attribution is recorded at the audit layer and is **decoupled from record ownership** (automation must not silently *own* the rows it writes, or owner-RLS would hide them from humans).
 4. **[ruled] User-less + `runAs:'user'` is a configuration error** (no user to scope to). Mainstream platforms do not offer "as the triggering user" for scheduled work; neither do we.
 5. **[staging — the key call] Build almost nothing now.** v1 = **this decision record + the author-time guardrail** (extend the #2308 lint to every user-less trigger; turn user-less `runAs:'user'` into a validation error). **Everything runtime — seeding the roles, the principal, attribution wiring, the `automation` default — is M2, *gated on the first real consumer*, not a date.** Rationale below.
 
@@ -54,7 +54,7 @@ This is a **footgun / hardening** issue, not an actively exploited hole, and the
 
 - Scheduled flows are **admin/AI-authored metadata**; an unprivileged user **cannot trigger a schedule**, so there is no untrusted-input path to the fail-open.
 - **#2308 already shipped** the cheap mitigations: a build-time lint, a runtime warning, and fixing the example flows to explicit `runAs:'system'`. The bleeding is stopped.
-- The platform is **pre-launch, single-operator** (ADR-0068: "sole operator = the founder"), so multi-tenant automation scoping is still theoretical.
+- Tenant isolation is **physical — environment-per-database** (ADR-0002): each tenant environment is its own kernel + DB. So the hard problem (cross-tenant RLS for an automation principal) **does not exist in this architecture** — the automation principal is a purely *intra-environment* Data-Plane identity with no cross-tenant data reach to scope. (The platform is also pre-launch / single-operator.)
 - The live automation surface is **tiny**, and — decisively — the existing scheduled flows (`stale_opportunity_sweep`, the app-todo sweeps) all want **full `system` elevation**, not the RLS-respecting middle. **The `automation` mode this ADR introduces has zero consumers in the current app set.**
 
 Building the runtime machinery now would therefore be the speculative enforcement ADR-0049 explicitly warns against. The real, present value is (a) pinning `runAs` semantics + the automation-identity model **before the AI authors metadata at scale**, and (b) the author-time guardrail.
@@ -83,14 +83,15 @@ This primitive is **not flow-specific**: `plugin-reports` already hand-rolls `SY
 
 ### D1 — A non-human automation identity, expressed as built-in roles
 
-Extend ADR-0068's "identities are roles" to the non-human case. Reserved, managed `sys_role` rows (siblings of `platform_admin` / `org_*`), carrying `label` + `description`:
+Extend ADR-0068's "identities are roles" to the non-human case. A single reserved, managed `sys_role` row per environment (sibling of `platform_admin` / `org_*`), carrying `label` + `description`:
 
 | name | scope | meaning |
 |---|---|---|
-| `automation` | org-scoped (`organization_id` = the run's tenant) | the identity for **app-authored** scheduled / user-less flows within a tenant. |
-| `platform_automation` | unscoped (`org_id = null`) | the identity for **platform-internal** jobs (retention, telemetry, migrations). **Not author-selectable** — reserved for the platform, sibling to `platform_admin`. |
+| `automation` | the environment (its own kernel/DB) | the identity for **app-authored** scheduled / user-less / system-initiated runs **within this environment**. |
 
-A user-less run resolves to an `EvalUser` (ADR-0068) whose `id` is a stable automation principal id and whose `roles` include the appropriate automation role. It appears as `current_user` like any other identity — so RLS, formulas, and audit treat it uniformly, with **zero bespoke booleans** (ADR-0068 D2). The principal is **non-loginable** and excluded from human/admin enumerations (the existing `usr_system` exclusion guards already model this). This does **not** resurrect `usr_system` as a seed-ownership crutch (seeds keep NULL-then-claim); it adds a non-human **execution + attribution** identity in the modern idiom.
+Because isolation is **environment-per-database** (ADR-0002, see D4), there is **no in-kernel cross-tenant automation role** — the DB boundary is the tenant boundary. Cross-environment, platform-wide automation (retention across customers, fleet telemetry) is a **Control-Plane** actor (ADR-0002/0004) that iterates over environments; it is *not* an in-kernel `sys_role` and is out of scope here.
+
+A user-less run resolves to an `EvalUser` (ADR-0068) whose `id` is the environment's stable automation principal id and whose `roles` include the `automation` role. It appears as `current_user` like any other identity — so RLS, formulas, and audit treat it uniformly, with **zero bespoke booleans** (ADR-0068 D2). The principal is **non-loginable** and excluded from human/admin enumerations (the existing `usr_system` exclusion guards already model this). This does **not** resurrect `usr_system` as a seed-ownership crutch (seeds keep NULL-then-claim); it adds a non-human **execution + attribution** identity in the modern idiom.
 
 ### D2 — `runAs` declares authorization posture, not identity
 
@@ -106,13 +107,16 @@ A user-less run resolves to an `EvalUser` (ADR-0068) whose `id` is a stable auto
 
 ### D3 — Attribution is always concrete, and decoupled from ownership
 
-- Every run carries an identity, so the **audit actor** is always concrete: the human, `automation`, or `platform_automation`. The anonymous/`NULL` automation write is eliminated.
+- Every run carries an identity, so the **audit actor** is always concrete: the human or the environment's `automation` principal. The anonymous/`NULL` automation write is eliminated.
 - **Attribution ≠ ownership.** Automation must **not** be force-stamped as `created_by` / `owner_id` of the rows it writes — owner-RLS keys on `created_by == current_user.id` (ADR-0057/0068), so automation-owned rows would become **invisible to the humans they are for**. Salesforce models this exactly: `CreatedBy = Automated Process` (audit) while `OwnerId` is set by flow logic. Therefore: record the automation actor at the **audit layer**; let flow logic set ownership explicitly (or leave the normal default), not the execution identity.
 
-### D4 — Scope follows the isolation boundary (ADR-0068 D3)
+### D4 — Isolation is physical (environment-per-database); the automation principal is per-environment
 
-- The `automation` identity is **tenant-scoped**: a scheduled flow belongs to an app installed in a tenant, so its automation principal carries that tenant's `organizationId`; RLS evaluates within the tenant; its grants bound what it can touch.
-- `platform_automation` is the **only** cross-tenant automation identity, reserved for platform-internal jobs and never author-selectable. Mirrors `platform_admin` (operator) vs `org_admin` (tenant), and answers "which tenant does a scheduled sweep run in?" — its own.
+ObjectStack is **environment-per-database** (ADR-0002): each tenant environment is its own `ObjectKernel` + DB (ADR-0004), with a hard **Control-Plane / Data-Plane** split. This dissolves the multi-tenant scoping question rather than answering it:
+
+- The `automation` principal is a **Data-Plane** identity that lives in the environment's **own** kernel/DB. There is **no cross-tenant data access from inside a tenant kernel** — the database boundary *is* the tenant boundary — so **no "unscoped cross-tenant" automation role is needed** (or wanted).
+- Its RLS is therefore purely **intra-environment**: it respects *this environment's* users' ownership/sharing (`runAs:'automation'`) or bypasses them (`runAs:'system'`). The `automation` vs `system` distinction is about the env's own users, never about tenants.
+- **Cross-environment / platform-wide automation** (retention across customers, fleet telemetry, migrations) is a **Control-Plane** concern that iterates over environments — each a separate DB — and acts within each via that env's own principal. It is **not** a kernel-resident role with cross-tenant reach, and is **out of scope** for this (Data-Plane) ADR.
 
 ### D5 — User-less `runAs:'user'` is a configuration error [enforced in v1]
 
@@ -131,7 +135,7 @@ Runtime behavior is otherwise **unchanged** from #2308 (the audible warning stay
 **M2 — gated on the FIRST REAL CONSUMER, not a date.** Build the principal *with* its first user, in this order:
 1. **Attribution wiring (non-breaking):** user-less runs carry the automation principal as the **audit actor** (D3). Likely first domino: **migrating `plugin-reports` / audit / ADR-0057 lifecycle jobs off ad-hoc `SYSTEM_CTX` onto the principal** — that migration is what first makes the principal earn its keep.
 2. **Authorization (the behavior change):** seed the roles (D1); `runAs:'automation'` becomes the user-less default and runs **RLS-enforced** (D2); assign capabilities/permission-sets to the automation role (ADR-0066). Ship **default-broad → tighten** (the GitHub-Actions playbook) with each flow's effective grants **visible and restrictable**.
-- Other triggers to start M2: **multi-tenant lands** (D4 becomes real), or a **real volume of scheduled CRUD flows** appears (orphan attribution starts to bite).
+- Other trigger to start M2: a **real volume of scheduled CRUD flows** appears (orphan attribution starts to bite). (Multi-tenant is *not* a trigger — it is already handled physically by env-per-DB, ADR-0002.)
 - `runAs:'system'` stays god-mode throughout.
 
 **Non-goals / deferred:**
@@ -169,7 +173,7 @@ Runtime behavior is otherwise **unchanged** from #2308 (the audible warning stay
 2. **`@objectstack/cli`** — extend `flow-schedule-runas-unscoped` to all user-less trigger types; make user-less `runAs:'user'` a hard validation error (D5).
 
 **M2 (gated on first consumer):**
-3. **`plugin-security`** — seed `automation` / `platform_automation` `sys_role` rows (sibling to `bootstrap-declared-roles`); extend the non-human exclusion guards.
+3. **`plugin-security`** — seed the per-environment `automation` `sys_role` row (sibling to `bootstrap-declared-roles`); extend the non-human exclusion guards.
 4. **`service-automation`** — `resolveRunContext` resolves user-less runs to the automation `EvalUser`; `runAs:'automation'` threads an RLS-enforcing context (not `isSystem`); stamp the audit actor (D3).
 5. **`runtime` / audit** — record the automation actor; do **not** stamp `created_by`/`owner_id` to it (D3).
 6. **`plugin-reports`, ADR-0057 jobs** — adopt the principal in place of ad-hoc `SYSTEM_CTX` (the likely first consumer that triggers M2).
