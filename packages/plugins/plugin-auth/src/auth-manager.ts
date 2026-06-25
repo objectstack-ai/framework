@@ -166,6 +166,21 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
   dataEngine?: IDataEngine;
 
   /**
+   * Optional callback invoked AFTER an organization is created via better-auth's
+   * `createOrganization` (the org-plugin `afterCreateOrganization` hook). Lets a
+   * host stack run org-creation side effects that core `databaseHooks` can't —
+   * better-auth's org-plugin models (`organization`/`member`) do NOT fire those.
+   * The cloud control plane uses it to provision an org's born-with production
+   * environment. Failure-isolated: org creation is never rolled back.
+   */
+  onOrganizationCreated?: (data: {
+    organizationId: string;
+    userId?: string;
+    name?: string;
+    slug?: string;
+  }) => void | Promise<void>;
+
+  /**
    * Base path for auth routes
    * Forwarded to better-auth's basePath option so it can match incoming
    * request URLs without manual path rewriting.
@@ -739,6 +754,25 @@ export class AuthManager {
                 message:
                   'Creating additional organizations is disabled on this deployment.',
               });
+            }
+          },
+          // Run host-provided org-creation side effects (e.g. the cloud control
+          // plane provisions the org's born-with production environment). The
+          // org-plugin's models don't fire core databaseHooks, so this is the
+          // only server-side seam for "every org is born with its prod env".
+          // Failure-isolated: org creation must not roll back on a side-effect miss.
+          afterCreateOrganization: async ({ organization, member, user }: any) => {
+            const cb = this.config.onOrganizationCreated;
+            if (typeof cb !== 'function') return;
+            try {
+              await cb({
+                organizationId: organization?.id,
+                userId: user?.id ?? member?.userId,
+                name: organization?.name,
+                slug: organization?.slug,
+              });
+            } catch (err: any) {
+              console.warn('[auth] onOrganizationCreated callback failed:', err?.message ?? String(err));
             }
           },
           beforeUpdateOrganization: async ({ organization, member }: any) => {
