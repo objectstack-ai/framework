@@ -84,8 +84,13 @@ describe('extractApiKey', () => {
     expect(extractApiKey({ authorization: 'apikey osk_123' })).toBe('osk_123');
   });
 
-  it('does NOT treat Bearer tokens as API keys', () => {
-    expect(extractApiKey({ authorization: 'Bearer osk_123' })).toBeUndefined();
+  it('treats Bearer tokens as API keys only when osk_-prefixed', () => {
+    // A bare Bearer (e.g. a session token) is NOT an api-key.
+    expect(extractApiKey({ authorization: 'Bearer plain' })).toBeUndefined();
+    // A Bearer carrying the api-key prefix IS accepted (remote MCP clients) —
+    // mirrors @objectstack/core's api-key test; this stale duplicate predated
+    // that behavior. extractApiKey is re-exported from core, so they must agree.
+    expect(extractApiKey({ authorization: 'Bearer osk_123' })).toBe('osk_123');
   });
 
   it('prefers x-api-key over Authorization', () => {
