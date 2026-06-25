@@ -67,7 +67,13 @@ export const SysVerification = ObjectSchema.create({
   },
   
   indexes: [
-    { fields: ['value'], unique: true },
+    // `value` must NOT be unique. better-auth's oauth-provider stores OIDC
+    // authorization codes in this table with `value` = a JSON blob keyed by
+    // user+client+state, which can legitimately repeat. A UNIQUE constraint
+    // makes `/api/v1/auth/oauth2/authorize` fail (`UNIQUE constraint failed:
+    // sys_verification.value`) → 503, breaking cloud-as-IdP SSO entirely.
+    // better-auth keys verification lookups on `identifier`, not `value`.
+    { fields: ['value'], unique: false },
     { fields: ['identifier'], unique: false },
     { fields: ['expires_at'], unique: false },
   ],
