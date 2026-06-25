@@ -324,6 +324,15 @@ export class AuthManager {
       // createAdapterFactory.
       user: {
         ...AUTH_USER_CONFIG,
+        // System-managed per-user capability flag(s). `ai_access` is the
+        // env-side AI-seat marker (single-org env DB has only sys_user, so the
+        // seat lives here as a boolean, not a permission set). better-auth
+        // includes additionalFields in the session user, so resolveCtx reads
+        // it with no extra query and synthesizes the `ai_seat` capability.
+        // `input:false` → not self-settable; set by the entitlement layer/admin.
+        additionalFields: {
+          ai_access: { type: 'boolean', required: false, defaultValue: false, input: false },
+        },
       },
       account: {
         ...AUTH_ACCOUNT_CONFIG,

@@ -490,6 +490,16 @@ export class HonoServerPlugin implements Plugin {
                         /* fall back to self-only */
                     }
                 }
+                // Env-side AI-seat marker (ADR: simple model). The single-org
+                // env DB has no permission-set/org dimension for this — the seat
+                // is a boolean on sys_user (a better-auth additionalField, so it
+                // rides on the session user). When set, synthesize the `ai_seat`
+                // capability so the existing per-agent gate (evaluateAgentAccess
+                // → requires `ai_seat`) admits the user with no permission-set
+                // grant. Absent/false → no synthesis (gate denies as before).
+                if ((session.user as any)?.ai_access === true && !permissions.includes('ai_seat')) {
+                    permissions.push('ai_seat');
+                }
                 return {
                     userId,
                     tenantId,
