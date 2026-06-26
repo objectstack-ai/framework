@@ -278,6 +278,47 @@ describe('ObjectQL Engine', () => {
             expect(result).toEqual({ id: '1', success: true });
         });
 
+        it('stamps a `current_user` defaultValue with the acting user id on insert', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        title: { type: 'text' },
+                        owner: { type: 'user', reference: 'sys_user', defaultValue: 'current_user' },
+                    },
+                } as any;
+                if (name === 'sys_user') return { name: 'sys_user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            await engine.insert('ticket', { title: 'T1' }, { context: { userId: 'u-42' } as any });
+
+            expect(mockDriver.create).toHaveBeenCalledWith(
+                'ticket',
+                expect.objectContaining({ title: 'T1', owner: 'u-42' }),
+                expect.anything(),
+            );
+        });
+
+        it('leaves a `current_user` default unset when there is no authenticated user', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        title: { type: 'text' },
+                        owner: { type: 'user', reference: 'sys_user', defaultValue: 'current_user' },
+                    },
+                } as any;
+                if (name === 'sys_user') return { name: 'sys_user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            await engine.insert('ticket', { title: 'T2' });
+
+            const arg = (mockDriver.create as any).mock.calls.at(-1)[1];
+            expect(arg.owner).toBeUndefined();
+        });
+
         it('should execute find operation', async () => {
             const result = await engine.find('task', {});
             expect(mockDriver.find).toHaveBeenCalled();
@@ -452,6 +493,42 @@ describe('ObjectQL Engine', () => {
                     object: 'user',
                     where: { id: { $in: ['u1', 'u2'] } },
                 }),
+                undefined,
+            );
+        });
+
+        it('should expand a `user` field (lookup specialized to sys_user) through the same path', async () => {
+            // Regression: $expand was gated on type lookup/master_detail only; the
+            // `user` type carries the same `reference` + id storage and must resolve.
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        owner: { type: 'user', reference: 'sys_user' },
+                        title: { type: 'text' },
+                    },
+                } as any;
+                if (name === 'sys_user') return {
+                    name: 'sys_user',
+                    fields: { name: { type: 'text' } },
+                } as any;
+                return undefined;
+            });
+
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([
+                    { id: 'k1', title: 'Ticket 1', owner: 'u1' },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'u1', name: 'Alice' },
+                ]);
+
+            const result = await engine.find('ticket', { expand: { owner: { object: 'owner' } } });
+
+            expect(result[0].owner).toEqual({ id: 'u1', name: 'Alice' });
+            expect(mockDriver.find).toHaveBeenLastCalledWith(
+                'sys_user',
+                expect.objectContaining({ where: { id: { $in: ['u1'] } } }),
                 undefined,
             );
         });

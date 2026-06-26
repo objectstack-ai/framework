@@ -73,8 +73,13 @@ export async function syncCollectionSchema(
         });
       }
 
-      // Lookup fields get an index for join performance
-      if (field.type === 'lookup' && field.reference_to) {
+      // Lookup + user (a lookup specialized to sys_user) fields get an index for
+      // join performance. A `user` field always references sys_user, so it is
+      // indexed even when reference_to is not explicitly set.
+      if (
+        (field.type === 'lookup' && field.reference_to) ||
+        field.type === 'user'
+      ) {
         indexOps.push({
           spec: { [fieldName]: 1 },
           options: { name: `idx_${fieldName}_lookup` },

@@ -123,7 +123,7 @@ export class SeedLoaderService implements ISeedLoaderService {
         const fields = objDef.fields as Record<string, any>;
         for (const [fieldName, fieldDef] of Object.entries(fields)) {
           if (
-            (fieldDef.type === 'lookup' || fieldDef.type === 'master_detail') &&
+            (fieldDef.type === 'lookup' || fieldDef.type === 'master_detail' || fieldDef.type === 'user') &&
             fieldDef.reference
           ) {
             const targetObject = fieldDef.reference as string;
@@ -138,7 +138,7 @@ export class SeedLoaderService implements ISeedLoaderService {
               field: fieldName,
               targetObject,
               targetField: DEFAULT_EXTERNAL_ID_FIELD,
-              fieldType: fieldDef.type as 'lookup' | 'master_detail',
+              fieldType: fieldDef.type as 'lookup' | 'master_detail' | 'user',
             });
           }
         }
