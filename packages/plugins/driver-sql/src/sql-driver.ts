@@ -123,6 +123,71 @@ function repairNaiveUtcAuditTimestamp(value: unknown): unknown {
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
 
+/**
+ * Whether a field's `defaultValue` is the framework's `'NOW()'` convention
+ * ("use the database clock at insert time"). Case-insensitive, whitespace
+ * tolerant. Single source for the two places `createColumn` checks it.
+ */
+function isNowDefaultValue(v: unknown): v is string {
+  return typeof v === 'string' && /^now\(\)$/i.test(v.trim());
+}
+
+/**
+ * Read-side normalization for user-declared `Field.datetime` columns on SQLite.
+ *
+ * SQLite has no native timestamp type, so one `datetime` column can hold MIXED
+ * storage:
+ *   - an explicitly-written value bound through better-sqlite3 as a JS `Date`
+ *     lands as INTEGER epoch milliseconds;
+ *   - a value left to a `defaultValue: 'NOW()'` column default lands as TEXT —
+ *     canonical ISO-8601-`Z` for columns created after this fix
+ *     (`SqlDriver.nowColumnDefault`), or a legacy timezone-NAIVE
+ *     `'YYYY-MM-DD HH:MM:SS'` (`CURRENT_TIMESTAMP`) for columns created before it.
+ *
+ * Present every shape as one canonical instant — full ISO-8601 with an explicit
+ * `Z` (`new Date(...).toISOString()`) — so reads are uniform and unambiguous
+ * regardless of how/when the row was written. A NAIVE string's wall-clock is
+ * interpreted as UTC, exactly what `CURRENT_TIMESTAMP` wrote; without this a
+ * zone-less string is read back by `Date.parse` as LOCAL time and the stored
+ * instant shifts by the host offset on a non-UTC runtime (the same class of bug
+ * ADR-0074 fixed for the builtin `created_at`/`updated_at` audit columns, and
+ * ADR-0053's "`datetime` is an instant stored as UTC" applied to user fields).
+ *
+ * Idempotent (an already zone-explicit `…Z`/`±HH:MM` string is preserved) and
+ * total (`null`/`undefined`/unparseable shapes pass through untouched). Reuses
+ * ADR-0074's `repairNaiveUtcAuditTimestamp` for the string shapes (the single
+ * source of the zone-naive→UTC rules) and adds the INTEGER epoch-ms / `Date`
+ * folding, mirroring the read-repair the `Field.date`/numeric-scalar paths do.
+ * SQLite-only: Postgres/MySQL store a real zone-aware TIMESTAMP and never carry
+ * this ambiguity.
+ */
+function normalizeSqliteDatetimeOutput(value: unknown): unknown {
+  if (value == null) return value;
+  // INTEGER/REAL epoch milliseconds — what better-sqlite3 binds a JS `Date` to.
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return value;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d.toISOString();
+  }
+  // A JS `Date` is never returned by better-sqlite3 here, but normalize one
+  // defensively so any caller-shaped row also reads back canonical.
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? value : value.toISOString();
+  }
+  if (typeof value !== 'string') return value;
+  const s = value.trim();
+  if (s === '') return value;
+  // A bare integer rendered as TEXT (defensive) — treat as epoch milliseconds.
+  if (/^-?\d+$/.test(s)) {
+    const d = new Date(Number(s));
+    return Number.isNaN(d.getTime()) ? value : d.toISOString();
+  }
+  // Any other string — zone-explicit or zone-naive `YYYY-MM-DD HH:MM:SS` — takes
+  // the same shape rules as an audit timestamp; reuse that repair as the single
+  // source for the string-handling logic (idempotent on zone-explicit values).
+  return repairNaiveUtcAuditTimestamp(s);
+}
+
 // ── Introspection Types ──────────────────────────────────────────────────────
 
 export interface IntrospectedColumn {
@@ -2634,6 +2699,39 @@ export class SqlDriver implements IDataDriver {
 
   // ── Column creation helper ──────────────────────────────────────────────────
 
+  /**
+   * The driver-native column DEFAULT for a `defaultValue: 'NOW()'` field.
+   *
+   * Postgres/MySQL use native `now()` — a real zone-aware TIMESTAMP that never
+   * had the ambiguity below. SQLite has no timestamp type and `knex.fn.now()`
+   * compiles to `CURRENT_TIMESTAMP`, which renders a timezone-NAIVE,
+   * space-separated `'YYYY-MM-DD HH:MM:SS'` (no millis, no zone). `Date.parse`
+   * reads such a zone-less string as LOCAL time, so a stored UTC wall-clock
+   * shifts by the host offset on a non-UTC runtime — the same class of bug
+   * ADR-0074 fixed for the builtin audit columns. Emit a canonical instead:
+   *   - datetime → ISO-8601 with explicit `Z` (`2026-06-26T10:34:13.891Z`),
+   *                matching `new Date().toISOString()` and the value
+   *                `formatInput`'s `NOW()` safety-net writes;
+   *   - date     → `YYYY-MM-DD` UTC calendar day (matches `toDateOnly`, so the
+   *                stored default already equals what an explicit write stores);
+   *   - time     → `HH:MM:SS.fff` UTC time-of-day (not a full timestamp).
+   *
+   * NOTE: a DDL default only governs NEWLY-created columns. An existing column
+   * keeps its legacy `CURRENT_TIMESTAMP` default and still emits naive text on a
+   * defaulted insert; `formatOutput` repairs those to canonical on read
+   * (`normalizeSqliteDatetimeOutput` for datetime, `toDateOnly` for date), so
+   * reads are uniform without a schema migration.
+   */
+  protected nowColumnDefault(type: string): Knex.Raw {
+    if (!this.isSqlite) return this.knex.fn.now();
+    switch (type) {
+      case 'date': return this.knex.raw("(strftime('%Y-%m-%d', 'now'))");
+      case 'time': return this.knex.raw("(strftime('%H:%M:%f', 'now'))");
+      // datetime (and any non-temporal field that opts into NOW()): canonical instant.
+      default:     return this.knex.raw("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))");
+    }
+  }
+
   protected createColumn(table: Knex.CreateTableBuilder, name: string, field: any) {
     if (field.multiple) {
       table.json(name);
@@ -2721,19 +2819,19 @@ export class SqlDriver implements IDataDriver {
       if (field.required) col.notNullable();
       // `defaultValue: 'NOW()'` is a framework convention for "use the
       // database clock at insert time". Translate it to the driver-native
-      // CURRENT_TIMESTAMP equivalent so the column gets a real default
-      // instead of leaving the literal string 'NOW()' for whatever
-      // upstream code happens to write.
+      // canonical default (`nowColumnDefault`) so the column gets a real,
+      // zone-explicit default instead of leaving the literal string 'NOW()'
+      // for whatever upstream code happens to write — and, on SQLite, instead
+      // of the timezone-naive `CURRENT_TIMESTAMP` that `knex.fn.now()` emits.
       if (
         (type === 'datetime' || type === 'date' || type === 'time') &&
-        typeof field.defaultValue === 'string' &&
-        /^now\(\)$/i.test(field.defaultValue.trim())
+        isNowDefaultValue(field.defaultValue)
       ) {
-        col.defaultTo(this.knex.fn.now());
+        col.defaultTo(this.nowColumnDefault(type));
       } else if (field.defaultValue !== undefined && field.defaultValue !== null) {
         const dv = field.defaultValue;
-        if (typeof dv === 'string' && /^now\(\)$/i.test(dv.trim())) {
-          col.defaultTo(this.knex.fn.now());
+        if (isNowDefaultValue(dv)) {
+          col.defaultTo(this.nowColumnDefault(type));
         } else if (typeof dv !== 'object') {
           col.defaultTo(dv as any);
         }
@@ -2962,6 +3060,25 @@ export class SqlDriver implements IDataDriver {
       // `Field.date`/numeric paths already do. See `repairNaiveUtcAuditTimestamp`.
       for (const col of AUDIT_TIMESTAMP_COLUMNS) {
         if (data[col] !== undefined) data[col] = repairNaiveUtcAuditTimestamp(data[col]);
+      }
+
+      // Present every `Field.datetime` value as one canonical instant —
+      // ISO-8601 with an explicit `Z` — regardless of its on-disk storage form.
+      // A SQLite `datetime` column mixes forms: an explicit value bound as a JS
+      // `Date` is stored as INTEGER epoch ms, while a `defaultValue: 'NOW()'`
+      // slot is TEXT (canonical ISO-`Z` post-fix, or a legacy timezone-naive
+      // `CURRENT_TIMESTAMP` string). Without this, reads leak the raw integer or
+      // a zone-naive string that `Date.parse` mis-reads as LOCAL time. Folds all
+      // shapes to UTC ISO-`Z` and transparently repairs legacy rows with no data
+      // migration — mirroring the `Field.date`/numeric read-repairs above and
+      // the audit-column repair just above. See `normalizeSqliteDatetimeOutput`.
+      const datetimeFields = this.datetimeFields[object];
+      if (datetimeFields && datetimeFields.size > 0) {
+        for (const field of datetimeFields) {
+          if (data[field] !== undefined) {
+            data[field] = normalizeSqliteDatetimeOutput(data[field]);
+          }
+        }
       }
     }
 
