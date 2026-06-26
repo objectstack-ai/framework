@@ -414,7 +414,11 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   // Guarded (tryFind swallows errors) → can only ever ADD access, never break auth.
   if (userId && !ctx.permissions!.includes('ai_seat')) {
     const seatRows = await tryFind(ql, 'sys_user', { id: userId }, 1);
-    if ((seatRows?.[0] as { ai_access?: unknown } | undefined)?.ai_access === true) {
+    // Turso/libSQL returns sqlite booleans as integer 1/0; the memory driver
+    // returns a JS boolean. Accept both (+ the stringified form) so the seat
+    // resolves regardless of the env's data driver.
+    const aiAccess = (seatRows?.[0] as { ai_access?: unknown } | undefined)?.ai_access;
+    if (aiAccess === true || aiAccess === 1 || aiAccess === '1') {
       ctx.permissions!.push('ai_seat');
     }
   }

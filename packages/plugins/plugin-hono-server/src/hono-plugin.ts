@@ -509,7 +509,9 @@ export class HonoServerPlugin implements Plugin {
                             'sys_user',
                             { where: { id: userId }, limit: 1, ...sysCtx } as any,
                         ).catch(() => []);
-                        if ((uRows?.[0] as any)?.ai_access === true) permissions.push('ai_seat');
+                        // Turso returns sqlite booleans as 1/0; memory driver as boolean.
+                        const aiAccess = (uRows?.[0] as any)?.ai_access;
+                        if (aiAccess === true || aiAccess === 1 || aiAccess === '1') permissions.push('ai_seat');
                     } catch {
                         /* no ai_access column / query failed → no seat (safe) */
                     }
