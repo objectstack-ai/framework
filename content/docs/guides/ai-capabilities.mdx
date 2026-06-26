@@ -7,7 +7,18 @@ description: "Complete guide to leveraging AI agents, RAG pipelines, and intelli
 
 Complete guide to leveraging AI agents, knowledge retrieval, and intelligent automation in ObjectStack.
 
-> **Note — the open edition exposes AI via MCP (BYO-AI).** Per ADR-0025, the in-UI AI runtime (`@objectstack/service-ai`: agents, the `ask`/`build` assistants, in-product chat) ships in the **cloud / Enterprise** distribution, not the open framework. A self-hosted **open** runtime instead exposes its objects, queries, and business actions to *your own* AI — Claude, Cursor, any MCP client, or a local model — through **`@objectstack/mcp`** (bring-your-own-AI, zero platform AI cost). The `@objectstack/service-ai` examples below therefore describe the cloud/EE distribution.
+<Callout type="warning">
+**This guide describes the cloud / Enterprise AI tier. The open edition exposes AI only via MCP (BYO-AI).**
+
+Per **cloud ADR-0025** (`service-ai → cloud; open = MCP-only` — [`cloud/docs/adr/0025`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md)), the in-UI AI runtime — `@objectstack/service-ai`: both the **`ask`** data-query assistant and the **`build`** Studio authoring assistant, plus all in-product chat — ships in the **cloud / Enterprise** distribution. It is **not** in the open framework, and no open distribution (cloud free tier, Docker, desktop, on-prem) has a built-in `ask` / `build` chat.
+
+The **open edition** does AI two ways instead — both bring-your-own-AI, zero platform AI cost:
+
+- **Data query → `@objectstack/mcp`** (BYO-AI). Point your own AI — Claude, Cursor, any MCP client, or a local model — at the app's objects, queries, and business **actions**, governed by the same RLS. With a local model, data *and* inference stay inside your boundary.
+- **Metadata authoring → source mode.** Author typed metadata as source (`*.object.ts`, `*.flow.ts`, …) with your own AI coding agent (Claude Code, Cursor), aided by the ObjectStack [skills](./skills) and MCP introspection. There is no in-product Builder chat in the open edition.
+
+Everything below (agents, the `ask` / `build` personas, `@objectstack/service-ai` wiring, the `/api/v1/ai/*` routes) therefore describes the **cloud / Enterprise** distribution.
+</Callout>
 
 ## Table of Contents
 
@@ -50,12 +61,17 @@ is in — the user never picks from a roster:
 
 | Agent | Surface | Does | Edition |
 |---|---|---|---|
-| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | open-source · free |
-| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud · paid |
+| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | cloud · Enterprise |
+| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud · Enterprise |
 
-There is no per-turn intent classifier and no agent dropdown: the surface binds
-the agent (data console → `ask`, Studio → `build`). A `build`-shaped request that
-reaches `ask` is declined and redirected to the Builder, never silently re-routed.
+Both agents are part of the **cloud / Enterprise** in-UI AI runtime (cloud ADR-0025).
+The **open edition** ships neither — it uses `@objectstack/mcp` (BYO-AI) for data
+query and source-mode authoring instead (see the note above).
+
+Within the cloud / EE runtime there is no per-turn intent classifier and no agent
+dropdown: the surface binds the agent (data console → `ask`, Studio → `build`). A
+`build`-shaped request that reaches `ask` is declined and redirected to the
+Builder, never silently re-routed.
 
 ### You extend the platform with **skills**, not agents
 
@@ -68,8 +84,10 @@ Actions / Flows / queries; it then attaches to `ask`. Every skill declares
 surface-compatible skills' tools** — there is no global fall-through, so a skill
 reaches an agent only when their surfaces match
 ([ADR-0064](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
-`surface:'build'` skills are inert on the open-source framework (the `build` agent
-is cloud-only) — intentional tiering, not a bug.
+Both `surface:'ask'` and `surface:'build'` skills run only where the in-UI AI
+runtime exists — the **cloud / Enterprise** distribution. On the open framework
+there is no in-product agent to attach them to (cloud ADR-0025); author capability
+as Actions / Flows and reach it through `@objectstack/mcp` instead.
 
 ### The shape of an agent
 

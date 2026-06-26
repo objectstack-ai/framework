@@ -428,7 +428,7 @@ CLI: `os serve` / `os dev`
      ├── HonoServerPlugin
      ├── RESTPlugin (auto-generated API)
      ├── DispatcherPlugin
-     └── AIServicePlugin (if available)
+     └── AIServicePlugin (cloud / EE only — reverse-mounted by a cloud host; absent in the open framework per cloud ADR-0025)
   5. Runtime.start() → init + start all plugins
   6. Server listens on the resolved port (see "Ports & networking" in Part 3)
 ```
@@ -449,7 +449,7 @@ Plugins initialize in registration order. Key dependencies:
 | AppPlugin | ObjectQLPlugin | Registers objects/metadata with engine |
 | AuthPlugin | ObjectQLPlugin | Needs user/session objects |
 | RESTPlugin | ObjectQLPlugin, AppPlugin | Generates routes from registered objects |
-| AIServicePlugin | ObjectQLPlugin, AppPlugin | Needs metadata for tool generation |
+| AIServicePlugin | ObjectQLPlugin, AppPlugin | Needs metadata for tool generation. **Cloud / EE only** — `@objectstack/service-ai` moved to cloud (cloud ADR-0025); the open edition has no in-UI AI plugin and uses `@objectstack/mcp` (BYO-AI) |
 
 ### Programmatic Bootstrap (Without CLI)
 

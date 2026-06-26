@@ -23,6 +23,16 @@ pipelines using the ObjectStack specification. This skill covers the
 Agent → Skill → Tool three-tier architecture aligned with Salesforce
 Agentforce, Microsoft Copilot Studio, and ServiceNow Now Assist patterns.
 
+> **Edition boundary (cloud ADR-0025 — `service-ai → cloud; open = MCP-only`).**
+> The in-UI AI **runtime** — the `ask` / `build` agents, in-product chat, and the
+> `/api/v1/ai/*` routes (`@objectstack/service-ai`) — ships in the **cloud /
+> Enterprise** distribution, not the open framework. The agent / skill / tool
+> **schemas** in `@objectstack/spec/ai` stay open, so you author `*.agent.ts` /
+> `*.skill.ts` / `*.tool.ts` as source either way — but they only execute in a
+> cloud / EE host. On the **open edition** there is no in-product agent: expose the
+> app to your own AI via `@objectstack/mcp` (BYO-AI) for data query, and author
+> metadata in **source mode** with an AI coding agent (Claude Code, Cursor).
+
 ---
 
 ## When to Use This Skill
@@ -65,8 +75,10 @@ never picks from a roster; the surface they are in selects the agent:
 - **`ask`** — the **data product** (≈ Claude Chat). Conversational read / query /
   explore over records, plus running the business **actions** the app already
   exposes. End-user audience, RLS-bounded. Canonical id `ask` (`ASK_AGENT_NAME`).
-  Open-source · free — ships in `@objectstack/service-ai`, and is the implicit
-  copilot for any app that does not pin `app.defaultAgent`.
+  **Cloud / Enterprise** — the `ask` runtime moved from the open framework into the
+  cloud AI runtime (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed)
+  per cloud ADR-0025; it is the implicit copilot for any cloud / EE app that does
+  not pin `app.defaultAgent`. (Open editions have no in-product `ask`; use MCP.)
 - **`build`** — the **authoring product** (≈ Claude Code). Agentic authoring of
   *metadata* (objects, fields, views, flows) through plan → draft → verify →
   publish. Builder audience, governance-gated. Canonical id `build`. Cloud-only ·

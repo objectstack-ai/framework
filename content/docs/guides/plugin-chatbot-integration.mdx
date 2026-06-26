@@ -5,6 +5,17 @@ description: Wire @object-ui/plugin-chatbot in Console (or any frontend) to the 
 
 # Connecting plugin-chatbot to a framework AI backend
 
+<Callout type="warning">
+**Cloud / Enterprise tier.** The in-UI AI backend this guide wires up — the
+`/api/v1/ai/*` routes, the `ask` / `build` assistants, the models picker, and the
+HITL inbox (`@objectstack/service-ai`) — ships in the **cloud / Enterprise**
+distribution, not the open framework (cloud ADR-0025: `service-ai → cloud; open =
+MCP-only`). On the **open edition** there is no in-product chat backend; expose
+the app to your own AI through `@objectstack/mcp` (BYO-AI) instead — see the
+[AI Capabilities guide](./ai-capabilities). Follow this guide when you run against
+a cloud / EE host (or a dev server with the AI tier mounted).
+</Callout>
+
 `@object-ui/plugin-chatbot` (a React component shipped from the `objectui`
 monorepo) is the canonical chat UI for ObjectStack Console. It speaks the
 Vercel AI Data Stream protocol, so it pairs natively with the AI routes

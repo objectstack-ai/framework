@@ -1,5 +1,7 @@
 # ADR-0040: Unified Assistant — the end user never picks an agent
 
+> **🔶 Cloud-owned — superseded in part by cloud ADR-0025 (2026-06-25).** The in-UI AI runtime and the `ask` / `build` agents described here moved to the **cloud / Enterprise** distribution (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed); the open framework exposes AI only via `@objectstack/mcp` (BYO-AI) and ships no in-product `ask` / `build` chat. Retained as historical design context, now **cloud-owned** — see [`cloud/docs/adr/0025-service-ai-to-cloud-open-mcp-only`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md).
+
 > **⚠️ Superseded by [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)** (2026-06-22). Its core decision — a *single* unified assistant carrying all skills, switched by a per-turn intent classifier — was **reversed**: the kernel now ships two agents (`ask` / `build`) bound by *surface*, and `*.agent.ts` is closed to third parties (skills are the extension primitive). The UX win it established (the user never picks from a roster) is kept, re-grounded as surface binding. Kept below as a historical record of the decision and the incident that motivated it.
 
 **Status**: **Superseded by [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)** — original: Proposed (2026-06-11)

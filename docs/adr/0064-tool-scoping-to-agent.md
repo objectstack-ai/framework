@@ -1,5 +1,7 @@
 # ADR-0064: Tool scoping — an agent's tools are exactly its skills' tools
 
+> **🔶 Cloud-owned — superseded in part by cloud ADR-0025 (2026-06-25).** The in-UI AI runtime and the `ask` / `build` agents described here moved to the **cloud / Enterprise** distribution (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed); the open framework exposes AI only via `@objectstack/mcp` (BYO-AI) and ships no in-product `ask` / `build` chat. Retained as historical design context, now **cloud-owned** — see [`cloud/docs/adr/0025-service-ai-to-cloud-open-mcp-only`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md).
+
 **Status**: Proposed (2026-06-22)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md) (two agents bound by surface; skill ↔ agent affinity), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring tools)

@@ -125,6 +125,15 @@ Auth settings precedence:
 
 ## AI
 
+<Callout type="warning">
+These variables configure the **cloud / Enterprise** in-UI AI runtime
+(`@objectstack/service-ai`), which moved out of the open framework — see cloud
+ADR-0025 (`service-ai → cloud; open = MCP-only`). The **open edition** has no
+in-UI AI runtime to configure: it exposes AI through `@objectstack/mcp` (BYO-AI),
+where the model and provider are configured in your own MCP client (Claude,
+Cursor, a local model, …). See the [AI Capabilities guide](./ai-capabilities).
+</Callout>
+
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
 | `AI_GATEWAY_MODEL` | string | — | Vercel AI Gateway model id (for example `openai/gpt-4.1-mini` or `anthropic/claude-sonnet-4-5`). When set, the AI service boots with the gateway adapter before trying direct providers. |

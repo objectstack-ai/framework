@@ -1,5 +1,7 @@
 # ADR-0063: Two agents (`ask` / `build`), bound by surface; skills are the only third-party extension primitive
 
+> **🔶 Cloud-owned — superseded in part by cloud ADR-0025 (2026-06-25).** The in-UI AI runtime and the `ask` / `build` agents described here moved to the **cloud / Enterprise** distribution (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed); the open framework exposes AI only via `@objectstack/mcp` (BYO-AI) and ships no in-product `ask` / `build` chat. Retained as historical design context, now **cloud-owned** — see [`cloud/docs/adr/0025-service-ai-to-cloud-open-mcp-only`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md).
+
 **Status**: Proposed (2026-06-22)
 **Deciders**: ObjectStack Protocol Architects
 **Supersedes**: [ADR-0040](./0040-unified-assistant-and-agent-binding.md) — its core decision (a *single* unified assistant selected by *per-turn intent classification*) is **reversed**. ADR-0040's UX win ("the end user never picks from a roster") is **kept** but re-grounded: the *surface* binds the agent, not a classifier and not a dropdown. §3 (custom tenant agents) is withdrawn; §4 (tool-scoping) is handed to [ADR-0064](./0064-tool-scoping-to-agent.md).

@@ -84,7 +84,7 @@ Prefer clicking? Author the same metadata visually in **Studio** — objects, re
 - **AI-native, not retrofitted** — Objects, permissions, flows, APIs, and UI are declarative typed metadata, small enough for an agent to load end-to-end. That metadata generates an automatic tool surface — REST APIs, client SDKs, UI views, and an [MCP](packages/mcp) server — so agents inspect and act through the same contracts you defined.
 - **Protocol-first runtime** — Every definition starts as a Zod schema (`z.infer<>` types), compiles into versioned, self-describing JSON artifacts, and runs on a microkernel plugin system (DI container, EventBus, `init → start → destroy` lifecycle).
 - **Data & framework reach** — In-memory, PostgreSQL, MySQL, SQLite, and MongoDB drivers; 7 framework adapters (Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit); a client SDK with React hooks (`useQuery` / `useMutation` / `usePagination`).
-- **Governance & built-ins** — better-auth, RBAC / RLS / FLS, a DAG-based automation engine, an AI service (Agent / Tool / Skill on the Vercel AI SDK), the ObjectUI Console, and a full CLI (`os init` / `dev` / `compile` / `validate` / …).
+- **Governance & built-ins** — better-auth, RBAC / RLS / FLS, a DAG-based automation engine, an [MCP](packages/mcp) server that exposes the app to your own AI (BYO-AI), the ObjectUI Console, and a full CLI (`os init` / `dev` / `compile` / `validate` / …).
 
 ## Why AI-native?
 
@@ -252,7 +252,6 @@ For the browser, the typed client SDK and React hooks (`useQuery` / `useMutation
 
 | Package | Description |
 | :--- | :--- |
-| [`@objectstack/service-ai`](packages/services/service-ai) | AI service — Agent, Tool, Skill, Vercel AI SDK integration |
 | [`@objectstack/service-analytics`](packages/services/service-analytics) | Analytics — aggregations, time series, funnels, dashboards |
 | [`@objectstack/service-automation`](packages/services/service-automation) | Automation engine — flows, triggers, and workflow state machines |
 | [`@objectstack/service-cache`](packages/services/service-cache) | Cache — in-memory, Redis, multi-tier |

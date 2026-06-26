@@ -1,5 +1,7 @@
 # ADR-0033: AI-assisted metadata authoring — one agent brain, draft-gated review, type-agnostic apply, open-core boundary
 
+> **🔶 Cloud-owned — superseded in part by cloud ADR-0025 (2026-06-25).** The in-UI AI runtime and the `ask` / `build` agents described here moved to the **cloud / Enterprise** distribution (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed); the open framework exposes AI only via `@objectstack/mcp` (BYO-AI) and ships no in-product `ask` / `build` chat. Retained as historical design context, now **cloud-owned** — see [`cloud/docs/adr/0025-service-ai-to-cloud-open-mcp-only`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md).
+
 **Status**: Accepted (2026-06-02)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type + org overlay), [ADR-0010 (protection)](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0010 (NL→flow)](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring of metadata / actions-as-tools — **the design center**), [ADR-0019](./0019-approval-as-flow-node.md) (approvals as a flow node), [ADR-0027](./0027-metadata-authoring-lifecycle.md) (**staged authoring · draft · publish · promote** — *this ADR routes every AI write through its draft workspace*), [ADR-0032](./0032-unified-expression-layer.md) (validate-by-default, AI-authored expressions)

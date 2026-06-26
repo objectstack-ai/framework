@@ -1,5 +1,7 @@
 # ADR-0038: Build Verification Loop — the agent builds, verifies, and corrects itself
 
+> **🔶 Cloud-owned — superseded in part by cloud ADR-0025 (2026-06-25).** The in-UI AI runtime and the `ask` / `build` agents described here moved to the **cloud / Enterprise** distribution (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed); the open framework exposes AI only via `@objectstack/mcp` (BYO-AI) and ships no in-product `ask` / `build` chat. Retained as historical design context, now **cloud-owned** — see [`cloud/docs/adr/0025-service-ai-to-cloud-open-mcp-only`](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md).
+
 **Status**: Proposed (2026-06-11)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (drafts as the staging layer — this ADR **replaces its human-approval assumption for AI builds** with a machine gate; HITL stays for destructive actions), [ADR-0021](./0021-analytics-dataset-semantic-layer.md) (datasets — what most verification probes exercise), ADR-0037 / [framework#1694](https://github.com/objectstack-ai/framework/pull/1694) (Live Canvas — the *human-visibility* complement to this ADR's *machine-verification*)

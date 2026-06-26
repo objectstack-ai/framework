@@ -17,6 +17,15 @@ service that orchestrates them — and ships individual adapters as
 `IDataEngine` / driver plugins (`driver-sql`, `driver-turso`,
 `driver-memory`) and `IStorageService` / S3 + local FS adapters.
 
+<Callout type="info">
+The Knowledge Protocol contract and the `service-knowledge` orchestrator are open
+framework mechanisms. The AI **consumer** that wires the `search_knowledge` tool
+into an in-product chat loop (`@objectstack/service-ai`, shown below) ships in the
+**cloud / Enterprise** distribution — see cloud ADR-0025 (`service-ai → cloud;
+open = MCP-only`). On the open edition, reach your data through `@objectstack/mcp`
+(BYO-AI) instead.
+</Callout>
+
 This document describes the **why**, the **contract**, the **plugin
 model**, and the **MVP scope** that ships in Phase 1.
 
