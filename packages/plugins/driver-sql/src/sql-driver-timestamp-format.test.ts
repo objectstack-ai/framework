@@ -135,9 +135,12 @@ describe('SqlDriver canonical audit-timestamp format (SQLite)', () => {
     expect(row.updated_at).toBe(canonical);
   });
 
-  it('does not mangle a Field.datetime-typed audit column stored as epoch ms', async () => {
+  it('presents a Field.datetime-typed audit column as canonical ISO-Z (Field.datetime owns it)', async () => {
     // When created_at is declared `datetime`, better-sqlite3 stores a JS Date as
-    // INTEGER ms; the repair must leave that number alone (Field.datetime owns it).
+    // INTEGER ms. The audit repair leaves that number alone, but the Field.datetime
+    // read-normalization (normalizeSqliteDatetimeOutput) now owns its presentation
+    // and folds it to one canonical ISO-8601-Z instant — consistent with every
+    // other datetime field, and with the string-typed audit columns above.
     const dd = new SqlDriver({
       client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true,
     });
@@ -145,8 +148,8 @@ describe('SqlDriver canonical audit-timestamp format (SQLite)', () => {
       await dd.initObjects([{ name: 'evt', fields: { created_at: { type: 'datetime' }, label: { type: 'string' } } }]);
       await dd.create('evt', { id: 'e1', label: 'x', created_at: new Date('2026-04-04T04:04:04.004Z') }, { bypassTenantAudit: true });
       const row: any = await dd.findOne('evt', 'e1', { bypassTenantAudit: true });
-      expect(typeof row.created_at).toBe('number');
-      expect(row.created_at).toBe(Date.parse('2026-04-04T04:04:04.004Z'));
+      expect(typeof row.created_at).toBe('string');
+      expect(row.created_at).toBe('2026-04-04T04:04:04.004Z');
     } finally {
       await dd.disconnect();
     }
