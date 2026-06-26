@@ -146,6 +146,7 @@ export const MyObject = ObjectSchema.create({
 | Choice | `Field.select()` | Status, category, type |
 | Multiple choice | `Field.select({ multiple: true })` | Tags, skills |
 | Reference | `Field.lookup()` | Relationships |
+| User / Person | `Field.user()` | Assignee, owner, collaborators (picks a `sys_user`) |
 | Location | `Field.location()` | GPS coordinates |
 | Address | `Field.address()` | Mailing addresses |
 | Color | `Field.color()` | Brand colors, themes |
