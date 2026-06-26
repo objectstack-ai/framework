@@ -34,6 +34,14 @@ export const FieldType = z.enum([
   // Relational
   'lookup', 'master_detail', // Dynamic reference
   'tree',         // Hierarchical reference
+  // User reference — a lookup specialized to the `sys_user` system object (person
+  // picker; single, or multiple for collaborators/watchers). Stored IDENTICALLY to
+  // 'lookup' (FK string column → sys_user.id; `multiple` ⇒ JSON) and resolved via the
+  // same $expand machinery. The distinct type exists for modelling discoverability
+  // (Studio/AI field palette), the user-search picker, and `current_user` defaults —
+  // NOT a separate storage primitive. Ownership stays the existing `owner_id`
+  // convention (plugin-security); a declarative `owner` is a possible future flag.
+  'user',
   // Media
   'image', 'file', 'avatar', 'video', 'audio',
   // Calculated / System
@@ -720,6 +728,27 @@ export const Field = {
     type: 'master_detail',
     reference,
     ...config
+  } as const),
+
+  /**
+   * User field — a person picker. Semantic specialization of `lookup` with the
+   * target fixed to the `sys_user` system object: stored identically (FK string
+   * column → sys_user.id; `multiple: true` ⇒ JSON array) and resolved via the same
+   * $expand machinery. The distinct `user` type drives the Studio/AI field palette,
+   * the user-search picker, and `current_user` defaults — without re-implementing
+   * lookup storage.
+   *
+   * @example Single assignee
+   * Field.user({ label: 'Assignee' })
+   * @example Collaborators / watchers (multi)
+   * Field.user({ label: 'Watchers', multiple: true })
+   * @example Auto-fill the acting user on create
+   * Field.user({ label: 'Reporter', defaultValue: 'current_user' })
+   */
+  user: (config: FieldInput = {}) => ({
+    type: 'user',
+    reference: 'sys_user',
+    ...config,
   } as const),
 
   // Enhanced Field Type Helpers

@@ -783,6 +783,14 @@ export class ObjectQL implements IDataEngine {
             object, field: f.name, error: result.error,
           });
         }
+      } else if (dv === 'current_user') {
+        // `current_user` token → the acting user's id at insert time. Declarative
+        // counterpart to writing a beforeInsert hook; mirrors the 'NOW()' string
+        // convention and is resolved app-side per request (driver-agnostic), so
+        // `Field.user({ defaultValue: 'current_user' })` auto-fills the actor.
+        // When there is no authenticated user (system/anonymous), leave it unset
+        // and let required-validation decide — never stamp a bogus owner.
+        if (execCtx?.userId != null) out[f.name] = String(execCtx.userId);
       } else {
         out[f.name] = dv;
       }
@@ -1766,7 +1774,9 @@ export class ObjectQL implements IDataEngine {
 
       // Skip if field not found or not a relationship type
       if (!fieldDef || !fieldDef.reference) continue;
-      if (fieldDef.type !== 'lookup' && fieldDef.type !== 'master_detail') continue;
+      // `user` is a lookup specialized to sys_user — it carries the same `reference`
+      // and id storage, so it expands through this exact path (single or multiple).
+      if (fieldDef.type !== 'lookup' && fieldDef.type !== 'master_detail' && fieldDef.type !== 'user') continue;
 
       const referenceObject = fieldDef.reference;
 

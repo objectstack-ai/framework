@@ -3649,7 +3649,11 @@ export class RestServer {
                         const allow = (name: string, cfg: any): boolean => {
                             const def = objectSchema?.fields?.[name];
                             const t = def?.type;
-                            if (t !== 'lookup' && t !== 'master_detail') return true;
+                            // `user` is a lookup specialized to sys_user — same risk as a
+                            // raw lookup: surfacing it on an anonymous public form would
+                            // expose unrestricted user search to the internet. Gate it
+                            // behind the same `publicPicker` opt-in.
+                            if (t !== 'lookup' && t !== 'master_detail' && t !== 'user') return true;
                             return !!cfg?.publicPicker;
                         };
                         const sections = match.form.sections.map((sec: any) => {

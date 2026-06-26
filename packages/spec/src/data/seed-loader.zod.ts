@@ -49,8 +49,8 @@ export const ReferenceResolutionSchema = lazySchema(() => z.object({
    */
   targetField: z.string().default('name').describe('Field on target object used for matching'),
 
-  /** The field type that triggered this resolution (lookup or master_detail) */
-  fieldType: z.enum(['lookup', 'master_detail']).describe('Relationship field type'),
+  /** The field type that triggered this resolution (lookup, master_detail, or user) */
+  fieldType: z.enum(['lookup', 'master_detail', 'user']).describe('Relationship field type'),
 }).describe('Describes how a field reference is resolved during seed loading'));
 
 export type ReferenceResolution = z.infer<typeof ReferenceResolutionSchema>;

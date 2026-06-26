@@ -1478,7 +1478,7 @@ export class ApprovalService implements IApprovalService {
       const fields = schema?.fields ?? {};
       const out: Array<{ key: string; reference: string }> = [];
       for (const [key, f] of Object.entries<any>(fields)) {
-        if ((f?.type === 'lookup' || f?.type === 'master_detail') && f?.reference) {
+        if ((f?.type === 'lookup' || f?.type === 'master_detail' || f?.type === 'user') && f?.reference) {
           out.push({ key, reference: String(f.reference) });
         }
       }

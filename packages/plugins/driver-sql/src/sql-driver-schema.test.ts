@@ -158,6 +158,36 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     expect(res[0].completion).toBe(0.85);
   });
 
+  it('should store a `user` field like a lookup (string id; multiple ⇒ JSON)', async () => {
+    // `user` is a lookup specialized to sys_user — same physical storage as any
+    // lookup: a string id column, or a JSON array when multiple.
+    const objects = [
+      {
+        name: 'ticket_user_test',
+        fields: {
+          title: { type: 'text' } as any,
+          owner: { type: 'user', reference: 'sys_user' } as any,
+          watchers: { type: 'user', reference: 'sys_user', multiple: true } as any,
+        },
+      },
+    ];
+
+    await driver.initObjects(objects);
+
+    const columns = await knexInstance('ticket_user_test').columnInfo();
+    expect(columns).toHaveProperty('owner');
+    expect(columns).toHaveProperty('watchers');
+
+    await driver.create('ticket_user_test', {
+      title: 'T',
+      owner: 'u-1',
+      watchers: ['u-2', 'u-3'],
+    });
+    const res = await driver.find('ticket_user_test', {});
+    expect(res[0].owner).toBe('u-1');
+    expect(res[0].watchers).toEqual(['u-2', 'u-3']);
+  });
+
   it('should handle special fields (formula, summary, auto_number)', async () => {
     const objects = [
       {

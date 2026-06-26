@@ -183,7 +183,7 @@ export function computeViewReferenceDiagnostics(
     if (kanban?.groupByField) {
         requireField(kanban.groupByField, 'kanban.groupByField');
         const def = fields.get(kanban.groupByField);
-        if (def && def.type && !['select', 'multi-select', 'boolean', 'lookup', 'master_detail'].includes(def.type)) {
+        if (def && def.type && !['select', 'multi-select', 'boolean', 'lookup', 'master_detail', 'user'].includes(def.type)) {
             errors.push({
                 path: 'kanban.groupByField',
                 message: `Field "${kanban.groupByField}" (type "${def.type}") cannot group a kanban — use a select-like field`,

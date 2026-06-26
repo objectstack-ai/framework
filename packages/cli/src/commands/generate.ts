@@ -734,6 +734,11 @@ function generateMigrationTs(config: Record<string, unknown>): string {
         case 'uuid': case 'lookup': case 'master_detail':
           colMethod = `table.uuid('${fieldName}')`;
           break;
+        // `user` references sys_user, whose id is a text identifier (not a uuid),
+        // so store it as a string column — consistent with the runtime sql-driver.
+        case 'user':
+          colMethod = `table.string('${fieldName}')`;
+          break;
         default:
           colMethod = `table.text('${fieldName}')`;
       }

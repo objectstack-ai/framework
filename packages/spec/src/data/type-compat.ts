@@ -141,7 +141,7 @@ const CANONICAL_TO_FIELD: Record<
   time: { suggested: 'time', exact: ['time'], lossy: [] },
   datetime: { suggested: 'datetime', exact: ['datetime'], lossy: ['date'] },
   json: { suggested: 'json', exact: ['json', 'composite', 'repeater', 'record', 'location', 'address', 'tags', 'multiselect'], lossy: ['text'] },
-  uuid: { suggested: 'text', exact: ['text', 'lookup', 'master_detail'], lossy: [] },
+  uuid: { suggested: 'text', exact: ['text', 'lookup', 'master_detail', 'user'], lossy: [] },
   binary: { suggested: 'file', exact: ['file', 'image', 'signature'], lossy: ['text'] },
   enum: { suggested: 'select', exact: ['select', 'radio', 'text'], lossy: [] },
   array: { suggested: 'multiselect', exact: ['multiselect', 'checkboxes', 'tags', 'json'], lossy: ['text'] },

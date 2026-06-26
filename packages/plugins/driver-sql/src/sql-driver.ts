@@ -2828,7 +2828,12 @@ export class SqlDriver implements IDataDriver {
       case 'time':
         col = table.time(name);
         break;
+      // `user` is a lookup specialized to sys_user (ADR: lookup → sys_user). Same
+      // physical storage as any lookup: a string column holding the related row id
+      // (multiple ⇒ JSON, handled at the top of createColumn). No bespoke storage
+      // primitive — it shares this exact DDL path so reads/$expand/FK stay uniform.
       case 'lookup':
+      case 'user':
         col = table.string(name);
         if (field.reference_to) {
           table.foreign(name).references('id').inTable(field.reference_to);

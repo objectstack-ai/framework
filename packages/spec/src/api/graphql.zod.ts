@@ -1090,6 +1090,7 @@ export const mapFieldTypeToGraphQL = (fieldType: z.infer<typeof FieldType>): str
     // Relational
     'lookup': 'ID',
     'master_detail': 'ID',
+    'user': 'ID',  // lookup specialized to sys_user — id-valued, same as lookup
     'tree': 'ID',
     
     // Media
