@@ -263,6 +263,32 @@ Field.lookup('contact', {
 })
 ```
 
+### User Fields
+
+Pick a person — the equivalent of Airtable's *Collaborator* or Salesforce's
+`Lookup(User)`. A `user` field is a **lookup specialized to the built-in
+`sys_user` object**: it stores the user's id (a real foreign key), resolves to
+the user's name/avatar via `$expand`, and renders as a searchable people picker.
+You never reference `sys_user` by hand.
+
+```typescript
+// Single assignee
+Field.user({ label: 'Assignee' })
+
+// Collaborators / watchers (multiple)
+Field.user({ label: 'Watchers', multiple: true })
+
+// Auto-fill the acting user on create (record owner / reporter)
+Field.user({ label: 'Owner', defaultValue: 'current_user' })
+```
+
+`defaultValue: 'current_user'` stamps the authenticated user's id at insert time
+(the people-field counterpart to `'NOW()'` for timestamps). Because a `user`
+field is stored exactly like a lookup, an existing `Field.lookup('sys_user')`
+is equivalent at the storage layer — adopt `Field.user()` with no data
+migration. Record ownership and row-level security continue to use the existing
+`owner_id` convention.
+
 ### Address Field
 
 Structured address data:
