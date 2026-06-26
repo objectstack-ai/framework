@@ -230,14 +230,28 @@ export class AuthPlugin implements Plugin {
         if (this.authManager) {
           await this.bindAuthSettings(ctx);
 
-          try {
-            const emailSvc = ctx.getService<any>('email');
-            if (emailSvc) {
-              this.authManager.setEmailService(emailSvc);
-              ctx.logger.info('Auth: email service wired (transactional mail enabled)');
+          let emailSvc: any;
+          try { emailSvc = ctx.getService<any>('email'); } catch { emailSvc = undefined; }
+          if (emailSvc) {
+            this.authManager.setEmailService(emailSvc);
+            ctx.logger.info('Auth: email service wired (transactional mail enabled)');
+          } else {
+            // No email service. The verification / password-reset callbacks now
+            // THROW when invoked without a transport (so an explicit resend
+            // reports a real error rather than faking success). If verification
+            // is REQUIRED, that means every signup would be stuck — surface the
+            // misconfiguration loudly at boot instead of one failure per signup.
+            const requiresEmail = !!this.authManager.getPublicConfig?.()?.emailPassword?.requireEmailVerification;
+            if (requiresEmail) {
+              ctx.logger.error(
+                'Auth: email verification is REQUIRED but NO email service is registered — '
+                + 'verification & password-reset emails will FAIL and new users will be locked '
+                + 'out at sign-in. Register an email service (e.g. EmailServicePlugin + OS_EMAIL_*) '
+                + 'or disable verification (OS_AUTH_REQUIRE_EMAIL_VERIFICATION=false).',
+              );
+            } else {
+              ctx.logger.info('Auth: no email service registered — transactional mail disabled');
             }
-          } catch {
-            ctx.logger.info('Auth: no email service registered — auth callbacks will log instead of sending');
           }
 
           // Bind the email brand name (`{{appName}}`) to the live
