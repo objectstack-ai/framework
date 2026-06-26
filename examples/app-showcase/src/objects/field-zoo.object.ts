@@ -95,6 +95,11 @@ export const FieldZoo = ObjectSchema.create({
     f_master_detail: Field.masterDetail('showcase_project', { label: 'Master-Detail → Project' }),
     f_tree: { type: 'tree', label: 'Tree (self/category)', reference: 'showcase_category' },
 
+    // ── User (lookup specialized to sys_user) ────────────────────────────
+    f_user: Field.user({ label: 'User → sys_user (single)' }),
+    f_users: Field.user({ label: 'Users (multiple)', multiple: true }),
+    f_owner: Field.user({ label: 'Owner (current_user default)', defaultValue: 'current_user' }),
+
     // ── Media ────────────────────────────────────────────────────────────
     f_image: Field.image({ label: 'Image' }),
     f_file: Field.file({ label: 'File' }),
