@@ -58,6 +58,13 @@ jobs:
       - name: Doc/skill authoring guard
         run: pnpm check:doc-authoring
 
+      # Authorization resolution must stay single-sourced (resolveAuthzContext,
+      # @objectstack/core). Guards against a duplicate resolver copy drifting on a
+      # security path (the REST-vs-dispatcher sys_user_role drift) and against an
+      # entry point silently dropping the delegation.
+      - name: Single authz resolver guard
+        run: pnpm check:authz-resolver
+
   typecheck:
     name: TypeScript Type Check
     runs-on: ubuntu-latest
