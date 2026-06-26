@@ -82,6 +82,47 @@ const NUMERIC_SCALAR_TYPES = new Set<string>([
   'rating', 'slider', 'progress',
 ]);
 
+/**
+ * The builtin audit-timestamp columns every managed object carries. They are
+ * stamped to a single canonical instant format on SQLite (see
+ * `stampInsertTimestamps`/`update`) and read-repaired by
+ * `repairNaiveUtcAuditTimestamp`.
+ */
+const AUDIT_TIMESTAMP_COLUMNS = ['created_at', 'updated_at'] as const;
+
+/**
+ * Read-side repair for the builtin audit timestamps on SQLite.
+ *
+ * SQLite has no native timestamp type. Rows written before the canonical-format
+ * fix — or by a raw insert that fell back to the `CURRENT_TIMESTAMP` column
+ * default — hold a timezone-NAIVE, space-separated string
+ * (`'YYYY-MM-DD HH:MM:SS[.fff]'`). `Date.parse` reads such a zone-less string as
+ * LOCAL time, so a stored UTC wall-clock silently shifts by the host offset on
+ * any non-UTC runtime — the bug that made the objectos freshness probe never
+ * evict. Re-emit those values as canonical ISO-8601 with an explicit `Z`,
+ * interpreting the stored wall-clock as UTC (exactly what `CURRENT_TIMESTAMP`
+ * and the legacy UPDATE stamp both wrote).
+ *
+ * Idempotent and total: a value that already carries an explicit zone (`…Z` or
+ * `±HH:MM`) is returned unchanged, so re-reading a normalised row is a no-op
+ * (this keeps optimistic-lock `updated_at` tokens stable — see
+ * objectql `assertVersionMatch`). Non-strings (e.g. a `Field.datetime`-typed
+ * audit column stored as epoch-ms INTEGER) and unrecognised shapes pass
+ * through untouched.
+ */
+function repairNaiveUtcAuditTimestamp(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const s = value.trim();
+  if (s === '') return value;
+  // Already zone-explicit (`…Z` or `±HH:MM`) — leave as-is (idempotent).
+  if (/[Zz]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) return value;
+  // Zone-naive `YYYY-MM-DD[ T]HH:MM:SS[.fff]` → interpret the wall-clock as UTC.
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/.exec(s);
+  if (!m) return value;
+  const d = new Date(`${m[1]}T${m[2]}Z`);
+  return Number.isNaN(d.getTime()) ? value : d.toISOString();
+}
+
 // ── Introspection Types ──────────────────────────────────────────────────────
 
 export interface IntrospectedColumn {
@@ -612,6 +653,7 @@ export class SqlDriver implements IDataDriver {
 
     const builder = this.getBuilder(object, options);
     const formatted = this.applyWriteColumnMap(object, this.formatInput(object, toInsert));
+    this.stampInsertTimestamps(object, formatted);
 
     const result = await builder.insert(formatted).returning('*');
     return this.formatOutput(object, result[0]);
@@ -921,6 +963,33 @@ export class SqlDriver implements IDataDriver {
     }
   }
 
+  /**
+   * Stamp the builtin audit timestamps to one canonical ISO-8601-with-`Z`
+   * instant on the SQLite write paths (`create`/`bulkCreate`/`upsert`), so
+   * INSERT and UPDATE agree on a single zone-explicit format.
+   *
+   * Without this, an insert that omits `created_at`/`updated_at` falls back to
+   * the column's `CURRENT_TIMESTAMP` default, which on SQLite renders a
+   * zone-NAIVE, space-separated `'YYYY-MM-DD HH:MM:SS'` (no millis, no zone) —
+   * the same ambiguity the old UPDATE stamp had. Stamping app-side (rather than
+   * changing the column default) fixes this for EXISTING tenant databases
+   * immediately, since their tables keep the legacy default. Legacy/raw rows
+   * still written zone-naive are repaired on read by
+   * `repairNaiveUtcAuditTimestamp`.
+   *
+   * Only fills a slot the caller left empty — an explicit value (a seed fixture,
+   * the sys_metadata writer, a service outbox) is preserved. No-op for
+   * timestamp-less objects and for Postgres/MySQL, whose native `now()` column
+   * default already stores a zone-aware TIMESTAMP.
+   */
+  protected stampInsertTimestamps(object: string, formatted: Record<string, any>): void {
+    if (!this.isSqlite || !this.tablesWithTimestamps.has(object)) return;
+    const iso = new Date().toISOString();
+    for (const col of AUDIT_TIMESTAMP_COLUMNS) {
+      if (formatted[col] === undefined || formatted[col] === null) formatted[col] = iso;
+    }
+  }
+
   async update(object: string, id: string | number, data: Record<string, any>, options?: DriverOptions): Promise<any> {
     this.auditMissingTenant(object, 'update', options);
     const builder = this.getBuilder(object, options).where('id', id);
@@ -928,12 +997,15 @@ export class SqlDriver implements IDataDriver {
     const formatted = this.applyWriteColumnMap(object, this.formatInput(object, data));
 
     if (this.tablesWithTimestamps.has(object)) {
-      if (this.isSqlite) {
-        const now = new Date();
-        formatted.updated_at = now.toISOString().replace('T', ' ').replace('Z', '');
-      } else {
-        formatted.updated_at = this.knex.fn.now();
-      }
+      // Canonical instant format. On SQLite (no native timestamp type) stamp
+      // full ISO-8601 WITH an explicit `Z` — matching the insert paths
+      // (`stampInsertTimestamps`) so create and update agree on one
+      // zone-explicit format. The previous `…replace('T',' ').replace('Z','')`
+      // wrote a zone-NAIVE, space-separated string that `Date.parse` reads as
+      // LOCAL time, silently shifting the instant by the host offset on a
+      // non-UTC runtime (the objectos freshness-probe miss). Postgres/MySQL keep
+      // native `now()` — a real zone-aware TIMESTAMP that never had the issue.
+      formatted.updated_at = this.isSqlite ? new Date().toISOString() : this.knex.fn.now();
     }
 
     await builder.update(formatted);
@@ -959,10 +1031,17 @@ export class SqlDriver implements IDataDriver {
     await this.fillAutoNumberFields(object, toUpsert, options);
 
     const formatted = this.applyWriteColumnMap(object, this.formatInput(object, toUpsert));
+    this.stampInsertTimestamps(object, formatted);
     const mergeKeys = conflictKeys && conflictKeys.length > 0 ? conflictKeys : ['id'];
 
     const builder = this.getBuilder(object, options);
-    await builder.insert(formatted).onConflict(mergeKeys).merge();
+    // `created_at` is insert-only — never overwrite it when an existing row is
+    // merged on conflict (the stamped/seeded value belongs to the original
+    // insert). Everything else (incl. `updated_at`) merges as before, so an
+    // upsert that updates a row still advances `updated_at`.
+    const mergeColumns = Object.keys(formatted).filter((c) => c !== 'created_at');
+    const insertion = builder.insert(formatted).onConflict(mergeKeys);
+    await (mergeColumns.length > 0 ? insertion.merge(mergeColumns) : insertion.merge());
 
     const readback = this.getBuilder(object, options).where('id', toUpsert.id);
     this.applyTenantScope(readback, object, options);
@@ -990,6 +1069,9 @@ export class SqlDriver implements IDataDriver {
         // Reserve a persistent sequence value for each row's autonumber
         // field(s) — the engine no longer pre-fills these (see #1603).
         await this.fillAutoNumberFields(object, row, options);
+        // Same canonical-instant stamp as create()/upsert() so bulk-inserted
+        // rows don't fall back to the zone-naive CURRENT_TIMESTAMP default.
+        this.stampInsertTimestamps(object, row);
       }
     }
     const builder = this.getBuilder(object, options);
@@ -2870,6 +2952,16 @@ export class SqlDriver implements IDataDriver {
             if (!Number.isNaN(n)) data[field] = n;
           }
         }
+      }
+
+      // Builtin audit timestamps: repair any legacy/raw row stored as a
+      // zone-naive, space-separated string (CURRENT_TIMESTAMP or the pre-fix
+      // UPDATE stamp) to canonical ISO-8601 with `Z`, so reads are unambiguous
+      // and uniform regardless of when/how the row was written. Idempotent on
+      // already-canonical values; mirrors the legacy-row read-repair the
+      // `Field.date`/numeric paths already do. See `repairNaiveUtcAuditTimestamp`.
+      for (const col of AUDIT_TIMESTAMP_COLUMNS) {
+        if (data[col] !== undefined) data[col] = repairNaiveUtcAuditTimestamp(data[col]);
       }
     }
 
