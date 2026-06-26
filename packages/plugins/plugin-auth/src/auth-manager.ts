@@ -181,6 +181,18 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
   }) => void | Promise<void>;
 
   /**
+   * D5.1 — OIDC OP authorization gate (cloud-as-IdP app-assignment).
+   * When set, it is called for an AUTHENTICATED subject on
+   * `/oauth2/authorize` before an authorization code is issued, with the
+   * subject + the requesting `clientId`. Return `false` to DENY (no code).
+   * The cloud control plane uses it to require org-membership: a cloud user
+   * may only obtain a code for an env client (`project_<envId>`) of an org
+   * they belong to. Unset (open editions / self-host, where the OP is not a
+   * multi-tenant issuer) = allow. Host is expected to fail CLOSED on error.
+   */
+  oidcAuthorizeGate?: (params: { userId: string; clientId: string }) => boolean | Promise<boolean>;
+
+  /**
    * Base path for auth routes
    * Forwarded to better-auth's basePath option so it can match incoming
    * request URLs without manual path rewriting.
@@ -503,6 +515,39 @@ export class AuthManager {
       // sees `userCount > 0` and the toggle is enforced again.
       hooks: {
         before: createAuthMiddleware(async (ctx: any) => {
+          // ── D5.1: cloud-as-IdP authorization gate ───────────────────
+          // On the OIDC OP's /oauth2/authorize, when a host gate is set
+          // (cloud control plane), an AUTHENTICATED subject must be
+          // authorized for the requesting client (env) before a code is
+          // issued — this enforces org-membership (app-assignment). Unset
+          // (open editions / self-host) → no gate. Unauthenticated → fall
+          // through so the OP redirects to login; the gate runs on the
+          // return pass (or immediately for a bearer/cookie session).
+          if (ctx?.path === '/oauth2/authorize' && this.config.oidcAuthorizeGate) {
+            const clientId = ctx?.query?.client_id;
+            if (clientId) {
+              let gateUserId: string | undefined;
+              try {
+                const { getSessionFromCtx } = await import('better-auth/api');
+                const s: any = await getSessionFromCtx(ctx as any);
+                gateUserId = s?.user?.id ?? s?.session?.userId;
+              } catch { /* no session → OP redirects to login */ }
+              if (gateUserId) {
+                const allowed = await this.config.oidcAuthorizeGate({
+                  userId: gateUserId,
+                  clientId: String(clientId),
+                });
+                if (!allowed) {
+                  const { APIError } = await import('better-auth/api');
+                  throw new APIError('FORBIDDEN', {
+                    message: 'You are not authorized to sign in to this environment.',
+                    code: 'ENV_ACCESS_DENIED',
+                  });
+                }
+              }
+            }
+            return;
+          }
           if (ctx?.path !== '/sign-up/email') return;
           const ep = ctx?.context?.options?.emailAndPassword;
           if (!ep?.disableSignUp) return;
