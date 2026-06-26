@@ -79,3 +79,11 @@ export {
   type GeneratedApiKey,
   type ApiKeyPrincipal,
 } from './api-key.js';
+
+export {
+  resolveAuthzContext,
+  resolveLocalizationContext,
+  type ResolvedAuthzContext,
+  type ResolveAuthzInput,
+  type ResolveLocalizationInput,
+} from './resolve-authz-context.js';

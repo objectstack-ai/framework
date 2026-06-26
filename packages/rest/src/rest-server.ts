@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { IHttpServer, resolveApiKeyPrincipal } from '@objectstack/core';
+import { IHttpServer, resolveAuthzContext, resolveLocalizationContext } from '@objectstack/core';
 import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
 import { ObjectStackProtocol } from '@objectstack/spec/api';
@@ -917,182 +917,46 @@ export class RestServer {
                 return undefined;
             }
 
-            const permissions: string[] = [];
-            const systemPermissions: string[] = [];
-            const roles: string[] = [];
+            // Resolve the data engine for this scope (shared by the resolver below).
+            const ql: any = kernel
+                ? await kernel.getServiceAsync('objectql').catch(() => undefined)
+                : (this.objectQLProvider ? await this.objectQLProvider(environmentId).catch(() => undefined) : undefined);
 
-            // Resolve the data engine once — needed by the API-key verifier and
-            // reused by the role/permission lookups below.
-            let identityQl: any;
-            if (kernel) identityQl = await kernel.getServiceAsync('objectql').catch(() => undefined);
-            if (!identityQl && this.objectQLProvider) {
-                identityQl = await this.objectQLProvider(environmentId).catch(() => undefined);
-            }
+            // Delegate ALL identity + role/permission/RLS aggregation to the SINGLE
+            // shared resolver (`resolveAuthzContext`, @objectstack/core) — the same one
+            // the runtime dispatcher uses, so the REST and dispatcher entry points can
+            // never drift on authorization. (This path previously kept its own copy that
+            // silently omitted sys_user_role / sys_role_permission_set / platform_admin /
+            // ai_seat — see the resolver's module doc.)
+            const getSession = async (h: any) => {
+                try { return await api.getSession({ headers: h }); } catch { return undefined; }
+            };
+            const authz = await resolveAuthzContext({ ql, headers, getSession });
+            if (!authz.userId) return undefined;
 
-            // ── Identity: API key (sys_api_key) takes precedence, then session.
-            //    Verified by the SAME `resolveApiKeyPrincipal` (@objectstack/core)
-            //    the dispatcher/MCP path uses, so REST + MCP never drift on how a
-            //    key authenticates. Anonymous (neither) → undefined → 401.
-            let userId: string;
-            let tenantId: string | undefined;
-            let email: string | undefined;
-            const keyPrincipal = await resolveApiKeyPrincipal(identityQl, headers).catch(() => undefined);
-            if (keyPrincipal) {
-                userId = keyPrincipal.userId;
-                tenantId = keyPrincipal.tenantId;
-                for (const s of keyPrincipal.scopes) if (!permissions.includes(s)) permissions.push(s);
-            } else {
-                const session = await api.getSession({ headers });
-                if (!session?.user?.id) return undefined;
-                userId = session.user.id;
-                tenantId = session.session?.activeOrganizationId ?? undefined;
-                if (session.user?.email) email = String(session.user.email);
-            }
-            // Resolve the caller's UNIQUE email for `current_user.email` RLS owner
-            // policies (e.g. `owner = current_user.email`). Session-supplied when
-            // present, else a bounded sys_user lookup (the API-key path). Email is
-            // the unique owner anchor — display `name` is never exposed to RLS
-            // (names collide, and a collision on an ownership predicate leaks access).
-            if (!email && identityQl && typeof identityQl.find === 'function') {
-                const urows = await identityQl.find('sys_user', { where: { id: userId }, limit: 1, context: { isSystem: true } } as any).catch(() => []);
-                if ((urows as any)?.[0]?.email) email = String((urows as any)[0].email);
-            }
-            // Look up the link tables to surface roles + permission set names.
-            // Skipping this lookup would silently ignore admin/role grants —
-            // including the platform-admin promotion seeded by
-            // `bootstrapPlatformAdmin` — and force every authenticated user
-            // through the `member_default` fallback path.
-            try {
-                let ql: any;
-                if (kernel) {
-                    ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
-                }
-                if (!ql && this.objectQLProvider) {
-                    ql = await this.objectQLProvider(environmentId).catch(() => undefined);
-                }
-                if (ql && typeof ql.find === 'function') {
-                    const sysOpts = { context: { isSystem: true } };
-                    const memberRows = await ql.find('sys_member', {
-                        where: tenantId ? { user_id: userId, organization_id: tenantId } : { user_id: userId },
-                        limit: 50,
-                        ...sysOpts,
-                    } as any).catch(() => []);
-                    for (const m of (memberRows ?? []) as any[]) {
-                        if (typeof m.role === 'string') {
-                            for (const r of m.role.split(',').map((s: string) => s.trim()).filter(Boolean)) {
-                                if (!roles.includes(r)) roles.push(r);
-                            }
-                        }
-                    }
-                    const upsRows = await ql.find('sys_user_permission_set', {
-                        where: { user_id: userId },
-                        limit: 100,
-                        ...sysOpts,
-                    } as any).catch(() => []);
-                    const psIds = new Set<string>();
-                    for (const r of (upsRows ?? []) as any[]) {
-                        const orgScope = r.organization_id ?? null;
-                        if (!orgScope || (tenantId && orgScope === tenantId)) {
-                            const pid = r.permission_set_id ?? r.permissionSetId;
-                            if (pid) psIds.add(pid);
-                        }
-                    }
-                    if (psIds.size > 0) {
-                        const psRows = await ql.find('sys_permission_set', {
-                            where: { id: { $in: Array.from(psIds) } },
-                            limit: 500,
-                            ...sysOpts,
-                        } as any).catch(() => []);
-                        for (const ps of (psRows ?? []) as any[]) {
-                            if (ps.name && !permissions.includes(ps.name)) permissions.push(ps.name);
-                            // System permissions may be stored as a JSON string
-                            // (driver-sql round-trips array columns as text).
-                            // Mirrors runtime/src/security/resolve-execution-context.ts.
-                            const rawSys = typeof ps.system_permissions === 'string'
-                                ? (() => { try { return JSON.parse(ps.system_permissions); } catch { return []; } })()
-                                : (ps.system_permissions ?? ps.systemPermissions);
-                            if (Array.isArray(rawSys)) {
-                                for (const sp of rawSys) {
-                                    if (typeof sp === 'string' && !systemPermissions.includes(sp)) {
-                                        systemPermissions.push(sp);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch { /* fall through with empty perms */ }
-            // Pre-resolve fellow-org user IDs so RLS can scope identity
-            // tables (sys_user) to org collaborators. Cap at 1000. See
-            // `@objectstack/runtime/security/resolve-execution-context.ts`
-            // for the mirror implementation in the dispatcher path.
-            let org_user_ids: string[] = [userId];
-            if (tenantId) {
-                try {
-                    let ql: any;
-                    if (kernel) {
-                        ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
-                    }
-                    if (!ql && this.objectQLProvider) {
-                        ql = await this.objectQLProvider(environmentId).catch(() => undefined);
-                    }
-                    if (ql && typeof ql.find === 'function') {
-                        const sysOpts = { context: { isSystem: true } };
-                        const memberRows = await ql.find('sys_member', {
-                            where: { organization_id: tenantId },
-                            limit: 1000,
-                            ...sysOpts,
-                        } as any).catch(() => []);
-                        const ids = new Set<string>([userId]);
-                        for (const m of (memberRows ?? []) as any[]) {
-                            const uid = m.user_id ?? m.userId;
-                            if (typeof uid === 'string' && uid.length > 0) ids.add(uid);
-                        }
-                        org_user_ids = Array.from(ids);
-                    }
-                } catch { /* fall back to self-only */ }
-            }
-            // Reference timezone + locale for date rendering and analytics date
-            // bucketing (ADR-0053 Phase 2 / localization manifest #2006). Resolved
-            // through the `settings` service so the 4-tier cascade — including the
-            // env override `OS_LOCALIZATION_TIMEZONE` — is honoured; `sys_setting`
-            // rows alone would miss the env/global tiers. Best-effort: any failure
-            // leaves the engine's UTC default. Mirrors the dispatcher path's
-            // `resolveLocalization` (runtime/security/resolve-execution-context.ts).
-            let timezone: string | undefined;
-            let locale: string | undefined;
-            let currency: string | undefined;
-            try {
-                const settings = this.settingsServiceProvider
-                    ? await this.settingsServiceProvider(environmentId).catch(() => undefined)
-                    : undefined;
-                if (settings && typeof settings.get === 'function') {
-                    const sctx = { tenantId, userId };
-                    const [tzRes, localeRes, currencyRes] = await Promise.all([
-                        settings.get('localization', 'timezone', sctx).catch(() => undefined),
-                        settings.get('localization', 'locale', sctx).catch(() => undefined),
-                        settings.get('localization', 'currency', sctx).catch(() => undefined),
-                    ]);
-                    const tzVal = tzRes?.value;
-                    const localeVal = localeRes?.value;
-                    const currencyVal = currencyRes?.value;
-                    if (typeof tzVal === 'string' && tzVal.trim()) timezone = tzVal.trim();
-                    if (typeof localeVal === 'string' && localeVal.trim()) locale = localeVal.trim();
-                    if (typeof currencyVal === 'string' && currencyVal.trim()) currency = currencyVal.trim().toUpperCase();
-                }
-            } catch { /* best-effort — fall back to engine UTC default */ }
+            const settings = this.settingsServiceProvider
+                ? await this.settingsServiceProvider(environmentId).catch(() => undefined)
+                : undefined;
+            const localization = await resolveLocalizationContext({
+                ql,
+                settings,
+                tenantId: authz.tenantId,
+                userId: authz.userId,
+            });
+
             return {
-                userId,
-                tenantId,
-                email,
-                roles,
-                permissions,
-                systemPermissions,
+                userId: authz.userId,
+                tenantId: authz.tenantId,
+                email: authz.email,
+                roles: authz.roles,
+                permissions: authz.permissions,
+                systemPermissions: authz.systemPermissions,
+                ...(authz.tabPermissions ? { tabPermissions: authz.tabPermissions } : {}),
                 isSystem: false,
-                org_user_ids,
-                ...(timezone ? { timezone } : {}),
-                ...(locale ? { locale } : {}),
-                ...(currency ? { currency } : {}),
+                org_user_ids: authz.org_user_ids,
+                ...(localization.timezone ? { timezone: localization.timezone } : {}),
+                ...(localization.locale ? { locale: localization.locale } : {}),
+                ...(localization.currency ? { currency: localization.currency } : {}),
                 // Internal: resolved kernel so the nav-serving path can probe
                 // requiresService capability gates (ADR-0057 D10). NOT an
                 // authorization input — never read by RLS/permission logic.
