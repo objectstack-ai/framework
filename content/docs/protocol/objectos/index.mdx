@@ -126,8 +126,8 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
 
 **ObjectOS Approach:**
 ```bash
-# Publish a compiled artifact to ObjectStack Cloud
-os publish dist/objectstack.json --environment <environment-id>
+# Publish a compiled artifact as a versioned package to ObjectStack Cloud
+os package publish dist/objectstack.json --env <environment-id> --install
 # ✓ Validated dependencies
 # ✓ Applied schema changes
 # ✓ Updated configuration
@@ -368,7 +368,7 @@ permissions:
 ```
 
 ### Idempotent Operations
-Run `os publish` 100 times → Same result.
+Run `os package publish` 100 times → Same result.
 - Installing a plugin twice does nothing (it's already installed)
 - Applying same configuration twice doesn't duplicate settings
 - Schema migrations are versioned (run once, skip if already applied)
@@ -481,7 +481,7 @@ const message = context.i18n.t('slack.button.send');
 | **i18n** | Built-in engine | Manual (libraries) | Manual | Manual |
 | **Dependency Resolution** | Semantic versioning | Manual (YAML) | Manual | Manual |
 | **Zero-Downtime Upgrades** | Declarative | Rolling updates | Blue-green | Git push |
-| **Developer UX** | `os publish` | `kubectl apply` | `cf push` | `git push heroku` |
+| **Developer UX** | `os package publish` | `kubectl apply` | `cf push` | `git push heroku` |
 
 **Key Differentiator:** ObjectOS is **application-aware**. Kubernetes knows about containers, not plugins. ObjectOS knows about ObjectQL objects, ObjectUI views, and business logic dependencies.
 

@@ -177,7 +177,7 @@ os doctor         # Check environment health
 os explain        # Explain protocol concepts on the command line
 ```
 
-Cloud, package registry, and environment management subcommands (`os publish`, `os rollback`, `os package`, `os login`, `os whoami`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
+Cloud, package registry, and environment management subcommands (`os package publish`, `os package install`, `os login`, `os whoami`, `os environments`, `os cloud …`) are available when targeting an ObjectStack Cloud control plane.
 
 ## Use the generated API
 

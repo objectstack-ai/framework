@@ -676,11 +676,11 @@ os build
 # 3. Compare two configs to detect breaking changes
 os diff ./before.json ./after.json
 
-# 4. Publish the compiled artifact to ObjectStack Cloud
-os publish
+# 4. Publish the compiled artifact as a versioned package to ObjectStack Cloud
+os package publish
 
-# 5. Roll back / forward to a previously published revision
-os rollback --commit <commit-id>
+# 5. Roll back / forward by installing a prior package version
+os package publish ./before.json --env <env-id> --install
 ```
 
 ## Best Practices

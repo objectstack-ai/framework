@@ -76,6 +76,20 @@ The `seq` is the single source of truth for ordering. The Studio status badge (`
 
 ---
 
+## Package-first authoring (ADR-0070)
+
+Every runtime-authored item lives inside a **writable package** — there are no
+orphans. Code-defined and installed packages are **read-only** at runtime, so the
+first step of any Studio/API authoring action is to target a *writable* package (a
+"base"): a create/update aimed at a read-only package is rejected, and the author
+is asked to pick or create a writable base first. New objects, fields, views, and
+flows are namespaced into that package — which is exactly what `os package publish`
+later ships. See [ADR-0070](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0070-package-first-authoring.md).
+
+> Note: "package" here is the runtime **authoring base** (a `package_id`-bearing
+> container of metadata), distinct from the npm `@objectstack/*` packages listed in
+> the repo README.
+
 ## Overlay whitelist (shared-DB tenancy invariant)
 
 In shared-database multi-tenancy, **most metadata types must not be per-org customizable** — overriding them would break the physical schema. The whitelist lives in **one** place: `MetadataTypeRegistryEntry.allowOrgOverride` in `packages/spec/src/kernel/metadata-plugin.zod.ts`.

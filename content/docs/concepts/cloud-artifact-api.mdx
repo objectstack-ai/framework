@@ -37,13 +37,14 @@ caches.
 }
 ```
 
-The CLI command is:
+This control-plane endpoint is driven by the Cloud / Marketplace install flow.
+The framework CLI publishes through the package catalog:
 
 ```bash
-OS_CLOUD_URL=https://cloud.example.com \
-OS_ENVIRONMENT_ID=env_prod \
-os publish
+os package publish ./dist/objectstack.json --env env_prod --install
 ```
+
+(The legacy direct-to-environment `os publish` CLI was removed — #2237.)
 
 ---
 
@@ -57,11 +58,9 @@ Activating a revision changes the environment's current artifact pointer.
 Runtime nodes can then reload or refresh their environment kernel based on the
 new commit/checksum.
 
-```bash
-OS_CLOUD_URL=https://cloud.example.com \
-OS_ENVIRONMENT_ID=env_prod \
-os rollback --commit 9ce1bd48dd7022b8
-```
+Revision activation is a Cloud control-plane operation. The framework `os rollback`
+CLI was removed (#2237); to change an environment's active artifact, install the
+desired package version into it.
 
 ---
 

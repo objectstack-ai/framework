@@ -1158,7 +1158,7 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 | `os data export` / `import` | Bulk import / export records as JSONL |
 | `os diff` | Show schema diff between local and target environment |
 | `os meta apply` | Apply metadata + data migrations to the target |
-| `os rollback` | Roll back the most recent migration batch |
+| `os migrate plan` / `os migrate apply` | Dry-run / apply physical-DB drift reconciliation from metadata (forward-only — no batch rollback; `os rollback` was removed) |
 
 ## Environments & deploy
 
@@ -1166,7 +1166,6 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 |:--------|:-------------|
 | `os login` / `logout` / `whoami` | Auth against the ObjectStack cloud control plane |
 | `os environments list` / `create` / `switch` | Manage cloud environments (prod/staging/dev) |
-| `os publish` | Push the compiled stack to a cloud environment |
 | `os register` | Register the local stack as a deployable target |
 | `os cloud …` | Cloud-specific subcommands (logs, metrics, status) |
 | `os package publish [dist/objectstack.json] [--env … --install --visibility org]` | Upload the compiled artifact as a versioned package to the cloud catalog (ADR-0008 P3) |

@@ -136,6 +136,7 @@ Components are the building blocks placed inside regions.
 | `events` | `Record<string, string>` | optional | Event handlers (action expressions) |
 | `style` | `object` | optional | CSS styles |
 | `className` | `string` | optional | CSS class names |
+| `responsiveStyles` | `object` | optional | **Preferred** SDUI styling channel (ADR-0065): per-breakpoint scoped CSS-property maps keyed by `xs`/`sm`/`md`/`lg`/`xl`/`2xl`, compiled to id-scoped CSS at render. Prefer design tokens, e.g. `{ base: { padding: 'var(--space-6)' }, md: { padding: 'var(--space-8)' } }`. Use over ad-hoc `style`/`className` for metadata-authored pages. |
 | `visibility` | `string` | optional | Visibility predicate (CEL expression) |
 
 The `type` field is a union of the standard `PageComponentType` enum and any custom string. The standard (namespaced) component types include:

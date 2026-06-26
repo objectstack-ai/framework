@@ -543,17 +543,14 @@ If upgrade fails, ObjectOS **automatically rolls back** to previous version.
 
 #### Manual Rollback
 
-`os rollback` activates a previously published artifact revision —
-the cloud equivalent of "switch back to yesterday's build". It does not run
-DDL or undo schema migrations.
+To switch an environment back to a previous build, **install the prior package
+version** into it (via the Cloud control plane / Marketplace, or
+`os package publish <older-artifact> --env <env-id> --install`). This is the cloud
+equivalent of "switch back to yesterday's build"; it does not run DDL or undo
+schema migrations.
 
-```bash
-# Activate a specific revision (commit) for an environment
-os rollback --environment <env-id> --commit <commit-id>
-
-# Environment can also be supplied via OS_ENVIRONMENT_ID
-OS_ENVIRONMENT_ID=<env-id> os rollback --commit <commit-id>
-```
+> The legacy revision-activate `os rollback` CLI was removed (#2237); environment
+> version management now goes through package install.
 
 For schema rollback, run the `down()` of your generated migration through
 whatever Knex / driver tooling your team uses to apply the `up()`.

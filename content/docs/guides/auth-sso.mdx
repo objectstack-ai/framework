@@ -113,6 +113,12 @@ Enterprise packages can pass `oidcProviders` into `@objectstack/plugin-auth`
 or contribute them through `auth:configure`. The open-source package does not
 ship a generic OIDC settings UI.
 
+> **Per-environment external IdP (ADR-0069).** Recent releases add a
+> per-environment external-IdP path built on `@better-auth/sso` (a generic OIDC
+> relying party) and surface an `sso` flag in the public `/auth/config`
+> (`features.sso`) so a client can show an enterprise-login button when SSO is
+> configured. The `oidcProviders` extension below remains the in-process path.
+
 ### Quick start — Okta
 
 ```ts

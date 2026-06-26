@@ -97,6 +97,28 @@ enable: {
 
 ---
 
+### Global search — `searchable` + `searchableFields`
+
+`searchable: true` includes an object's records in global search and the record
+picker. By default the search matches the name/title field plus short-text fields.
+To control exactly which fields are matched, set `searchableFields` on the object
+(ADR-0061):
+
+```typescript
+{
+  name: 'account',
+  searchable: true,
+  searchableFields: ['name', 'website', 'billing_city'],
+}
+```
+
+Queries then use the `$search` filter operator to match across `searchableFields`
+(e.g. `{ filters: { $search: 'acme' } }`); a view may narrow the set with
+`$searchFields`. When `searchableFields` is unset, search falls back to the
+name/title field plus short-text fields.
+
+---
+
 ## Field Types & Configuration
 
 ### Text Fields
