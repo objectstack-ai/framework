@@ -80,6 +80,30 @@ export function readEnvWithDeprecation(
 }
 
 /**
+ * Resolve whether the deployment runs in multi-org (a.k.a. multi-tenant) mode.
+ *
+ * Single source of truth for the `OS_MULTI_ORG_ENABLED` flag. Resolution: the
+ * canonical `OS_MULTI_ORG_ENABLED` wins; else the deprecated `OS_MULTI_TENANT`
+ * (which fires the one-shot rename warning via {@link readEnvWithDeprecation});
+ * else `false`. Any value other than a case-insensitive `'false'` enables it.
+ *
+ * Every site that needs to know "is this multi-org?" — the SQL driver's
+ * tenant-audit gate, the auth manager's `/auth/config` feature flag and
+ * org-create guard, the CLI / dev / runtime org-scoping plugin wiring — MUST
+ * call this instead of re-reading the env, so the driver, the security layer,
+ * and the UI can never disagree about the mode. Previously each site inlined
+ * its own `String(... ?? 'false').toLowerCase() !== 'false'` (and the SQL
+ * driver read `process.env` directly, skipping the deprecation warning).
+ *
+ * Reads `process.env` live on each call; memoise at the call site if the
+ * result must be stable for the process lifetime.
+ */
+export function resolveMultiOrgEnabled(): boolean {
+  const raw = readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT');
+  return String(raw ?? 'false').toLowerCase() !== 'false';
+}
+
+/**
  * Internal: clear the dedupe set. Test-only; exposed so suite-wide
  * deprecation warnings don't bleed between tests.
  *

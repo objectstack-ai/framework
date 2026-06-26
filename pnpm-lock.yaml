@@ -1158,6 +1158,9 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../spec
+      '@objectstack/types':
+        specifier: workspace:*
+        version: link:../../types
       knex:
         specifier: ^3.2.10
         version: 3.2.10(better-sqlite3@12.11.1)(mysql2@3.22.4(@types/node@26.0.0))(pg@8.21.0)(sqlite3@5.1.7)(tedious@18.6.2(@azure/core-client@1.10.2))

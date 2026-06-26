@@ -42,7 +42,7 @@
  */
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { resolveCloudUrl } from './cloud-url.js';
 import { resolveMarketplacePublicBaseUrl } from './marketplace-public-url.js';
 import { LocalManifestSource, type InstalledManifestEntry } from './local-manifest-source.js';
@@ -789,7 +789,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
         // writes tenant-scoped rows the same way AppPlugin's
         // single-tenant branch + SecurityPlugin's per-org replay do.
         if (opts.seedNow && datasets.length > 0) {
-            const multiTenant = String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false';
+            const multiTenant = resolveMultiOrgEnabled();
             try {
                 const ql: any = ctx.getService('objectql');
                 let metadata: any;

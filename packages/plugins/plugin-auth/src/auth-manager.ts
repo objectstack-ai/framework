@@ -12,7 +12,7 @@ import type {
 } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
 import type { IEmailService } from '@objectstack/spec/contracts';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled } from '@objectstack/types';
 import { mapMembershipRole, BUILTIN_ROLE_PLATFORM_ADMIN } from '@objectstack/spec';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
 import {
@@ -827,13 +827,7 @@ export class AuthManager {
           // 2. else `OS_MULTI_TENANT` (multi-tenant deployments are always
           //    multi-org), default `'false'` → single-org / per-env runtime.
           beforeCreateOrganization: async () => {
-            const env = (globalThis as any)?.process?.env ?? {};
-            const explicit = env.OS_MULTI_ORG_ENABLED;
-            const legacy = explicit === undefined
-              ? readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT')
-              : explicit;
-            const flag = String(legacy ?? 'false').toLowerCase();
-            if (flag === 'false') {
+            if (!resolveMultiOrgEnabled()) {
               const { APIError } = await import('better-auth/api');
               throw new APIError('FORBIDDEN', {
                 message:
@@ -1505,11 +1499,7 @@ export class AuthManager {
     // Resolution order: explicit `OS_MULTI_ORG_ENABLED` wins, else fall
     // back to legacy `OS_MULTI_TENANT` (multi-tenant deployments are always
     // multi-org); default `'false'` → single-org / per-env runtime.
-    const multiOrgEnv = (globalThis as any)?.process?.env ?? {};
-    const multiOrgRaw = multiOrgEnv.OS_MULTI_ORG_ENABLED !== undefined
-      ? multiOrgEnv.OS_MULTI_ORG_ENABLED
-      : (readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false');
-    const multiOrgEnabled = String(multiOrgRaw).toLowerCase() !== 'false';
+    const multiOrgEnabled = resolveMultiOrgEnabled();
 
     // Legal links shown beneath the login / register cards. Defaults to
     // the public ObjectStack pages so vanilla deployments don't link to

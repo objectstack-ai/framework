@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled } from '@objectstack/types';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -1263,7 +1263,7 @@ export default class Serve extends Command {
             // the `org-scoping` service at start() time and conditionally
             // strips the wildcard `tenant_isolation` RLS when this plugin
             // is absent — so registration order matters.
-            const multiTenant = String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false';
+            const multiTenant = resolveMultiOrgEnabled();
             if (multiTenant) {
               try {
                 const orgScopingPkg = '@objectstack/plugin-org-scoping';
@@ -2066,7 +2066,7 @@ export default class Serve extends Command {
         consolePath: loadedPlugins.includes('ConsoleUI') ? CONSOLE_PATH : undefined,
         driverLabel: resolvedDriverLabel,
         databaseUrl: redactDbUrl(resolvedDatabaseUrl),
-        multiTenant: String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false',
+        multiTenant: resolveMultiOrgEnabled(),
         seededAdmin,
       });
 

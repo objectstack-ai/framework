@@ -12,6 +12,7 @@ import { parseAutonumberFormat, renderAutonumber, missingFieldValues, type Auton
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
+import { resolveMultiOrgEnabled } from '@objectstack/types';
 import {
   diffManagedTable,
   driftKey,
@@ -2229,9 +2230,10 @@ export class SqlDriver implements IDataDriver {
   private _multiTenantMode?: boolean;
   protected isMultiTenantMode(): boolean {
     if (this._multiTenantMode === undefined) {
-      const raw =
-        process.env.OS_MULTI_ORG_ENABLED ?? process.env.OS_MULTI_TENANT ?? 'false';
-      this._multiTenantMode = String(raw).toLowerCase() !== 'false';
+      // Single source of truth (shared with auth/registry/CLI) — previously
+      // this read `process.env` inline and so never emitted the
+      // `OS_MULTI_TENANT` deprecation warning the other sites do.
+      this._multiTenantMode = resolveMultiOrgEnabled();
     }
     return this._multiTenantMode;
   }

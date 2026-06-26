@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ServiceObject, ObjectSchema, ObjectOwnership } from '@objectstack/spec/data';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
 import { AppSchema } from '@objectstack/spec/ui';
 import { applyProtection } from '@objectstack/spec/shared';
@@ -420,8 +420,7 @@ export class SchemaRegistry {
       this.multiTenant = options.multiTenant;
     } else {
       // Mirror the SecurityPlugin / CLI banner default (env-driven, off by default).
-      this.multiTenant =
-        String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false';
+      this.multiTenant = resolveMultiOrgEnabled();
     }
 
     // ADR-0048 — default to a loud error on cross-package collision; allow an

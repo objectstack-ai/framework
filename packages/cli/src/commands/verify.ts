@@ -2,7 +2,7 @@
 
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { resolveMultiOrgEnabled } from '@objectstack/types';
 import {
   bootStack,
   runCrudVerification,
@@ -53,10 +53,7 @@ export default class Verify extends Command {
 
     const { config, absolutePath } = await loadConfig(flags.app);
 
-    const multiTenant =
-      flags['multi-tenant'] ||
-      String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT') ?? 'false').toLowerCase() !==
-        'false';
+    const multiTenant = flags['multi-tenant'] || resolveMultiOrgEnabled();
 
     // Data fidelity runs on its own pristine stack.
     let crud: VerifyReport;
