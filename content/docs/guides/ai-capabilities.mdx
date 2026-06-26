@@ -50,8 +50,13 @@ is in — the user never picks from a roster:
 
 | Agent | Surface | Does | Edition |
 |---|---|---|---|
-| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | open-source · free |
-| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud · paid |
+| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | cloud / Enterprise |
+| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud / Enterprise |
+
+Both in-UI agents ship in the **cloud / Enterprise** distribution, not the open
+framework. A self-hosted **open-source** runtime has no in-product `ask`/`build`
+assistant; it instead exposes the same objects, queries, and actions to *your own*
+AI through **`@objectstack/mcp`** (bring-your-own-AI) — see the note at the top.
 
 There is no per-turn intent classifier and no agent dropdown: the surface binds
 the agent (data console → `ask`, Studio → `build`). A `build`-shaped request that
@@ -68,8 +73,10 @@ Actions / Flows / queries; it then attaches to `ask`. Every skill declares
 surface-compatible skills' tools** — there is no global fall-through, so a skill
 reaches an agent only when their surfaces match
 ([ADR-0064](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
-`surface:'build'` skills are inert on the open-source framework (the `build` agent
-is cloud-only) — intentional tiering, not a bug.
+The in-UI `ask` and `build` agents are cloud / Enterprise only, so
+`surface:'ask'` / `surface:'build'` skills bind no in-product agent on the
+open-source framework — there you reach the same Actions, Flows, and queries
+through `@objectstack/mcp` instead. Intentional tiering, not a bug.
 
 ### The shape of an agent
 
