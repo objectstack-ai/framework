@@ -430,32 +430,39 @@ export class AuthManager {
         sendResetPassword: async ({ user, url, token }: { user: { id: string; email: string; name?: string }; url: string; token: string }) => {
           const email = this.getEmailService();
           if (!email) {
-            console.warn(
-              `[AuthManager] Password-reset requested for ${user.email} but no email service is wired. URL: ${url}`,
+            // No transport wired but password reset is enabled — a
+            // misconfiguration. THROW (don't silently drop): better-auth
+            // invokes this via `runInBackgroundOrAwait` and the forget-password
+            // route always returns `{status:true}`, so this never leaks whether
+            // an address exists AND never turns the request into a 500 — it just
+            // surfaces the failure in the logs instead of vanishing.
+            throw new Error(
+              `Password-reset email could not be sent to ${user.email}: no email service is configured for this deployment.`,
             );
-            return;
           }
           const ttlSec = this.config.emailAndPassword?.resetPasswordTokenExpiresIn ?? 60 * 60;
-          try {
-            await email.sendTemplate({
-              template: 'auth.password_reset',
-              to: { address: user.email, ...(user.name ? { name: user.name } : {}) },
-              data: {
-                user: { name: user.name || user.email, email: user.email, id: user.id },
-                resetUrl: url,
-                token,
-                expiresInMinutes: Math.round(ttlSec / 60),
-                appName: this.getAppName(),
-              },
-              relatedObject: 'sys_user',
-              relatedId: user.id,
-            });
-          } catch (err: any) {
-            // Do NOT rethrow: the user account exists; an email-transport failure
-            // (missing template, bad credentials, network blip) must not turn
-            // the user-facing reset request into a 500. The user can retry via
-            // the "forgot password" flow.
-            console.error(`[AuthManager] sendResetPassword failed (swallowed): ${err?.message ?? err}`);
+          // Surface both template-resolution throws and transport failures
+          // (status:'failed'); resilience is preserved by better-auth's
+          // background-task handling (see sendVerificationEmail) and the
+          // forget-password route always returns {status:true}, so this never
+          // leaks whether an address exists nor turns the request into a 500.
+          const result = await email.sendTemplate({
+            template: 'auth.password_reset',
+            to: { address: user.email, ...(user.name ? { name: user.name } : {}) },
+            data: {
+              user: { name: user.name || user.email, email: user.email, id: user.id },
+              resetUrl: url,
+              token,
+              expiresInMinutes: Math.round(ttlSec / 60),
+              appName: this.getAppName(),
+            },
+            relatedObject: 'sys_user',
+            relatedId: user.id,
+          });
+          if (result?.status === 'failed') {
+            throw new Error(
+              `Password-reset email could not be sent to ${user.email}: ${result.error ?? 'delivery failed'}`,
+            );
           }
         },
         };
@@ -475,31 +482,43 @@ export class AuthManager {
           sendVerificationEmail: async ({ user, url, token }: { user: { id: string; email: string; name?: string }; url: string; token: string }) => {
             const email = this.getEmailService();
             if (!email) {
-              console.warn(
-                `[AuthManager] Verification email requested for ${user.email} but no email service is wired. URL: ${url}`,
+              // Verification is enabled (this callback only exists when it is)
+              // but no email transport is wired — a misconfiguration, not a
+              // transient blip. THROW so the explicit `/send-verification-email`
+              // resend endpoint (which awaits this) surfaces a real error
+              // instead of a false "email sent" success. Sign-up stays
+              // resilient regardless: better-auth runs the sendOnSignUp call
+              // through `runInBackgroundOrAwait`, which logs (never rethrows)
+              // a failure, so the account is still created and the user lands
+              // on the verify screen (where an honest resend now reports the
+              // problem). Previously this was swallowed, leaving every user
+              // permanently stuck with no signal and no resend that could work.
+              throw new Error(
+                `Verification email could not be sent to ${user.email}: no email service is configured for this deployment.`,
               );
-              return;
             }
             const ttlSec = this.config.emailVerification?.expiresIn ?? 60 * 60;
-            try {
-              await email.sendTemplate({
-                template: 'auth.verify_email',
-                to: { address: user.email, ...(user.name ? { name: user.name } : {}) },
-                data: {
-                  user: { name: user.name || user.email, email: user.email, id: user.id },
-                  verificationUrl: url,
-                  token,
-                  expiresInMinutes: Math.round(ttlSec / 60),
-                  appName: this.getAppName(),
-                },
-                relatedObject: 'sys_user',
-                relatedId: user.id,
-              });
-            } catch (err: any) {
-              // Do NOT rethrow: the user account exists; an email-transport
-              // failure must not turn signup or /send-verification-email into
-              // a 500. The "Resend verification email" UI lets the user retry.
-              console.error(`[AuthManager] sendVerificationEmail failed (swallowed): ${err?.message ?? err}`);
+            // Let send failures propagate (see above): sendTemplate THROWS on
+            // template/loader errors, and returns status:'failed' on transport
+            // errors — surface both so resend is honest and signup stays
+            // resilient via better-auth's background-task error handling.
+            const result = await email.sendTemplate({
+              template: 'auth.verify_email',
+              to: { address: user.email, ...(user.name ? { name: user.name } : {}) },
+              data: {
+                user: { name: user.name || user.email, email: user.email, id: user.id },
+                verificationUrl: url,
+                token,
+                expiresInMinutes: Math.round(ttlSec / 60),
+                appName: this.getAppName(),
+              },
+              relatedObject: 'sys_user',
+              relatedId: user.id,
+            });
+            if (result?.status === 'failed') {
+              throw new Error(
+                `Verification email could not be sent to ${user.email}: ${result.error ?? 'delivery failed'}`,
+              );
             }
           },
         },
