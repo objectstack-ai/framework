@@ -1,0 +1,91 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * Read-side time-of-day normalization for `Field.time` on SQLite.
+ *
+ * `Field.time` is a wall-clock time-of-day, not an instant (#2004). A
+ * `defaultValue: 'NOW()'` time column historically took the full
+ * `CURRENT_TIMESTAMP` default, so a defaulted row read back a full
+ * `'YYYY-MM-DD HH:MM:SS'` timestamp instead of a time-of-day. `formatOutput` now
+ * repairs such legacy/raw rows to just the time portion (`toTimeOnly`), while
+ * leaving a value already stored as a bare time-of-day untouched — read-only, so
+ * no write/read asymmetry is introduced and the field-zoo round-trip
+ * (`f_time: '14:30:00'`, #2022) is unaffected.
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { SqlDriver } from '../src/index.js';
+
+const TIME_OF_DAY = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+describe('Field.time read normalization (time-of-day, SQLite)', () => {
+  let driver: SqlDriver;
+  let raw: any;
+
+  beforeEach(async () => {
+    driver = new SqlDriver({
+      client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true,
+    });
+    raw = (driver as any).knex;
+    await driver.initObjects([
+      {
+        name: 'shift',
+        fields: {
+          label: { type: 'string' },
+          starts_at: { type: 'time' },
+          auto_at: { type: 'time', defaultValue: 'NOW()' },
+        },
+      },
+    ]);
+  });
+
+  afterEach(async () => {
+    await driver.disconnect();
+  });
+
+  it('repairs a legacy full-timestamp time value to its time-of-day on read', async () => {
+    // A row written by a raw insert that took the OLD full `CURRENT_TIMESTAMP`
+    // default (or any full timestamp that leaked into the column), bypassing the
+    // driver write path.
+    await raw('shift').insert({ id: 'legacy', label: 'L', starts_at: '2026-01-15 14:30:00' });
+    const row: any = await driver.findOne('shift', 'legacy', { bypassTenantAudit: true });
+    expect(row.starts_at).toBe('14:30:00');
+  });
+
+  it('repairs a full-ISO value (with Z) in a time column to its time-of-day', async () => {
+    await raw('shift').insert({ id: 'iso', label: 'I', starts_at: '2026-01-15T14:30:00.500Z' });
+    const row: any = await driver.findOne('shift', 'iso', { bypassTenantAudit: true });
+    expect(row.starts_at).toBe('14:30:00.500');
+  });
+
+  it('leaves a bare time-of-day untouched (field-zoo parity — no write/read asymmetry)', async () => {
+    for (const [id, v] of [['a', '14:30'], ['b', '14:30:00'], ['c', '09:05:30']] as const) {
+      await driver.create('shift', { id, label: id, starts_at: v }, { bypassTenantAudit: true });
+      const row: any = await driver.findOne('shift', id, { bypassTenantAudit: true });
+      expect(row.starts_at).toBe(v); // unchanged — round-trips identically
+    }
+  });
+
+  it('a NOW()-default time column reads back a time-of-day, not a full timestamp', async () => {
+    // `auto_at` omitted → the DDL default fires.
+    await driver.create('shift', { id: 'd', label: 'D' }, { bypassTenantAudit: true });
+    const row: any = await driver.findOne('shift', 'd', { bypassTenantAudit: true });
+    expect(row.auto_at).toMatch(TIME_OF_DAY);
+    expect(row.auto_at).not.toContain('-'); // not a `YYYY-MM-DD …` timestamp
+  });
+
+  it('find() (list path) normalizes time identically to findOne()', async () => {
+    await raw('shift').insert({ id: 'l1', label: 'L1', starts_at: '2026-02-02 08:15:00' });
+    await driver.create('shift', { id: 'l2', label: 'L2', starts_at: '08:15:00' }, { bypassTenantAudit: true });
+    const rows = await driver.find('shift', { orderBy: [{ field: 'id', order: 'asc' }] });
+    const byId = Object.fromEntries(rows.map((r: any) => [r.id, r]));
+    expect(byId.l1.starts_at).toBe('08:15:00'); // legacy full-timestamp repaired
+    expect(byId.l2.starts_at).toBe('08:15:00'); // bare time-of-day preserved
+  });
+
+  it('leaves null untouched', async () => {
+    await driver.create('shift', { id: 'n', label: 'N', starts_at: null }, { bypassTenantAudit: true });
+    const row: any = await driver.findOne('shift', 'n', { bypassTenantAudit: true });
+    expect(row.starts_at).toBeNull();
+  });
+});

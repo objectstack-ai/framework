@@ -321,6 +321,7 @@ export class SqlDriver implements IDataDriver {
   protected numericFields: Record<string, string[]> = {};
   protected dateFields: Record<string, Set<string>> = {};
   protected datetimeFields: Record<string, Set<string>> = {};
+  protected timeFields: Record<string, Set<string>> = {};
   /**
    * Federation read path (ADR-0015). For external objects whose physical
    * remote table differs from the object name, these map between the two so
@@ -1546,6 +1547,7 @@ export class SqlDriver implements IDataDriver {
     const numericCols: string[] = [];
     const dateCols: string[] = [];
     const datetimeCols: string[] = [];
+    const timeCols: string[] = [];
     const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
 
     const tenantField = this.computeTenantField(schema);
@@ -1557,6 +1559,7 @@ export class SqlDriver implements IDataDriver {
         if (NUMERIC_SCALAR_TYPES.has(type) && !field.multiple) numericCols.push(name);
         if (type === 'date') dateCols.push(name);
         if (type === 'datetime') datetimeCols.push(name);
+        if (type === 'time') timeCols.push(name);
         if (type === 'auto_number' || type === 'autonumber') {
           const rawFmt = (typeof field.autonumberFormat === 'string' && field.autonumberFormat)
             ? field.autonumberFormat
@@ -1573,6 +1576,7 @@ export class SqlDriver implements IDataDriver {
     this.tenantFieldByTable[key] = tenantField;
     if (dateCols.length) this.dateFields[key] = new Set(dateCols);
     if (datetimeCols.length) this.datetimeFields[key] = new Set(datetimeCols);
+    if (timeCols.length) this.timeFields[key] = new Set(timeCols);
   }
 
   async initObjects(objects: Array<{ name: string; fields?: Record<string, any> }>): Promise<void> {
@@ -1621,6 +1625,9 @@ export class SqlDriver implements IDataDriver {
           }
           if (type === 'datetime') {
             (this.datetimeFields[tableName] ??= new Set()).add(name);
+          }
+          if (type === 'time') {
+            (this.timeFields[tableName] ??= new Set()).add(name);
           }
           if (type === 'auto_number' || type === 'autonumber') {
             // Honor either the spec-canonical `autonumberFormat` or the
@@ -2367,6 +2374,35 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Read-side repair for a `Field.time` value to its wall-clock time-of-day
+   * (`Field.time` is a tz-naive time-of-day, not an instant — #2004). This is a
+   * deliberately NARROW, read-only normalization (no write/filter counterpart):
+   * it only strips a leading `YYYY-MM-DD` date — exactly what a legacy
+   * `defaultValue: 'NOW()'` column took when the default was still the full
+   * `CURRENT_TIMESTAMP` (or a full ISO datetime that leaked into the column) —
+   * and any trailing zone, leaving the time portion. A value that is ALREADY a
+   * bare time-of-day (`HH:MM[:SS[.fff]]`, with or without `Z`/offset) is returned
+   * untouched, so the common case never changes and no write/read asymmetry is
+   * introduced. A `Date`/epoch-ms (defensive — a Date bound to a time column)
+   * maps to its UTC time-of-day. `null`/unrecognised shapes pass through.
+   */
+  protected toTimeOnly(value: any): any {
+    if (value == null) return value;
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? value : value.toISOString().slice(11, 19);
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? value : d.toISOString().slice(11, 19);
+    }
+    if (typeof value !== 'string') return value;
+    // Legacy full date+time → keep just the time-of-day (strip date + any zone).
+    // A bare time-of-day is left exactly as stored.
+    const m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:[Zz]|[+-]\d{2}:?\d{2})?$/.exec(value.trim());
+    return m ? m[1] : value;
+  }
+
+  /**
    * Normalise a filter value for a single column so the comparison the
    * driver sends to SQLite matches the on-disk representation.
    *
@@ -3092,6 +3128,23 @@ export class SqlDriver implements IDataDriver {
         const v = data[field];
         if (v == null) continue;
         const normalized = this.toDateOnly(v);
+        if (normalized !== v) data[field] = normalized;
+      }
+    }
+
+    // Present `Field.time` as a wall-clock time-of-day (#2004), repairing a
+    // legacy row stored as a full timestamp — what a `defaultValue: 'NOW()'`
+    // column took when the SQLite default was still the full `CURRENT_TIMESTAMP`
+    // — to just its time portion. A value already stored as a bare time-of-day
+    // is left untouched, so this is read-only and asymmetry-free. Runs for every
+    // dialect (a native TIME column already returns a time-of-day → no-op). See
+    // `toTimeOnly`.
+    const timeFields = this.timeFields[object];
+    if (timeFields && timeFields.size > 0) {
+      for (const field of timeFields) {
+        const v = data[field];
+        if (v == null) continue;
+        const normalized = this.toTimeOnly(v);
         if (normalized !== v) data[field] = normalized;
       }
     }
