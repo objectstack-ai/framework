@@ -135,10 +135,13 @@ capability the inline single-object query could never reach:
 // → revenue by account.region, joined + RLS-enforced per object.
 ```
 
-Joins follow **dotted relationship paths** and may traverse **multiple to-one hops**
-(ADR-0071) — e.g. `account.owner.region` walks the chain order → account → owner →
-region. The path is capped at **3 join hops (4 objects)** and is **to-one only**;
-to-many traversal is rejected (aggregate the many-side as its own measure instead).
+Joins are **derived from the dataset's `include` declarations**: list the relationship
+paths to join (`include: ['account', 'account.owner']`), and dimensions/measures then
+reference fields along them by **dotted path** (`account.owner.region`). Only declared
+paths are joinable. Paths may chain **multiple to-one hops** (ADR-0071 — declaring
+`account.owner` implicitly includes `account`), are capped at **3 join hops (4 objects)**,
+and are **to-one only**; to-many traversal is rejected (aggregate the many-side as its
+own measure instead).
 
 ## How it runs
 
