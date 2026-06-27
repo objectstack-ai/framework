@@ -512,6 +512,40 @@ export class AuthPlugin implements Plugin {
           patch.session = session as AuthManagerOptions['session'];
         }
 
+        // Anti-abuse (ADR-0069 D2) — account lockout (custom, per-identity)
+        // and rate-limit tuning (better-auth-native, per-IP). `asPositiveInt`
+        // rejects 0/malformed; lockout_threshold uses a non-negative reader so
+        // an explicit 0 can turn the feature off.
+        const asNonNegativeInt = (value: unknown): number | undefined => {
+          const n = Math.floor(Number(value));
+          return Number.isFinite(n) && n >= 0 ? n : undefined;
+        };
+        if (isExplicit('lockout_threshold')) {
+          const n = asNonNegativeInt(values.lockout_threshold);
+          if (n !== undefined) patch.lockoutThreshold = n;
+        }
+        if (isExplicit('lockout_duration_minutes')) {
+          const n = asPositiveInt(values.lockout_duration_minutes);
+          if (n !== undefined) patch.lockoutDurationMinutes = n;
+        }
+        if (isExplicit('rate_limit_max') || isExplicit('rate_limit_window_seconds')) {
+          const max = asPositiveInt(values.rate_limit_max) ?? 10;
+          const window = asPositiveInt(values.rate_limit_window_seconds) ?? 60;
+          // Tighten the auth-mutating endpoints; better-auth keeps its own
+          // defaults for everything else. customRules support `*` wildcards.
+          patch.rateLimit = {
+            enabled: true,
+            window,
+            max,
+            customRules: {
+              '/sign-in/email': { window, max },
+              '/sign-up/email': { window, max },
+              '/request-password-reset': { window, max },
+              '/reset-password': { window, max },
+            },
+          } as AuthManagerOptions['rateLimit'];
+        }
+
         if (
           isExplicit('google_enabled') ||
           isExplicit('google_client_id') ||
@@ -831,6 +865,51 @@ export class AuthPlugin implements Plugin {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         ctx.logger.error('[AuthPlugin] toggle-disabled failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // ADR-0069 D2 — admin: clear a brute-force lockout on an account.
+    // Lockout (`sys_user.locked_until` / `failed_login_count`) is a custom,
+    // per-identity mechanism with no better-auth endpoint, so this route owns
+    // the "Unlock" affordance (sys_user `unlock_user` action). Admin-guarded
+    // server-side; mirrors the toggle-disabled route's session+role check.
+    rawApp.post(`${basePath}/admin/unlock-user`, async (c: any) => {
+      try {
+        let body: any = {};
+        try { body = await c.req.json(); } catch { body = {}; }
+        const userId: unknown = body?.userId ?? body?.user_id;
+        if (typeof userId !== 'string' || userId.length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'userId is required' } }, 400);
+        }
+
+        const authApi = await this.authManager!.getApi();
+        const session = await authApi.getSession({ headers: c.req.raw.headers });
+        if (!session?.user?.id) {
+          return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
+        }
+        // Platform-admin gate. Accept any of the equivalent signals the
+        // customSession plugin may carry (ADR-0068): the derived
+        // `isPlatformAdmin` alias, the canonical `platform_admin` in roles[],
+        // or the legacy admin-plugin `role` scalar.
+        const u: any = session.user;
+        const isAdmin =
+          u?.isPlatformAdmin === true ||
+          (Array.isArray(u?.roles) && u.roles.includes('platform_admin')) ||
+          u?.role === 'admin';
+        if (!isAdmin) {
+          return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);
+        }
+
+        const ok = await this.authManager!.unlockUser(userId);
+        if (!ok) {
+          return c.json({ success: false, error: { code: 'not_found', message: 'User not found or data engine unavailable' } }, 404);
+        }
+        return c.json({ success: true, data: { userId } });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] unlock-user failed', err);
         return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
       }
     });

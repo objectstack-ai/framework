@@ -98,6 +98,21 @@ export const SysUser = ObjectSchema.create({
       refreshAfter: true,
     },
     {
+      // ADR-0069 D2 — clear a brute-force lockout early (locked_until auto-
+      // expires, but an admin can release a user immediately). Hits the
+      // plugin-auth custom route, which is admin-guarded server-side.
+      name: 'unlock_user',
+      label: 'Unlock Account',
+      icon: 'lock-open',
+      variant: 'secondary',
+      locations: ['list_item'],
+      type: 'api',
+      target: '/api/v1/auth/admin/unlock-user',
+      recordIdParam: 'userId',
+      successMessage: 'Account unlocked',
+      refreshAfter: true,
+    },
+    {
       name: 'set_user_password',
       label: 'Set Password',
       icon: 'key-round',
@@ -408,6 +423,28 @@ export const SysUser = ObjectSchema.create({
       required: false,
       group: 'Admin',
       description: 'When set, the ban auto-clears at this time.',
+    }),
+
+    // ── Anti-brute-force (ADR-0069 D2) — owned by objectql, better-auth is
+    //    oblivious. The auth manager's sign-in hooks maintain these: failures
+    //    increment the counter; crossing `lockout_threshold` stamps
+    //    `locked_until`; a successful sign-in resets both. Admins can clear
+    //    them early via the Unlock action.
+    failed_login_count: Field.number({
+      label: 'Failed Login Count',
+      required: false,
+      defaultValue: 0,
+      readonly: true,
+      group: 'Admin',
+      description: 'Consecutive failed sign-in attempts; reset to 0 on success. Maintained by the auth manager.',
+    }),
+
+    locked_until: Field.datetime({
+      label: 'Locked Until',
+      required: false,
+      readonly: true,
+      group: 'Admin',
+      description: 'When set and in the future, sign-in is rejected (brute-force lockout). Auto-clears past this time; an admin can clear it early via Unlock.',
     }),
 
     ai_access: Field.boolean({
