@@ -707,6 +707,18 @@ describe('AuthPlugin', () => {
       expect((manager as any).config.mfaGracePeriodDays).toBe(14);
     });
 
+    it('binds session-control settings (ADR-0069 D4)', async () => {
+      const { manager } = await bootWithAuthSettings({
+        session_idle_timeout_minutes: { value: 15, source: 'global' },
+        session_absolute_max_hours: { value: 12, source: 'global' },
+        max_concurrent_sessions_per_user: { value: 3, source: 'global' },
+      });
+      const cfg = (manager as any).config;
+      expect(cfg.sessionIdleTimeoutMinutes).toBe(15);
+      expect(cfg.sessionAbsoluteMaxHours).toBe(12);
+      expect(cfg.maxConcurrentSessions).toBe(3);
+    });
+
     it('clamps mfa_grace_period_days to a max of 90', async () => {
       const { manager } = await bootWithAuthSettings({ mfa_grace_period_days: { value: 999, source: 'global' } });
       expect((manager as any).config.mfaGracePeriodDays).toBe(90);
