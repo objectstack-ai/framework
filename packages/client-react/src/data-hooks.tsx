@@ -12,19 +12,11 @@ import { PaginatedResult } from '@objectstack/client';
 import { useClient } from './context';
 
 /**
- * Query options for useQuery hook
+ * Query options for useQuery hook.
  *
- * Supports both **canonical** (Spec protocol) and **legacy** field names.
- * Canonical names are preferred; legacy names are accepted for backward
- * compatibility and will be removed in a future major release.
- *
- * | Canonical | Legacy (deprecated) |
- * |-----------|---------------------|
- * | `where`   | `filters`           |
- * | `fields`  | `select`            |
- * | `orderBy` | `sort`              |
- * | `limit`   | `top`               |
- * | `offset`  | `skip`              |
+ * Uses the canonical Spec protocol field names: `where`, `fields`,
+ * `orderBy`, `limit`, `offset`. (The legacy aliases `filters` / `select` /
+ * `sort` / `top` / `skip` were removed in 11.0.)
  */
 export interface UseQueryOptions<T = any> {
   /** Query AST or simplified query options */
@@ -42,17 +34,6 @@ export interface UseQueryOptions<T = any> {
   /** Number of records to skip (OFFSET). */
   offset?: number;
 
-  // ── Legacy field names (deprecated) ────────────────────────────────
-  /** @deprecated Use `fields` instead. */
-  select?: string[];
-  /** @deprecated Use `where` instead. */
-  filters?: FilterCondition;
-  /** @deprecated Use `orderBy` instead. */
-  sort?: string | string[];
-  /** @deprecated Use `limit` instead. */
-  top?: number;
-  /** @deprecated Use `offset` instead. */
-  skip?: number;
 
   /** Enable/disable automatic query execution */
   enabled?: boolean;
@@ -120,20 +101,17 @@ export function useQuery<T = any>(
     query,
     // Canonical names take precedence over legacy names
     where, fields, orderBy, limit, offset,
-    // Legacy names (deprecated fallbacks)
-    select, filters, sort, top, skip,
     enabled = true,
     refetchInterval,
     onSuccess,
     onError
   } = options;
 
-  // Resolve canonical vs legacy: canonical wins when both are provided
-  const resolvedFields = fields ?? select;
-  const resolvedWhere = where ?? filters;
-  const resolvedSort = orderBy ?? sort;
-  const resolvedLimit = limit ?? top;
-  const resolvedOffset = offset ?? skip;
+  const resolvedFields = fields;
+  const resolvedWhere = where;
+  const resolvedSort = orderBy;
+  const resolvedLimit = limit;
+  const resolvedOffset = offset;
 
   const fetchData = useCallback(async (isRefetch = false) => {
     if (!enabled) return;
@@ -352,7 +330,7 @@ export function useMutation<TData = any, TVariables = any>(
 /**
  * Pagination options for usePagination hook
  */
-export interface UsePaginationOptions<T = any> extends Omit<UseQueryOptions<T>, 'top' | 'skip' | 'limit' | 'offset'> {
+export interface UsePaginationOptions<T = any> extends Omit<UseQueryOptions<T>, 'limit' | 'offset'> {
   /** Page size */
   pageSize?: number;
   /** Initial page (1-based) */
@@ -463,7 +441,7 @@ export function usePagination<T = any>(
 /**
  * Infinite query options for useInfiniteQuery hook
  */
-export interface UseInfiniteQueryOptions<T = any> extends Omit<UseQueryOptions<T>, 'skip' | 'offset'> {
+export interface UseInfiniteQueryOptions<T = any> extends Omit<UseQueryOptions<T>, 'offset'> {
   /** Page size for each fetch */
   pageSize?: number;
   /** Get next page parameter */
@@ -533,17 +511,14 @@ export function useInfiniteQuery<T = any>(
     query,
     // Canonical names take precedence over legacy names
     where, fields, orderBy,
-    // Legacy names (deprecated fallbacks)
-    select, filters, sort,
     enabled = true,
     onSuccess,
     onError
   } = options;
 
-  // Resolve canonical vs legacy: canonical wins
-  const resolvedFields = fields ?? select;
-  const resolvedWhere = where ?? filters;
-  const resolvedSort = orderBy ?? sort;
+  const resolvedFields = fields;
+  const resolvedWhere = where;
+  const resolvedSort = orderBy;
 
   const [pages, setPages] = useState<PaginatedResult<T>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
