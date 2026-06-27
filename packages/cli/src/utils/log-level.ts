@@ -50,5 +50,5 @@ export function resolveLogLevel(opts: {
  * environment, emitting the standard deprecation warning for the legacy name.
  */
 export function readLogLevelEnv(): string | undefined {
-  return readEnvWithDeprecation('OS_LOG_LEVEL', 'LOG_LEVEL');
+  return readEnvWithDeprecation('OS_LOG_LEVEL', 'LOG_LEVEL', { silent: true });
 }

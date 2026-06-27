@@ -124,7 +124,7 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
   //   OS_CORS_CREDENTIALS – "false" to disallow credentials (default: true)
   //   OS_CORS_MAX_AGE     – preflight cache seconds (default: 86400)
   // (legacy CORS_* names still honoured with a deprecation warning)
-  const corsDisabledByEnv = readEnvWithDeprecation('OS_CORS_ENABLED', 'CORS_ENABLED') === 'false';
+  const corsDisabledByEnv = readEnvWithDeprecation('OS_CORS_ENABLED', 'CORS_ENABLED', { silent: true }) === 'false';
   if (options.cors !== false && !corsDisabledByEnv) {
     const corsOpts = typeof options.cors === 'object' ? options.cors : {};
     const enabled = corsOpts.enabled ?? true;
@@ -132,7 +132,7 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
     if (enabled) {
       // Resolve origins: options > env > default '*'
       let configuredOrigin: string | string[];
-      const corsOriginEnv = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN');
+      const corsOriginEnv = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN', { silent: true });
       if (corsOpts.origin) {
         configuredOrigin = corsOpts.origin;
       } else if (corsOriginEnv) {
@@ -142,8 +142,8 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
         configuredOrigin = '*';
       }
 
-      const credentials = corsOpts.credentials ?? (readEnvWithDeprecation('OS_CORS_CREDENTIALS', 'CORS_CREDENTIALS') !== 'false');
-      const maxAgeEnv = readEnvWithDeprecation('OS_CORS_MAX_AGE', 'CORS_MAX_AGE');
+      const credentials = corsOpts.credentials ?? (readEnvWithDeprecation('OS_CORS_CREDENTIALS', 'CORS_CREDENTIALS', { silent: true }) !== 'false');
+      const maxAgeEnv = readEnvWithDeprecation('OS_CORS_MAX_AGE', 'CORS_MAX_AGE', { silent: true });
       const maxAge = corsOpts.maxAge ?? (maxAgeEnv ? parseInt(maxAgeEnv, 10) : 86400);
 
       // When credentials is true, browsers reject wildcard '*' for Access-Control-Allow-Origin.

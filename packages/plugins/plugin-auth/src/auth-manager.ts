@@ -859,7 +859,7 @@ export class AuthManager {
       ...(() => {
         const origins: string[] = [...(this.config.trustedOrigins || [])];
         // Sync with OS_CORS_ORIGIN env var (comma-separated)
-        const corsOrigin = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN');
+        const corsOrigin = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN', { silent: true });
         if (corsOrigin && corsOrigin !== '*') {
           corsOrigin.split(',').map(s => s.trim()).filter(Boolean).forEach(o => {
             if (!origins.includes(o)) origins.push(o);
@@ -1137,9 +1137,8 @@ export class AuthManager {
           // The plugin itself is always installed (so list/update/invite endpoints
           // keep responding); only the `create` operation is denied when the
           // deployment is provisioned in single-org mode. Resolution order:
-          // 1. explicit `OS_MULTI_ORG_ENABLED` (wins for backwards compat),
-          // 2. else `OS_MULTI_TENANT` (multi-tenant deployments are always
-          //    multi-org), default `'false'` → single-org / per-env runtime.
+          // `OS_MULTI_ORG_ENABLED` (default `'false'` → single-org /
+          // per-env runtime).
           beforeCreateOrganization: async () => {
             if (!resolveMultiOrgEnabled()) {
               const { APIError } = await import('better-auth/api');
@@ -1565,7 +1564,7 @@ export class AuthManager {
    * Generate a secure secret if not provided
    */
   private generateSecret(): string {
-    const envSecret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET']);
+    const envSecret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'], { silent: true });
     if (envSecret) return envSecret;
 
     // No secret configured. In production this is FATAL: a predictable
@@ -1863,9 +1862,7 @@ export class AuthManager {
     // Extract enabled features
     const pluginConfig: Partial<AuthPluginConfig> = this.config.plugins ?? {};
     // Multi-org capability (UI org-switcher, "create org" action, etc.).
-    // Resolution order: explicit `OS_MULTI_ORG_ENABLED` wins, else fall
-    // back to legacy `OS_MULTI_TENANT` (multi-tenant deployments are always
-    // multi-org); default `'false'` → single-org / per-env runtime.
+    // `OS_MULTI_ORG_ENABLED` (default `'false'` → single-org / per-env runtime).
     const multiOrgEnabled = resolveMultiOrgEnabled();
 
     // Legal links shown beneath the login / register cards. Defaults to

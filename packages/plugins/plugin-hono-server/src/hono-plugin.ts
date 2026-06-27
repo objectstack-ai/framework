@@ -112,14 +112,14 @@ export class HonoServerPlugin implements Plugin {
 
         // ─── CORS Middleware ──────────────────────────────────────────────────
         // Enabled by default. Controlled via options.cors or environment variables.
-        const corsDisabledByEnv = readEnvWithDeprecation('OS_CORS_ENABLED', 'CORS_ENABLED') === 'false';
+        const corsDisabledByEnv = readEnvWithDeprecation('OS_CORS_ENABLED', 'CORS_ENABLED', { silent: true }) === 'false';
         if (this.options.cors !== false && !corsDisabledByEnv) {
             const corsOpts = typeof this.options.cors === 'object' ? this.options.cors : {};
             const enabled = corsOpts.enabled ?? true;
 
             if (enabled) {
                 let configuredOrigin: string | string[];
-                const corsOriginEnv = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN');
+                const corsOriginEnv = readEnvWithDeprecation('OS_CORS_ORIGIN', 'CORS_ORIGIN', { silent: true });
                 if (corsOpts.origins) {
                     configuredOrigin = corsOpts.origins;
                 } else if (corsOriginEnv) {
@@ -129,8 +129,8 @@ export class HonoServerPlugin implements Plugin {
                     configuredOrigin = '*';
                 }
 
-                const credentials = corsOpts.credentials ?? (readEnvWithDeprecation('OS_CORS_CREDENTIALS', 'CORS_CREDENTIALS') !== 'false');
-                const maxAgeEnv = readEnvWithDeprecation('OS_CORS_MAX_AGE', 'CORS_MAX_AGE');
+                const credentials = corsOpts.credentials ?? (readEnvWithDeprecation('OS_CORS_CREDENTIALS', 'CORS_CREDENTIALS', { silent: true }) !== 'false');
+                const maxAgeEnv = readEnvWithDeprecation('OS_CORS_MAX_AGE', 'CORS_MAX_AGE', { silent: true });
                 const maxAge = corsOpts.maxAge ?? (maxAgeEnv ? parseInt(maxAgeEnv, 10) : 86400);
 
                 // Determine origin handler based on configuration.

@@ -179,7 +179,7 @@ export default class Start extends Command {
     // ── Database resolution ─────────────────────────────────────────
     // Priority: --database > $OS_DATABASE_URL > $DATABASE_URL (legacy) > file:<home>/data/objectstack.db
     const databaseUrl = flags.database
-      ?? readEnvWithDeprecation('OS_DATABASE_URL', 'DATABASE_URL')
+      ?? readEnvWithDeprecation('OS_DATABASE_URL', 'DATABASE_URL', { silent: true })
       ?? `file:${path.join(homeDir, 'data', 'objectstack.db')}`;
 
     const environmentId = flags['environment-id']
@@ -196,7 +196,7 @@ export default class Start extends Command {
     // Quick-start should "just work" without the user having to
     // export AUTH_SECRET.
     const authSecret = flags['auth-secret']
-      ?? readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'])
+      ?? readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'], { silent: true })
       ?? readOrCreateAuthSecret(homeDir);
 
     // ── Banner ──────────────────────────────────────────────────────

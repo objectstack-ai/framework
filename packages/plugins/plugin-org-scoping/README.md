@@ -33,10 +33,10 @@ await kernel.use(new OrgScopingPlugin());
 await kernel.use(new SecurityPlugin());
 ```
 
-Or via the `OS_MULTI_TENANT` env switch when using `@objectstack/runtime` / `@objectstack/plugin-dev`:
+Or via the `OS_MULTI_ORG_ENABLED` env switch when using `@objectstack/runtime` / `@objectstack/plugin-dev`:
 
 ```bash
-OS_MULTI_TENANT=true objectstack serve
+OS_MULTI_ORG_ENABLED=true objectstack serve
 ```
 
 ## Options

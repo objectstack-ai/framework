@@ -64,9 +64,9 @@ export class MCPServerPlugin implements Plugin {
 
   async init(ctx: PluginContext): Promise<void> {
     const config: MCPServerRuntimeConfig = {
-      name: readEnvWithDeprecation('OS_MCP_SERVER_NAME', 'MCP_SERVER_NAME') ?? this.options.name ?? 'objectstack',
+      name: readEnvWithDeprecation('OS_MCP_SERVER_NAME', 'MCP_SERVER_NAME', { silent: true }) ?? this.options.name ?? 'objectstack',
       version: this.options.version ?? '1.0.0',
-      transport: (readEnvWithDeprecation('OS_MCP_SERVER_TRANSPORT', 'MCP_SERVER_TRANSPORT') as 'stdio' | 'http') ?? this.options.transport ?? 'stdio',
+      transport: (readEnvWithDeprecation('OS_MCP_SERVER_TRANSPORT', 'MCP_SERVER_TRANSPORT', { silent: true }) as 'stdio' | 'http') ?? this.options.transport ?? 'stdio',
       instructions: this.options.instructions,
       logger: ctx.logger,
     };
@@ -118,7 +118,7 @@ export class MCPServerPlugin implements Plugin {
     }
 
     // ── Auto-start if configured ──
-    const shouldStart = this.options.autoStart || readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED') === 'true';
+    const shouldStart = this.options.autoStart || readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', { silent: true }) === 'true';
     if (shouldStart) {
       await this.runtime.start();
       ctx.logger.info('[MCP] Server started automatically');
