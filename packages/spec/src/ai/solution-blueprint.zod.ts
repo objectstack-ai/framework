@@ -63,6 +63,19 @@ export const BlueprintViewSchema = lazySchema(() => z.object({
 }));
 export type BlueprintView = z.infer<typeof BlueprintViewSchema>;
 
+/**
+ * A single comparison that scopes WHICH records a dashboard widget
+ * counts/aggregates — kept deliberately simple (one field op value) so the
+ * builder can compile it to a widget `runtimeFilter`, and the model can emit it
+ * reliably, instead of leaving a "low stock" / "overdue" card counting every row.
+ */
+export const BlueprintWidgetConditionSchema = lazySchema(() => z.object({
+  field: z.string().regex(SNAKE_CASE).describe('Field on the widget object to filter by (e.g. "stock_quantity", "status")'),
+  op: z.enum(['lt', 'lte', 'gt', 'gte', 'eq', 'ne']).describe('Comparison operator'),
+  value: z.union([z.number(), z.string(), z.boolean()]).describe('Comparison value (e.g. 10, "open")'),
+}));
+export type BlueprintWidgetCondition = z.infer<typeof BlueprintWidgetConditionSchema>;
+
 /** A proposed dashboard with a few widgets (kept intentionally light). */
 export const BlueprintDashboardSchema = lazySchema(() => z.object({
   name: z.string().regex(SNAKE_CASE).describe('Dashboard machine name (snake_case)'),
@@ -76,6 +89,8 @@ export const BlueprintDashboardSchema = lazySchema(() => z.object({
       .describe('The field this widget aggregates (e.g. "amount", "probability"), or "count" to count records. The aggregation is chosen automatically from the field type — a money field SUMs, a percentage/rate AVERAGEs — so name the FIELD, not "total_amount". A "total revenue" widget sets measure:"amount"; an "average win rate" widget sets measure:"win_rate"; a "number of deals" widget sets measure:"count". Omit to let the builder infer from the title.'),
     groupBy: z.string().regex(SNAKE_CASE).optional()
       .describe('The field to break the widget down by — the category or time axis (e.g. "stage", "created_at"). A "by status" chart MUST set this to the status field; the title and this field MUST name the SAME field. Omit for a single-number metric.'),
+    condition: BlueprintWidgetConditionSchema.optional()
+      .describe('Restrict WHICH records the widget counts/aggregates when its title implies a threshold or status (e.g. "stock below 10" → {field:"stock_quantity", op:"lt", value:10}; "open tickets" → {field:"status", op:"eq", value:"open"}). Without it the widget covers ALL records — so a "低于10的备件预警" / "overdue" card would wrongly count everything. Omit when the widget genuinely spans every record.'),
   })).optional().describe('Widgets to place on the dashboard'),
 }));
 export type BlueprintDashboard = z.infer<typeof BlueprintDashboardSchema>;
@@ -205,6 +220,12 @@ const StrictDashboard = z.object({
       .describe('The field this widget aggregates (e.g. "amount", "probability"), or "count" to count records, or null to infer from the title. The aggregation (sum vs average) is chosen automatically from the field type — name the FIELD, not "total_amount". "total revenue" → "amount"; "average win rate" → "win_rate"; "number of deals" → "count".'),
     groupBy: z.string().nullable()
       .describe('The field to break the widget down by — the category or time axis (e.g. "stage", "created_at"), or null for a single-number metric. A "by status" chart MUST set this to the status field; the title and this field MUST name the SAME field.'),
+    condition: z.object({
+      field: z.string().describe('Field on the widget object to filter by (e.g. "stock_quantity", "status")'),
+      op: z.enum(['lt', 'lte', 'gt', 'gte', 'eq', 'ne']).describe('Comparison operator'),
+      value: z.union([z.number(), z.string(), z.boolean()]).describe('Comparison value (e.g. 10, "open")'),
+    }).nullable()
+      .describe('Restrict WHICH records the widget counts/aggregates when its title implies a threshold or status (e.g. "stock below 10" → {field:"stock_quantity",op:"lt",value:10}; "open tickets" → {field:"status",op:"eq",value:"open"}), or null when the widget covers every record. Without it a "低于10的预警" / "overdue" card wrongly counts ALL rows.'),
   })).nullable().describe('Widgets to place on the dashboard, or null'),
 });
 

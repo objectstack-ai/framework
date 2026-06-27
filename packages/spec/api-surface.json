@@ -1731,6 +1731,8 @@
     "BlueprintSeedSchema (const)",
     "BlueprintView (type)",
     "BlueprintViewSchema (const)",
+    "BlueprintWidgetCondition (type)",
+    "BlueprintWidgetConditionSchema (const)",
     "CodeContentSchema (const)",
     "ConversationAnalytics (type)",
     "ConversationAnalyticsSchema (const)",
