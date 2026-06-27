@@ -120,7 +120,7 @@ export class SecurityPlugin implements Plugin {
    * `requiredPermissions` capability contract. Populated lazily from the schema;
    * cleared on metadata change alongside the other schema-derived caches.
    */
-  private readonly objectSecurityMetaCache = new Map<string, { isPrivate: boolean; tenancyDisabled: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }>();
+  private readonly objectSecurityMetaCache = new Map<string, { isPrivate: boolean; tenancyDisabled: boolean; isBetterAuthManaged: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }>();
   private dbLoader?: (names: string[]) => Promise<PermissionSet[]>;
   private logger: { info?: (...a: any[]) => void; warn?: (...a: any[]) => void; error?: (...a: any[]) => void } = {};
 
@@ -382,7 +382,7 @@ export class SecurityPlugin implements Plugin {
       const secMeta =
         permissionSets.length > 0
           ? await this.getObjectSecurityMeta(opCtx.object)
-          : { isPrivate: false, tenancyDisabled: false, requiredPermissions: [] as string[], fieldRequiredPermissions: {} as Record<string, string[]> };
+          : { isPrivate: false, tenancyDisabled: false, isBetterAuthManaged: false, requiredPermissions: [] as string[], fieldRequiredPermissions: {} as Record<string, string[]> };
 
       // 1.5. [ADR-0066 D3] requiredPermissions AND-gate — a capability
       //      prerequisite checked BEFORE the CRUD grant (ADR §Precedence): a
@@ -981,7 +981,7 @@ export class SecurityPlugin implements Plugin {
     // posture gate ensures this never grants cross-tenant visibility on ordinary
     // tenant business objects.
     const meta = await this.getObjectSecurityMeta(object);
-    if (meta.isPrivate || meta.tenancyDisabled) {
+    if (meta.isPrivate || meta.tenancyDisabled || meta.isBetterAuthManaged) {
       const isWrite = operation === 'insert' || operation === 'update' || operation === 'delete';
       const bypass = isWrite
         ? this.permissionEvaluator.hasSuperuserWriteBypass(object, permissionSets, { isPrivate: meta.isPrivate })
@@ -1036,7 +1036,7 @@ export class SecurityPlugin implements Plugin {
     // check) on private/platform-global objects.
     const meta = await this.getObjectSecurityMeta(object);
     if (
-      (meta.isPrivate || meta.tenancyDisabled) &&
+      (meta.isPrivate || meta.tenancyDisabled || meta.isBetterAuthManaged) &&
       this.permissionEvaluator.hasSuperuserWriteBypass(object, permissionSets, { isPrivate: meta.isPrivate })
     ) {
       return null;
@@ -1244,7 +1244,7 @@ export class SecurityPlugin implements Plugin {
    */
   private async getObjectSecurityMeta(
     object: string,
-  ): Promise<{ isPrivate: boolean; tenancyDisabled: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }> {
+  ): Promise<{ isPrivate: boolean; tenancyDisabled: boolean; isBetterAuthManaged: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }> {
     const cached = this.objectSecurityMetaCache.get(object);
     if (cached) return cached;
     let obj: any = typeof this.ql?.getSchema === 'function' ? this.ql.getSchema(object) : null;
@@ -1270,6 +1270,18 @@ export class SecurityPlugin implements Plugin {
       isPrivate: (obj as any)?.access?.default === 'private',
       tenancyDisabled:
         (obj as any)?.tenancy?.enabled === false || (obj as any)?.systemFields?.tenant === false,
+      // Identity-infrastructure tables managed by the auth library
+      // (`managedBy: 'better-auth'`: sys_user, sys_account, sys_session,
+      // sys_oauth_application, sys_sso_provider, …). Their rows are written by
+      // better-auth's own adapter with no tenant context, so `organization_id`
+      // is never stamped and the wildcard `tenant_isolation` RLS denies them —
+      // making a platform admin's `viewAllRecords` see an empty list. Treat
+      // them like the private/non-tenant posture for the SUPERUSER BYPASS ONLY
+      // (so the platform super-admin sees all identity rows env-wide). This does
+      // NOT relax member RLS (members never trigger the bypass; their `_self`
+      // carve-outs / tenant_isolation still apply) and is NOT used for the
+      // wildcard-policy drop below, so it can never leak rows to non-admins.
+      isBetterAuthManaged: (obj as any)?.managedBy === 'better-auth',
       requiredPermissions: Array.isArray((obj as any)?.requiredPermissions)
         ? (obj as any).requiredPermissions.map(String)
         : [],

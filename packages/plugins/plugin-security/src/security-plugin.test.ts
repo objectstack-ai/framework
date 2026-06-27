@@ -483,6 +483,54 @@ describe('SecurityPlugin', () => {
       await expect(harness.run(opCtx)).resolves.toBeDefined();
       expect(harness.findOne).not.toHaveBeenCalled();
     });
+
+    // ADR-0024 / cloud#551 — `managedBy: 'better-auth'` identity tables get the
+    // SAME posture-gated superuser bypass as private/non-tenant objects (their
+    // rows are written without a tenant stamp, so the wildcard tenant_isolation
+    // would otherwise hide every row from a platform admin).
+    it('ALLOWS the platform admin and BYPASSES wildcard RLS on a better-auth-managed object', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'admin_full_access' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [adminSet],
+        objectFields: ['id', 'organization_id', 'provider_id'],
+        schemaExtra: { managedBy: 'better-auth' }, // NOT private, NOT tenancy-disabled
+        orgScoping: true,
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'admin', tenantId: 'org-1', roles: ['admin_full_access'], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).resolves.toBeDefined();
+      expect(opCtx.ast.where).toBeUndefined(); // bypassed — admin sees all identity rows
+    });
+
+    it('does NOT bypass for a non-admin on a better-auth-managed object (no leak)', async () => {
+      const memberWithRls: PermissionSet = {
+        name: 'member_default', label: 'Member', isProfile: true,
+        objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+        rowLevelSecurity: [
+          { name: 'tenant_isolation', object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' },
+        ],
+      } as any;
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [memberWithRls],
+        objectFields: ['id', 'organization_id', 'provider_id'],
+        schemaExtra: { managedBy: 'better-auth' },
+        orgScoping: true,
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await harness.run(opCtx);
+      // The member is still tenant-scoped — the managedBy bypass is admin-only.
+      expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+    });
   });
 
   // -------------------------------------------------------------------------
