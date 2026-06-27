@@ -1,5 +1,218 @@
 # @objectstack/cli
 
+## 10.4.0
+
+### Minor Changes
+
+- 4845c12: feat(cli): make the AI service opt-in via a declared dependency; honor `config.tiers`
+
+  **AI edition boundary (cli).** The CLI auto-registered the headless `AIServicePlugin`
+  whenever the `ai` tier was enabled (default) and `@objectstack/service-ai` was
+  merely _resolvable_. In a workspace/monorepo the package is hoist-resolvable even
+  when an app does not declare it, so every app got the AI service — discovery
+  reported `services.ai: available` and the agent runtime served any
+  metadata-defined agents — including Community-Edition apps that ship no AI.
+
+  Now the _declared_ dependency is the boundary: AIService auto-registers only when
+  the host app declares `@objectstack/service-ai` **or** `@objectstack/service-ai-studio`
+  (Studio attaches its personas via the base service's `ai:ready` hook, so declaring
+  Studio implies the base). A CE app that declares neither gets no AI service, no
+  agents, and `services.ai: { enabled: false, status: 'unavailable' }` in discovery
+  (so the console hides its AI surface). MCP and every other capability are
+  unaffected. The `app-showcase`/`app-crm` examples now declare `@objectstack/service-ai`.
+
+  **`config.tiers` now honored (spec).** `ObjectStackDefinitionSchema` gains a `tiers`
+  field, so `defineStack` no longer strips it. `config.tiers` (e.g. a list WITHOUT
+  `ai`) now actually overrides the `--preset` default — previously it was silently
+  dropped by schema validation, making the `--preset` help text inaccurate. This is
+  a second, in-place way to disable AI for a deployment without touching dependencies.
+
+- ad143ce: fix(security): surface the schedule/user-less `runAs:'user'` fail-open (#1888 follow-up)
+
+  With `flow.runAs` now enforced (#1888), a **schedule-triggered** flow with the
+  default `runAs:'user'` has no trigger user. `resolveRunDataContext` returns
+  `undefined` for that case, so the CRUD nodes pass no ObjectQL `options.context`
+  and the security middleware — which _skips_ when there is no identity (it
+  delegates auth to the auth layer) — runs the operation **UNSCOPED** (effectively
+  elevated). An author who left `runAs` at the `'user'` default expecting a
+  restricted run silently gets an unscoped one — a fail-open footgun (ADR-0049: a
+  security property must not silently do the opposite of what it implies).
+
+  This is the **product decision** to make that explicit, chosen to keep legitimate
+  scheduled CRUD working (denying outright would break it, and silently elevating
+  would hide the author's intent). Prevention happens where the platform can tell
+  intent apart (author/build time); the runtime stays non-breaking but is no longer
+  silent:
+
+  - **Author-time lint** (`@objectstack/cli`, `lintFlowPatterns`): a new advisory
+    rule `flow-schedule-runas-unscoped` flags a schedule-triggered flow whose
+    effective `runAs` is `user` (explicit or unset) and which performs a data
+    operation — pointing the author at `runAs:'system'`. Catches the footgun at
+    compile time, before deploy (most flows are AI-authored).
+  - **Runtime warning** (`@objectstack/service-automation`): the engine now emits a
+    clear one-per-run warning when a user-mode run resolves no trigger identity and
+    the flow touches data — the fail-open is _audible_ rather than silent. Behavior
+    is otherwise unchanged (the run still executes), so scheduled CRUD that relied
+    on this is not broken. New helpers `runIsUnscopedUserMode`, `flowTouchesData`,
+    and `DATA_NODE_TYPES` are exported alongside `resolveRunDataContext`.
+  - **Spec describe** (`@objectstack/spec`): `FlowSchema.runAs` now states that a
+    scheduled run has no user, so under `user` it runs unscoped — declare `system`.
+
+  The first-party example apps that tripped the new lint are fixed to declare
+  `runAs:'system'` explicitly (`stale_opportunity_sweep`, the app-todo
+  `task_reminder` / `overdue_escalation` sweeps) — they read/write across owners and
+  were running unscoped by default.
+
+  Longer term, attributing scheduled runs to a dedicated service principal (so they
+  are scopable + audit-attributable rather than unscoped) is the right enforcement;
+  tracked as M2 follow-up.
+
+  Proven by a service-automation unit test (the engine warns once for a user-less
+  user-mode data run; stays silent for `system`, for an identified user, and for a
+  data-less flow), an end-to-end test wiring the **real `ScheduleTrigger` to the
+  real engine** (`@objectstack/trigger-schedule`) that fires a job and asserts the
+  user-less identity reaches the engine + trips the warning through the actual cron
+  path, and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that drives
+  user-less runs through the real automation + security + data stack: a
+  `runAs:'user'` run reads + writes an owner-scoped note a member cannot — audibly —
+  while `runAs:'system'` is the explicit, warning-free equivalent.
+
+  Refs #1888, ADR-0049.
+
+### Patch Changes
+
+- 84784fc: feat(cli): lint ADR-0044 approval revise-loop footguns at compile time
+
+  `objectstack compile` now warns on two send-back-for-revision shapes an AI (or human) authoring an approval flow commonly gets wrong:
+
+  - **Dead-end revise** — an approval node with a `revise` out-edge but no path looping back to it. This is a valid DAG, so `registerFlow` accepts it, yet the submitter reworks the record with nowhere to resubmit. The linter is the only place that catches the dead end.
+  - **Un-declared revise loop** — the loop returns to the approval but the closing edge isn't `type: 'back'`, so `registerFlow` rejects it as an un-declared cycle. The lint fires at compile time with the specific fix (mark the resubmit edge `type: 'back'`).
+
+  Also flags `maxRevisions: 0` alongside a `revise` edge (send-back disabled, so the branch always auto-rejects and never runs). Advisory only — never fails the build. Part of #2274 / ADR-0044.
+
+- d980f0d: feat: add a first-class `user` field type (person picker)
+
+  A new `user` field type — the equivalent of Airtable's Collaborator / Notion's
+  Person / Salesforce's `Lookup(User)`. Authored as `Field.user({ ... })`; use
+  `{ multiple: true }` for collaborators/watchers and `{ defaultValue: 'current_user' }`
+  to auto-fill the acting user on create.
+
+  **Why a distinct type rather than telling authors to `Field.lookup('sys_user')`:**
+  selecting a person is table-stakes, but the value is in _modelling
+  discoverability_ — a "User" entry in the Studio/AI field palette instead of
+  requiring authors (and AI) to know to reference the internal `sys_user` system
+  object — plus `current_user` defaults and a user-search picker. Storage and
+  runtime are unchanged.
+
+  **Deliberately NOT a new storage primitive.** `user` is a _semantic
+  specialization of `lookup`_ with the target fixed to `sys_user`: it shares the
+  exact lookup code path — same FK string column (`multiple` ⇒ JSON), same
+  `$expand` resolution, same indexing — so referential integrity and fresh display
+  names come for free, and nothing is re-implemented. An existing
+  `Field.lookup('sys_user')` is therefore equivalent at the storage layer (zero
+  data migration to adopt `Field.user`).
+
+  Ownership semantics are **unchanged**: the existing `owner_id` convention +
+  `plugin-security` auto-stamp/RLS still apply. A declarative `owner` flag is a
+  possible future follow-up; intentionally not added here to avoid a second
+  field type for what is a system role (rationale: keep the `FieldType` surface
+  lean — see related ADR-0059 freeze discipline).
+
+  Changes: `FieldType` gains `'user'` + `Field.user()` builder; the SQL/Mongo
+  drivers treat `user` exactly like `lookup`; the engine resolves `$expand` for
+  `user` fields and honours a new `defaultValue: 'current_user'` token (resolved
+  app-side from the execution context, mirroring the `NOW()` convention); kanban
+  group-by and symbolic seed references accept `user`; approvals enrich `user`
+  references. The public API surface is unchanged (additive enum member).
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [61d441f]
+- Updated dependencies [c224e18]
+- Updated dependencies [d616e1d]
+- Updated dependencies [910a8f0]
+- Updated dependencies [1e8a813]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [1b00ba2]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [4b5ec6e]
+- Updated dependencies [b6a4972]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [359c0aa]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [9a810f8]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [f44c1bd]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [98a1535]
+- Updated dependencies [bc22a89]
+- Updated dependencies [8a7e9f1]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+  - @objectstack/objectql@10.4.0
+  - @objectstack/runtime@10.4.0
+  - @objectstack/service-analytics@10.4.0
+  - @objectstack/plugin-auth@10.4.0
+  - @objectstack/spec@10.4.0
+  - @objectstack/client@10.4.0
+  - @objectstack/service-automation@10.4.0
+  - @objectstack/trigger-record-change@10.4.0
+  - @objectstack/formula@10.4.0
+  - @objectstack/rest@10.4.0
+  - @objectstack/trigger-schedule@10.4.0
+  - @objectstack/platform-objects@10.4.0
+  - @objectstack/service-settings@10.4.0
+  - @objectstack/types@10.4.0
+  - @objectstack/driver-sql@10.4.0
+  - @objectstack/core@10.4.0
+  - @objectstack/driver-mongodb@10.4.0
+  - @objectstack/plugin-approvals@10.4.0
+  - @objectstack/plugin-sharing@10.4.0
+  - @objectstack/verify@10.4.0
+  - @objectstack/cloud-connection@10.4.0
+  - @objectstack/account@10.4.0
+  - @objectstack/setup@10.4.0
+  - @objectstack/studio@10.4.0
+  - @objectstack/lint@10.4.0
+  - @objectstack/mcp@10.4.0
+  - @objectstack/observability@10.4.0
+  - @objectstack/driver-memory@10.4.0
+  - @objectstack/driver-sqlite-wasm@10.4.0
+  - @objectstack/plugin-audit@10.4.0
+  - @objectstack/plugin-email@10.4.0
+  - @objectstack/plugin-hono-server@10.4.0
+  - @objectstack/plugin-org-scoping@10.4.0
+  - @objectstack/plugin-reports@10.4.0
+  - @objectstack/plugin-security@10.4.0
+  - @objectstack/plugin-webhooks@10.4.0
+  - @objectstack/service-cache@10.4.0
+  - @objectstack/service-datasource@10.4.0
+  - @objectstack/service-job@10.4.0
+  - @objectstack/service-messaging@10.4.0
+  - @objectstack/service-package@10.4.0
+  - @objectstack/service-queue@10.4.0
+  - @objectstack/service-realtime@10.4.0
+  - @objectstack/service-storage@10.4.0
+  - @objectstack/trigger-api@10.4.0
+  - @objectstack/console@10.4.0
+
 ## 10.3.0
 
 ### Minor Changes

@@ -1,5 +1,61 @@
 # Changelog
 
+## 10.4.0
+
+### Patch Changes
+
+- 1e8a813: feat(auth): surface `features.sso` in the public `/auth/config` response
+
+  `getPublicConfig()` reported every other auth capability flag (`oidcProvider`,
+  `twoFactor`, `multiOrgEnabled`, …) but omitted enterprise SSO, even though the
+  manager already computes whether the domain-routed `@better-auth/sso` plugin is
+  wired (`OS_SSO_ENABLED` / `plugins.sso`). Without it the login UI had no signal
+  to gate on, so it rendered a "Sign in with SSO" button unconditionally — and on
+  a self-hosted / local deployment where SSO isn't wired, clicking it only then
+  surfaced "No SSO provider is configured for this email domain."
+
+  The config now includes `features.sso`. `getPublicConfig()` returns the coarse
+  "is the plugin wired" flag — resolved with the EXACT logic that decides whether
+  the plugin is mounted in `buildPlugins()`, so the advertised capability can never
+  disagree with the actual `/sign-in/sso` route. The `/auth/config` route then
+  refines it to "usable" via the new `AuthManager.isSsoUsable()`, which additionally
+  requires at least one `sys_sso_provider` row to exist — so a freshly-enabled but
+  unconfigured SSO setup doesn't advertise a button that errors for everyone.
+  `isSsoUsable()` only queries when wired and fails open to the wired flag on any
+  introspection error (no data engine, query failure), so config never 500s. The
+  console login form consumes `features.sso` to hide the button (objectui side).
+
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [f44c1bd]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+  - @objectstack/spec@10.4.0
+  - @objectstack/platform-objects@10.4.0
+  - @objectstack/types@10.4.0
+  - @objectstack/core@10.4.0
+
 ## 10.3.0
 
 ### Patch Changes
