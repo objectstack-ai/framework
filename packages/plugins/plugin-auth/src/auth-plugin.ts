@@ -579,6 +579,25 @@ export class AuthPlugin implements Plugin {
           patch.session = session as AuthManagerOptions['session'];
         }
 
+        // Session controls (ADR-0069 D4) — idle / absolute / concurrent. 0 = off;
+        // non-negative reader so an explicit 0 disables.
+        const asNonNeg = (v: unknown): number | undefined => {
+          const n = Math.floor(Number(v));
+          return Number.isFinite(n) && n >= 0 ? n : undefined;
+        };
+        if (isExplicit('session_idle_timeout_minutes')) {
+          const n = asNonNeg(values.session_idle_timeout_minutes);
+          if (n !== undefined) patch.sessionIdleTimeoutMinutes = n;
+        }
+        if (isExplicit('session_absolute_max_hours')) {
+          const n = asNonNeg(values.session_absolute_max_hours);
+          if (n !== undefined) patch.sessionAbsoluteMaxHours = n;
+        }
+        if (isExplicit('max_concurrent_sessions_per_user')) {
+          const n = asNonNeg(values.max_concurrent_sessions_per_user);
+          if (n !== undefined) patch.maxConcurrentSessions = n;
+        }
+
         // Anti-abuse (ADR-0069 D2) — account lockout (custom, per-identity)
         // and rate-limit tuning (better-auth-native, per-IP). `asPositiveInt`
         // rejects 0/malformed; lockout_threshold uses a non-negative reader so

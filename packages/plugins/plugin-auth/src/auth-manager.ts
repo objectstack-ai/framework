@@ -323,6 +323,16 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
   mfaGracePeriodDays?: number;
 
   /**
+   * ADR-0069 D4 — session controls. Enforced in `customSession` (idle/absolute)
+   * and the sign-in hook (concurrent). 0 = off for each. A revoked session is
+   * expired in place (`sys_session.expires_at` past + `revoked_at`/`revoke_reason`)
+   * so better-auth returns no session on the next request (→ 401 → re-login).
+   */
+  sessionIdleTimeoutMinutes?: number;
+  sessionAbsoluteMaxHours?: number;
+  maxConcurrentSessions?: number;
+
+  /**
    * ADR-0069 D2 — better-auth-native per-IP rate limiting, passed through to
    * better-auth's core `rateLimit`. The settings bind tightens `customRules`
    * for the auth endpoints (`/sign-in/email`, `/sign-up/email`,
@@ -851,6 +861,10 @@ export class AuthManager {
                 succeeded = !(ctx?.context?.returned instanceof Error);
               }
               await this.recordSignInOutcome(email, succeeded);
+              if (succeeded) {
+                const uid = ctx?.context?.returned?.user?.id;
+                if (typeof uid === 'string') await this.enforceConcurrentCap(uid);
+              }
             }
             return;
           }
@@ -1567,6 +1581,10 @@ export class AuthManager {
         // enforced MFA). Computed only when a gate feature is enabled (else
         // zero extra reads on the hot path); surfaced as `user.authGate` for
         // the transport seams to enforce. See computeAuthGate().
+        // ADR-0069 D4 — session controls (idle / absolute). Best-effort;
+        // revokes the session in place when exceeded (next request → 401).
+        await this.enforceSessionControls((session as any)?.id, (session as any)?.createdAt);
+
         const authGate = await this.computeAuthGate(
           user.id,
           (session as any)?.activeOrganizationId,
@@ -2649,6 +2667,90 @@ export class AuthManager {
       { context: SYSTEM_CTX } as any,
     );
     return true;
+  }
+
+  /**
+   * ADR-0069 D4 — idle / absolute session enforcement, run per request from
+   * `customSession`. No-op when both are off. Revokes (expires in place +
+   * stamps revoked_at/revoke_reason) when a limit is exceeded so better-auth
+   * returns no session on the NEXT request; otherwise touches `last_activity_at`
+   * (throttled to once a minute). Best-effort — never throws.
+   */
+  private async enforceSessionControls(sessionId: string | undefined, createdAtHint: unknown): Promise<void> {
+    const idleMin = Math.floor(Number(this.config.sessionIdleTimeoutMinutes) || 0);
+    const absHrs = Math.floor(Number(this.config.sessionAbsoluteMaxHours) || 0);
+    if (idleMin <= 0 && absHrs <= 0) return;
+    const engine = this.getDataEngine();
+    if (!engine || !sessionId) return;
+    try {
+      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const srow = await engine.findOne('sys_session', {
+        where: { id: sessionId },
+        fields: ['id', 'created_at', 'last_activity_at', 'revoked_at'],
+        context: SYSTEM_CTX,
+      } as any);
+      if (!srow?.id || srow.revoked_at) return;
+      const now = Date.now();
+      let reason: string | undefined;
+      if (absHrs > 0) {
+        const created = srow.created_at ?? createdAtHint;
+        if (created && now - new Date(created as any).getTime() > absHrs * 3_600_000) reason = 'absolute_max';
+      }
+      if (!reason && idleMin > 0) {
+        const last = srow.last_activity_at ?? srow.created_at ?? createdAtHint;
+        if (last && now - new Date(last as any).getTime() > idleMin * 60_000) reason = 'idle_timeout';
+      }
+      if (reason) {
+        await engine.update(
+          'sys_session',
+          { id: sessionId, expires_at: new Date(now - 1000), revoked_at: new Date(now), revoke_reason: reason },
+          { context: SYSTEM_CTX } as any,
+        ).catch(() => undefined);
+        return;
+      }
+      if (idleMin > 0) {
+        const la = srow.last_activity_at ? new Date(srow.last_activity_at as any).getTime() : 0;
+        if (now - la > 60_000) {
+          await engine.update('sys_session', { id: sessionId, last_activity_at: new Date(now) }, { context: SYSTEM_CTX } as any).catch(() => undefined);
+        }
+      }
+    } catch {
+      // session controls are best-effort — never break a request
+    }
+  }
+
+  /**
+   * ADR-0069 D4 — concurrent-session cap, run from the sign-in after-hook.
+   * Keeps the newest `maxConcurrentSessions` live sessions for the user and
+   * revokes the rest (oldest first). No-op when off. Best-effort.
+   */
+  private async enforceConcurrentCap(userId: string): Promise<void> {
+    const cap = Math.floor(Number(this.config.maxConcurrentSessions) || 0);
+    if (cap <= 0 || !userId) return;
+    const engine = this.getDataEngine();
+    if (!engine) return;
+    try {
+      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const rows = await engine.find('sys_session', {
+        where: { user_id: userId },
+        fields: ['id', 'created_at', 'expires_at', 'revoked_at'],
+        limit: 200,
+        context: SYSTEM_CTX,
+      } as any);
+      const now = Date.now();
+      const live = (Array.isArray(rows) ? rows : [])
+        .filter((sn: any) => !sn.revoked_at && (!sn.expires_at || new Date(sn.expires_at).getTime() > now))
+        .sort((a: any, b: any) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+      for (const sn of live.slice(cap)) {
+        await engine.update(
+          'sys_session',
+          { id: sn.id, expires_at: new Date(now - 1000), revoked_at: new Date(now), revoke_reason: 'concurrent_cap' },
+          { context: SYSTEM_CTX } as any,
+        ).catch(() => undefined);
+      }
+    } catch {
+      // best-effort — never break a successful sign-in
+    }
   }
 
   /**

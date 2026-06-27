@@ -2036,4 +2036,89 @@ describe('AuthManager', () => {
       expect(engine.findOne).not.toHaveBeenCalled();
     });
   });
+
+  // ADR-0069 D4 — session controls (idle / absolute / concurrent).
+  describe('session controls (ADR-0069 D4)', () => {
+    const SECRET = 'test-secret-at-least-32-chars-long';
+    const mgr = (engine: any, extra: any = {}) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', dataEngine: engine, ...extra });
+      warn.mockRestore();
+      return m;
+    };
+    const oneEngine = (row: any) => ({
+      findOne: vi.fn(async () => row),
+      update: vi.fn(async () => ({})),
+      find: vi.fn(async () => []),
+    });
+
+    it('is a no-op when idle + absolute are both off', async () => {
+      const engine = oneEngine({ id: 's1', created_at: new Date(0).toISOString() });
+      const m = mgr(engine, {});
+      await (m as any).enforceSessionControls('s1', undefined);
+      expect(engine.findOne).not.toHaveBeenCalled();
+    });
+
+    it('revokes (absolute_max) when the session is older than the absolute cap', async () => {
+      const old = new Date(Date.now() - 100 * 3_600_000).toISOString();
+      const engine = oneEngine({ id: 's1', created_at: old, last_activity_at: null, revoked_at: null });
+      const m = mgr(engine, { sessionAbsoluteMaxHours: 24 });
+      await (m as any).enforceSessionControls('s1', undefined);
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.revoke_reason).toBe('absolute_max');
+      expect(patch.revoked_at instanceof Date).toBe(true);
+      expect(patch.expires_at instanceof Date).toBe(true);
+    });
+
+    it('revokes (idle_timeout) when last activity is older than the idle window', async () => {
+      const recentCreate = new Date(Date.now() - 60 * 60_000).toISOString();
+      const staleActivity = new Date(Date.now() - 30 * 60_000).toISOString();
+      const engine = oneEngine({ id: 's1', created_at: recentCreate, last_activity_at: staleActivity, revoked_at: null });
+      const m = mgr(engine, { sessionIdleTimeoutMinutes: 15 });
+      await (m as any).enforceSessionControls('s1', undefined);
+      expect(engine.update.mock.calls[0][1].revoke_reason).toBe('idle_timeout');
+    });
+
+    it('touches last_activity_at (not revoke) when within the idle window but stale > 60s', async () => {
+      const recentCreate = new Date(Date.now() - 5 * 60_000).toISOString();
+      const activity2minAgo = new Date(Date.now() - 2 * 60_000).toISOString();
+      const engine = oneEngine({ id: 's1', created_at: recentCreate, last_activity_at: activity2minAgo, revoked_at: null });
+      const m = mgr(engine, { sessionIdleTimeoutMinutes: 15 });
+      await (m as any).enforceSessionControls('s1', undefined);
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.last_activity_at instanceof Date).toBe(true);
+      expect(patch.revoke_reason).toBeUndefined();
+    });
+
+    it('does not touch when already revoked', async () => {
+      const engine = oneEngine({ id: 's1', created_at: new Date().toISOString(), revoked_at: new Date().toISOString() });
+      const m = mgr(engine, { sessionIdleTimeoutMinutes: 15 });
+      await (m as any).enforceSessionControls('s1', undefined);
+      expect(engine.update).not.toHaveBeenCalled();
+    });
+
+    it('enforceConcurrentCap revokes the oldest sessions past the cap', async () => {
+      const now = Date.now();
+      const sess = [
+        { id: 'a', created_at: new Date(now - 4000).toISOString(), revoked_at: null },
+        { id: 'b', created_at: new Date(now - 3000).toISOString(), revoked_at: null },
+        { id: 'c', created_at: new Date(now - 2000).toISOString(), revoked_at: null },
+        { id: 'd', created_at: new Date(now - 1000).toISOString(), revoked_at: null },
+      ];
+      const engine = { findOne: vi.fn(), update: vi.fn(async () => ({})), find: vi.fn(async () => sess) };
+      const m = mgr(engine, { maxConcurrentSessions: 2 });
+      await (m as any).enforceConcurrentCap('u1');
+      // keeps newest 2 (d, c) → revokes oldest 2 (b, a)
+      const revokedIds = engine.update.mock.calls.map((c: any[]) => c[1].id).sort();
+      expect(revokedIds).toEqual(['a', 'b']);
+      expect(engine.update.mock.calls[0][1].revoke_reason).toBe('concurrent_cap');
+    });
+
+    it('enforceConcurrentCap is a no-op when the cap is 0', async () => {
+      const engine = { findOne: vi.fn(), update: vi.fn(), find: vi.fn(async () => []) };
+      const m = mgr(engine, { maxConcurrentSessions: 0 });
+      await (m as any).enforceConcurrentCap('u1');
+      expect(engine.find).not.toHaveBeenCalled();
+    });
+  });
 });

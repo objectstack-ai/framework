@@ -107,6 +107,30 @@ export const SysSession = ObjectSchema.create({
       group: 'Session',
     }),
 
+    // ── ADR-0069 D4 — session controls (idle / absolute / revoke) ──
+    last_activity_at: Field.datetime({
+      label: 'Last Activity At',
+      required: false,
+      readonly: true,
+      group: 'Session',
+      description: 'Timestamp of the last request on this session; drives idle-timeout. System-managed.',
+    }),
+    revoked_at: Field.datetime({
+      label: 'Revoked At',
+      required: false,
+      readonly: true,
+      group: 'Session',
+      description: 'When set, this session was revoked (idle / absolute-max / concurrent-cap / admin). System-managed.',
+    }),
+    revoke_reason: Field.text({
+      label: 'Revoke Reason',
+      required: false,
+      maxLength: 64,
+      readonly: true,
+      group: 'Session',
+      description: 'Why the session was revoked (idle_timeout, absolute_max, concurrent_cap, …).',
+    }),
+
     // ── Active context (multi-org/team) ──────────────────────────
     active_organization_id: Field.lookup('sys_organization', {
       label: 'Active Organization',
