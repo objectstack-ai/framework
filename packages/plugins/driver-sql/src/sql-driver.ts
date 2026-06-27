@@ -2222,7 +2222,7 @@ export class SqlDriver implements IDataDriver {
 
   /**
    * Whether the host kernel runs in multi-tenant mode — read once from
-   * `OS_MULTI_ORG_ENABLED` (or the deprecated `OS_MULTI_TENANT`), matching how
+   * `OS_MULTI_ORG_ENABLED`, matching how
    * the SchemaRegistry / SecurityPlugin pick the mode. Used to gate the
    * tenant-audit warning: it's only meaningful where tenant isolation is
    * actually enforced (org-scoping installed).
@@ -2231,8 +2231,7 @@ export class SqlDriver implements IDataDriver {
   protected isMultiTenantMode(): boolean {
     if (this._multiTenantMode === undefined) {
       // Single source of truth (shared with auth/registry/CLI) — previously
-      // this read `process.env` inline and so never emitted the
-      // `OS_MULTI_TENANT` deprecation warning the other sites do.
+      // this read `process.env` inline instead of the shared resolver.
       this._multiTenantMode = resolveMultiOrgEnabled();
     }
     return this._multiTenantMode;

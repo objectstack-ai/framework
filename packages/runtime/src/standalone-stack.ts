@@ -148,7 +148,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
             : resolvePath(cwd, artifactPathInput));
 
     const dbUrl = cfg.databaseUrl
-        ?? readEnvWithDeprecation('OS_DATABASE_URL', 'DATABASE_URL')?.trim()
+        ?? readEnvWithDeprecation('OS_DATABASE_URL', 'DATABASE_URL', { silent: true })?.trim()
         ?? process.env.TURSO_DATABASE_URL?.trim()
         ?? (process.env.OS_HOME?.trim()
             ? `file:${resolvePath(resolveObjectStackHome(), 'data/standalone.db')}`

@@ -133,10 +133,10 @@ export interface SchemaRegistryOptions {
    * is additionally INDEXED — single-tenant stacks skip the index since
    * nothing ever filters by organization.
    *
-   * Sourced from the `OS_MULTI_TENANT` env var when not explicitly set —
+   * Sourced from the `OS_MULTI_ORG_ENABLED` env var when not explicitly set —
    * matches how the SecurityPlugin and CLI startup banner pick the mode.
    * Default is `false` (single-tenant) so local `dev`/`start` runs seed
-   * demo data inline at boot; set `OS_MULTI_TENANT=true` for cloud /
+   * demo data inline at boot; set `OS_MULTI_ORG_ENABLED=true` for cloud /
    * production multi-org deployments. Pass an explicit boolean to override
    * (useful in tests).
    */

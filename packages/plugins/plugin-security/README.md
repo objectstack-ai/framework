@@ -53,7 +53,7 @@ SecurityPlugin probes `getService('org-scoping')` at start time:
 
 `organization_id` auto-injection on insert is provided by OrgScopingPlugin; `owner_id` auto-injection always runs in SecurityPlugin regardless.
 
-In CLI / dev-server mode the `OS_MULTI_TENANT` environment variable (default `false`) toggles whether the runtime registers `OrgScopingPlugin` alongside `SecurityPlugin`. Set `OS_MULTI_TENANT=true` before `objectstack serve` / `pnpm dev` to enable.
+In CLI / dev-server mode the `OS_MULTI_ORG_ENABLED` environment variable (default `false`) toggles whether the runtime registers `OrgScopingPlugin` alongside `SecurityPlugin`. Set `OS_MULTI_ORG_ENABLED=true` before `objectstack serve` / `pnpm dev` to enable.
 
 ## Key Exports
 

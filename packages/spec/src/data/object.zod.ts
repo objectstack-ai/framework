@@ -439,7 +439,7 @@ const ObjectSchemaBase = z.object({
    * declare them per-object (Salesforce-style). Currently injected:
    *
    *   - `organization_id` — `lookup → sys_organization`. Injected only when
-   *     the kernel runs in multi-tenant mode (`OS_MULTI_TENANT === 'true'`;
+   *     the kernel runs in multi-tenant mode (`OS_MULTI_ORG_ENABLED === 'true'`;
    *     default is off — single-tenant).
    *     Required for the default `tenant_isolation` RLS policy and the
    *     SecurityPlugin's auto-fill on insert to take effect.

@@ -185,7 +185,7 @@ const RUNTIME_CREATE_ALLOWED_TYPES: ReadonlySet<string> = new Set(
 let _envWritableMetadataTypes: Set<string> | null = null;
 function envWritableMetadataTypes(): ReadonlySet<string> {
   if (_envWritableMetadataTypes !== null) return _envWritableMetadataTypes;
-  const raw = readEnvWithDeprecation('OS_METADATA_WRITABLE', 'OBJECTSTACK_METADATA_WRITABLE') || '';
+  const raw = readEnvWithDeprecation('OS_METADATA_WRITABLE', []) || '';
   const set = new Set<string>();
   for (const tok of raw.split(',')) {
     const t = tok.trim();

@@ -1099,7 +1099,7 @@ export default class Serve extends Command {
 
           // In dev, fall back to a stable local secret so users don't have
           // to set OS_AUTH_SECRET just to try the login/register flow.
-          const secret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'])
+          const secret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'], { silent: true })
             ?? (isDev ? 'dev-only-insecure-secret-change-me-in-production' : undefined);
 
           // Guard: in cloud-connected runtime mode (e.g. objectos worker)
@@ -1128,7 +1128,7 @@ export default class Serve extends Command {
           } else if (!secret) {
             console.warn(chalk.yellow('  ⚠ AuthPlugin skipped — set OS_AUTH_SECRET to enable authentication in production'));
           } else {
-            const baseUrl = readEnvWithDeprecation('OS_AUTH_URL', ['OS_AUTH_BASE_URL', 'AUTH_BASE_URL', 'BETTER_AUTH_URL'])
+            const baseUrl = readEnvWithDeprecation('OS_AUTH_URL', 'BETTER_AUTH_URL', { silent: true })
               ?? process.env.OS_BASE_URL
               ?? `http://localhost:${port}`;
 
@@ -1184,7 +1184,7 @@ export default class Serve extends Command {
             // must be trusted by better-auth or sign-up/sign-in is
             // rejected with "Invalid origin". Mirrors the OS_COOKIE_DOMAIN
             // wildcard semantics — they are always set together.
-            const rootDomain = readEnvWithDeprecation('OS_ROOT_DOMAIN', 'ROOT_DOMAIN')?.trim();
+            const rootDomain = readEnvWithDeprecation('OS_ROOT_DOMAIN', 'ROOT_DOMAIN', { silent: true })?.trim();
             if (rootDomain) {
               const wildcard = `https://*.${rootDomain}`;
               if (!trustedOrigins.includes(wildcard)) trustedOrigins.push(wildcard);

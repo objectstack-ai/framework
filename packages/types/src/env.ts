@@ -83,9 +83,9 @@ export function readEnvWithDeprecation(
  * Resolve whether the deployment runs in multi-org (a.k.a. multi-tenant) mode.
  *
  * Single source of truth for the `OS_MULTI_ORG_ENABLED` flag. Resolution: the
- * canonical `OS_MULTI_ORG_ENABLED` wins; else the deprecated `OS_MULTI_TENANT`
- * (which fires the one-shot rename warning via {@link readEnvWithDeprecation});
- * else `false`. Any value other than a case-insensitive `'false'` enables it.
+ * canonical `OS_MULTI_ORG_ENABLED`; else `false`. Any value other than a
+ * case-insensitive `'false'` enables it. (The legacy `OS_MULTI_TENANT` alias was
+ * removed in 11.0.)
  *
  * Every site that needs to know "is this multi-org?" — the SQL driver's
  * tenant-audit gate, the auth manager's `/auth/config` feature flag and
@@ -99,7 +99,7 @@ export function readEnvWithDeprecation(
  * result must be stable for the process lifetime.
  */
 export function resolveMultiOrgEnabled(): boolean {
-  const raw = readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', 'OS_MULTI_TENANT');
+  const raw = readEnvWithDeprecation('OS_MULTI_ORG_ENABLED', []);
   return String(raw ?? 'false').toLowerCase() !== 'false';
 }
 
