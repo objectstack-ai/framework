@@ -1970,8 +1970,11 @@ export class AuthManager {
    * in `buildPlugins()` (`ssoFromEnv ?? pluginConfig.sso ?? false`) so the
    * advertised capability can never disagree with the actual `/sign-in/sso`
    * route. `OS_SSO_ENABLED` (when set) wins over the config-file setting.
+   * Public so `AuthPlugin` can gate the Setup-nav "SSO Providers" entry on it
+   * (captures both self-host `OS_SSO_ENABLED` and the cloud per-env
+   * `planAllowsSso` config, since that arrives via `plugins.sso`).
    */
-  private isSsoWired(): boolean {
+  public isSsoWired(): boolean {
     const ssoEnv = (globalThis as any)?.process?.env?.OS_SSO_ENABLED;
     const ssoFromEnv = ssoEnv != null ? String(ssoEnv).toLowerCase() === 'true' : undefined;
     return ssoFromEnv ?? (this.config.plugins as any)?.sso ?? false;

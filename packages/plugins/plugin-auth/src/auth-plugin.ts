@@ -200,6 +200,34 @@ export class AuthPlugin implements Plugin {
       dashboards: [SystemOverviewDashboard],
       // ADR-0021 — datasets backing the System Overview dashboard's widgets.
       datasets: SystemOverviewDatasets,
+      // ADR-0024 / cloud#551 — surface "SSO Providers" (sys_sso_provider) in the
+      // Setup app's Access Control group, but ONLY when the external-IdP RP is
+      // wired (self-host `OS_SSO_ENABLED`, or the cloud per-env `planAllowsSso`
+      // arriving via `plugins.sso`). Without the gate the entry would render an
+      // empty list + a "Register" button whose endpoint 404s when SSO is off.
+      // Owning-plugin-contributes pattern (ADR-0029 K2), mirroring plugin-security.
+      ...(this.authManager.isSsoWired()
+        ? {
+            navigationContributions: [
+              {
+                app: 'setup',
+                group: 'group_access_control',
+                // After Roles/Permission-Sets (100) and Sharing (200), near API Keys (300).
+                priority: 250,
+                items: [
+                  {
+                    id: 'nav_sso_providers',
+                    type: 'object',
+                    label: 'SSO Providers',
+                    objectName: 'sys_sso_provider',
+                    icon: 'log-in',
+                    requiredPermissions: ['manage_platform_settings'],
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
     });
 
     ctx.logger.info('Auth Plugin initialized successfully');
