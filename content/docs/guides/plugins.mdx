@@ -271,7 +271,6 @@ export default defineStack({
 
   // Development-only plugins (loaded only with `os dev`)
   devPlugins: [
-    '@objectstack/plugin-msw',  // String references also work
   ],
 });
 ```
@@ -345,11 +344,6 @@ HTTP server integration using [Hono](https://hono.dev).
 Security features including field-level and row-level security.
 - Permission enforcement
 - Middleware-based security
-
-### `@objectstack/plugin-msw`
-[Mock Service Worker](https://mswjs.io/) integration for testing.
-- Intercept HTTP requests in tests
-- Dev-only plugin
 
 ### `@objectstack/driver-memory`
 In-memory data driver for development and testing.

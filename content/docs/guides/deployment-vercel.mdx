@@ -5,12 +5,15 @@ description: Deploy ObjectStack applications to Vercel — Server mode (recommen
 
 # Deploy to Vercel
 
-ObjectStack supports two deployment modes on Vercel. **Server mode is recommended** for production. The published ObjectStack Studio/console ships as a static Vite SPA that points at a separate ObjectStack server (via `VITE_SERVER_URL`) — see the note under Option B.
+ObjectStack 11 deploys to Vercel in **server mode** — serverless functions running the **Hono** adapter (`@objectstack/hono`). The published ObjectStack Studio/console ships as a static Vite SPA that points at a separate ObjectStack server (via `VITE_SERVER_URL`).
+
+<Callout type="warn">
+**Updated for 11.** The in-browser **MSW Mode** (`@objectstack/plugin-msw`) and the **Next.js adapter** (`@objectstack/nextjs`) were **removed in 11** and are no longer published. Use the Hono server path below. The "MSW Mode" how-to further down is retained for reference only and is slated for removal.
+</Callout>
 
 | Mode | Runtime | Vercel Feature | Use Case |
 | :--- | :--- | :--- | :--- |
 | **Server** (default) | Node.js / Edge | Serverless Functions | Production apps, Studio, real database |
-| **MSW** | Browser (Service Worker) | Static Site | Offline-only demos, prototypes |
 
 ---
 
@@ -206,65 +209,7 @@ In Server mode, ObjectStack runs inside Vercel Serverless Functions. API request
 └───────────────────────────────────────────────────────────────┘
 ```
 
-### Option A: Next.js + `@objectstack/nextjs`
-
-This is the recommended approach for Vercel. The `@objectstack/nextjs` adapter maps all ObjectStack protocol endpoints to a single Next.js catch-all route.
-
-**1. Create the kernel singleton:**
-
-```typescript
-// lib/kernel.ts
-import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
-import { ObjectQLPlugin } from '@objectstack/objectql';
-import appConfig from '../objectstack.config';
-
-let kernel: ObjectKernel | null = null;
-
-export async function getKernel() {
-  if (kernel) return kernel;
-
-  kernel = new ObjectKernel();
-  await kernel.use(new ObjectQLPlugin());
-
-  // Use your production driver (Postgres, MongoDB, etc.)
-  // await kernel.use(new DriverPlugin(new PostgresDriver({
-  //   url: process.env.DATABASE_URL,
-  // })));
-
-  // Load the application configuration (objects, data, etc.)
-  await kernel.use(new AppPlugin(appConfig));
-
-  await kernel.bootstrap();
-  return kernel;
-}
-```
-
-**2. Create the API route handler:**
-
-```typescript
-// app/api/[...objectstack]/route.ts
-import { createRouteHandler } from '@objectstack/nextjs';
-import { getKernel } from '@/lib/kernel';
-
-async function handler(...args: any[]) {
-  const kernel = await getKernel();
-  const routeHandler = createRouteHandler({ kernel, prefix: '/api' });
-  return routeHandler(...args);
-}
-
-export { handler as GET, handler as POST, handler as PATCH, handler as DELETE };
-```
-
-**3. `vercel.json` (optional — Next.js works out of the box):**
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs"
-}
-```
-
-### Option B: Hono + `@objectstack/hono` (Vite SPA)
+### Hono serverless function (`@objectstack/hono`)
 
 This is a valid self-contained pattern when you want to ship a Vite SPA *and* its API from a single Vercel project: the SPA is served as static assets, and a Hono-based serverless function handles `/api/*` requests.
 

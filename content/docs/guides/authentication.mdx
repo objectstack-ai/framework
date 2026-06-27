@@ -689,25 +689,6 @@ This ensures that registration and sign-in flows do not return 404 errors in MSW
 
 > **Note:** In server mode with AuthPlugin loaded, the auth service handler takes priority and the mock fallback is never reached. The mock fallback only activates when AuthPlugin is not loaded (e.g. browser-only Console/MSW builds where `better-auth` is unavailable).
 
-### Browser Kernel Factory
-
-Browser-only Console builds cannot bundle the Node-only `better-auth` library.
-Instead of loading `AuthPlugin` directly, MSW mode can rely on
-`HttpDispatcher`'s built-in mock fallback to handle auth endpoints:
-
-```typescript
-// browser test/mock kernel
-// No AuthPlugin needed — HttpDispatcher provides mock auth endpoints automatically
-const kernel = new ObjectKernel();
-await kernel.use(new ObjectQLPlugin());
-await kernel.use(new DriverPlugin(driver, 'memory'));
-// ...
-await kernel.use(new MSWPlugin({ /* ... */ }));
-await kernel.bootstrap();
-```
-
----
-
 ## Next Steps
 
 - See [Security Guide](/docs/guides/security) for authorization and permissions
