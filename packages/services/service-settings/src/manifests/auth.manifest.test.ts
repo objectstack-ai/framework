@@ -26,6 +26,7 @@ describe('authSettingsManifest', () => {
       'email_password_enabled',
       'google_enabled',
       'password_reject_breached',
+      'password_require_complexity',
       'require_email_verification',
       'signup_enabled',
     ]);

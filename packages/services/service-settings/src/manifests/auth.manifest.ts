@@ -85,6 +85,27 @@ const manifest = {
         'Block passwords found in public breach corpora via Have I Been Pwned (k-anonymity range check; the password is never sent in full).',
       visible: "${data.email_password_enabled !== false}",
     },
+    {
+      type: 'toggle',
+      key: 'password_require_complexity',
+      label: 'Require complex passwords',
+      required: false,
+      default: false,
+      description:
+        'Require passwords to mix character classes (uppercase, lowercase, digits, symbols) on sign-up and password change/reset.',
+      visible: "${data.email_password_enabled !== false}",
+    },
+    {
+      type: 'number',
+      key: 'password_min_classes',
+      label: 'Minimum character classes',
+      required: false,
+      default: 3,
+      min: 1,
+      max: 4,
+      description: 'How many of the four classes (upper / lower / digit / symbol) a password must include.',
+      visible: "${data.email_password_enabled !== false && data.password_require_complexity === true}",
+    },
 
     {
       type: 'group',

@@ -497,6 +497,16 @@ export class AuthPlugin implements Plugin {
           } as AuthManagerOptions['plugins'];
         }
 
+        // Password complexity (ADR-0069 D1) — custom validator in the before
+        // hook (better-auth only enforces length). Only explicit values apply.
+        if (isExplicit('password_require_complexity')) {
+          patch.passwordRequireComplexity = asBoolean(values.password_require_complexity, false);
+        }
+        if (isExplicit('password_min_classes')) {
+          const n = asPositiveInt(values.password_min_classes);
+          if (n !== undefined) patch.passwordMinClasses = Math.min(4, Math.max(1, n));
+        }
+
         // Session lifetime — days → seconds for better-auth's `session`
         // (`expiresIn` = absolute lifetime; `updateAge` = refresh threshold).
         const session: { expiresIn?: number; updateAge?: number } = {};

@@ -648,6 +648,31 @@ describe('AuthPlugin', () => {
       expect((manager as any).config.plugins?.passwordRejectBreached).toBeUndefined();
     });
 
+    it('binds password complexity settings (ADR-0069 D1)', async () => {
+      const { manager } = await bootWithAuthSettings({
+        password_require_complexity: { value: true, source: 'global' },
+        password_min_classes: { value: 4, source: 'global' },
+      });
+      const cfg = (manager as any).config;
+      expect(cfg.passwordRequireComplexity).toBe(true);
+      expect(cfg.passwordMinClasses).toBe(4);
+    });
+
+    it('clamps password_min_classes into [1,4]', async () => {
+      const { manager } = await bootWithAuthSettings({
+        password_require_complexity: { value: true, source: 'global' },
+        password_min_classes: { value: 9, source: 'global' },
+      });
+      expect((manager as any).config.passwordMinClasses).toBe(4);
+    });
+
+    it('does not set complexity flags when default-source', async () => {
+      const { manager } = await bootWithAuthSettings({
+        password_require_complexity: { value: false, source: 'default' },
+      });
+      expect((manager as any).config.passwordRequireComplexity).toBeUndefined();
+    });
+
     it('binds account-lockout settings (ADR-0069 D2)', async () => {
       const { manager } = await bootWithAuthSettings({
         lockout_threshold: { value: 5, source: 'global' },

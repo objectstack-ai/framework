@@ -283,6 +283,18 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
   lockoutDurationMinutes?: number;
 
   /**
+   * ADR-0069 D1 — password complexity. When `passwordRequireComplexity` is on,
+   * a new password must contain at least `passwordMinClasses` (1-4) of the
+   * character classes upper / lower / digit / symbol. Enforced by a validator
+   * in the `/sign-up/email`, `/reset-password`, `/change-password` before hook
+   * (better-auth only enforces min/max length natively).
+   */
+  passwordRequireComplexity?: boolean;
+
+  /** Minimum distinct character classes required (1-4). Default 3. */
+  passwordMinClasses?: number;
+
+  /**
    * ADR-0069 D2 — better-auth-native per-IP rate limiting, passed through to
    * better-auth's core `rateLimit`. The settings bind tightens `customRules`
    * for the auth endpoints (`/sign-in/email`, `/sign-up/email`,
@@ -576,6 +588,24 @@ export class AuthManager {
       // sees `userCount > 0` and the toggle is enforced again.
       hooks: {
         before: createAuthMiddleware(async (ctx: any) => {
+          // ── ADR-0069 D1: password complexity (validator) ────────────
+          // better-auth enforces only min/max length; class-mix is custom.
+          // Runs on the password-mutating endpoints; reads the candidate from
+          // the path-appropriate body field (sign-up: `password`; reset /
+          // change: `newPassword`).
+          if (
+            ctx?.path === '/sign-up/email' ||
+            ctx?.path === '/reset-password' ||
+            ctx?.path === '/change-password'
+          ) {
+            const candidate =
+              (typeof ctx?.body?.password === 'string' && ctx.body.password) ||
+              (typeof ctx?.body?.newPassword === 'string' && ctx.body.newPassword) ||
+              '';
+            if (candidate) await this.assertPasswordComplexity(candidate);
+            // fall through to the path's own handling below
+          }
+
           // ── ADR-0024: admin-gate self-service SSO provider registration ──
           // `@better-auth/sso`'s POST /sso/register only checks org-admin when
           // `body.organizationId` is present (index.mjs: `if (ctx.body
@@ -2058,6 +2088,31 @@ export class AuthManager {
       await engine.update('sys_user', { id: userId, source: 'idp_provisioned' }, { context: SYSTEM_CTX } as any);
     } catch {
       // Provenance stamp must never break federated login. Leave the prior value.
+    }
+  }
+
+  /**
+   * ADR-0069 D1 — reject a password that doesn't meet the configured character-
+   * class complexity. No-op when `passwordRequireComplexity` is off. Counts the
+   * four classes (upper / lower / digit / symbol) present and throws
+   * `PASSWORD_POLICY_VIOLATION` when fewer than `passwordMinClasses` are used.
+   */
+  private async assertPasswordComplexity(password: string): Promise<void> {
+    if (!this.config.passwordRequireComplexity) return;
+    const min = Math.min(4, Math.max(1, Math.floor(Number(this.config.passwordMinClasses) || 3)));
+    const classes =
+      (/[a-z]/.test(password) ? 1 : 0) +
+      (/[A-Z]/.test(password) ? 1 : 0) +
+      (/[0-9]/.test(password) ? 1 : 0) +
+      (/[^A-Za-z0-9]/.test(password) ? 1 : 0);
+    if (classes < min) {
+      const { APIError } = await import('better-auth/api');
+      throw new APIError('BAD_REQUEST', {
+        message:
+          `Password must include at least ${min} of: uppercase, lowercase, ` +
+          'digit, symbol.',
+        code: 'PASSWORD_POLICY_VIOLATION',
+      });
     }
   }
 

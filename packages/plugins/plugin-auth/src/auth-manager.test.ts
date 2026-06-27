@@ -1731,4 +1731,51 @@ describe('AuthManager', () => {
       expect(captured).not.toHaveProperty('rateLimit');
     });
   });
+
+  // ADR-0069 D1: password complexity validator (custom; better-auth only does
+  // length). Exercised directly via the AuthManager helper.
+  describe('password complexity (ADR-0069 D1)', () => {
+    const SECRET = 'test-secret-at-least-32-chars-long';
+    const mgr = (extra: any = {}) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', ...extra });
+      warn.mockRestore();
+      return m;
+    };
+
+    it('is a no-op when complexity is not required (any password passes)', async () => {
+      const m = mgr({ passwordRequireComplexity: false });
+      await expect((m as any).assertPasswordComplexity('password')).resolves.toBeUndefined();
+    });
+
+    it('rejects a password with too few character classes', async () => {
+      const m = mgr({ passwordRequireComplexity: true, passwordMinClasses: 3 });
+      // only lowercase → 1 class < 3
+      await expect((m as any).assertPasswordComplexity('alllowercase')).rejects.toMatchObject({
+        body: { code: 'PASSWORD_POLICY_VIOLATION' },
+      });
+    });
+
+    it('accepts a password meeting the required class count', async () => {
+      const m = mgr({ passwordRequireComplexity: true, passwordMinClasses: 3 });
+      // upper + lower + digit = 3 classes
+      await expect((m as any).assertPasswordComplexity('Abcdef12')).resolves.toBeUndefined();
+    });
+
+    it('counts symbols as a class and honours a min of 4', async () => {
+      const m = mgr({ passwordRequireComplexity: true, passwordMinClasses: 4 });
+      await expect((m as any).assertPasswordComplexity('Abcd1234')).rejects.toMatchObject({
+        body: { code: 'PASSWORD_POLICY_VIOLATION' },
+      }); // 3 classes < 4
+      await expect((m as any).assertPasswordComplexity('Abcd123!')).resolves.toBeUndefined(); // 4 classes
+    });
+
+    it('clamps an out-of-range min_classes into [1,4] (defaults to 3 when unset)', async () => {
+      const m = mgr({ passwordRequireComplexity: true, passwordMinClasses: 99 });
+      // clamped to 4 → needs all four classes
+      await expect((m as any).assertPasswordComplexity('Abcd1234')).rejects.toMatchObject({
+        body: { code: 'PASSWORD_POLICY_VIOLATION' },
+      });
+    });
+  });
 });
