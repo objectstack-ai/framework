@@ -55,14 +55,25 @@ export const SysSsoProvider = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       method: 'POST',
-      target: '/api/v1/auth/sso/register',
+      // Routed through the env-side bridge (plugin-auth `auth-plugin.ts`), which
+      // reshapes these FLAT form fields into the nested `oidcConfig` body that
+      // `@better-auth/sso`'s /sso/register requires, then re-dispatches to it
+      // (so the admin gate + discovery hydration run). Posting straight to
+      // /sso/register would drop clientId/clientSecret (top-level → Zod-stripped)
+      // and persist an unusable `oidc_config = null` provider.
+      target: '/api/v1/auth/admin/sso/register',
       refreshAfter: true,
       params: [
         { name: 'providerId', label: 'Provider ID', type: 'text', required: true, helpText: 'Stable identifier, e.g. "okta" or "acme-entra".' },
-        { name: 'issuer', label: 'Issuer URL', type: 'text', required: true, helpText: 'IdP issuer / discovery base, e.g. https://acme.okta.com.' },
-        { name: 'domain', label: 'Email Domain', type: 'text', required: true, helpText: 'Users with this email domain are routed to this IdP.' },
-        { name: 'clientId', label: 'Client ID', type: 'text', required: true },
-        { name: 'clientSecret', label: 'Client Secret', type: 'text', required: true },
+        { name: 'issuer', label: 'Issuer URL', type: 'text', required: true, helpText: 'IdP issuer, e.g. https://acme.okta.com. Discovery is fetched from here unless an explicit URL is given below.' },
+        { name: 'domain', label: 'Email Domain', type: 'text', required: true, helpText: 'Users with this email domain are routed to this IdP, e.g. acme.com.' },
+        { name: 'clientId', label: 'Client ID', type: 'text', required: true, helpText: 'OAuth client ID issued by the IdP for this environment.' },
+        { name: 'clientSecret', label: 'Client Secret', type: 'text', required: true, helpText: 'OAuth client secret (stored encrypted by better-auth).' },
+        { name: 'discoveryEndpoint', label: 'Discovery URL', type: 'text', required: false, helpText: 'Optional. OIDC discovery document URL. Leave blank to derive `<issuer>/.well-known/openid-configuration`.' },
+        { name: 'scopes', label: 'Scopes', type: 'text', required: false, placeholder: 'openid email profile', helpText: 'Optional. Space- or comma-separated OAuth scopes. Defaults to "openid email profile".' },
+        { name: 'mapId', label: 'Map: User ID claim', type: 'text', required: false, placeholder: 'sub', helpText: 'Optional. ID-token claim mapped to the user ID. Defaults to "sub".' },
+        { name: 'mapEmail', label: 'Map: Email claim', type: 'text', required: false, placeholder: 'email', helpText: 'Optional. Claim mapped to email. Defaults to "email".' },
+        { name: 'mapName', label: 'Map: Name claim', type: 'text', required: false, placeholder: 'name', helpText: 'Optional. Claim mapped to display name. Defaults to "name".' },
       ],
     },
     {
