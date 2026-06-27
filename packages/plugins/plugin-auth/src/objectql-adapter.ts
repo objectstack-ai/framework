@@ -16,15 +16,15 @@ export const AUTH_MODEL_TO_PROTOCOL: Record<string, string> = {
   session: SystemObjectName.SESSION,
   account: SystemObjectName.ACCOUNT,
   verification: SystemObjectName.VERIFICATION,
-  // @better-auth/sso has NO `schema` option (verified vs 1.6.20 — no
-  // mergeSchema, runtime never reads options.schema), so it cannot declare
-  // its modelName/fields. Bridge the table name here. NOTE: the ACTIVE
-  // factory adapter (createObjectQLAdapterFactory) passes the raw `model`
-  // to dataEngine and does NOT yet consult resolveProtocolName for plugin
-  // models — nor map sso's camelCase fields (oidcConfig→oidc_config …).
-  // Finishing the @better-auth/sso integration needs that adapter work +
-  // E2E (see ADR-0024 / sys_sso_provider). Off by default (OS_SSO_ENABLED).
+  // Plugin models. `@better-auth/sso` and `@better-auth/scim` both hardcode
+  // their model name and accept NO `schema` option (verified vs 1.6.2x — no
+  // mergeSchema, runtime never reads options.schema), so the table name is
+  // bridged here and `createObjectQLAdapterFactory` (below) auto-maps their
+  // camelCase fields to snake_case (oidcConfig→oidc_config, scimToken→
+  // scim_token, …) on every CRUD op via resolveProtocolName. Off by default
+  // (OS_SSO_ENABLED / OS_SCIM_ENABLED). See ADR-0024 / ADR-0071.
   ssoProvider: 'sys_sso_provider',
+  scimProvider: 'sys_scim_provider',
 };
 
 /**

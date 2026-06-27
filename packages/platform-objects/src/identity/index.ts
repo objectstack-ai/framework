@@ -38,3 +38,6 @@ export { SysJwks } from './sys-jwks.object.js';
 
 // ── External SSO (relying-party, @better-auth/sso) ─────────────────
 export { SysSsoProvider } from './sys-sso-provider.object.js';
+
+// ── SCIM 2.0 provisioning (@better-auth/scim) ──────────────────────
+export { SysScimProvider } from './sys-scim-provider.object.js';

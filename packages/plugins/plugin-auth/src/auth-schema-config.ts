@@ -689,6 +689,37 @@ export const AUTH_SSO_PROVIDER_SCHEMA = {
 // resolution in objectql-adapter.ts). See ADR-0024.
 
 // ---------------------------------------------------------------------------
+// SCIM plugin – scimProvider table (@better-auth/scim)
+// ---------------------------------------------------------------------------
+
+/**
+ * `@better-auth/scim` plugin `scimProvider` model mapping.
+ *
+ * Each row is a SCIM connection: a bearer token an external IdP (Okta / Entra)
+ * uses to auto-provision / deprovision THIS environment's users — the env is
+ * the SCIM Service Provider (ADR-0071). Like `@better-auth/sso`, the plugin
+ * hardcodes its model and exposes NO `schema` option, so the mapping is
+ * consumed at the ADAPTER layer (AUTH_MODEL_TO_PROTOCOL + field resolution in
+ * objectql-adapter.ts), NOT handed to the plugin.
+ *
+ * | camelCase (better-auth) | snake_case (ObjectStack) |
+ * |:------------------------|:-------------------------|
+ * | providerId              | provider_id              |
+ * | scimToken               | scim_token               |
+ * | organizationId          | organization_id          |
+ * | userId                  | user_id                  |
+ */
+export const AUTH_SCIM_PROVIDER_SCHEMA = {
+  modelName: 'sys_scim_provider',
+  fields: {
+    providerId: 'provider_id',
+    scimToken: 'scim_token',
+    organizationId: 'organization_id',
+    userId: 'user_id',
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
 // Helper: build device-authorization plugin schema option
 // ---------------------------------------------------------------------------
 

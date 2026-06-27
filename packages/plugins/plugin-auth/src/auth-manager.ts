@@ -822,6 +822,12 @@ export class AuthManager {
     const oidcFromEnv = oidcEnv != null ? String(oidcEnv).toLowerCase() === 'true' : undefined;
     const ssoEnv = (globalThis as any)?.process?.env?.OS_SSO_ENABLED;
     const ssoFromEnv = ssoEnv != null ? String(ssoEnv).toLowerCase() === 'true' : undefined;
+    const scimEnv = (globalThis as any)?.process?.env?.OS_SCIM_ENABLED;
+    const scimFromEnv = scimEnv != null ? String(scimEnv).toLowerCase() === 'true' : undefined;
+    // @better-auth/scim's `active:false` → ban runs through the admin plugin,
+    // and org-scoped tokens need the organization plugin — so enabling SCIM
+    // forces `admin` on (organization already defaults on). See ADR-0071.
+    const scimEffective = scimFromEnv ?? (pluginConfig as any).scim ?? false;
     const twoFactorFromEnv = readBooleanEnv('OS_AUTH_TWO_FACTOR');
     const enabled = {
       organization: pluginConfig.organization ?? true,
@@ -830,8 +836,9 @@ export class AuthManager {
       magicLink: pluginConfig.magicLink ?? false,
       oidcProvider: oidcFromEnv ?? pluginConfig.oidcProvider ?? false,
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
-      admin: pluginConfig.admin ?? false,
+      admin: pluginConfig.admin ?? scimEffective,
       sso: ssoFromEnv ?? (pluginConfig as any).sso ?? false,
+      scim: scimEffective,
     };
 
     // bearer() — ALWAYS enabled.
@@ -1155,6 +1162,23 @@ export class AuthManager {
       // provisionUser / organizationProvisioning will assign a default env role
       // on first federated login (ADR-0024 V1); JIT works via account linking.
       plugins.push(sso());
+    }
+
+    // External SCIM 2.0 Service Provider (@better-auth/scim, MIT) — lets an
+    // external IdP (Okta / Entra) auto-provision / deprovision THIS env's users
+    // (the paid Identity lifecycle, ADR-0071). The env is the SCIM Service
+    // Provider; endpoints mount under /api/v1/auth/scim/v2/{Users,…} (SCIM 2.0)
+    // and /api/v1/auth/scim/{generate-token,…} (management). `active:false` →
+    // ban + session revoke (needs the admin plugin, forced on above); org-scoped
+    // tokens need the organization plugin. Like @better-auth/sso it hardcodes
+    // its `scimProvider` model (no schema option) — bridged to `sys_scim_provider`
+    // via AUTH_MODEL_TO_PROTOCOL. Toggle with `OS_SCIM_ENABLED`.
+    //
+    // storeSCIMToken: 'hashed' — never persist the bearer in cleartext; the
+    // plaintext is returned exactly once from generate-token (for the IdP admin).
+    if (enabled.scim) {
+      const { scim } = await import('@better-auth/scim');
+      plugins.push(scim({ storeSCIMToken: 'hashed' }));
     }
 
     // Device Authorization Grant (RFC 8628) — for CLI / TV-style devices.
