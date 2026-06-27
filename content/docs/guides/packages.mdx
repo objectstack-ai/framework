@@ -308,7 +308,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 **Organization Scoping Plugin** — Multi-org (a.k.a. "soft" multi-tenant) row-level scoping built on top of `plugin-security`.
 
 - **Features**: `organization_id` auto-stamp on insert, per-org seed-data replay, default-org bootstrap, orphan-row claim hook
-- **When to use**: Multi-organization SaaS where every row is scoped to an `sys_organization`. Enable by setting `OS_MULTI_ORG_ENABLED=true` (the legacy `OS_MULTI_TENANT` still works as a deprecated alias); registered automatically before `plugin-security`
+- **When to use**: Multi-organization SaaS where every row is scoped to an `sys_organization`. Enable by setting `OS_MULTI_ORG_ENABLED=true`; registered automatically before `plugin-security`
 - **README**: [View README](/packages/plugins/plugin-org-scoping/README.md)
 
 ### @objectstack/plugin-audit
@@ -334,14 +334,6 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **Features**: Lightweight HTTP server, middleware support, edge-compatible
 - **When to use**: Serve ObjectStack REST API with Hono
 - **README**: [View README](/packages/plugins/plugin-hono-server/README.md)
-
-### @objectstack/plugin-msw
-
-**MSW Plugin** — Mock Service Worker for testing.
-
-- **Features**: Mock HTTP handlers for testing without real server
-- **When to use**: Frontend testing, integration tests
-- **README**: [View README](/packages/plugins/plugin-msw/README.md)
 
 ### @objectstack/plugin-dev
 
@@ -390,56 +382,14 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 ## Framework Adapters
 
-ObjectStack integrates with popular web frameworks via adapters. All adapters expose ObjectStack's REST API through the framework's routing system.
-
-### @objectstack/express
-
-**Express.js Adapter** — Traditional Node.js web framework.
-
-- **Use case**: Classic Node.js applications, RESTful APIs
-- **README**: [View README](/packages/adapters/express/README.md)
-
-### @objectstack/fastify
-
-**Fastify Adapter** — High-performance Node.js framework.
-
-- **Use case**: Performance-critical applications, microservices
-- **README**: [View README](/packages/adapters/fastify/README.md)
+The open edition ships the **Hono** adapter. Hono runs on Node.js, Bun, Deno, and edge runtimes (Cloudflare Workers, Vercel Edge), covering most deployments. For another framework, build a thin adapter on the public `HttpDispatcher` API (the previous Express/Fastify/Next/Nest/Nuxt/SvelteKit adapters were ~50-line wrappers and can be vendored out-of-tree).
 
 ### @objectstack/hono
 
-**Hono Adapter** — Edge-native web framework.
+**Hono Adapter** — the supported HTTP adapter; edge-native and multi-runtime.
 
-- **Use case**: Cloudflare Workers, Vercel Edge, Deno, Bun
+- **Use case**: Node.js, Bun, Deno, Cloudflare Workers, Vercel Edge
 - **README**: [View README](/packages/adapters/hono/README.md)
-
-### @objectstack/nestjs
-
-**NestJS Adapter** — Enterprise TypeScript framework.
-
-- **Use case**: Enterprise applications, complex architectures
-- **README**: [View README](/packages/adapters/nestjs/README.md)
-
-### @objectstack/nextjs
-
-**Next.js Adapter** — React metaframework.
-
-- **Use case**: Full-stack React applications, App Router, Server Components
-- **README**: [View README](/packages/adapters/nextjs/README.md)
-
-### @objectstack/nuxt
-
-**Nuxt Adapter** — Vue metaframework.
-
-- **Use case**: Full-stack Vue applications
-- **README**: [View README](/packages/adapters/nuxt/README.md)
-
-### @objectstack/sveltekit
-
-**SvelteKit Adapter** — Svelte metaframework.
-
-- **Use case**: Full-stack Svelte applications
-- **README**: [View README](/packages/adapters/sveltekit/README.md)
 
 ---
 

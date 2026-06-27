@@ -108,7 +108,7 @@ Each node performs a specific action in the flow.
 | `update_record` | Update existing records |
 | `delete_record` | Delete records |
 | `get_record` | Query records |
-| `http` | Make an HTTP API call (the deprecated alias `http_request` still resolves to this) |
+| `http` | Make an HTTP API call |
 | `script` | Run a custom script action (dispatched by `config.actionType`) |
 | `screen` | Display a user form/screen (durable pause) |
 | `wait` | Pause for a timer or named signal (durable pause; timers auto-resume) |
@@ -317,7 +317,7 @@ events).
   type: 'try_catch',
   label: 'Charge with fallback',
   config: {
-    try: { nodes: [{ id: 'charge', type: 'http_request', label: 'Charge', config: { /* … */ } }], edges: [] },
+    try: { nodes: [{ id: 'charge', type: 'http', label: 'Charge', config: { /* … */ } }], edges: [] },
     catch: { nodes: [{ id: 'flag', type: 'update_record', label: 'Flag failure', config: { /* … */ } }], edges: [] },
     errorVariable: '$error',
     retry: { maxRetries: 3, retryDelayMs: 1000, backoffMultiplier: 2 },

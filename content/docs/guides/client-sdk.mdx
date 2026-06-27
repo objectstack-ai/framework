@@ -382,7 +382,7 @@ The `find` method accepts an options object with **canonical** (recommended) fie
 | `expand` | `Record<string, any>` or `string[]` | Relation loading (JOIN) | `{ owner: {} }` |
 
 <Callout type="warn">
-**Deprecated aliases:** The following legacy field names are still accepted for backward compatibility but will be removed in a future major version: `select` → `fields`, `filter`/`filters` → `where`, `sort` → `orderBy`, `top` → `limit`, `skip` → `offset`.
+**Removed in 11:** the legacy query-field aliases were removed — use the canonical names: `fields` (was `select`), `where` (was `filter`/`filters`), `orderBy` (was `sort`), `limit` (was `top`), `offset` (was `skip`).
 </Callout>
 
 ### Batch Options

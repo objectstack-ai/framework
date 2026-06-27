@@ -306,7 +306,7 @@ than redefining the basics.
 
 > **Single-org vs. multi-org runtimes.** The wildcard `tenant_isolation`
 > RLS row above only takes effect when `@objectstack/plugin-org-scoping`
-> is registered (typically via `OS_MULTI_TENANT=true`). In single-org
+> is registered (typically via `OS_MULTI_ORG_ENABLED=true`). In single-org
 > mode `plugin-security` detects the missing `org-scoping` service and
 > strips the wildcard policy so reads / writes aren't accidentally
 > filtered by an unset `current_user.organization_id`. See the

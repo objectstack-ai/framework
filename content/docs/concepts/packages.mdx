@@ -335,37 +335,7 @@ The package does **not** export schemas from the root; import the domain you nee
 
 ## Framework Adapters
 
-Framework adapters that bridge ObjectStack's unified `HttpDispatcher` to specific HTTP frameworks.
-
-### @objectstack/express
-
-**Description:** Express Framework Adapter
-
-**Purpose:** Converts ObjectStack's standard HTTP dispatch interface to Express routes.
-
-**Key Features:**
-- Maps standard routes to Express handlers
-- Supports Express v5 middleware chain
-- Bearer token authentication via AuthPlugin
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED**
-
----
-
-### @objectstack/fastify
-
-**Description:** Fastify Framework Adapter
-
-**Purpose:** Converts ObjectStack's standard HTTP dispatch interface to Fastify routes.
-
-**Key Features:**
-- Maps standard routes to Fastify handlers
-- Supports Fastify v5 plugin system
-- Bearer token authentication via AuthPlugin
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED**
-
----
+The open edition ships the **Hono** adapter. For another framework, build a thin adapter on the public `HttpDispatcher` API — the previous Express / Fastify / Next.js / NestJS / Nuxt / SvelteKit adapters were removed in 11 and can be vendored out-of-tree.
 
 ### @objectstack/hono
 
@@ -377,66 +347,6 @@ Framework adapters that bridge ObjectStack's unified `HttpDispatcher` to specifi
 - Maps standard routes to Hono handlers
 - Supports Hono's middleware chain
 - Works with Node.js, Bun, Deno, Cloudflare Workers
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED**
-
----
-
-### @objectstack/nestjs
-
-**Description:** NestJS Framework Adapter
-
-**Purpose:** Integrates ObjectStack as a NestJS module with automatic controller generation.
-
-**Key Features:**
-- NestJS module registration
-- Automatic controller generation from metadata
-- Dependency injection integration
-
-**Implementation Status:** 🔄 **IN PROGRESS**
-
----
-
-### @objectstack/nextjs
-
-**Description:** Next.js Framework Adapter
-
-**Purpose:** Integrates ObjectStack with Next.js App Router and API routes.
-
-**Key Features:**
-- App Router integration
-- API route handlers
-- Server-side data access and server actions
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED**
-
----
-
-### @objectstack/nuxt
-
-**Description:** Nuxt Framework Adapter
-
-**Purpose:** Integrates ObjectStack with Nuxt server routes via h3.
-
-**Key Features:**
-- h3 event handler integration
-- Nitro server route support
-- Bearer token authentication via AuthPlugin
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED**
-
----
-
-### @objectstack/sveltekit
-
-**Description:** SvelteKit Framework Adapter
-
-**Purpose:** Integrates ObjectStack with SvelteKit hooks and server routes.
-
-**Key Features:**
-- SvelteKit handle hook integration
-- Server route handlers
-- Bearer token authentication via AuthPlugin
 
 **Implementation Status:** ✅ **FULLY IMPLEMENTED**
 
@@ -498,30 +408,6 @@ Framework adapters that bridge ObjectStack's unified `HttpDispatcher` to specifi
 - Local development server
 
 **Implementation Status:** ✅ **FULLY IMPLEMENTED** - Production ready
-
----
-
-### @objectstack/plugin-msw
-
-**Description:** Mock Service Worker (MSW) Plugin for ObjectStack Testing
-
-**Purpose:** Testing plugin that mocks the entire ObjectStack backend in browser/node using the unified Runtime logic.
-
-**Key Features:**
-- **Unified Dispatcher**: Uses `@objectstack/runtime`'s `HttpDispatcher` to behave exactly like the real server
-- **Full Protocol Mocking**: Mocks Auth, Metadata, Data, Storage, Analytics, and Automation endpoints
-- **Browser Testing**: High-fidelity backend simulation in browser environments
-- **Custom Handlers**: Support for custom request handlers
-- **Request Logging**: Built-in request/response logging
-- **Service Worker Based**: Uses MSW's service worker approach
-
-**Use Cases:**
-- Unit testing React components
-- Integration testing frontend applications
-- Browser-based testing without backend
-- E2E testing with mocked APIs
-
-**Implementation Status:** ✅ **FULLY IMPLEMENTED** - Production ready for testing
 
 ---
 
@@ -928,20 +814,12 @@ Trigger packages auto-launch flows in response to events (ADR-0018, ADR-0041).
     │               ├─→ @objectstack/client (consumes runtime APIs)
     │               │       ↓
     │               │       └─→ @objectstack/client-react (wraps client)
-    │               └─→ Adapters:
-    │                       ├─→ @objectstack/express (Express routes)
-    │                       ├─→ @objectstack/fastify (Fastify routes)
-    │                       ├─→ @objectstack/hono (Hono routes)
-    │                       ├─→ @objectstack/nestjs (NestJS modules)
-    │                       ├─→ @objectstack/nextjs (Next.js routes)
-    │                       ├─→ @objectstack/nuxt (Nuxt/h3 routes)
-    │                       └─→ @objectstack/sveltekit (SvelteKit hooks)
+    │               └─→ @objectstack/hono (Hono adapter)
     └─→ @objectstack/cli (validates against spec schemas)
 
 Plugins (depend on core packages):
     ├─→ @objectstack/driver-memory (implements driver interface)
     ├─→ @objectstack/plugin-hono-server (HTTP server via @objectstack/hono)
-    ├─→ @objectstack/plugin-msw (mocks for testing via runtime)
     ├─→ @objectstack/plugin-auth (authentication via better-auth)
     ├─→ @objectstack/plugin-security (RBAC, RLS, field masking)
     └─→ @objectstack/plugin-dev (dev mode, all services in-memory)

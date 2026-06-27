@@ -652,8 +652,7 @@ fields:
     required: true
 ```
 
-When the kernel runs in multi-tenant mode (`OS_MULTI_ORG_ENABLED=true`; the older
-`OS_MULTI_TENANT` is still accepted as a deprecated alias), the registry also
+When the kernel runs in multi-tenant mode (`OS_MULTI_ORG_ENABLED=true`), the registry also
 auto-injects an `organization_id` lookup on every user object, and the default
 `tenant_isolation` RLS policy scopes reads/writes to the caller's tenant — so a user in
 Tenant A cannot see Tenant B's records.

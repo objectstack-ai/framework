@@ -275,14 +275,15 @@ the hosted ObjectStack Cloud control plane.
 
 ## Legacy aliases
 
-The names below still work this release but emit a one-shot deprecation
-warning. They will be removed in a future major.
+Some env vars accept a legacy alias for compatibility. **Ecosystem-standard names** (e.g. `DATABASE_URL`, `AUTH_SECRET`, `BETTER_AUTH_*`, `PORT`, `CORS_*`, `MCP_SERVER_*`) are permanently accepted and no longer warn. ObjectStack's own former names are deprecated — prefer the canonical `OS_*`.
+
+> **Removed in 11** (rename required): `OS_MULTI_TENANT` → `OS_MULTI_ORG_ENABLED`, `OBJECTSTACK_METADATA_WRITABLE` → `OS_METADATA_WRITABLE`, `AUTH_BASE_URL`/`OS_AUTH_BASE_URL` → `OS_AUTH_URL`.
 
 | Canonical | Legacy |
 |:---|:---|
 | `OS_PORT` | `PORT` |
 | `OS_DATABASE_URL` | `DATABASE_URL` |
-| `OS_AUTH_URL` | `BETTER_AUTH_URL`, `AUTH_BASE_URL`, `OS_AUTH_BASE_URL` |
+| `OS_AUTH_URL` | `BETTER_AUTH_URL` |
 | `OS_AUTH_SECRET` | `BETTER_AUTH_SECRET`, `AUTH_SECRET` |
 | `OS_ROOT_DOMAIN` | `ROOT_DOMAIN` |
 | `OS_CORS_ENABLED` | `CORS_ENABLED` |
@@ -293,8 +294,6 @@ warning. They will be removed in a future major.
 | `OS_MCP_SERVER_ENABLED` | `MCP_SERVER_ENABLED` |
 | `OS_MCP_SERVER_NAME` | `MCP_SERVER_NAME` |
 | `OS_MCP_SERVER_TRANSPORT` | `MCP_SERVER_TRANSPORT` |
-| `OS_MULTI_ORG_ENABLED` | `OS_MULTI_TENANT` |
 | `OS_NODE_ID` | `OBJECTSTACK_NODE_ID` |
-| `OS_METADATA_WRITABLE` | `OBJECTSTACK_METADATA_WRITABLE` |
 | `OS_HOME` | `OBJECTSTACK_HOME` |
 | `OS_DEV_CRYPTO_KEY` | `OBJECTSTACK_DEV_CRYPTO_KEY` |

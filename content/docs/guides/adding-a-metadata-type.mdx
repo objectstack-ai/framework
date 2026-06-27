@@ -58,7 +58,7 @@ The single source of truth for built-in types is the
 
 The `allowOrgOverride` flag is the **only** place that controls whether the
 overlay store accepts writes for this type. The runtime env-var
-`OS_METADATA_WRITABLE=foo,bar` (legacy alias: `OBJECTSTACK_METADATA_WRITABLE`)
+`OS_METADATA_WRITABLE=foo,bar`
 flips the flag on at runtime for the listed types — useful for opt-in writable
 behaviour in production. The allow-list is parsed and cached lazily on first
 use, not pinned at process start.
