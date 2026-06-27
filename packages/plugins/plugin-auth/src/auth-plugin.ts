@@ -12,6 +12,7 @@ import {
 import { SysOrganizationDetailPage, SysUserDetailPage } from '@objectstack/platform-objects/pages';
 import { AuthManager, type AuthManagerOptions } from './auth-manager.js';
 import { runSetInitialPassword } from './set-initial-password.js';
+import { runRegisterSsoProviderFromForm } from './register-sso-provider.js';
 import {
   authIdentityObjects,
   authPluginManifestHeader,
@@ -880,6 +881,35 @@ export class AuthPlugin implements Plugin {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         ctx.logger.error('[AuthPlugin] toggle-disabled failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // SSO admin: register an external OIDC IdP from the flat metadata form
+    // (ADR-0024). `@better-auth/sso`'s POST /sso/register expects the protocol
+    // fields NESTED under `oidcConfig` ({ clientId, clientSecret,
+    // discoveryEndpoint, scopes, mapping }). The `sys_sso_provider`
+    // `register_sso_provider` action collects FLAT form fields (the action
+    // param schema has no nested-path support), so posting them straight to
+    // /sso/register lands them at the top level where better-auth's Zod schema
+    // strips them → a provider with `oidc_config = null` that can never
+    // complete a login. This thin bridge reshapes the flat form body into the
+    // nested shape and RE-DISPATCHES it through the real /sso/register endpoint
+    // (via the better-auth handler) so the admin gate, the public-routable
+    // trustedOrigins allowance, discovery hydration, and secret handling all
+    // still run. No bespoke persistence. Retire when the action framework
+    // gains nested-param support.
+    rawApp.post(`${basePath}/admin/sso/register`, async (c: any) => {
+      try {
+        const { status, body } = await runRegisterSsoProviderFromForm(
+          (req) => this.authManager!.handleRequest(req),
+          c.req.raw,
+        );
+        return c.json(body, status as any);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] sso/register bridge failed', err);
         return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
       }
     });
