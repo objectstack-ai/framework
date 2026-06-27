@@ -31,6 +31,22 @@ export const SysSsoProvider = ObjectSchema.create({
   icon: 'shield-check',
   isSystem: true,
   managedBy: 'better-auth',
+  // ADR-0024 — env-global, ADMIN-ONLY identity config. Two orthogonal controls:
+  //   • `tenancy.enabled: false` — the env IS the tenant; providers are env-wide,
+  //     not org-partitioned. Opting out of multi-tenancy lets a platform admin's
+  //     `viewAllRecords` superuser bypass see every provider (without it, the
+  //     `member_default` wildcard `tenant_isolation` RLS denies every row, since
+  //     better-auth writes via its adapter with no tenantId → `organization_id`
+  //     is never stamped).
+  //   • `requiredPermissions: ['manage_platform_settings']` — object-level
+  //     capability gate (ADR-0066 D3) so ordinary members are denied entirely
+  //     (without it, tenancy-disabled + `member_default`'s `'*': allowRead` would
+  //     leak providers to every authenticated user).
+  // Together: admins see all env providers; non-admins get 403. better-auth's
+  // own endpoints already read via a system context. (Env-only object — no
+  // control-plane cross-tenant risk.)
+  tenancy: { enabled: false, strategy: 'shared' },
+  requiredPermissions: ['manage_platform_settings'],
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema.
   protection: {
     lock: 'full',
