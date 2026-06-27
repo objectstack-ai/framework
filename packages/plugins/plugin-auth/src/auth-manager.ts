@@ -346,6 +346,10 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
 export class AuthManager {
   private auth: Auth<any> | null = null;
   private config: AuthManagerOptions;
+  // ADR-0069 — cached "does any org require MFA" flag (per-org tightening).
+  // Refreshed lazily with a TTL so isAuthGateActive() stays synchronous + cheap.
+  private _orgMfaCache: { value: boolean; at: number } = { value: false, at: 0 };
+  private _orgMfaRefreshing = false;
 
   /**
    * Result of the dev-only admin seed (set by `AuthPlugin.maybeSeedDevAdmin`
@@ -2289,10 +2293,42 @@ export class AuthManager {
    * default), keeping the gate zero-overhead until an admin opts in.
    */
   public isAuthGateActive(): boolean {
+    // Per-org MFA (no global flag) can still activate the gate — keep the cheap
+    // sync check honest by consulting a lazily-refreshed cache.
+    this.refreshOrgMfaCacheIfStale();
     return (
       Math.floor(Number(this.config.passwordExpiryDays) || 0) > 0 ||
-      this.config.mfaRequired === true
+      this.config.mfaRequired === true ||
+      this._orgMfaCache.value
     );
+  }
+
+  /**
+   * ADR-0069 — refresh the "any org requires MFA" cache in the background when
+   * stale (60s TTL). Fire-and-forget: a brand-new per-org requirement activates
+   * the gate on the next request, never blocking this one. No-op when global MFA
+   * is already on (the gate is active regardless).
+   */
+  private refreshOrgMfaCacheIfStale(): void {
+    if (this.config.mfaRequired === true) return;
+    if (this._orgMfaRefreshing) return;
+    if (Date.now() - this._orgMfaCache.at < 60_000) return;
+    const engine = this.getDataEngine();
+    if (!engine) return;
+    this._orgMfaRefreshing = true;
+    void (async () => {
+      try {
+        const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+        const n = await engine.count('sys_organization', {
+          where: { require_mfa: true }, context: SYSTEM_CTX,
+        } as any);
+        this._orgMfaCache = { value: typeof n === 'number' && n > 0, at: Date.now() };
+      } catch {
+        // leave the prior value; try again after the TTL
+      } finally {
+        this._orgMfaRefreshing = false;
+      }
+    })();
   }
 
   /**
@@ -2308,8 +2344,10 @@ export class AuthManager {
     _twoFactorEnabledHint: boolean,
   ): Promise<{ code: string; message: string } | undefined> {
     const expiryDays = Math.floor(Number(this.config.passwordExpiryDays) || 0);
-    const mfaRequired = this.config.mfaRequired === true;
-    if (expiryDays <= 0 && !mfaRequired) return undefined; // no gate feature active
+    const mfaGlobal = this.config.mfaRequired === true;
+    // Per-org tightening: an org may require MFA above the global floor.
+    const orgMaybeRequires = !mfaGlobal && !!_activeOrgId && this._orgMfaCache.value;
+    if (expiryDays <= 0 && !mfaGlobal && !orgMaybeRequires) return undefined; // no gate feature active
     const engine = this.getDataEngine();
     if (!engine || !userId) return undefined;
     try {
@@ -2319,6 +2357,15 @@ export class AuthManager {
         fields: ['password_changed_at', 'two_factor_enabled', 'mfa_required_at'],
         context: SYSTEM_CTX,
       } as any);
+
+      // Effective MFA requirement: global floor OR the active org's require_mfa.
+      let mfaRequired = mfaGlobal;
+      if (!mfaRequired && orgMaybeRequires) {
+        const org = await engine.findOne('sys_organization', {
+          where: { id: _activeOrgId }, fields: ['require_mfa'], context: SYSTEM_CTX,
+        } as any);
+        mfaRequired = org?.require_mfa === true || org?.require_mfa === 1;
+      }
 
       // ── Password expiry ───────────────────────────────────────────────
       if (expiryDays > 0) {

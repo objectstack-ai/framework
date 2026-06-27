@@ -1975,4 +1975,65 @@ describe('AuthManager', () => {
       expect(g?.code).toBe('MFA_REQUIRED');
     });
   });
+
+  // ADR-0069 D3 — per-org MFA tightening (an org may require MFA above the
+  // global floor). Uses an object-aware engine mock (sys_user + sys_organization).
+  describe('per-org enforced MFA (ADR-0069 D3)', () => {
+    const SECRET = 'test-secret-at-least-32-chars-long';
+    const makeEngine = (user: any, org: any) => ({
+      findOne: vi.fn(async (obj: string, q: any) => {
+        const row = obj === 'sys_organization' ? org : user;
+        if (!row) return null;
+        const w = q?.where ?? {};
+        return Object.entries(w).every(([k, v]) => (row as any)[k] === v) ? row : null;
+      }),
+      update: vi.fn(async () => ({})),
+      count: vi.fn(async () => 1),
+    });
+    const mgr = (engine: any, extra: any = {}) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', dataEngine: engine, ...extra });
+      warn.mockRestore();
+      return m;
+    };
+
+    it('isAuthGateActive trips on the cached org-MFA flag even with global MFA off', () => {
+      const m = mgr(makeEngine(null, null), {});
+      // Prime the cache as if an org requires MFA.
+      (m as any)._orgMfaCache = { value: true, at: Date.now() };
+      expect(m.isAuthGateActive()).toBe(true);
+    });
+
+    it('blocks MFA_REQUIRED when the ACTIVE ORG requires MFA (global off) and grace elapsed', async () => {
+      const old = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const engine = makeEngine(
+        { id: 'u1', two_factor_enabled: false, mfa_required_at: old },
+        { id: 'org1', require_mfa: true },
+      );
+      const m = mgr(engine, { mfaRequired: false, mfaGracePeriodDays: 7 });
+      (m as any)._orgMfaCache = { value: true, at: Date.now() }; // org-requires cache primed
+      const g = await (m as any).computeAuthGate('u1', 'org1', false);
+      expect(g?.code).toBe('MFA_REQUIRED');
+    });
+
+    it('does NOT block when the active org does not require MFA (global off)', async () => {
+      const old = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const engine = makeEngine(
+        { id: 'u1', two_factor_enabled: false, mfa_required_at: old },
+        { id: 'org1', require_mfa: false },
+      );
+      const m = mgr(engine, { mfaRequired: false });
+      (m as any)._orgMfaCache = { value: true, at: Date.now() };
+      await expect((m as any).computeAuthGate('u1', 'org1', false)).resolves.toBeUndefined();
+    });
+
+    it('is a no-op when no org requires MFA and there is no active org', async () => {
+      const engine = makeEngine({ id: 'u1', two_factor_enabled: false }, null);
+      const m = mgr(engine, { mfaRequired: false });
+      // cache says no org requires MFA
+      (m as any)._orgMfaCache = { value: false, at: Date.now() };
+      await expect((m as any).computeAuthGate('u1', undefined, false)).resolves.toBeUndefined();
+      expect(engine.findOne).not.toHaveBeenCalled();
+    });
+  });
 });

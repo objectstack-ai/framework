@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
+import { ObjectKernel, getEnv, resolveLocale, evaluateAuthGate, isAuthGateAllowlisted } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
@@ -1034,6 +1034,45 @@ export class HttpDispatcher {
      * response object that callers should surface directly — no further
      * dispatch happens.
      */
+    /**
+     * ADR-0069 — returns a 403 response when the resolved session is blocked by
+     * an auth-policy gate (expired password / required MFA) on a non-allow-listed
+     * path, else null. Mirrors the REST `enforceAuth` seam so REST + dispatcher
+     * (MCP, GraphQL) enforce consistently. Fails open on any lookup error.
+     */
+    private async enforceAuthGate(context: any, cleanPath: string): Promise<any | null> {
+        try {
+            if (isAuthGateAllowlisted(cleanPath)) return null;
+            const authService: any = await this.resolveService('auth', context.environmentId);
+            if (!authService || typeof authService.isAuthGateActive !== 'function' || !authService.isAuthGateActive()) {
+                return null;
+            }
+            let api: any = authService.api;
+            if (!api && typeof authService.getApi === 'function') api = await authService.getApi();
+            if (!api?.getSession) return null;
+            // Normalize headers to a Web Headers instance for getSession.
+            const raw: any = context?.request?.headers;
+            let headers: any;
+            if (raw && typeof raw.get === 'function') {
+                headers = raw;
+            } else if (raw && typeof raw === 'object') {
+                headers = new (globalThis as any).Headers();
+                for (const k of Object.keys(raw)) {
+                    const v = raw[k];
+                    if (v != null) headers.set(String(k), Array.isArray(v) ? v.join(',') : String(v));
+                }
+            } else {
+                return null;
+            }
+            const session: any = await api.getSession({ headers }).catch(() => undefined);
+            const gate = evaluateAuthGate(session?.user, cleanPath);
+            if (!gate) return null;
+            return this.error(gate.message, 403, { code: gate.code });
+        } catch {
+            return null; // fail-open — never break dispatch on a gate hiccup
+        }
+    }
+
     private async enforceProjectMembership(
         context: HttpProtocolContext,
         path: string,
@@ -3542,6 +3581,16 @@ export class HttpDispatcher {
             });
         } catch {
             // anonymous request — leave executionContext undefined
+        }
+
+        // ── ADR-0069 Authentication-policy gate ──
+        // Block a gated session (expired password / required MFA) from
+        // protected MCP/GraphQL/data routes, mirroring the REST seam. The core
+        // allow-list keeps auth + remediation reachable. Skipped (no session
+        // lookup) when no gate feature is active.
+        const authGated = await this.enforceAuthGate(context, cleanPath);
+        if (authGated) {
+            return { handled: true, response: authGated };
         }
 
         // ── Project Membership Enforcement ──

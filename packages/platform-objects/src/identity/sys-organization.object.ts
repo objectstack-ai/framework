@@ -202,6 +202,18 @@ export const SysOrganization = ObjectSchema.create({
       group: 'Configuration',
     }),
 
+    // ADR-0069 D3 — per-org MFA tightening above the global floor. When true,
+    // members of this org must enrol TOTP to access data (enforced at the
+    // session-validation gate). An org can only tighten, never loosen, the
+    // global `mfa_required` setting.
+    require_mfa: Field.boolean({
+      label: 'Require Multi-Factor Auth',
+      required: false,
+      defaultValue: false,
+      group: 'Configuration',
+      description: 'When true, every member of this organization must enroll an authenticator app to access data.',
+    }),
+
     // ── System ───────────────────────────────────────────────────
     id: Field.text({
       label: 'Organization ID',
