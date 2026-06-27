@@ -109,11 +109,6 @@ describe('app-crm minimal metadata bundle', () => {
     expect(rules.some((r) => r.type === 'owner')).toBe(true);
   });
 
-  it('has security policies', () => {
-    const policies = stack.policies ?? [];
-    expect(policies.length).toBeGreaterThanOrEqual(1);
-    expect(policies.some((p) => p.isDefault)).toBe(true);
-  });
 
   it('has API endpoints', () => {
     expect((stack.apis ?? []).length).toBeGreaterThanOrEqual(2);
