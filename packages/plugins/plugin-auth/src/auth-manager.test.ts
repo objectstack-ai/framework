@@ -1594,4 +1594,141 @@ describe('AuthManager', () => {
       }
     });
   });
+
+  // ADR-0069 D2: per-identity account lockout + native rate-limit passthrough.
+  // The lockout state machine is exercised directly via the AuthManager helpers
+  // with a mocked data engine (deterministic; the live multi-failure path is
+  // covered by the dogfood smoke).
+  describe('account lockout + rate limiting (ADR-0069 D2)', () => {
+    const SECRET = 'test-secret-at-least-32-chars-long';
+    // findOne honours the `where` clause (the ObjectQL engine key) — so a
+    // regression to the wrong key (`filter`, silently ignored → returns the
+    // first/arbitrary row) makes these tests fail, not pass. Caught a real bug
+    // in dogfood that a query-agnostic mock had masked.
+    const makeEngine = (user: any) => ({
+      findOne: vi.fn(async (_obj: string, q: any) => {
+        const w = q?.where ?? {};
+        if (!user) return null;
+        const matches = Object.entries(w).every(([k, v]) => (user as any)[k] === v);
+        return matches ? user : null;
+      }),
+      update: vi.fn(async () => ({ ...(user ?? {}) })),
+      count: vi.fn(),
+    });
+    const mgr = (engine: any, extra: any = {}) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', dataEngine: engine, ...extra });
+      warn.mockRestore();
+      return m;
+    };
+
+    it('assertAccountNotLocked is a no-op when lockout is disabled (threshold 0)', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', locked_until: new Date(Date.now() + 60_000).toISOString() });
+      const m = mgr(engine, { lockoutThreshold: 0 });
+      await expect((m as any).assertAccountNotLocked('a@b.com')).resolves.toBeUndefined();
+      expect(engine.findOne).not.toHaveBeenCalled();
+    });
+
+    it('assertAccountNotLocked throws ACCOUNT_LOCKED while locked_until is in the future', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', locked_until: new Date(Date.now() + 60_000).toISOString() });
+      const m = mgr(engine, { lockoutThreshold: 3 });
+      await expect((m as any).assertAccountNotLocked('a@b.com')).rejects.toMatchObject({
+        body: { code: 'ACCOUNT_LOCKED' },
+      });
+    });
+
+    it('assertAccountNotLocked allows sign-in once the lock has expired', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', locked_until: new Date(Date.now() - 60_000).toISOString() });
+      const m = mgr(engine, { lockoutThreshold: 3 });
+      await expect((m as any).assertAccountNotLocked('a@b.com')).resolves.toBeUndefined();
+    });
+
+    it('recordSignInOutcome increments below threshold without locking', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', failed_login_count: 0, locked_until: null });
+      const m = mgr(engine, { lockoutThreshold: 3 });
+      await (m as any).recordSignInOutcome('a@b.com', false);
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.failed_login_count).toBe(1);
+      expect(patch.locked_until).toBeUndefined();
+    });
+
+    it('recordSignInOutcome stamps locked_until (a Date) once the threshold is reached', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', failed_login_count: 2, locked_until: null });
+      const m = mgr(engine, { lockoutThreshold: 3, lockoutDurationMinutes: 15 });
+      await (m as any).recordSignInOutcome('a@b.com', false);
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.failed_login_count).toBe(3);
+      expect(patch.locked_until instanceof Date).toBe(true);
+      // ~15 minutes out (datetime stored as a Date, never epoch-ms — see ADR-0074).
+      expect((patch.locked_until as Date).getTime()).toBeGreaterThan(Date.now() + 14 * 60_000);
+    });
+
+    it('recordSignInOutcome resets counter + lock on success when there is state to clear', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', failed_login_count: 2, locked_until: null });
+      const m = mgr(engine, { lockoutThreshold: 3 });
+      await (m as any).recordSignInOutcome('a@b.com', true);
+      expect(engine.update).toHaveBeenCalledWith(
+        'sys_user',
+        { id: 'u1', failed_login_count: 0, locked_until: null },
+        expect.anything(),
+      );
+    });
+
+    it('recordSignInOutcome skips the write on success when nothing needs clearing', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', failed_login_count: 0, locked_until: null });
+      const m = mgr(engine, { lockoutThreshold: 3 });
+      await (m as any).recordSignInOutcome('a@b.com', true);
+      expect(engine.update).not.toHaveBeenCalled();
+    });
+
+    it('recordSignInOutcome is a no-op when lockout is disabled', async () => {
+      const engine = makeEngine({ id: 'u1', email: 'a@b.com', failed_login_count: 5 });
+      const m = mgr(engine, { lockoutThreshold: 0 });
+      await (m as any).recordSignInOutcome('a@b.com', false);
+      expect(engine.update).not.toHaveBeenCalled();
+    });
+
+    it('unlockUser clears failed_login_count and locked_until', async () => {
+      const engine = makeEngine({ id: 'u1' });
+      const m = mgr(engine);
+      await expect(m.unlockUser('u1')).resolves.toBe(true);
+      expect(engine.update).toHaveBeenCalledWith(
+        'sys_user',
+        { id: 'u1', failed_login_count: 0, locked_until: null },
+        expect.anything(),
+      );
+    });
+
+    it('unlockUser returns false for an unknown user', async () => {
+      const engine = makeEngine(null);
+      const m = mgr(engine);
+      await expect(m.unlockUser('nope')).resolves.toBe(false);
+      expect(engine.update).not.toHaveBeenCalled();
+    });
+
+    it('passes a configured rateLimit through to betterAuth', async () => {
+      let captured: any;
+      (betterAuth as any).mockImplementation((cfg: any) => { captured = cfg; return { handler: vi.fn(), api: {} }; });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({
+        secret: SECRET,
+        baseUrl: 'http://localhost:3000',
+        rateLimit: { enabled: true, window: 60, max: 10, customRules: { '/sign-in/email': { window: 60, max: 10 } } } as any,
+      });
+      await m.getAuthInstance();
+      warn.mockRestore();
+      expect(captured.rateLimit).toMatchObject({ enabled: true, max: 10, window: 60 });
+      expect(captured.rateLimit.customRules['/sign-in/email']).toEqual({ window: 60, max: 10 });
+    });
+
+    it('omits rateLimit from the betterAuth config when unset (keeps library defaults)', async () => {
+      let captured: any;
+      (betterAuth as any).mockImplementation((cfg: any) => { captured = cfg; return { handler: vi.fn(), api: {} }; });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000' });
+      await m.getAuthInstance();
+      warn.mockRestore();
+      expect(captured).not.toHaveProperty('rateLimit');
+    });
+  });
 });

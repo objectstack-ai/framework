@@ -269,6 +269,26 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * "create organization" screen.
    */
   databaseHooks?: BetterAuthOptions['databaseHooks'];
+
+  /**
+   * ADR-0069 D2 — account lockout (anti-brute-force). After this many
+   * consecutive failed sign-ins the account is locked for
+   * {@link lockoutDurationMinutes}. `0` (default) disables lockout.
+   * Enforced per-identity in the `/sign-in/email` before/after hooks
+   * (survives IP rotation, unlike the per-IP {@link rateLimit}).
+   */
+  lockoutThreshold?: number;
+
+  /** Minutes an account stays locked once the threshold is crossed. Default 15. */
+  lockoutDurationMinutes?: number;
+
+  /**
+   * ADR-0069 D2 — better-auth-native per-IP rate limiting, passed through to
+   * better-auth's core `rateLimit`. The settings bind tightens `customRules`
+   * for the auth endpoints (`/sign-in/email`, `/sign-up/email`,
+   * `/reset-password`). Multi-node deployments need a shared `storage`.
+   */
+  rateLimit?: BetterAuthOptions['rateLimit'];
 }
 
 /**
@@ -531,6 +551,11 @@ export class AuthManager {
         updateAge: this.config.session?.updateAge || 60 * 60 * 24, // 1 day default
       },
 
+      // ADR-0069 D2 — per-IP rate limiting (native). Only set when configured
+      // so better-auth keeps its own defaults otherwise. The settings bind
+      // supplies stricter `customRules` for the auth endpoints.
+      ...(this.config.rateLimit ? { rateLimit: this.config.rateLimit } : {}),
+
       // better-auth plugins — registered based on AuthPluginConfig flags
       plugins,
 
@@ -704,6 +729,15 @@ export class AuthManager {
             // fall through to better-auth's own handler
           }
 
+          // ── ADR-0069 D2: account lockout (gate) ─────────────────────
+          // Reject a sign-in for a locked identity BEFORE better-auth checks
+          // the password — a lock must hold even against the correct password.
+          if (ctx?.path === '/sign-in/email') {
+            const email = typeof ctx?.body?.email === 'string' ? ctx.body.email : '';
+            if (email) await this.assertAccountNotLocked(email);
+            return;
+          }
+
           if (ctx?.path !== '/sign-up/email') return;
           const ep = ctx?.context?.options?.emailAndPassword;
           if (!ep?.disableSignUp) return;
@@ -719,6 +753,25 @@ export class AuthManager {
           }
         }),
         after: createAuthMiddleware(async (ctx: any) => {
+          // ── ADR-0069 D2: account lockout (counter) ──────────────────
+          // better-auth catches an INVALID_EMAIL_OR_PASSWORD APIError and runs
+          // the after-hook with it on `ctx.context.returned`; a success leaves
+          // the session payload there. Count failures, reset on success.
+          if (ctx?.path === '/sign-in/email') {
+            const email = typeof ctx?.body?.email === 'string' ? ctx.body.email : '';
+            if (email) {
+              let succeeded = true;
+              try {
+                const { isAPIError } = await import('better-auth/api');
+                succeeded = !isAPIError(ctx?.context?.returned);
+              } catch {
+                succeeded = !(ctx?.context?.returned instanceof Error);
+              }
+              await this.recordSignInOutcome(email, succeeded);
+            }
+            return;
+          }
+
           if (ctx?.path !== '/sign-up/email') return;
           const ep = ctx?.context?.options?.emailAndPassword;
           if (ep && ctx.context.__osDisableSignUpOrig !== undefined) {
@@ -2006,6 +2059,103 @@ export class AuthManager {
     } catch {
       // Provenance stamp must never break federated login. Leave the prior value.
     }
+  }
+
+  /**
+   * ADR-0069 D2 — throw `ACCOUNT_LOCKED` when the identity is currently locked
+   * out (brute-force protection). No-op when lockout is disabled
+   * (`lockoutThreshold <= 0`) or no data engine is wired. Fails OPEN on a
+   * lookup error: an infra hiccup must never block every login.
+   */
+  private async assertAccountNotLocked(email: string): Promise<void> {
+    const threshold = Number(this.config.lockoutThreshold) || 0;
+    if (threshold <= 0) return;
+    const engine = this.getDataEngine();
+    if (!engine) return;
+    let locked = false;
+    try {
+      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const u = await engine.findOne('sys_user', {
+        where: { email }, fields: ['id', 'locked_until'], context: SYSTEM_CTX,
+      } as any);
+      const lu = u?.locked_until;
+      locked = !!(lu && new Date(lu).getTime() > Date.now());
+    } catch {
+      return; // fail-open
+    }
+    if (locked) {
+      const { APIError } = await import('better-auth/api');
+      throw new APIError('FORBIDDEN', {
+        message:
+          'This account is temporarily locked after too many failed sign-in ' +
+          'attempts. Try again later or ask an administrator to unlock it.',
+        code: 'ACCOUNT_LOCKED',
+      });
+    }
+  }
+
+  /**
+   * ADR-0069 D2 — record a sign-in outcome for lockout accounting. On failure
+   * increments `failed_login_count` and, once it reaches `lockoutThreshold`,
+   * stamps `locked_until = now + lockoutDurationMinutes`. On success resets
+   * both (only writing when there is something to clear, to avoid a no-op
+   * history row on every login). No-op when lockout is disabled. Never throws —
+   * a counter write must not turn a valid login into an error.
+   */
+  private async recordSignInOutcome(email: string, success: boolean): Promise<void> {
+    const threshold = Number(this.config.lockoutThreshold) || 0;
+    if (threshold <= 0) return;
+    const engine = this.getDataEngine();
+    if (!engine) return;
+    try {
+      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const u = await engine.findOne('sys_user', {
+        where: { email },
+        fields: ['id', 'failed_login_count', 'locked_until'],
+        context: SYSTEM_CTX,
+      } as any);
+      if (!u?.id) return;
+      if (success) {
+        if ((Number(u.failed_login_count) || 0) !== 0 || u.locked_until) {
+          await engine.update(
+            'sys_user',
+            { id: u.id, failed_login_count: 0, locked_until: null },
+            { context: SYSTEM_CTX } as any,
+          );
+        }
+        return;
+      }
+      const next = (Number(u.failed_login_count) || 0) + 1;
+      const patch: Record<string, unknown> = { id: u.id, failed_login_count: next };
+      if (next >= threshold) {
+        const mins = Number(this.config.lockoutDurationMinutes) || 15;
+        patch.locked_until = new Date(Date.now() + mins * 60_000);
+      }
+      await engine.update('sys_user', patch, { context: SYSTEM_CTX } as any);
+    } catch {
+      // Lockout accounting is best-effort — never break the auth response.
+    }
+  }
+
+  /**
+   * ADR-0069 D2 — clear a user's lockout state (admin "Unlock" action).
+   * Resets `failed_login_count` and `locked_until`. Returns false when no data
+   * engine is wired or the user does not exist.
+   */
+  public async unlockUser(userId: string): Promise<boolean> {
+    const engine = this.getDataEngine();
+    if (!engine || !userId) return false;
+    const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+    const u = await engine.findOne('sys_user', {
+      where: { id: userId }, fields: ['id'], context: SYSTEM_CTX,
+    } as any);
+    if (!u?.id) return false;
+    await engine.update(
+      'sys_user',
+      { id: userId, failed_login_count: 0, locked_until: null },
+      { context: SYSTEM_CTX } as any,
+    );
+    return true;
   }
 
   /**

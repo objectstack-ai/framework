@@ -48,6 +48,21 @@ describe('authSettingsManifest', () => {
     const groups = specs.filter((s) => s.type === 'group').map((s) => s.id);
     expect(groups).toContain('password_policy');
     expect(groups).toContain('sessions');
+    expect(groups).toContain('anti_abuse');
+  });
+
+  it('exposes anti-abuse lockout + rate-limit number fields (ADR-0069 D2)', () => {
+    const specs = authSettingsManifest.specifiers as any[];
+    const byKey = (k: string) => specs.find((s) => s.key === k);
+
+    const threshold = byKey('lockout_threshold');
+    expect(threshold.type).toBe('number');
+    expect(threshold.default).toBe(0); // off by default
+    expect(threshold.min).toBe(0);
+
+    expect(byKey('lockout_duration_minutes').default).toBe(15);
+    expect(byKey('rate_limit_max').default).toBe(10);
+    expect(byKey('rate_limit_window_seconds').default).toBe(60);
   });
 
   it('exposes encrypted Google OAuth credential fields', () => {

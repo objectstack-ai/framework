@@ -648,6 +648,46 @@ describe('AuthPlugin', () => {
       expect((manager as any).config.plugins?.passwordRejectBreached).toBeUndefined();
     });
 
+    it('binds account-lockout settings (ADR-0069 D2)', async () => {
+      const { manager } = await bootWithAuthSettings({
+        lockout_threshold: { value: 5, source: 'global' },
+        lockout_duration_minutes: { value: 30, source: 'global' },
+      });
+      const cfg = (manager as any).config;
+      expect(cfg.lockoutThreshold).toBe(5);
+      expect(cfg.lockoutDurationMinutes).toBe(30);
+    });
+
+    it('allows an explicit lockout_threshold of 0 to disable lockout', async () => {
+      const { manager } = await bootWithAuthSettings({
+        lockout_threshold: { value: 0, source: 'global' },
+      });
+      // 0 is a meaningful (feature-off) value, so it must still be applied —
+      // unlike the positive-int session fields where 0 is rejected as malformed.
+      expect((manager as any).config.lockoutThreshold).toBe(0);
+    });
+
+    it('binds auth rate-limit tuning into a native rateLimit with customRules (ADR-0069 D2)', async () => {
+      const { manager } = await bootWithAuthSettings({
+        rate_limit_max: { value: 5, source: 'global' },
+        rate_limit_window_seconds: { value: 30, source: 'global' },
+      });
+      const rl = (manager as any).config.rateLimit;
+      expect(rl).toMatchObject({ enabled: true, max: 5, window: 30 });
+      expect(rl.customRules['/sign-in/email']).toEqual({ window: 30, max: 5 });
+      expect(rl.customRules['/reset-password']).toEqual({ window: 30, max: 5 });
+    });
+
+    it('does not set lockout/rateLimit when those settings are default-source', async () => {
+      const { manager } = await bootWithAuthSettings({
+        lockout_threshold: { value: 0, source: 'default' },
+        rate_limit_max: { value: 10, source: 'default' },
+      });
+      const cfg = (manager as any).config;
+      expect(cfg.lockoutThreshold).toBeUndefined();
+      expect(cfg.rateLimit).toBeUndefined();
+    });
+
     it('enables Google from env credentials when google_enabled is explicit true', async () => {
       process.env.GOOGLE_CLIENT_ID = 'google-env-client-id';
       process.env.GOOGLE_CLIENT_SECRET = 'google-env-client-secret';
