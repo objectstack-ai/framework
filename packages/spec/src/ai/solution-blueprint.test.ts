@@ -224,7 +224,7 @@ describe('SolutionBlueprintStrictSchema (OpenAI strict mirror)', () => {
     expect('seedData' in SolutionBlueprintStrictSchema.shape).toBe(false);
   });
 
-  it('accepts a dashboard widget carrying the (nullable) measure + groupBy keys', () => {
+  it('accepts a dashboard widget carrying the (nullable) measure + groupBy + condition keys', () => {
     const parsed = SolutionBlueprintStrictSchema.parse({
       ...strictBp,
       dashboards: [
@@ -232,14 +232,15 @@ describe('SolutionBlueprintStrictSchema (OpenAI strict mirror)', () => {
           name: 'overview',
           label: null,
           widgets: [
-            { id: 'revenue', title: 'Total revenue', object: 'project', chart: 'metric', measure: 'amount', groupBy: null },
-            { id: 'w2', title: null, object: null, chart: null, measure: null, groupBy: null },
+            { id: 'revenue', title: 'Total revenue', object: 'project', chart: 'metric', measure: 'amount', groupBy: null, condition: null },
+            { id: 'low_stock', title: 'Low stock', object: 'project', chart: 'table', measure: null, groupBy: null, condition: { field: 'qty', op: 'lt', value: 10 } },
           ],
         },
       ],
     });
     expect(parsed.dashboards?.[0].widgets?.[0]).toMatchObject({ measure: 'amount', groupBy: null });
-    expect(parsed.dashboards?.[0].widgets?.[1].measure).toBeNull();
+    expect(parsed.dashboards?.[0].widgets?.[0].condition).toBeNull();
+    expect(parsed.dashboards?.[0].widgets?.[1].condition).toMatchObject({ field: 'qty', op: 'lt', value: 10 });
   });
 
   it('requires the (nullable) measure + groupBy widget keys to be present (OpenAI strict)', () => {
