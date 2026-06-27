@@ -3498,7 +3498,6 @@
     "ITeamGraphService (interface)",
     "ITenantRouter (interface)",
     "ITypedEventEmitter (interface)",
-    "IUIService (interface)",
     "IWorkflowService (interface)",
     "ImportObjectOpts (interface)",
     "ImportObjectResult (interface)",

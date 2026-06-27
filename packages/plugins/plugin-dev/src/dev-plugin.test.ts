@@ -176,13 +176,6 @@ describe('DevPlugin', () => {
     expect(i18n.t('missing', 'en')).toBe('missing');
     expect(Array.isArray(i18n.getLocales())).toBe(true);
 
-    // ── Verify IUIService contract ──
-    const ui = registeredServices.get('ui');
-    ui.registerView('test_view', { name: 'test_view', object: 'account' });
-    expect(ui.getView('test_view')).toBeDefined();
-    expect(Array.isArray(ui.listViews())).toBe(true);
-    expect(ui.listViews('account')).toHaveLength(1);
-
     // ── Verify IWorkflowService contract ──
     const workflow = registeredServices.get('workflow');
     const transResult = await workflow.transition({ recordId: 'r1', object: 'order', targetState: 'approved' });
