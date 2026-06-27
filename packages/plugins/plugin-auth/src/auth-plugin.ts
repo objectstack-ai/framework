@@ -345,6 +345,52 @@ export class AuthPlugin implements Plugin {
       await this.maybeSeedDevAdmin(ctx);
     });
 
+    // Identity-source provenance for accounts created OUTSIDE better-auth's
+    // `databaseHooks` — @better-auth/scim creates `sys_account` at the adapter
+    // level, which BYPASSES `account.create.after` / `stampIdentitySource`. This
+    // ObjectQL `afterInsert` hook stamps `source=idp_provisioned` regardless of
+    // the creation path, so SCIM-provisioned users are correctly marked as the
+    // managed mirror (ADR-0024 D4 / ADR-0071 verification #1). It mirrors the
+    // federated branch of `stampIdentitySource`, is idempotent, and never breaks
+    // the insert. Complementary to (not a replacement for) the OAuth-path stamp.
+    ctx.hook('kernel:ready', async () => {
+      try {
+        // Use the kernel's ObjectQL engine (available + hookable at kernel:ready);
+        // the auth manager's getDataEngine() is not yet wired this early.
+        const engine: any = ctx.getService<any>('objectql');
+        if (!engine || typeof engine.registerHook !== 'function') return;
+        const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+        engine.registerHook('afterInsert', async (hookCtx: any) => {
+          try {
+            if (hookCtx?.object !== 'sys_account') return;
+            const acct: any = hookCtx.result ?? {};
+            const providerId = acct.provider_id ?? acct.providerId;
+            const userId = acct.user_id ?? acct.userId;
+            // Only federated/SCIM accounts mark the user managed; a local
+            // password (`credential`) keeps the user env-native.
+            if (!userId || !providerId || providerId === 'credential') return;
+            // QueryAST options use `where` (not `filter`); a wrong key is silently
+            // ignored and counts every row — the bug that shipped env_native.
+            const credCount = await engine.count('sys_account', {
+              where: { user_id: userId, provider_id: 'credential' }, context: SYSTEM_CTX,
+            });
+            if (typeof credCount === 'number' && credCount > 0) return;
+            const u = await engine.findOne('sys_user', {
+              where: { id: userId }, fields: ['id', 'source'], context: SYSTEM_CTX,
+            });
+            if (u && u.source !== 'idp_provisioned') {
+              await engine.update('sys_user', { id: userId, source: 'idp_provisioned' }, { context: SYSTEM_CTX });
+            }
+          } catch {
+            // Provenance must never break account creation.
+          }
+        }, { packageId: 'com.objectstack.plugin-auth' });
+        ctx.logger.info('Identity-source afterInsert stamp registered on sys_account (SCIM-safe)');
+      } catch {
+        // Engine not available — skip; OAuth path still stamps via databaseHooks.
+      }
+    });
+
     // Register auth middleware on ObjectQL engine (if available)
     try {
       const ql = ctx.getService<any>('objectql');
