@@ -1,5 +1,63 @@
 # @objectstack/core
 
+## 11.0.0
+
+### Patch Changes
+
+- c715d25: chore(license): unify the framework repo to a single Apache-2.0 license
+
+  The repo was left in a half-finished, self-contradictory source-available
+  transition: 44 package `LICENSE` files carried restrictive dual-license text
+  (a Licensor of "ObjectStack AI LLC", a four-year conversion date, and an
+  anti-competitive-hosting grant) while those same packages' `package.json`
+  already declared `"license": "Apache-2.0"` — and that license text pointed at
+  `LICENSING.md` for the authoritative list of restricted packages, which listed
+  none. The root also carried a redundant `LICENSE.apache` left over from that
+  transition.
+
+  The framework is deliberately permissive Apache-2.0 to maximize adoption; value
+  capture lives in the separate closed-source cloud repo, not here. This change
+  makes that unambiguous: every package `LICENSE` now contains the canonical
+  Apache 2.0 text (copied from the root `LICENSE`), the redundant root
+  `LICENSE.apache` is removed, and `LICENSING.md` states the entire repository is
+  Apache-2.0 with no dual-license language. No restrictive-license residue remains
+  anywhere outside `node_modules`.
+
+  This is a metadata-only change (license text and `package.json` already agreed);
+  the patch bump republishes the affected packages with the corrected `LICENSE`.
+
+- aa33b02: fix(security): single-source the request authorization resolver — REST no longer drops sys_user_role
+
+  The REST server and the runtime dispatcher each carried their own copy of the request → ExecutionContext identity/role resolver, and they drifted on a security path. The REST copy silently omitted `sys_user_role` (so custom roles granted via the ADR-0057 D4 platform-RBAC path did not apply over REST), `sys_role_permission_set`, the `owner→org_owner` membership normalization, the platform-admin derivation, and the `ai_seat` synthesis — fail-closed (legitimate access denied), not an escalation.
+
+  Both entry points now delegate to a single shared resolver, `resolveAuthzContext` in `@objectstack/core/security` (joining the API-key verifier that already lived there). A contract test locks every authorization source and a lint gate (`check:authz-resolver`) prevents a future duplicate resolver or a dropped delegation.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

@@ -1,5 +1,197 @@
 # @objectstack/service-automation
 
+## 11.0.0
+
+### Major Changes
+
+- 82ff91c: Remove the deprecated `http_request` / `http_call` / `webhook` flow-node aliases — author `http` (ADR-0018 M3).
+
+  ADR-0018 M3 collapsed the divergent outbound-callout verbs onto the canonical
+  `http` node and kept the old names as deprecated aliases for back-compat. This
+  removes those aliases (the 11.0 cleanup):
+
+  - `http_request` is dropped from `FlowNodeAction` (and therefore
+    `FLOW_BUILTIN_NODE_TYPES`); authoring it now fails fast at parse instead of
+    resolving to `http`.
+  - `AutomationEngine` no longer registers the `http_request` / `http_call` /
+    `webhook` node aliases; only `http` is registered.
+  - The flow-builder palette offers `http`.
+
+  **Breaking.** Flows / workflow rules / approval actions that still use the old
+  node type must switch to `type: 'http'` (behavior is identical — durable outbox
+  when `config.durable`, inline fetch otherwise). The trigger `eventType: 'webhook'`
+  and the `webhook` resume event are unaffected — only the HTTP _node_ aliases are
+  removed. First-party examples (showcase, app-crm) are migrated.
+
+### Minor Changes
+
+- 6c4fbd9: fix(security): enforce flow `runAs` execution identity (#1888)
+
+  The `service-automation` engine now honors `flow.runAs` instead of ignoring it.
+  Previously the CRUD nodes passed **no identity** to ObjectQL, so the security
+  middleware was skipped entirely — every flow ran effectively elevated regardless
+  of `runAs`. A `runAs:'user'` flow did **not** de-elevate (a privilege-boundary
+  surprise), and `runAs:'system'` did not _explicitly_ elevate.
+
+  The engine now establishes the run's data-layer identity at setup and restores
+  the caller's context afterward:
+
+  - **`runAs:'system'`** → an elevated, RLS-bypassing system principal
+    (`{ isSystem: true }`): the run can read/write records the triggering user
+    cannot.
+  - **`runAs:'user'`** (default) → the **triggering user's** identity
+    (`{ userId, roles, permissions, tenantId }`): CRUD nodes' ObjectQL reads/writes
+    respect that user's row-level security, and the run can never exceed the
+    triggering user's grants.
+
+  To keep `runAs:'user'` faithful to a direct request by that user, the REST
+  trigger route (`@objectstack/runtime`) and the record-change trigger
+  (`@objectstack/trigger-record-change`) now forward the caller's resolved
+  `roles`/`tenantId` into the `AutomationContext` (new optional fields), not just
+  `userId`. The new `resolveRunDataContext` helper is the single place that maps a
+  run's effective `runAs` to the ObjectQL context, shared by every data node.
+
+  The `[EXPERIMENTAL — not enforced]` marker is removed from `FlowSchema.runAs`.
+
+  **Behavior change / migration.** Flows that previously relied on the implicit
+  elevation (the default `runAs:'user'` ran unscoped) now run as the triggering
+  user and are subject to their RLS. **Declare `runAs:'system'` on any flow that
+  must read or write beyond the triggering user's access** (e.g. system
+  automations, cross-owner roll-ups). Schedule-triggered runs have no trigger user;
+  under `user` they stay unscoped (there is no identity to scope to) — declare
+  `system` to make elevation explicit.
+
+  Proven both directions by the dogfood regression gate
+  (`flow-runas.dogfood.test.ts` — a restricted member triggers system vs user
+  flows against an owner-scoped record) and service-automation unit + regression
+  tests (`crud-runas.test.ts`).
+
+- ad143ce: fix(security): surface the schedule/user-less `runAs:'user'` fail-open (#1888 follow-up)
+
+  With `flow.runAs` now enforced (#1888), a **schedule-triggered** flow with the
+  default `runAs:'user'` has no trigger user. `resolveRunDataContext` returns
+  `undefined` for that case, so the CRUD nodes pass no ObjectQL `options.context`
+  and the security middleware — which _skips_ when there is no identity (it
+  delegates auth to the auth layer) — runs the operation **UNSCOPED** (effectively
+  elevated). An author who left `runAs` at the `'user'` default expecting a
+  restricted run silently gets an unscoped one — a fail-open footgun (ADR-0049: a
+  security property must not silently do the opposite of what it implies).
+
+  This is the **product decision** to make that explicit, chosen to keep legitimate
+  scheduled CRUD working (denying outright would break it, and silently elevating
+  would hide the author's intent). Prevention happens where the platform can tell
+  intent apart (author/build time); the runtime stays non-breaking but is no longer
+  silent:
+
+  - **Author-time lint** (`@objectstack/cli`, `lintFlowPatterns`): a new advisory
+    rule `flow-schedule-runas-unscoped` flags a schedule-triggered flow whose
+    effective `runAs` is `user` (explicit or unset) and which performs a data
+    operation — pointing the author at `runAs:'system'`. Catches the footgun at
+    compile time, before deploy (most flows are AI-authored).
+  - **Runtime warning** (`@objectstack/service-automation`): the engine now emits a
+    clear one-per-run warning when a user-mode run resolves no trigger identity and
+    the flow touches data — the fail-open is _audible_ rather than silent. Behavior
+    is otherwise unchanged (the run still executes), so scheduled CRUD that relied
+    on this is not broken. New helpers `runIsUnscopedUserMode`, `flowTouchesData`,
+    and `DATA_NODE_TYPES` are exported alongside `resolveRunDataContext`.
+  - **Spec describe** (`@objectstack/spec`): `FlowSchema.runAs` now states that a
+    scheduled run has no user, so under `user` it runs unscoped — declare `system`.
+
+  The first-party example apps that tripped the new lint are fixed to declare
+  `runAs:'system'` explicitly (`stale_opportunity_sweep`, the app-todo
+  `task_reminder` / `overdue_escalation` sweeps) — they read/write across owners and
+  were running unscoped by default.
+
+  Longer term, attributing scheduled runs to a dedicated service principal (so they
+  are scopable + audit-attributable rather than unscoped) is the right enforcement;
+  tracked as M2 follow-up.
+
+  Proven by a service-automation unit test (the engine warns once for a user-less
+  user-mode data run; stays silent for `system`, for an identified user, and for a
+  data-less flow), an end-to-end test wiring the **real `ScheduleTrigger` to the
+  real engine** (`@objectstack/trigger-schedule`) that fires a job and asserts the
+  user-less identity reaches the engine + trips the warning through the actual cron
+  path, and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that drives
+  user-less runs through the real automation + security + data stack: a
+  `runAs:'user'` run reads + writes an owner-scoped note a member cannot — audibly —
+  while `runAs:'system'` is the explicit, warning-free equivalent.
+
+  Refs #1888, ADR-0049.
+
+### Patch Changes
+
+- 4b5ec6e: fix(automation): re-bind scheduled-flow jobs on `os dev` hot-reload
+
+  Editing a schedule-triggered flow under `objectstack dev` silently kept firing
+  the OLD definition until a full server restart. The dev watcher recompiles
+  `dist/objectstack.json` and MetadataPlugin reloads it into the MetadataManager
+  (so GET /meta reads + UI HMR are fresh), but the AutomationEngine pulls its flow
+  definitions and trigger/job bindings ONCE at boot — nothing re-registered them
+  on reload. So the scheduled job bound at boot kept running the pre-edit flow
+  (old `runAs`, schedule, or logic) on its timer, with no signal that the edit had
+  no effect.
+
+  Fix: MetadataPlugin now fires a generic `metadata:reloaded` hook after each
+  artifact reload (the HMR POST handler and the server-side artifact-file watcher;
+  never on the initial boot load). AutomationServicePlugin subscribes and re-syncs
+  the engine from the metadata service — re-registering every current flow
+  (idempotent: `registerFlow` re-binds the trigger, and `ScheduleTrigger.start`
+  cancels + reschedules the job) and unregistering flows removed from the artifact
+  so their jobs stop firing. This covers all auto-triggered flow types
+  (schedule / record-change / api), not just scheduled ones, since record-change
+  flows were also executing their boot-time definitions after an edit. Production
+  deployments are unaffected — nothing reloads the artifact there.
+
+- b6a4972: fix(automation): honor the `assignments` wrapper shape on assignment nodes
+
+  The built-in `assignment` node executor set each TOP-LEVEL `config` key as a flow
+  variable. But the surfaces that author these nodes all emit an `assignments`
+  wrapper instead:
+
+  - Studio's visual Assignment editor → `config: { assignments: { <var>: <value> } }`
+  - bundled example flows (app-crm, showcase) → `config: { assignments: [{ variable, value }] }`
+
+  So a node designed in Studio (or any of the shipped examples) silently set a
+  single variable literally named `assignments` to the whole map/array and never
+  set the intended variables — it passed build and no-oped at run time, leaving
+  every downstream reference unresolved.
+
+  The executor now normalizes all three shapes (`assignments` map, `assignments`
+  array of `{ variable | name | key, value }`, and the legacy flat
+  `{ <var>: <value> }`) and interpolates `{var}` templates in the values, matching
+  the CRUD / screen nodes. Adds `logic-nodes.test.ts` covering each shape as a
+  regression guard.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/formula@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

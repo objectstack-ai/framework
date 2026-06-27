@@ -1,5 +1,50 @@
 # @objectstack/client
 
+## 11.0.0
+
+### Patch Changes
+
+- 1b00ba2: chore(client): remove dead `projects.*` env-member SDK methods (cloud#533 / ADR-0024 D9)
+
+  Removes `projects.listMembers` / `addMember` / `updateMemberRole` / `removeMember`,
+  which called `GET/POST/PATCH/DELETE /api/v1/cloud/environments/:id/members`. Those
+  control-plane endpoints were deleted in cloud#533 (retiring `sys_environment_member`),
+  so the methods returned 404. Org membership/invites now flow through the better-auth
+  `organization` plugin (`organization.inviteMember` / `listMembers` / …); objectui
+  already uses `organization.*` and no in-repo callers remained.
+
+  The `membership` field on the `projects.get()` response is unchanged — cloud#533 still
+  returns it on the single-env GET (re-sourced to the caller's org `sys_member` role).
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

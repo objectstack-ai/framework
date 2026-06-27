@@ -1,5 +1,119 @@
 # Changelog
 
+## 11.0.0
+
+### Minor Changes
+
+- 21b3208: Auth: password complexity policy (ADR-0069 D1, P1)
+
+  Adds `password_require_complexity` (toggle, default off) + `password_min_classes` (1–4, default 3) to the `auth` password-policy settings. A custom validator runs in the better-auth `before` hook on `/sign-up/email`, `/reset-password`, and `/change-password`, rejecting passwords that use fewer than `password_min_classes` of the four character classes (upper / lower / digit / symbol) with `PASSWORD_POLICY_VIOLATION` — better-auth natively enforces only min/max length.
+
+  Default-off and additive (no upgrade behavior change); per ADR-0049 the setting ships with its enforcement. No new identity fields. Continues the ADR-0069 P1 password-policy work alongside the HIBP breached-password reject (#2361).
+
+- 9b5bf3d: Auth: password history / no-reuse (ADR-0069 D1, P1)
+
+  Adds `password_history_count` (0–24, 0 = off) to the `auth` password-policy settings. On `/change-password` and `/reset-password`, a new password that matches the current password or any of the last N hashes is rejected with `PASSWORD_REUSE`. A new bounded `sys_account.previous_password_hashes` column (JSON ring, system-managed, hidden) backs the check; it is maintained by before/after hooks (capture the old hash, append on success).
+
+  Reuses better-auth's native `password.verify` (no bespoke crypto) and resolves the reset-flow user via the same token lookup better-auth uses. Default-off / additive (no upgrade behavior change); per ADR-0049 the setting ships with its enforcement.
+
+- cb5b393: Auth: account lockout + rate-limit tuning (ADR-0069 D2, P1)
+
+  Second slice of ADR-0069 — per-identity brute-force protection, reusing the setting→enforcement pattern from the HIBP PR.
+
+  - **Account lockout** `[custom][field]`: new `sys_user.failed_login_count` / `sys_user.locked_until` columns; `auth` settings `lockout_threshold` (0 = off) + `lockout_duration_minutes`. Enforced in the `/sign-in/email` before/after hooks — failures increment the counter, crossing the threshold stamps `locked_until`, and a locked account is rejected **even with the correct password** (survives IP rotation, unlike rate limiting). A successful sign-in resets both.
+  - **Admin Unlock**: new admin-guarded `POST /api/v1/auth/admin/unlock-user` route + an `unlock_user` action on `sys_user`.
+  - **Rate-limit tuning** `[native]`: `auth` settings `rate_limit_max` / `rate_limit_window_seconds` wire better-auth's core `rateLimit` with stricter `customRules` for `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
+
+  All settings default off / to safe values; additive (no upgrade behavior change). Per ADR-0049 each setting ships with its enforcement. Timestamps are written as `Date` (never epoch-ms) per ADR-0074.
+
+- ab5718a: Auth: reject breached passwords via Have I Been Pwned (ADR-0069 D1, P1)
+
+  First slice of ADR-0069 (enterprise authentication hardening) and the enforcement-wired pattern template the rest of the ADR follows. Adds a `password_reject_breached` auth setting (default **off**) bound end-to-end to better-auth's native `haveibeenpwned` plugin — a k-anonymity range check on sign-up / change-password / reset-password (the plaintext password never leaves the process).
+
+  - **spec**: new `passwordRejectBreached` flag on `AuthPluginConfigSchema`.
+  - **service-settings**: new "Reject breached passwords" toggle in the `auth` manifest's password-policy group (`global` scope, `manage_platform_settings`).
+  - **plugin-auth**: `bindAuthSettings` maps the setting into the plugin config; `buildPluginList` gates and mounts the `haveIBeenPwned` plugin (env `OS_AUTH_PASSWORD_REJECT_BREACHED` wins over config, mirroring `OS_AUTH_TWO_FACTOR`).
+  - **cli**: surface the knob in the `serve` boot config alongside `twoFactor`.
+
+  Default-off and additive — no behavior change on upgrade. Per ADR-0049 the toggle ships with its enforcement (no false surface). No new identity fields (the `[custom]` D1 items — complexity / expiry / history — land in follow-up PRs).
+
+### Patch Changes
+
+- caa3ef4: Auth: trust public-routable external-IdP origins at SSO registration (ADR-0024 / cloud#551)
+
+  `@better-auth/sso`'s discovery validation requires every IdP endpoint origin to be in `trustedOrigins` — even for a publicly-routable IdP. That broke ADR-0024's "register your OIDC IdP at runtime, no boot config" promise: registering any external IdP returned `400 discovery_untrusted_origin` unless the operator had pre-listed it.
+
+  When the external-SSO RP is enabled, `trustedOrigins` is now exposed as a per-request function that, for a `POST /sso/register` | `/sso/update-provider`, additionally trusts the **public-routable** issuer / `oidcConfig` endpoint origins declared in the request body (via `@better-auth/core`'s own `isPublicRoutableHost`). Private / internal / loopback hosts are never auto-trusted — they still require explicit `trustedOrigins` config (the documented SSRF escape hatch), and better-auth's own DNS-resolution checks still apply.
+
+  Verified: a same-origin public IdP (GitLab.com — issuer and all discovered endpoints on one origin, like Okta / Entra / Auth0 / Keycloak) now registers at runtime with no boot config (was a hard 400). The admin gate still fires first (a non-admin is rejected before discovery runs). Note: IdPs that split endpoints across multiple domains (e.g. Google's `accounts.google.com` + `oauth2.googleapis.com`) still need those extra origins in `trustedOrigins`.
+
+- 22b32c1: Auth: admin-gate self-service SSO provider registration + default-role JIT (ADR-0024 / cloud#551)
+
+  `@better-auth/sso`'s `POST /sso/register` only enforces org-admin when `body.organizationId` is supplied — a **global** (org-less) provider passed on nothing but a valid session, so any authenticated env member could register an env-wide external IdP (a JIT-provisioning / login-routing vector). This closed the "registerSSOProvider is admin-only" requirement of ADR-0024's first slice.
+
+  - **plugin-auth**: a `before`-hook on `/sso/register` now requires the caller to be a platform admin OR an owner/admin of their active org, regardless of `organizationId`. Fail-closed; unauthenticated requests still fall through to `sessionMiddleware` (→ 401). New helpers `resolveActor()` (hook-order-independent cookie/bearer resolution) and `isOrgOrPlatformAdmin()` (mirrors `customSession`'s role derivation; reads via `withSystemReadContext`).
+  - **plugin-auth**: `sso()` now receives `organizationProvisioning.defaultRole:'member'` so a first-time federated login lands with an explicit role (over SecurityPlugin's `member_default` baseline).
+
+  Additive and fail-closed — no behavior change for legitimate admins. The SSO mechanism stays framework-open (no identity-governance added).
+
+- 1e8a813: feat(auth): surface `features.sso` in the public `/auth/config` response
+
+  `getPublicConfig()` reported every other auth capability flag (`oidcProvider`,
+  `twoFactor`, `multiOrgEnabled`, …) but omitted enterprise SSO, even though the
+  manager already computes whether the domain-routed `@better-auth/sso` plugin is
+  wired (`OS_SSO_ENABLED` / `plugins.sso`). Without it the login UI had no signal
+  to gate on, so it rendered a "Sign in with SSO" button unconditionally — and on
+  a self-hosted / local deployment where SSO isn't wired, clicking it only then
+  surfaced "No SSO provider is configured for this email domain."
+
+  The config now includes `features.sso`. `getPublicConfig()` returns the coarse
+  "is the plugin wired" flag — resolved with the EXACT logic that decides whether
+  the plugin is mounted in `buildPlugins()`, so the advertised capability can never
+  disagree with the actual `/sign-in/sso` route. The `/auth/config` route then
+  refines it to "usable" via the new `AuthManager.isSsoUsable()`, which additionally
+  requires at least one `sys_sso_provider` row to exist — so a freshly-enabled but
+  unconfigured SSO setup doesn't advertise a button that errors for everyone.
+  `isSsoUsable()` only queries when wired and fails open to the wired flag on any
+  introspection error (no data engine, query failure), so config never 500s. The
+  console login form consumes `features.sso` to hide the button (objectui side).
+
+- Updated dependencies [9b5bf3d]
+- Updated dependencies [cb5b393]
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [f44c1bd]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/platform-objects@11.0.0
+  - @objectstack/spec@11.0.0
+  - @objectstack/types@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

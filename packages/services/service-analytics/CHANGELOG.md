@@ -1,5 +1,79 @@
 # Changelog — @objectstack/service-analytics
 
+## 11.0.0
+
+### Minor Changes
+
+- 5eef4cf: feat(analytics): multi-hop relationship joins for datasets (ADR-0071)
+
+  A dataset's `include` and dimension/measure `field` paths may now traverse up to
+  3 to-one relationship hops (`account.owner.region`), not just one. The compiler
+  expands each declared path into the ordered join chain (one `cube.join` per path
+  prefix, aliased dot-free as `account__owner` so it stays a single valid SQL
+  identifier), and the NativeSQLStrategy emits the chained `LEFT JOIN`s. Per-hop
+  tenant/RLS read-scope is enforced for EVERY object in the chain — the
+  alias-driven scope loop already generalizes, so no security path is rewritten.
+
+  Restricted to **to-one** (lookup / master_detail) relationships, which never fan
+  out — aggregates stay correct with no symmetric-aggregate machinery; to-many
+  traversal is out of scope. Single-hop datasets are byte-for-byte unchanged (the
+  dot-free alias is a no-op for a single segment). Undeclared paths are still
+  rejected (ADR-0021 D-C); paths beyond 3 hops are rejected at both parse and
+  compile time.
+
+### Patch Changes
+
+- 910a8f0: fix(analytics): compare boolean filters/group-by against the real boolean, not stringified '1'
+
+  The analytics filter normalizer stringified boolean `true` → `'1'`, which the
+  ObjectQL strategy then coerced back to the number `1` before calling
+  `engine.aggregate`. Boolean fields hold a real `true`/`false`, so `1 !== true`
+  never matched: a metric widget filtered on a boolean field (e.g.
+  `{ is_critical: true }`) always returned 0, and pie/donut/bar charts grouped by
+  a boolean dimension failed to bucket. `stringifyForCube` now serializes booleans
+  as the tokens `'true'`/`'false'`, and a new `coerceFilterValueForObjectQL`
+  recovers a real boolean for the ObjectQL engine while the SQL path keeps binding
+  `1`/`0` (better-sqlite3 cannot bind a JS boolean).
+
+- 715d667: fix(analytics): qualify base-object columns in joined dataset queries
+
+  A dataset that joins a related object (`include` + a `relationship.field`
+  dimension/measure) emitted BARE base-table columns in SELECT/GROUP BY while the
+  joined columns were alias-qualified. When the base and joined tables share a
+  column name (e.g. both have `status`), the query failed at runtime with
+  "ambiguous column name". `NativeSQLStrategy` now qualifies plain base-column
+  identifiers with the base table when the cube has joins; single-object cubes
+  are unchanged (byte-for-byte identical SQL).
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

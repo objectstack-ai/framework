@@ -1,5 +1,153 @@
 # @objectstack/runtime
 
+## 11.0.0
+
+### Minor Changes
+
+- 4d99a5c: Package-scoped commit history & rollback for AI authoring (ADR-0067)
+
+  Each authoring apply now lands as one revertible **commit** on a package timeline, on top of `sys_metadata_history`:
+
+  - New `sys_metadata_commit` object groups a turn's metadata changes (by `event_seq` range).
+  - `publishPackageDrafts` records each publish as one commit (best-effort) with a per-artifact revert plan and an optional `message` / `aiModel`.
+  - New protocol methods `listCommits`, `revertCommit`, `rollbackToPackageCommit` (reusing `restoreVersion` + delete; a revert is itself an append-only commit).
+  - New REST routes: `GET /packages/:id/commits`, `POST /packages/:id/commits/:commitId/revert`, `POST /packages/:id/rollback`.
+
+- 6c4fbd9: fix(security): enforce flow `runAs` execution identity (#1888)
+
+  The `service-automation` engine now honors `flow.runAs` instead of ignoring it.
+  Previously the CRUD nodes passed **no identity** to ObjectQL, so the security
+  middleware was skipped entirely — every flow ran effectively elevated regardless
+  of `runAs`. A `runAs:'user'` flow did **not** de-elevate (a privilege-boundary
+  surprise), and `runAs:'system'` did not _explicitly_ elevate.
+
+  The engine now establishes the run's data-layer identity at setup and restores
+  the caller's context afterward:
+
+  - **`runAs:'system'`** → an elevated, RLS-bypassing system principal
+    (`{ isSystem: true }`): the run can read/write records the triggering user
+    cannot.
+  - **`runAs:'user'`** (default) → the **triggering user's** identity
+    (`{ userId, roles, permissions, tenantId }`): CRUD nodes' ObjectQL reads/writes
+    respect that user's row-level security, and the run can never exceed the
+    triggering user's grants.
+
+  To keep `runAs:'user'` faithful to a direct request by that user, the REST
+  trigger route (`@objectstack/runtime`) and the record-change trigger
+  (`@objectstack/trigger-record-change`) now forward the caller's resolved
+  `roles`/`tenantId` into the `AutomationContext` (new optional fields), not just
+  `userId`. The new `resolveRunDataContext` helper is the single place that maps a
+  run's effective `runAs` to the ObjectQL context, shared by every data node.
+
+  The `[EXPERIMENTAL — not enforced]` marker is removed from `FlowSchema.runAs`.
+
+  **Behavior change / migration.** Flows that previously relied on the implicit
+  elevation (the default `runAs:'user'` ran unscoped) now run as the triggering
+  user and are subject to their RLS. **Declare `runAs:'system'` on any flow that
+  must read or write beyond the triggering user's access** (e.g. system
+  automations, cross-owner roll-ups). Schedule-triggered runs have no trigger user;
+  under `user` they stay unscoped (there is no identity to scope to) — declare
+  `system` to make elevation explicit.
+
+  Proven both directions by the dogfood regression gate
+  (`flow-runas.dogfood.test.ts` — a restricted member triggers system vs user
+  flows against an owner-scoped record) and service-automation unit + regression
+  tests (`crud-runas.test.ts`).
+
+### Patch Changes
+
+- 61d441f: feat(objectql): duplicate a writable base — ADR-0070 D4 ("duplicate base")
+
+  `protocol.duplicatePackage` clones every ACTIVE item a base owns into a NEW
+  package, **re-namespacing** object names (the blueprint prefixes a base's object
+  names with its namespace, e.g. `iojn_repair_ticket`, and `sys_metadata` keys on
+  `(type,name,org)` so a same-name copy would collide with the source) and
+  **rewriting every intra-package reference** (lookup `reference`, view `object`,
+  expressions, …) to the new names via a longest-first, identifier-boundary
+  replace. Exposed as `POST /packages/:id/duplicate` (body
+  `{ targetPackageId, targetName?, targetNamespace? }`).
+
+  Completes ADR-0070 D4 (package = lifecycle unit): delete-cascade and export
+  already shipped; this adds the duplicate gesture.
+
+- c224e18: feat(objectql): adopt orphaned metadata into a base — ADR-0070 D5 migration
+
+  `protocol.reassignOrphanedMetadata` bulk-rebinds every package-less orphan
+  (`package_id` null / `""` / the `sys_metadata` sentinel left by the pre-
+  package-first stopgaps) onto a target base, leaving already-owned rows
+  untouched. Exposed as `POST /packages/:id/adopt-orphans`. This is the migration
+  affordance behind retiring the "Local / Custom" scope (D5): once an env has no
+  orphans, that scope can be dropped from the selector. Pairs with the kernel's
+  `writable_package_required` (D1) so no NEW orphans are created.
+
+- aa33b02: fix(security): single-source the request authorization resolver — REST no longer drops sys_user_role
+
+  The REST server and the runtime dispatcher each carried their own copy of the request → ExecutionContext identity/role resolver, and they drifted on a security path. The REST copy silently omitted `sys_user_role` (so custom roles granted via the ADR-0057 D4 platform-RBAC path did not apply over REST), `sys_role_permission_set`, the `owner→org_owner` membership normalization, the platform-admin derivation, and the `ai_seat` synthesis — fail-closed (legitimate access denied), not an escalation.
+
+  Both entry points now delegate to a single shared resolver, `resolveAuthzContext` in `@objectstack/core/security` (joining the API-key verifier that already lived there). A contract test locks every authorization source and a lint gate (`check:authz-resolver`) prevents a future duplicate resolver or a dropped delegation.
+
+- Updated dependencies [caa3ef4]
+- Updated dependencies [22b32c1]
+- Updated dependencies [4d99a5c]
+- Updated dependencies [21b3208]
+- Updated dependencies [9b5bf3d]
+- Updated dependencies [cb5b393]
+- Updated dependencies [ab5718a]
+- Updated dependencies [61d441f]
+- Updated dependencies [c224e18]
+- Updated dependencies [d616e1d]
+- Updated dependencies [1e8a813]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [4b5ec6e]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [359c0aa]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [9a810f8]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [a619a3a]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [98a1535]
+- Updated dependencies [bc22a89]
+- Updated dependencies [8a7e9f1]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/plugin-auth@11.0.0
+  - @objectstack/objectql@11.0.0
+  - @objectstack/spec@11.0.0
+  - @objectstack/metadata@11.0.0
+  - @objectstack/formula@11.0.0
+  - @objectstack/rest@11.0.0
+  - @objectstack/types@11.0.0
+  - @objectstack/driver-sql@11.0.0
+  - @objectstack/core@11.0.0
+  - @objectstack/plugin-org-scoping@11.0.0
+  - @objectstack/plugin-security@11.0.0
+  - @objectstack/observability@11.0.0
+  - @objectstack/driver-memory@11.0.0
+  - @objectstack/driver-sqlite-wasm@11.0.0
+  - @objectstack/service-cluster@11.0.0
+  - @objectstack/service-datasource@11.0.0
+  - @objectstack/service-i18n@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

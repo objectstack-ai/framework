@@ -1,5 +1,401 @@
 # @objectstack/spec
 
+## 11.0.0
+
+### Major Changes
+
+- a658523: Open edition is MCP-only.
+
+  The bundled AI authoring service (`@objectstack/service-ai`) is no longer part of
+  the open distribution (ADR-0025 S2, #2325); AI now integrates through MCP
+  (`@objectstack/mcp`) and the documented opt-in seam — an app that declares
+  `@objectstack/service-ai` / `@objectstack/service-ai-studio` still loads the
+  service. Removing a published package from the open edition is a breaking change,
+  so this cuts the next release as a major.
+
+- 82ff91c: Remove the deprecated `http_request` / `http_call` / `webhook` flow-node aliases — author `http` (ADR-0018 M3).
+
+  ADR-0018 M3 collapsed the divergent outbound-callout verbs onto the canonical
+  `http` node and kept the old names as deprecated aliases for back-compat. This
+  removes those aliases (the 11.0 cleanup):
+
+  - `http_request` is dropped from `FlowNodeAction` (and therefore
+    `FLOW_BUILTIN_NODE_TYPES`); authoring it now fails fast at parse instead of
+    resolving to `http`.
+  - `AutomationEngine` no longer registers the `http_request` / `http_call` /
+    `webhook` node aliases; only `http` is registered.
+  - The flow-builder palette offers `http`.
+
+  **Breaking.** Flows / workflow rules / approval actions that still use the old
+  node type must switch to `type: 'http'` (behavior is identical — durable outbox
+  when `config.durable`, inline fetch otherwise). The trigger `eventType: 'webhook'`
+  and the `webhook` resume event are unaffected — only the HTTP _node_ aliases are
+  removed. First-party examples (showcase, app-crm) are migrated.
+
+- 638f472: Remove the deprecated `IUIService` contract (use `IMetadataService`) — 11.0.
+
+  `IUIService` (spec `contracts/ui-service.ts`) was superseded by `IMetadataService`
+  (views/dashboards are metadata: `metadata.get('view', …)` / `register(…)`). This
+  removes the dead interface and its dev stub:
+
+  - spec: delete `contracts/ui-service.ts` + its barrel export.
+  - plugin-dev: drop the bespoke `ui` dev stub (`createUIStub`). `'ui'` remains a
+    `CoreServiceName`, so dev mode still registers a generic stub for it via the
+    fallback path; only the obsolete view/dashboard methods are gone.
+
+  Use `IMetadataService` for view/dashboard CRUD.
+
+### Minor Changes
+
+- ab5718a: Auth: reject breached passwords via Have I Been Pwned (ADR-0069 D1, P1)
+
+  First slice of ADR-0069 (enterprise authentication hardening) and the enforcement-wired pattern template the rest of the ADR follows. Adds a `password_reject_breached` auth setting (default **off**) bound end-to-end to better-auth's native `haveibeenpwned` plugin — a k-anonymity range check on sign-up / change-password / reset-password (the plaintext password never leaves the process).
+
+  - **spec**: new `passwordRejectBreached` flag on `AuthPluginConfigSchema`.
+  - **service-settings**: new "Reject breached passwords" toggle in the `auth` manifest's password-policy group (`global` scope, `manage_platform_settings`).
+  - **plugin-auth**: `bindAuthSettings` maps the setting into the plugin config; `buildPluginList` gates and mounts the `haveIBeenPwned` plugin (env `OS_AUTH_PASSWORD_REJECT_BREACHED` wins over config, mirroring `OS_AUTH_TWO_FACTOR`).
+  - **cli**: surface the knob in the `serve` boot config alongside `twoFactor`.
+
+  Default-off and additive — no behavior change on upgrade. Per ADR-0049 the toggle ships with its enforcement (no false surface). No new identity fields (the `[custom]` D1 items — complexity / expiry / history — land in follow-up PRs).
+
+- 4845c12: feat(cli): make the AI service opt-in via a declared dependency; honor `config.tiers`
+
+  **AI edition boundary (cli).** The CLI auto-registered the headless `AIServicePlugin`
+  whenever the `ai` tier was enabled (default) and `@objectstack/service-ai` was
+  merely _resolvable_. In a workspace/monorepo the package is hoist-resolvable even
+  when an app does not declare it, so every app got the AI service — discovery
+  reported `services.ai: available` and the agent runtime served any
+  metadata-defined agents — including Community-Edition apps that ship no AI.
+
+  Now the _declared_ dependency is the boundary: AIService auto-registers only when
+  the host app declares `@objectstack/service-ai` **or** `@objectstack/service-ai-studio`
+  (Studio attaches its personas via the base service's `ai:ready` hook, so declaring
+  Studio implies the base). A CE app that declares neither gets no AI service, no
+  agents, and `services.ai: { enabled: false, status: 'unavailable' }` in discovery
+  (so the console hides its AI surface). MCP and every other capability are
+  unaffected. The `app-showcase`/`app-crm` examples now declare `@objectstack/service-ai`.
+
+  **`config.tiers` now honored (spec).** `ObjectStackDefinitionSchema` gains a `tiers`
+  field, so `defineStack` no longer strips it. `config.tiers` (e.g. a list WITHOUT
+  `ai`) now actually overrides the `--preset` default — previously it was silently
+  dropped by schema validation, making the `--preset` help text inaccurate. This is
+  a second, in-place way to disable AI for a deployment without touching dependencies.
+
+- 715d667: feat(spec): dataset authoring form + derived measures without a dummy aggregate
+
+  `dataset` was the only UI-authorable metadata type without a `defineForm`
+  layout, so Studio's create surface fell back to the auto-generated flat layout
+  (free-text `object`, no grouping). Adds `dataset.form.ts` (registered in
+  `METADATA_FORM_REGISTRY`): sectioned Basics / Source / Dimensions / Measures
+  with an `object` picker (`ref:object`) and guidance — matching the sibling
+  `report` editor.
+
+  Also makes `DatasetMeasureSchema.aggregate` optional. A derived measure
+  (`derived: { op, of }`) combines other measures by name and `aggregate` is
+  ignored for it at compile time, but the schema still required it — so a derived
+  measure failed validation unless you added a meaningless aggregate. `aggregate`
+  is now required only for non-derived measures (enforced in the existing
+  `superRefine`). Backward compatible: existing measures that carry an aggregate
+  stay valid.
+
+- 5eef4cf: feat(analytics): multi-hop relationship joins for datasets (ADR-0071)
+
+  A dataset's `include` and dimension/measure `field` paths may now traverse up to
+  3 to-one relationship hops (`account.owner.region`), not just one. The compiler
+  expands each declared path into the ordered join chain (one `cube.join` per path
+  prefix, aliased dot-free as `account__owner` so it stays a single valid SQL
+  identifier), and the NativeSQLStrategy emits the chained `LEFT JOIN`s. Per-hop
+  tenant/RLS read-scope is enforced for EVERY object in the chain — the
+  alias-driven scope loop already generalizes, so no security path is rewritten.
+
+  Restricted to **to-one** (lookup / master_detail) relationships, which never fan
+  out — aggregates stay correct with no symmetric-aggregate machinery; to-many
+  traversal is out of scope. Single-hop datasets are byte-for-byte unchanged (the
+  dot-free alias is a no-op for a single segment). Undeclared paths are still
+  rejected (ADR-0021 D-C); paths beyond 3 hops are rejected at both parse and
+  compile time.
+
+- 6c4fbd9: fix(security): enforce flow `runAs` execution identity (#1888)
+
+  The `service-automation` engine now honors `flow.runAs` instead of ignoring it.
+  Previously the CRUD nodes passed **no identity** to ObjectQL, so the security
+  middleware was skipped entirely — every flow ran effectively elevated regardless
+  of `runAs`. A `runAs:'user'` flow did **not** de-elevate (a privilege-boundary
+  surprise), and `runAs:'system'` did not _explicitly_ elevate.
+
+  The engine now establishes the run's data-layer identity at setup and restores
+  the caller's context afterward:
+
+  - **`runAs:'system'`** → an elevated, RLS-bypassing system principal
+    (`{ isSystem: true }`): the run can read/write records the triggering user
+    cannot.
+  - **`runAs:'user'`** (default) → the **triggering user's** identity
+    (`{ userId, roles, permissions, tenantId }`): CRUD nodes' ObjectQL reads/writes
+    respect that user's row-level security, and the run can never exceed the
+    triggering user's grants.
+
+  To keep `runAs:'user'` faithful to a direct request by that user, the REST
+  trigger route (`@objectstack/runtime`) and the record-change trigger
+  (`@objectstack/trigger-record-change`) now forward the caller's resolved
+  `roles`/`tenantId` into the `AutomationContext` (new optional fields), not just
+  `userId`. The new `resolveRunDataContext` helper is the single place that maps a
+  run's effective `runAs` to the ObjectQL context, shared by every data node.
+
+  The `[EXPERIMENTAL — not enforced]` marker is removed from `FlowSchema.runAs`.
+
+  **Behavior change / migration.** Flows that previously relied on the implicit
+  elevation (the default `runAs:'user'` ran unscoped) now run as the triggering
+  user and are subject to their RLS. **Declare `runAs:'system'` on any flow that
+  must read or write beyond the triggering user's access** (e.g. system
+  automations, cross-owner roll-ups). Schedule-triggered runs have no trigger user;
+  under `user` they stay unscoped (there is no identity to scope to) — declare
+  `system` to make elevation explicit.
+
+  Proven both directions by the dogfood regression gate
+  (`flow-runas.dogfood.test.ts` — a restricted member triggers system vs user
+  flows against an owner-scoped record) and service-automation unit + regression
+  tests (`crud-runas.test.ts`).
+
+- ef3ed67: Formula field typing: `inferExpressionType()` + a declared `returnType`.
+
+  - `@objectstack/formula`: new `inferExpressionType()` (and lower-level `inferCelType()`) surfaces the cel-js type-checker's result for a CEL value/formula expression, mapped to `number | text | boolean | date | unknown`. Conservative — two `dyn` operands stay `unknown`; typed literals/stdlib returns pin a concrete type.
+  - `@objectstack/spec`: `FieldSchema` gains an optional `returnType` (`number|text|boolean|date`) so a formula field can carry its declared value type (the way Salesforce/Airtable do), letting consumers (dataset measures, formatting, validation) read a declared type instead of re-parsing the expression.
+
+- cd51229: Expose authoritative create seeds via /meta/types (spec-derived create-shape contract, Phase 2)
+
+  The minimal valid create seeds added in `@objectstack/spec/kernel` (`getMetadataCreateSeed`) now reach consumers through the real `/meta/types` registry response: each entry carries an optional `createSeed`. The Studio designer / CLI / API clients derive their create defaults from this single source of truth instead of re-inventing them — closing the drift that produced the dashboard-`layout` and action-`body` create→save 422s.
+
+  - `@objectstack/spec`: barrel-export `getMetadataCreateSeed` / `listMetadataCreateSeedTypes` from `/kernel`; add optional `createSeed` to the `GetMetaTypesResponse` entry schema.
+  - `@objectstack/objectql`: `getMetaTypes()` attaches each type's seed (registry + runtime entries). Canvas-create types whose shape is built interactively (report) are intentionally absent.
+
+- 7697a0e: chore(spec): hard-remove the dead `blank`/`record_review` page config (enforce-or-remove)
+
+  Completes the enforce-or-remove started in framework#2265. The `blank` and
+  `record_review` page types were already removed from `PageTypeSchema` (no
+  renderer), their fields marked `@deprecated`, and objectui dropped all
+  references (objectui#1949). This deletes the now-unreachable surface:
+
+  - `BlankPageLayoutSchema`, `BlankPageLayoutItemSchema`, `RecordReviewConfigSchema`
+    (and their inferred types `BlankPageLayout`, `BlankPageLayoutItem`,
+    `RecordReviewConfig`).
+  - The `blankLayout` and `recordReview` fields on `PageSchema`.
+  - `page-builder.zod.ts` (the `blank`-type drag-drop canvas config:
+    `PageBuilderConfigSchema` / `CanvasSnapSettingsSchema` / `CanvasZoomSettingsSchema`
+    / `ElementPaletteItemSchema` / `InterfaceBuilderConfigSchema` and their types)
+    and its `@objectstack/spec/studio` re-exports — nothing consumed them.
+
+  The `page` liveness ledger drops to 15 properties (the 2 `dead` entries are gone).
+  No consumers in framework or objectui (objectui#1949 already merged).
+
+  **Version note (kept `minor`, not `major`).** These exports shipped in the
+  published `10.3.0`, so under ADR-0059 §4 (the freeze contract) a removal would
+  normally demand a major bump. It is kept `minor` as a deliberate, documented
+  exception: the removed symbols are config schemas for the renderless
+  `blank`/`record_review` page types — authoring those already failed at runtime
+  ("Unknown component type"), the frozen `@objectstack/downstream-contract`
+  fixture never referenced them, and the pre-publish hotcrm live gate guards
+  against any real consumer break. The `api-surface.json` snapshot is regenerated
+  alongside this so the removal is acknowledged, not silent.
+
+- cfd5ac4: fix(spec): remove unrendered roadmap page types from PageTypeSchema (enforce-or-remove)
+
+  `PageTypeSchema` advertised six page types that never shipped a renderer —
+  `dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`.
+  Authoring one passed schema validation but broke at runtime ("Unknown component
+  type"), a false affordance that's especially dangerous when templates are
+  AI-authored. Per ADR-0049 (enforce-or-remove), the enum is now the _live_ set
+  (`record`, `home`, `app`, `utility`, `list`) — authoring a removed type now
+  fails fast at parse instead of silently at render. The removed types are tracked
+  in the new `PAGE_TYPE_ROADMAP` export and re-enter the enum only when a renderer
+  ships. A `page-type-liveness` gate test asserts the enum never re-grows a
+  roadmap type.
+
+  The `recordReview`/`blankLayout` config schemas and fields are retained but
+  `@deprecated` (their page types are no longer authorizable) to avoid breaking
+  downstream imports; they will be removed in a coordinated follow-up. The
+  `variables` page field is documented `@experimental` — its state container is
+  wired but no consumer reads/writes it end-to-end yet.
+
+- 5c4a8c8: feat(spec): RecordRelatedListProps.add — add-existing-via-picker (generic m2m/junction assignment). A related list can now link existing records via a picker, not just create+navigate. Powers a generic "Assigned Users" / Manage Assignments UI on permission sets.
+- 3afaeed: feat(ui): add `element:text_input` — free-text data-entry element for SDUI pages
+
+  SDUI pages could display and navigate but not collect free-text input. This adds
+  that half of the contract:
+
+  - `ElementTextInputPropsSchema` (label, placeholder, `inputType` —
+    text/email/number/tel/url/password — defaultValue, required, disabled,
+    description) wired into `PageComponentType` and `ComponentPropsMap` as
+    `element:text_input`.
+
+  The objectui renderer binds the typed value into a page variable
+  (`PageVariableSchema.source`); a submit `element:button` reads it back via
+  `{{page.<var>}}` token interpolation in the console action runtime. Showcase:
+  `showcase_contact_form` (text inputs → page variables → POST web-to-lead).
+
+- 3d04e06: Add authoritative per-type create seeds (root-cause for the "designer shape ≠ spec" family)
+
+  New `metadata-create-seeds.ts`: a single source of truth for the minimal valid create shape of each metadata type (`getMetadataCreateSeed(type)`), co-located with the schemas and asserted valid against each type's schema by `metadata-create-seeds.test.ts`. This anchors the create-form's default shape to the spec so it can't drift — the root cause of the recurring family where a freshly-created item (dashboard without `layout`, script action without `body`, report with stale `objectName`/`columns`) failed validation on save (422) yet passed every other gate. Seeds the 9 core Studio-designer types (dashboard, action, page, view, flow, validation, hook, dataset, object); the test surfaces remaining schema-backed types still needing a seed. (Follow-up: expose `createSeed` via `/meta/types` so the Studio designer consumes it instead of hardcoding `createDefaults`.)
+
+- d980f0d: feat: add a first-class `user` field type (person picker)
+
+  A new `user` field type — the equivalent of Airtable's Collaborator / Notion's
+  Person / Salesforce's `Lookup(User)`. Authored as `Field.user({ ... })`; use
+  `{ multiple: true }` for collaborators/watchers and `{ defaultValue: 'current_user' }`
+  to auto-fill the acting user on create.
+
+  **Why a distinct type rather than telling authors to `Field.lookup('sys_user')`:**
+  selecting a person is table-stakes, but the value is in _modelling
+  discoverability_ — a "User" entry in the Studio/AI field palette instead of
+  requiring authors (and AI) to know to reference the internal `sys_user` system
+  object — plus `current_user` defaults and a user-search picker. Storage and
+  runtime are unchanged.
+
+  **Deliberately NOT a new storage primitive.** `user` is a _semantic
+  specialization of `lookup`_ with the target fixed to `sys_user`: it shares the
+  exact lookup code path — same FK string column (`multiple` ⇒ JSON), same
+  `$expand` resolution, same indexing — so referential integrity and fresh display
+  names come for free, and nothing is re-implemented. An existing
+  `Field.lookup('sys_user')` is therefore equivalent at the storage layer (zero
+  data migration to adopt `Field.user`).
+
+  Ownership semantics are **unchanged**: the existing `owner_id` convention +
+  `plugin-security` auto-stamp/RLS still apply. A declarative `owner` flag is a
+  possible future follow-up; intentionally not added here to avoid a second
+  field type for what is a system role (rationale: keep the `FieldType` surface
+  lean — see related ADR-0059 freeze discipline).
+
+  Changes: `FieldType` gains `'user'` + `Field.user()` builder; the SQL/Mongo
+  drivers treat `user` exactly like `lookup`; the engine resolves `$expand` for
+  `user` fields and honours a new `defaultValue: 'current_user'` token (resolved
+  app-side from the execution context, mirroring the `NOW()` convention); kanban
+  group-by and symbolic seed references accept `user`; approvals enrich `user`
+  references. The public API surface is unchanged (additive enum member).
+
+### Patch Changes
+
+- c1a754a: feat(spec): type ChartConfig `colors` as a palette OR a value→color map
+
+  `ChartConfigSchema.colors` now accepts either a positional palette (`string[]`)
+  or an explicit value→color map (`Record<value, color>`, kanban-style). A
+  value→color map — and a select/lookup dimension's option colors — take
+  precedence over the positional palette per category, so semantic charts
+  (health, status) paint their own colors instead of the generic palette.
+
+- 6fbe91f: fix(spec): make dashboard widget `layout` optional (auto-flowed when omitted)
+
+  `DashboardWidgetSchema.layout` was required, but the entire runtime treats it as
+  optional: the renderer (`DashboardGridLayout`) auto-flows any widget without a
+  layout (`x: (i % 4) * 3, y: ⌊i/4⌋ * 4, w: 3, h: 4`), and the Studio dashboard
+  designer adds widgets **without** a layout by design.
+
+  The mismatch meant every dashboard authored in the Studio designer failed spec
+  validation the moment a widget was added — the draft `PUT /meta/dashboard/...`
+  returned **422** ("widgets: Invalid type: expected object, received undefined"),
+  so the draft never saved and **Publish stayed disabled**, even though the widget
+  rendered correctly in the canvas. Found by dogfooding the dashboard designer in
+  the browser.
+
+  `layout` is now optional; absence means "auto-place". Authors may still pin an
+  explicit grid position. Backward-compatible — existing dashboards that specify
+  `layout` are unaffected.
+
+- 72759e1: feat(spec): add the `back` edge style to the flow-builder canvas protocol
+
+  `FlowCanvasEdgeStyleSchema` gains a `back` value alongside `solid`/`dashed`/`dotted`/`bold`, marking an ADR-0044 declared back-edge (a `revise` loop's resubmit edge). Flow-builder-protocol consumers can now render it as a distinct curved/dashed return arc, set apart from forward flow — matching the objectui designer's hand-rolled canvas (objectstack-ai/objectui#1954). Part of #2274.
+
+- e7e04f1: chore(liveness): bring `page` under the spec liveness gate
+
+  Onboards the `page` metadata type to the ADR-0049/#1919 liveness ledger
+  (`packages/spec/liveness/page.json`) and adds it to the governed-types list in
+  `check-liveness.mts`. Every authorable PageSchema property now declares a
+  status with evidence: 17 properties — 14 `live` (objectui renderer consumers
+  cited as prose), 1 `experimental` (`variables` — provider/hook exist, no
+  end-to-end consumer), 2 `dead` (`recordReview` / `blankLayout` — their page
+  types were removed in framework#2265 and objectui dropped all references in
+  objectui#1949; the fields stay @deprecated pending hard-removal). CI now fails
+  if a new page property lands unclassified.
+
+- 2be5c1f: Promote `PageSchema.variables` from @experimental to live (ADR-0049)
+
+  Page-local state is now wired end-to-end (runtime in objectui#1957: page
+  variables are injected into the visible/CEL expression context as `page.<var>`,
+  and `element:record_picker` writes a variable via its `source` binding). The
+  spec docs are updated to describe the now-live behaviour and the binding
+  direction, and the liveness ledger entry is flipped `experimental → live`.
+
+- ad143ce: fix(security): surface the schedule/user-less `runAs:'user'` fail-open (#1888 follow-up)
+
+  With `flow.runAs` now enforced (#1888), a **schedule-triggered** flow with the
+  default `runAs:'user'` has no trigger user. `resolveRunDataContext` returns
+  `undefined` for that case, so the CRUD nodes pass no ObjectQL `options.context`
+  and the security middleware — which _skips_ when there is no identity (it
+  delegates auth to the auth layer) — runs the operation **UNSCOPED** (effectively
+  elevated). An author who left `runAs` at the `'user'` default expecting a
+  restricted run silently gets an unscoped one — a fail-open footgun (ADR-0049: a
+  security property must not silently do the opposite of what it implies).
+
+  This is the **product decision** to make that explicit, chosen to keep legitimate
+  scheduled CRUD working (denying outright would break it, and silently elevating
+  would hide the author's intent). Prevention happens where the platform can tell
+  intent apart (author/build time); the runtime stays non-breaking but is no longer
+  silent:
+
+  - **Author-time lint** (`@objectstack/cli`, `lintFlowPatterns`): a new advisory
+    rule `flow-schedule-runas-unscoped` flags a schedule-triggered flow whose
+    effective `runAs` is `user` (explicit or unset) and which performs a data
+    operation — pointing the author at `runAs:'system'`. Catches the footgun at
+    compile time, before deploy (most flows are AI-authored).
+  - **Runtime warning** (`@objectstack/service-automation`): the engine now emits a
+    clear one-per-run warning when a user-mode run resolves no trigger identity and
+    the flow touches data — the fail-open is _audible_ rather than silent. Behavior
+    is otherwise unchanged (the run still executes), so scheduled CRUD that relied
+    on this is not broken. New helpers `runIsUnscopedUserMode`, `flowTouchesData`,
+    and `DATA_NODE_TYPES` are exported alongside `resolveRunDataContext`.
+  - **Spec describe** (`@objectstack/spec`): `FlowSchema.runAs` now states that a
+    scheduled run has no user, so under `user` it runs unscoped — declare `system`.
+
+  The first-party example apps that tripped the new lint are fixed to declare
+  `runAs:'system'` explicitly (`stale_opportunity_sweep`, the app-todo
+  `task_reminder` / `overdue_escalation` sweeps) — they read/write across owners and
+  were running unscoped by default.
+
+  Longer term, attributing scheduled runs to a dedicated service principal (so they
+  are scopable + audit-attributable rather than unscoped) is the right enforcement;
+  tracked as M2 follow-up.
+
+  Proven by a service-automation unit test (the engine warns once for a user-less
+  user-mode data run; stays silent for `system`, for an identified user, and for a
+  data-less flow), an end-to-end test wiring the **real `ScheduleTrigger` to the
+  real engine** (`@objectstack/trigger-schedule`) that fires a job and asserts the
+  user-less identity reaches the engine + trips the warning through the actual cron
+  path, and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that drives
+  user-less runs through the real automation + security + data stack: a
+  `runAs:'user'` run reads + writes an owner-scoped note a member cannot — audibly —
+  while `runAs:'system'` is the explicit, warning-free equivalent.
+
+  Refs #1888, ADR-0049.
+
+- 8801c02: fix(spec): don't require `slots` on slotted pages
+
+  `PageSchema`'s superRefine rejected any `kind: 'slotted'` page that didn't
+  provide a `slots` map — but a slotted page with no overrides is valid: every
+  slot falls through to the synthesized default layout, the natural starting
+  point before you add overrides. Requiring `slots` up front made the Studio
+  "New Page" form a dead-end the moment you picked "slotted" (the form can't
+  author a slot map), the same trap as the old required `regions`.
+
+- 4a84c98: fix(spec): make page `regions` and component `properties` optional
+
+  `PageSchema.regions` and `PageComponentSchema.properties` were required, which
+  made it impossible to create record/home/app pages in the Studio editor: the
+  New Page form has no region editor, and the create-form seeds a record page's
+  default layout from `buildDefaultPageSchema`, whose nodes carry props at the top
+  level — so every seeded block tripped `regions.N.components.M.properties:
+expected record`. Both are now `.optional().default(...)`; an empty full page
+  falls back to the synthesized default layout, slotted pages compose via `slots`,
+  list pages ignore regions, and prop-less components (record:activity,
+  element:divider) no longer need `properties: {}`.
+
 ## 10.3.0
 
 ## 10.2.0

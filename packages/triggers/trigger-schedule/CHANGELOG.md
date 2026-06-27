@@ -1,5 +1,90 @@
 # @objectstack/plugin-trigger-schedule
 
+## 11.0.0
+
+### Patch Changes
+
+- ad143ce: fix(security): surface the schedule/user-less `runAs:'user'` fail-open (#1888 follow-up)
+
+  With `flow.runAs` now enforced (#1888), a **schedule-triggered** flow with the
+  default `runAs:'user'` has no trigger user. `resolveRunDataContext` returns
+  `undefined` for that case, so the CRUD nodes pass no ObjectQL `options.context`
+  and the security middleware — which _skips_ when there is no identity (it
+  delegates auth to the auth layer) — runs the operation **UNSCOPED** (effectively
+  elevated). An author who left `runAs` at the `'user'` default expecting a
+  restricted run silently gets an unscoped one — a fail-open footgun (ADR-0049: a
+  security property must not silently do the opposite of what it implies).
+
+  This is the **product decision** to make that explicit, chosen to keep legitimate
+  scheduled CRUD working (denying outright would break it, and silently elevating
+  would hide the author's intent). Prevention happens where the platform can tell
+  intent apart (author/build time); the runtime stays non-breaking but is no longer
+  silent:
+
+  - **Author-time lint** (`@objectstack/cli`, `lintFlowPatterns`): a new advisory
+    rule `flow-schedule-runas-unscoped` flags a schedule-triggered flow whose
+    effective `runAs` is `user` (explicit or unset) and which performs a data
+    operation — pointing the author at `runAs:'system'`. Catches the footgun at
+    compile time, before deploy (most flows are AI-authored).
+  - **Runtime warning** (`@objectstack/service-automation`): the engine now emits a
+    clear one-per-run warning when a user-mode run resolves no trigger identity and
+    the flow touches data — the fail-open is _audible_ rather than silent. Behavior
+    is otherwise unchanged (the run still executes), so scheduled CRUD that relied
+    on this is not broken. New helpers `runIsUnscopedUserMode`, `flowTouchesData`,
+    and `DATA_NODE_TYPES` are exported alongside `resolveRunDataContext`.
+  - **Spec describe** (`@objectstack/spec`): `FlowSchema.runAs` now states that a
+    scheduled run has no user, so under `user` it runs unscoped — declare `system`.
+
+  The first-party example apps that tripped the new lint are fixed to declare
+  `runAs:'system'` explicitly (`stale_opportunity_sweep`, the app-todo
+  `task_reminder` / `overdue_escalation` sweeps) — they read/write across owners and
+  were running unscoped by default.
+
+  Longer term, attributing scheduled runs to a dedicated service principal (so they
+  are scopable + audit-attributable rather than unscoped) is the right enforcement;
+  tracked as M2 follow-up.
+
+  Proven by a service-automation unit test (the engine warns once for a user-less
+  user-mode data run; stays silent for `system`, for an identified user, and for a
+  data-less flow), an end-to-end test wiring the **real `ScheduleTrigger` to the
+  real engine** (`@objectstack/trigger-schedule`) that fires a job and asserts the
+  user-less identity reaches the engine + trips the warning through the actual cron
+  path, and a dogfood gate (`flow-runas-schedule.dogfood.test.ts`) that drives
+  user-less runs through the real automation + security + data stack: a
+  `runAs:'user'` run reads + writes an owner-scoped note a member cannot — audibly —
+  while `runAs:'system'` is the explicit, warning-free equivalent.
+
+  Refs #1888, ADR-0049.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

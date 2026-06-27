@@ -1,5 +1,88 @@
 # @objectstack/rest
 
+## 11.0.0
+
+### Patch Changes
+
+- 359c0aa: fix(objectql,rest): single-item meta reads must revalidate (no `max-age=3600`)
+
+  `GET /api/v1/meta/object/:name` (and the other single-item meta reads served by
+  the cached path) sent `Cache-Control: public, max-age, max-age=3600`. Two bugs:
+
+  1. **Stale metadata for up to an hour.** Object metadata is invalidated by
+     publish, but a one-hour TTL let browsers (and any CDN/proxy) serve a stale
+     schema _without revalidating_ — e.g. the AI-build "New" create form kept
+     rendering pre-publish fields until the TTL lapsed. The list endpoint
+     `GET /api/v1/meta/object` is uncached, which is why list views updated but
+     single-object reads didn't. `getMetaItemCached` now returns
+     `directives: ['private', 'no-cache']` with no `maxAge`, so the ETag validator
+     (which already changes on publish) gates freshness: a cheap `304` when
+     unchanged, fresh fields the instant a publish bumps the ETag. `private` also
+     keeps per-tenant metadata out of shared caches.
+
+  2. **Malformed header.** The directives array carried a bare `max-age`
+     placeholder _and_ the REST layer appended `max-age=3600` from the `maxAge`
+     field, concatenating into `public, max-age, max-age=3600`. The header builder
+     now strips the bare `max-age` token before appending the real value, so a
+     `maxAge` is emitted once as a well-formed `max-age=N`.
+
+- 9a810f8: fix(rest): register static data-action routes before the greedy `:object/:id` matcher
+
+  The REST router matches first-registered-wins with no specificity sorting, but
+  `registerDataActionEndpoints` (which holds `GET /data/:object/export`) ran AFTER
+  `registerCrudEndpoints` (which holds the greedy `GET /data/:object/:id`). A
+  request to `GET /data/<object>/export` was therefore captured by `:object/:id` —
+  `"export"` treated as a record id — returning `404 RECORD_NOT_FOUND` instead of
+  streaming the export. The data-action registration now runs first, mirroring the
+  existing `/meta/:type/:name/references`-before-`/meta/:type/:name` convention.
+  Reordering is safe both ways: `registerDataActionEndpoints` contains no greedy
+  2-segment `:object/:id` routes, so it cannot shadow any CRUD literal. A
+  regression test asserts the export route registers ahead of the get-by-id route.
+
+- a619a3a: fix(setup): first-run admin polish — pin Company/Localization, gate dashboard widgets by `requiresService`, i18n + settings PUT envelope
+
+  Dogfooding the Setup app as a brand-new system administrator surfaced a cluster of small first-run gaps, now fixed:
+
+  - **platform-objects**: pin **Localization** and **Company** in the Setup sidebar's Configuration group — both are registered `service-settings` manifests (the two lowest-`order` Workspace settings) but were reachable only via the "All Settings" hub. Translate the previously-English nav labels Cloud Connection (云连接), Datasources (数据源) and Capabilities (能力). Tag the System Overview `widget_organizations` KPI with `requiresService: 'org-scoping'`.
+  - **rest**: extend the ADR-0057 D10 server-side visibility gate to **dashboard widgets** — strip widgets whose `requiresService` names an unregistered kernel service (mirrors the existing app-nav gate; `resolveRegisteredServices` now also discovers gates declared on widgets). In a single-tenant runtime this removes the orphan "Organizations" KPI, matching the already-hidden org nav entries.
+  - **service-settings**: add the missing zh `help` strings for the Localization manifest (number/currency/first-day-of-week/fiscal-year fields), and accept the `{ values: { … } }` envelope on `PUT /api/settings/:ns` symmetrically with what `GET` returns.
+
+- aa33b02: fix(security): single-source the request authorization resolver — REST no longer drops sys_user_role
+
+  The REST server and the runtime dispatcher each carried their own copy of the request → ExecutionContext identity/role resolver, and they drifted on a security path. The REST copy silently omitted `sys_user_role` (so custom roles granted via the ADR-0057 D4 platform-RBAC path did not apply over REST), `sys_role_permission_set`, the `owner→org_owner` membership normalization, the platform-admin derivation, and the `ai_seat` synthesis — fail-closed (legitimate access denied), not an escalation.
+
+  Both entry points now delegate to a single shared resolver, `resolveAuthzContext` in `@objectstack/core/security` (joining the API-key verifier that already lived there). A contract test locks every authorization source and a lint gate (`check:authz-resolver`) prevents a future duplicate resolver or a dropped delegation.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/core@11.0.0
+  - @objectstack/service-package@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

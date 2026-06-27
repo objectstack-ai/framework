@@ -1,5 +1,80 @@
 # @objectstack/plugin-dev
 
+## 11.0.0
+
+### Major Changes
+
+- 638f472: Remove the deprecated `IUIService` contract (use `IMetadataService`) — 11.0.
+
+  `IUIService` (spec `contracts/ui-service.ts`) was superseded by `IMetadataService`
+  (views/dashboards are metadata: `metadata.get('view', …)` / `register(…)`). This
+  removes the dead interface and its dev stub:
+
+  - spec: delete `contracts/ui-service.ts` + its barrel export.
+  - plugin-dev: drop the bespoke `ui` dev stub (`createUIStub`). `'ui'` remains a
+    `CoreServiceName`, so dev mode still registers a generic stub for it via the
+    fallback path; only the obsolete view/dashboard methods are gone.
+
+  Use `IMetadataService` for view/dashboard CRUD.
+
+### Patch Changes
+
+- Updated dependencies [caa3ef4]
+- Updated dependencies [22b32c1]
+- Updated dependencies [4d99a5c]
+- Updated dependencies [21b3208]
+- Updated dependencies [9b5bf3d]
+- Updated dependencies [cb5b393]
+- Updated dependencies [ab5718a]
+- Updated dependencies [61d441f]
+- Updated dependencies [c224e18]
+- Updated dependencies [d616e1d]
+- Updated dependencies [1e8a813]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [359c0aa]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [9a810f8]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [a619a3a]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/plugin-auth@11.0.0
+  - @objectstack/objectql@11.0.0
+  - @objectstack/runtime@11.0.0
+  - @objectstack/spec@11.0.0
+  - @objectstack/rest@11.0.0
+  - @objectstack/types@11.0.0
+  - @objectstack/core@11.0.0
+  - @objectstack/account@11.0.0
+  - @objectstack/setup@11.0.0
+  - @objectstack/studio@11.0.0
+  - @objectstack/plugin-org-scoping@11.0.0
+  - @objectstack/plugin-security@11.0.0
+  - @objectstack/driver-memory@11.0.0
+  - @objectstack/plugin-hono-server@11.0.0
+  - @objectstack/service-i18n@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

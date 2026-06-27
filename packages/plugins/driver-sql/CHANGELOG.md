@@ -1,5 +1,162 @@
 # @objectstack/driver-sql
 
+## 11.0.0
+
+### Minor Changes
+
+- d980f0d: feat: add a first-class `user` field type (person picker)
+
+  A new `user` field type — the equivalent of Airtable's Collaborator / Notion's
+  Person / Salesforce's `Lookup(User)`. Authored as `Field.user({ ... })`; use
+  `{ multiple: true }` for collaborators/watchers and `{ defaultValue: 'current_user' }`
+  to auto-fill the acting user on create.
+
+  **Why a distinct type rather than telling authors to `Field.lookup('sys_user')`:**
+  selecting a person is table-stakes, but the value is in _modelling
+  discoverability_ — a "User" entry in the Studio/AI field palette instead of
+  requiring authors (and AI) to know to reference the internal `sys_user` system
+  object — plus `current_user` defaults and a user-search picker. Storage and
+  runtime are unchanged.
+
+  **Deliberately NOT a new storage primitive.** `user` is a _semantic
+  specialization of `lookup`_ with the target fixed to `sys_user`: it shares the
+  exact lookup code path — same FK string column (`multiple` ⇒ JSON), same
+  `$expand` resolution, same indexing — so referential integrity and fresh display
+  names come for free, and nothing is re-implemented. An existing
+  `Field.lookup('sys_user')` is therefore equivalent at the storage layer (zero
+  data migration to adopt `Field.user`).
+
+  Ownership semantics are **unchanged**: the existing `owner_id` convention +
+  `plugin-security` auto-stamp/RLS still apply. A declarative `owner` flag is a
+  possible future follow-up; intentionally not added here to avoid a second
+  field type for what is a system role (rationale: keep the `FieldType` surface
+  lean — see related ADR-0059 freeze discipline).
+
+  Changes: `FieldType` gains `'user'` + `Field.user()` builder; the SQL/Mongo
+  drivers treat `user` exactly like `lookup`; the engine resolves `$expand` for
+  `user` fields and honours a new `defaultValue: 'current_user'` token (resolved
+  app-side from the execution context, mirroring the `NOW()` convention); kanban
+  group-by and symbolic seed references accept `user`; approvals enrich `user`
+  references. The public API surface is unchanged (additive enum member).
+
+### Patch Changes
+
+- 98a1535: Fix: store SQLite `created_at`/`updated_at` in one canonical, timezone-explicit format (ADR-0074)
+
+  The two SQLite write paths disagreed on the audit-timestamp format. INSERT fell
+  back to the column default `CURRENT_TIMESTAMP` (`'YYYY-MM-DD HH:MM:SS'`) while
+  UPDATE stamped `toISOString().replace('T',' ').replace('Z','')`
+  (`'YYYY-MM-DD HH:MM:SS.mmm'`) — both **timezone-naive**, space-separated strings
+  that `Date.parse` reads as _local_ time. On a non-UTC runtime a stored UTC
+  wall-clock silently shifted by the host offset; e.g. the objectos kernel
+  freshness probe compared a shifted `updated_at` against an absolute `builtAtMs`
+  and never evicted (publishes/installs/config toggles didn't take effect until the
+  LRU TTL expired).
+
+  `create` / `bulkCreate` / `upsert` / `update` now stamp a single canonical
+  ISO-8601 instant with an explicit `Z` (`new Date().toISOString()`) — matching the
+  caller-stamped paths (`sys_metadata`, the service outboxes) and Postgres/MySQL's
+  native `now()`. Because the stamp is applied app-side (not via the column
+  default), **existing** tenant databases are fixed immediately, not just freshly
+  created tables. `formatOutput` additionally repairs any legacy/raw zone-naive
+  audit timestamp to the same format on read (idempotent), so old rows read back
+  unambiguously without a data migration. `upsert` now treats `created_at` as
+  insert-only — a conflicting merge never overwrites it.
+
+  Postgres/MySQL are unaffected (they store a real zone-aware `TIMESTAMP`).
+
+- bc22a89: Fix: present `Field.time` as a wall-clock time-of-day on read (SQLite)
+
+  `Field.time` is a tz-naive time-of-day, not an instant (#2004). A
+  `defaultValue: 'NOW()'` time column historically took the full SQLite
+  `CURRENT_TIMESTAMP` default, so a defaulted/legacy row read back a full
+  `'YYYY-MM-DD HH:MM:SS'` timestamp instead of a time-of-day.
+
+  `formatOutput` now repairs a `Field.time` value to just its time portion
+  (`toTimeOnly`): a legacy full timestamp — or a full ISO value that leaked into
+  the column — is sliced to `HH:MM[:SS[.fff]]`, while a value already stored as a
+  bare time-of-day is left untouched. This is a deliberately NARROW, read-only
+  normalization with no write/filter counterpart, so it introduces no write/read
+  asymmetry and preserves exact round-trips for bare time-of-day values (e.g. the
+  field-zoo `f_time` guard). Runs for every dialect (a native TIME column already
+  returns a time-of-day, so it is a no-op there).
+
+  Completes the temporal-field read normalization alongside #2346: `datetime`
+  folds to a canonical ISO-8601-`Z` instant, `date` to `YYYY-MM-DD`, and `time` to
+  a wall-clock time-of-day.
+
+- 8a7e9f1: Fix: canonical storage + presentation for user-declared `NOW()`-default temporal fields on SQLite (ADR-0074 follow-up)
+
+  A user-declared `Field.datetime` (or `date`/`time`) with `defaultValue: 'NOW()'`
+  took the `knex.fn.now()` → `CURRENT_TIMESTAMP` column default on SQLite, storing a
+  **timezone-naive**, space-separated `'YYYY-MM-DD HH:MM:SS'` (no millis, no zone).
+  `Date.parse` reads such a zone-less string as _local_ time, so the stored UTC
+  wall-clock shifted by the host offset on a non-UTC runtime — the same class of bug
+  ADR-0074 fixed for the builtin `created_at`/`updated_at` audit columns, but left
+  scoped out for user fields. Worse, the **same** column mixed storage: an explicit
+  JS `Date` is bound by better-sqlite3 as INTEGER epoch ms, while an omitted value
+  took the naive TEXT default — so one column held both INTEGER ms and naive TEXT.
+
+  This fix, SQLite-only:
+
+  - **DDL default → canonical.** The `NOW()` default now emits a per-type canonical
+    via `strftime`: datetime → ISO-8601 with explicit `Z`
+    (`strftime('%Y-%m-%dT%H:%M:%fZ','now')`, e.g. `2026-06-26T10:34:13.891Z`,
+    matching `new Date().toISOString()`); date → `YYYY-MM-DD`; time → `HH:MM:SS.fff`
+    time-of-day (not a full timestamp).
+  - **Read → uniform instant.** `formatOutput` folds every `Field.datetime` storage
+    form — INTEGER epoch ms, canonical ISO-`Z`, and legacy naive `CURRENT_TIMESTAMP`
+    TEXT — to one canonical ISO-8601-`Z` instant (`normalizeSqliteDatetimeOutput`),
+    interpreting a naive wall-clock as UTC. Idempotent on already-zone-explicit
+    values; total on null/unparseable. This transparently repairs existing rows on
+    read (a DDL default only governs newly-created columns), so no data migration is
+    needed — mirroring the `Field.date`/numeric read-repairs already in place.
+
+  Applied as DDL-default + read-normalization, NOT app-side write stamping (the
+  inverse of ADR-0074's audit-column fix): the read path already repairs
+  existing-table rows transparently, and an explicit `Date` is bound as INTEGER
+  epoch ms regardless of any write stamp, so stamping wouldn't make on-disk storage
+  uniform anyway — the INTEGER-vs-TEXT split is inherent to SQLite and resolved at
+  the read boundary. This keeps the hot insert/upsert/bulk paths untouched.
+
+  The analytics SQL-bucketing path (`strftime`, bypasses `formatOutput`) is
+  unchanged: ISO-`Z` TEXT buckets identically to the old naive TEXT. Postgres/MySQL
+  keep native `now()` (a real zone-aware `TIMESTAMP`) and are entirely unaffected.
+
+  Generalizes ADR-0074's `repairNaiveUtcAuditTimestamp` by also folding the INTEGER
+  epoch-ms storage form; the two read-repairs can be unified once both land.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/types@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

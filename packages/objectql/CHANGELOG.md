@@ -1,5 +1,160 @@
 # @objectstack/objectql
 
+## 11.0.0
+
+### Minor Changes
+
+- 4d99a5c: Package-scoped commit history & rollback for AI authoring (ADR-0067)
+
+  Each authoring apply now lands as one revertible **commit** on a package timeline, on top of `sys_metadata_history`:
+
+  - New `sys_metadata_commit` object groups a turn's metadata changes (by `event_seq` range).
+  - `publishPackageDrafts` records each publish as one commit (best-effort) with a per-artifact revert plan and an optional `message` / `aiModel`.
+  - New protocol methods `listCommits`, `revertCommit`, `rollbackToPackageCommit` (reusing `restoreVersion` + delete; a revert is itself an append-only commit).
+  - New REST routes: `GET /packages/:id/commits`, `POST /packages/:id/commits/:commitId/revert`, `POST /packages/:id/rollback`.
+
+- cd51229: Expose authoritative create seeds via /meta/types (spec-derived create-shape contract, Phase 2)
+
+  The minimal valid create seeds added in `@objectstack/spec/kernel` (`getMetadataCreateSeed`) now reach consumers through the real `/meta/types` registry response: each entry carries an optional `createSeed`. The Studio designer / CLI / API clients derive their create defaults from this single source of truth instead of re-inventing them — closing the drift that produced the dashboard-`layout` and action-`body` create→save 422s.
+
+  - `@objectstack/spec`: barrel-export `getMetadataCreateSeed` / `listMetadataCreateSeedTypes` from `/kernel`; add optional `createSeed` to the `GetMetaTypesResponse` entry schema.
+  - `@objectstack/objectql`: `getMetaTypes()` attaches each type's seed (registry + runtime entries). Canvas-create types whose shape is built interactively (report) are intentionally absent.
+
+- d980f0d: feat: add a first-class `user` field type (person picker)
+
+  A new `user` field type — the equivalent of Airtable's Collaborator / Notion's
+  Person / Salesforce's `Lookup(User)`. Authored as `Field.user({ ... })`; use
+  `{ multiple: true }` for collaborators/watchers and `{ defaultValue: 'current_user' }`
+  to auto-fill the acting user on create.
+
+  **Why a distinct type rather than telling authors to `Field.lookup('sys_user')`:**
+  selecting a person is table-stakes, but the value is in _modelling
+  discoverability_ — a "User" entry in the Studio/AI field palette instead of
+  requiring authors (and AI) to know to reference the internal `sys_user` system
+  object — plus `current_user` defaults and a user-search picker. Storage and
+  runtime are unchanged.
+
+  **Deliberately NOT a new storage primitive.** `user` is a _semantic
+  specialization of `lookup`_ with the target fixed to `sys_user`: it shares the
+  exact lookup code path — same FK string column (`multiple` ⇒ JSON), same
+  `$expand` resolution, same indexing — so referential integrity and fresh display
+  names come for free, and nothing is re-implemented. An existing
+  `Field.lookup('sys_user')` is therefore equivalent at the storage layer (zero
+  data migration to adopt `Field.user`).
+
+  Ownership semantics are **unchanged**: the existing `owner_id` convention +
+  `plugin-security` auto-stamp/RLS still apply. A declarative `owner` flag is a
+  possible future follow-up; intentionally not added here to avoid a second
+  field type for what is a system role (rationale: keep the `FieldType` surface
+  lean — see related ADR-0059 freeze discipline).
+
+  Changes: `FieldType` gains `'user'` + `Field.user()` builder; the SQL/Mongo
+  drivers treat `user` exactly like `lookup`; the engine resolves `$expand` for
+  `user` fields and honours a new `defaultValue: 'current_user'` token (resolved
+  app-side from the execution context, mirroring the `NOW()` convention); kanban
+  group-by and symbolic seed references accept `user`; approvals enrich `user`
+  references. The public API surface is unchanged (additive enum member).
+
+### Patch Changes
+
+- 61d441f: feat(objectql): duplicate a writable base — ADR-0070 D4 ("duplicate base")
+
+  `protocol.duplicatePackage` clones every ACTIVE item a base owns into a NEW
+  package, **re-namespacing** object names (the blueprint prefixes a base's object
+  names with its namespace, e.g. `iojn_repair_ticket`, and `sys_metadata` keys on
+  `(type,name,org)` so a same-name copy would collide with the source) and
+  **rewriting every intra-package reference** (lookup `reference`, view `object`,
+  expressions, …) to the new names via a longest-first, identifier-boundary
+  replace. Exposed as `POST /packages/:id/duplicate` (body
+  `{ targetPackageId, targetName?, targetNamespace? }`).
+
+  Completes ADR-0070 D4 (package = lifecycle unit): delete-cascade and export
+  already shipped; this adds the duplicate gesture.
+
+- c224e18: feat(objectql): adopt orphaned metadata into a base — ADR-0070 D5 migration
+
+  `protocol.reassignOrphanedMetadata` bulk-rebinds every package-less orphan
+  (`package_id` null / `""` / the `sys_metadata` sentinel left by the pre-
+  package-first stopgaps) onto a target base, leaving already-owned rows
+  untouched. Exposed as `POST /packages/:id/adopt-orphans`. This is the migration
+  affordance behind retiring the "Local / Custom" scope (D5): once an env has no
+  orphans, that scope can be dropped from the selector. Pairs with the kernel's
+  `writable_package_required` (D1) so no NEW orphans are created.
+
+- d616e1d: feat(objectql): enforce package-first authoring at the kernel (ADR-0070 D1/D2)
+
+  A runtime-only metadata **create** that targets a read-only code/installed
+  package now throws `writable_package_required` (status 422) instead of silently
+  coercing `package_id` to `null`. The old coercion (#2252 stopgap) unblocked
+  editing but scattered orphans into a package-less bucket with no container to
+  delete (#1946); the rejection instead directs the authoring surface (Studio /
+  AI) to pick or create a writable base first.
+
+  `isLoadedPackage` is generalized into `isWritablePackage` (D2): a package is
+  writable unless it is a booted code package (registered in the engine manifest
+  map) or a `system`/`cloud`-scoped installed package. The old "owns ≥1 registered
+  object" heuristic is dropped — it was the read-only-after-publish trap (#2252),
+  since a writable base accrues registered objects once its drafts publish.
+
+  `null` is still accepted as the legacy org-overlay destination; ADR-0070 D5
+  retires it after the orphan migration.
+
+- 359c0aa: fix(objectql,rest): single-item meta reads must revalidate (no `max-age=3600`)
+
+  `GET /api/v1/meta/object/:name` (and the other single-item meta reads served by
+  the cached path) sent `Cache-Control: public, max-age, max-age=3600`. Two bugs:
+
+  1. **Stale metadata for up to an hour.** Object metadata is invalidated by
+     publish, but a one-hour TTL let browsers (and any CDN/proxy) serve a stale
+     schema _without revalidating_ — e.g. the AI-build "New" create form kept
+     rendering pre-publish fields until the TTL lapsed. The list endpoint
+     `GET /api/v1/meta/object` is uncached, which is why list views updated but
+     single-object reads didn't. `getMetaItemCached` now returns
+     `directives: ['private', 'no-cache']` with no `maxAge`, so the ETag validator
+     (which already changes on publish) gates freshness: a cheap `304` when
+     unchanged, fresh fields the instant a publish bumps the ETag. `private` also
+     keeps per-tenant metadata out of shared caches.
+
+  2. **Malformed header.** The directives array carried a bare `max-age`
+     placeholder _and_ the REST layer appended `max-age=3600` from the `maxAge`
+     field, concatenating into `public, max-age, max-age=3600`. The header builder
+     now strips the bare `max-age` token before appending the real value, so a
+     `maxAge` is emitted once as a well-formed `max-age=N`.
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [795b6d1]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/metadata-core@11.0.0
+  - @objectstack/spec@11.0.0
+  - @objectstack/formula@11.0.0
+  - @objectstack/types@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

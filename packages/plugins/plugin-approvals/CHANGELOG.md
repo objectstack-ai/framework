@@ -1,5 +1,82 @@
 # @objectstack/plugin-approvals
 
+## 11.0.0
+
+### Patch Changes
+
+- d980f0d: feat: add a first-class `user` field type (person picker)
+
+  A new `user` field type — the equivalent of Airtable's Collaborator / Notion's
+  Person / Salesforce's `Lookup(User)`. Authored as `Field.user({ ... })`; use
+  `{ multiple: true }` for collaborators/watchers and `{ defaultValue: 'current_user' }`
+  to auto-fill the acting user on create.
+
+  **Why a distinct type rather than telling authors to `Field.lookup('sys_user')`:**
+  selecting a person is table-stakes, but the value is in _modelling
+  discoverability_ — a "User" entry in the Studio/AI field palette instead of
+  requiring authors (and AI) to know to reference the internal `sys_user` system
+  object — plus `current_user` defaults and a user-search picker. Storage and
+  runtime are unchanged.
+
+  **Deliberately NOT a new storage primitive.** `user` is a _semantic
+  specialization of `lookup`_ with the target fixed to `sys_user`: it shares the
+  exact lookup code path — same FK string column (`multiple` ⇒ JSON), same
+  `$expand` resolution, same indexing — so referential integrity and fresh display
+  names come for free, and nothing is re-implemented. An existing
+  `Field.lookup('sys_user')` is therefore equivalent at the storage layer (zero
+  data migration to adopt `Field.user`).
+
+  Ownership semantics are **unchanged**: the existing `owner_id` convention +
+  `plugin-security` auto-stamp/RLS still apply. A declarative `owner` flag is a
+  possible future follow-up; intentionally not added here to avoid a second
+  field type for what is a system role (rationale: keep the `FieldType` surface
+  lean — see related ADR-0059 freeze discipline).
+
+  Changes: `FieldType` gains `'user'` + `Field.user()` builder; the SQL/Mongo
+  drivers treat `user` exactly like `lookup`; the engine resolves `$expand` for
+  `user` fields and honours a new `defaultValue: 'current_user'` token (resolved
+  app-side from the execution context, mirroring the `NOW()` convention); kanban
+  group-by and symbolic seed references accept `user`; approvals enrich `user`
+  references. The public API surface is unchanged (additive enum member).
+
+- Updated dependencies [4d99a5c]
+- Updated dependencies [9b5bf3d]
+- Updated dependencies [cb5b393]
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [5737261]
+- Updated dependencies [a619a3a]
+- Updated dependencies [f44c1bd]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/metadata-core@11.0.0
+  - @objectstack/platform-objects@11.0.0
+  - @objectstack/spec@11.0.0
+  - @objectstack/formula@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

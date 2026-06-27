@@ -1,5 +1,66 @@
 # @objectstack/types
 
+## 11.0.0
+
+### Patch Changes
+
+- 795b6d1: refactor: single-source the multi-org (`OS_MULTI_ORG_ENABLED`) flag resolution
+
+  "Is this deployment multi-org?" was resolved in 10 places across 8 packages
+  with three subtly different inline expressions:
+
+  - the canonical `String(readEnvWithDeprecation('OS_MULTI_ORG_ENABLED',
+'OS_MULTI_TENANT') ?? 'false').toLowerCase() !== 'false'` (objectql registry,
+    plugin-dev, runtime app-plugin, cli serve/verify, cloud-connection),
+  - a redundant `env.OS_MULTI_ORG_ENABLED !== undefined ? … : …` variant in
+    plugin-auth (auth-manager `/auth/config` features + `beforeCreateOrganization`
+    guard),
+  - and a bare `process.env.OS_MULTI_ORG_ENABLED ?? process.env.OS_MULTI_TENANT`
+    read in the SQL driver's `isMultiTenantMode()` — which skipped the
+    `OS_MULTI_TENANT` deprecation warning every other site emits.
+
+  Because the SQL driver computed the mode independently of the auth/security
+  layer, the driver's tenant-audit gate and the rest of the system could in
+  principle disagree about whether tenant isolation is active.
+
+  Introduces `resolveMultiOrgEnabled()` in `@objectstack/types` (next to
+  `readEnvWithDeprecation`, the natural leaf dependency) as the single source of
+  truth, and routes all 10 sites through it. `@objectstack/driver-sql` gains a
+  direct `@objectstack/types` dependency (previously it read `process.env`
+  directly).
+
+  Behaviour is unchanged everywhere except the SQL driver, which now also emits
+  the one-shot `OS_MULTI_TENANT`-is-deprecated warning — consistent with every
+  other site. This mirrors the `resolveAuthzContext` single-source pattern in
+  `@objectstack/core`. Follow-up (not in this change): a lint gate forbidding new
+  inline reads of these env vars outside the helper.
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes

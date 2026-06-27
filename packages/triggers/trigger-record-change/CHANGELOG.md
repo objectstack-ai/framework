@@ -1,5 +1,81 @@
 # @objectstack/plugin-trigger-record-change
 
+## 11.0.0
+
+### Minor Changes
+
+- 6c4fbd9: fix(security): enforce flow `runAs` execution identity (#1888)
+
+  The `service-automation` engine now honors `flow.runAs` instead of ignoring it.
+  Previously the CRUD nodes passed **no identity** to ObjectQL, so the security
+  middleware was skipped entirely — every flow ran effectively elevated regardless
+  of `runAs`. A `runAs:'user'` flow did **not** de-elevate (a privilege-boundary
+  surprise), and `runAs:'system'` did not _explicitly_ elevate.
+
+  The engine now establishes the run's data-layer identity at setup and restores
+  the caller's context afterward:
+
+  - **`runAs:'system'`** → an elevated, RLS-bypassing system principal
+    (`{ isSystem: true }`): the run can read/write records the triggering user
+    cannot.
+  - **`runAs:'user'`** (default) → the **triggering user's** identity
+    (`{ userId, roles, permissions, tenantId }`): CRUD nodes' ObjectQL reads/writes
+    respect that user's row-level security, and the run can never exceed the
+    triggering user's grants.
+
+  To keep `runAs:'user'` faithful to a direct request by that user, the REST
+  trigger route (`@objectstack/runtime`) and the record-change trigger
+  (`@objectstack/trigger-record-change`) now forward the caller's resolved
+  `roles`/`tenantId` into the `AutomationContext` (new optional fields), not just
+  `userId`. The new `resolveRunDataContext` helper is the single place that maps a
+  run's effective `runAs` to the ObjectQL context, shared by every data node.
+
+  The `[EXPERIMENTAL — not enforced]` marker is removed from `FlowSchema.runAs`.
+
+  **Behavior change / migration.** Flows that previously relied on the implicit
+  elevation (the default `runAs:'user'` ran unscoped) now run as the triggering
+  user and are subject to their RLS. **Declare `runAs:'system'` on any flow that
+  must read or write beyond the triggering user's access** (e.g. system
+  automations, cross-owner roll-ups). Schedule-triggered runs have no trigger user;
+  under `user` they stay unscoped (there is no identity to scope to) — declare
+  `system` to make elevation explicit.
+
+  Proven both directions by the dogfood regression gate
+  (`flow-runas.dogfood.test.ts` — a restricted member triggers system vs user
+  flows against an owner-scoped record) and service-automation unit + regression
+  tests (`crud-runas.test.ts`).
+
+### Patch Changes
+
+- Updated dependencies [ab5718a]
+- Updated dependencies [4845c12]
+- Updated dependencies [c1a754a]
+- Updated dependencies [6fbe91f]
+- Updated dependencies [715d667]
+- Updated dependencies [5eef4cf]
+- Updated dependencies [72759e1]
+- Updated dependencies [6c4fbd9]
+- Updated dependencies [ef3ed67]
+- Updated dependencies [cd51229]
+- Updated dependencies [7697a0e]
+- Updated dependencies [e7e04f1]
+- Updated dependencies [cfd5ac4]
+- Updated dependencies [2be5c1f]
+- Updated dependencies [ad143ce]
+- Updated dependencies [5c4a8c8]
+- Updated dependencies [3afaeed]
+- Updated dependencies [8801c02]
+- Updated dependencies [3d04e06]
+- Updated dependencies [4a84c98]
+- Updated dependencies [c715d25]
+- Updated dependencies [aa33b02]
+- Updated dependencies [d980f0d]
+- Updated dependencies [a658523]
+- Updated dependencies [82ff91c]
+- Updated dependencies [638f472]
+  - @objectstack/spec@11.0.0
+  - @objectstack/core@11.0.0
+
 ## 10.3.0
 
 ### Patch Changes
