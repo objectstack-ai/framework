@@ -23,6 +23,12 @@ Complete guide to implementing enterprise-grade security in ObjectStack with fin
 
 ## Security Architecture
 
+> **Authentication is the first layer.** This guide covers *authorization* —
+> who can see and do what once signed in (RBAC, RLS, FLS, sharing). Harden
+> *authentication* first — password policy, enforced MFA, account lockout,
+> session controls, and IP allowlist — in
+> [Enterprise Authentication Hardening](./authentication#enterprise-authentication-hardening-adr-0069).
+
 ObjectStack implements a multi-layered security model:
 
 ```
@@ -689,6 +695,7 @@ writes.
 
 ### Initial Setup
 
+- [ ] Harden authentication (password policy, enforced MFA, lockout, session controls, IP allowlist) — see [Authentication Hardening](./authentication#enterprise-authentication-hardening-adr-0069)
 - [ ] Define user roles and hierarchies
 - [ ] Create profiles for each role
 - [ ] Set organization-wide defaults

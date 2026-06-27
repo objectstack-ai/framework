@@ -16,6 +16,7 @@ adapter layer for a production deployment.
 | Token-bucket rate limit                | Off (opt-in)          | `RateLimiter` primitive        |
 | CSRF                                   | Adapter-layer concern | `hono/secure-headers` / `hono/csrf` |
 | Auth (better-auth)                     | On                    | `@objectstack/plugin-auth`     |
+| Auth hardening (ADR-0069)              | Off (opt-in)          | Setup → Authentication         |
 | Project membership (RBAC)              | On when scoped        | dispatcher plugin              |
 | Field- and row-level perms             | On                    | SecurityPlugin                 |
 | Request id / metrics / 5xx reporting   | Noop default          | see [Observability](./OBSERVABILITY.md) |
@@ -137,6 +138,28 @@ CSRF protection becomes required when you switch to **cookie-based
 session auth**. In that case wire a CSRF middleware (e.g. `hono/csrf`)
 and exempt only the auth callback routes.
 
+## Authentication hardening (ADR-0069)
+
+Beyond transport-layer defences, `@objectstack/plugin-auth` ships an enterprise
+authentication-hardening layer. Each control is **opt-in** from **Setup →
+Authentication** and backed by real runtime enforcement (ADR-0049). For a new
+production deployment, enable at least:
+
+| Group       | Recommended settings                                                                 |
+| ----------- | ------------------------------------------------------------------------------------ |
+| Password    | `password_reject_breached: true`, `password_require_complexity: true`, `password_history_count: 3–5`, `password_expiry_days: 90` |
+| Anti-abuse  | `lockout_threshold: 5`, `lockout_duration_minutes: 15`, `rate_limit_max` / `rate_limit_window_seconds` |
+| MFA         | `mfa_required: true` (or per-org `require_mfa`), `mfa_grace_period_days: 7`            |
+| Sessions    | `session_idle_timeout_minutes: 30–60`, `session_absolute_max_hours: 8–12`, `max_concurrent_sessions_per_user` |
+| Network     | `allowed_ip_ranges` (IPv4 CIDR) for tenant- or office-scoped access                   |
+
+Password expiry and enforced MFA share a *session-validation gate*: a
+non-compliant session can authenticate but is blocked from data access (auth +
+health + a remediation allowlist still pass) until the user rotates the password
+or enrols MFA. See the
+[Authentication guide](../content/docs/guides/authentication.mdx#enterprise-authentication-hardening-adr-0069)
+for the full per-setting reference.
+
 ## JWT / session lifecycle
 
 ObjectStack uses [better-auth](https://www.better-auth.com/) via
@@ -148,6 +171,7 @@ ObjectStack uses [better-auth](https://www.better-auth.com/) via
 | Access token TTL  | inherited from session                    | configure in better-auth                  |
 | Refresh           | better-auth `/auth/get-session` rolls TTL | `session.updateAge` (seconds)             |
 | Revocation        | DELETE on `session` row                   | `revokeSessionsOnPasswordReset: true`     |
+| Idle / absolute / concurrent caps | Off (opt-in)              | `session_idle_timeout_minutes` / `session_absolute_max_hours` / `max_concurrent_sessions_per_user` (Setup → Authentication) |
 | Email verify TTL  | 1 hour                                    | `emailVerification.expiresIn`             |
 
 ### Verification checklist (run before going live)

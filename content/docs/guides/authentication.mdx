@@ -33,10 +33,21 @@ The `@objectstack/plugin-auth` package provides enterprise-grade authentication 
 - ✅ **Session Management** - Automatic session handling with configurable expiry
 - ✅ **Password Reset** - Email-based password reset flow
 - ✅ **Email Verification** - Email verification workflow
-- ⚙️ **2FA backend** - better-auth two-factor plugin wiring is available for custom UIs
+- ✅ **Multi-Factor Authentication** - TOTP two-factor, plus org-wide **enforced MFA** with a grace period and a Console enrollment/remediation flow (ADR-0069)
 - ✅ **Magic Links** - Passwordless authentication
 - ✅ **Organizations** - Multi-tenant support
 - ✅ **ObjectQL Integration** - Native ObjectStack data persistence (no ORM required)
+
+**Enterprise hardening (ADR-0069)** — configured from **Setup → Authentication**, each setting backed by real runtime enforcement:
+
+- ✅ **Password policy** - Complexity (min character classes), history (no-reuse), expiry, and breached-password rejection via Have I Been Pwned (k-anonymity)
+- ✅ **Account lockout & rate-limiting** - Per-account lockout after N failed sign-ins (admin **Unlock** action) and per-IP throttling
+- ✅ **Enforced MFA** - Org-wide `require_mfa` with a configurable grace period; the session is gated from data access until the user enrolls
+- ✅ **Session controls** - Idle timeout, absolute lifetime cap, and concurrent-session limit per user
+- ✅ **IP allowlist** - Restrict authenticated access to CIDR ranges
+- ✅ **Enterprise SSO** - Admin-managed OIDC and SAML 2.0 trust list (see [Social & Enterprise SSO](/docs/guides/auth-sso))
+
+See [Enterprise Authentication Hardening](#enterprise-authentication-hardening-adr-0069) for the full settings reference.
 
 ### Architecture
 
@@ -324,13 +335,71 @@ Better-Auth automatically handles the OAuth callback at `/api/v1/auth/callback/g
 
 ---
 
+## Enterprise Authentication Hardening (ADR-0069)
+
+Beyond the core flows above, `@objectstack/plugin-auth` ships an enterprise
+hardening layer. Every toggle is configured from **Setup → Authentication** and
+is wired to real runtime enforcement (ADR-0049 — no setting ships without the
+code that reads it). Changes take effect immediately; no restart is required.
+
+### Password policy
+
+| Setting | Effect |
+|---|---|
+| `password_reject_breached` | Reject passwords found in the Have I Been Pwned corpus (k-anonymity range check — the password is never sent in full). |
+| `password_require_complexity` / `password_min_classes` | Require a minimum number of character classes (upper / lower / digit / symbol). |
+| `password_history_count` | Block reuse of the last *N* passwords. |
+| `password_expiry_days` | Force a password change after *N* days; expired sessions are gated until the password is rotated. |
+
+### Anti-abuse (lockout & rate-limiting)
+
+| Setting | Effect |
+|---|---|
+| `lockout_threshold` | Lock an account after this many consecutive failed sign-ins. |
+| `lockout_duration_minutes` | How long a lockout lasts. Admins can clear it early with the **Unlock** action on the user record. |
+| `rate_limit_max` / `rate_limit_window_seconds` | Per-IP request throttle on auth endpoints. |
+
+### Multi-factor (enforced MFA)
+
+| Setting | Effect |
+|---|---|
+| `mfa_required` | Require MFA org-wide (also settable per organization via `require_mfa`). |
+| `mfa_grace_period_days` | Grace window for existing users to enroll. After it elapses, the session is allowed to sign in but **gated from data access** until TOTP is enrolled — the Console surfaces a remediation overlay that walks the user through enrollment. |
+
+### Sessions
+
+| Setting | Effect |
+|---|---|
+| `session_idle_timeout_minutes` | Expire a session after inactivity. |
+| `session_absolute_max_hours` | Hard cap on total session lifetime regardless of activity. |
+| `max_concurrent_sessions_per_user` | Cap simultaneous sessions; the oldest is revoked (expired in place) when the cap is exceeded. |
+
+### Network
+
+| Setting | Effect |
+|---|---|
+| `allowed_ip_ranges` | Restrict authenticated access to one or more IPv4 CIDR ranges. IP is extracted with trust-proxy awareness (`x-forwarded-for` / `cf-connecting-ip` / `x-real-ip`); requests whose IP can't be determined fail open. |
+
+> **How enforcement works.** Password expiry and enforced MFA share a single
+> *session-validation gate*: `customSession` stamps the session with an
+> `authGate` posture, and the REST server + runtime dispatcher block gated
+> sessions from data access (auth, health, and a small allowlist still pass so
+> the user can remediate). This is why a non-compliant user can sign in but
+> can't read data until they fix the issue.
+
+---
+
 ## Advanced Features
 
 ### Two-Factor Authentication (2FA)
 
-ObjectStack wires the better-auth two-factor plugin at the backend layer, but
-the open-source Console login UI does not yet ship the complete TOTP challenge
-flow. Do not expose 2FA as an end-user feature until your UI handles:
+ObjectStack wires the better-auth two-factor (TOTP) plugin at the backend layer.
+The endpoints below let you build an **opt-in** 2FA experience in a custom account
+UI; for **organization-wide enforced MFA**, see
+[Enterprise Authentication Hardening](#enterprise-authentication-hardening-adr-0069)
+— the Console ships an enrollment/remediation flow for that path.
+
+A complete opt-in 2FA UX still needs to handle:
 
 - enrollment (`/two-factor/enable`),
 - TOTP confirmation (`/two-factor/verify-totp`),

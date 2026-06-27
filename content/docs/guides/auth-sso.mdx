@@ -113,11 +113,14 @@ Enterprise packages can pass `oidcProviders` into `@objectstack/plugin-auth`
 or contribute them through `auth:configure`. The open-source package does not
 ship a generic OIDC settings UI.
 
-> **Per-environment external IdP (ADR-0069).** Recent releases add a
-> per-environment external-IdP path built on `@better-auth/sso` (a generic OIDC
-> relying party) and surface an `sso` flag in the public `/auth/config`
-> (`features.sso`) so a client can show an enterprise-login button when SSO is
-> configured. The `oidcProviders` extension below remains the in-process path.
+> **Admin-managed external IdP (ADR-0069).** Recent releases add a
+> per-environment external-IdP path built on `@better-auth/sso` and surface an
+> `sso` flag in the public `/auth/config` (`features.sso`) so a client can show
+> an enterprise-login button when SSO is configured. Admins register providers
+> **without code** from **Setup → SSO Providers** — both **OIDC** (Okta, Entra,
+> Auth0, Keycloak, …) and **SAML 2.0** (see [SAML 2.0](#enterprise-sso-saml-20)
+> below). The `oidcProviders` extension shown here remains the in-process path
+> for framework/enterprise packages that prefer wiring providers in code.
 
 ### Quick start — Okta
 
@@ -201,6 +204,58 @@ const oidcProviders = [
 | `pkce` | — | Enable PKCE — recommended for public clients |
 
 *Either `discoveryUrl` or `authorizationUrl` + `tokenUrl` must be provided.
+
+---
+
+## Enterprise SSO (SAML 2.0)
+
+SAML 2.0 is provided natively by `@better-auth/sso` (the same package behind the
+OIDC path) — **no custom plugin or extension is needed**. Admins register a SAML
+IdP from **Setup → SSO Providers → Register SAML Provider**, which posts to the
+env-side bridge at `POST /api/v1/auth/admin/sso/register-saml`.
+
+### Register a SAML provider
+
+Fill in the IdP details collected by the **Register SAML Provider** action:
+
+| Field | Required | Description |
+|---|---|---|
+| `providerId` | ✅ | Stable identifier, e.g. `acme-saml`. |
+| `issuer` | ✅ | The IdP's SAML **EntityID** (issuer), e.g. `https://saml.acme.com/entityid`. |
+| `domain` | ✅ | Users with this email domain are routed to this IdP, e.g. `acme.com`. |
+| `entryPoint` | ✅ | The IdP's SAML single sign-on (redirect) URL that receives the `SAMLRequest`. |
+| `cert` | ✅ | The IdP's X.509 signing certificate (PEM body) — used to verify assertion signatures. |
+| `identifierFormat` | — | Requested SAML NameID format (defaults to the IdP's configured format), e.g. `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. |
+
+On success the response returns the two **Service Provider (SP)** URLs you
+configure on the IdP side:
+
+```json
+{
+  "success": true,
+  "data": { "providerId": "acme-saml" },
+  "acsUrl": "https://<your-domain>/api/v1/auth/sso/saml2/sp/acs/acme-saml",
+  "spMetadataUrl": "https://<your-domain>/api/v1/auth/sso/saml2/sp/metadata?providerId=acme-saml"
+}
+```
+
+- **ACS (Assertion Consumer Service) URL** — register this as the SP ACS / reply
+  URL on the IdP.
+- **SP metadata URL** — serves the SP `EntityDescriptor`/`SPSSODescriptor` XML
+  (many IdPs can import it directly to auto-configure the SP).
+
+### SAML sign-in flow
+
+1. User enters their work email (or clicks the enterprise-login button).
+2. Client calls `POST /api/v1/auth/sign-in/sso` with `{ email, callbackURL }`.
+3. The email **domain** is matched to the registered provider; the response is a
+   redirect to the IdP's `entryPoint` carrying a signed `SAMLRequest`.
+4. The IdP authenticates the user and POSTs a SAML assertion back to the SP ACS
+   URL; `@better-auth/sso` (samlify) validates the signature/timestamp, then
+   creates a session and redirects to `callbackURL`.
+
+> Signature, timestamp, and replay validation are handled by `@better-auth/sso`
+> (samlify). You only supply the IdP's signing certificate at registration time.
 
 ---
 
