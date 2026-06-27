@@ -76,7 +76,7 @@ const result = ChartAnnotation.parse(data);
 | **xAxis** | `Object` | optional | X-Axis configuration |
 | **yAxis** | `Object[]` | optional | Y-Axis configuration (support dual axis) |
 | **series** | `Object[]` | optional | Defined series configuration |
-| **colors** | `string[]` | optional | Color palette |
+| **colors** | `string[] \| Record<string, string>` | optional | Color palette (string[]) or value→color map (`{ value: color }`) |
 | **height** | `number` | optional | Fixed height in pixels |
 | **showLegend** | `boolean` | ✅ | Display legend |
 | **showDataLabels** | `boolean` | ✅ | Display data labels |

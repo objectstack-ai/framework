@@ -62,6 +62,7 @@ Advanced / low-level Better-Auth options
 | **emailAndPassword** | `Object` | optional | Email and password authentication options forwarded to better-auth |
 | **emailVerification** | `Object` | optional | Email verification options forwarded to better-auth |
 | **advanced** | `Object` | optional | Advanced / low-level Better-Auth options |
+| **ssoOnlyMode** | `boolean` | optional | SSO-only login: hide the local password form + self-registration (the break-glass password endpoint stays enabled) |
 | **mutualTls** | `Object` | optional | Mutual TLS (mTLS) configuration |
 
 
@@ -76,6 +77,7 @@ Advanced / low-level Better-Auth options
 | **organization** | `boolean` | ✅ | Enable Organization/Teams support (frontend AuthProvider expects this enabled) |
 | **twoFactor** | `boolean` | ✅ | Enable 2FA |
 | **passkeys** | `boolean` | ✅ | Enable Passkey support |
+| **passwordRejectBreached** | `boolean` | ✅ | Reject passwords found in the Have I Been Pwned breach corpus (enables better-auth's haveibeenpwned plugin) |
 | **magicLink** | `boolean` | ✅ | Enable Magic Link login |
 | **oidcProvider** | `boolean` | ✅ | Enable the OpenID Connect provider plugin (acts as an OIDC IdP) |
 | **deviceAuthorization** | `boolean` | ✅ | Enable RFC 8628 Device Authorization Grant (CLI / TV-style login) |

@@ -88,7 +88,7 @@ const result = JoinedReportBlock.parse(data);
 | **xAxis** | `string` | ✅ | Grouping field for X-Axis |
 | **yAxis** | `string` | ✅ | Summary field for Y-Axis |
 | **series** | `Object[]` | optional | Defined series configuration |
-| **colors** | `string[]` | optional | Color palette |
+| **colors** | `string[] \| Record<string, string>` | optional | Color palette (string[]) or value→color map (`{ value: color }`) |
 | **height** | `number` | optional | Fixed height in pixels |
 | **showLegend** | `boolean` | ✅ | Display legend |
 | **showDataLabels** | `boolean` | ✅ | Display data labels |

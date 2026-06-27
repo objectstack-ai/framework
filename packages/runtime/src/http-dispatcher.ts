@@ -127,12 +127,16 @@ export interface HttpDispatcherOptions {
 }
 
 /**
- * @deprecated Use `createDispatcherPlugin()` from `@objectstack/runtime` instead.
- * This class will be removed in v2. Prefer the plugin-based approach:
- * ```ts
- * import { createDispatcherPlugin } from '@objectstack/runtime';
- * kernel.use(createDispatcherPlugin({ prefix: '/api/v1' }));
- * ```
+ * The HTTP dispatch engine — translates an inbound (method, path, body, ctx)
+ * request into a kernel response. Used directly by the framework's HTTP adapters
+ * (express / fastify / nextjs / nestjs / nuxt / sveltekit / hono) and plugin-msw,
+ * which need a *callable* dispatcher.
+ *
+ * NOTE: `createDispatcherPlugin()` is a different thing — a kernel plugin that
+ * registers routes on a kernel-hosted HTTP server. It is NOT a drop-in for
+ * adapters. Retiring this public class behind a `createHttpDispatcher()` factory
+ * is tracked in #2380 (a deliberate adapter-API change, not yet done) — so this
+ * is intentionally NOT marked `@deprecated` while no working replacement exists.
  */
 export class HttpDispatcher {
     private kernel: any; // Casting to any to access dynamic props like services, graphql

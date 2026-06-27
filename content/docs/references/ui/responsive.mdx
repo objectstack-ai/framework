@@ -16,8 +16,8 @@ Matches the breakpoint names defined in theme.zod.ts BreakpointsSchema.
 ## TypeScript Usage
 
 ```typescript
-import { BreakpointColumnMap, BreakpointName, BreakpointOrderMap, PerformanceConfig, ResponsiveConfig } from '@objectstack/spec/ui';
-import type { BreakpointColumnMap, BreakpointName, BreakpointOrderMap, PerformanceConfig, ResponsiveConfig } from '@objectstack/spec/ui';
+import { BreakpointColumnMap, BreakpointName, BreakpointOrderMap, PerformanceConfig, ResponsiveConfig, ResponsiveStyles, StyleMap } from '@objectstack/spec/ui';
+import type { BreakpointColumnMap, BreakpointName, BreakpointOrderMap, PerformanceConfig, ResponsiveConfig, ResponsiveStyles, StyleMap } from '@objectstack/spec/ui';
 
 // Validate data
 const result = BreakpointColumnMap.parse(data);
@@ -105,6 +105,25 @@ Responsive layout configuration
 | **hiddenOn** | `Enum<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl' \| '2xl'>[]` | optional | Hide on these breakpoints |
 | **columns** | `Object` | optional | Grid columns per breakpoint |
 | **order** | `Object` | optional | Display order per breakpoint |
+
+
+---
+
+## ResponsiveStyles
+
+Per-breakpoint scoped style maps (ADR-0065)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **large** | `Record<string, string \| number>` | optional | Unconditional base (desktop-first) |
+| **medium** | `Record<string, string \| number>` | optional | Applied at ≤ medium breakpoint |
+| **small** | `Record<string, string \| number>` | optional | Applied at ≤ small breakpoint |
+| **xsmall** | `Record<string, string \| number>` | optional | Applied at ≤ xsmall breakpoint |
+
+
+---
 
 
 ---

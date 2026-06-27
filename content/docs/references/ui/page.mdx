@@ -16,41 +16,12 @@ A named region in the template where components are dropped.
 ## TypeScript Usage
 
 ```typescript
-import { BlankPageLayout, BlankPageLayoutItem, ElementDataSource, InterfacePageConfig, PageComponentType, PageType, PageVariable, RecordReviewConfig } from '@objectstack/spec/ui';
-import type { BlankPageLayout, BlankPageLayoutItem, ElementDataSource, InterfacePageConfig, PageComponentType, PageType, PageVariable, RecordReviewConfig } from '@objectstack/spec/ui';
+import { ElementDataSource, InterfacePageConfig, PageComponentType, PageType, PageVariable } from '@objectstack/spec/ui';
+import type { ElementDataSource, InterfacePageConfig, PageComponentType, PageType, PageVariable } from '@objectstack/spec/ui';
 
 // Validate data
-const result = BlankPageLayout.parse(data);
+const result = ElementDataSource.parse(data);
 ```
-
----
-
-## BlankPageLayout
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **columns** | `integer` | ✅ | Number of grid columns |
-| **rowHeight** | `integer` | ✅ | Height of each grid row in pixels |
-| **gap** | `integer` | ✅ | Gap between grid items in pixels |
-| **items** | `Object[]` | ✅ | Positioned components on the canvas |
-
-
----
-
-## BlankPageLayoutItem
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **componentId** | `string` | ✅ | Reference to a PageComponent.id in the page |
-| **x** | `integer` | ✅ | Grid column position (0-based) |
-| **y** | `integer` | ✅ | Grid row position (0-based) |
-| **width** | `integer` | ✅ | Width in grid columns |
-| **height** | `integer` | ✅ | Height in grid rows |
-
 
 ---
 
@@ -132,13 +103,14 @@ Interface-level page configuration (Airtable parity)
 * `element:filter`
 * `element:form`
 * `element:record_picker`
+* `element:text_input`
 
 
 ---
 
 ## PageType
 
-Page type — the page KIND (platform or interface). Visualizations of a list page live in interfaceConfig, not here.
+Page type — the page KIND. Only types with a dedicated renderer are authorizable; visualizations of a list page live in interfaceConfig, not here.
 
 ### Allowed Values
 
@@ -147,12 +119,6 @@ Page type — the page KIND (platform or interface). Visualizations of a list pa
 * `app`
 * `utility`
 * `list`
-* `dashboard`
-* `form`
-* `record_detail`
-* `record_review`
-* `overview`
-* `blank`
 
 
 ---
@@ -163,27 +129,10 @@ Page type — the page KIND (platform or interface). Visualizations of a list pa
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **name** | `string` | ✅ | Variable name |
+| **name** | `string` | ✅ | Variable name. Exposed to expressions as `page.<name>`. |
 | **type** | `Enum<'string' \| 'number' \| 'boolean' \| 'object' \| 'array' \| 'record_id'>` | ✅ |  |
-| **defaultValue** | `any` | optional |  |
-| **source** | `string` | optional | Component ID that writes to this variable |
-
-
----
-
-## RecordReviewConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **object** | `string` | ✅ | Target object for review |
-| **filter** | `[__schema0](./__schema0)` | optional | Filter criteria for review queue |
-| **sort** | `Object[]` | optional | Sort order for review queue |
-| **displayFields** | `string[]` | optional | Fields to display on the review page |
-| **actions** | `Object[]` | ✅ | Review actions |
-| **navigation** | `Enum<'sequential' \| 'random' \| 'filtered'>` | ✅ | Record navigation mode |
-| **showProgress** | `boolean` | ✅ | Show review progress indicator |
+| **defaultValue** | `any` | optional | Initial value. Defaults to a type-appropriate empty value when omitted. |
+| **source** | `string` | optional | Component id that writes this variable (e.g. an element:record_picker whose `id` matches). |
 
 
 ---
