@@ -14,8 +14,8 @@ Empty Properties Schema
 ## TypeScript Usage
 
 ```typescript
-import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
-import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextInputProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementMetadataViewerProps, ElementNumberProps, ElementRecordPickerProps, ElementTextInputProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AIChatWindowProps.parse(data);
@@ -132,6 +132,25 @@ const result = AIChatWindowProps.parse(data);
 | **multiple** | `boolean` | ✅ | Allow multiple record selection |
 | **targetVariable** | `string` | optional | Page variable to bind selected record ID(s) |
 | **placeholder** | `string` | optional | Placeholder text |
+| **aria** | `Object` | optional | ARIA accessibility attributes |
+
+
+---
+
+## ElementTextInputProps
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **inputType** | `Enum<'text' \| 'email' \| 'number' \| 'tel' \| 'url' \| 'password'>` | ✅ | Native input type — drives keyboard/validation affordance and how the bound value is coerced (number → numeric). |
+| **label** | `string` | optional | Field label shown above the input |
+| **placeholder** | `string` | optional | Placeholder text shown when empty |
+| **defaultValue** | `string \| number` | optional | Initial value; seeds the bound page variable on mount |
+| **required** | `boolean` | ✅ | Mark the field as required |
+| **disabled** | `boolean` | ✅ | Disable the input |
+| **description** | `string` | optional | Helper text shown below the input |
+| **targetVariable** | `string` | optional | Page variable this input writes to. Declarative hint; the live binding resolves via the variable whose `source` equals this component id (see PageVariableSchema). |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
 
 
@@ -334,6 +353,7 @@ Type: `string`
 | **title** | `string` | optional | Custom title for the related list |
 | **showViewAll** | `boolean` | ✅ | Show "View All" link to see all related records |
 | **actions** | `string[]` | optional | Action IDs available for related records |
+| **add** | `Object` | optional | Add-existing-via-picker config (generic m2m/junction assignment). |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
 
 

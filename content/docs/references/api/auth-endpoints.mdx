@@ -61,6 +61,7 @@ const result = AuthEndpoint.parse(data);
 | **passkeys** | `boolean` | ✅ | Passkey/WebAuthn support enabled |
 | **magicLink** | `boolean` | ✅ | Magic link login enabled |
 | **organization** | `boolean` | ✅ | Multi-tenant organization support enabled |
+| **ssoEnforced** | `boolean` | optional | SSO-only login enforced: the UI hides the local password form + self-registration (a break-glass "use a password" link remains) |
 
 
 ---

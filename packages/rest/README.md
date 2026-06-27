@@ -7,7 +7,7 @@
 
 ## Overview
 
-`@objectstack/rest` is registered as a kernel plugin and emits HTTP routes for every object defined in the protocol metadata. Framework adapters (`@objectstack/express`, `hono`, `fastify`, `nextjs`, `nuxt`, `nestjs`, `sveltekit`) invoke these routes through `HttpDispatcher` from `@objectstack/runtime`.
+`@objectstack/rest` is registered as a kernel plugin and emits HTTP routes for every object defined in the protocol metadata. The Hono framework adapter (`@objectstack/hono`) invokes these routes through `HttpDispatcher` from `@objectstack/runtime`.
 
 ## Installation
 

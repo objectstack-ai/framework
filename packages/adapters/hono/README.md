@@ -74,11 +74,6 @@ app.use('/api/*', objectStackMiddleware(kernel));
 - ✅ Edge, serverless, and multi-runtime deployments.
 - ✅ Projects wanting built-in CORS with wildcard patterns.
 
-## When not to use
-
-- ❌ Existing Express app — use [`@objectstack/express`](../express).
-- ❌ NestJS enterprise stacks — use [`@objectstack/nestjs`](../nestjs).
-
 ## Related Packages
 
 - [`@objectstack/plugin-hono-server`](../../plugins/plugin-hono-server) — optional plugin that hosts a Hono server inside the kernel.

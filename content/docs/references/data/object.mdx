@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -56,6 +56,17 @@ const result = ApiMethod.parse(data);
 | **type** | `Enum<'btree' \| 'hash' \| 'gin' \| 'gist' \| 'fulltext'>` | ✅ | Index algorithm type |
 | **unique** | `boolean` | ✅ | Whether the index enforces uniqueness |
 | **partial** | `string` | optional | Partial index condition (SQL WHERE clause for conditional indexes) |
+
+
+---
+
+## ObjectAccessConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **default** | `Enum<'public' \| 'private'>` | ✅ | Default exposure posture: public (covered by wildcard grants) | private (needs explicit grant; exempt from wildcard RLS). |
 
 
 ---

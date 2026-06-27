@@ -34,8 +34,8 @@ batch-draft. This is the safety valve for low-specificity input.
 ## TypeScript Usage
 
 ```typescript
-import { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
-import type { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
+import { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, BlueprintWidgetCondition, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
+import type { BlueprintApp, BlueprintDashboard, BlueprintField, BlueprintNavItem, BlueprintObject, BlueprintSeed, BlueprintView, BlueprintWidgetCondition, SolutionBlueprint, SolutionBlueprintStrict } from '@objectstack/spec/ai';
 
 // Validate data
 const result = BlueprintApp.parse(data);
@@ -78,7 +78,7 @@ const result = BlueprintApp.parse(data);
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Field machine name (snake_case) |
 | **label** | `string` | optional | Human-readable field label |
-| **type** | `Enum<'text' \| 'textarea' \| 'email' \| 'url' \| 'phone' \| 'password' \| 'secret' \| 'markdown' \| 'html' \| 'richtext' \| 'number' \| 'currency' \| 'percent' \| 'date' \| 'datetime' \| 'time' \| 'boolean' \| 'toggle' \| 'select' \| 'multiselect' \| 'radio' \| 'checkboxes' \| 'lookup' \| 'master_detail' \| 'tree' \| 'image' \| 'file' \| 'avatar' \| 'video' \| 'audio' \| 'formula' \| 'summary' \| 'autonumber' \| 'composite' \| 'repeater' \| 'record' \| 'location' \| 'address' \| 'code' \| 'json' \| 'color' \| 'rating' \| 'slider' \| 'signature' \| 'qrcode' \| 'progress' \| 'tags' \| 'vector'>` | ✅ | Field data type |
+| **type** | `Enum<'text' \| 'textarea' \| 'email' \| 'url' \| 'phone' \| 'password' \| 'secret' \| 'markdown' \| 'html' \| 'richtext' \| 'number' \| 'currency' \| 'percent' \| 'date' \| 'datetime' \| 'time' \| 'boolean' \| 'toggle' \| 'select' \| 'multiselect' \| 'radio' \| 'checkboxes' \| 'lookup' \| 'master_detail' \| 'tree' \| 'user' \| 'image' \| 'file' \| 'avatar' \| 'video' \| 'audio' \| 'formula' \| 'summary' \| 'autonumber' \| 'composite' \| 'repeater' \| 'record' \| 'location' \| 'address' \| 'code' \| 'json' \| 'color' \| 'rating' \| 'slider' \| 'signature' \| 'qrcode' \| 'progress' \| 'tags' \| 'vector'>` | ✅ | Field data type |
 | **required** | `boolean` | optional | Whether the field is required |
 | **reference** | `string` | optional | Target object name for lookup / master_detail relationship fields |
 | **options** | `Object[]` | optional | Choices for select / multiselect / radio fields |
@@ -138,6 +138,19 @@ const result = BlueprintApp.parse(data);
 | **type** | `Enum<'list' \| 'form' \| 'kanban' \| 'calendar'>` | ✅ | View kind |
 | **columns** | `string[]` | optional | Field names shown as columns (in order) |
 | **groupBy** | `string` | optional | REQUIRED for kanban views: the select/status field whose options become the board columns (e.g. "stage", "status"). Without it a kanban renders as a plain list. |
+
+
+---
+
+## BlueprintWidgetCondition
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **field** | `string` | ✅ | Field on the widget object to filter by (e.g. "stock_quantity", "status") |
+| **op** | `Enum<'lt' \| 'lte' \| 'gt' \| 'gte' \| 'eq' \| 'ne'>` | ✅ | Comparison operator |
+| **value** | `number \| string \| boolean` | ✅ | Comparison value (e.g. 10, "open") |
 
 
 ---
