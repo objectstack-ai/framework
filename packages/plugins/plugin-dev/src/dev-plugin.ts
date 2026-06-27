@@ -160,25 +160,6 @@ function createI18nStub() {
   };
 }
 
-/** IUIService — delegates to IMetadataService when available, falls back to in-memory Map */
-function createUIStub() {
-  const views = new Map<string, any>();
-  const dashboards = new Map<string, any>();
-  return {
-    _dev: true, _serviceName: 'ui',
-    _deprecated: 'Use IMetadataService instead. This stub will be removed in v4.0.0.',
-    getView(name: string) { return views.get(name); },
-    listViews(object?: string) {
-      const all = [...views.values()];
-      return object ? all.filter(v => v.object === object) : all;
-    },
-    getDashboard(name: string) { return dashboards.get(name); },
-    listDashboards() { return [...dashboards.values()]; },
-    registerView(name: string, definition: unknown) { views.set(name, definition); },
-    registerDashboard(name: string, definition: unknown) { dashboards.set(name, definition); },
-  };
-}
-
 /** IWorkflowService — in-memory workflow state stub */
 function createWorkflowStub() {
   const states = new Map<string, string>(); // recordKey → currentState
@@ -299,7 +280,6 @@ const DEV_STUB_FACTORIES: Record<string, () => Record<string, any>> = {
   'notification': createNotificationStub,
   'ai':          createAIStub,
   'i18n':        createI18nStub,
-  'ui':          createUIStub,
   'workflow':    createWorkflowStub,
   'metadata':    createMetadataStub,
   'data':        createDataStub,
