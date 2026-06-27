@@ -22,6 +22,7 @@ import {
   SysOrganization,
   SysSession,
   SysSsoProvider,
+  SysScimProvider,
   SysTeam,
   SysTeamMember,
   SysTwoFactor,
@@ -54,6 +55,7 @@ export const authIdentityObjects: any[] = [
   SysJwks,
   SysDeviceCode,
   SysSsoProvider,
+  SysScimProvider,
 ];
 
 /** Manifest header shared by compile-time config and runtime registration. */
