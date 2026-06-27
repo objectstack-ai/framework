@@ -586,6 +586,36 @@ enforces per-tenant data isolation:
 | `isolated` | Separate database per tenant | Regulatory isolation / large tenants |
 | `hybrid` | Shared schema, tenant-specific sharding | High-volume multi-tenant |
 
+### Platform-global / admin-only objects (visibility posture)
+
+Some system/config objects are **env-global** (not partitioned per org) and
+should be visible to a **platform admin env-wide** but hidden from members —
+e.g. identity tables a plugin writes via its own adapter (`sys_sso_provider`,
+OAuth clients). These hit a non-obvious interaction:
+
+- The default `member_default` ships a **wildcard `tenant_isolation` RLS**
+  (`organization_id == current_user.organization_id`). Any row whose
+  `organization_id` is **null or absent** (common for adapter-written rows that
+  never get the tenant stamp) is **denied** — the list renders empty.
+- A platform admin's `viewAllRecords` superuser bypass is **posture-gated**: it
+  fires **only** for objects marked `access.default: 'private'` **or**
+  `tenancy: { enabled: false }`. On ordinary tenant objects it deliberately does
+  **not** grant cross-tenant visibility — so the admin sees 0 rows too.
+
+**Recipe — env-global, admin-only object that admins can fully see:**
+
+```typescript
+tenancy: { enabled: false, strategy: 'shared' }, // env IS the tenant; admin viewAllRecords bypass applies
+requiredPermissions: ['manage_platform_settings'], // object-level gate → members get 403
+```
+
+> ⚠️ **Don't use either flag alone.** `tenancy.enabled:false` *by itself* drops
+> the wildcard RLS, and `member_default`'s `'*': allowRead` then **leaks every
+> row to all authenticated users**. `access.default:'private'` *by itself* opts
+> the admin's `'*'` grant out too, so the **admin sees nothing**. The
+> `tenancy.enabled:false` + `requiredPermissions` pair is the correct combo
+> (admin sees all, non-admins 403). Posture model: [ADR-0066](../../docs/adr/0066-unified-authorization-model.md).
+
 ### Cross-skill notes
 
 - **API auth providers** (OIDC, JWT, API key) live in **objectstack-api**.
