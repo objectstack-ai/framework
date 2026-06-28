@@ -278,7 +278,7 @@ is one diagram a reviewer (or AI) can read end-to-end.
       },
     },
     { id: 'mark_won', type: 'update_record',
-      config: { object: 'opportunity', filter: { id: '{record.id}' }, fields: { stage: 'closed_won' } } },
+      config: { objectName: 'opportunity', filter: { id: '{record.id}' }, fields: { stage: 'closed_won' } } },
     { id: 'approved', type: 'end' },
     { id: 'rejected', type: 'end' },
   ],
