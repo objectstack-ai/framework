@@ -12,7 +12,7 @@ import {
 import { SysOrganizationDetailPage, SysUserDetailPage } from '@objectstack/platform-objects/pages';
 import { AuthManager, type AuthManagerOptions } from './auth-manager.js';
 import { runSetInitialPassword } from './set-initial-password.js';
-import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm } from './register-sso-provider.js';
+import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm, runRequestDomainVerification, runVerifyDomain } from './register-sso-provider.js';
 import {
   authIdentityObjects,
   authPluginManifestHeader,
@@ -1080,6 +1080,41 @@ export class AuthPlugin implements Plugin {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         ctx.logger.error('[AuthPlugin] sso/register-saml bridge failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // SSO domain verification (ADR-0024 ②, opt-in OS_SSO_DOMAIN_VERIFICATION).
+    // Re-dispatch through @better-auth/sso's /sso/{request-domain-verification,
+    // verify-domain} (so the per-provider admin gate runs) and reshape into the
+    // `{ success, data }` envelope the action `resultDialog` / toast reads:
+    // request returns the ready-to-paste DNS TXT record, verify returns a clear
+    // success/error. A 404 from the inner endpoint = feature OFF for this env.
+    rawApp.post(`${basePath}/admin/sso/request-domain-verification`, async (c: any) => {
+      try {
+        const { status, body } = await runRequestDomainVerification(
+          (req) => this.authManager!.handleRequest(req),
+          c.req.raw,
+        );
+        return c.json(body, status as any);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] sso/request-domain-verification bridge failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
+    rawApp.post(`${basePath}/admin/sso/verify-domain`, async (c: any) => {
+      try {
+        const { status, body } = await runVerifyDomain(
+          (req) => this.authManager!.handleRequest(req),
+          c.req.raw,
+        );
+        return c.json(body, status as any);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] sso/verify-domain bridge failed', err);
         return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
       }
     });

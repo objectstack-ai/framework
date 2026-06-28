@@ -263,3 +263,156 @@ export async function runRegisterSamlProviderFromForm(
   }
   return { status: 200, body: { success: true, data: { providerId: parsed?.providerId ?? providerId }, acsUrl, spMetadataUrl } };
 }
+
+
+// ── Domain verification (ADR-0024 ②, opt-in OS_SSO_DOMAIN_VERIFICATION) ──────
+//
+// `@better-auth/sso` proves an external IdP's email DOMAIN is controlled by the
+// registrant via a DNS-TXT challenge, mounted ONLY when `domainVerification` is
+// enabled on `sso()`. The two endpoints are:
+//   • POST /sso/request-domain-verification {providerId} → 201 {domainVerificationToken}
+//   • POST /sso/verify-domain {providerId}               → 204 (or 502 if the TXT
+//     record is absent / not yet propagated)
+// The token alone is not actionable — the admin needs the full DNS record
+// (name `_better-auth-token-<providerId>.<domain>`, value
+// `_better-auth-token-<providerId>=<token>`; the prefix is @better-auth/sso's
+// default `tokenPrefix`, which we do not override). These bridges re-dispatch
+// through the real endpoints (so the per-provider admin gate runs) and reshape
+// the response into the `{ success, data }` envelope the action `resultDialog`
+// reads — request returns the ready-to-paste DNS record; verify returns a
+// friendly success/error message. A `404` from the inner endpoint means the
+// feature is OFF for this env (endpoints unmounted) → surfaced as such, not a
+// bare "not found".
+
+/** @better-auth/sso default verification token prefix (we don't override `tokenPrefix`). */
+const SSO_DOMAIN_TOKEN_PREFIX = 'better-auth-token';
+
+/**
+ * Strip protocol / path / port so `https://acme.com/` → `acme.com` for the DNS
+ * record. Regex-free on purpose — `domain` is request-controlled input, so a
+ * backtracking pattern here would be a ReDoS vector (CodeQL js/polynomial-redos).
+ */
+function bareHostname(domain: string): string {
+  let d = domain.trim();
+  if (!d) return d;
+  const schemeIdx = d.indexOf('://');
+  if (schemeIdx !== -1) {
+    try {
+      return new URL(d).hostname;
+    } catch {
+      d = d.slice(schemeIdx + 3); // malformed URL — drop the scheme and strip manually
+    }
+  }
+  // Truncate at the first path / port / query / fragment separator.
+  for (const sep of ['/', ':', '?', '#']) {
+    const i = d.indexOf(sep);
+    if (i !== -1) d = d.slice(0, i);
+  }
+  return d;
+}
+
+function rewriteSsoAdminUrl(request: Request, fromSuffix: RegExp, toPath: string): { innerUrl: string; origin: string } | null {
+  try {
+    const url = new URL(request.url);
+    return { origin: url.origin, innerUrl: `${url.origin}${url.pathname.replace(fromSuffix, toPath)}` };
+  } catch {
+    return null;
+  }
+}
+
+function forwardAuthHeaders(request: Request, origin: string): Headers {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  const cookie = request.headers.get('cookie');
+  if (cookie) headers.set('cookie', cookie);
+  const authz = request.headers.get('authorization');
+  if (authz) headers.set('authorization', authz);
+  headers.set('origin', request.headers.get('origin') || origin);
+  return headers;
+}
+
+/**
+ * Request a DNS-TXT domain-verification challenge for a registered provider and
+ * return the ready-to-paste DNS record (for a one-shot `resultDialog`).
+ *
+ * Body: `{ providerId, domain? }` (domain only shapes the displayed record name).
+ */
+export async function runRequestDomainVerification(
+  handle: AuthRequestHandler,
+  request: Request,
+): Promise<RegisterSsoFormResult & { body: RegisterSsoFormResult['body'] & { data?: any } }> {
+  let body: any;
+  try { body = await request.json(); } catch { body = {}; }
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+  const providerId = str(body?.providerId);
+  const domain = bareHostname(str(body?.domain));
+  if (!providerId) {
+    return { status: 400, body: { success: false, error: { code: 'invalid_request', message: 'Missing required field: providerId' } } };
+  }
+
+  const rw = rewriteSsoAdminUrl(request, /\/admin\/sso\/request-domain-verification$/, '/sso/request-domain-verification');
+  if (!rw) return { status: 400, body: { success: false, error: { code: 'invalid_request', message: 'Bad request URL' } } };
+  const headers = forwardAuthHeaders(request, rw.origin);
+
+  const resp = await handle(new Request(rw.innerUrl, { method: 'POST', headers, body: JSON.stringify({ providerId }) }));
+  let parsed: any = {};
+  try { const t = await resp.text(); parsed = t ? JSON.parse(t) : {}; } catch { parsed = {}; }
+  if (!resp.ok) {
+    if (resp.status === 404 && !parsed?.code) {
+      return { status: 400, body: { success: false, error: { code: 'domain_verification_disabled', message: 'Domain verification is not enabled for this environment (set OS_SSO_DOMAIN_VERIFICATION).' } } };
+    }
+    return { status: resp.status, body: { success: false, error: { code: parsed?.code || 'request_domain_verification_failed', message: parsed?.message || 'Failed to request domain verification' } } };
+  }
+
+  const token = str(parsed?.domainVerificationToken);
+  const label = `_${SSO_DOMAIN_TOKEN_PREFIX}-${providerId}`;
+  const dnsRecordName = domain ? `${label}.${domain}` : label;
+  const dnsRecordValue = `${label}=${token}`;
+  return {
+    status: 200,
+    body: {
+      success: true,
+      data: { providerId, domain, token, dnsRecordType: 'TXT', dnsRecordName, dnsRecordValue },
+    },
+  };
+}
+
+/**
+ * Verify a provider's domain ownership (re-checks the DNS-TXT record). Reshapes
+ * @better-auth/sso's empty `204` / `502` into a `{ success, data:{ message } }`
+ * envelope so the action surfaces a clear toast.
+ *
+ * Body: `{ providerId }`.
+ */
+export async function runVerifyDomain(
+  handle: AuthRequestHandler,
+  request: Request,
+): Promise<RegisterSsoFormResult & { body: RegisterSsoFormResult['body'] & { data?: any } }> {
+  let body: any;
+  try { body = await request.json(); } catch { body = {}; }
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+  const providerId = str(body?.providerId);
+  if (!providerId) {
+    return { status: 400, body: { success: false, error: { code: 'invalid_request', message: 'Missing required field: providerId' } } };
+  }
+
+  const rw = rewriteSsoAdminUrl(request, /\/admin\/sso\/verify-domain$/, '/sso/verify-domain');
+  if (!rw) return { status: 400, body: { success: false, error: { code: 'invalid_request', message: 'Bad request URL' } } };
+  const headers = forwardAuthHeaders(request, rw.origin);
+
+  const resp = await handle(new Request(rw.innerUrl, { method: 'POST', headers, body: JSON.stringify({ providerId }) }));
+  let parsed: any = {};
+  try { const t = await resp.text(); parsed = t ? JSON.parse(t) : {}; } catch { parsed = {}; }
+  if (resp.ok) {
+    return { status: 200, body: { success: true, data: { providerId, verified: true, message: 'Domain ownership verified — this provider can now sign users in.' } } };
+  }
+  // Friendlier copy for the expected failure modes.
+  let message = parsed?.message || 'Domain verification failed';
+  if (resp.status === 404 && !parsed?.code) {
+    message = 'Domain verification is not enabled for this environment (set OS_SSO_DOMAIN_VERIFICATION).';
+  } else if (parsed?.code === 'NO_PENDING_VERIFICATION') {
+    message = 'No pending verification — click “Request Domain Verification” first to get the DNS record.';
+  } else if (parsed?.code === 'DOMAIN_VERIFICATION_FAILED') {
+    message = 'DNS TXT record not found yet. Add the record shown when you requested verification, allow time for DNS to propagate, then retry.';
+  }
+  return { status: resp.status, body: { success: false, error: { code: parsed?.code || 'verify_domain_failed', message } } };
+}

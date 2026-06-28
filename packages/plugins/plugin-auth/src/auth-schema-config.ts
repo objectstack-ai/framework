@@ -679,6 +679,12 @@ export const AUTH_SSO_PROVIDER_SCHEMA = {
     samlConfig: 'saml_config',
     userId: 'user_id',
     organizationId: 'organization_id',
+    // DNS domain-ownership proof (ADR-0024 ②). @better-auth/sso writes
+    // `domainVerified` on its `ssoProvider` model when domain verification is
+    // enabled; map it so the env can surface a verified/unverified badge. The
+    // one-time `domainVerificationToken` is NOT a provider column — it lives in
+    // the verification table and is returned only from request-domain-verification.
+    domainVerified: 'domain_verified',
   },
 } as const;
 
