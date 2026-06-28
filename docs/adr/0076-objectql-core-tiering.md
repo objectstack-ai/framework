@@ -1,6 +1,6 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
-**Status**: Proposed (2026-06-28, rev. 7 — kernel review concluded: dissolve the `ObjectStackProtocol` union (D9 refinement; discovery `services` + shared spine already provide unification); transport stays a framework-agnostic port with per-domain normalized handlers (D11)) — v12 assessment
+**Status**: Proposed (2026-06-28, rev. 8) — D1–D11 below. D9 step-1 (interface segmentation) shipped in #2429. Open Question #7 resolved: keep the published `@objectstack/metadata-protocol` name (no rename). — v12 assessment
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
@@ -111,7 +111,7 @@ A single `ObjectStackProtocolImplementation` facade — and any `*-protocol` *im
 Target end-state:
 - **"protocol" names ONLY the contract** — the segmented interfaces in `@objectstack/spec/api` (D9). There is **no `*-protocol` implementation package**.
 - **`DataProtocol`** impl → engine-adjacent / transport (thin wire-normalizers).
-- **`MetadataProtocol`** impl → a metadata-**domain** package; rename `@objectstack/metadata-protocol` → e.g. `@objectstack/metadata-runtime` (it owns `sys_metadata` — a legitimate business domain, not "protocol").
+- **`MetadataProtocol`** impl → stays in **`@objectstack/metadata-protocol`** (name **retained** — already published; renaming churns downstream for ~0 benefit). The package's *content* converges to the metadata-management impl (it owns `sys_metadata`). The `protocol` in the name is a deliberate, low-cost naming exception from being published — the real contract lives in `@objectstack/spec/api`, not here. (Open Question #7, resolved.)
 - **Analytics / Feed / Realtime / Notification / …** → their existing service packages; **delete the facade's duplicated `analyticsQuery` + feed wrappers** and the `ObjectQLPlugin` `'analytics'` adapter (let `service-analytics` own the `'analytics'` service).
 - **The transport/dispatcher routes each contract-slice to the owning service** (it already resolves services by name) — no central facade class.
 
@@ -181,7 +181,7 @@ import { SecurityPlugin } from '@objectstack/plugin-security';
 4. **`trusted` profile** — two-key (build-time absence + explicit runtime assertion), prod env-allowlisted.
 5. **D7 trigger threshold** — what cross-package ratio (from 88%) over what window signals "extract the engine"? Track in CI; set on first review.
 6. **Data-facade home** — does the `DataProtocol` impl live in the engine-adjacent transport layer / `rest`, or a small `@objectstack/protocol-data`? (It is thin and transport-shaped.)
-7. **Metadata package name (post-segmentation)** — keep `@objectstack/metadata-protocol` for the `MetadataProtocol` impl, or rename (`@objectstack/protocol-metadata` / `@objectstack/metadata-runtime`)?
+7. **Metadata package name (post-segmentation)** — **Resolved: keep `@objectstack/metadata-protocol`** (already published; renaming has ~0 benefit and real churn). The `protocol` suffix is a low-cost naming exception — the contract is in `@objectstack/spec/api`; a README note in the package should clarify impl-vs-contract.
 8. **Per-domain versioning** — once segmented, do capability protocols get independent version markers / a `getCapabilities()` discovery method?
 9. **dispatcher vs rest-server overlap** — are `runtime/http-dispatcher` (~3.8k) and `rest/rest-server` (~5.1k) redundant central transport layers? Consolidate or delineate (D11).
 10. **Validate multi-adapter** — write a second `IHttpServer` adapter (thin Workers/Express) to prove the port is free of Hono-isms before relying on it (D11).
