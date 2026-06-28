@@ -23,7 +23,7 @@
       "@objectstack/objectql",
       "@objectstack/metadata-protocol",
       "@objectstack/observability",
-      "@objectstack/formula",
+      "@objectstack/formula", "@objectstack/sdui-parser",
       "@objectstack/lint",
       "@objectstack/platform-objects",
       "@objectstack/studio",
