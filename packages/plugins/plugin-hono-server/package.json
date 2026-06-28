@@ -12,6 +12,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.5",
     "@objectstack/core": "workspace:*",
+    "@objectstack/observability": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "hono": "^4.12.26"

@@ -220,6 +220,58 @@ runtime: the OTel API surface is large and host-specific (Node vs. edge vs.
 browser), so we publish the parsing primitive and leave SDK wiring to the
 host.
 
+## Server-Timing (perf-tuning mode)
+
+Per-request server-side timing can be surfaced to clients via the W3C
+[`Server-Timing`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Server-Timing)
+response header. The browser DevTools **Network → Timing** panel renders these
+phases inline, which makes it trivial to see where wall-clock time went on a
+slow request without attaching a profiler.
+
+```
+Server-Timing: total;dur=18.7;desc="Total server time", parse;dur=0.4;desc="Body parse", handler;dur=17.9;desc="Route handler"
+```
+
+This is **off by default**: the header discloses internal phase durations,
+which is helpful for profiling but also lets a caller fingerprint the backend.
+Treat it as a perf-tuning toggle you flip in staging (or briefly in production
+behind an allowlist), not a default-on header.
+
+Enable it on the Hono server plugin:
+
+```ts
+new HonoServerPlugin({ serverTiming: true });
+```
+
+…or, for the default `os serve` server (which constructs the plugin for you),
+via the environment:
+
+```bash
+OS_SERVER_TIMING=true os serve
+```
+
+When enabled, every response carries `total` (the whole request, measured by
+an outer middleware) plus any sub-phases the request recorded. The HTTP adapter
+contributes `parse` (request-body parsing) and `handler` (route-handler
+execution) out of the box.
+
+### Recording your own phases
+
+Timing is collected through a request-scoped `AsyncLocalStorage` collector, so
+any code on the request's async call chain can add a phase without threading a
+request object through every layer. The free functions are cheap no-ops when
+the feature is off, so they are safe to leave in place permanently:
+
+```ts
+import { measureServerTiming } from '@objectstack/observability';
+
+const rows = await measureServerTiming('db', () => engine.find(query), 'Primary query');
+// → adds `db;dur=<ms>;desc="Primary query"` to the response when perf-tuning is on.
+```
+
+`startServerTiming(name)` (returns an `end()` callback) and
+`recordServerTiming(name, dur)` are also available for manual instrumentation.
+
 ## Go-live checklist
 
 - [ ] `metrics` adapter configured and `/metrics` (Prometheus) or OTel
@@ -234,3 +286,5 @@ host.
 - [ ] Log records include `requestId` field; cross-checked one against the
       response `X-Request-Id` header.
 - [ ] Alerts wired: error rate, p95 latency per route.
+- [ ] (Optional) `Server-Timing` verified in DevTools when `serverTiming` /
+      `OS_SERVER_TIMING=true` is enabled, and confirmed **absent** by default.

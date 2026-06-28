@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createOriginMatcher, hasWildcardPattern, isLocalhostOrigin } from './pattern-matcher';
 import { readEnvWithDeprecation } from '@objectstack/types';
+import { PerfTiming, runWithPerfTiming } from '@objectstack/observability';
 
 export interface StaticMount {
     root: string;
@@ -57,6 +58,17 @@ export interface HonoPluginOptions {
      *   (legacy CORS_* names still honoured with a deprecation warning).
      */
     cors?: HonoCorsOptions | false;
+
+    /**
+     * Enable per-request performance timing via the `Server-Timing` response
+     * header ("perf-tuning mode"). OFF by default — the header discloses
+     * internal phase durations (total / body-parse / handler), which is handy
+     * for profiling but is also a backend-fingerprinting surface, so it is
+     * opt-in. Can also be enabled with the `OS_SERVER_TIMING=true` environment
+     * variable.
+     * @default false
+     */
+    serverTiming?: boolean;
 }
 
 /**
@@ -109,6 +121,29 @@ export class HonoServerPlugin implements Plugin {
         // Alias 'http-server' for backward compatibility
         ctx.registerService('http-server', this.server);
         ctx.logger.debug('HTTP server service registered', { serviceName: 'http.server' });
+
+        // ─── Server-Timing (perf-tuning mode) ─────────────────────────────────
+        // Opt-in per-request performance timing exposed via the `Server-Timing`
+        // response header. Registered FIRST (before CORS) so the `total` mark
+        // brackets the whole request and the ambient timing collector is
+        // established — via AsyncLocalStorage — for every downstream layer
+        // (CORS, route handler, body parse) to record sub-phases into.
+        const serverTimingEnabled =
+            this.options.serverTiming ?? (process.env.OS_SERVER_TIMING === 'true');
+        if (serverTimingEnabled) {
+            const rawApp = this.server.getRawApp();
+            rawApp.use('*', async (c, next) => {
+                const timing = new PerfTiming();
+                const endTotal = timing.start('total', 'Total server time');
+                await runWithPerfTiming(timing, () => next());
+                endTotal();
+                const header = timing.toHeader();
+                // `append` (not `set`) so we coexist with any upstream proxy
+                // that already added a Server-Timing entry.
+                if (header) c.res.headers.append('Server-Timing', header);
+            });
+            ctx.logger.debug('Server-Timing (perf-tuning) middleware enabled');
+        }
 
         // ─── CORS Middleware ──────────────────────────────────────────────────
         // Enabled by default. Controlled via options.cors or environment variables.

@@ -8,6 +8,7 @@ import {
     RouteHandler,
     Middleware
 } from '@objectstack/core';
+import { currentPerfTiming } from '@objectstack/observability';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -62,6 +63,12 @@ export class HonoHttpServer implements IHttpServer {
         return async (c: any) => {
             let body: any = {};
 
+            // Ambient per-request timing collector — present only when the
+            // Server-Timing / perf-tuning middleware established one for this
+            // request. All marks below are no-ops otherwise (zero overhead).
+            const _perf = currentPerfTiming();
+            const _endParse = _perf?.start('parse', 'Body parse');
+
             const contentType = c.req.header('content-type') ?? '';
             const isOctetStream = contentType.includes('application/octet-stream');
 
@@ -83,6 +90,8 @@ export class HonoHttpServer implements IHttpServer {
                     body = await c.req.parseBody();
                 } catch(e) {}
             }
+
+            _endParse?.();
 
             const rawHeaders = c.req.header();
             // Fetch API `Request` objects don't expose the `Host` header
@@ -173,9 +182,11 @@ export class HonoHttpServer implements IHttpServer {
                 });
 
                 // Run the handler; once it's done, check if streaming was used
+                const _endHandler = _perf?.start('handler', 'Route handler');
                 const result = handler(req as any, res as any);
                 const done = result instanceof Promise ? result : Promise.resolve(result);
                 done.then(() => {
+                    _endHandler?.();
                     if (isStreaming) {
                         resolve(new Response(stream, {
                             status: 200,
@@ -187,6 +198,7 @@ export class HonoHttpServer implements IHttpServer {
                         resolve(null);
                     }
                 }).catch((err) => {
+                    _endHandler?.();
                     closeStream();
                     resolve(null);
                 });

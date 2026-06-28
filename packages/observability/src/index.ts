@@ -40,3 +40,16 @@ export {
     LOG_LEVELS,
     type LogLevel,
 } from './loggers.js';
+
+// Per-request performance timing (Server-Timing header)
+export {
+    PerfTiming,
+    perfNow,
+    formatServerTiming,
+    runWithPerfTiming,
+    currentPerfTiming,
+    recordServerTiming,
+    startServerTiming,
+    measureServerTiming,
+    type ServerTimingMark,
+} from './perf-timing.js';
