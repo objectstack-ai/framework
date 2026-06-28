@@ -287,16 +287,28 @@ export async function runRegisterSamlProviderFromForm(
 /** @better-auth/sso default verification token prefix (we don't override `tokenPrefix`). */
 const SSO_DOMAIN_TOKEN_PREFIX = 'better-auth-token';
 
-/** Strip protocol / path / port so `https://acme.com/` → `acme.com` for the DNS record. */
+/**
+ * Strip protocol / path / port so `https://acme.com/` → `acme.com` for the DNS
+ * record. Regex-free on purpose — `domain` is request-controlled input, so a
+ * backtracking pattern here would be a ReDoS vector (CodeQL js/polynomial-redos).
+ */
 function bareHostname(domain: string): string {
-  const d = domain.trim();
+  let d = domain.trim();
   if (!d) return d;
-  try {
-    if (/^https?:\/\//i.test(d)) return new URL(d).hostname;
-  } catch {
-    /* fall through to manual strip */
+  const schemeIdx = d.indexOf('://');
+  if (schemeIdx !== -1) {
+    try {
+      return new URL(d).hostname;
+    } catch {
+      d = d.slice(schemeIdx + 3); // malformed URL — drop the scheme and strip manually
+    }
   }
-  return d.replace(/^https?:\/\//i, '').replace(/[/:].*$/, '');
+  // Truncate at the first path / port / query / fragment separator.
+  for (const sep of ['/', ':', '?', '#']) {
+    const i = d.indexOf(sep);
+    if (i !== -1) d = d.slice(0, i);
+  }
+  return d;
 }
 
 function rewriteSsoAdminUrl(request: Request, fromSuffix: RegExp, toPath: string): { innerUrl: string; origin: string } | null {
