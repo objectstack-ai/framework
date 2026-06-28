@@ -510,6 +510,67 @@ describe('ActionSchema', () => {
   });
 });
 
+// ============================================================================
+// openIn — declarative new-tab control for static type:'url' targets (#2043)
+// ============================================================================
+
+describe('ActionSchema - openIn', () => {
+  it('should accept openIn: "new-tab" on a static url action', () => {
+    const result = ActionSchema.parse({
+      name: 'print_a3',
+      label: 'Print A3',
+      type: 'url',
+      target: '/print/a3?id=${record.id}',
+      openIn: 'new-tab',
+    });
+    expect(result.openIn).toBe('new-tab');
+  });
+
+  it('should accept openIn: "self"', () => {
+    const result = ActionSchema.parse({
+      name: 'open_inline',
+      label: 'Open Inline',
+      type: 'url',
+      target: '/somewhere',
+      openIn: 'self',
+    });
+    expect(result.openIn).toBe('self');
+  });
+
+  it('should leave openIn undefined when omitted', () => {
+    const result = ActionSchema.parse({
+      name: 'plain_url',
+      label: 'Plain URL',
+      type: 'url',
+      target: 'https://example.com',
+    });
+    expect(result.openIn).toBeUndefined();
+  });
+
+  it('should preserve openIn through defineAction (not stripped at build)', () => {
+    // Regression guard for #2043 counterpart: a plain z.object() stripped
+    // unknown keys, so openIn never reached objectui. It must survive parse.
+    const result = ActionSchema.parse({
+      name: 'print_a3',
+      label: '打印总表(A3)',
+      type: 'url',
+      target: '/print/a3?id=${record.id}',
+      openIn: 'new-tab',
+    });
+    expect(result.openIn).toBe('new-tab');
+  });
+
+  it('should reject an invalid openIn value', () => {
+    expect(() => ActionSchema.parse({
+      name: 'bad_openin',
+      label: 'Bad',
+      type: 'url',
+      target: '/x',
+      openIn: 'newtab',
+    })).toThrow();
+  });
+});
+
 describe('Action Factory', () => {
   it('should create action with default values via factory', () => {
     const action = Action.create({

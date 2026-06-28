@@ -1359,20 +1359,44 @@ export const AddToCampaignAction = defineAction({
 });
 ```
 
-### Opening in a New Tab (`opensInNewTab` / `newTabUrl`)
+### Opening in a New Tab (`openIn` / `opensInNewTab` / `newTabUrl`)
 
-For actions that should land in a new browser tab, set `opensInNewTab: true`
-(#1787). The renderer pre-opens the tab **synchronously** on click so popup
-blockers don't fire, then navigates it to the handler's returned `redirectUrl`.
+There are **two** mechanisms here. Pick by whether the URL is static or computed:
 
-For external deep-links / SSO with no server round-trip, add `newTabUrl` — a
-direct URL template (supports the `{recordId}` placeholder). It is valid **only**
-alongside `opensInNewTab: true`, and the target endpoint must enforce its own
-auth (the new tab carries no in-app session context).
+#### `openIn: 'new-tab'` — simplest case (static `target`)
+
+When you have a **static** `target` URL (relative or absolute) you just want
+opened in a new tab, set `openIn: 'new-tab'` on a `type: 'url'` action. No
+handler, no synchronous pre-open. `openIn: 'self'` forces in-place navigation;
+omit it and external/absolute URLs open in a new tab while relative URLs
+navigate in place. objectui's `ActionRunner.executeUrl` reads `openIn` with
+priority over the legacy heuristic.
 
 ```typescript
 import { defineAction } from '@objectstack/spec/ui';
 
+export const PrintA3Action = defineAction({
+  name: 'print_a3',
+  label: '打印总表(A3)',
+  type: 'url',
+  target: '/print/a3?id=${record.id}',   // static template; interpolated at click
+  openIn: 'new-tab',
+  locations: ['list_toolbar'],
+});
+```
+
+#### `opensInNewTab` + `newTabUrl` — async / computed redirect (SSO)
+
+For actions whose redirect URL is **computed after a fetch** (SSO and SSO-like
+handlers), set `opensInNewTab: true` (#1787). The renderer pre-opens the tab
+**synchronously** on click so popup blockers don't fire, then navigates it to
+the handler's returned `redirectUrl`. For external deep-links with no server
+round-trip, add `newTabUrl` — a direct URL template (supports the `{recordId}`
+placeholder). It is valid **only** alongside `opensInNewTab: true`, and the
+target endpoint must enforce its own auth (the new tab carries no in-app session
+context).
+
+```typescript
 export const OpenInvoicePdfAction = defineAction({
   name: 'open_invoice_pdf',
   label: 'Open PDF',
@@ -1383,6 +1407,14 @@ export const OpenInvoicePdfAction = defineAction({
   locations: ['record_header'],
 });
 ```
+
+> ⚠️ **Never express new-tab behavior via `params`.** `params` is exclusively
+> `ActionParam[]` for collecting **user input**. Writing an object form like
+> `params: { newTab: true }` fails the zod build outright; the array form
+> `params: [{ name: 'newTab', type: 'checkbox' }]` *builds* but mis-renders as a
+> user-facing checkbox in the param-collection dialog. Use `openIn` (static) or
+> `opensInNewTab`/`newTabUrl` (async) instead — these are static execution
+> options, not inputs.
 
 ### Action Parameter Patterns
 

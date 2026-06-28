@@ -284,6 +284,24 @@ export const ActionSchema = lazySchema(() => z.object({
   target: z.string().optional().describe('URL, Script Name, Flow ID, or API Endpoint. Supports ${param.X} and ${ctx.X} interpolation.'),
 
   /**
+   * For `type:'url'` — where to open `target`. A simple, declarative new-tab
+   * control for STATIC urls (no handler, no synchronous pre-open). objectui's
+   * ActionRunner.executeUrl reads `openIn` with priority over the legacy
+   * `params.newTab`/external-URL heuristic.
+   *
+   * - `'new-tab'` — opens `target` in a new browser tab.
+   * - `'self'`    — navigates in place.
+   * - omitted     — external/absolute URLs open in a new tab; relative URLs
+   *                 navigate in place.
+   *
+   * Distinct from `opensInNewTab`/`newTabUrl`, which pre-open an about:blank
+   * tab synchronously for ASYNC SSO-redirect handlers — do NOT use `openIn`
+   * for those. This is a STATIC execution option: keep it OUT of `params`
+   * (which is user-input-collection only).
+   */
+  openIn: z.enum(['self', 'new-tab']).optional().describe("For type:'url' — where to open `target`. 'new-tab' opens a new browser tab; 'self' navigates in place. When omitted, external/absolute URLs open in a new tab and relative URLs navigate in place. Static execution option — keep it OUT of `params` (which is user-input-collection only)."),
+
+  /**
    * Action Body (L1 expression or L2 sandboxed JS).
    *
    * Only meaningful when `type === 'script'`. When set, the runtime invokes

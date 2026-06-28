@@ -142,6 +142,11 @@
       "status": "live",
       "note": "objectui."
     },
+    "openIn": {
+      "status": "live",
+      "evidence": "objectui ActionRunner.executeUrl (objectui issue #2043)",
+      "note": "Declarative new-tab control for STATIC type:'url' targets. ActionRunner.executeUrl reads action.openIn with priority over the legacy params.newTab/external-URL heuristic; action-button/icon/menu/group + basic/elements renderers forward it. Distinct from opensInNewTab/newTabUrl (async SSO pre-open)."
+    },
     "timeout": {
       "status": "dead",
       "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer"
