@@ -1,6 +1,6 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
-**Status**: Proposed (2026-06-28, rev. 8) — D1–D11 below. D9 step-1 (interface segmentation) shipped in #2429. Open Question #7 resolved: keep the published `@objectstack/metadata-protocol` name (no rename). — v12 assessment
+**Status**: Proposed (2026-06-28, rev. 9) — D1–D11 below. D9 step-1 (interface segmentation) shipped in #2429; OQ#7 resolved (keep `metadata-protocol` name). rev.9 corrects the D10 analytics note: it is a deliberate fallback + `replaceService`, **not** a collision — do not blindly delete the fallback. — v12 assessment
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
@@ -104,7 +104,7 @@ The segmentation is **spec/type-level and may start incrementally now** (define 
 
 A single `ObjectStackProtocolImplementation` facade — and any `*-protocol` *implementation* package — is the wrong end-state. Verified against source:
 - The facade implements only **4 of the 11** contract domains (data, metadata, analytics, feed). The other 7 (realtime / notifications / workflow / ai / i18n / views / permissions) are **not implemented in it** — they belong to their own services or aren't implemented at all.
-- **Analytics is duplicated and collides**: both `ObjectQLPlugin` (`objectql/src/plugin.ts`) and `AnalyticsServicePlugin` (`@objectstack/service-analytics`) register a service named `'analytics'` — the facade's ~66-line `analyticsQuery` versus service-analytics's ~1.8k-LOC engine (three strategies incl. native-SQL). Last-registered wins; the facade's copy is a strictly lesser duplicate.
+- **Analytics uses a deliberate fallback + `replaceService` pattern (NOT a collision/bug — corrected in rev.9)**: `registerService` throws on duplicate (`core/kernel.ts`), so `ObjectQLPlugin` registers a lightweight ~66-line analytics **fallback** (so `/analytics` doesn't 404 in minimal deployments), and `AnalyticsServicePlugin`, when installed, calls **`ctx.replaceService('analytics', …)`** to swap in the full ~1.8k-LOC engine (three strategies incl. native-SQL). With service-analytics present the real engine serves (no shadowing); without it the fallback serves. The fallback duplicates *logic* only (a minor maintenance cost) and is intentional and harmless.
 - **Feed is already delegated** to `IFeedService`; the facade only forwards.
 - The domain service packages already exist: `service-analytics`, `service-messaging`, `service-realtime`.
 
@@ -112,7 +112,7 @@ Target end-state:
 - **"protocol" names ONLY the contract** — the segmented interfaces in `@objectstack/spec/api` (D9). There is **no `*-protocol` implementation package**.
 - **`DataProtocol`** impl → engine-adjacent / transport (thin wire-normalizers).
 - **`MetadataProtocol`** impl → stays in **`@objectstack/metadata-protocol`** (name **retained** — already published; renaming churns downstream for ~0 benefit). The package's *content* converges to the metadata-management impl (it owns `sys_metadata`). The `protocol` in the name is a deliberate, low-cost naming exception from being published — the real contract lives in `@objectstack/spec/api`, not here. (Open Question #7, resolved.)
-- **Analytics / Feed / Realtime / Notification / …** → their existing service packages; **delete the facade's duplicated `analyticsQuery` + feed wrappers** and the `ObjectQLPlugin` `'analytics'` adapter (let `service-analytics` own the `'analytics'` service).
+- **Analytics / Feed / Realtime / Notification / …** → each domain's *full* impl lives in its existing service package. For analytics specifically, the `ObjectQLPlugin` fallback **must be preserved or consciously dropped** (it prevents `/analytics` 404 for deployments without service-analytics) — **not blindly deleted**. Feed already delegates to `IFeedService`. The engine keeps only the minimal fallback it deliberately provides.
 - **The transport/dispatcher routes each contract-slice to the owning service** (it already resolves services by name) — no central facade class.
 
 This **refines D1** (the `metadata-protocol` package was an intermediate, not the end-state) and **completes D9**. Executed at the cross-repo window with D7 / Step 2.
