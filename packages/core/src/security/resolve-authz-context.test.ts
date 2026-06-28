@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { resolveAuthzContext } from './resolve-authz-context.js';
+import { resolveAuthzContext, resolveLocalizationContext } from './resolve-authz-context.js';
 
 /**
  * Contract test for the SINGLE authorization resolver. Every authorization
@@ -107,5 +107,65 @@ describe('resolveAuthzContext — single source of truth', () => {
     expect(ctx.userId).toBeUndefined();
     expect(ctx.roles).toEqual([]);
     expect(ctx.permissions).toEqual([]);
+  });
+});
+
+// A counting ObjectQL: records how many find() calls hit each object so we can
+// assert the de-duplication of redundant authz/localization reads (#2409).
+function makeCountingQl(tables: Record<string, any[]>) {
+  const counts: Record<string, number> = {};
+  return {
+    counts,
+    async find(object: string, opts: any) {
+      counts[object] = (counts[object] ?? 0) + 1;
+      const rows = tables[object] ?? [];
+      const where = opts?.where ?? {};
+      return rows.filter((r) =>
+        Object.entries(where).every(([k, v]) => {
+          if (v && typeof v === 'object' && '$in' in (v as any)) return (v as any).$in.includes(r[k]);
+          return r[k] === v;
+        }),
+      );
+    },
+  };
+}
+
+describe('resolveAuthzContext — request-scoped read de-duplication (#2409)', () => {
+  it('reads sys_user at most once even when both email fallback and ai_seat need it', async () => {
+    // No email in the session → email fallback reads sys_user; ai_seat synthesis
+    // also needs sys_user. Previously these were two separate queries.
+    const ql = makeCountingQl({
+      sys_user: [{ id: 'u1', email: 'ada@x.com', ai_access: 1 }],
+      sys_member: [],
+      sys_user_role: [],
+      sys_user_permission_set: [],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
+    expect(ctx.email).toBe('ada@x.com');
+    expect(ctx.permissions).toContain('ai_seat');
+    expect(ql.counts.sys_user).toBe(1);
+  });
+});
+
+describe('resolveLocalizationContext — batched fallback read (#2409)', () => {
+  it('reads sys_setting once (all three keys) when no settings service is wired', async () => {
+    const ql = makeCountingQl({
+      sys_setting: [
+        { namespace: 'localization', key: 'timezone', scope: 'tenant', value: 'Asia/Tokyo' },
+        { namespace: 'localization', key: 'locale', scope: 'tenant', value: 'ja-JP' },
+        { namespace: 'localization', key: 'currency', scope: 'tenant', value: 'JPY' },
+      ],
+    });
+    const loc = await resolveLocalizationContext({ ql, tenantId: 'o1' });
+    expect(loc).toEqual({ timezone: 'Asia/Tokyo', locale: 'ja-JP', currency: 'JPY' });
+    expect(ql.counts.sys_setting).toBe(1);
+  });
+
+  it('falls back to UTC / en-US when no rows exist', async () => {
+    const ql = makeCountingQl({ sys_setting: [] });
+    const loc = await resolveLocalizationContext({ ql });
+    expect(loc.timezone).toBe('UTC');
+    expect(loc.locale).toBe('en-US');
+    expect(loc.currency).toBeUndefined();
   });
 });

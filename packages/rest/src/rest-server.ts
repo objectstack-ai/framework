@@ -542,6 +542,19 @@ export class RestServer {
      */
     private readonly hostnameCache = new Map<string, { value: { environmentId: string } | null; expiresAt: number }>();
     private readonly hostnameCacheTtlMs = 30_000;
+    /**
+     * Request-scoped memoization for `resolveExecCtx`. A single HTTP request
+     * resolves the SAME execution context (identity + RBAC/RLS + localization)
+     * many times — the data operation itself, app-nav RBAC filtering, dashboard
+     * widget gating, the auth gate, etc. Each resolution is ~16 sequential
+     * queries (the `resolveAuthzContext` aggregation plus localization), so a
+     * request that resolves twice pays for duplicate authz and repeated
+     * localization. Keyed by the per-request `req` object (a `WeakMap`, so the
+     * entry is collected with the request — naturally request-scoped, no TTL,
+     * no cross-request leak) and the input `environmentId`. We cache the
+     * in-flight Promise so concurrent callers share one resolution.
+     */
+    private readonly execCtxMemo = new WeakMap<object, Map<string, Promise<any | undefined>>>();
     private defaultEnvironmentIdProvider?: () => string | undefined;
     private authServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private objectQLProvider?: (environmentId?: string) => Promise<any | undefined>;
@@ -847,6 +860,25 @@ export class RestServer {
      * to the protocol layer (the SecurityPlugin treats undefined as anon).
      */
     private async resolveExecCtx(environmentId: string | undefined, req: any): Promise<any | undefined> {
+        // Request-scoped memoization — see `execCtxMemo`. The same `req` flows
+        // unchanged through every handler call, so its identity keys the memo;
+        // the input `environmentId` is part of the key because one host can route
+        // multiple environments. Anonymous (`undefined`) resolutions are cached
+        // too so repeat callers don't re-run getSession. Fall back to a direct
+        // resolve when there is no object to key on.
+        if (!req || typeof req !== 'object') return this.computeExecCtx(environmentId, req);
+        const key = environmentId ?? '\u0000default';
+        let perReq = this.execCtxMemo.get(req);
+        if (!perReq) { perReq = new Map(); this.execCtxMemo.set(req, perReq); }
+        const cached = perReq.get(key);
+        if (cached) return cached;
+        const pending = this.computeExecCtx(environmentId, req);
+        perReq.set(key, pending);
+        return pending;
+    }
+
+    /** Heavy path behind `resolveExecCtx` — resolve identity + RBAC/RLS + localization. */
+    private async computeExecCtx(environmentId: string | undefined, req: any): Promise<any | undefined> {
         try {
             // For multi-tenant hosts (objectos), incoming requests on unscoped
             // URLs like `/api/v1/data/:object` arrive with `environmentId === undefined`.
