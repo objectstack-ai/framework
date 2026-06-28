@@ -58,9 +58,23 @@ export function perfNow(): number {
 /** Characters not allowed in a Server-Timing metric name (a token). */
 const NAME_UNSAFE = /[^A-Za-z0-9_-]+/g;
 
-/** Coerce an arbitrary string into a Server-Timing token. */
+const UNDERSCORE = 0x5f;
+
+/**
+ * Coerce an arbitrary string into a Server-Timing token: non-token runs become
+ * a single underscore, then leading/trailing underscores are trimmed.
+ *
+ * The trim is a linear scan rather than a `/^_+|_+$/g` regex on purpose - the
+ * anchored `_+$` quantifier backtracks polynomially on underscore-heavy input
+ * (CodeQL js/polynomial-redos), and this name comes from a public-API argument.
+ */
 function sanitizeName(name: string): string {
-    return String(name).replace(NAME_UNSAFE, '_').replace(/^_+|_+$/g, '');
+    const collapsed = String(name).replace(NAME_UNSAFE, '_');
+    let start = 0;
+    let end = collapsed.length;
+    while (start < end && collapsed.charCodeAt(start) === UNDERSCORE) start++;
+    while (end > start && collapsed.charCodeAt(end - 1) === UNDERSCORE) end--;
+    return collapsed.slice(start, end);
 }
 
 /**
@@ -79,7 +93,7 @@ function sanitizeDesc(desc: string): string {
             out += ' ';
         }
     }
-    return out.replace(/\s+/g, ' ').trim();
+    return out.replace(/ +/g, ' ').trim();
 }
 
 /** Round to at most 2 decimals without trailing-zero noise (`12.3`, not `12.30`). */
