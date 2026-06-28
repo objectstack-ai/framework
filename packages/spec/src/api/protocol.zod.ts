@@ -1376,7 +1376,34 @@ export type ObjectStackProtocolZod = z.infer<typeof ObjectStackProtocolSchema>;
  * The Zod schema (ObjectStackProtocolSchema) is used for runtime validation,
  * while this interface provides compile-time type safety for implementations.
  */
-export interface ObjectStackProtocol {
+// ─────────────────────────────────────────────────────────────────────────────
+// Protocol contracts, segmented per domain (ADR-0076 D9).
+//
+// `ObjectStackProtocol` (below) is the composition of these per-domain contracts
+// and is shape-identical to the historical flat interface — a back-compat alias.
+// New code should depend on the narrowest slice it needs (e.g. `DataProtocol`).
+// Per ADR-0076 D9 (rev.7) the union is transitional; the end-state dissolves it
+// in favour of independent domain protocols + the discovery `services` registry.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Business-data CRUD + batch operations (thin wire-normalizers over the engine). */
+export interface DataProtocol {
+  // Data Operations (core)
+  findData(request: FindDataRequest): Promise<FindDataResponse>;
+  getData(request: GetDataRequest): Promise<GetDataResponse>;
+  createData(request: CreateDataRequest): Promise<CreateDataResponse>;
+  updateData(request: UpdateDataRequest): Promise<UpdateDataResponse>;
+  deleteData(request: DeleteDataRequest): Promise<DeleteDataResponse>;
+
+  // Batch Operations (optional)
+  batchData?(request: BatchDataRequest): Promise<BatchDataResponse>;
+  createManyData?(request: CreateManyDataRequest): Promise<CreateManyDataResponse>;
+  updateManyData?(request: UpdateManyDataRequest): Promise<UpdateManyDataResponse>;
+  deleteManyData?(request: DeleteManyDataRequest): Promise<DeleteManyDataResponse>;
+}
+
+/** Discovery + metadata (sys_metadata) management. */
+export interface MetadataProtocol {
   // Discovery & Metadata (core)
   getDiscovery(request?: GetDiscoveryRequest): Promise<GetDiscoveryResponse>;
   getMetaTypes(request?: GetMetaTypesRequest): Promise<GetMetaTypesResponse>;
@@ -1392,61 +1419,64 @@ export interface ObjectStackProtocol {
   deleteMetaItem?(request: DeleteMetaItemRequest): Promise<DeleteMetaItemResponse>;
   getMetaItemCached?(request: GetMetaItemCachedRequest): Promise<GetMetaItemCachedResponse>;
   getUiView?(request: GetUiViewRequest): Promise<GetUiViewResponse>;
-  
-  // Analytics (optional)
+}
+
+/** Analytics (optional). */
+export interface AnalyticsProtocol {
   analyticsQuery?(request: AnalyticsQueryRequest): Promise<AnalyticsResultResponse>;
   getAnalyticsMeta?(request: GetAnalyticsMetaRequest): Promise<GetAnalyticsMetaResponse>;
+}
 
-  // Automation (optional)
+/** Automation (optional). */
+export interface AutomationProtocol {
   triggerAutomation?(request: AutomationTriggerRequest): Promise<AutomationTriggerResponse>;
+}
 
-  // Package Management (optional)
+/** Package lifecycle (optional). */
+export interface PackageProtocol {
   listPackages?(request: ListPackagesRequest): Promise<ListPackagesResponse>;
   getPackage?(request: GetPackageRequest): Promise<GetPackageResponse>;
   installPackage?(request: InstallPackageRequest): Promise<InstallPackageResponse>;
   uninstallPackage?(request: UninstallPackageRequest): Promise<UninstallPackageResponse>;
   enablePackage?(request: EnablePackageRequest): Promise<EnablePackageResponse>;
   disablePackage?(request: DisablePackageRequest): Promise<DisablePackageResponse>;
+}
 
-  // Data Operations (core)
-  findData(request: FindDataRequest): Promise<FindDataResponse>;
-  getData(request: GetDataRequest): Promise<GetDataResponse>;
-  createData(request: CreateDataRequest): Promise<CreateDataResponse>;
-  updateData(request: UpdateDataRequest): Promise<UpdateDataResponse>;
-  deleteData(request: DeleteDataRequest): Promise<DeleteDataResponse>;
-  
-  // Batch Operations (optional)
-  batchData?(request: BatchDataRequest): Promise<BatchDataResponse>;
-  createManyData?(request: CreateManyDataRequest): Promise<CreateManyDataResponse>;
-  updateManyData?(request: UpdateManyDataRequest): Promise<UpdateManyDataResponse>;
-  deleteManyData?(request: DeleteManyDataRequest): Promise<DeleteManyDataResponse>;
-
-  // View Management (optional)
+/** View management (optional). */
+export interface ViewProtocol {
   listViews?(request: ListViewsRequest): Promise<ListViewsResponse>;
   getView?(request: GetViewRequest): Promise<GetViewResponse>;
   createView?(request: CreateViewRequest): Promise<CreateViewResponse>;
   updateView?(request: UpdateViewRequest): Promise<UpdateViewResponse>;
   deleteView?(request: DeleteViewRequest): Promise<DeleteViewResponse>;
+}
 
-  // Permissions (optional)
+/** Permissions (optional). */
+export interface PermissionProtocol {
   checkPermission?(request: CheckPermissionRequest): Promise<CheckPermissionResponse>;
   getObjectPermissions?(request: GetObjectPermissionsRequest): Promise<GetObjectPermissionsResponse>;
   getEffectivePermissions?(request: GetEffectivePermissionsRequest): Promise<GetEffectivePermissionsResponse>;
+}
 
-  // Workflows (optional)
+/** Workflows (optional). */
+export interface WorkflowProtocol {
   getWorkflowConfig?(request: GetWorkflowConfigRequest): Promise<GetWorkflowConfigResponse>;
   getWorkflowState?(request: GetWorkflowStateRequest): Promise<GetWorkflowStateResponse>;
   workflowTransition?(request: WorkflowTransitionRequest): Promise<WorkflowTransitionResponse>;
+}
 
-  // Realtime (optional)
+/** Realtime / presence (optional). */
+export interface RealtimeProtocol {
   realtimeConnect?(request: RealtimeConnectRequest): Promise<RealtimeConnectResponse>;
   realtimeDisconnect?(request: RealtimeDisconnectRequest): Promise<RealtimeDisconnectResponse>;
   realtimeSubscribe?(request: RealtimeSubscribeRequest): Promise<RealtimeSubscribeResponse>;
   realtimeUnsubscribe?(request: RealtimeUnsubscribeRequest): Promise<RealtimeUnsubscribeResponse>;
   setPresence?(request: SetPresenceRequest): Promise<SetPresenceResponse>;
   getPresence?(request: GetPresenceRequest): Promise<GetPresenceResponse>;
+}
 
-  // Notifications (optional)
+/** Notifications (optional). */
+export interface NotificationProtocol {
   registerDevice?(request: RegisterDeviceRequest): Promise<RegisterDeviceResponse>;
   unregisterDevice?(request: UnregisterDeviceRequest): Promise<UnregisterDeviceResponse>;
   getNotificationPreferences?(request: GetNotificationPreferencesRequest): Promise<GetNotificationPreferencesResponse>;
@@ -1454,18 +1484,24 @@ export interface ObjectStackProtocol {
   listNotifications?(request: ListNotificationsRequest): Promise<ListNotificationsResponse>;
   markNotificationsRead?(request: MarkNotificationsReadRequest): Promise<MarkNotificationsReadResponse>;
   markAllNotificationsRead?(request: MarkAllNotificationsReadRequest): Promise<MarkAllNotificationsReadResponse>;
+}
 
-  // AI (optional — chat is now handled by Vercel AI SDK wire protocol)
+/** AI (optional — chat is now handled by the Vercel AI SDK wire protocol). */
+export interface AiProtocol {
   aiNlq?(request: AiNlqRequest): Promise<AiNlqResponse>;
   aiSuggest?(request: AiSuggestRequest): Promise<AiSuggestResponse>;
   aiInsights?(request: AiInsightsRequest): Promise<AiInsightsResponse>;
+}
 
-  // i18n (optional)
+/** Localization (optional). */
+export interface I18nProtocol {
   getLocales?(request: GetLocalesRequest): Promise<GetLocalesResponse>;
   getTranslations?(request: GetTranslationsRequest): Promise<GetTranslationsResponse>;
   getFieldLabels?(request: GetFieldLabelsRequest): Promise<GetFieldLabelsResponse>;
+}
 
-  // Feed (optional)
+/** Feed / social (optional). */
+export interface FeedProtocol {
   listFeed?(request: GetFeedRequest): Promise<GetFeedResponse>;
   createFeedItem?(request: CreateFeedItemRequest): Promise<CreateFeedItemResponse>;
   updateFeedItem?(request: UpdateFeedItemRequest): Promise<UpdateFeedItemResponse>;
@@ -1481,3 +1517,26 @@ export interface ObjectStackProtocol {
   feedSubscribe?(request: SubscribeRequest): Promise<SubscribeResponse>;
   feedUnsubscribe?(request: FeedUnsubscribeRequest): Promise<UnsubscribeResponse>;
 }
+
+/**
+ * ObjectStackProtocol — composition of the per-domain contracts above
+ * (ADR-0076 D9). Shape-identical to the historical flat interface, so every
+ * existing implementation/consumer is unaffected. Prefer depending on the
+ * narrowest slice (e.g. `DataProtocol`). Per ADR-0076 D9 (rev.7) this union is
+ * transitional; the end-state dissolves it (capability availability comes from
+ * the discovery `services` registry, not a static union).
+ */
+export interface ObjectStackProtocol extends
+  DataProtocol,
+  MetadataProtocol,
+  AnalyticsProtocol,
+  AutomationProtocol,
+  PackageProtocol,
+  ViewProtocol,
+  PermissionProtocol,
+  WorkflowProtocol,
+  RealtimeProtocol,
+  NotificationProtocol,
+  AiProtocol,
+  I18nProtocol,
+  FeedProtocol {}
