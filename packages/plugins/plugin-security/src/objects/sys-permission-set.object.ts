@@ -27,6 +27,7 @@ export const SysPermissionSet = ObjectSchema.create({
   },
   description: 'Named permission groupings for fine-grained access control',
   displayNameField: 'label',
+  nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['label', 'name', 'active'],
 

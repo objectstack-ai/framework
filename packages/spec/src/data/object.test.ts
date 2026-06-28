@@ -606,6 +606,46 @@ describe('ObjectSchema - displayNameField', () => {
     });
     expect(result.displayNameField).toBeUndefined();
   });
+
+  // ADR-0079: `nameField` is the canonical pointer; `displayNameField` is a
+  // deprecated alias that the schema maps onto `nameField` on parse.
+  it('should accept the canonical nameField pointer', () => {
+    const result = ObjectSchema.parse({
+      name: 'ticket',
+      fields: { title: { type: 'text' } },
+      nameField: 'title',
+    });
+    expect(result.nameField).toBe('title');
+  });
+
+  it('should map deprecated displayNameField onto nameField (back-compat alias)', () => {
+    const result = ObjectSchema.parse({
+      name: 'ticket',
+      fields: { title: { type: 'text' } },
+      displayNameField: 'title',
+    });
+    expect(result.nameField).toBe('title');
+    expect(result.displayNameField).toBe('title'); // preserved for cross-repo consumers
+  });
+
+  it('should map the alias through ObjectSchema.create() as well', () => {
+    const result = ObjectSchema.create({
+      name: 'ticket',
+      fields: { title: { type: 'text' } },
+      displayNameField: 'title',
+    });
+    expect(result.nameField).toBe('title');
+  });
+
+  it('explicit nameField takes precedence over displayNameField alias', () => {
+    const result = ObjectSchema.parse({
+      name: 'ticket',
+      fields: { a: { type: 'text' }, b: { type: 'text' } },
+      nameField: 'a',
+      displayNameField: 'b',
+    });
+    expect(result.nameField).toBe('a');
+  });
 });
 
 describe('ObjectSchema - recordName', () => {

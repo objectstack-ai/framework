@@ -27,6 +27,7 @@ export const SysOrganization = ObjectSchema.create({
   },
   description: 'Organizations for multi-tenant grouping',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
   compactLayout: ['name', 'slug'],
 

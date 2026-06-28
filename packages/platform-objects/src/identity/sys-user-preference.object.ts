@@ -27,6 +27,7 @@ export const SysUserPreference = ObjectSchema.create({
   // surface in Setup is a support/diagnostic view only.
   managedBy: 'system',
   description: 'Per-user key-value preferences (theme, locale, etc.)',
+  nameField: 'key', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{key}',
   compactLayout: ['user_id', 'key'],
 

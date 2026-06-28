@@ -27,6 +27,7 @@ export const SysTeam = ObjectSchema.create({
   },
   description: 'Teams within organizations for fine-grained grouping',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
   compactLayout: ['name', 'organization_id'],
 

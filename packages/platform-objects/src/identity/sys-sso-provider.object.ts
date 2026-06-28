@@ -55,6 +55,7 @@ export const SysSsoProvider = ObjectSchema.create({
   },
   description: 'External SSO identity providers (OIDC / SAML) this environment federates login to',
   displayNameField: 'provider_id',
+  nameField: 'provider_id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{provider_id}',
   compactLayout: ['provider_id', 'issuer', 'domain'],
 

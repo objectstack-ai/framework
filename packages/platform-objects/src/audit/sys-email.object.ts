@@ -27,6 +27,7 @@ export const SysEmail = ObjectSchema.create({
   managedBy: 'append-only',
   description: 'Outbound email delivery log',
   displayNameField: 'subject',
+  nameField: 'subject', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{subject}',
   compactLayout: ['subject', 'to', 'status', 'sent_at'],
 

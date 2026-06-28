@@ -26,6 +26,7 @@ export const SysComment = ObjectSchema.create({
   managedBy: 'platform',
   description: 'Threaded comments attached to records via thread_id',
   displayNameField: 'body',
+  nameField: 'body', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{author_name}: {body}',
   compactLayout: ['created_at', 'author_name', 'body'],
 

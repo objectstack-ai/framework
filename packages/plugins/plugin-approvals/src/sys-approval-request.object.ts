@@ -31,6 +31,7 @@ export const SysApprovalRequest = ObjectSchema.create({
   managedBy: 'system',
   description: 'Live approval instance tracked per submission',
   displayNameField: 'id',
+  nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{process_name} · {record_id}',
   compactLayout: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'submitter_id', 'updated_at'],
 

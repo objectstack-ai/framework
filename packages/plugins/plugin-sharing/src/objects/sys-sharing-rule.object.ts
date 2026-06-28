@@ -39,6 +39,7 @@ export const SysSharingRule = ObjectSchema.create({
   userActions: { create: true, edit: true, delete: true, import: false },
   description: 'Declarative sharing rule that auto-materialises sys_record_share grants. Authored via defineSharingRule() in code or the Studio criteria builder.',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['name', 'object_name', 'recipient_type', 'recipient_id', 'access_level', 'active'],
 

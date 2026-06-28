@@ -1927,7 +1927,9 @@ export class ObjectQL implements IDataEngine {
           fields: _findSchema.fields as any,
           searchableFields: (_findSchema as any).searchableFields,
           requestedFields: _reqFields,
-          displayField: (_findSchema as any).displayNameField,
+          // [ADR-0079] `nameField` is the canonical primary-title pointer;
+          // `displayNameField` is the deprecated alias (still honored).
+          displayField: (_findSchema as any).nameField ?? (_findSchema as any).displayNameField,
         });
         if (_searchFilter) {
           ast.where = ast.where ? { $and: [ast.where, _searchFilter] } : _searchFilter;

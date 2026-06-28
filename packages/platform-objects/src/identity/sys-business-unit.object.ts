@@ -29,6 +29,7 @@ export const SysBusinessUnit = ObjectSchema.create({
   managedBy: 'platform',
   description: 'Canonical Business Unit tree — hierarchical org/data-partition node (company / division / department / region / office). ADR-0057 D2.',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
   compactLayout: ['name', 'kind', 'parent_business_unit_id', 'manager_user_id'],
 

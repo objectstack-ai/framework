@@ -28,6 +28,7 @@ export const SysUser = ObjectSchema.create({
   },
   description: 'User accounts for authentication',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
   compactLayout: ['name', 'email', 'email_verified'],
 

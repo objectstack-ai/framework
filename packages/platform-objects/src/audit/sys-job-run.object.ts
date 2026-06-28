@@ -24,6 +24,7 @@ export const SysJobRun = ObjectSchema.create({
   managedBy: 'append-only',
   description: 'Background job execution audit trail',
   displayNameField: 'job_name',
+  nameField: 'job_name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{job_name} @ {started_at}',
   compactLayout: ['job_name', 'status', 'started_at', 'duration_ms', 'attempt'],
 

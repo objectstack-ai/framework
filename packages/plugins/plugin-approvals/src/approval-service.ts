@@ -1419,7 +1419,9 @@ export class ApprovalService implements IApprovalService {
     try {
       const schema: any = (this.engine as any).getSchema?.(object);
       const fields = schema?.fields ?? {};
-      const declared = schema?.displayNameField;
+      // [ADR-0079] `nameField` is the canonical primary-title pointer;
+      // `displayNameField` is the deprecated alias (still honored).
+      const declared = schema?.nameField ?? schema?.displayNameField;
       if (declared && declared !== 'id' && fields[declared]) return declared;
       for (const cand of ['name', 'title', 'subject', 'label']) {
         if (fields[cand]) return cand;
