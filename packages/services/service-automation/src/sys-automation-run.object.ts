@@ -37,6 +37,7 @@ export const SysAutomationRun = ObjectSchema.create({
   managedBy: 'system',
   description: 'Durable state of a suspended automation flow run (ADR-0019)',
   displayNameField: 'id',
+  nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{flow_name} · {node_id}',
   compactLayout: ['flow_name', 'node_id', 'status', 'correlation', 'started_at', 'updated_at'],
 

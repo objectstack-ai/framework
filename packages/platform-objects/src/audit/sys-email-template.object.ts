@@ -25,6 +25,7 @@ export const SysEmailTemplate = ObjectSchema.create({
   managedBy: 'config',
   description: 'Outbound email template (subject + body + variables) resolved by name+locale',
   displayNameField: 'label',
+  nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['name', 'label', 'category', 'locale', 'active'],
 

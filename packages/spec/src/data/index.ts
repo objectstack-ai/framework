@@ -43,6 +43,12 @@ export * from './analytics.zod';
 // and build-time coherence validation.
 export * from './aggregation-policy';
 
+// Record display-name contract (ADR-0079) — title eligibility, primary-field
+// resolution/derivation, record display-name rendering, primary provisioning,
+// and title-completeness classification. Shared by authoring, display
+// enrichment, search field resolution, and lint.
+export * from './display-name';
+
 // Feed & Activity Protocol
 export * from './feed.zod';
 

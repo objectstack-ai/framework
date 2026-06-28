@@ -17,6 +17,7 @@ export const SystemUploadSession = ObjectSchema.create({
   pluralLabel: 'System Upload Sessions',
   icon: 'upload-cloud',
   description: 'Resumable multipart upload sessions tracked by service-storage',
+  nameField: 'filename', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{filename}',
   compactLayout: ['filename', 'status', 'uploaded_chunks', 'total_chunks', 'expires_at'],
 

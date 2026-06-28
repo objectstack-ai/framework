@@ -31,6 +31,7 @@ export const SysSession = ObjectSchema.create({
   },
   description: 'Active user sessions',
   displayNameField: 'user_id',
+  nameField: 'user_id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: 'Session — {user_id}',
   compactLayout: ['user_id', 'ip_address', 'expires_at'],
 

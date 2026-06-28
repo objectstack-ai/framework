@@ -36,6 +36,7 @@ export const HttpDelivery = ObjectSchema.create({
     description:
         'Durable outbox row for one outbound-HTTP attempt (ADR-0018). Managed by @objectstack/service-messaging; do not write directly.',
     displayNameField: 'id',
+    nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
     titleFormat: '{label} → {url}',
     compactLayout: ['source', 'url', 'status', 'attempts', 'next_retry_at'],
 

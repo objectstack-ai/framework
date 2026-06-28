@@ -47,6 +47,8 @@ export const BlueprintObjectSchema = lazySchema(() => z.object({
   label: z.string().optional().describe('Human-readable singular label'),
   description: z.string().optional().describe('What this object represents'),
   fields: z.array(BlueprintFieldSchema).describe('Fields to create on the object'),
+  nameField: z.string().regex(SNAKE_CASE).optional()
+    .describe('The record title field — which field holds the human-readable name shown on cards, lookup chips, breadcrumbs and search (ADR-0079). Set it to the object\'s text label field (e.g. "product_name"). For a numbered entity (invoice/ticket), set it to a formula field that composes number + name (e.g. "{order_no} · {customer}"). Omitting it lets the platform auto-pick a text field, but declaring it is strongly preferred.'),
 }));
 export type BlueprintObject = z.infer<typeof BlueprintObjectSchema>;
 

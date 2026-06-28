@@ -45,6 +45,7 @@ export const SysWebhook = ObjectSchema.create({
   userActions: { create: true, edit: true, delete: true, import: false },
   description: 'Outbound HTTP webhook subscription. Authored via defineWebhook() in code or the Studio editor; executed by the HTTP connector plugin.',
   displayNameField: 'name',
+  nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['name', 'object_name', 'url', 'active', 'updated_at'],
 

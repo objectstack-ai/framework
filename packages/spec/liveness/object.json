@@ -25,7 +25,11 @@
     },
     "displayNameField": {
       "status": "live",
-      "note": "objectui RecordDetailView."
+      "note": "Deprecated alias of nameField (ADR-0079); still read by objectui RecordDetailView + resolveDisplayField back-compat."
+    },
+    "nameField": {
+      "status": "live",
+      "note": "ADR-0079 canonical record-title pointer; read by data/display-name.ts resolveDisplayField/resolveRecordDisplayName, objectql search displayField, and plugin-approvals."
     },
     "titleFormat": {
       "status": "live",

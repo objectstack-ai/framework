@@ -567,6 +567,21 @@ export class SchemaRegistry {
     // applySystemFields().
     schema = applySystemFields(schema, { multiTenant: this.multiTenant });
 
+    // TODO(ADR-0079): wire `provisionPrimary` (from `@objectstack/spec/data`)
+    // HERE — this is the object materialization seam. It should run for
+    // `ownership === 'own'` only (extensions must not synthesize a title) and
+    // AFTER `applySystemFields` (so a synthesized `name` co-exists with system
+    // columns). NOT wired yet on purpose: `provisionPrimary` SYNTHESIZES a real
+    // `name` text field when nothing is title-eligible, which the driver's
+    // `syncSchema` would materialize as a new DB column on dozens of title-less
+    // system/append-only tables (e.g. sys_record_share, sys_member) that today
+    // rely on `titleFormat`. Enabling that is a schema-migration-bearing change
+    // and must be staged behind the ADR-0079 required-title refine. Until then
+    // the canonical pointer is resolved on read via `resolveDisplayField`.
+    // To wire the DESIGNATE-only half safely (set nameField when derivable,
+    // never synthesize), split `provisionPrimary` or add a `{ synthesize:false }`
+    // option and call it here for own-objects.
+
     const shortName = schema.name;
     const fqn = computeFQN(namespace, shortName);
 

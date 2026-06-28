@@ -39,6 +39,7 @@ export const SysCapability = ObjectSchema.create({
   },
   description: 'Authorization capability definitions (ADR-0066 D1). Referenced by name from permission-set systemPermissions and resource requiredPermissions.',
   displayNameField: 'label',
+  nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['label', 'name', 'scope', 'managed_by', 'active'],
 

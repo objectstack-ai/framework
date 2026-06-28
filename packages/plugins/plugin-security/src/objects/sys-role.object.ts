@@ -30,6 +30,7 @@ export const SysRole = ObjectSchema.create({
   },
   description: 'Role definitions for RBAC access control',
   displayNameField: 'label',
+  nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   compactLayout: ['label', 'name', 'active', 'is_default'],
 

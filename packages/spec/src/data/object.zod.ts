@@ -547,7 +547,23 @@ const ObjectSchemaBase = z.object({
   /**
    * Display & UI Hints (Data-Layer)
    */
-  displayNameField: z.string().optional().describe('Field to use as the record display name (e.g., "name", "title"). Defaults to "name" if present.'),
+  /**
+   * [ADR-0079] Canonical pointer to the object's PRIMARY title field — the one
+   * real stored field (text / autonumber / formula→text) that is a record's
+   * human name. Pairs with `recordName` (the Salesforce Name / Record-Name
+   * model). Optional at the schema level for now (a hard required-refine is
+   * staged so existing title-less metadata still parses). Resolve / derive via
+   * `resolveDisplayField` from `@objectstack/spec/data` (display-name.ts), which
+   * falls back to the deprecated `displayNameField` alias and then a derivation.
+   */
+  nameField: z.string().optional().describe('[ADR-0079] Canonical primary title field — the stored field used as the record display name (e.g. "name", "title"). Pairs with recordName.'),
+  /**
+   * @deprecated [ADR-0079] Renamed to `nameField`. Still ACCEPTED as an alias:
+   * the schema copies `displayNameField` onto `nameField` on parse when
+   * `nameField` is absent (both are preserved on the parsed output for
+   * cross-repo back-compat). New metadata should set `nameField`.
+   */
+  displayNameField: z.string().optional().describe('[DEPRECATED → nameField] Field to use as the record display name (e.g., "name", "title"). Accepted as an alias for nameField.'),
   recordName: z.object({
     type: z.enum(['text', 'autonumber']).describe('Record name type: text (user-entered) or autonumber (system-generated)'),
     displayFormat: z.string().optional().describe('Auto-number format pattern (e.g., "CASE-{0000}", "INV-{YYYY}-{0000}")'),
@@ -836,9 +852,42 @@ type NoExcessObjectKeys<T> = T &
   Record<Exclude<keyof T, keyof z.input<typeof ObjectSchemaBase>>, never>;
 
 /**
+ * [ADR-0079] Back-compat alias normalization: an object authored with the
+ * deprecated `displayNameField` key still parses by mapping it onto the
+ * canonical `nameField` when `nameField` is absent. `displayNameField` is
+ * PRESERVED on the output (cross-repo consumers / older tests still read it).
+ * Non-object inputs pass through untouched (Zod raises the real type error).
+ */
+function normalizeNameFieldAlias(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const obj = input as Record<string, unknown>;
+  if (obj.nameField == null && typeof obj.displayNameField === 'string') {
+    return { ...obj, nameField: obj.displayNameField };
+  }
+  return input;
+}
+
+/**
  * Enhanced ObjectSchema with Factory
  */
-export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
+export const ObjectSchema = lazySchema(() => {
+  // Capture the ORIGINAL ZodObject parse/safeParse before `Object.assign`
+  // mutates `ObjectSchemaBase` in place (assign returns the same object, so
+  // overriding `.parse` on the result would otherwise recurse into itself).
+  const baseParse = ObjectSchemaBase.parse.bind(ObjectSchemaBase);
+  const baseSafeParse = ObjectSchemaBase.safeParse.bind(ObjectSchemaBase);
+  return Object.assign(ObjectSchemaBase, {
+  /**
+   * [ADR-0079] Parse with deprecated-`displayNameField`→`nameField` alias
+   * normalization applied first. Wraps the captured original ZodObject parse,
+   * so `.shape` / `.create()`'s internal `ObjectSchemaBase.parse` keep working.
+   */
+  parse(data: unknown, params?: Parameters<typeof ObjectSchemaBase.parse>[1]) {
+    return baseParse(normalizeNameFieldAlias(data), params);
+  },
+  safeParse(data: unknown, params?: Parameters<typeof ObjectSchemaBase.safeParse>[1]) {
+    return baseSafeParse(normalizeNameFieldAlias(data), params);
+  },
   /**
    * Type-safe factory for creating business object definitions.
    * 
@@ -875,9 +924,14 @@ export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
       ...cfg,
       label: cfg.label ?? snakeCaseToLabel(cfg.name as string),
     };
+    // [ADR-0079] `ObjectSchemaBase.parse` here is the alias-normalizing override
+    // assigned just below (Object.assign mutates the base in place), so the
+    // deprecated `displayNameField`→`nameField` mapping is applied for create()
+    // too — no need to normalize again at this call site.
     return ObjectSchemaBase.parse(withDefaults) as Omit<ServiceObject, 'fields'> & Pick<T, 'fields'>;
   },
-}));
+  });
+});
 
 export type ServiceObject = z.infer<typeof ObjectSchemaBase>;
 export type ServiceObjectInput = z.input<typeof ObjectSchemaBase>;

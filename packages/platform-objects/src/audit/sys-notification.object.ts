@@ -34,6 +34,7 @@ export const SysNotification = ObjectSchema.create({
   managedBy: 'system',
   description: 'Notification events — one row per emit() (ADR-0030 Layer 2 ingress)',
   displayNameField: 'topic',
+  nameField: 'topic', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{topic}',
   compactLayout: ['topic', 'severity', 'source_object', 'created_at'],
 

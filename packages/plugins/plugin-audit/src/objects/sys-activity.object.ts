@@ -25,6 +25,7 @@ export const SysActivity = ObjectSchema.create({
   managedBy: 'append-only',
   description: 'Recent activity stream entries (lightweight, denormalized)',
   displayNameField: 'summary',
+  nameField: 'summary', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{type} · {summary}',
   compactLayout: ['timestamp', 'type', 'actor_name', 'summary'],
 
