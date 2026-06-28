@@ -1,6 +1,6 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
-**Status**: Proposed (2026-06-28, rev. 6 — kernel review extended: D10 reserves "protocol" for the contract and distributes implementations to domain packages; the central facade / `*-protocol` impl package is a transitional intermediate) — v12 assessment
+**Status**: Proposed (2026-06-28, rev. 7 — kernel review concluded: dissolve the `ObjectStackProtocol` union (D9 refinement; discovery `services` + shared spine already provide unification); transport stays a framework-agnostic port with per-domain normalized handlers (D11)) — v12 assessment
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
@@ -20,6 +20,9 @@
 5. **Decision (later, separate concern):** extracting the *engine itself* into a standalone repo remains **trigger-gated** on its cross-package commit ratio (currently **88%** for `engine.ts`/`registry.ts`). That is orthogonal to — and unblocked by — the protocol relocation.
 
 6. **Kernel review — the deeper debt is the contract, not the engine.** The engine hard-codes **zero** governance (RLS/RBAC/owner/tenant are all pluggable) and is the part to protect. But the central wire contract `ObjectStackProtocol` is a **70-method, 11-domain god-interface** (60/70 optional; no consumer uses >11%). Decision: **segment it per ISP** into `DataProtocol` + `MetadataProtocol` + optional capability protocols, keeping a composed alias for back-compat (see D8–D9). Spec/type-level and incremental.
+
+
+7. **No unified protocol interface; transport is a framework-agnostic port.** The "unified" need is already met by the runtime discovery `services` registry + a shared envelope/error spine — not by the `ObjectStackProtocol` union, which is dissolved (D9 refinement). Dispatch stays a framework-agnostic port (multi-adapter; only Hono today) with per-domain plugins registering normalized handlers (D11).
 
 
 ## Context: the layers
@@ -95,6 +98,8 @@ Decision — split the interface into focused contracts:
 
 The segmentation is **spec/type-level and may start incrementally now** (define sub-interfaces; narrow consumers over time). The implementation restructure + the `@objectstack/metadata-protocol` rename are breaking and ride the **same cross-repo window as D7 / Step 2**.
 
+**Refinement (rev.7) — the composed alias is transitional; the end-state has no union interface.** The platform already carries the two things a "unified protocol" is actually for, and neither is the god-interface: (a) a **runtime discovery `services` registry** (`spec/api/discovery.zod.ts` — `services` is "the single source of truth for service availability"; `capabilities`/`features` was *removed* as derivable from `services[x].enabled`), and (b) a **shared envelope/error spine** (`spec/api/errors.zod.ts`, `shared/error-map.zod.ts`, `dispatcher.zod.ts`). So `ObjectStackProtocol` is a static, lesser duplicate of the runtime `services` map. **End-state: dissolve `ObjectStackProtocol`** — keep N independent domain protocols + the thin shared spine + the discovery registry; the composed `&` alias is a back-compat shim only, deleted at the cross-repo window. This is strictly better for tiering ("what can this server do" = what is installed/enabled, computed at runtime).
+
 ### D10 — "protocol" is a contract, not an implementation package; distribute impls to domain packages [new — kernel review]
 
 A single `ObjectStackProtocolImplementation` facade — and any `*-protocol` *implementation* package — is the wrong end-state. Verified against source:
@@ -111,6 +116,16 @@ Target end-state:
 - **The transport/dispatcher routes each contract-slice to the owning service** (it already resolves services by name) — no central facade class.
 
 This **refines D1** (the `metadata-protocol` package was an intermediate, not the end-state) and **completes D9**. Executed at the cross-repo window with D7 / Step 2.
+
+### D11 — Transport stays a framework-agnostic port (multi-adapter); decompose the central dispatcher; domains register normalized handlers [new — kernel review]
+
+The transport layer repeats the kernel's recurring pattern — a **clean port with a god implementation**:
+- **Clean port (keep / ratify)**: `runtime/http-dispatcher.ts` is framework-agnostic (no Hono import; normalized `HttpProtocolContext` → `HttpDispatcherResult`); `IHttpServer` is a `@objectstack/spec/contracts` interface; `plugin-hono-server` is an *adapter* that translates `c.req` → the normalized context. This ports-and-adapters seam is exactly why a non-Hono adapter (Express/Fastify/Workers) would be **additive, not a rewrite** — it was deliberately abstracted for multi-adapter and is correct.
+- **God implementation (fix)**: the dispatcher (~3.8k LOC) hardcodes a handler per domain (`handleData`/`handleMcp`/`handleAnalytics`/`handleActions`, each `getService(...)`); `rest/rest-server.ts` (~5.1k LOC) is a second central route generator. Core protocol routes are written together here — even though plugin/manifest route-contribution already exists (`core/api-registry.ts`, manifest "API route contributions to HttpDispatcher", `IHttpServer.route`).
+
+Decision: each capability plugin registers its routes as a **normalized handler** into a thin dispatcher registry (the framework-agnostic port) — **not** as framework-specific routes. (Registering Hono `app.route` directly would couple plugins to Hono and break multi-adapter.) The central dispatcher / rest-server decompose into a thin core + per-domain contributions; adapters stay below, unchanged. Incremental (both mechanisms already coexist — migrate one domain at a time). Cross-repo window.
+
+**Caveats**: (1) multi-adapter is currently **unproven** — only the Hono adapter exists and the normalized context shows Hono-isms (e.g. backfilling host from `c.req.url`); writing a second adapter (even a thin Workers/Express one) is the only real validation that the port is clean. (2) `http-dispatcher` (~3.8k) and `rest-server` (~5.1k) appear to **overlap** (two central transport layers touching data-CRUD routes) — confirm whether that is redundancy to consolidate.
 
 ## Feasibility (verified against current source)
 
@@ -168,3 +183,5 @@ import { SecurityPlugin } from '@objectstack/plugin-security';
 6. **Data-facade home** — does the `DataProtocol` impl live in the engine-adjacent transport layer / `rest`, or a small `@objectstack/protocol-data`? (It is thin and transport-shaped.)
 7. **Metadata package name (post-segmentation)** — keep `@objectstack/metadata-protocol` for the `MetadataProtocol` impl, or rename (`@objectstack/protocol-metadata` / `@objectstack/metadata-runtime`)?
 8. **Per-domain versioning** — once segmented, do capability protocols get independent version markers / a `getCapabilities()` discovery method?
+9. **dispatcher vs rest-server overlap** — are `runtime/http-dispatcher` (~3.8k) and `rest/rest-server` (~5.1k) redundant central transport layers? Consolidate or delineate (D11).
+10. **Validate multi-adapter** — write a second `IHttpServer` adapter (thin Workers/Express) to prove the port is free of Hono-isms before relying on it (D11).
