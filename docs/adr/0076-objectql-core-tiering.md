@@ -1,6 +1,6 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
-**Status**: Proposed (2026-06-28, rev. 5 — adds the kernel-architecture review: the engine is a clean primitive; the real debt is the `ObjectStackProtocol` god-interface, segmented per ISP in D8–D9) — v12 assessment
+**Status**: Proposed (2026-06-28, rev. 6 — kernel review extended: D10 reserves "protocol" for the contract and distributes implementations to domain packages; the central facade / `*-protocol` impl package is a transitional intermediate) — v12 assessment
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
@@ -52,6 +52,9 @@ engine surface protocol needs: SysMetadataEngine = { find, findOne, insert, upda
 - `@objectstack/objectql` re-exports `ObjectStackProtocolImplementation` from the new package for back-compat (the only two source importers — `plugin.ts`, `index.ts` — are updated; `plugin.ts` keeps wiring it, now imported from `metadata-protocol`).
 - Result: objectql is a lean data engine **by construction** — 268KB of metadata logic physically leaves the engine package. The gateway depends on `@objectstack/objectql` and never pulls protocol. (This **replaces** the rev.3 `./core` subpath proposal, which was a workaround for the false premise that protocol must stay in objectql. A subpath remains an optional later polish to also exclude the small `ObjectQLPlugin`/`kernel-factory` glue.)
 
+
+> **Refined by D10** — this `@objectstack/metadata-protocol` *implementation* package is a pragmatic **intermediate** (it got protocol out of the engine, unblocking the lean gateway). It is **not** the end-state: D10 reserves the name "protocol" for the contract and distributes implementations to their domain packages.
+
 ### D2 — Boundary ratchet keeps the engine pure [new — keystone]
 
 A CI test asserts `@objectstack/objectql` does **not** import `@objectstack/metadata-protocol` / `plugin` / `kernel` (the dependency points one way: `metadata-protocol → objectql-public-interface`, never back). This makes the relocation durable and creates backpressure against the engine re-absorbing metadata/platform concerns — the root cause of the original complexity. Fits the team's existing ratchet culture (liveness / api-surface / authz-matrix).
@@ -91,6 +94,23 @@ Decision — split the interface into focused contracts:
 - **Back-compat** — keep `ObjectStackProtocol = DataProtocol & MetadataProtocol & Partial<…>` as a composed alias so current callers/types keep working.
 
 The segmentation is **spec/type-level and may start incrementally now** (define sub-interfaces; narrow consumers over time). The implementation restructure + the `@objectstack/metadata-protocol` rename are breaking and ride the **same cross-repo window as D7 / Step 2**.
+
+### D10 — "protocol" is a contract, not an implementation package; distribute impls to domain packages [new — kernel review]
+
+A single `ObjectStackProtocolImplementation` facade — and any `*-protocol` *implementation* package — is the wrong end-state. Verified against source:
+- The facade implements only **4 of the 11** contract domains (data, metadata, analytics, feed). The other 7 (realtime / notifications / workflow / ai / i18n / views / permissions) are **not implemented in it** — they belong to their own services or aren't implemented at all.
+- **Analytics is duplicated and collides**: both `ObjectQLPlugin` (`objectql/src/plugin.ts`) and `AnalyticsServicePlugin` (`@objectstack/service-analytics`) register a service named `'analytics'` — the facade's ~66-line `analyticsQuery` versus service-analytics's ~1.8k-LOC engine (three strategies incl. native-SQL). Last-registered wins; the facade's copy is a strictly lesser duplicate.
+- **Feed is already delegated** to `IFeedService`; the facade only forwards.
+- The domain service packages already exist: `service-analytics`, `service-messaging`, `service-realtime`.
+
+Target end-state:
+- **"protocol" names ONLY the contract** — the segmented interfaces in `@objectstack/spec/api` (D9). There is **no `*-protocol` implementation package**.
+- **`DataProtocol`** impl → engine-adjacent / transport (thin wire-normalizers).
+- **`MetadataProtocol`** impl → a metadata-**domain** package; rename `@objectstack/metadata-protocol` → e.g. `@objectstack/metadata-runtime` (it owns `sys_metadata` — a legitimate business domain, not "protocol").
+- **Analytics / Feed / Realtime / Notification / …** → their existing service packages; **delete the facade's duplicated `analyticsQuery` + feed wrappers** and the `ObjectQLPlugin` `'analytics'` adapter (let `service-analytics` own the `'analytics'` service).
+- **The transport/dispatcher routes each contract-slice to the owning service** (it already resolves services by name) — no central facade class.
+
+This **refines D1** (the `metadata-protocol` package was an intermediate, not the end-state) and **completes D9**. Executed at the cross-repo window with D7 / Step 2.
 
 ## Feasibility (verified against current source)
 
