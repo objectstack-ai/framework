@@ -358,8 +358,8 @@ export const PageSchema = lazySchema(() => z.object({
    *
    * Only meaningful when `type === 'record'`. Ignored otherwise.
    */
-  kind: z.enum(['full', 'slotted']).default('full')
-    .describe('Page override mode: full (default) or slotted (partial overrides)'),
+  kind: z.enum(['full', 'slotted', 'jsx']).default('full')
+    .describe('Page override mode: full | slotted | jsx (ADR-0080 JSX-source authoring)'),
 
   /**
    * Slot override map for slotted record pages.
@@ -384,13 +384,33 @@ export const PageSchema = lazySchema(() => z.object({
     tabs: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     discussion: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
   }).optional().describe('Slot override map for slotted pages'),
+
+  /**
+   * JSX-source authoring (ADR-0080). When `kind === 'jsx'`, `source` is the
+   * source-of-truth: a constrained JSX/HTML+Tailwind text compiled by
+   * `@objectstack/sdui-parser` into the SchemaNode tree at SAVE time — parse,
+   * never execute. `regions` then hold the DERIVED tree (a cache; the source
+   * wins on any mismatch). For `full`/`slotted` pages `source` is unused.
+   */
+  source: z.string().optional()
+    .describe("JSX-source page text — authoritative when kind==='jsx'; compiled to the tree by @objectstack/sdui-parser at save time (parse, never execute)"),
+  /** Plugin namespaces the JSX source references — inferred at compile, checked at save AND load (ADR-0048 provenance). */
+  requires: z.array(z.string()).optional()
+    .describe('Plugin namespaces the JSX source references (validated at save and load)'),
+}).superRefine((page, ctx) => {
+  // ADR-0080 + ADR-0078 (completeness): a `kind:'jsx'` page with no `source`
+  // is silently inert — fail loudly at author time, do not render an empty page.
+  if (page.kind === 'jsx' && !(typeof page.source === 'string' && page.source.trim().length > 0)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['source'],
+      message: "A jsx page requires a non-empty `source` (ADR-0080: JSX is the source-of-truth).",
+    });
+  }
 }));
-// PageSchema has no cross-field (`superRefine`) requirements by design. It once
-// required `recordReview`/`blankLayout` for the `record_review`/`blank` types
-// (both removed — unrendered roadmap, see PAGE_TYPE_ROADMAP) and `slots` for
-// `kind: 'slotted'` (dropped — an empty slotted page validly renders the
-// synthesized default). Each of those was a "required-but-unauthorable field
-// blocks the Studio create form" trap; none survives.
+// PageSchema's only cross-field rule is the ADR-0080 jsx-source completeness
+// check above. It once also required `recordReview`/`blankLayout` and `slots`
+// (all removed — unrendered roadmap / "required-but-unauthorable" Studio traps).
 
 export type Page = z.infer<typeof PageSchema>;
 /** Authoring input for {@link Page} — defaulted fields are optional. */
