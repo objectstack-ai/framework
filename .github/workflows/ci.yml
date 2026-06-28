@@ -237,6 +237,32 @@ jobs:
           fi
           echo "Build outputs verified successfully"
 
+      # Capability packages (services / triggers / plugins) are loaded by the
+      # multi-tenant runtime via a DYNAMIC import of their published entry. If a
+      # package ships a dts-only / half-built / 0-byte `dist` (an interrupted
+      # build, or a package retired in source but still referenced), that import
+      # resolves to nothing and the capability SILENTLY fails to load — e.g.
+      # record-change automation never fires, with no user-visible signal. The
+      # build config always emits JS, so this can only happen by accident; assert
+      # every buildable capability package actually produced its declared runtime
+      # entry. Self-maintaining: reads each package's own `main`, skips dirs with
+      # no package.json (e.g. a retired service-feed/service-ai leftover).
+      - name: Verify capability packages ship a runtime entry (no dts-only / half-built)
+        run: |
+          fail=0
+          for d in packages/triggers/* packages/services/* packages/plugins/*; do
+            [ -f "$d/package.json" ] || continue
+            has_build=$(node -p "Boolean((require('./$d/package.json').scripts||{}).build)" 2>/dev/null || echo false)
+            [ "$has_build" = "true" ] || continue
+            main=$(node -p "require('./$d/package.json').main || 'dist/index.js'" 2>/dev/null || echo dist/index.js)
+            if [ ! -s "$d/$main" ]; then
+              echo "✗ $d: missing/empty runtime entry '$main' — dts-only or unbuilt? dynamic import would silently fail"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "✓ all buildable capability packages ship a runtime JS entry"
+
       - name: Analyze bundle size
         run: pnpm --filter @objectstack/spec analyze
 
