@@ -88,7 +88,9 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 const objectName = String(cfg.objectName ?? cfg.object ?? '');
                 if (!objectName) return { success: false, error: 'create_record: objectName required' };
 
-                const fields = interpolate(cfg.fields ?? {}, variables, context) as Record<string, unknown>;
+                // `fieldValues` is a legacy alias some authoring paths (e.g. the AI build
+                // agent) emit for the write map — accept it like `filter ?? filters` below.
+                const fields = interpolate(cfg.fields ?? cfg.fieldValues ?? {}, variables, context) as Record<string, unknown>;
                 const outputVariable = cfg.outputVariable as string | undefined;
 
                 const data = getData();
@@ -138,7 +140,8 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 if (!objectName) return { success: false, error: 'update_record: objectName required' };
 
                 const filter = interpolate(cfg.filter ?? cfg.filters ?? {}, variables, context) as Record<string, unknown>;
-                const fields = interpolate(cfg.fields ?? {}, variables, context) as Record<string, unknown>;
+                // `fieldValues` — legacy authoring alias for the write map (see create_record).
+                const fields = interpolate(cfg.fields ?? cfg.fieldValues ?? {}, variables, context) as Record<string, unknown>;
 
                 const data = getData();
                 if (!data) {

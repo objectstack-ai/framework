@@ -193,3 +193,97 @@ describe('record-change trigger — end-to-end (#1491)', () => {
     expect(row?.stamp).toBe('done');
   }, 15000);
 });
+
+/**
+ * The "AI-built record-change flow writes a blank row" defect class.
+ *
+ * Once the trigger fires (#1491/#686), a `create_record` action must actually
+ * populate the new row. The AI build agent authors that write map under the
+ * `fieldValues` key (the framework executor reads `config.fields`) and links the
+ * new record back to the trigger row with `{record.id}` / dates with `{TODAY()}`.
+ * This boots the REAL kernel + trigger and drives the documented scenario —
+ * "customer status → lost auto-creates a linked follow-up" — end to end, for
+ * BOTH the canonical `fields` key and the legacy `fieldValues` alias, asserting
+ * the follow-up row is correctly populated (note + `{TODAY()}` date) and correctly
+ * linked (`customer` === the triggering record's id).
+ */
+describe('record-change trigger — create_record write convention (fields/fieldValues alias)', () => {
+  const customerObj = (name: string) => ({
+    name, label: name,
+    fields: { status: { name: 'status', label: 'S', type: 'text' } },
+  });
+  const followupObj = (name: string) => ({
+    name, label: name,
+    fields: {
+      customer: { name: 'customer', label: 'C', type: 'text' },
+      note: { name: 'note', label: 'N', type: 'text' },
+      due: { name: 'due', label: 'D', type: 'text' },
+    },
+  });
+
+  const lostFollowupFlow = (name: string, customer: string, followup: string, useLegacyKey: boolean) => {
+    const writeMap = { customer: '{record.id}', note: 'auto follow-up', due: '{TODAY()}' };
+    return {
+      name, label: name, type: 'record_change', status: 'active',
+      nodes: [
+        { id: 'start', type: 'start', label: 'Start', config: { objectName: customer, triggerType: 'record-after-update', condition: "record.status == 'lost'" } },
+        { id: 'mk', type: 'create_record', label: 'Follow up', config: { objectName: followup, ...(useLegacyKey ? { fieldValues: writeMap } : { fields: writeMap }) } },
+        { id: 'end', type: 'end', label: 'End' },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'mk' },
+        { id: 'e2', source: 'mk', target: 'end' },
+      ],
+    };
+  };
+
+  for (const variant of [
+    { key: 'fields' as const, legacy: false, suffix: 'canonical' },
+    { key: 'fieldValues' as const, legacy: true, suffix: 'legacy' },
+  ]) {
+    it(`status→lost writes a correctly-linked follow-up via config.${variant.key} (+ {record.id} + {TODAY()})`, async () => {
+      const cust = `cust_${variant.suffix}`;
+      const fup = `fup_${variant.suffix}`;
+      const flowName = `lost_followup_${variant.suffix}`;
+
+      const kernel = new ObjectKernel({ logLevel: 'silent' });
+      await kernel.use(new ObjectQLPlugin());
+      await kernel.use(new AutomationServicePlugin());
+      await kernel.use(new RecordChangeTriggerPlugin());
+      await kernel.bootstrap();
+
+      const objectql = kernel.getService('objectql') as any;
+      const data = kernel.getService('data') as any;
+      const automation = kernel.getService<AutomationEngine>('automation');
+
+      objectql.registerDriver(makeMemoryDriver(), true);
+      objectql.registry.registerObject(customerObj(cust), 'test', 'test');
+      objectql.registry.registerObject(followupObj(fup), 'test', 'test');
+      automation.registerFlow(flowName, lostFollowupFlow(flowName, cust, fup, variant.legacy) as any);
+
+      expect((automation as any).getActiveTriggerBindings()).toContainEqual({
+        flowName,
+        triggerType: 'record_change',
+      });
+
+      // Create a customer that is NOT yet lost — the condition must gate it out.
+      const created = await data.insert(cust, { status: 'open' });
+      const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
+      await sleep(200);
+      expect(await data.find(fup, { where: {} })).toHaveLength(0);
+
+      // Flip status → lost: fires record-after-update, condition passes, flow runs.
+      await data.update(cust, { status: 'lost' }, { where: { id } });
+      const today = new Date().toISOString().slice(0, 10);
+      await sleep(200);
+
+      const followups = await data.find(fup, { where: {} });
+      expect(followups).toHaveLength(1);
+      // correctly LINKED: {record.id} resolved to the triggering customer's id…
+      expect(followups[0].customer).toBe(id);
+      // …correctly POPULATED: literal + {TODAY()} both interpolated, not stored raw.
+      expect(followups[0].note).toBe('auto follow-up');
+      expect(followups[0].due).toBe(today);
+    }, 15000);
+  }
+});
