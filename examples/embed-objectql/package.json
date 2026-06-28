@@ -1,0 +1,22 @@
+{
+  "name": "@objectstack/example-embed-objectql",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Embed the ObjectQL engine as a plain library via @objectstack/objectql/core — no kernel, no plugins, no metadata protocol (ADR-0076).",
+  "type": "module",
+  "scripts": {
+    "demo": "vitest run",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@objectstack/objectql": "workspace:*",
+    "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
