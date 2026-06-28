@@ -50,16 +50,17 @@ export const BlueprintObjectSchema = lazySchema(() => z.object({
 }));
 export type BlueprintObject = z.infer<typeof BlueprintObjectSchema>;
 
-/** A proposed list/form/kanban/calendar view over an object. */
+/** A proposed list/form/kanban/calendar/gallery/gantt view over an object. */
 export const BlueprintViewSchema = lazySchema(() => z.object({
   object: z.string().regex(SNAKE_CASE).describe('Object this view displays (snake_case)'),
   name: z.string().regex(SNAKE_CASE).describe('View machine name (snake_case)'),
   label: z.string().optional().describe('Human-readable view label'),
-  type: z.enum(['list', 'form', 'kanban', 'calendar']).default('list').describe('View kind'),
+  type: z.enum(['list', 'form', 'kanban', 'calendar', 'gallery', 'gantt']).default('list')
+    .describe('View kind. Pick the surface that fits the data: "gallery" for a visual card/cover browse when the user asks for a 画廊/相册/卡片墙/封面/海报/图集 (a gallery / card wall / cover / poster grid) or the object has an image/avatar/file field worth showing as a card cover; "gantt" for a 甘特图/时间线/排期 (timeline / schedule) when the object has BOTH a start and an end date field; "kanban" for a board grouped by a status/select field; "calendar" for a single-date schedule; "form" for a record editor; else "list".'),
   columns: z.array(z.string().regex(SNAKE_CASE)).optional()
-    .describe('Field names shown as columns (in order)'),
+    .describe('Field names shown as columns (in order). For a gallery, INCLUDE the image/avatar/file field (it becomes the card cover); for a gantt, INCLUDE the start date column before the end date column.'),
   groupBy: z.string().regex(SNAKE_CASE).optional()
-    .describe('REQUIRED for kanban views: the select/status field whose options become the board columns (e.g. "stage", "status"). Without it a kanban renders as a plain list.'),
+    .describe('REQUIRED for kanban views: the select/status field whose options become the board columns (e.g. "stage", "status"). Without it a kanban renders as a plain list. Optional for gantt (groups leaf tasks into summary rows).'),
 }));
 export type BlueprintView = z.infer<typeof BlueprintViewSchema>;
 
@@ -203,9 +204,9 @@ const StrictView = z.object({
   object: z.string().describe('Object this view displays (snake_case)'),
   name: z.string().describe('View machine name (snake_case)'),
   label: z.string().nullable().describe('Human-readable view label, or null'),
-  type: z.enum(['list', 'form', 'kanban', 'calendar']).nullable().describe('View kind, or null for list'),
-  columns: z.array(z.string()).nullable().describe('Field names shown as columns, or null'),
-  groupBy: z.string().nullable().describe('REQUIRED for kanban: the select/status field whose options become the board columns (e.g. "stage"). Null for non-kanban views.'),
+  type: z.enum(['list', 'form', 'kanban', 'calendar', 'gallery', 'gantt']).nullable().describe('View kind, or null for list. "gallery" = visual card/cover browse (画廊/相册/卡片墙/封面/海报, or an object with an image/avatar/file field); "gantt" = timeline/schedule (甘特图/时间线/排期, object with BOTH a start and an end date field); "kanban" = board grouped by a status/select field; "calendar" = single-date schedule; "form" = record editor.'),
+  columns: z.array(z.string()).nullable().describe('Field names shown as columns, or null. For a gallery, INCLUDE the image/avatar/file field (becomes the card cover); for a gantt, INCLUDE the start date column before the end date column.'),
+  groupBy: z.string().nullable().describe('REQUIRED for kanban: the select/status field whose options become the board columns (e.g. "stage"). Optional for gantt (groups leaf tasks). Null for list/form/calendar/gallery.'),
 });
 
 const StrictDashboard = z.object({

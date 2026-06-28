@@ -53,6 +53,21 @@ describe('SolutionBlueprintSchema', () => {
     expect(parsed.views?.[0].type).toBe('list');
   });
 
+  it('accepts gallery and gantt as first-class view kinds (not only list/form/kanban/calendar)', () => {
+    // A build agent that wants a poster wall or a schedule must be able to PROPOSE
+    // a gallery/gantt view directly — otherwise the closest allowed enum value
+    // (list) wins and the view silently downgrades to a grid.
+    const parsed = SolutionBlueprintSchema.parse({
+      summary: 'events',
+      objects: [{ name: 'event', fields: [{ name: 'name', type: 'text' }, { name: 'poster', type: 'image' }] }],
+      views: [
+        { object: 'event', name: 'poster_wall', type: 'gallery', columns: ['poster', 'name'] },
+        { object: 'event', name: 'schedule', type: 'gantt', columns: ['name'] },
+      ],
+    });
+    expect(parsed.views?.map((v) => v.type)).toEqual(['gallery', 'gantt']);
+  });
+
   it('rejects a missing summary', () => {
     const { summary: _drop, ...noSummary } = validBlueprint;
     expect(() => SolutionBlueprintSchema.parse(noSummary)).toThrow();
@@ -202,6 +217,20 @@ describe('SolutionBlueprintStrictSchema (OpenAI strict mirror)', () => {
     expect(parsed.objects[0].fields[0].type).toBe('text');
     expect(parsed.views).toBeNull();
     expect(parsed.app).toBeNull();
+  });
+
+  it('accepts gallery/gantt view kinds in the strict mirror (the structured-output contract)', () => {
+    // This is the schema the build agent's structured output is validated against,
+    // so the gallery/gantt enum values MUST live here too — else the model can
+    // never emit them and a requested gallery degrades to a list/grid.
+    const parsed = SolutionBlueprintStrictSchema.parse({
+      ...strictBp,
+      views: [
+        { object: 'event', name: 'wall', label: null, type: 'gallery', columns: null, groupBy: null },
+        { object: 'event', name: 'plan', label: null, type: 'gantt', columns: null, groupBy: null },
+      ],
+    });
+    expect(parsed.views?.map((v) => v.type)).toEqual(['gallery', 'gantt']);
   });
 
   it('requires every top-level key to be present (OpenAI strict needs all in `required`)', () => {
