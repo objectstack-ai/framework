@@ -37,6 +37,37 @@ export interface RegisterSsoFormResult {
 export type AuthRequestHandler = (request: Request) => Promise<Response>;
 
 /**
+ * Resolve the caller's active organization id by re-dispatching a
+ * `/get-session` through the same better-auth handler. Returns `undefined` on
+ * any failure / when no active org is set — callers fall back to an org-less
+ * (registrar-only) provider, so this is strictly best-effort. `registerUrl` is
+ * the resolved `…/sso/register` URL; we swap the trailing path for
+ * `…/get-session` on the same origin/basePath.
+ */
+async function resolveActiveOrganizationId(
+  handle: AuthRequestHandler,
+  registerUrl: string,
+  headers: Headers,
+): Promise<string | undefined> {
+  try {
+    const sessionUrl = registerUrl.replace(/\/sso\/register$/, '/get-session');
+    if (sessionUrl === registerUrl) return undefined;
+    const h = new Headers({ accept: 'application/json' });
+    const cookie = headers.get('cookie');
+    if (cookie) h.set('cookie', cookie);
+    const authz = headers.get('authorization');
+    if (authz) h.set('authorization', authz);
+    const resp = await handle(new Request(sessionUrl, { method: 'GET', headers: h }));
+    if (!resp.ok) return undefined;
+    const data: any = await resp.json().catch(() => null);
+    const org = data?.session?.activeOrganizationId ?? data?.activeOrganizationId;
+    return typeof org === 'string' && org.length > 0 ? org : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Reshape a flat SSO-provider registration form body and register it.
  *
  * @param handle  the better-auth universal handler (`AuthManager.handleRequest`
@@ -112,10 +143,20 @@ export async function runRegisterSsoProviderFromForm(
   if (authz) headers.set('authorization', authz);
   headers.set('origin', request.headers.get('origin') || origin);
 
+  // Org-scope the provider to the caller's active organization (best-effort).
+  // `@better-auth/sso`'s management endpoints (delete / update / domain
+  // verification) gate org-scoped providers on `isOrgAdmin` but gate ORG-LESS
+  // ones on `provider.userId === caller` — i.e. only the original registrar can
+  // manage them. Scoping to the org means ANY org owner/admin can manage the
+  // env's IdPs (the env is single-org in V1). Resolved by re-dispatching a
+  // `/get-session` through the same handler; falls back to org-less (no
+  // regression) when no active org is set.
+  const organizationId = await resolveActiveOrganizationId(handle, innerUrl, headers);
+
   const innerReq = new Request(innerUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ providerId, issuer, domain, oidcConfig }),
+    body: JSON.stringify({ providerId, issuer, domain, oidcConfig, ...(organizationId ? { organizationId } : {}) }),
   });
 
   const resp = await handle(innerReq);
@@ -205,10 +246,14 @@ export async function runRegisterSamlProviderFromForm(
   if (authz) headers.set('authorization', authz);
   headers.set('origin', request.headers.get('origin') || origin);
 
+  // Org-scope to the caller's active org (best-effort) so any org owner/admin
+  // can manage the provider — see the OIDC helper above.
+  const organizationId = await resolveActiveOrganizationId(handle, innerUrl, headers);
+
   const innerReq = new Request(innerUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ providerId, issuer, domain, samlConfig }),
+    body: JSON.stringify({ providerId, issuer, domain, samlConfig, ...(organizationId ? { organizationId } : {}) }),
   });
   const resp = await handle(innerReq);
   let parsed: any = {};
