@@ -120,6 +120,56 @@ export const SysSsoProvider = ObjectSchema.create({
       ],
     },
     {
+      name: 'request_domain_verification',
+      label: 'Request Domain Verification',
+      icon: 'globe',
+      variant: 'secondary',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      method: 'POST',
+      // ADR-0024 ② (opt-in OS_SSO_DOMAIN_VERIFICATION). Asks @better-auth/sso
+      // for a one-time DNS-TXT challenge and reveals the ready-to-paste record
+      // ONCE via `resultDialog`. Routed through the env bridge (plugin-auth /
+      // cloud AuthProxyPlugin) which reshapes the `{domainVerificationToken}`
+      // response into the `{ data: { dnsRecordName, dnsRecordValue } }` envelope
+      // the dialog reads. When the feature is OFF the bridge returns a clear
+      // "not enabled for this environment" error instead of a bare 404.
+      target: '/api/v1/auth/admin/sso/request-domain-verification',
+      params: [
+        { name: 'providerId', field: 'provider_id', defaultFromRow: true, required: true },
+        { name: 'domain', field: 'domain', defaultFromRow: true, required: false },
+      ],
+      resultDialog: {
+        title: 'Verify your domain',
+        description:
+          'Add the DNS TXT record below at your domain’s DNS provider, then run “Verify Domain”. The token is shown once.',
+        acknowledge: 'Done',
+        fields: [
+          { path: 'data.dnsRecordType', label: 'Record type', format: 'text' },
+          { path: 'data.dnsRecordName', label: 'Name / Host', format: 'secret' },
+          { path: 'data.dnsRecordValue', label: 'Value', format: 'secret' },
+        ],
+      },
+    },
+    {
+      name: 'verify_domain',
+      label: 'Verify Domain',
+      icon: 'shield-check',
+      variant: 'secondary',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      method: 'POST',
+      // ADR-0024 ②. Re-checks the DNS-TXT record and flips `domain_verified`
+      // on success. Routed through the env bridge, which maps @better-auth/sso's
+      // empty 204 / 502 into a clear success/error toast.
+      target: '/api/v1/auth/admin/sso/verify-domain',
+      successMessage: 'Domain ownership verified',
+      refreshAfter: true,
+      params: [
+        { name: 'providerId', field: 'provider_id', defaultFromRow: true, required: true },
+      ],
+    },
+    {
       name: 'delete_sso_provider',
       label: 'Delete SSO Provider',
       icon: 'trash-2',
@@ -144,7 +194,7 @@ export const SysSsoProvider = ObjectSchema.create({
       name: 'all',
       label: 'All',
       data: { provider: 'object', object: 'sys_sso_provider' },
-      columns: ['provider_id', 'issuer', 'domain', 'created_at'],
+      columns: ['provider_id', 'issuer', 'domain', 'domain_verified', 'created_at'],
       sort: [{ field: 'provider_id', order: 'asc' }],
       pagination: { pageSize: 50 },
       // Per-object empty state — the shared identity-object copy ("created
@@ -183,6 +233,15 @@ export const SysSsoProvider = ObjectSchema.create({
       required: true,
       maxLength: 255,
       description: 'Email domain routed to this IdP (e.g. acme.com)',
+      group: 'Identity',
+    }),
+
+    domain_verified: Field.boolean({
+      label: 'Domain Verified',
+      defaultValue: false,
+      readonly: true,
+      description:
+        'Whether DNS ownership of the email domain has been proven (ADR-0024 ②). Set by “Verify Domain” after the DNS TXT record resolves. Managed by better-auth — not directly editable. Only enforced when domain verification is enabled for the environment.',
       group: 'Identity',
     }),
 

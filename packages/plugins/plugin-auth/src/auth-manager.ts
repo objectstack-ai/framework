@@ -1101,6 +1101,15 @@ export class AuthManager {
     const oidcFromEnv = readBooleanEnv('OS_OIDC_PROVIDER_ENABLED');
     const ssoFromEnv = readBooleanEnv('OS_SSO_ENABLED');
     const scimFromEnv = readBooleanEnv('OS_SCIM_ENABLED');
+    // Opt-in DNS domain-verification for external SSO providers (ADR-0024 ②).
+    // OFF by default → today's behavior exactly (register → login immediately).
+    // ON → @better-auth/sso mounts /sso/{request-domain-verification,verify-domain}
+    // AND enforces a HARD login gate: a provider whose domain is not DNS-verified
+    // rejects logins ("Provider domain has not been verified"). The two are
+    // coupled in @better-auth/sso (the endpoints only register when
+    // `domainVerification.enabled`), so this single flag governs both. Requires
+    // `OS_SSO_ENABLED` (the sso plugin must be loaded to honor it).
+    const ssoDomainVerifyFromEnv = readBooleanEnv('OS_SSO_DOMAIN_VERIFICATION');
     // @better-auth/scim's `active:false` → ban runs through the admin plugin,
     // and org-scoped tokens need the organization plugin — so enabling SCIM
     // forces `admin` on (organization already defaults on). See ADR-0071.
@@ -1117,6 +1126,7 @@ export class AuthManager {
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
       admin: pluginConfig.admin ?? scimEffective,
       sso: ssoFromEnv ?? (pluginConfig as any).sso ?? false,
+      ssoDomainVerification: ssoDomainVerifyFromEnv ?? (pluginConfig as any).ssoDomainVerification ?? false,
       scim: scimEffective,
     };
 
@@ -1482,8 +1492,15 @@ export class AuthManager {
       // an explicit default role (belt-and-suspenders over SecurityPlugin's
       // `member_default` fallback, which already grants baseline access to any
       // authenticated user). Requires the `organization` plugin — on by default.
+      // `domainVerification.enabled` (ADR-0024 ②, opt-in via OS_SSO_DOMAIN_VERIFICATION):
+      // when on, @better-auth/sso mounts /sso/request-domain-verification +
+      // /sso/verify-domain (DNS TXT proof-of-ownership) AND enforces that an
+      // external IdP's email domain be DNS-verified before it may complete a
+      // login — preventing an org admin from registering a provider for a domain
+      // they don't control. Off by default to preserve the register→login flow.
       plugins.push(sso({
         organizationProvisioning: { defaultRole: 'member' },
+        ...(enabled.ssoDomainVerification ? { domainVerification: { enabled: true } } : {}),
       }));
     }
 
@@ -2050,6 +2067,21 @@ export class AuthManager {
     // capability can never disagree with the actually-mounted route.
     const ssoFromEnv = readBooleanEnv('OS_SSO_ENABLED');
     return ssoFromEnv ?? (this.config.plugins as any)?.sso ?? false;
+  }
+
+  /**
+   * Whether opt-in DNS domain-verification (ADR-0024 ②) is wired — i.e. the
+   * `/sso/request-domain-verification` + `/sso/verify-domain` endpoints are
+   * mounted (and the hard "domain must be verified to log in" gate is active).
+   * Resolved with the EXACT logic `buildPluginList` uses for the `sso()`
+   * `domainVerification.enabled` option, so the bridge can return a clear
+   * "not enabled for this environment" instead of a bare 404 when off.
+   * Implies `isSsoWired()` (the sso plugin must be loaded to honor it).
+   */
+  public isSsoDomainVerificationEnabled(): boolean {
+    if (!this.isSsoWired()) return false;
+    const fromEnv = readBooleanEnv('OS_SSO_DOMAIN_VERIFICATION');
+    return fromEnv ?? (this.config.plugins as any)?.ssoDomainVerification ?? false;
   }
 
   /**
