@@ -1,6 +1,7 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
 **Status**: Proposed (2026-06-28, rev. 4 — data-driven; centerpiece corrected to protocol relocation) — v12 assessment
+**Follow-up**: [ADR-0078](./0078-protocol-segmentation.md) — segments the `ObjectStackProtocol` god-interface (the deeper contract shape this ADR did not address; engine stays a pure primitive).
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
