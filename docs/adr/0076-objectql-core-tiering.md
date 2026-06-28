@@ -1,6 +1,6 @@
 # ADR-0076: objectql is the data engine — relocate metadata management (protocol) out of it; enforce the boundary; defer the engine repo-split
 
-**Status**: Proposed (2026-06-28, rev. 4 — data-driven; centerpiece corrected to protocol relocation) — v12 assessment
+**Status**: Proposed (2026-06-28, rev. 5 — adds the kernel-architecture review: the engine is a clean primitive; the real debt is the `ObjectStackProtocol` god-interface, segmented per ISP in D8–D9) — v12 assessment
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0005](./0005-metadata-customization-overlay.md) (sys_metadata overlay substrate), [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (open-core boundary), [ADR-0048](./0048-cross-package-metadata-collision.md) (package id is the addressing unit), [ADR-0066](./0066-unified-authorization-model.md) (secure-by-default, posture-gated bypass)
 **Consumers**: **new** `@objectstack/metadata-protocol` (receives `protocol` + `sys-metadata-repository` + `metadata-diagnostics`), `@objectstack/objectql` (loses protocol → becomes a lean data engine; keeps a back-compat re-export), `@objectstack/metadata-core` (gains the `SysMetadataEngine` interface), `@objectstack/plugin-security`, `@objectstack/plugin-sharing`, `@objectstack/spec`, and out-of-tree embedders — notably `../objectbase` (its `gateway`).
@@ -18,6 +18,9 @@
 3. **Measured coupling makes the relocation cheap.** Last month: `protocol.ts` changed 47×; only **3 (6%)** also touched `engine.ts`, while **20 (43%)** touched `metadata-core`/`metadata`/`spec`. Blast radius of the move is **2 source files** (`plugin.ts` wiring, `index.ts` re-export). Its two helpers (`sys-metadata-repository`, `metadata-diagnostics`) depend only on `metadata-core`/`spec`/`types` and move with it.
 4. **Decision (now):** relocate `protocol` + helpers into a **new `@objectstack/metadata-protocol`** package between `metadata-core` (pure contracts) and `metadata` (plugin). objectql becomes a lean data engine **by construction** — the 268KB genuinely leaves the package; the gateway depends on objectql with no protocol. Add a **boundary ratchet** so the engine stays pure. Add the **capability/profile** contract for optional permissions. Formula stays in core.
 5. **Decision (later, separate concern):** extracting the *engine itself* into a standalone repo remains **trigger-gated** on its cross-package commit ratio (currently **88%** for `engine.ts`/`registry.ts`). That is orthogonal to — and unblocked by — the protocol relocation.
+
+6. **Kernel review — the deeper debt is the contract, not the engine.** The engine hard-codes **zero** governance (RLS/RBAC/owner/tenant are all pluggable) and is the part to protect. But the central wire contract `ObjectStackProtocol` is a **70-method, 11-domain god-interface** (60/70 optional; no consumer uses >11%). Decision: **segment it per ISP** into `DataProtocol` + `MetadataProtocol` + optional capability protocols, keeping a composed alias for back-compat (see D8–D9). Spec/type-level and incremental.
+
 
 ## Context: the layers
 
@@ -73,6 +76,22 @@ RLS/permissions/sharing attach via engine **middleware** (`ql.registerMiddleware
 
 Extracting the *engine* into a standalone repo (the `objectui` sibling-link, no-publish model) is gated on the engine's cross-package commit ratio (currently **88%**) falling. This ADR's relocation (D1) is independent of and unblocked by D7. `objectui` separates cleanly because it is a stable downstream leaf; the engine is an upstream foundation still in 88% cross-cutting co-evolution — separating it now would reproduce the overhead that caused the earlier `@objectql/core` merge-back.
 
+### D8 — The engine stays a pure, governance-free primitive [ratify — kernel review]
+
+A deep read of `engine.ts` (~3.3k LOC) confirms it hard-codes **no** governance: RLS, RBAC, field-masking, owner stamping, and tenant `organization_id` are all injected by plugins via `registerMiddleware` + hooks (`plugin-security` / `plugin-sharing` / `org-scoping`); the driver port is minimal (CRUD+DDL); boot ordering is sound. This pluggable-primitive property is the kernel's most valuable asset. **No protocol, metadata-management, or governance logic may enter the engine** — protect this over any tidiness goal (the `./core` ratchet, D2, guards it).
+
+### D9 — Segment the `ObjectStackProtocol` god-interface per ISP [new — kernel review]
+
+The central contract in `spec/api/protocol.zod.ts` bundles **70 methods across 11 unrelated domains** — Data (9), Metadata (8), Feed (13), Notifications (7), Realtime (6), Packages (6), Views (5), Permissions (3), Workflows (3), AI (3), i18n (3), Analytics (2), Automation (1). **60/70 are optional, and no consumer uses more than ~11%** (REST ~11%, objectql ~2%, analytics ~3%). It aggregates domains that already have their own services (`service-analytics` / `service-realtime` / `service-messaging`), which forces the ~5.6k-LOC facade, makes the contract un-versionable, and is the root cause of the `metadata-protocol` naming confusion (the package also carries the thin data facade).
+
+Decision — split the interface into focused contracts:
+- **`DataProtocol`** — `findData/getData/createData/updateData/deleteData` (+ batch): thin wire-normalizers over the engine.
+- **`MetadataProtocol`** — metadata read/write, draft/publish, locks (ADR-0010), commits (ADR-0067), package ownership (ADR-0048), `loadMetaFromDb`: the heavy control plane (the true content of `@objectstack/metadata-protocol`).
+- **Optional capability protocols** — `AnalyticsProtocol` / `FeedProtocol` / `RealtimeProtocol` / `NotificationProtocol` / `ViewProtocol` / …, each owned by its existing service and independently optional/versionable.
+- **Back-compat** — keep `ObjectStackProtocol = DataProtocol & MetadataProtocol & Partial<…>` as a composed alias so current callers/types keep working.
+
+The segmentation is **spec/type-level and may start incrementally now** (define sub-interfaces; narrow consumers over time). The implementation restructure + the `@objectstack/metadata-protocol` rename are breaking and ride the **same cross-repo window as D7 / Step 2**.
+
 ## Feasibility (verified against current source)
 
 | Claim | Status | Evidence |
@@ -126,3 +145,6 @@ import { SecurityPlugin } from '@objectstack/plugin-security';
 3. **Capability granularity** — derive from object declarations; do not overload per-user `requiredPermissions`.
 4. **`trusted` profile** — two-key (build-time absence + explicit runtime assertion), prod env-allowlisted.
 5. **D7 trigger threshold** — what cross-package ratio (from 88%) over what window signals "extract the engine"? Track in CI; set on first review.
+6. **Data-facade home** — does the `DataProtocol` impl live in the engine-adjacent transport layer / `rest`, or a small `@objectstack/protocol-data`? (It is thin and transport-shaped.)
+7. **Metadata package name (post-segmentation)** — keep `@objectstack/metadata-protocol` for the `MetadataProtocol` impl, or rename (`@objectstack/protocol-metadata` / `@objectstack/metadata-runtime`)?
+8. **Per-domain versioning** — once segmented, do capability protocols get independent version markers / a `getCapabilities()` discovery method?
