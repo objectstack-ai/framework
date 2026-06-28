@@ -121,11 +121,26 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   if (tenantId) ctx.tenantId = tenantId;
   if (!ql || typeof ql.find !== 'function') return ctx;
 
+  // sys_user is needed for both the `current_user.email` fallback (API-key auth,
+  // where the session didn't supply an email) and the ai_seat synthesis below.
+  // Read the row at most once per resolution — the two reads were a duplicate
+  // query on the API-key path.
+  let userRowLoaded = false;
+  let userRow: any;
+  const getUserRow = async (): Promise<any> => {
+    if (!userRowLoaded) {
+      userRowLoaded = true;
+      const rows = await tryFind(ql, 'sys_user', { id: userId }, 1);
+      userRow = rows[0];
+    }
+    return userRow;
+  };
+
   // Resolve the caller's unique email for `current_user.email` RLS owner
   // policies when the session path didn't supply it (e.g. API-key auth).
   if (!ctx.email) {
-    const userRows = await tryFind(ql, 'sys_user', { id: userId }, 1);
-    if (userRows[0]?.email) ctx.email = String(userRows[0].email);
+    const u = await getUserRow();
+    if (u?.email) ctx.email = String(u.email);
   }
 
   // 3. Organization-administration roles via sys_member (better-auth), normalized
@@ -244,8 +259,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   // 7. [ADR-0024] Env-side AI seat: synthesize the `ai_seat` capability from the
   //    boolean sys_user.ai_access (sqlite returns 1/0; memory returns boolean).
   if (!ctx.permissions.includes('ai_seat')) {
-    const seatRows = await tryFind(ql, 'sys_user', { id: userId }, 1);
-    const aiAccess = (seatRows?.[0] as { ai_access?: unknown } | undefined)?.ai_access;
+    const aiAccess = ((await getUserRow()) as { ai_access?: unknown } | undefined)?.ai_access;
     if (aiAccess === true || aiAccess === 1 || aiAccess === '1') ctx.permissions.push('ai_seat');
   }
 
@@ -304,12 +318,17 @@ export async function resolveLocalizationContext(
   } catch {
     // settings service unavailable → direct read
   }
-  const tzRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'timezone', scope: 'tenant' }, 1);
-  const localeRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'locale', scope: 'tenant' }, 1);
-  const currencyRows = await tryFind(ql, 'sys_setting', { namespace: 'localization', key: 'currency', scope: 'tenant' }, 1);
+  // One read for all three keys instead of a query per key (`$in` on `key`).
+  const rows = await tryFind(
+    ql,
+    'sys_setting',
+    { namespace: 'localization', key: { $in: ['timezone', 'locale', 'currency'] }, scope: 'tenant' },
+    10,
+  );
+  const valueOf = (k: string) => rows.find((r) => r.key === k)?.value;
   return {
-    timezone: coerceTimeZone(tzRows[0]?.value) ?? 'UTC',
-    locale: coerceLocale(localeRows[0]?.value) ?? 'en-US',
-    currency: coerceCurrency(currencyRows[0]?.value),
+    timezone: coerceTimeZone(valueOf('timezone')) ?? 'UTC',
+    locale: coerceLocale(valueOf('locale')) ?? 'en-US',
+    currency: coerceCurrency(valueOf('currency')),
   };
 }
