@@ -2,6 +2,7 @@
 
 import { Args, Command, Flags } from '@oclif/core';
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import chalk from 'chalk';
 import { ZodError } from 'zod';
@@ -179,6 +180,12 @@ export default class Validate extends Command {
       try {
         const mp = join(process.cwd(), 'sdui.manifest.json');
         if (existsSync(mp)) sduiManifest = JSON.parse(readFileSync(mp, 'utf8'));
+        if (!sduiManifest) {
+          // Fall back to the manifest shipped inside @objectstack/console
+          // (built from objectui's public-tier registry; cli already deps it).
+          const cp = createRequire(import.meta.url).resolve('@objectstack/console/dist/sdui.manifest.json');
+          if (existsSync(cp)) sduiManifest = JSON.parse(readFileSync(cp, 'utf8'));
+        }
       } catch { /* fall back to parse-level */ }
       const jsxFindings = validateJsxPages(
         result.data as Record<string, unknown>,
