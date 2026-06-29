@@ -1,5 +1,14 @@
 # @objectstack/service-knowledge
 
+## 11.2.0
+
+### Patch Changes
+
+- Updated dependencies [d0f4b13]
+- Updated dependencies [302bdab]
+  - @objectstack/spec@11.2.0
+  - @objectstack/core@11.2.0
+
 ## 11.1.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/sdui-parser",
-  "version": "11.1.0",
+  "version": "11.2.0",
   "license": "Apache-2.0",
   "description": "ObjectStack constrained JSX-source → SDUI SchemaNode tree compiler (parse, never execute). Isomorphic, zero React. ADR-0080.",
   "main": "dist/index.js",
@@ -20,10 +20,22 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
-  "keywords": ["objectstack", "sdui", "jsx", "parser", "adr-0080"],
+  "keywords": [
+    "objectstack",
+    "sdui",
+    "jsx",
+    "parser",
+    "adr-0080"
+  ],
   "author": "ObjectStack",
-  "repository": { "type": "git", "url": "https://github.com/objectstack-ai/framework.git", "directory": "packages/sdui-parser" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/sdui-parser"
+  },
   "homepage": "https://objectstack.ai/docs",
   "bugs": "https://github.com/objectstack-ai/framework/issues",
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

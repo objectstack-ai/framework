@@ -1,5 +1,65 @@
 # @objectstack/cli
 
+## 11.2.0
+
+### Minor Changes
+
+- 8ea1f4f: ADR-0080 M3b②: `os validate` / `os build` now parse `kind:'jsx'` page `source` via `@objectstack/sdui-parser` (new `validateJsxPages` lint rule) — malformed JSX fails loudly at author time (ADR-0078) instead of being stored and breaking only at render. Parse-level for now (syntax, tag matching, forbidden constructs like event handlers / dangerouslySetInnerHTML); full component/prop whitelist validation arrives once the registry manifest is threaded through `compile()`.
+- 21c37d8: ADR-0080 M3b① (consumption seam): the `os build` / `os validate` JSX gate now does **full component/prop validation** (unknown component, missing/wrong prop, bad enum, bindings) when a `sdui.manifest.json` is present at the project root — falling back to parse-level otherwise. `validateJsxPages` accepts an optional manifest; the validate command loads the file when present. Generating + shipping that manifest from the registry's public tier remains a build/CI step.
+
+### Patch Changes
+
+- Updated dependencies [d0f4b13]
+- Updated dependencies [8ea1f4f]
+- Updated dependencies [21c37d8]
+- Updated dependencies [302bdab]
+  - @objectstack/spec@11.2.0
+  - @objectstack/lint@11.2.0
+  - @objectstack/account@11.2.0
+  - @objectstack/setup@11.2.0
+  - @objectstack/studio@11.2.0
+  - @objectstack/client@11.2.0
+  - @objectstack/cloud-connection@11.2.0
+  - @objectstack/core@11.2.0
+  - @objectstack/formula@11.2.0
+  - @objectstack/mcp@11.2.0
+  - @objectstack/objectql@11.2.0
+  - @objectstack/observability@11.2.0
+  - @objectstack/platform-objects@11.2.0
+  - @objectstack/driver-memory@11.2.0
+  - @objectstack/driver-mongodb@11.2.0
+  - @objectstack/driver-sql@11.2.0
+  - @objectstack/driver-sqlite-wasm@11.2.0
+  - @objectstack/plugin-approvals@11.2.0
+  - @objectstack/plugin-audit@11.2.0
+  - @objectstack/plugin-auth@11.2.0
+  - @objectstack/plugin-email@11.2.0
+  - @objectstack/plugin-hono-server@11.2.0
+  - @objectstack/plugin-org-scoping@11.2.0
+  - @objectstack/plugin-reports@11.2.0
+  - @objectstack/plugin-security@11.2.0
+  - @objectstack/plugin-sharing@11.2.0
+  - @objectstack/plugin-webhooks@11.2.0
+  - @objectstack/rest@11.2.0
+  - @objectstack/runtime@11.2.0
+  - @objectstack/service-analytics@11.2.0
+  - @objectstack/service-automation@11.2.0
+  - @objectstack/service-cache@11.2.0
+  - @objectstack/service-datasource@11.2.0
+  - @objectstack/service-job@11.2.0
+  - @objectstack/service-messaging@11.2.0
+  - @objectstack/service-package@11.2.0
+  - @objectstack/service-queue@11.2.0
+  - @objectstack/service-realtime@11.2.0
+  - @objectstack/service-settings@11.2.0
+  - @objectstack/service-storage@11.2.0
+  - @objectstack/trigger-api@11.2.0
+  - @objectstack/trigger-record-change@11.2.0
+  - @objectstack/trigger-schedule@11.2.0
+  - @objectstack/types@11.2.0
+  - @objectstack/verify@11.2.0
+  - @objectstack/console@11.2.0
+
 ## 11.1.0
 
 ### Minor Changes
