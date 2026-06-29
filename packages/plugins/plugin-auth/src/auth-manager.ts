@@ -1539,18 +1539,19 @@ export class AuthManager {
       }));
     }
 
-    // customSession() — augments the session payload with a derived `role`
-    // field so frontend gating (e.g. AppShell's `isAdmin = user.role === 'admin'`)
-    // works without each consumer having to re-query permission sets.
+    // customSession() — augments the session payload with the canonical
+    // `roles: string[]` array (ADR-0068 D1/D2): the stored `user.role` scalar
+    // split on commas, PLUS the active membership mapped to canonical
+    // `org_owner`/`org_admin`/`org_member`, PLUS `platform_admin` when the user
+    // holds the admin_full_access permission set. `user.isPlatformAdmin` is a
+    // derived alias of `'platform_admin' in roles`.
     //
-    // It also returns a `roles: string[]` array: the stored `user.role`
-    // string split on commas (the admin plugin stores multi-role users as
-    // e.g. `"admin,manager"`), with `'admin'` appended (deduplicated) when
-    // the user is promoted below. Consumers that match on individual role
-    // names (e.g. the Console approvals inbox resolving `role:<name>`
-    // approvers) must read `roles` — `user.role` is *replaced* by the
-    // literal `'admin'` on promotion, so business roles such as `manager`
-    // only survive in the array.
+    // IMPORTANT: `user.role` is NOT overwritten anymore — consumers must gate
+    // on `roles[]` / `isPlatformAdmin` (e.g. via objectui's useIsWorkspaceAdmin),
+    // never on `user.role === 'admin'`. Consumers that match individual role
+    // names (e.g. the Console approvals inbox resolving `role:<name>` approvers)
+    // also read `roles` — business roles such as `manager` survive only there.
+    // The raw membership role stays on the organization plugin's `member` payload.
     //
     // Better-auth's `sys_user` table doesn't carry a `role` column. We derive
     // it from two sources:
