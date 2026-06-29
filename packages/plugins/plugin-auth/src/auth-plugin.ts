@@ -940,10 +940,18 @@ export class AuthPlugin implements Plugin {
         if (!session?.user?.id) {
           return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
         }
-        // The customSession plugin synthesizes `user.role = 'admin'` for
-        // platform admins (admin_full_access permission set) and active-org
-        // owners/admins; anyone else is denied.
-        if ((session.user as any).role !== 'admin') {
+        // Platform-admin gate. ADR-0068 removed the `user.role = 'admin'`
+        // synthesis, so a stale `role === 'admin'` check now rejects even
+        // platform admins. Accept the canonical signals customSession carries
+        // (the derived `isPlatformAdmin` alias / `platform_admin` in roles[]),
+        // with the legacy admin-plugin `role` scalar as a fallback. Mirrors the
+        // /admin/unlock-user gate below.
+        const u: any = session.user;
+        const isAdmin =
+          u?.isPlatformAdmin === true ||
+          (Array.isArray(u?.roles) && u.roles.includes('platform_admin')) ||
+          u?.role === 'admin';
+        if (!isAdmin) {
           return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);
         }
 
