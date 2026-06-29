@@ -22,7 +22,7 @@
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@hono/node-server": "^2.0.5",
+    "@hono/node-server": "^2.0.6",
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/hono": "workspace:*",
     "@objectstack/objectql": "workspace:*",
