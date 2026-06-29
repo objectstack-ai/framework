@@ -1,5 +1,13 @@
 # @objectstack/downstream-contract
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [58e8e31]
+- Updated dependencies [b4a5df0]
+  - @objectstack/spec@11.3.0
+
 ## 0.0.7
 
 ### Patch Changes

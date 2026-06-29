@@ -1,5 +1,82 @@
 # @objectstack/cli
 
+## 11.3.0
+
+### Minor Changes
+
+- e296e1d: ADR-0080: wire the SDUI manifest end-to-end. `build-console.sh` now (best-effort, guarded) generates `sdui.manifest.json` from the just-built console's public-tier registry into `@objectstack/console/dist/`; the `os build` / `os validate` JSX gate resolves the manifest from `@objectstack/console` (in addition to the project root) and does full component/prop validation when present. Activating full validation requires bumping `.objectui-sha` to an objectui commit that ships the dump tooling (>=96b1293); until then the gate falls back to parse-level and the build step skips.
+
+### Patch Changes
+
+- 58e8e31: feat(lint): ADR-0079 record-title gate — deprecate titleFormat + record-title validator
+
+  A record's human title is a structural invariant (ADR-0079): every object
+  resolves a primary title from a real STORED field via `nameField` (the
+  canonical pointer; `displayNameField` is the deprecated alias) or a
+  deterministic derivation. This adds build-time diagnostics so `os build` /
+  `os lint`, the MCP authoring surface, and hand-authoring all get the coverage
+  cloud graph-lint already has (the ADR-0078 "not cloud-only" principle):
+
+  - `title-format-retired` — flags an object that declares a `titleFormat`. That
+    key is a render-only template the server can neither return nor query;
+    ADR-0079 retires it in favour of `nameField`. The schema still parses it
+    (existing metadata keeps loading), so this is advisory, not an error.
+  - `title-unresolvable` — flags an object whose title cannot be resolved from any
+    stored field (`objectTitleCompleteness` reports `status: 'none'`).
+
+  `@objectstack/spec` carries the `titleFormat` `.describe()` deprecation note;
+  the `@objectstack/cli` `lint` command wires the new validator into its run.
+
+- Updated dependencies [58e8e31]
+- Updated dependencies [b4a5df0]
+- Updated dependencies [59576d0]
+  - @objectstack/lint@11.3.0
+  - @objectstack/spec@11.3.0
+  - @objectstack/plugin-auth@11.3.0
+  - @objectstack/account@11.3.0
+  - @objectstack/setup@11.3.0
+  - @objectstack/studio@11.3.0
+  - @objectstack/client@11.3.0
+  - @objectstack/cloud-connection@11.3.0
+  - @objectstack/core@11.3.0
+  - @objectstack/formula@11.3.0
+  - @objectstack/mcp@11.3.0
+  - @objectstack/objectql@11.3.0
+  - @objectstack/observability@11.3.0
+  - @objectstack/platform-objects@11.3.0
+  - @objectstack/driver-memory@11.3.0
+  - @objectstack/driver-mongodb@11.3.0
+  - @objectstack/driver-sql@11.3.0
+  - @objectstack/driver-sqlite-wasm@11.3.0
+  - @objectstack/plugin-approvals@11.3.0
+  - @objectstack/plugin-audit@11.3.0
+  - @objectstack/plugin-email@11.3.0
+  - @objectstack/plugin-hono-server@11.3.0
+  - @objectstack/plugin-org-scoping@11.3.0
+  - @objectstack/plugin-reports@11.3.0
+  - @objectstack/plugin-security@11.3.0
+  - @objectstack/plugin-sharing@11.3.0
+  - @objectstack/plugin-webhooks@11.3.0
+  - @objectstack/rest@11.3.0
+  - @objectstack/runtime@11.3.0
+  - @objectstack/service-analytics@11.3.0
+  - @objectstack/service-automation@11.3.0
+  - @objectstack/service-cache@11.3.0
+  - @objectstack/service-datasource@11.3.0
+  - @objectstack/service-job@11.3.0
+  - @objectstack/service-messaging@11.3.0
+  - @objectstack/service-package@11.3.0
+  - @objectstack/service-queue@11.3.0
+  - @objectstack/service-realtime@11.3.0
+  - @objectstack/service-settings@11.3.0
+  - @objectstack/service-storage@11.3.0
+  - @objectstack/trigger-api@11.3.0
+  - @objectstack/trigger-record-change@11.3.0
+  - @objectstack/trigger-schedule@11.3.0
+  - @objectstack/types@11.3.0
+  - @objectstack/verify@11.3.0
+  - @objectstack/console@11.3.0
+
 ## 11.2.0
 
 ### Minor Changes
