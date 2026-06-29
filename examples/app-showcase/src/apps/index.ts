@@ -65,6 +65,7 @@ export const ShowcaseApp = App.create({
       icon: 'layout',
       children: [
         { id: 'nav_gallery', type: 'page', pageName: 'showcase_component_gallery', label: 'Component Gallery', icon: 'layout-template' },
+        { id: 'nav_command_center_jsx', type: 'page', pageName: 'showcase_command_center_jsx', label: 'Command Center (JSX)', icon: 'code' },
         { id: 'nav_styling_gallery', type: 'page', pageName: 'showcase_styling_gallery', label: 'Styling (ADR-0065)', icon: 'palette' },
         { id: 'nav_page_variables', type: 'page', pageName: 'showcase_page_variables', label: 'Page Variables', icon: 'mouse-pointer-click' },
         { id: 'nav_contact_form', type: 'page', pageName: 'showcase_contact_form', label: 'Contact Form', icon: 'mail-plus' },
