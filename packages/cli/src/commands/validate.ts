@@ -8,6 +8,7 @@ import { loadConfig } from '../utils/config.js';
 import { validateStackExpressions } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
+import { validateJsxPages } from '@objectstack/lint';
 import {
   printHeader,
   printKV,
@@ -164,6 +165,35 @@ export default class Validate extends Command {
         this.exit(1);
       }
 
+      // 3b. JSX-source pages (ADR-0080) — a kind:'jsx' page's `source` is
+      //     parsed (never executed) and compiled to the SDUI tree at save
+      //     time. Parse it now so malformed source fails loudly (ADR-0078)
+      //     instead of being stored and breaking only at render.
+      if (!flags.json) printStep('Checking JSX-source pages (ADR-0080)...');
+      const jsxFindings = validateJsxPages(result.data as Record<string, unknown>);
+      const jsxErrors = jsxFindings.filter((f) => f.severity === 'error');
+      const jsxWarnings = jsxFindings.filter((f) => f.severity === 'warning');
+
+      if (jsxErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: jsxErrors,
+            warnings: [...widgetWarnings, ...styleWarnings, ...jsxWarnings],
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`JSX-source page check failed (${jsxErrors.length} issue${jsxErrors.length > 1 ? 's' : ''})`);
+        for (const f of jsxErrors.slice(0, 50)) {
+          console.log(`  \u2022 ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+
       // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
@@ -172,7 +202,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings],
+          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings],
           duration: timer.elapsed(),
         }, null, 2));
         return;
@@ -188,6 +218,9 @@ export default class Validate extends Command {
         warnings.push(`${f.where}: ${f.message}`);
       }
       for (const f of styleWarnings) {
+        warnings.push(`${f.where}: ${f.message}`);
+      }
+      for (const f of jsxWarnings) {
         warnings.push(`${f.where}: ${f.message}`);
       }
       if (stats.objects === 0) {

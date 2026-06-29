@@ -804,6 +804,9 @@ importers:
       '@objectstack/formula':
         specifier: workspace:*
         version: link:../formula
+      '@objectstack/sdui-parser':
+        specifier: workspace:*
+        version: link:../sdui-parser
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec

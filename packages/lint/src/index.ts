@@ -35,3 +35,5 @@ export {
   STYLE_UNKNOWN_TOKEN,
 } from './validate-responsive-styles.js';
 export type { StyleFinding, StyleSeverity } from './validate-responsive-styles.js';
+export { validateJsxPages } from './validate-jsx-pages.js';
+export type { JsxPageFinding, JsxPageSeverity } from './validate-jsx-pages.js';
