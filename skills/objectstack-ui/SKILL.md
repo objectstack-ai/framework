@@ -168,6 +168,27 @@ regression. Use `tabs` when a record has several substantial child tables that
 each deserve first-class navigation; keep `stack` when related lists are
 secondary to the main record body.
 
+**Status stepper opt-out — `detail.hidePath`.** The record detail page
+auto-detects a "status/stage" field and renders it as a Salesforce Lightning
+Path-style stepper at the top, marking every option *before* the current value
+as completed. Detection is name/type based (a field named
+`status`/`stage`/`state`/`phase`, or typed `status`/`stage`, or the object's
+explicit `stageField`) — a plain `select` is **not** auto-promoted.
+
+That stepper is right for a genuine linear pipeline, but wrong when the picklist
+isn't one — e.g. a status that folds a **risk gradient** into its options
+(`已完成 / 进行中-正常 / … / 进行中-特高风险 / 已逾期`), where "earlier option =
+done ✓" misrepresents the record. Suppress it per object:
+
+```typescript
+detail: { hidePath: true }   // no top status stepper; status shows as a normal field
+```
+
+Default (unset) keeps the stepper — zero regression. Prefer fixing the data
+model first (split lifecycle vs. risk into two fields, or point `stageField` at
+the real pipeline field); reach for `hidePath` when the picklist genuinely
+isn't a sequence.
+
 ### Field Conditional Rules in Forms
 
 For conditions that belong to a field's lifecycle, declare the rule on the
