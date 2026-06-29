@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ServiceObject, ObjectSchema, ObjectOwnership } from '@objectstack/spec/data';
+import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary } from '@objectstack/spec/data';
 import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
 import { AppSchema } from '@objectstack/spec/ui';
@@ -567,20 +567,21 @@ export class SchemaRegistry {
     // applySystemFields().
     schema = applySystemFields(schema, { multiTenant: this.multiTenant });
 
-    // TODO(ADR-0079): wire `provisionPrimary` (from `@objectstack/spec/data`)
-    // HERE — this is the object materialization seam. It should run for
-    // `ownership === 'own'` only (extensions must not synthesize a title) and
-    // AFTER `applySystemFields` (so a synthesized `name` co-exists with system
-    // columns). NOT wired yet on purpose: `provisionPrimary` SYNTHESIZES a real
-    // `name` text field when nothing is title-eligible, which the driver's
-    // `syncSchema` would materialize as a new DB column on dozens of title-less
-    // system/append-only tables (e.g. sys_record_share, sys_member) that today
-    // rely on `titleFormat`. Enabling that is a schema-migration-bearing change
-    // and must be staged behind the ADR-0079 required-title refine. Until then
-    // the canonical pointer is resolved on read via `resolveDisplayField`.
-    // To wire the DESIGNATE-only half safely (set nameField when derivable,
-    // never synthesize), split `provisionPrimary` or add a `{ synthesize:false }`
-    // option and call it here for own-objects.
+    // [ADR-0079] Object-materialization seam — DESIGNATE-ONLY primary-title
+    // provisioning. Runs AFTER `applySystemFields` (so any designated field
+    // co-exists with the injected system columns) and ONLY for owned objects
+    // (extensions must not redesignate the owner's title). `synthesize: false`
+    // means: when a title-eligible field already EXISTS, set `nameField` to it
+    // (so `nameField` is reliably populated for normal/user/AI-built objects,
+    // which always carry a text label); when NOTHING is title-eligible, the
+    // object is left exactly as-is. We deliberately do NOT synthesize a `name`
+    // column here — that would materialize a new DB column on title-less
+    // system/append-only tables (sys_record_share, sys_member, …) via the
+    // driver's `syncSchema`, a schema-migration-bearing change. Those keep
+    // resolving their title on read via `resolveDisplayField` / `titleFormat`.
+    if (ownership === 'own') {
+      schema = provisionPrimary(schema, { synthesize: false });
+    }
 
     const shortName = schema.name;
     const fqn = computeFQN(namespace, shortName);

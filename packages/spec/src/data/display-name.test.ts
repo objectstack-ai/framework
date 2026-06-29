@@ -228,6 +228,72 @@ describe('provisionPrimary', () => {
     expect((input.fields as Record<string, unknown>).name).toBeUndefined();
     expect(out).not.toBe(input);
   });
+
+  it('synthesize:true is the explicit default (synthesizes when nothing eligible)', () => {
+    const out = provisionPrimary({ fields: { amount: { type: 'currency' } } }, { synthesize: true });
+    expect(out.nameField).toBe('name');
+    expect(out.fields!.name).toMatchObject({ type: 'text' });
+  });
+});
+
+describe('provisionPrimary — designate-only (synthesize: false)', () => {
+  it('DESIGNATES an existing derivable title (sets nameField, no column added)', () => {
+    const out = provisionPrimary(
+      { fields: { notes: { type: 'text' }, title: { type: 'text' } } },
+      { synthesize: false },
+    );
+    expect(out.nameField).toBe('title');
+    expect(Object.keys(out.fields!)).toEqual(['notes', 'title']); // no field added
+  });
+
+  it('DESIGNATES a `*_name` affix text field (e.g. account_name)', () => {
+    const out = provisionPrimary(
+      { fields: { notes: { type: 'text' }, account_name: { type: 'text' } } },
+      { synthesize: false },
+    );
+    expect(out.nameField).toBe('account_name');
+    expect(Object.keys(out.fields!)).toEqual(['notes', 'account_name']);
+  });
+
+  it('honors an existing explicit pointer (designates nameField from displayNameField alias)', () => {
+    const out = provisionPrimary(
+      { displayNameField: 'subject', fields: { subject: { type: 'text' } } },
+      { synthesize: false },
+    );
+    expect(out.nameField).toBe('subject');
+  });
+
+  it('leaves a title-LESS object UNCHANGED — no `name` synthesized, same instance', () => {
+    const input = { fields: { amount: { type: 'currency' }, when: { type: 'date' } } };
+    const out = provisionPrimary(input, { synthesize: false });
+    expect(out).toBe(input); // returned as-is
+    expect(out.nameField).toBeUndefined();
+    expect((out.fields as Record<string, unknown>).name).toBeUndefined();
+    expect(Object.keys(out.fields!)).toEqual(['amount', 'when']);
+  });
+
+  it('leaves a FIELDLESS object UNCHANGED — no `name` added', () => {
+    const input = { name: 'sys_thing' };
+    const out = provisionPrimary(input, { synthesize: false });
+    expect(out).toBe(input);
+    expect((out as { nameField?: string }).nameField).toBeUndefined();
+    expect((out as { fields?: unknown }).fields).toBeUndefined();
+  });
+
+  it('is idempotent in designate-only mode', () => {
+    const once = provisionPrimary({ fields: { title: { type: 'text' } } }, { synthesize: false });
+    const twice = provisionPrimary(once, { synthesize: false });
+    expect(twice).toBe(once);
+    expect(twice.nameField).toBe('title');
+  });
+
+  it('does not mutate the input in designate-only mode', () => {
+    const input = { fields: { name: { type: 'text' } } };
+    const out = provisionPrimary(input, { synthesize: false });
+    expect(input.nameField).toBeUndefined(); // input untouched
+    expect(out.nameField).toBe('name');
+    expect(out).not.toBe(input);
+  });
 });
 
 describe('objectTitleCompleteness', () => {

@@ -236,25 +236,54 @@ export function resolveRecordDisplayName(
   return `Record #${id ?? ''}`.trimEnd();
 }
 
+/** Options for {@link provisionPrimary}. */
+export interface ProvisionPrimaryOptions {
+  /**
+   * Whether to SYNTHESIZE a `name` text field when nothing is title-eligible.
+   *
+   * - `true` (default) — full provisioning: designate a derivable title, else
+   *   add a `name` text field and point `nameField` at it. GUARANTEES a primary
+   *   exists. This adds a column, so for an already-materialized table it is a
+   *   schema-migration-bearing change.
+   * - `false` — DESIGNATE-ONLY: set `nameField` when a title can be
+   *   resolved/derived from an EXISTING field, otherwise return the object
+   *   unchanged (no `name` field is added, no schema change). Safe to run at the
+   *   object-materialization seam against title-less system tables.
+   */
+  synthesize?: boolean;
+}
+
 /**
- * Pure transform guaranteeing the object has a primary title field.
+ * Pure transform that provisions the object's primary title field.
  *
- * - If a title can be resolved/derived, set `nameField` to it (idempotent — a
- *   second call is a no-op).
- * - Otherwise SYNTHESIZE a `name` text field (added to `fields`) and set
- *   `nameField: 'name'`.
+ * - If a title can be resolved/derived from an existing field, set `nameField`
+ *   to it (idempotent — a second call is a no-op).
+ * - Otherwise, when `synthesize !== false` (the default), SYNTHESIZE a `name`
+ *   text field (added to `fields`) and set `nameField: 'name'` — GUARANTEEING a
+ *   primary exists. When `synthesize === false`, the object is returned
+ *   UNCHANGED (no field added, no schema-migration-bearing column).
  *
- * Returns a NEW object (does not mutate the input). The deprecated
- * `displayNameField` is left untouched for back-compat; `nameField` becomes the
- * authoritative pointer.
+ * Returns a NEW object when it changes anything (does not mutate the input); in
+ * designate-only mode with nothing to designate it returns the input as-is. The
+ * deprecated `displayNameField` is left untouched for back-compat; `nameField`
+ * becomes the authoritative pointer.
  */
-export function provisionPrimary<T extends DisplayNameObjectMeta>(objectMeta: T): T {
+export function provisionPrimary<T extends DisplayNameObjectMeta>(
+  objectMeta: T,
+  opts?: ProvisionPrimaryOptions,
+): T {
   const resolved = resolveDisplayField(objectMeta);
   if (resolved) {
     if (objectMeta.nameField === resolved) return objectMeta; // already canonical — no-op
     return { ...objectMeta, nameField: resolved };
   }
-  // Nothing eligible — synthesize a primary `name` text field.
+  // Nothing eligible to designate.
+  if (opts?.synthesize === false) {
+    // Designate-only: leave the object exactly as-is (no synthesized column,
+    // no schema migration). The canonical pointer stays resolved on read.
+    return objectMeta;
+  }
+  // Synthesize a primary `name` text field.
   const fields = { ...(objectMeta.fields ?? {}) };
   if (!fields.name) {
     fields.name = { type: 'text', label: 'Name', required: true } as TitleEligibleFieldDef;

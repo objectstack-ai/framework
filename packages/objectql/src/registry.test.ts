@@ -129,6 +129,71 @@ describe('SchemaRegistry', () => {
     });
 
     // ==========================================
+    // ADR-0079 — primary-title designation (designate-only, no synthesis)
+    // ==========================================
+    describe('ADR-0079 primary-title designation', () => {
+        it('designates nameField from an existing title-eligible field when none declared', () => {
+            // No `nameField` declared; `title` (text) is derivable → registry
+            // should DESIGNATE it on the owned object.
+            const obj = { name: 'ticket', fields: { notes: { type: 'text' }, title: { type: 'text' } } };
+            registry.registerObject(obj as any, 'com.example.crm', undefined, 'own');
+
+            const resolved = registry.getObject('ticket');
+            expect((resolved as any)?.nameField).toBe('title');
+            // designate-only: declared fields preserved, NO `name` column synthesized
+            // (system audit/tenant fields may be injected by applySystemFields).
+            expect(resolved?.fields).toHaveProperty('notes');
+            expect(resolved?.fields).toHaveProperty('title');
+            expect(resolved?.fields).not.toHaveProperty('name');
+        });
+
+        it('prefers a `name`-ish field and respects an explicit pointer', () => {
+            const named = { name: 'company', fields: { description: { type: 'text' }, company_name: { type: 'text' } } };
+            registry.registerObject(named as any, 'com.crm', undefined, 'own');
+            expect((registry.getObject('company') as any)?.nameField).toBe('company_name');
+
+            const explicit = { name: 'invoice', nameField: 'ref', fields: { ref: { type: 'text' }, memo: { type: 'text' } } };
+            registry.registerObject(explicit as any, 'com.fin', undefined, 'own');
+            expect((registry.getObject('invoice') as any)?.nameField).toBe('ref');
+        });
+
+        it('does NOT add a `name` column to a title-LESS object (no schema migration)', () => {
+            // currency/date/select/lookup → nothing title-eligible. The object
+            // must be left as-is: no `nameField`, no synthesized `name` field.
+            const obj = {
+                name: 'sys_ledger_entry',
+                fields: {
+                    amount: { type: 'currency' },
+                    posted_at: { type: 'datetime' },
+                    status: { type: 'select' },
+                    account: { type: 'lookup' },
+                },
+            };
+            registry.registerObject(obj as any, 'com.objectstack.system', undefined, 'own');
+
+            const resolved = registry.getObject('sys_ledger_entry');
+            // Nothing title-eligible (currency/date/select/lookup + injected
+            // audit lookups/datetimes are all ineligible) → no designation and,
+            // critically, NO `name` column synthesized (no schema migration).
+            expect((resolved as any)?.nameField).toBeUndefined();
+            expect(resolved?.fields).not.toHaveProperty('name');
+            // declared fields untouched
+            for (const f of ['amount', 'posted_at', 'status', 'account']) {
+                expect(resolved?.fields).toHaveProperty(f);
+            }
+        });
+
+        it('does NOT add a `name` column to a FIELDLESS object', () => {
+            const obj = { name: 'sys_empty', fields: {} };
+            registry.registerObject(obj as any, 'com.objectstack.system', undefined, 'own');
+
+            const resolved = registry.getObject('sys_empty');
+            expect((resolved as any)?.nameField).toBeUndefined();
+            expect(resolved?.fields).not.toHaveProperty('name');
+        });
+    });
+
+    // ==========================================
     // Object Extension Tests
     // ==========================================
     describe('Object Extension', () => {

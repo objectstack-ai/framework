@@ -351,6 +351,7 @@
     "OperatorKey (type)",
     "PoolConfig (type)",
     "PoolConfigSchema (const)",
+    "ProvisionPrimaryOptions (interface)",
     "QueryAST (type)",
     "QueryFilter (type)",
     "QueryFilterSchema (const)",
