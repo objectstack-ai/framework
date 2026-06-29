@@ -17,13 +17,6 @@
     "validate": "objectstack validate",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
-    "test:ai": "tsx test/ai.test.ts",
-    "test:agent": "tsx test/ai-agent.test.ts",
-    "test:action": "tsx test/ai-action.test.ts",
-    "test:hitl": "tsx test/ai-hitl.test.ts",
-    "test:hitl:llm": "tsx test/ai-hitl-llm.test.ts",
-    "test:llm": "tsx test/ai-llm.test.ts",
-    "test:knowledge:llm": "tsx test/ai-knowledge-llm.test.ts",
     "test:mcp": "tsx test/mcp-actions.test.ts"
   },
   "dependencies": {
@@ -38,9 +31,7 @@
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/gateway": "^3.0.139",
     "@objectstack/cli": "workspace:*",
-    "ai": "^6.0.214",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

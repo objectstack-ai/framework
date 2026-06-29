@@ -39,10 +39,6 @@
     "topicSeparator": " "
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.89",
-    "@ai-sdk/gateway": "^3.0.139",
-    "@ai-sdk/google": "^3.0.86",
-    "@ai-sdk/openai": "^3.0.77",
     "@objectstack/account": "workspace:*",
     "@objectstack/client": "workspace:*",
     "@objectstack/cloud-connection": "workspace:*",
