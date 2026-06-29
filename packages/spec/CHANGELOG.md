@@ -1,5 +1,52 @@
 # @objectstack/spec
 
+## 11.3.0
+
+### Minor Changes
+
+- b4a5df0: chore(ai): align framework with Vercel AI SDK v7 and stop bundling provider SDKs
+
+  AI runtime capabilities now live in the cloud package (service-ai removed from the
+  open edition, ADR-0025 S2). The framework therefore no longer ships any `@ai-sdk/*`
+  provider SDK:
+
+  - `@objectstack/cli` drops the dead `@ai-sdk/anthropic|gateway|google|openai`
+    dependencies (zero usages in `cli/src` — they were only bundled so the old
+    in-tree `service-ai` could `require()` them at runtime). Apps that boot the
+    closed AI now declare the providers themselves (cloud side).
+  - `examples/app-todo` drops the unused `ai` / `@ai-sdk/gateway` devDeps and the
+    dead `test:ai*` / `test:agent` / `test:llm` scripts (their test files were
+    migrated to cloud).
+  - `@objectstack/spec` bumps its `ai` peer/dev dependency from `^6` to `^7`. The
+    protocol still re-exports the canonical message/stream types (`ModelMessage`,
+    `TextStreamPart`, `ToolSet`, `FinishReason`, …) — all verified present in
+    `ai@7`; `ai` stays an OPTIONAL peer so installs are not forced.
+
+  First step of the AI SDK v6→v7 / providers v3→v4 upgrade. Cloud (service-ai
+  adapter migration + apps declaring v4 providers) and objectui (chatbot useChat
+  v7) follow in their own PRs.
+
+### Patch Changes
+
+- 58e8e31: feat(lint): ADR-0079 record-title gate — deprecate titleFormat + record-title validator
+
+  A record's human title is a structural invariant (ADR-0079): every object
+  resolves a primary title from a real STORED field via `nameField` (the
+  canonical pointer; `displayNameField` is the deprecated alias) or a
+  deterministic derivation. This adds build-time diagnostics so `os build` /
+  `os lint`, the MCP authoring surface, and hand-authoring all get the coverage
+  cloud graph-lint already has (the ADR-0078 "not cloud-only" principle):
+
+  - `title-format-retired` — flags an object that declares a `titleFormat`. That
+    key is a render-only template the server can neither return nor query;
+    ADR-0079 retires it in favour of `nameField`. The schema still parses it
+    (existing metadata keeps loading), so this is advisory, not an error.
+  - `title-unresolvable` — flags an object whose title cannot be resolved from any
+    stored field (`objectTitleCompleteness` reports `status: 'none'`).
+
+  `@objectstack/spec` carries the `titleFormat` `.describe()` deprecation note;
+  the `@objectstack/cli` `lint` command wires the new validator into its run.
+
 ## 11.2.0
 
 ### Minor Changes
