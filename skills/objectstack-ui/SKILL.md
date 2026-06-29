@@ -709,6 +709,35 @@ export const LeadDetailPage = definePage({
 });
 ```
 
+> **Auto-synthesized detail pages & the status path.** When an object has **no
+> authored record page**, ObjectUI synthesizes a default detail page and
+> auto-detects a status field to drive a top `record:path` stepper. The stage
+> hint lives in the object def's `detail` block (`object.zod.ts` — a
+> `.passthrough()` block documented as "Detail-page UI hints consumed by
+> @object-ui/plugin-detail synth"). Detection precedence (`detectStatusField`):
+> (0) `detail.stageField === false | null` → explicit opt-out, no path;
+> (1) `detail.stageField` is a field name → use it; (2) else first field named
+> `status` / `stage` / `state` / `phase`; (3) else first field whose `type` is
+> `status` / `stage`; (4) else no path.
+>
+> **Opt out with `detail: { stageField: false }`.** Many objects carry a
+> `status` *select* that is a **non-linear** picklist (e.g. 正常 / 暂停 / 作废),
+> not an ordered pipeline — rendering it as an ordered stepper is wrong:
+>
+> ```typescript
+> ObjectSchema.create({
+>   name: 'production_plan',
+>   detail: { stageField: false },   // suppress the auto status path
+>   fields: { status: Field.select({ options: [...] }) /* … */ },
+> });
+> ```
+>
+> **Put it under `detail`, not top-level.** `ObjectSchema.create()` rejects
+> unknown *top-level* keys (a bare `stageField:` fails to compile and is rejected
+> at build). The `detail` block is `.passthrough()`, so author-facing synth hints
+> like `stageField` belong there. Use `detail: { stageField: 'my_field' }` to
+> pick which field drives the path.
+
 > **Variable substitution** — `{first_name}`, `{current_user.first_name}`,
 > `{current_quarter_start}` etc. resolve from the page's `variables` block,
 > the bound record, and the runtime context. Declare `variables: [...]` at
