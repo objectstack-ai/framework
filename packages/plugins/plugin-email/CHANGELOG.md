@@ -1,5 +1,15 @@
 # @objectstack/plugin-email
 
+## 11.3.0
+
+### Patch Changes
+
+- Updated dependencies [58e8e31]
+  - @objectstack/spec@11.3.0
+  - @objectstack/core@11.3.0
+  - @objectstack/formula@11.3.0
+  - @objectstack/platform-objects@11.3.0
+
 ## 11.2.0
 
 ### Patch Changes
