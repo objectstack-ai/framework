@@ -1,5 +1,7 @@
 # @objectstack/spec
 
+## 11.3.0
+
 ## 11.2.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @objectstack/plugin-sharing
 
+## 11.3.0
+
+### Patch Changes
+
+- @objectstack/spec@11.3.0
+- @objectstack/core@11.3.0
+- @objectstack/objectql@11.3.0
+- @objectstack/formula@11.3.0
+- @objectstack/platform-objects@11.3.0
+
 ## 11.2.0
 
 ### Patch Changes
