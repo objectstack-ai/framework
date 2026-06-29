@@ -24,3 +24,22 @@ describe('validateJsxPages (ADR-0080 build gate)', () => {
     expect(validateJsxPages({ pages: [{ name: 'full', kind: 'full', regions: [] }] })).toEqual([]);
   });
 });
+
+describe('validateJsxPages — full validation with a manifest', () => {
+  const manifest = {
+    components: {
+      flex: { type: 'flex', namespace: 'ui', isContainer: true, inputs: [] },
+      'object-table': { type: 'object-table', namespace: 'plugin-grid', inputs: [{ name: 'object', type: 'string', required: true }] },
+    },
+  };
+  it('catches unknown components and missing required props', () => {
+    const stack = { pages: [{ name: 'cc', kind: 'jsx', source: '<flex><object-table /><bogus /></flex>' }] };
+    const f = validateJsxPages(stack, { manifest } as never);
+    expect(f.some((x) => x.rule === 'jsx-missing-required-prop')).toBe(true);
+    expect(f.some((x) => x.rule === 'jsx-forbidden-tag')).toBe(true);
+  });
+  it('passes when components + required props are satisfied', () => {
+    const stack = { pages: [{ name: 'cc', kind: 'jsx', source: '<flex><object-table object="account" /></flex>' }] };
+    expect(validateJsxPages(stack, { manifest } as never)).toEqual([]);
+  });
+});

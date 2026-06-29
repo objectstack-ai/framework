@@ -14,7 +14,7 @@
 // thread it through `compile()` here. Until then this catches the structural
 // class of error an AI author is most likely to emit.
 
-import { parseJsx } from '@objectstack/sdui-parser';
+import { parseJsx, compile, type Manifest } from '@objectstack/sdui-parser';
 
 export type JsxPageSeverity = 'error' | 'warning';
 
@@ -32,7 +32,7 @@ export interface JsxPageFinding {
 type AnyRec = Record<string, unknown>;
 const asArray = (v: unknown): AnyRec[] => (Array.isArray(v) ? (v as AnyRec[]) : []);
 
-export function validateJsxPages(stack: AnyRec): JsxPageFinding[] {
+export function validateJsxPages(stack: AnyRec, opts: { manifest?: Manifest } = {}): JsxPageFinding[] {
   const findings: JsxPageFinding[] = [];
   const pages = asArray(stack.pages);
   for (let p = 0; p < pages.length; p++) {
@@ -52,7 +52,9 @@ export function validateJsxPages(stack: AnyRec): JsxPageFinding[] {
       });
       continue;
     }
-    const { diagnostics } = parseJsx(source);
+    // With a component manifest, do full validation (unknown component, missing/
+    // wrong prop, bad enum, bindings); without it, parse-level (syntax/structure).
+    const { diagnostics } = opts.manifest ? compile(source, opts.manifest) : parseJsx(source);
     for (const d of diagnostics) {
       findings.push({
         severity: d.severity,
