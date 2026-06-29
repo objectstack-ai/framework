@@ -18,15 +18,15 @@
   },
   "dependencies": {
     "@objectstack/plugin-hono-server": "workspace:*",
-    "@objectstack/types": "workspace:*",
-    "@objectstack/runtime": "workspace:^"
+    "@objectstack/runtime": "workspace:^",
+    "@objectstack/types": "workspace:*"
   },
   "peerDependencies": {
     "hono": "^4.12.8"
   },
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
-    "hono": "^4.12.26",
+    "hono": "^4.12.27",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },

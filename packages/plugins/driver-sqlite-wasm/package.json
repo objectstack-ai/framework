@@ -31,8 +31,8 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/driver-sql": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "knex": "^3.2.10",
-    "nanoid": "^5.1.15",
+    "knex": "^3.3.0",
+    "nanoid": "^5.1.16",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {

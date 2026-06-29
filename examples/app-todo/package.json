@@ -29,18 +29,18 @@
   "dependencies": {
     "@objectstack/client": "workspace:*",
     "@objectstack/driver-sqlite-wasm": "workspace:^",
+    "@objectstack/knowledge-memory": "workspace:*",
     "@objectstack/mcp": "workspace:*",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:^",
-    "@objectstack/knowledge-memory": "workspace:*",
     "@objectstack/runtime": "workspace:^",
     "@objectstack/service-knowledge": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/gateway": "^3.0.133",
+    "@ai-sdk/gateway": "^3.0.139",
     "@objectstack/cli": "workspace:*",
-    "ai": "^6.0.208",
+    "ai": "^6.0.214",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
