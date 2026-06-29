@@ -707,11 +707,18 @@ const ObjectSchemaBase = z.object({
    * - `hideRelatedTab=true` suppresses the "Related" tab. By default the
    *   synth removes the Related tab automatically when the rail is shown to
    *   avoid duplication; set this flag to force hide/show regardless.
+   * - `stageField` controls the auto status-path stepper (`record:path`).
+   *   A field name forces that field; `false`/`null` disables the stepper —
+   *   use it when `status` is a non-linear picklist (active/paused/voided)
+   *   that shouldn't render as an ordered Path. Omit it to let the synth
+   *   auto-detect (status/stage/state/phase, or a status/stage-typed field).
    */
   detail: z.object({
     renderViaSchema: z.boolean().optional().describe('Opt this object out of the schema-driven detail renderer'),
     hideReferenceRail: z.boolean().optional().describe('Suppress the right-hand reference-rail on the detail page'),
     hideRelatedTab: z.boolean().optional().describe('Suppress the Related tab on the detail page'),
+    stageField: z.union([z.string(), z.literal(false), z.null()]).optional()
+      .describe('record:path status field name; false/null disables the auto status-path stepper'),
   }).passthrough().optional().describe('Detail-page UI hints consumed by @object-ui/plugin-detail synth'),
 
   /**
