@@ -1,5 +1,37 @@
 # @objectstack/spec
 
+## 11.4.0
+
+### Minor Changes
+
+- 5821c51: ADR-0081: split the AI page-authoring surface into honest tiers.
+
+  - `PageSchema.kind` gains `'html'` and `'react'`. `'html'` is the constrained
+    parse-never-execute tier (the renamed `'jsx'`, kept as a deprecated alias);
+    `'react'` is the real-React tier (executed at render by
+    `@object-ui/react-runtime`). It runs author JS, so it is gated by a host
+    capability that **defaults ON** (the platform trusts reviewed, draft-gated
+    authors) and is disabled **server-side** via the `OS_PAGE_REACT=off`
+    env toggle. The completeness gate now requires `source` for all three kinds.
+  - `@objectstack/cli` console serving injects the disable global into the served
+    HTML when `OS_PAGE_REACT=off` (read per request, no rebuild).
+  - `validate-jsx-pages` lints `html`/`jsx` (constrained parse). A new
+    `validate-react-pages` transpiles `react` source with Sucrase (transpile-only,
+    never executed) so syntax errors fail at `os build` instead of at render.
+
+### Patch Changes
+
+- a0fce3f: feat(spec): add `userActions.editInline` toggle for inline record editing
+
+  `UserActionsConfigSchema` — the shared toggle set behind both a view's toolbar
+  and a page's `interfaceConfig.userActions` — gains `editInline: boolean`
+  (default `false`, alongside `addRecordForm`). The runtime already honors it
+  (objectui `InterfaceListPage` reads `userActions.editInline` → `inlineEdit`),
+  and the metadata-admin "Interface (list pages)" panel — which auto-renders
+  these booleans as checkboxes — now exposes an "Edit Inline" toggle. When on,
+  cells edit with the field's type-aware widget (the same control the form uses).
+  A list stays read-only unless the author opts in.
+
 ## 11.3.0
 
 ### Minor Changes

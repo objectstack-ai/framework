@@ -1,5 +1,17 @@
 # @objectstack/plugin-sharing
 
+## 11.4.0
+
+### Patch Changes
+
+- Updated dependencies [5821c51]
+- Updated dependencies [a0fce3f]
+  - @objectstack/spec@11.4.0
+  - @objectstack/core@11.4.0
+  - @objectstack/formula@11.4.0
+  - @objectstack/objectql@11.4.0
+  - @objectstack/platform-objects@11.4.0
+
 ## 11.3.0
 
 ### Patch Changes
