@@ -5,11 +5,11 @@ import { definePage } from '@objectstack/spec/ui';
 /**
  * Account Cockpit — a `kind:'react'` business scenario (ADR-0081).
  *
- * A customer-360 cockpit: a live-search account list (React text input drives
- * the real `<ListView>`'s `filters`), a selected account edited in a real
- * `<ObjectForm>`, and a related-data strip that aggregates the account's
- * projects and invoices via cross-object `useAdapter` queries. Demonstrates
- * live search, master-detail edit, and cross-object roll-ups together.
+ * Customer-360 over `showcase_account`: a live search filters a real
+ * `<ListView>`, selecting an account loads it into an `<ObjectForm>` editor and
+ * rolls up related projects & invoices via `useAdapter()` cross-object queries.
+ *
+ * Styling (ADR-0065): no Tailwind — inline `style={{}}` with `hsl(var(--token))`.
  */
 export const AccountCockpitPage = definePage({
   name: 'showcase_account_cockpit',
@@ -38,49 +38,49 @@ function Page() {
   }, [adapter, sel, reload]);
 
   const filters = q.trim() ? ['name', 'contains', q.trim()] : undefined;
+  const card = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)' };
   const Stat = ({ label, value, accent }) => (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={'mt-1 text-2xl font-bold ' + (accent || 'text-slate-900')}>{value}</div>
+    <div style={{ background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', padding: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--muted-foreground))' }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 24, fontWeight: 700, color: accent || 'hsl(var(--foreground))' }}>{value}</div>
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-8">
-      <header className="flex items-end justify-between gap-4">
+    <div style={{ maxWidth: 1152, margin: '0 auto', padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Account Cockpit</h1>
-          <p className="mt-1 text-sm text-slate-500">Customer-360 over <code>showcase_account</code> — search, edit, and roll up related projects &amp; invoices.</p>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: 'hsl(var(--foreground))' }}>Account Cockpit</h1>
+          <p style={{ marginTop: 4, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>Customer-360 over <code>showcase_account</code> — search, edit, and roll up related projects &amp; invoices.</p>
         </div>
-        <input value={q} onChange={(e) => { setQ(e.target.value); setSel(null); }}
-          placeholder="Search accounts…"
-          className="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+        <input value={q} onChange={(e) => { setQ(e.target.value); setSel(null); }} placeholder="Search accounts…"
+          style={{ width: 256, borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', padding: '8px 12px', fontSize: 14, outline: 'none' }} />
       </header>
 
-      <div className="grid grid-cols-5 gap-6">
-        <section className="col-span-3 rounded-xl border border-slate-200 bg-white p-2">
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, alignItems: 'start' }}>
+        <section style={{ ...card, padding: 8 }}>
           <ListView key={q + ':' + reload} objectName="showcase_account"
             fields={['name', 'industry', 'status', 'annual_revenue']} filters={filters}
             navigation={{ mode: 'none' }} onRowClick={(r) => setSel(r)} />
         </section>
-        <section className="col-span-2 space-y-4">
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {sel ? (
             <React.Fragment>
-              <div className="grid grid-cols-3 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 <Stat label="Projects" value={related.projects} />
                 <Stat label="Invoices" value={related.invoices} />
-                <Stat label="Open AR" value={related.openInvoices} accent="text-amber-600" />
+                <Stat label="Open AR" value={related.openInvoices} accent="hsl(38 92% 50%)" />
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div style={{ ...card, padding: 20 }}>
                 <ObjectForm key={sel.id + ':' + reload} objectName="showcase_account" mode="edit"
                   recordId={sel.id} onSuccess={() => { setSel(null); setReload((k) => k + 1); }}
                   onCancel={() => setSel(null)} />
               </div>
             </React.Fragment>
           ) : (
-            <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white text-center text-slate-400">
-              <div className="text-4xl">🛰️</div>
-              <p className="mt-2 text-sm">Search and select an account.</p>
+            <div style={{ ...card, display: 'flex', minHeight: 240, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
+              <div style={{ fontSize: 32 }}>🛰️</div>
+              <p style={{ marginTop: 8, fontSize: 14 }}>Search and select an account.</p>
             </div>
           )}
         </section>

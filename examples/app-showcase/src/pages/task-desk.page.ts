@@ -4,11 +4,15 @@ import { definePage } from '@objectstack/spec/ui';
 
 /**
  * Task Desk — a `kind:'react'` business scenario (ADR-0081) showing the
- * popup-edit patterns real apps need: a **slide-out drawer** to edit a row, and
- * a **centered modal** to create. Both are author-built React overlays (fixed
- * positioning + backdrop + Esc/close state) that wrap the platform's real
- * `<ObjectForm>` — demonstrating that the react tier composes drawer/modal
- * interactions the in-page master/detail layout can't.
+ * popup-edit patterns real apps need: a **slide-out drawer** to edit a row and a
+ * **centered modal** to create — both rendered by the platform's own
+ * `<ObjectForm formType="drawer"|"modal">` variant, NOT hand-rolled.
+ *
+ * Styling note (ADR-0065): page source is runtime metadata, so the console's
+ * build-time Tailwind never scans it — arbitrary utility classes silently no-op.
+ * So this page uses ZERO Tailwind: the overlay/backdrop/animation come from the
+ * pre-styled ObjectForm drawer/modal, and the thin page chrome uses inline
+ * `style={{}}` with `hsl(var(--token))` theme colors (real CSS, theme-aware).
  */
 export const TaskDeskPage = definePage({
   name: 'showcase_task_desk',
@@ -17,67 +21,44 @@ export const TaskDeskPage = definePage({
   kind: 'react',
   source: `
 function Page() {
-  const adapter = useAdapter();
-  const [editId, setEditId] = React.useState(null);   // drawer (edit existing)
+  const [editId, setEditId] = React.useState(null);     // drawer (edit existing)
   const [creating, setCreating] = React.useState(false); // modal (create new)
   const [reload, setReload] = React.useState(0);
-
-  const closeAll = () => { setEditId(null); setCreating(false); };
-  const afterWrite = () => { closeAll(); setReload((k) => k + 1); };
-
-  // Close overlays on Escape — the kind of detail a real app needs.
-  React.useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') closeAll(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  const afterWrite = () => { setEditId(null); setCreating(false); setReload((k) => k + 1); };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-8">
-      <header className="flex items-center justify-between">
+    <div style={{ maxWidth: 1024, margin: '0 auto', padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Task Desk</h1>
-          <p className="mt-1 text-sm text-slate-500">Click a task to edit in a <strong>drawer</strong>; create one in a <strong>modal</strong> — both wrap the real <code>&lt;ObjectForm&gt;</code>.</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: 'hsl(var(--foreground))', margin: 0 }}>Task Desk</h1>
+          <p style={{ marginTop: 4, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>
+            Click a task to edit it in a <strong>drawer</strong>; create one in a <strong>modal</strong> — both render the platform's pre-styled <code>&lt;ObjectForm&gt;</code> overlay.
+          </p>
         </div>
-        <button onClick={() => setCreating(true)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">+ New task</button>
+        <button onClick={() => setCreating(true)}
+          style={{ flexShrink: 0, borderRadius: 'var(--radius)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', padding: '8px 16px', fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+          + New task
+        </button>
       </header>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-2">
-        <ListView key={reload} objectName="showcase_task"
-          fields={['title', 'assignee', 'status', 'priority']}
-          navigation={{ mode: 'none' }} onRowClick={(r) => setEditId(r.id)} />
-      </div>
+      <ListView key={reload} objectName="showcase_task"
+        fields={['title', 'assignee', 'status', 'priority']}
+        navigation={{ mode: 'none' }} onRowClick={(r) => setEditId(r.id)} />
 
-      {/* Drawer — edit an existing task */}
-      {editId ? (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-slate-900/30" onClick={closeAll} />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h2 className="text-base font-semibold text-slate-900">Edit task</h2>
-              <button onClick={closeAll} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              <ObjectForm key={'edit:' + editId + ':' + reload} objectName="showcase_task" mode="edit"
-                recordId={editId} onSuccess={afterWrite} onCancel={closeAll} />
-            </div>
-          </div>
-        </div>
+      {/* Drawer — edit an existing task. Backdrop, Esc, slide animation are the component's. */}
+      {editId != null ? (
+        <ObjectForm formType="drawer" drawerSide="right" objectName="showcase_task" mode="edit"
+          recordId={editId} open title="Edit task"
+          onOpenChange={(o) => { if (!o) setEditId(null); }}
+          onSuccess={afterWrite} />
       ) : null}
 
-      {/* Modal — create a new task */}
+      {/* Modal — create a new task. */}
       {creating ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={closeAll} />
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">New task</h2>
-              <button onClick={closeAll} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">✕</button>
-            </div>
-            <ObjectForm key={'new:' + reload} objectName="showcase_task" mode="create"
-              onSuccess={afterWrite} onCancel={closeAll} />
-          </div>
-        </div>
+        <ObjectForm formType="modal" objectName="showcase_task" mode="create"
+          open title="New task"
+          onOpenChange={(o) => { if (!o) setCreating(false); }}
+          onSuccess={afterWrite} />
       ) : null}
     </div>
   );

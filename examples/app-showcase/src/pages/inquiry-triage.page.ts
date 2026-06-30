@@ -5,12 +5,12 @@ import { definePage } from '@objectstack/spec/ui';
 /**
  * Inquiry Triage Inbox — a `kind:'react'` business scenario (ADR-0081).
  *
- * Models the classic support/lead-triage queue every CRM needs: status TABS
- * with live counts, a real `<ListView>` filtered by the active tab, and a detail
- * panel with one-click status actions ("Mark Contacted" / "Close") that persist
- * via `useAdapter().update` and refresh the list + counts. Demonstrates
- * React-state-driven server filtering, cross-row aggregation, and a status
- * workflow — none of which the fixed page schema can express.
+ * A support/lead-triage queue: status TABS with live counts filter a real
+ * `<ListView>`, and a detail panel with one-click status actions persists via
+ * `useAdapter().update` and refreshes the list + counts.
+ *
+ * Styling (ADR-0065): no Tailwind — page chrome is inline `style={{}}` with
+ * `hsl(var(--token))` theme colors; the data component brings its own styling.
  */
 export const InquiryTriagePage = definePage({
   name: 'showcase_inquiry_triage',
@@ -47,53 +47,60 @@ function Page() {
 
   const TABS = [['all', 'All'], ['new', 'New'], ['contacted', 'Contacted'], ['closed', 'Closed']];
   const filters = tab === 'all' ? undefined : ['status', '=', tab];
-  const STATUS_COLOR = { new: 'bg-blue-100 text-blue-700', contacted: 'bg-amber-100 text-amber-700', closed: 'bg-emerald-100 text-emerald-700' };
+  const STATUS_COLOR = { new: 'hsl(217 91% 60%)', contacted: 'hsl(38 92% 50%)', closed: 'hsl(142 70% 45%)' };
+
+  const card = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)' };
+  const tabBtn = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 8, borderRadius: 9999, padding: '6px 16px', fontSize: 14, fontWeight: 600,
+    border: '1px solid ' + (active ? 'transparent' : 'hsl(var(--border))'), cursor: 'pointer',
+    background: active ? 'hsl(var(--primary))' : 'transparent',
+    color: active ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
+  });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-8">
+    <div style={{ maxWidth: 1152, margin: '0 auto', padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inquiry Triage</h1>
-        <p className="mt-1 text-sm text-slate-500">A support queue over <code>showcase_inquiry</code> — tabs filter a real <code>&lt;ListView&gt;</code>; one click moves an inquiry's status.</p>
+        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: 'hsl(var(--foreground))' }}>Inquiry Triage</h1>
+        <p style={{ marginTop: 4, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>A support queue over <code>showcase_inquiry</code> — tabs filter a real <code>&lt;ListView&gt;</code>; one click moves an inquiry's status.</p>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {TABS.map(([k, label]) => (
-          <button key={k} onClick={() => { setTab(k); setSel(null); }}
-            className={'flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold ' + (tab === k ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+          <button key={k} onClick={() => { setTab(k); setSel(null); }} style={tabBtn(tab === k)}>
             {label}
-            <span className={'rounded-full px-2 py-0.5 text-xs ' + (tab === k ? 'bg-white/20' : 'bg-white text-slate-500')}>{counts[k]}</span>
+            <span style={{ borderRadius: 9999, padding: '1px 8px', fontSize: 12, background: tab === k ? 'rgba(255,255,255,0.2)' : 'hsl(var(--muted))', color: tab === k ? 'inherit' : 'hsl(var(--muted-foreground))' }}>{counts[k]}</span>
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
-        <section className="col-span-3 rounded-xl border border-slate-200 bg-white p-2">
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, alignItems: 'start' }}>
+        <section style={{ ...card, padding: 8 }}>
           <ListView key={tab + ':' + reload} objectName="showcase_inquiry"
             fields={['name', 'company', 'email', 'status']} filters={filters}
             navigation={{ mode: 'none' }} onRowClick={(r) => setSel(r)} />
         </section>
-        <section className="col-span-2 rounded-xl border border-slate-200 bg-white p-5">
+        <section style={{ ...card, padding: 20 }}>
           {sel ? (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900">{sel.name}</h2>
-                  <span className={'rounded-full px-2.5 py-0.5 text-xs font-semibold ' + (STATUS_COLOR[sel.status] || 'bg-slate-100 text-slate-600')}>{sel.status}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{sel.name}</h2>
+                  <span style={{ borderRadius: 9999, padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#fff', background: STATUS_COLOR[sel.status] || 'hsl(var(--muted))' }}>{sel.status}</span>
                 </div>
-                <p className="text-sm text-slate-500">{sel.company} · {sel.email}</p>
+                <p style={{ marginTop: 4, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>{sel.company} · {sel.email}</p>
               </div>
-              <p className="rounded-lg bg-slate-50 p-3 text-sm leading-relaxed text-slate-700">{sel.message || 'No message.'}</p>
-              <div className="flex gap-2">
+              <p style={{ borderRadius: 'var(--radius)', background: 'hsl(var(--muted))', padding: 12, fontSize: 14, lineHeight: 1.6, color: 'hsl(var(--foreground))' }}>{sel.message || 'No message.'}</p>
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setStatus('contacted')} disabled={sel.status === 'contacted'}
-                  className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-40">Mark Contacted</button>
+                  style={{ borderRadius: 'var(--radius)', background: 'hsl(38 92% 50%)', color: '#fff', padding: '8px 16px', fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer', opacity: sel.status === 'contacted' ? 0.4 : 1 }}>Mark Contacted</button>
                 <button onClick={() => setStatus('closed')} disabled={sel.status === 'closed'}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">Close</button>
+                  style={{ borderRadius: 'var(--radius)', background: 'hsl(142 70% 40%)', color: '#fff', padding: '8px 16px', fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer', opacity: sel.status === 'closed' ? 0.4 : 1 }}>Close</button>
               </div>
             </div>
           ) : (
-            <div className="flex h-full min-h-[240px] flex-col items-center justify-center text-center text-slate-400">
-              <div className="text-4xl">📥</div>
-              <p className="mt-2 text-sm">Select an inquiry to triage.</p>
+            <div style={{ display: 'flex', minHeight: 240, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
+              <div style={{ fontSize: 32 }}>📥</div>
+              <p style={{ marginTop: 8, fontSize: 14 }}>Select an inquiry to triage.</p>
             </div>
           )}
         </section>

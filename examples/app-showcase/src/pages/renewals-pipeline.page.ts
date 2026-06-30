@@ -5,19 +5,14 @@ import { definePage } from '@objectstack/spec/ui';
 /**
  * Renewals Pipeline — a `kind:'react'` business scenario (ADR-0081).
  *
- * Authored as a DOGFOOD of the react-tier component contract
- * (skills/objectstack-ui/references/react-blocks.md): every block prop below is
- * taken straight from the contract — no guessing. A renewals manager works a list
- * of accounts on the left; selecting one drives a 360° panel on the right
- * (highlights + the account's invoices + a value-by-status chart) and a slide-out
- * <ObjectForm drawer> to update the account in place.
+ * A renewals manager works a list of accounts by lifecycle stage; selecting one
+ * drives a 360° panel (highlights + invoices + a value-by-status chart) and a
+ * pre-styled `<ObjectForm formType="drawer">` to update the account in place.
+ * Every block prop is taken straight from the react-tier contract
+ * (skills/objectstack-ui/references/react-blocks.md).
  *
- * Blocks exercised, with the contract props each accepts:
- *   <ListView>          objectName(req) · viewType · filters · columns · searchableFields · navigation · onRowClick
- *   <RecordHighlights>  objectName · recordId · fields · layout
- *   <RecordRelatedList> objectName · recordId · relationshipField · columns · limit · showViewAll · title
- *   <ObjectChart>       objectName(req) · aggregate · title · showLegend
- *   <ObjectForm>        objectName(req) · mode · recordId · formType · drawerSide · drawerWidth · onSuccess · onCancel
+ * Styling (ADR-0065): no Tailwind — inline `style={{}}` with `hsl(var(--token))`;
+ * data blocks and the drawer bring their own compiled styling.
  */
 export const RenewalsPipelinePage = definePage({
   name: 'showcase_renewals_pipeline',
@@ -36,26 +31,23 @@ function Page() {
     { id: 'at_risk', label: 'At risk' },
     { id: 'churned', label: 'Churned' },
   ];
+  const stageBtn = (active) => ({
+    borderRadius: 'var(--radius)', padding: '6px 12px', fontSize: 14, cursor: 'pointer',
+    border: '1px solid ' + (active ? 'hsl(var(--primary))' : 'hsl(var(--border))'),
+    background: active ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+    color: 'hsl(var(--foreground))', fontWeight: active ? 600 : 400,
+  });
 
   return (
-    <div className="flex h-full gap-4 p-4">
-      <div className="flex w-1/2 flex-col gap-3">
+    <div style={{ display: 'flex', height: '100%', gap: 16, padding: 16 }}>
+      <div style={{ display: 'flex', width: '50%', flexDirection: 'column', gap: 12 }}>
         <div>
-          <h1 className="text-lg font-semibold">Renewals Pipeline</h1>
-          <p className="text-sm text-muted-foreground">Work the renewal book by lifecycle stage.</p>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'hsl(var(--foreground))' }}>Renewals Pipeline</h1>
+          <p style={{ marginTop: 2, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>Work the renewal book by lifecycle stage.</p>
         </div>
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: 8 }}>
           {STAGES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => { setStage(s.id); setSel(null); }}
-              className={
-                'rounded-md border px-3 py-1.5 text-sm ' +
-                (stage === s.id ? 'border-primary bg-primary/10 font-medium' : 'border-border')
-              }
-            >
-              {s.label}
-            </button>
+            <button key={s.id} onClick={() => { setStage(s.id); setSel(null); }} style={stageBtn(stage === s.id)}>{s.label}</button>
           ))}
         </div>
         <ListView
@@ -69,64 +61,35 @@ function Page() {
         />
       </div>
 
-      <div className="flex w-1/2 flex-col gap-4 overflow-auto">
+      <div style={{ display: 'flex', width: '50%', flexDirection: 'column', gap: 16, overflow: 'auto' }}>
         {!sel ? (
-          <div className="flex h-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius)', border: '1px dashed hsl(var(--border))', fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>
             Select an account to see its renewal picture.
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Account 360</h2>
-              <button
-                onClick={() => setEditing(true)}
-                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-              >
-                Edit account
-              </button>
+          <React.Fragment>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>Account 360</h2>
+              <button onClick={() => setEditing(true)} style={{ borderRadius: 'var(--radius)', border: '1px solid hsl(var(--border))', background: 'transparent', color: 'hsl(var(--foreground))', padding: '6px 12px', fontSize: 14, cursor: 'pointer' }}>Edit account</button>
             </div>
 
-            <RecordHighlights
-              objectName="showcase_account"
-              recordId={sel}
-              fields={['name', 'status']}
-              layout="horizontal"
-            />
+            <RecordHighlights objectName="showcase_account" recordId={sel} fields={['name', 'status']} layout="horizontal" />
 
-            <ObjectChart
-              objectName="showcase_invoice"
-              aggregate={{ field: 'total', function: 'sum', groupBy: 'status' }}
-              title="Invoice value by status"
-              showLegend={true}
-            />
+            <ObjectChart objectName="showcase_invoice" aggregate={{ field: 'total', function: 'sum', groupBy: 'status' }} title="Invoice value by status" showLegend={true} />
 
-            <RecordRelatedList
-              objectName="showcase_account"
-              recordId={sel}
-              relationshipField="account"
-              columns={['name', 'status', 'total']}
-              limit={5}
-              showViewAll={true}
-              title="Invoices"
-            />
+            <RecordRelatedList objectName="showcase_account" recordId={sel} relationshipField="account" columns={['name', 'status', 'total']} limit={5} showViewAll={true} title="Invoices" />
 
             {editing ? (
-              <ObjectForm
-                objectName="showcase_account"
-                mode="edit"
-                recordId={sel}
-                formType="drawer"
-                drawerSide="right"
-                drawerWidth="480px"
+              <ObjectForm objectName="showcase_account" mode="edit" recordId={sel}
+                formType="drawer" drawerSide="right" drawerWidth="480px" open title="Edit account"
+                onOpenChange={(o) => { if (!o) setEditing(false); }}
                 onSuccess={() => { setEditing(false); setReload((n) => n + 1); }}
-                onCancel={() => setEditing(false)}
-              />
+                onCancel={() => setEditing(false)} />
             ) : null}
-          </>
+          </React.Fragment>
         )}
       </div>
     </div>
   );
-}
-`,
+}`,
 });

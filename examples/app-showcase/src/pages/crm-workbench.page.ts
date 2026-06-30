@@ -5,27 +5,15 @@ import { definePage } from '@objectstack/spec/ui';
 /**
  * CRM Workbench — a `kind:'react'` page (ADR-0081, the TRUSTED tier).
  *
- * The whole page is REAL React executed at render by `@object-ui/react-runtime`
- * (hooks, event handlers, arbitrary JS) — NOT the constrained parse-never-execute
- * `kind:'html'` tier. It demonstrates exactly what a real customer business UI
- * needs: a master/detail workbench that COMPOSES the platform's real data
- * components — `<ListView>` (the object table) and `<ObjectForm>` — with React
- * state to wire complex interaction the fixed page schema cannot express:
+ * Real React executed at render (hooks, handlers, arbitrary JS) composing the
+ * platform's real data components — `<ListView>` + `<ObjectForm>` — into a
+ * master/detail workbench with a live KPI strip.
  *
- *   - click a project row  → load that record into the editor (controlled `recordId`)
- *   - save the form        → refresh the list (`onSuccess` bumps a remount key)
- *   - "New project"        → the same editor in create mode
- *   - a live KPI strip     → `useAdapter()` queries the object directly
- *
- * The injected scope exposes `React`, `useAdapter`, and the curated public data
- * blocks as PascalCase components (`ListView`, `ObjectForm`, `ObjectMetric`, …),
- * each a real registered renderer. Layout is plain HTML + Tailwind.
- *
- * NOTE: `kind:'react'` executes author code, so it is gated by the host
- * capability `CAP_REACT_PAGES`, which defaults ON (the platform trusts its
- * reviewed, draft-gated authors). A deployment that does not trust its authors
- * turns it off server-side with `OS_PAGE_REACT=off`, in which case
- * this page renders a "disabled on this deployment" notice instead of executing.
+ * Styling (ADR-0065): page source is runtime metadata, so the console's
+ * build-time Tailwind never scans it — utility classes silently no-op. So the
+ * page uses ZERO Tailwind: layout/chrome is inline `style={{}}` with
+ * `hsl(var(--token))` theme colors (real CSS, theme-aware), and the data
+ * components bring their own compiled styling.
  */
 export const CrmWorkbenchPage = definePage({
   name: 'showcase_crm_workbench',
@@ -48,64 +36,50 @@ function Page() {
       setStats({ total: rows.length, active: rows.filter((r) => r.status === 'active').length });
     } catch (e) { /* ignore in demo */ }
   }, [adapter]);
-
   React.useEffect(() => { refreshStats(); }, [refreshStats, reloadKey]);
 
   const openNew = () => { setSelected(null); setMode('create'); };
   const onRowClick = (rec) => { setSelected(rec); setMode('edit'); };
   const afterSave = () => { setSelected(null); setMode('edit'); setReloadKey((k) => k + 1); };
-
   const editing = mode === 'create' || selected;
 
+  const card = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', padding: 16 };
+  const eyebrow = { fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(var(--muted-foreground))' };
+  const big = { marginTop: 4, fontSize: 30, fontWeight: 700, color: 'hsl(var(--foreground))' };
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-8">
-      <header className="flex items-center justify-between">
+    <div style={{ maxWidth: 1152, margin: '0 auto', padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">CRM Workbench</h1>
-          <p className="mt-1 text-sm text-slate-500">Master/detail over <code>showcase_project</code> — real <code>&lt;ListView&gt;</code> + <code>&lt;ObjectForm&gt;</code> wired with React state.</p>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: 'hsl(var(--foreground))' }}>CRM Workbench</h1>
+          <p style={{ marginTop: 4, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>Master/detail over <code>showcase_project</code> — real <code>&lt;ListView&gt;</code> + <code>&lt;ObjectForm&gt;</code> wired with React state.</p>
         </div>
-        <button onClick={openNew} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">+ New project</button>
+        <button onClick={openNew} style={{ flexShrink: 0, borderRadius: 'var(--radius)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', padding: '8px 16px', fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer' }}>+ New project</button>
       </header>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Total projects</div>
-          <div className="mt-1 text-3xl font-bold text-slate-900">{stats.total}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Active</div>
-          <div className="mt-1 text-3xl font-bold text-emerald-600">{stats.active}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Editing</div>
-          <div className="mt-1 truncate text-lg font-semibold text-slate-700">{mode === 'create' ? 'New project' : selected ? (selected.name || selected.id) : '—'}</div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={card}><div style={eyebrow}>Total projects</div><div style={big}>{stats.total}</div></div>
+        <div style={card}><div style={eyebrow}>Active</div><div style={{ ...big, color: 'hsl(142 70% 45%)' }}>{stats.active}</div></div>
+        <div style={card}><div style={eyebrow}>Editing</div><div style={{ marginTop: 4, fontSize: 18, fontWeight: 600, color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mode === 'create' ? 'New project' : selected ? (selected.name || selected.id) : '—'}</div></div>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
-        <section className="col-span-3 rounded-xl border border-slate-200 bg-white p-2">
-          <ListView
-            key={reloadKey}
-            objectName="showcase_project"
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, alignItems: 'start' }}>
+        <section style={{ ...card, padding: 8 }}>
+          <ListView key={reloadKey} objectName="showcase_project"
             fields={['name', 'status', 'health', 'budget', 'owner']}
-            navigation={{ mode: 'none' }}
-            onRowClick={onRowClick}
-          />
+            navigation={{ mode: 'none' }} onRowClick={onRowClick} />
         </section>
-        <section className="col-span-2 rounded-xl border border-slate-200 bg-white p-5">
+        <section style={{ ...card, padding: 20 }}>
           {editing ? (
             <ObjectForm
               key={(mode === 'create' ? 'new' : selected && selected.id) + ':' + reloadKey}
-              objectName="showcase_project"
-              mode={mode}
+              objectName="showcase_project" mode={mode}
               recordId={mode === 'edit' && selected ? selected.id : undefined}
-              onSuccess={afterSave}
-              onCancel={() => { setSelected(null); }}
-            />
+              onSuccess={afterSave} onCancel={() => { setSelected(null); }} />
           ) : (
-            <div className="flex h-full min-h-[240px] flex-col items-center justify-center text-center text-slate-400">
-              <div className="text-4xl">🗂️</div>
-              <p className="mt-2 text-sm">Select a project to edit, or create a new one.</p>
+            <div style={{ display: 'flex', minHeight: 240, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
+              <div style={{ fontSize: 32 }}>🗂️</div>
+              <p style={{ marginTop: 8, fontSize: 14 }}>Select a project to edit, or create a new one.</p>
             </div>
           )}
         </section>
