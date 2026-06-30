@@ -54,15 +54,15 @@ export const CommandCenterJsxPage = definePage({
   <grid columns={3} gap={5}>
     <flex direction="col" gap={6} style={{"gridColumn":"span 2","background":"hsl(var(--card))","border":"1px solid hsl(var(--border))","borderRadius":"var(--radius)","padding":"24px"}}>
       <div style={{"fontSize":"16px","fontWeight":"600","color":"hsl(var(--foreground))"}}>Weekly Throughput</div>
-      <grid columns={7} gap={4} style={{"height":"140px","alignItems":"end"}}>
-        <flex style={{"height":"48px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
-        <flex style={{"height":"86px","borderRadius":"8px","background":"hsl(var(--primary) / 0.7)"}} />
-        <flex style={{"height":"64px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
-        <flex style={{"height":"120px","borderRadius":"8px","background":"hsl(var(--primary))"}} />
-        <flex style={{"height":"58px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
-        <flex style={{"height":"100px","borderRadius":"8px","background":"hsl(var(--primary) / 0.7)"}} />
-        <flex style={{"height":"40px","borderRadius":"8px","background":"hsl(var(--primary) / 0.4)"}} />
-      </grid>
+      <div style={{"display":"grid","gridTemplateColumns":"repeat(7, 1fr)","gap":"16px","height":"140px","width":"100%","alignItems":"end"}}>
+        <div style={{"height":"48px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
+        <div style={{"height":"86px","borderRadius":"8px","background":"hsl(var(--primary) / 0.7)"}} />
+        <div style={{"height":"64px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
+        <div style={{"height":"120px","borderRadius":"8px","background":"hsl(var(--primary))"}} />
+        <div style={{"height":"58px","borderRadius":"8px","background":"hsl(var(--primary) / 0.55)"}} />
+        <div style={{"height":"100px","borderRadius":"8px","background":"hsl(var(--primary) / 0.7)"}} />
+        <div style={{"height":"40px","borderRadius":"8px","background":"hsl(var(--primary) / 0.4)"}} />
+      </div>
     </flex>
     <flex direction="col" gap={4} style={{"background":"hsl(var(--card))","border":"1px solid hsl(var(--border))","borderRadius":"var(--radius)","padding":"24px"}}>
       <div style={{"fontSize":"16px","fontWeight":"600","color":"hsl(var(--foreground))"}}>Recent Activity</div>
