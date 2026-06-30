@@ -129,38 +129,10 @@ cp -R "$CONSOLE_DIST" "$TARGET"
 BYTES="$(du -sk "$TARGET" 2>/dev/null | awk '{print $1}')"
 echo "✓ @objectstack/console dist ready (${BYTES} KB) from objectui@${PINNED_SHA:0:12}"
 
-# ADR-0080: generate the public-tier SDUI manifest from the just-built console's
-# registry so the framework os-build JSX gate can do full component/prop
-# validation. Best-effort and GUARDED: skips on a sha without the dump tooling,
-# and never fails the console build (the gate falls back to parse-level).
-DUMP_PAGE="${BUILD_ROOT}/apps/console/dev/manifest-dump.html"
-DUMP_SCRIPT="${BUILD_ROOT}/scripts/dump-public-manifest.mjs"
-if [[ -f "$DUMP_PAGE" && -f "$DUMP_SCRIPT" ]]; then
-  echo "→ Generating SDUI public-tier manifest (ADR-0080)..."
-  pushd "$BUILD_ROOT" > /dev/null
-  pnpm --filter @object-ui/console exec vite dev --port 5180 > /tmp/sdui-dump-dev.log 2>&1 &
-  DUMP_DEV_PID=$!
-  for _ in $(seq 1 90); do curl -sf "http://localhost:5180/" > /dev/null 2>&1 && break; sleep 1; done
-  if BASE_URL="http://localhost:5180" OUT="${TARGET}/sdui.manifest.json" node scripts/dump-public-manifest.mjs; then
-    echo "✓ wrote ${TARGET}/sdui.manifest.json"
-    # ADR-0081: ratchet the spec↔frontend react-block conformance against the
-    # committed baseline while the freshly-dumped manifest is here for free. This
-    # is the ONLY place the manifest exists, so it is the cheapest place to catch
-    # NEW divergence (a component exposing an undocumented prop, or a block
-    # vanishing). Warn-only — never fails the console build; run check:react-conformance
-    # --strict locally to gate intentionally.
-    if [[ -f "${FRAMEWORK_ROOT}/packages/spec/react-conformance.baseline.json" ]]; then
-      echo "→ Ratcheting spec↔frontend react-block conformance (ADR-0081)..."
-      ( cd "${FRAMEWORK_ROOT}" && MANIFEST="${TARGET}/sdui.manifest.json" \
-        pnpm --filter @objectstack/spec check:react-conformance \
-        --baseline react-conformance.baseline.json ) || \
-        echo "⚠ conformance ratchet reported new divergence (non-fatal) — see output above"
-    fi
-  else
-    echo "⚠ manifest generation failed — os-build JSX gate falls back to parse-level (non-fatal)"
-  fi
-  kill "$DUMP_DEV_PID" 2>/dev/null || true
-  popd > /dev/null
-else
-  echo "ℹ manifest dump tooling not present at objectui@${PINNED_SHA:0:12} — skipping (bump .objectui-sha to >=96b1293 to enable full JSX validation)"
-fi
+# ADR-0080/0081: the public-tier SDUI manifest and the spec↔frontend react-block
+# conformance ratchet are intentionally NOT generated here — they require a real
+# browser (Playwright) to enumerate the console registry, and the console build
+# must not drag in a browser dependency. Regenerate them on demand instead:
+#   pnpm sdui:manifest        (see scripts/gen-sdui-manifest.sh)
+echo "ℹ SDUI manifest + conformance ratchet are decoupled from the console build."
+echo "  Run 'pnpm sdui:manifest' on demand to regenerate (requires Playwright)."
