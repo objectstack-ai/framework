@@ -37,6 +37,8 @@ export {
 export type { StyleFinding, StyleSeverity } from './validate-responsive-styles.js';
 export { validateJsxPages } from './validate-jsx-pages.js';
 export type { JsxPageFinding, JsxPageSeverity } from './validate-jsx-pages.js';
+export { validateReactPages } from './validate-react-pages.js';
+export type { ReactPageFinding, ReactPageSeverity } from './validate-react-pages.js';
 
 export {
   validateRecordTitle,

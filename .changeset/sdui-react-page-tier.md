@@ -15,5 +15,6 @@ ADR-0081: split the AI page-authoring surface into honest tiers.
   env toggle. The completeness gate now requires `source` for all three kinds.
 - `@objectstack/cli` console serving injects the disable global into the served
   HTML when `OS_PAGE_REACT=off` (read per request, no rebuild).
-- `validate-jsx-pages` lints `html`/`jsx` (constrained parse) and intentionally
-  skips `react` (real JS, not constrained JSX).
+- `validate-jsx-pages` lints `html`/`jsx` (constrained parse). A new
+  `validate-react-pages` transpiles `react` source with Sucrase (transpile-only,
+  never executed) so syntax errors fail at `os build` instead of at render.

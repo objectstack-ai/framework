@@ -11,7 +11,7 @@ import { loadConfig } from '../utils/config.js';
 import { validateStackExpressions } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
-import { validateJsxPages } from '@objectstack/lint';
+import { validateJsxPages, validateReactPages } from '@objectstack/lint';
 import {
   printHeader,
   printKV,
@@ -207,6 +207,32 @@ export default class Validate extends Command {
         console.log('');
         printError(`JSX-source page check failed (${jsxErrors.length} issue${jsxErrors.length > 1 ? 's' : ''})`);
         for (const f of jsxErrors.slice(0, 50)) {
+          console.log(`  \u2022 ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+
+      // 3c. React-source pages (ADR-0081) — a kind:'react' page's `source` is
+      //     real React executed at render. Transpile it now (Sucrase, never
+      //     executed) so syntax errors fail loudly at build, not at render.
+      if (!flags.json) printStep('Checking React-source pages (ADR-0081)...');
+      const reactFindings = validateReactPages(result.data as Record<string, unknown>);
+      const reactErrors = reactFindings.filter((f) => f.severity === 'error');
+      if (reactErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: reactErrors,
+            warnings: [...widgetWarnings, ...styleWarnings, ...jsxWarnings],
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`React-source page check failed (${reactErrors.length} issue${reactErrors.length > 1 ? 's' : ''})`);
+        for (const f of reactErrors.slice(0, 50)) {
           console.log(`  \u2022 ${f.where}: ${f.message}`);
           console.log(chalk.dim(`      ${f.hint}`));
           console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));

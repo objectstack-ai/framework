@@ -721,6 +721,96 @@ export const LeadDetailPage = definePage({
 > `page:header.properties.actions`; do **not** create a sibling action node.
 > The header renders them inline in the action slot.
 
+### AI-authored *source* pages — `kind:'html'` and `kind:'react'` (ADR-0080/0081)
+
+Besides the structured `regions` model above, a page's whole body can be written
+as a *source string* in `source`, with `kind` choosing the authoring tier. Pick
+by what the page needs:
+
+| `kind` | Author writes | JS runs? | Use when |
+|:--|:--|:--|:--|
+| `full` / `slotted` | structured `regions` / `slots` (no `source`) | — | record/detail/home layouts from the component catalogue |
+| `html` | constrained JSX = HTML + Tailwind + registered components, **parsed, never executed** | no | free-form layout / landing / dashboard that just *composes* blocks — AI's HTML+Tailwind strength, no interactivity |
+| `react` | **real React** (hooks, `.map`, `onClick`, expressions) | yes (main React tree) | complex interactive business UIs — master/detail, wizards, state-driven filters |
+
+`source` is the source-of-truth in both source tiers; `regions` is ignored. A
+`kind:'html'`/`'react'` page with no `source` fails the build (ADR-0078). The legacy
+value `kind:'jsx'` is a deprecated alias for `kind:'html'`.
+
+#### `kind:'html'` — constrained JSX, parsed (safe by construction)
+
+Tags are the **registered components** (bare names: `<flex>`, `<grid>`, `<card>`,
+`<object-table>`, `<object-form>`, `<object-metric>`, …) **plus the safe native HTML
+set** (`<h1>`–`<h6>`, `<p>`, `<a>`, `<ul>/<ol>/<li>`, `<img>`, `<blockquote>`, `<strong>`,
+…). Props come from each component's registry `inputs` (e.g. `<text content=…>`,
+`<badge label=…>`). **No JavaScript** — `onClick`, `{expr}` logic and `.map()` are NOT
+available; use `kind:'react'` for those. `os build` parses the source and fails loudly
+on unknown tags / missing required props / forbidden constructs (event handlers,
+`dangerouslySetInnerHTML`).
+
+```typescript
+export const ReleaseNotesPage = definePage({
+  name: 'release_notes', type: 'home', kind: 'html',
+  source: `
+<section className="mx-auto max-w-3xl p-10">
+  <h1 className="text-4xl font-bold">Release Notes</h1>
+  <object-metric objectName="ticket" aggregate="count" label="Open tickets" className="mt-6" />
+</section>`,
+});
+```
+
+#### `kind:'react'` — real React, executed (trusted tier)
+
+The source is real React executed at render by the runtime. The injected scope are
+**closure variables (NOT props)** — reference them directly:
+
+- `React` — hooks (`React.useState`, `React.useEffect`, …)
+- `useAdapter()` — live data: `adapter.find('obj', {…})` / `.findOne` / `.create` / `.update`
+- the public **data blocks as PascalCase components** — `<ObjectForm>`, `<ListView>`,
+  `<ObjectMetric>`, `<ObjectChart>`, `<ObjectKanban>`, … each rendering the real registered
+  component; `<Block type="…" …/>` is the escape hatch for any other type
+- `data` / `variables` / `page`
+
+Compose **layout with plain HTML + Tailwind** (React's strength); use the injected
+blocks for data. Real component props/callbacks flow through — e.g. `<ObjectForm>` honors
+`objectName` / `mode` / `recordId` / `onSuccess` / `onCancel`; `<ListView>` honors
+`objectName` / `fields` / `onRowClick` / `navigation`.
+
+Master/detail (click a row → edit it → save refreshes the list):
+
+```tsx
+export const CrmWorkbenchPage = definePage({
+  name: 'crm_workbench', type: 'home', kind: 'react',
+  source: `
+function Page() {
+  const [sel, setSel] = React.useState(null);
+  const [reload, setReload] = React.useState(0);
+  return (
+    <div className="grid grid-cols-5 gap-6 p-8">
+      <div className="col-span-3">
+        <ListView key={reload} objectName="project"
+          fields={['name','status','owner']} navigation={{ mode: 'none' }}
+          onRowClick={(r) => setSel(r)} />
+      </div>
+      <div className="col-span-2">
+        {sel
+          ? <ObjectForm objectName="project" mode="edit" recordId={sel.id}
+              onSuccess={() => { setSel(null); setReload((k) => k + 1); }} />
+          : <p className="text-slate-400">Select a project to edit.</p>}
+      </div>
+    </div>
+  );
+}`,
+});
+```
+
+**Safety / availability.** `kind:'react'` executes author code in the app, so it is gated
+by the host capability `react-pages` — **ON by default** (the platform trusts reviewed,
+draft-gated authors). A deployment that does not trust its authors turns it off server-side
+with `OS_PAGE_REACT=off`; the page then shows a "disabled" notice instead of executing.
+`os build` does NOT lint react source (it is real JS, not constrained JSX) — errors surface
+at render behind an error boundary, so always test a react page in the browser.
+
 ### Styling a page (ADR-0065) — `responsiveStyles`, NOT `className`
 
 To style a metadata-authored block, give it a **`responsiveStyles`** object — a
