@@ -180,6 +180,20 @@
           "description": "What a row click does. Use { mode: \"none\" } when you handle clicks via onRowClick."
         },
         {
+          "name": "fields",
+          "type": "string[]",
+          "kind": "binding",
+          "required": false,
+          "description": "Limit/order the columns shown (defaults to the object list fields)."
+        },
+        {
+          "name": "options",
+          "type": "Record<string, any>",
+          "kind": "binding",
+          "required": false,
+          "description": "View-type-specific options bag (kanban/calendar/gantt extras); prefer the typed spec props where they exist."
+        },
+        {
           "name": "filters",
           "type": "FilterArray e.g. ['status','=','active']",
           "kind": "controlled",
@@ -291,6 +305,13 @@
           "kind": "binding",
           "required": false,
           "description": "Aggregation: function (sum/avg/count) over field, grouped by groupBy."
+        },
+        {
+          "name": "data",
+          "type": "any[]",
+          "kind": "binding",
+          "required": false,
+          "description": "Static/precomputed data to chart directly instead of binding via objectName + aggregate."
         },
         {
           "name": "filter",

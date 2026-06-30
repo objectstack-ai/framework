@@ -47,6 +47,8 @@ Server-connected object table with toolbar and switchable visualizations (grid/k
 | `objectName` | `string` | binding | ✓ | The object this block binds to (server-connected). |
 | `viewType` | `'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map'` | binding |  | Which visualization to render (default grid). How you get a kanban/calendar/gantt of the object. |
 | `navigation` | `{ mode: 'page' \| 'drawer' \| 'modal' \| 'split' \| 'none' }` | binding |  | What a row click does. Use { mode: "none" } when you handle clicks via onRowClick. |
+| `fields` | `string[]` | binding |  | Limit/order the columns shown (defaults to the object list fields). |
+| `options` | `Record<string, any>` | binding |  | View-type-specific options bag (kanban/calendar/gantt extras); prefer the typed spec props where they exist. |
 | `filters` | `FilterArray e.g. ['status','=','active']` | controlled |  | ObjectQL base filter; drive from React state for tabbed/searched lists. ([field, op, value]; ops =, !=, >, <, contains, in; compound: ["and", […], […]]). |
 | `onRowClick` | `(record) => void` | callback |  | Called with the clicked row's record — the hook for master/detail. |
 | `onNavigate` | `(recordId, action: 'view' \| 'edit') => void` | callback |  | Called for page-level navigation. |
@@ -69,6 +71,7 @@ Chart over an object’s aggregated data. Config props come from the spec Chart 
 |------|------|------|:--------:|-------------|
 | `objectName` | `string` | binding | ✓ | The object this block binds to (server-connected). |
 | `aggregate` | `{ field, function, groupBy }` | binding |  | Aggregation: function (sum/avg/count) over field, grouped by groupBy. |
+| `data` | `any[]` | binding |  | Static/precomputed data to chart directly instead of binding via objectName + aggregate. |
 | `filter` | `FilterArray` | controlled |  | ObjectQL filter scoping the data; drive from React state. |
 | `showLegend` | `boolean` | data | ✓ | Display legend |
 | `title` | `string` | data |  | Chart title |
