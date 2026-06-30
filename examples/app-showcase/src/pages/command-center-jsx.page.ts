@@ -3,8 +3,9 @@
 import { definePage } from '@objectstack/spec/ui';
 
 /**
- * Command Center — a `kind:'jsx'` page (ADR-0080). The entire layout is
- * authored as a constrained JSX + Tailwind *string*; at save time
+ * Command Center — a `kind:'html'` page (ADR-0080; formerly `kind:'jsx'`).
+ * The entire layout is authored as a constrained JSX/HTML + Tailwind *string*;
+ * at save time
  * `@objectstack/sdui-parser` compiles it (parse, never execute) into the SDUI
  * tree, which the normal PageRenderer / SchemaRenderer renders. Every tag is a
  * real registered component — `flex`, `grid`, `card`, `text`, `badge`, `stack`.
@@ -14,9 +15,9 @@ import { definePage } from '@objectstack/spec/ui';
  */
 export const CommandCenterJsxPage = definePage({
   name: 'showcase_command_center_jsx',
-  label: 'Command Center (JSX)',
+  label: 'Command Center (HTML)',
   type: 'home',
-  kind: 'jsx',
+  kind: 'html',
   source: `
 <flex direction="col" className="min-h-screen gap-10 bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-10">
 

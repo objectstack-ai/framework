@@ -358,8 +358,14 @@ export const PageSchema = lazySchema(() => z.object({
    *
    * Only meaningful when `type === 'record'`. Ignored otherwise.
    */
-  kind: z.enum(['full', 'slotted', 'jsx']).default('full')
-    .describe('Page override mode: full | slotted | jsx (ADR-0080 JSX-source authoring)'),
+  kind: z.enum(['full', 'slotted', 'html', 'react', 'jsx']).default('full')
+    .describe(
+      "Page override mode. full | slotted = structured authoring; " +
+      "html = author-written constrained JSX/HTML+Tailwind compiled (parsed, never " +
+      "executed) to the tree (ADR-0080; the legacy value 'jsx' is a deprecated alias); " +
+      "react = TRUSTED real-React source executed at render by the runtime (ADR-0081), " +
+      "gated to enterprise/private deployments.",
+    ),
 
   /**
    * Slot override map for slotted record pages.
@@ -393,18 +399,19 @@ export const PageSchema = lazySchema(() => z.object({
    * wins on any mismatch). For `full`/`slotted` pages `source` is unused.
    */
   source: z.string().optional()
-    .describe("JSX-source page text — authoritative when kind==='jsx'; compiled to the tree by @objectstack/sdui-parser at save time (parse, never execute)"),
+    .describe("Page source text. For kind==='html' (alias 'jsx') it is constrained JSX/HTML+Tailwind compiled to the tree by @objectstack/sdui-parser at save time (parse, never execute). For kind==='react' it is real React/JSX executed at render by @object-ui/react-runtime (trusted tier). Authoritative over `regions` in both."),
   /** Plugin namespaces the JSX source references — inferred at compile, checked at save AND load (ADR-0048 provenance). */
   requires: z.array(z.string()).optional()
     .describe('Plugin namespaces the JSX source references (validated at save and load)'),
 }).superRefine((page, ctx) => {
-  // ADR-0080 + ADR-0078 (completeness): a `kind:'jsx'` page with no `source`
-  // is silently inert — fail loudly at author time, do not render an empty page.
-  if (page.kind === 'jsx' && !(typeof page.source === 'string' && page.source.trim().length > 0)) {
+  // ADR-0080/0081 + ADR-0078 (completeness): an html/react/jsx page with no
+  // `source` is silently inert — fail loudly at author time, never render empty.
+  const sourceKinds = ['html', 'react', 'jsx'];
+  if (sourceKinds.includes(page.kind) && !(typeof page.source === 'string' && page.source.trim().length > 0)) {
     ctx.addIssue({
       code: 'custom',
       path: ['source'],
-      message: "A jsx page requires a non-empty `source` (ADR-0080: JSX is the source-of-truth).",
+      message: `A ${page.kind} page requires a non-empty \`source\` (the source is the source-of-truth).`,
     });
   }
 }));
