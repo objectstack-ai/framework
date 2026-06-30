@@ -196,7 +196,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check:liveness": "tsx scripts/liveness/check-liveness.mts",
-    "gen:react-blocks": "tsx scripts/build-react-blocks-contract.ts"
+    "gen:react-blocks": "tsx scripts/build-react-blocks-contract.ts",
+    "check:react-conformance": "tsx scripts/check-react-blocks-conformance.ts"
   },
   "keywords": [
     "objectstack",
