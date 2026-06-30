@@ -81,6 +81,55 @@
           "description": "Custom persistence instead of the default create/update."
         },
         {
+          "name": "layout",
+          "type": "'vertical' | 'horizontal' | 'inline' | 'grid'",
+          "kind": "data",
+          "required": false,
+          "description": "Field layout direction"
+        },
+        {
+          "name": "columns",
+          "type": "integer",
+          "kind": "data",
+          "required": false,
+          "description": "Number of columns for the form body"
+        },
+        {
+          "name": "tabPosition",
+          "type": "'top' | 'bottom' | 'left' | 'right'",
+          "kind": "data",
+          "required": false,
+          "description": "Tab strip position (tabbed forms)"
+        },
+        {
+          "name": "drawerSide",
+          "type": "'top' | 'bottom' | 'left' | 'right'",
+          "kind": "data",
+          "required": false,
+          "description": "Drawer side (drawer forms)"
+        },
+        {
+          "name": "drawerWidth",
+          "type": "string",
+          "kind": "data",
+          "required": false,
+          "description": "Drawer width, e.g. \"480px\" (drawer forms)"
+        },
+        {
+          "name": "modalSize",
+          "type": "'sm' | 'default' | 'lg' | 'xl' | 'full'",
+          "kind": "data",
+          "required": false,
+          "description": "Modal size (modal forms)"
+        },
+        {
+          "name": "splitDirection",
+          "type": "'horizontal' | 'vertical'",
+          "kind": "data",
+          "required": false,
+          "description": "Split orientation (split forms)"
+        },
+        {
           "name": "sections",
           "type": "object[]",
           "kind": "data",
@@ -100,13 +149,6 @@
           "kind": "data",
           "required": false,
           "description": "Post-submit behavior"
-        },
-        {
-          "name": "defaultSort",
-          "type": "object[]",
-          "kind": "data",
-          "required": false,
-          "description": "Default sort order for related list views within this form"
         }
       ]
     },

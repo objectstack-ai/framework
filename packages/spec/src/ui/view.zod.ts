@@ -801,7 +801,32 @@ export const FormViewSchema = lazySchema(() => z.object({
     'drawer',  // Side panel
     'modal'    // Dialog
   ]).default('simple'),
-  
+
+  // --- Presentation options (per `type` variant). These mirror what the
+  // ObjectForm component accepts so the protocol declares them; all optional. ---
+  /** Field layout within the form body. */
+  layout: z.enum(['vertical', 'horizontal', 'inline', 'grid']).optional().describe('Field layout direction'),
+  /** Number of columns for the form body (grid/multi-column layouts). */
+  columns: z.number().int().min(1).optional().describe('Number of columns for the form body'),
+  /** Optional form title / description (for embedded or standalone forms). */
+  title: z.string().optional().describe('Form title'),
+  description: z.string().optional().describe('Form description'),
+  /** Tabbed (`type: 'tabbed'`). */
+  defaultTab: z.string().optional().describe('Initially active tab (tabbed forms)'),
+  tabPosition: z.enum(['top', 'bottom', 'left', 'right']).optional().describe('Tab strip position (tabbed forms)'),
+  /** Wizard (`type: 'wizard'`). */
+  allowSkip: z.boolean().optional().describe('Allow skipping steps (wizard forms)'),
+  showStepIndicator: z.boolean().optional().describe('Show the step indicator (wizard forms)'),
+  /** Split (`type: 'split'`). */
+  splitDirection: z.enum(['horizontal', 'vertical']).optional().describe('Split orientation (split forms)'),
+  splitSize: z.number().optional().describe('Primary split panel size, % (split forms)'),
+  splitResizable: z.boolean().optional().describe('Whether the split is resizable (split forms)'),
+  /** Drawer (`type: 'drawer'`). */
+  drawerSide: z.enum(['top', 'bottom', 'left', 'right']).optional().describe('Drawer side (drawer forms)'),
+  drawerWidth: z.string().optional().describe('Drawer width, e.g. "480px" (drawer forms)'),
+  /** Modal (`type: 'modal'`). */
+  modalSize: z.enum(['sm', 'default', 'lg', 'xl', 'full']).optional().describe('Modal size (modal forms)'),
+
   /** Data Source Configuration */
   data: ViewDataSchema.optional().describe('Data source configuration (defaults to "object" provider)'),
   

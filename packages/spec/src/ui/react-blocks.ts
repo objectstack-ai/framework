@@ -69,7 +69,7 @@ export const REACT_BLOCKS: ReactBlockDef[] = [
     schemaType: 'object-form',
     summary: "Server-connected create/edit/view form for one object. Config props come from the spec FormView schema; bind + wire it with the React props below.",
     schema: FormViewSchema,
-    dataProps: ['sections', 'subforms', 'submitBehavior', 'defaultSort'],
+    dataProps: ['layout', 'columns', 'tabPosition', 'drawerSide', 'drawerWidth', 'modalSize', 'splitDirection', 'sections', 'subforms', 'submitBehavior'],
     interactions: [
       OBJECT_NAME,
       { name: 'mode', type: "'create' | 'edit' | 'view'", kind: 'controlled', description: 'Create a new record, or edit/view an existing one — drive from React state.' },
