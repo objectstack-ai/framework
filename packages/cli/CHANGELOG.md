@@ -1,5 +1,75 @@
 # @objectstack/cli
 
+## 11.4.0
+
+### Minor Changes
+
+- 5821c51: ADR-0081: split the AI page-authoring surface into honest tiers.
+
+  - `PageSchema.kind` gains `'html'` and `'react'`. `'html'` is the constrained
+    parse-never-execute tier (the renamed `'jsx'`, kept as a deprecated alias);
+    `'react'` is the real-React tier (executed at render by
+    `@object-ui/react-runtime`). It runs author JS, so it is gated by a host
+    capability that **defaults ON** (the platform trusts reviewed, draft-gated
+    authors) and is disabled **server-side** via the `OS_PAGE_REACT=off`
+    env toggle. The completeness gate now requires `source` for all three kinds.
+  - `@objectstack/cli` console serving injects the disable global into the served
+    HTML when `OS_PAGE_REACT=off` (read per request, no rebuild).
+  - `validate-jsx-pages` lints `html`/`jsx` (constrained parse). A new
+    `validate-react-pages` transpiles `react` source with Sucrase (transpile-only,
+    never executed) so syntax errors fail at `os build` instead of at render.
+
+### Patch Changes
+
+- Updated dependencies [5821c51]
+- Updated dependencies [a0fce3f]
+  - @objectstack/spec@11.4.0
+  - @objectstack/lint@11.4.0
+  - @objectstack/account@11.4.0
+  - @objectstack/setup@11.4.0
+  - @objectstack/studio@11.4.0
+  - @objectstack/client@11.4.0
+  - @objectstack/cloud-connection@11.4.0
+  - @objectstack/core@11.4.0
+  - @objectstack/formula@11.4.0
+  - @objectstack/mcp@11.4.0
+  - @objectstack/objectql@11.4.0
+  - @objectstack/observability@11.4.0
+  - @objectstack/platform-objects@11.4.0
+  - @objectstack/driver-memory@11.4.0
+  - @objectstack/driver-mongodb@11.4.0
+  - @objectstack/driver-sql@11.4.0
+  - @objectstack/driver-sqlite-wasm@11.4.0
+  - @objectstack/plugin-approvals@11.4.0
+  - @objectstack/plugin-audit@11.4.0
+  - @objectstack/plugin-auth@11.4.0
+  - @objectstack/plugin-email@11.4.0
+  - @objectstack/plugin-hono-server@11.4.0
+  - @objectstack/plugin-org-scoping@11.4.0
+  - @objectstack/plugin-reports@11.4.0
+  - @objectstack/plugin-security@11.4.0
+  - @objectstack/plugin-sharing@11.4.0
+  - @objectstack/plugin-webhooks@11.4.0
+  - @objectstack/rest@11.4.0
+  - @objectstack/runtime@11.4.0
+  - @objectstack/service-analytics@11.4.0
+  - @objectstack/service-automation@11.4.0
+  - @objectstack/service-cache@11.4.0
+  - @objectstack/service-datasource@11.4.0
+  - @objectstack/service-job@11.4.0
+  - @objectstack/service-messaging@11.4.0
+  - @objectstack/service-package@11.4.0
+  - @objectstack/service-queue@11.4.0
+  - @objectstack/service-realtime@11.4.0
+  - @objectstack/service-settings@11.4.0
+  - @objectstack/service-storage@11.4.0
+  - @objectstack/trigger-api@11.4.0
+  - @objectstack/trigger-record-change@11.4.0
+  - @objectstack/trigger-schedule@11.4.0
+  - @objectstack/types@11.4.0
+  - @objectstack/verify@11.4.0
+  - @objectstack/console@11.4.0
+
 ## 11.3.0
 
 ### Minor Changes
