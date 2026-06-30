@@ -777,6 +777,14 @@ blocks for data. Real component props/callbacks flow through — e.g. `<ObjectFo
 `objectName` / `mode` / `recordId` / `onSuccess` / `onCancel`; `<ListView>` honors
 `objectName` / `fields` / `onRowClick` / `navigation`.
 
+> **Do not guess props — read the contract.** Each injected block's full prop set
+> (name, type, `data`/`controlled`/`callback` kind, required, description) is the
+> **[React-tier component contract](./references/react-blocks.md)**, generated from
+> [`contracts/react-blocks.contract.json`](./contracts/react-blocks.contract.json).
+> It is the authoritative answer to "what props does `<ObjectForm>`/`<ListView>`/…
+> take?" — author against it, not from memory. Regenerate after editing the JSON
+> with `node skills/objectstack-ui/contracts/build-ref.mjs`.
+
 Master/detail (click a row → edit it → save refreshes the list):
 
 ```tsx

@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "adr": "ADR-0081",
+  "note": "Curated contract for the components injected into kind:'react' page source. Reference these by their PascalCase `tag` in JSX. `data` props mirror the objectui registry `inputs` (the same surface the html tier validates); `controlled` props are React-driven state (recordId, mode, filters…); `callback` props are React functions the component invokes. Layout is plain HTML + Tailwind — these blocks are for DATA. Filters use the ObjectQL array form: [field, op, value], e.g. ['status','=','active'] (ops: =, !=, >, <, contains, in). Live data: `const adapter = useAdapter(); await adapter.find(obj, {$filter, $top}); .findOne; .create; .update`.",
+  "blocks": [
+    {
+      "tag": "ObjectForm",
+      "schemaType": "object-form",
+      "summary": "Server-connected create / edit / view form for one object. Auto-builds fields from the object schema. Built-in drawer/modal variants via formType.",
+      "props": [
+        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object whose record this form edits." },
+        { "name": "mode", "type": "'create' | 'edit' | 'view'", "kind": "controlled", "description": "Create a new record, edit/view an existing one." },
+        { "name": "recordId", "type": "string | number", "kind": "controlled", "description": "Which record to load (edit/view mode). Drive from React state for master/detail." },
+        { "name": "fields", "type": "string[]", "kind": "data", "description": "Limit/order the fields shown (defaults to the object's form fields)." },
+        { "name": "initialValues", "type": "Record<string, any>", "kind": "data", "description": "Prefill values in create mode." },
+        { "name": "formType", "type": "'simple' | 'tabbed' | 'wizard' | 'split' | 'drawer' | 'modal'", "kind": "data", "description": "Form presentation; 'drawer'/'modal' render the form in a built-in overlay (use drawerSide/drawerWidth/modalSize)." },
+        { "name": "onSuccess", "type": "(record) => void", "kind": "callback", "description": "Called after a successful create/update with the saved record. Typical: close a panel + bump a reload key." },
+        { "name": "onError", "type": "(error: Error) => void", "kind": "callback", "description": "Called when the save fails." },
+        { "name": "onCancel", "type": "() => void", "kind": "callback", "description": "Called when the user cancels." },
+        { "name": "submitHandler", "type": "(values) => any | Promise<any>", "kind": "callback", "description": "Custom persistence instead of the default create/update (the form just validates and hands over values)." },
+        { "name": "navigateOnSuccess", "type": "string", "kind": "data", "description": "URL to navigate to after save (supports {id})." }
+      ]
+    },
+    {
+      "tag": "ListView",
+      "schemaType": "list-view",
+      "summary": "Server-connected object table with toolbar (search/filter/sort), and switchable views (grid/kanban/gallery/calendar/timeline/gantt/map). The primary object-list block.",
+      "props": [
+        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to list." },
+        { "name": "fields", "type": "string[]", "kind": "data", "description": "Columns to show." },
+        { "name": "filters", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter, e.g. ['status','=','active'] or ['and', [...], [...]]. Drive from React state for tabbed/searched lists." },
+        { "name": "sort", "type": "SortArray", "kind": "data", "description": "Sort spec." },
+        { "name": "viewType", "type": "'grid' | 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map'", "kind": "data", "description": "Which view to render (default grid). This is how you get a kanban/calendar/gantt of the object." },
+        { "name": "navigation", "type": "{ mode: 'page' | 'drawer' | 'modal' | 'split' | 'none' }", "kind": "data", "description": "What a row click does. Set { mode: 'none' } when you handle clicks yourself via onRowClick." },
+        { "name": "onRowClick", "type": "(record) => void", "kind": "callback", "description": "Called with the clicked row's record. The hook for master/detail." },
+        { "name": "onNavigate", "type": "(recordId, action) => void", "kind": "callback", "description": "Called for page-level navigation (action: 'view' | 'edit')." },
+        { "name": "searchableFields", "type": "string[]", "kind": "data", "description": "Fields the toolbar search matches." }
+      ]
+    },
+    {
+      "tag": "ObjectGrid",
+      "schemaType": "object-grid",
+      "summary": "Lower-level data grid for an object (columns + filters). Prefer ListView for a full toolbar; use ObjectGrid for an embedded table.",
+      "props": [
+        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to render." },
+        { "name": "columns", "type": "ColumnDef[]", "kind": "data", "description": "Column definitions." },
+        { "name": "filters", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter." }
+      ]
+    },
+    {
+      "tag": "ObjectMasterDetailForm",
+      "schemaType": "object-master-detail-form",
+      "summary": "Parent record + child line-items, edited and saved atomically (e.g. Invoice + line items).",
+      "props": [
+        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "Parent object." },
+        { "name": "mode", "type": "'create' | 'edit'", "kind": "controlled", "description": "Create or edit the parent + children." },
+        { "name": "recordId", "type": "string | number", "kind": "controlled", "description": "Parent record to edit." },
+        { "name": "childObject", "type": "string", "kind": "data", "required": true, "description": "Child (line-item) object." },
+        { "name": "relationshipField", "type": "string", "kind": "data", "required": true, "description": "Field on the child that points to the parent." },
+        { "name": "columns", "type": "ColumnDef[]", "kind": "data", "required": true, "description": "Child line-item grid columns." },
+        { "name": "totalField", "type": "string", "kind": "data", "description": "Parent field that rolls up the child amounts." },
+        { "name": "onSuccess", "type": "(record) => void", "kind": "callback", "description": "After the atomic save." },
+        { "name": "onCancel", "type": "() => void", "kind": "callback", "description": "On cancel." }
+      ]
+    },
+    {
+      "tag": "ObjectChart",
+      "schemaType": "object-chart",
+      "summary": "Chart over an object's aggregated data (bar/line/area/pie/donut/…).",
+      "props": [
+        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to aggregate." },
+        { "name": "chartType", "type": "'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter' | 'radar' | '…'", "kind": "data", "description": "Chart variant." },
+        { "name": "aggregate", "type": "{ field, function, groupBy }", "kind": "data", "description": "Aggregation: function (sum/avg/count) over field, grouped by groupBy." },
+        { "name": "filter", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter to scope the data." }
+      ]
+    },
+    {
+      "tag": "Block",
+      "schemaType": "(any)",
+      "summary": "Escape hatch — render any registered component by type when it isn't injected as a named block.",
+      "props": [
+        { "name": "type", "type": "string", "kind": "data", "required": true, "description": "The registered component type, e.g. 'object-kanban'." }
+      ]
+    }
+  ],
+  "alsoAvailable": {
+    "note": "Other curated public blocks are reachable too. Kanban/calendar/gantt/timeline/map of an object = <ListView viewType=\"kanban\" …>. Metrics/dashboards/pivots and record:* panels can be rendered via <Block type=\"object-metric\" …> / <Block type=\"dashboard\" …> until they are added to this contract.",
+    "scope": ["React", "useAdapter", "data", "variables", "page"]
+  }
+}
