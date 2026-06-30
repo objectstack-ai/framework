@@ -1,0 +1,112 @@
+# ADR-0082: Governing the react-tier component contract — spec is the protocol source of truth, the registry is a designer subset, and divergence is held by a build-time conformance ratchet + an authoring prop gate
+
+**Status**: Accepted (2026-06-30)
+**Deciders**: ObjectStack Protocol Architects
+**Builds on**: [ADR-0080](./0080-ai-authored-ui-jsx-source.md) (AI authors UI; the component registry `inputs` are the contract; **capability ≠ contract** — curate a small public surface, not the full capability set), [ADR-0081](./0081-trusted-react-page-tier.md) (the `kind:'react'` tier executes real React; its safety boundary is **trust + review**, and its prop ceiling is the **injected scope**), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (AI writes metadata via draft-gated review), [ADR-0054](./0054-runtime-proof-for-authorable-surface.md) (ratchet a snapshot; flag regressions, not the accepted baseline), [ADR-0078](./0078-no-silently-inert-metadata.md) (no silently-inert metadata — a prop the author writes must be honored or rejected, never silently dropped).
+**Consumers**: `@objectstack/spec` (`packages/spec/src/ui/react-blocks.ts` — the block→schema index + React overlay; `scripts/build-react-blocks-contract.ts` — the generator; `scripts/check-react-blocks-conformance.ts` + `react-conformance.baseline.json` — the ratchet), `@objectstack/lint` (`validate-react-page-props.ts` — the authoring prop gate), `@objectstack/cli` (`os validate` wires the gate), `scripts/build-console.sh` (runs the ratchet at console-build time), `../objectui` (the component registry `inputs` are the projected surface the ratchet checks against).
+
+**Premise**: ADR-0081 gave authors (and AI) a `kind:'react'` page tier whose blocks are the curated public data components (`<ObjectForm>`, `<ListView>`, charts, record:* panels). For AI to author those blocks *correctly* it must know each block's props — and for that knowledge to be trustworthy, the props must come from an authoritative, machine-readable, **non-drifting** source. The problem: **there is no single such source.** Three prop surfaces exist for the same components, and nothing keeps them in lockstep:
+
+| surface | what it is | role |
+|---|---|---|
+| **spec zod schemas** (`view.zod`, `component.zod`, `chart.zod`) | the protocol — `FormViewSchema`, `ListViewSchema`, `RecordDetailsProps`, … | declarative config, authoritative + richly described |
+| **registry `inputs`** (objectui) | the visual **designer palette** | a *curated subset* the property panel exposes |
+| **React prop types** | the implementation | what the component actually accepts at runtime |
+
+They drift silently: a component can accept a prop the spec never declared (an undocumented extension), or the spec can declare a prop the designer can't configure (a panel gap). Left ungoverned, the AI-facing contract becomes fiction, and `kind:'react'` authoring degrades to guessing.
+
+> **Trigger**: building the react-tier contract, the author asked in turn — "does the AI know the prop list? does it know each prop's params? do we need a protocol?" then "the spec UI protocol must already define the standard components — reference it, don't hand-author" then "we can't guarantee the frontend actually conforms to the backend protocol — confirm that too" then "is running this conformance check on every CI worth it?". This ADR records the model those questions converged on, now that it is implemented and merged across framework #2478/#2480/#2482/#2484/#2485/#2488/#2489 and objectui #2113/#2115.
+
+---
+
+## TL;DR
+
+1. **[source of truth] The spec zod schema is the protocol.** The AI-facing component contract is **generated** from the spec schemas (`z.toJSONSchema`) plus a thin React-interaction overlay — never hand-authored. Generated ⇒ it cannot drift into fiction.
+2. **[registry is a subset] Registry `inputs` are the designer palette, not the protocol.** A prop the spec declares but the registry doesn't expose is a *soft* signal (panel gap), not a violation. A prop the component exposes that the spec doesn't declare is the *actionable* signal (undocumented extension).
+3. **[overlay] React-interaction props live in a thin overlay, not the spec.** Callbacks (`onSuccess`, `onRowClick`), controlled props (`recordId`, `mode`, `filters`), and binding escape-hatches (`objectName`, a chart's static `data`, a list's `fields`/`options`) are real React surface the *view metadata* schema neither models nor should. They are declared in `react-blocks.ts`'s overlay so the contract documents them.
+4. **[conformance = ratchet, not per-PR gate] Frontend↔spec conformance is checked where the manifest is free.** The registry-inputs manifest only exists at console-build time (the registry is a browser app). So conformance runs **inside `build-console.sh`**, warn-only, as a **baseline ratchet** (ADR-0054 shape): it flags only NEW frontend-only props or vanished blocks against a committed baseline — not the accepted divergence, and not every PR.
+5. **[authoring = a hard gate] `os validate` enforces correct prop *usage*.** A separate `validate-react-page-props` gate parses each `kind:'react'` page's real JSX and checks block usage against the contract: a missing **required binding** is an error; a near-miss **prop typo** is a warning; arbitrary unknown props are *not* flagged (the contract's data props are a curated subset, so false positives stay near zero).
+6. **[the chain] Five links, each with one job.** protocol source (spec) → generated contract (`react-blocks.md`) → conformance ratchet (build-console.sh) → authoring prop gate (os validate) → a dogfood golden page proving the loop closes.
+
+---
+
+## Decision
+
+### 1. The spec schema is the source of truth; the contract is generated from it
+
+`packages/spec/src/ui/react-blocks.ts` is a **block→schema index**: each curated public block (`<ObjectForm>` → `FormViewSchema`, `<ListView>` → `ListViewSchema`, `<RecordDetails>` → `RecordDetailsProps`, `<ObjectChart>` → `ChartConfigSchema`, …) names its spec schema, plus a per-block `dataProps` allowlist that curates *which* schema props to surface (ADR-0080: capability ≠ contract — `ListView` has 45 schema props; the contract surfaces ~10 high-signal ones).
+
+`scripts/build-react-blocks-contract.ts` generates the AI-facing contract (`skills/objectstack-ui/contracts/react-blocks.contract.json` + `references/react-blocks.md`) by reading the spec schemas (`z.toJSONSchema`, with `OS_EAGER_SCHEMAS=1` to resolve lazy schemas), taking each prop's spec-authored `.describe()`, and merging the React overlay. **Hand-authoring is rejected** — a hand-written contract drifts into fiction; a generated one is zero-drift by construction.
+
+### 2. Registry `inputs` are a projection, not the protocol
+
+Per ADR-0080, the objectui registry `inputs` are the *contract for the visual designer's property panel*. They are deliberately a **subset**: the component reads the full schema at render time, but the panel only exposes the props worth configuring by hand. Therefore:
+
+- **spec-only** (spec declares it, registry doesn't expose it) ⇒ a **soft** signal. The component still honors the prop; the designer just can't set it. Not a conformance failure.
+- **frontend-only** (registry exposes it, spec doesn't declare it) ⇒ the **actionable** signal. Either the component grew an undocumented extension (record it), or the spec is behind (catch it up).
+
+### 3. React-interaction props belong in the overlay, not the spec
+
+The spec UI schemas are *view metadata* — declarative, serializable configuration. React interaction surface is not view metadata and must not be forced into it:
+
+- **callbacks** (`onSuccess`, `onError`, `onCancel`, `onRowClick`, `onNavigate`, `submitHandler`) — functions; meaningless in serialized metadata.
+- **controlled props** (`recordId`, `mode`, `filters`) — driven by React state at render.
+- **binding escape-hatches** (`objectName`; `<ObjectChart>`'s static `data`; `<ListView>`'s simplified `fields` and per-viewType `options`) — legitimate props the component accepts that the schema doesn't model.
+
+These are declared in the `react-blocks.ts` overlay with a `kind` of `binding`/`controlled`/`callback`. Declaring a genuine binding in the overlay is how a "frontend-only" prop is *closed* — the divergence was "the component accepts a prop the contract doesn't document," and the fix is to document it, not to leave it as accepted noise (framework #2488 took every block to **0 frontend-only** this way).
+
+### 4. Conformance is a build-time baseline ratchet, not a per-PR gate
+
+`scripts/check-react-blocks-conformance.ts` compares the spec props (per block, via `z.toJSONSchema`) against the registry-inputs manifest (`sdui.manifest.json`). The manifest **only exists at console-build time** — the registry is a browser app pulling browser-only deps, so a framework PR has no manifest to check against. Running conformance on every PR is therefore not worth it.
+
+Instead, conformance runs **inside `build-console.sh`**, immediately after it dumps the manifest (near-zero marginal cost), as a **baseline ratchet** modeled on ADR-0054:
+
+- `react-conformance.baseline.json` stores each block's accepted frontend-only prop *set* + whether it is missing.
+- `--baseline` reports **only regressions**: a block exposing a NEW frontend-only prop, or a previously-present block that vanished. The soft spec-only signal is not gated.
+- It is **warn-only** in the console build (never fails it). `--strict` exits non-zero on regression for intentional gating; `--update` re-accepts the current state after a deliberate frontend change.
+
+Because the baseline was driven to **0 frontend-only** (decision 3), the ratchet is noise-free: any future frontend-only prop is a real, actionable signal rather than one sitting in an accepted baseline.
+
+### 5. Authoring correctness is a hard gate at `os validate`
+
+`packages/lint/src/validate-react-page-props.ts` parses each `kind:'react'` page's real JSX (TypeScript compiler) and checks block usage against `REACT_BLOCKS`:
+
+- **missing a required binding** (e.g. `<ObjectForm>` with no `objectName`) → **error** (fails `os build`). A spread `{...props}` escapes the check (the prop may come from it).
+- **a near-miss of a known prop** (edit distance ≤ 2, e.g. `onSucces` → `onSuccess`) → **warning**.
+- **arbitrary unknown props** are deliberately **not** flagged — the contract's data props are a curated subset, so flagging unknowns would false-positive constantly. Only likely typos of *known* props are surfaced.
+
+This is the ADR-0078 boundary applied to react pages: a prop the author writes is either honored, or loudly rejected — never silently dropped.
+
+### 6. The chain, and proof it closes
+
+```
+spec zod schema  ──gen──►  react-blocks.md      (AI reads it — decisions 1–3)
+   (protocol)              (generated contract)
+                                │
+        registry inputs ──────► conformance ratchet   (build-console.sh — decision 4)
+        (designer subset)       (warn-only baseline)
+                                │
+                                ▼
+                           prop gate                  (os validate — decision 5)
+                           (hard: missing-required / typo)
+```
+
+`examples/app-showcase/src/pages/renewals-pipeline.page.ts` is the **golden page**: authored straight from the contract (five server-connected blocks), it passes `os validate`; injecting a missing required `objectName` and an `onSucces` typo makes the gate fail with an error + a warning (captured in `docs/audits/2026-06-react-tier-authoring-dogfood.md`). The chain demonstrably closes.
+
+---
+
+## Consequences
+
+- **Future contributors don't re-litigate the model.** Adding a public block = add it to the `react-blocks.ts` index + regenerate; the contract, the conformance baseline, and the prop gate all follow from that one edit.
+- **The contract can't lie.** It is generated from the spec schemas, so it always reflects the real protocol — there is no hand-maintained list to fall behind.
+- **New frontend divergence is caught at the release point, for free**, without taxing every PR or false-failing on the accepted (subset) baseline.
+- **AI authoring is enforced, not hoped for.** A wrong prop is caught at `os validate` before it ever renders.
+- **Cost**: the contract regen + baseline are committed artifacts that must be regenerated on a deliberate change (an extra step, guarded by `gen:api-surface` for public exports and the ratchet for frontend changes). This is the price of zero-drift and is intentional.
+
+## Alternatives considered
+
+- **Copy component props into the framework spec zod (one schema to rule them all).** Rejected by ADR-0080: the registry `inputs` are already the contract, and the spec's role is the tree envelope + object-binding (only it knows objects). Duplicating component props into spec would create the same `z.record` escape-debt this whole line avoids.
+- **Run conformance on every PR as a hard gate.** Rejected: the manifest doesn't exist on a framework PR (browser-only registry), and the divergence has a legitimate accepted baseline (registry = designer subset), so a hard per-PR gate would be both expensive and false-positive-prone.
+- **Hand-author the contract.** Rejected: it drifts into fiction (an earlier Phase-1 hand-authored contract did exactly this). Spec-as-source is zero-drift.
+- **Treat the registry `inputs` as the source of truth.** Rejected: `inputs` are a curated *subset* (the panel), not the full protocol; sourcing the contract from them would under-document what components actually accept.
+- **Sandbox/typecheck the React source against generated `.d.ts` for full prop typing.** Out of scope here (and partially covered by ADR-0080's codegen path for the `html` tier); the prop gate's required-binding + typo checks are the pragmatic 80% for `react` authoring without a full type-check harness over executed source.
