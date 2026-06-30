@@ -70,6 +70,7 @@ export const ShowcaseApp = App.create({
         { id: 'nav_inquiry_triage', type: 'page', pageName: 'showcase_inquiry_triage', label: 'Inquiry Triage (React)', icon: 'inbox' },
         { id: 'nav_account_cockpit', type: 'page', pageName: 'showcase_account_cockpit', label: 'Account Cockpit (React)', icon: 'satellite' },
         { id: 'nav_invoice_console', type: 'page', pageName: 'showcase_invoice_console', label: 'Invoice Console (React)', icon: 'receipt' },
+        { id: 'nav_task_desk', type: 'page', pageName: 'showcase_task_desk', label: 'Task Desk (React)', icon: 'panel-right-open' },
         { id: 'nav_styling_gallery', type: 'page', pageName: 'showcase_styling_gallery', label: 'Styling (ADR-0065)', icon: 'palette' },
         { id: 'nav_page_variables', type: 'page', pageName: 'showcase_page_variables', label: 'Page Variables', icon: 'mouse-pointer-click' },
         { id: 'nav_contact_form', type: 'page', pageName: 'showcase_contact_form', label: 'Contact Form', icon: 'mail-plus' },
