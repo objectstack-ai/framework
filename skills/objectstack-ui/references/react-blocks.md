@@ -27,10 +27,16 @@ Server-connected create/edit/view form for one object. Config props come from th
 | `onError` | `(error: Error) => void` | callback |  | Called when the save fails. |
 | `onCancel` | `() => void` | callback |  | Called when the user cancels. |
 | `submitHandler` | `(values) => any \| Promise<any>` | callback |  | Custom persistence instead of the default create/update. |
+| `layout` | `'vertical' \| 'horizontal' \| 'inline' \| 'grid'` | data |  | Field layout direction |
+| `columns` | `integer` | data |  | Number of columns for the form body |
+| `tabPosition` | `'top' \| 'bottom' \| 'left' \| 'right'` | data |  | Tab strip position (tabbed forms) |
+| `drawerSide` | `'top' \| 'bottom' \| 'left' \| 'right'` | data |  | Drawer side (drawer forms) |
+| `drawerWidth` | `string` | data |  | Drawer width, e.g. "480px" (drawer forms) |
+| `modalSize` | `'sm' \| 'default' \| 'lg' \| 'xl' \| 'full'` | data |  | Modal size (modal forms) |
+| `splitDirection` | `'horizontal' \| 'vertical'` | data |  | Split orientation (split forms) |
 | `sections` | `object[]` | data |  |  |
 | `subforms` | `object[]` | data |  | Inline master-detail child collections |
 | `submitBehavior` | `object` | data |  | Post-submit behavior |
-| `defaultSort` | `object[]` | data |  | Default sort order for related list views within this form |
 
 ## `<ListView>` — `list-view`
 
