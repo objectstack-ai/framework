@@ -96,6 +96,8 @@ export const REACT_BLOCKS: ReactBlockDef[] = [
       { name: 'navigation', type: "{ mode: 'page' | 'drawer' | 'modal' | 'split' | 'none' }", kind: 'binding', description: 'What a row click does. Use { mode: \"none\" } when you handle clicks via onRowClick.' },
       { name: 'onRowClick', type: '(record) => void', kind: 'callback', description: "Called with the clicked row's record — the hook for master/detail." },
       { name: 'onNavigate', type: "(recordId, action: 'view' | 'edit') => void", kind: 'callback', description: 'Called for page-level navigation.' },
+      { name: 'fields', type: 'string[]', kind: 'binding', description: 'Limit/order the columns shown (defaults to the object list fields).' },
+      { name: 'options', type: 'Record<string, any>', kind: 'binding', description: 'View-type-specific options bag (kanban/calendar/gantt extras); prefer the typed spec props where they exist.' },
     ],
   },
   {
@@ -108,6 +110,7 @@ export const REACT_BLOCKS: ReactBlockDef[] = [
       OBJECT_NAME,
       { name: 'filter', type: 'FilterArray', kind: 'controlled', description: 'ObjectQL filter scoping the data; drive from React state.' },
       { name: 'aggregate', type: '{ field, function, groupBy }', kind: 'binding', description: 'Aggregation: function (sum/avg/count) over field, grouped by groupBy.' },
+      { name: 'data', type: 'any[]', kind: 'binding', description: 'Static/precomputed data to chart directly instead of binding via objectName + aggregate.' },
     ],
   },
   {

@@ -6,16 +6,11 @@
       "missing": false
     },
     "ListView": {
-      "frontendOnly": [
-        "fields",
-        "options"
-      ],
+      "frontendOnly": [],
       "missing": false
     },
     "ObjectChart": {
-      "frontendOnly": [
-        "data"
-      ],
+      "frontendOnly": [],
       "missing": false
     },
     "RecordDetails": {
