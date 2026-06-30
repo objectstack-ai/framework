@@ -1,9 +1,15 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// Build-time diagnostics for AI-authored JSX-source pages (ADR-0080).
+// Build-time diagnostics for AI-authored HTML-source pages (ADR-0080).
+//
+// Applies to `kind:'html'` (and its deprecated alias `kind:'jsx'`) — the tier
+// whose `source` is constrained JSX/HTML parsed (never executed) to the tree.
+// `kind:'react'` (ADR-0081) is intentionally NOT linted here: its source is
+// real JavaScript, not constrained JSX, so the constrained parser would
+// false-error on hooks / expressions.
 //
 // A pure `(stack) => Finding[]` rule (ADR-0019), run from `os validate` / `os
-// build`. A `kind:'jsx'` page's `source` is a constrained JSX/Tailwind string
+// build`. An html page's `source` is a constrained JSX/Tailwind string
 // compiled (parsed, never executed) to the SDUI tree at save time. This gate
 // parses it at author time so malformed source fails loudly (ADR-0078) instead
 // of being stored and breaking only at render.
@@ -37,7 +43,8 @@ export function validateJsxPages(stack: AnyRec, opts: { manifest?: Manifest } = 
   const pages = asArray(stack.pages);
   for (let p = 0; p < pages.length; p++) {
     const page = pages[p];
-    if (!page || page.kind !== 'jsx') continue;
+    // html tier (+ deprecated 'jsx' alias). react pages are not constrained JSX.
+    if (!page || (page.kind !== 'html' && page.kind !== 'jsx')) continue;
     const name = String(page.name ?? `#${p}`);
     const source = page.source;
     if (typeof source !== 'string' || source.trim() === '') {
@@ -47,7 +54,7 @@ export function validateJsxPages(stack: AnyRec, opts: { manifest?: Manifest } = 
         rule: 'jsx-page-empty-source',
         where: `page "${name}"`,
         path: `pages[${p}].source`,
-        message: "kind:'jsx' page has no `source`.",
+        message: `kind:'${page.kind}' page has no \`source\`.`,
         hint: 'Author the page as a constrained JSX/Tailwind string in `source`.',
       });
       continue;

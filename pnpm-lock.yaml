@@ -792,6 +792,9 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec
+      sucrase:
+        specifier: ^3.35.0
+        version: 3.35.1
     devDependencies:
       '@types/node':
         specifier: ^26.0.1

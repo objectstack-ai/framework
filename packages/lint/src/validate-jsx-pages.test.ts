@@ -23,6 +23,14 @@ describe('validateJsxPages (ADR-0080 build gate)', () => {
   it('ignores non-jsx pages', () => {
     expect(validateJsxPages({ pages: [{ name: 'full', kind: 'full', regions: [] }] })).toEqual([]);
   });
+  it('validates kind:\'html\' (the renamed tier) too', () => {
+    expect(validateJsxPages({ pages: [{ name: 'cc', kind: 'html', source: '<flex><text content="hi" /></flex>' }] })).toEqual([]);
+    expect(validateJsxPages({ pages: [{ name: 'cc', kind: 'html' }] }).some((f) => f.rule === 'jsx-page-empty-source')).toBe(true);
+  });
+  it('does NOT lint kind:\'react\' (real JS, not constrained JSX)', () => {
+    const stack = { pages: [{ name: 'rx', kind: 'react', source: 'function P(){const[n]=React.useState(0);return <div>{n}</div>}' }] };
+    expect(validateJsxPages(stack)).toEqual([]);
+  });
 });
 
 describe('validateJsxPages — full validation with a manifest', () => {
