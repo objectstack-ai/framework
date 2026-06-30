@@ -23,6 +23,7 @@ export { InvoiceConsolePage } from './invoice-console.page.js';
 export { TaskDeskPage } from './task-desk.page.js';
 export { PageVariablesPage } from './page-variables.page.js';
 export { ContactFormPage } from './contact-form.page.js';
+export { RenewalsPipelinePage } from './renewals-pipeline.page.js';
 export {
   TaskBoardPage,
   TaskCalendarPage,
