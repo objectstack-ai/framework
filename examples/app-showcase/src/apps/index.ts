@@ -3,9 +3,18 @@
 import { App } from '@objectstack/spec/ui';
 
 /**
- * Showcase app — navigation that links to every surface so a human can click
- * through the whole gallery: the data objects, the Task view gallery, the
- * Chart Gallery dashboard, the reports, and the component-gallery home page.
+ * Showcase app — navigation organized to TEACH page authoring.
+ *
+ * "Start Here" is the default landing: it explains the two axes every page has —
+ * `type` (the surface role) and `kind` (the authoring model) — and links to the
+ * canonical example of each kind. The first three groups (Workspace / Data Model
+ * / Analytics) are the app *working* like a real product. The "Authoring · *"
+ * groups are the page-authoring gallery, split BY KIND so a learner can see
+ * which model fits which scenario:
+ *   • Structured (full/slotted) — declarative regions, no code (the default)
+ *   • Visualizations           — one list/interface page per record view-type
+ *   • HTML                     — constrained JSX, composed, parsed-never-executed
+ *   • React                    — real React, executed, interactive (trusted tier)
  */
 export const ShowcaseApp = App.create({
   name: 'showcase_app',
@@ -14,6 +23,7 @@ export const ShowcaseApp = App.create({
   branding: { primaryColor: '#7C3AED' },
 
   navigation: [
+    { id: 'nav_start_here', type: 'page', pageName: 'showcase_start_here', label: 'Start Here', icon: 'compass' },
     {
       id: 'grp_workspace',
       type: 'group',
@@ -59,18 +69,12 @@ export const ShowcaseApp = App.create({
       ],
     },
     {
-      id: 'grp_pages',
+      id: 'grp_auth_structured',
       type: 'group',
-      label: 'Pages',
-      icon: 'layout',
+      label: 'Authoring · Structured',
+      icon: 'layout-template',
       children: [
         { id: 'nav_gallery', type: 'page', pageName: 'showcase_component_gallery', label: 'Component Gallery', icon: 'layout-template' },
-        { id: 'nav_command_center_jsx', type: 'page', pageName: 'showcase_command_center_jsx', label: 'Command Center (HTML)', icon: 'code' },
-        { id: 'nav_crm_workbench', type: 'page', pageName: 'showcase_crm_workbench', label: 'CRM Workbench (React)', icon: 'layout-dashboard' },
-        { id: 'nav_inquiry_triage', type: 'page', pageName: 'showcase_inquiry_triage', label: 'Inquiry Triage (React)', icon: 'inbox' },
-        { id: 'nav_account_cockpit', type: 'page', pageName: 'showcase_account_cockpit', label: 'Account Cockpit (React)', icon: 'satellite' },
-        { id: 'nav_invoice_console', type: 'page', pageName: 'showcase_invoice_console', label: 'Invoice Console (React)', icon: 'receipt' },
-        { id: 'nav_task_desk', type: 'page', pageName: 'showcase_task_desk', label: 'Task Desk (React)', icon: 'panel-right-open' },
         { id: 'nav_styling_gallery', type: 'page', pageName: 'showcase_styling_gallery', label: 'Styling (ADR-0065)', icon: 'palette' },
         { id: 'nav_page_variables', type: 'page', pageName: 'showcase_page_variables', label: 'Page Variables', icon: 'mouse-pointer-click' },
         { id: 'nav_contact_form', type: 'page', pageName: 'showcase_contact_form', label: 'Contact Form', icon: 'mail-plus' },
@@ -79,6 +83,14 @@ export const ShowcaseApp = App.create({
         { id: 'nav_task_workbench', type: 'page', pageName: 'showcase_task_workbench', label: 'Task Workbench', icon: 'sliders-horizontal' },
         { id: 'nav_task_triage', type: 'page', pageName: 'showcase_task_triage', label: 'Task Triage (Tabs)', icon: 'layout-list' },
         { id: 'nav_active_projects', type: 'page', pageName: 'showcase_active_projects', label: 'Active Projects', icon: 'folder-kanban' },
+      ],
+    },
+    {
+      id: 'grp_auth_viz',
+      type: 'group',
+      label: 'Authoring · Visualizations',
+      icon: 'layout-grid',
+      children: [
         { id: 'nav_task_all_views', type: 'page', pageName: 'showcase_task_all_views', label: 'All Views', icon: 'layout-grid' },
         { id: 'nav_task_board', type: 'page', pageName: 'showcase_task_board', label: 'Task Board', icon: 'columns-3' },
         { id: 'nav_task_calendar', type: 'page', pageName: 'showcase_task_calendar', label: 'Task Calendar', icon: 'calendar' },
@@ -86,6 +98,27 @@ export const ShowcaseApp = App.create({
         { id: 'nav_task_schedule', type: 'page', pageName: 'showcase_task_schedule', label: 'Team Schedule', icon: 'gantt-chart' },
         { id: 'nav_task_timeline', type: 'page', pageName: 'showcase_task_timeline', label: 'Activity Timeline', icon: 'activity' },
         { id: 'nav_task_map', type: 'page', pageName: 'showcase_task_map', label: 'Work Map', icon: 'map-pin' },
+      ],
+    },
+    {
+      id: 'grp_auth_html',
+      type: 'group',
+      label: 'Authoring · HTML',
+      icon: 'code',
+      children: [
+        { id: 'nav_command_center_jsx', type: 'page', pageName: 'showcase_command_center_jsx', label: 'Command Center', icon: 'code' },
+      ],
+    },
+    {
+      id: 'grp_auth_react',
+      type: 'group',
+      label: 'Authoring · React',
+      icon: 'zap',
+      children: [
+        { id: 'nav_crm_workbench', type: 'page', pageName: 'showcase_crm_workbench', label: 'CRM Workbench · master/detail', icon: 'layout-dashboard' },
+        { id: 'nav_task_desk', type: 'page', pageName: 'showcase_task_desk', label: 'Task Desk · drawer & modal', icon: 'panel-right-open' },
+        { id: 'nav_account_cockpit', type: 'page', pageName: 'showcase_account_cockpit', label: 'Account Cockpit · live rollup', icon: 'satellite' },
+        { id: 'nav_renewals_pipeline', type: 'page', pageName: 'showcase_renewals_pipeline', label: 'Renewals Pipeline · record blocks', icon: 'refresh-cw' },
       ],
     },
   ],
