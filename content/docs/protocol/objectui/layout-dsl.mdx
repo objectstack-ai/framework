@@ -22,6 +22,32 @@ Instead of giving you infinite layout freedom (and infinite ways to break respon
 - **Accessibility:** Keyboard navigation and screen readers work automatically
 - **Maintainability:** Designers can't create 47 different button sizes
 
+## Authoring Modes: Structured, HTML, and React
+
+A page's `kind` selects **how** it is authored. This document describes the
+**structured** mode (regions + the 12-column grid below) — but for layouts the
+fixed schema can't express, two *source-authoring* tiers let an author (or AI)
+write the page body as a string. Pick by what the page needs:
+
+| `kind` | You write | JavaScript | Use when |
+|:-------|:----------|:-----------|:---------|
+| `full` / `slotted` *(this doc)* | structured `regions` / `slots` | — | record, detail, home, and app layouts from the component catalogue |
+| `html` | constrained JSX = HTML + Tailwind + registered components, **parsed, never executed** | none | free-form layout, landing pages, or dashboards that *compose* blocks — no interactivity |
+| `react` | **real React** (hooks, `.map`, `onClick`, expressions) | executed in the app | complex interactive business UIs — master/detail, wizards, state-driven filters |
+
+For `html` / `react`, the page body is the `source` string (it is the
+source-of-truth; `regions` is ignored). `html` is **safe by construction** (it
+is parsed into the same SDUI tree this document describes, never executed).
+`react` executes author code, so it is gated by a host capability that is **ON
+by default** and disabled per-deployment with the `OS_PAGE_REACT=off` env
+variable. Both tiers can embed the platform's real data components
+(`<ObjectTable>`, `<ObjectForm>`, charts, metrics).
+
+> **Learn more:** [ADR-0080](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0080-ai-authored-ui-jsx-source.md)
+> (the `html` tier — parse ≠ execute; the registry is the contract) and
+> [ADR-0081](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0081-trusted-react-page-tier.md)
+> (the trusted `react` tier). The rest of this page covers the structured mode.
+
 ## Layout Hierarchy
 
 ```
