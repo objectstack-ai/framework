@@ -2,6 +2,7 @@
 
 import { definePage } from '@objectstack/spec/ui';
 
+export { StartHerePage } from './start-here.page.js';
 export { ProjectWorkspacePage } from './project-workspace.page.js';
 export { ProjectDetailPage } from './project-detail.page.js';
 export { TaskWorkbenchPage } from './task-workbench.page.js';
@@ -17,9 +18,7 @@ export { StylingGalleryPage } from './styling-gallery.page.js';
 export { CommandCenterPage } from './command-center.page.js';
 export { CommandCenterJsxPage } from './command-center-jsx.page.js';
 export { CrmWorkbenchPage } from './crm-workbench.page.js';
-export { InquiryTriagePage } from './inquiry-triage.page.js';
 export { AccountCockpitPage } from './account-cockpit.page.js';
-export { InvoiceConsolePage } from './invoice-console.page.js';
 export { TaskDeskPage } from './task-desk.page.js';
 export { PageVariablesPage } from './page-variables.page.js';
 export { ContactFormPage } from './contact-form.page.js';
@@ -46,7 +45,7 @@ export const ComponentGalleryPage = definePage({
   label: 'Component Gallery',
   type: 'home',
   template: 'header-sidebar-main',
-  isDefault: true,
+  isDefault: false,
   kind: 'full',
   regions: [
     {
