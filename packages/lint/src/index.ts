@@ -39,6 +39,8 @@ export { validateJsxPages } from './validate-jsx-pages.js';
 export type { JsxPageFinding, JsxPageSeverity } from './validate-jsx-pages.js';
 export { validateReactPages } from './validate-react-pages.js';
 export type { ReactPageFinding, ReactPageSeverity } from './validate-react-pages.js';
+export { validateReactPageProps } from './validate-react-page-props.js';
+export type { ReactPropFinding, ReactPropSeverity } from './validate-react-page-props.js';
 
 export {
   validateRecordTitle,

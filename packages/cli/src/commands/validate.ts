@@ -11,7 +11,7 @@ import { loadConfig } from '../utils/config.js';
 import { validateStackExpressions } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
-import { validateJsxPages, validateReactPages } from '@objectstack/lint';
+import { validateJsxPages, validateReactPages, validateReactPageProps } from '@objectstack/lint';
 import {
   printHeader,
   printKV,
@@ -233,6 +233,39 @@ export default class Validate extends Command {
         console.log('');
         printError(`React-source page check failed (${reactErrors.length} issue${reactErrors.length > 1 ? 's' : ''})`);
         for (const f of reactErrors.slice(0, 50)) {
+          console.log(`  \u2022 ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+
+      // 3d. React-source pages — prop usage against the component contract
+      //     (ADR-0081 Phase 2): missing required bindings (error) + likely
+      //     prop typos (warning), parsed from the real JSX.
+      if (!flags.json) printStep('Checking React-source page props (ADR-0081)...');
+      const reactPropFindings = validateReactPageProps(result.data as Record<string, unknown>);
+      const reactPropErrors = reactPropFindings.filter((f) => f.severity === 'error');
+      const reactPropWarnings = reactPropFindings.filter((f) => f.severity === 'warning');
+      if (!flags.json) {
+        for (const w of reactPropWarnings.slice(0, 50)) {
+          console.log(chalk.yellow(`  \u26a0 ${w.where}: ${w.message}`));
+          console.log(chalk.dim(`      ${w.hint}`));
+        }
+      }
+      if (reactPropErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: reactPropErrors,
+            warnings: [...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...reactPropWarnings],
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`React-source page prop check failed (${reactPropErrors.length} issue${reactPropErrors.length > 1 ? 's' : ''})`);
+        for (const f of reactPropErrors.slice(0, 50)) {
           console.log(`  \u2022 ${f.where}: ${f.message}`);
           console.log(chalk.dim(`      ${f.hint}`));
           console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
