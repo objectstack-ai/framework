@@ -1,90 +1,527 @@
 {
-  "version": 1,
+  "version": 2,
   "adr": "ADR-0081",
-  "note": "Curated contract for the components injected into kind:'react' page source. Reference these by their PascalCase `tag` in JSX. `data` props mirror the objectui registry `inputs` (the same surface the html tier validates); `controlled` props are React-driven state (recordId, mode, filters…); `callback` props are React functions the component invokes. Layout is plain HTML + Tailwind — these blocks are for DATA. Filters use the ObjectQL array form: [field, op, value], e.g. ['status','=','active'] (ops: =, !=, >, <, contains, in). Live data: `const adapter = useAdapter(); await adapter.find(obj, {$filter, $top}); .findOne; .create; .update`.",
+  "source": "GENERATED from packages/spec/src/ui/react-blocks.ts — data props from the spec zod schemas, binding/controlled/callback from the React overlay.",
+  "note": "Props each component accepts in kind:'react' page source. Reference blocks by their PascalCase tag. kind: data=declarative config (from the spec schema) · binding=connects to data · controlled=React state · callback=React function. Layout = plain HTML+Tailwind; these blocks are for DATA. Live data: const adapter = useAdapter(); adapter.find/findOne/create/update.",
   "blocks": [
     {
       "tag": "ObjectForm",
       "schemaType": "object-form",
-      "summary": "Server-connected create / edit / view form for one object. Auto-builds fields from the object schema. Built-in drawer/modal variants via formType.",
+      "summary": "Server-connected create/edit/view form for one object. Config props come from the spec FormView schema; bind + wire it with the React props below.",
+      "specSchema": true,
       "props": [
-        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object whose record this form edits." },
-        { "name": "mode", "type": "'create' | 'edit' | 'view'", "kind": "controlled", "description": "Create a new record, edit/view an existing one." },
-        { "name": "recordId", "type": "string | number", "kind": "controlled", "description": "Which record to load (edit/view mode). Drive from React state for master/detail." },
-        { "name": "fields", "type": "string[]", "kind": "data", "description": "Limit/order the fields shown (defaults to the object's form fields)." },
-        { "name": "initialValues", "type": "Record<string, any>", "kind": "data", "description": "Prefill values in create mode." },
-        { "name": "formType", "type": "'simple' | 'tabbed' | 'wizard' | 'split' | 'drawer' | 'modal'", "kind": "data", "description": "Form presentation; 'drawer'/'modal' render the form in a built-in overlay (use drawerSide/drawerWidth/modalSize)." },
-        { "name": "onSuccess", "type": "(record) => void", "kind": "callback", "description": "Called after a successful create/update with the saved record. Typical: close a panel + bump a reload key." },
-        { "name": "onError", "type": "(error: Error) => void", "kind": "callback", "description": "Called when the save fails." },
-        { "name": "onCancel", "type": "() => void", "kind": "callback", "description": "Called when the user cancels." },
-        { "name": "submitHandler", "type": "(values) => any | Promise<any>", "kind": "callback", "description": "Custom persistence instead of the default create/update (the form just validates and hands over values)." },
-        { "name": "navigateOnSuccess", "type": "string", "kind": "data", "description": "URL to navigate to after save (supports {id})." }
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": true,
+          "description": "The object this block binds to (server-connected)."
+        },
+        {
+          "name": "formType",
+          "type": "'simple' | 'tabbed' | 'wizard' | 'split' | 'drawer' | 'modal'",
+          "kind": "binding",
+          "required": false,
+          "description": "Form presentation; drawer/modal render the form in a built-in overlay (use drawerSide/drawerWidth/modalSize)."
+        },
+        {
+          "name": "fields",
+          "type": "string[]",
+          "kind": "binding",
+          "required": false,
+          "description": "Limit/order the fields shown (defaults to the object form fields)."
+        },
+        {
+          "name": "initialValues",
+          "type": "Record<string, any>",
+          "kind": "binding",
+          "required": false,
+          "description": "Prefill values in create mode."
+        },
+        {
+          "name": "mode",
+          "type": "'create' | 'edit' | 'view'",
+          "kind": "controlled",
+          "required": false,
+          "description": "Create a new record, or edit/view an existing one — drive from React state."
+        },
+        {
+          "name": "recordId",
+          "type": "string | number",
+          "kind": "controlled",
+          "required": false,
+          "description": "Which record to load (edit/view). The hook for master/detail."
+        },
+        {
+          "name": "onSuccess",
+          "type": "(record) => void",
+          "kind": "callback",
+          "required": false,
+          "description": "Called after a successful save with the saved record (e.g. close a panel + reload)."
+        },
+        {
+          "name": "onError",
+          "type": "(error: Error) => void",
+          "kind": "callback",
+          "required": false,
+          "description": "Called when the save fails."
+        },
+        {
+          "name": "onCancel",
+          "type": "() => void",
+          "kind": "callback",
+          "required": false,
+          "description": "Called when the user cancels."
+        },
+        {
+          "name": "submitHandler",
+          "type": "(values) => any | Promise<any>",
+          "kind": "callback",
+          "required": false,
+          "description": "Custom persistence instead of the default create/update."
+        },
+        {
+          "name": "sections",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "subforms",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Inline master-detail child collections"
+        },
+        {
+          "name": "submitBehavior",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "Post-submit behavior"
+        },
+        {
+          "name": "defaultSort",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Default sort order for related list views within this form"
+        }
       ]
     },
     {
       "tag": "ListView",
       "schemaType": "list-view",
-      "summary": "Server-connected object table with toolbar (search/filter/sort), and switchable views (grid/kanban/gallery/calendar/timeline/gantt/map). The primary object-list block.",
+      "summary": "Server-connected object table with toolbar and switchable visualizations (grid/kanban/calendar/gantt/…). Config props come from the spec ListView schema.",
+      "specSchema": true,
       "props": [
-        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to list." },
-        { "name": "fields", "type": "string[]", "kind": "data", "description": "Columns to show." },
-        { "name": "filters", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter, e.g. ['status','=','active'] or ['and', [...], [...]]. Drive from React state for tabbed/searched lists." },
-        { "name": "sort", "type": "SortArray", "kind": "data", "description": "Sort spec." },
-        { "name": "viewType", "type": "'grid' | 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map'", "kind": "data", "description": "Which view to render (default grid). This is how you get a kanban/calendar/gantt of the object." },
-        { "name": "navigation", "type": "{ mode: 'page' | 'drawer' | 'modal' | 'split' | 'none' }", "kind": "data", "description": "What a row click does. Set { mode: 'none' } when you handle clicks yourself via onRowClick." },
-        { "name": "onRowClick", "type": "(record) => void", "kind": "callback", "description": "Called with the clicked row's record. The hook for master/detail." },
-        { "name": "onNavigate", "type": "(recordId, action) => void", "kind": "callback", "description": "Called for page-level navigation (action: 'view' | 'edit')." },
-        { "name": "searchableFields", "type": "string[]", "kind": "data", "description": "Fields the toolbar search matches." }
-      ]
-    },
-    {
-      "tag": "ObjectGrid",
-      "schemaType": "object-grid",
-      "summary": "Lower-level data grid for an object (columns + filters). Prefer ListView for a full toolbar; use ObjectGrid for an embedded table.",
-      "props": [
-        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to render." },
-        { "name": "columns", "type": "ColumnDef[]", "kind": "data", "description": "Column definitions." },
-        { "name": "filters", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter." }
-      ]
-    },
-    {
-      "tag": "ObjectMasterDetailForm",
-      "schemaType": "object-master-detail-form",
-      "summary": "Parent record + child line-items, edited and saved atomically (e.g. Invoice + line items).",
-      "props": [
-        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "Parent object." },
-        { "name": "mode", "type": "'create' | 'edit'", "kind": "controlled", "description": "Create or edit the parent + children." },
-        { "name": "recordId", "type": "string | number", "kind": "controlled", "description": "Parent record to edit." },
-        { "name": "childObject", "type": "string", "kind": "data", "required": true, "description": "Child (line-item) object." },
-        { "name": "relationshipField", "type": "string", "kind": "data", "required": true, "description": "Field on the child that points to the parent." },
-        { "name": "columns", "type": "ColumnDef[]", "kind": "data", "required": true, "description": "Child line-item grid columns." },
-        { "name": "totalField", "type": "string", "kind": "data", "description": "Parent field that rolls up the child amounts." },
-        { "name": "onSuccess", "type": "(record) => void", "kind": "callback", "description": "After the atomic save." },
-        { "name": "onCancel", "type": "() => void", "kind": "callback", "description": "On cancel." }
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": true,
+          "description": "The object this block binds to (server-connected)."
+        },
+        {
+          "name": "viewType",
+          "type": "'grid' | 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map'",
+          "kind": "binding",
+          "required": false,
+          "description": "Which visualization to render (default grid). How you get a kanban/calendar/gantt of the object."
+        },
+        {
+          "name": "navigation",
+          "type": "{ mode: 'page' | 'drawer' | 'modal' | 'split' | 'none' }",
+          "kind": "binding",
+          "required": false,
+          "description": "What a row click does. Use { mode: \"none\" } when you handle clicks via onRowClick."
+        },
+        {
+          "name": "filters",
+          "type": "FilterArray e.g. ['status','=','active']",
+          "kind": "controlled",
+          "required": false,
+          "description": "ObjectQL base filter; drive from React state for tabbed/searched lists. ([field, op, value]; ops =, !=, >, <, contains, in; compound: [\"and\", […], […]])."
+        },
+        {
+          "name": "onRowClick",
+          "type": "(record) => void",
+          "kind": "callback",
+          "required": false,
+          "description": "Called with the clicked row's record — the hook for master/detail."
+        },
+        {
+          "name": "onNavigate",
+          "type": "(recordId, action: 'view' | 'edit') => void",
+          "kind": "callback",
+          "required": false,
+          "description": "Called for page-level navigation."
+        },
+        {
+          "name": "columns",
+          "type": "string[] | object[]",
+          "kind": "data",
+          "required": true,
+          "description": "Fields to display as columns"
+        },
+        {
+          "name": "sort",
+          "type": "string | object[]",
+          "kind": "data",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "searchableFields",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Fields enabled for search"
+        },
+        {
+          "name": "userFilters",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "End-user quick-filter bar: dropdown/toggle fields or tab presets. Omit to let the renderer derive filters from select/boolean fields"
+        },
+        {
+          "name": "pagination",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "Pagination configuration"
+        },
+        {
+          "name": "grouping",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "Group records by one or more fields"
+        },
+        {
+          "name": "rowHeight",
+          "type": "'compact' | 'short' | 'medium' | 'tall' | 'extra_tall'",
+          "kind": "data",
+          "required": false,
+          "description": "Row height / density setting"
+        },
+        {
+          "name": "selection",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "Row selection configuration"
+        },
+        {
+          "name": "rowActions",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Actions available for individual row items"
+        },
+        {
+          "name": "inlineEdit",
+          "type": "boolean",
+          "kind": "data",
+          "required": false,
+          "description": "Allow inline editing of records directly in the list view"
+        }
       ]
     },
     {
       "tag": "ObjectChart",
       "schemaType": "object-chart",
-      "summary": "Chart over an object's aggregated data (bar/line/area/pie/donut/…).",
+      "summary": "Chart over an object’s aggregated data. Config props come from the spec Chart config schema.",
+      "specSchema": true,
       "props": [
-        { "name": "objectName", "type": "string", "kind": "data", "required": true, "description": "The object to aggregate." },
-        { "name": "chartType", "type": "'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter' | 'radar' | '…'", "kind": "data", "description": "Chart variant." },
-        { "name": "aggregate", "type": "{ field, function, groupBy }", "kind": "data", "description": "Aggregation: function (sum/avg/count) over field, grouped by groupBy." },
-        { "name": "filter", "type": "FilterArray", "kind": "controlled", "description": "ObjectQL filter to scope the data." }
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": true,
+          "description": "The object this block binds to (server-connected)."
+        },
+        {
+          "name": "aggregate",
+          "type": "{ field, function, groupBy }",
+          "kind": "binding",
+          "required": false,
+          "description": "Aggregation: function (sum/avg/count) over field, grouped by groupBy."
+        },
+        {
+          "name": "filter",
+          "type": "FilterArray",
+          "kind": "controlled",
+          "required": false,
+          "description": "ObjectQL filter scoping the data; drive from React state."
+        },
+        {
+          "name": "showLegend",
+          "type": "boolean",
+          "kind": "data",
+          "required": true,
+          "description": "Display legend"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "kind": "data",
+          "required": false,
+          "description": "Chart title"
+        },
+        {
+          "name": "series",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Defined series configuration"
+        },
+        {
+          "name": "xAxis",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "X-Axis configuration"
+        },
+        {
+          "name": "yAxis",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Y-Axis configuration (support dual axis)"
+        },
+        {
+          "name": "colors",
+          "type": "string[] | object",
+          "kind": "data",
+          "required": false,
+          "description": "Color palette (string[]) or value→color map ({ value: color })"
+        }
+      ]
+    },
+    {
+      "tag": "RecordDetails",
+      "schemaType": "record:details",
+      "summary": "Field-detail panel for the bound record. Config props from the spec RecordDetails schema.",
+      "specSchema": true,
+      "props": [
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": false,
+          "description": "The record’s object."
+        },
+        {
+          "name": "recordId",
+          "type": "string | number",
+          "kind": "controlled",
+          "required": false,
+          "description": "The record to show."
+        },
+        {
+          "name": "columns",
+          "type": "'1' | '2' | '3' | '4'",
+          "kind": "data",
+          "required": true,
+          "description": "Number of columns for field layout (1-4)"
+        },
+        {
+          "name": "layout",
+          "type": "'auto' | 'custom'",
+          "kind": "data",
+          "required": true,
+          "description": "Layout mode: auto uses object compactLayout, custom uses explicit sections"
+        },
+        {
+          "name": "sections",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Section IDs to show (required when layout is \"custom\")"
+        },
+        {
+          "name": "fields",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Explicit field list to display (optional, overrides compactLayout)"
+        }
+      ]
+    },
+    {
+      "tag": "RecordHighlights",
+      "schemaType": "record:highlights",
+      "summary": "Highlights panel — a strip of key fields. Config props from the spec RecordHighlights schema.",
+      "specSchema": true,
+      "props": [
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": false,
+          "description": "The record’s object."
+        },
+        {
+          "name": "recordId",
+          "type": "string | number",
+          "kind": "controlled",
+          "required": false,
+          "description": "The record to summarize."
+        },
+        {
+          "name": "fields",
+          "type": "string | object[]",
+          "kind": "data",
+          "required": true,
+          "description": "Key fields to highlight (1-7 fields max, typically displayed as prominent cards). Each item may be a bare field name or {name, label?, icon?, type?} for inline…"
+        },
+        {
+          "name": "layout",
+          "type": "'horizontal' | 'vertical'",
+          "kind": "data",
+          "required": true,
+          "description": "Layout orientation for highlight fields"
+        }
+      ]
+    },
+    {
+      "tag": "RecordRelatedList",
+      "schemaType": "record:related_list",
+      "summary": "Related child records via a lookup. Config props from the spec RecordRelatedList schema.",
+      "specSchema": true,
+      "props": [
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": false,
+          "description": "The parent object."
+        },
+        {
+          "name": "recordId",
+          "type": "string | number",
+          "kind": "controlled",
+          "required": false,
+          "description": "The parent record."
+        },
+        {
+          "name": "relationshipField",
+          "type": "string",
+          "kind": "data",
+          "required": true,
+          "description": "Field on related object that points to this record (e.g., \"account_id\")"
+        },
+        {
+          "name": "columns",
+          "type": "string[]",
+          "kind": "data",
+          "required": true,
+          "description": "Fields to display in the related list"
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "kind": "data",
+          "required": true,
+          "description": "Number of records to display initially"
+        },
+        {
+          "name": "showViewAll",
+          "type": "boolean",
+          "kind": "data",
+          "required": true,
+          "description": "Show \"View All\" link to see all related records"
+        },
+        {
+          "name": "sort",
+          "type": "string | object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Sort order for related records"
+        },
+        {
+          "name": "filter",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Additional filter criteria for related records"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "kind": "data",
+          "required": false,
+          "description": "Custom title for the related list"
+        },
+        {
+          "name": "actions",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Action IDs available for related records"
+        },
+        {
+          "name": "add",
+          "type": "object",
+          "kind": "data",
+          "required": false,
+          "description": "Add-existing-via-picker config (generic m2m/junction assignment)."
+        }
+      ]
+    },
+    {
+      "tag": "RecordPath",
+      "schemaType": "record:path",
+      "summary": "Stage/progress bar driven by a status field. Config props from the spec RecordPath schema.",
+      "specSchema": true,
+      "props": [
+        {
+          "name": "objectName",
+          "type": "string",
+          "kind": "binding",
+          "required": false,
+          "description": "The record’s object."
+        },
+        {
+          "name": "recordId",
+          "type": "string | number",
+          "kind": "controlled",
+          "required": false,
+          "description": "The record whose stage to show."
+        },
+        {
+          "name": "statusField",
+          "type": "string",
+          "kind": "data",
+          "required": true,
+          "description": "Field name representing the current status/stage"
+        },
+        {
+          "name": "stages",
+          "type": "object[]",
+          "kind": "data",
+          "required": false,
+          "description": "Explicit stage definitions (if not using field metadata)"
+        }
       ]
     },
     {
       "tag": "Block",
       "schemaType": "(any)",
-      "summary": "Escape hatch — render any registered component by type when it isn't injected as a named block.",
+      "summary": "Escape hatch — render any registered component by type. <Block type=\"object-kanban\" objectName=\"task\" /> etc.",
+      "specSchema": false,
       "props": [
-        { "name": "type", "type": "string", "kind": "data", "required": true, "description": "The registered component type, e.g. 'object-kanban'." }
+        {
+          "name": "type",
+          "type": "string",
+          "kind": "binding",
+          "required": true,
+          "description": "The registered component type to render."
+        }
       ]
     }
-  ],
-  "alsoAvailable": {
-    "note": "Other curated public blocks are reachable too. Kanban/calendar/gantt/timeline/map of an object = <ListView viewType=\"kanban\" …>. Metrics/dashboards/pivots and record:* panels can be rendered via <Block type=\"object-metric\" …> / <Block type=\"dashboard\" …> until they are added to this contract.",
-    "scope": ["React", "useAdapter", "data", "variables", "page"]
-  }
+  ]
 }

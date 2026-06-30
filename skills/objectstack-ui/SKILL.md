@@ -782,8 +782,10 @@ blocks for data. Real component props/callbacks flow through — e.g. `<ObjectFo
 > **[React-tier component contract](./references/react-blocks.md)**, generated from
 > [`contracts/react-blocks.contract.json`](./contracts/react-blocks.contract.json).
 > It is the authoritative answer to "what props does `<ObjectForm>`/`<ListView>`/…
-> take?" — author against it, not from memory. Regenerate after editing the JSON
-> with `node skills/objectstack-ui/contracts/build-ref.mjs`.
+> take?" — author against it, not from memory. The `data` props are sourced from the platform's spec schemas (FormView,
+> ListView, RecordDetails, Chart, …) — the same protocol the server validates;
+> `binding`/`controlled`/`callback` are the React overlay. Regenerate with
+> `pnpm --filter @objectstack/spec gen:react-blocks`.
 
 Master/detail (click a row → edit it → save refreshes the list):
 

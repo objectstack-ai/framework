@@ -29,6 +29,7 @@ export * from './action.zod';
 export * from './page.zod';
 export * from './widget.zod';
 export * from './component.zod';
+export * from './react-blocks';
 export * from './theme.zod';
 export * from './touch.zod';
 export * from './offline.zod';
