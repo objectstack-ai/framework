@@ -2,7 +2,8 @@
 name: objectstack-ui
 description: >
   Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt),
-  Apps (navigation), Pages, Dashboards, Reports, Charts, Actions, and
+  Apps (navigation), Pages (structured plus the HTML and React source-authoring
+  tiers, ADR-0080/0081), Dashboards, Reports, Charts, Actions, and
   package Docs (`src/docs/*.md`). Use when
   the user is adding `*.view.ts` / `*.app.ts` / `*.dashboard.ts` /
   `*.action.ts` / `src/docs/*.md` files or designing a Studio-rendered UI

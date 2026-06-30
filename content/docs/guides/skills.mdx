@@ -48,7 +48,7 @@ ObjectStack ships **9 domain-specific skills**. Each is self-contained — an AI
 | 1 | [Platform](#platform) | `platform` | `skills/objectstack-platform/` | Bootstrap, configure, extend, and operate ObjectStack runtimes. Covers project setup (`defineStack`, drivers, adapters, scaffolding), plugin and service development (PluginContext, DI, kernel hooks like `kernel:ready` and `data:*`), and operations (CLI commands, migrations, deployment, test harnesses via LiteKernel). |
 | 2 | [Data](#data) | `data` | `skills/objectstack-data/` | Design ObjectStack data schemas — objects, fields, field conditional rules, relationships, validations, indexes, lifecycle hooks, permissions, row-level security — and the seed datasets (`defineDataset()`) that load fixtures and reference data alongside them. |
 | 3 | [Query](#query) | `query` | `skills/objectstack-query/` | Construct ObjectQL queries — filters, sorting, pagination, aggregation, joins/expansion, window functions, and full-text search. |
-| 4 | [UI](#ui) | `ui` | `skills/objectstack-ui/` | Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt), Apps (navigation), Pages, Dashboards, Reports, Charts, Actions, and package Docs (`src/docs/*.md`). |
+| 4 | [UI](#ui) | `ui` | `skills/objectstack-ui/` | Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt), Apps (navigation), Pages (structured plus the HTML and React source-authoring tiers, ADR-0080/0081), Dashboards, Reports, Charts, Actions, and package Docs (`src/docs/*.md`). |
 | 5 | [Automation](#automation) | `automation` | `skills/objectstack-automation/` | Design ObjectStack automation — Flows (visual logic), Workflows (declarative rules), Triggers, Approvals, scheduled jobs, and webhooks. |
 | 6 | [AI](#ai) | `ai` | `skills/objectstack-ai/` | Design ObjectStack AI agents, tools, skills, conversations, model registry entries, and MCP integrations. |
 | 7 | [API](#api) | `api` | `skills/objectstack-api/` | Design the server-side API surface that an ObjectStack runtime exposes — REST/GraphQL endpoints, auth providers, realtime channels, error envelopes, batch/versioning contracts. |
@@ -103,7 +103,7 @@ Do not use for defining objects / fields / relationships (see objectstack-data) 
 
 **Domain** `ui` · **Path** `skills/objectstack-ui/`
 
-Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt), Apps (navigation), Pages, Dashboards, Reports, Charts, Actions, and package Docs (`src/docs/*.md`).
+Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt), Apps (navigation), Pages (structured plus the HTML and React source-authoring tiers, ADR-0080/0081), Dashboards, Reports, Charts, Actions, and package Docs (`src/docs/*.md`).
 
 Use when the user is adding `*.view.ts` / `*.app.ts` / `*.dashboard.ts` / `*.action.ts` / `src/docs/*.md` files or designing a Studio-rendered UI surface, including dataset-bound dashboard/report widgets.
 
