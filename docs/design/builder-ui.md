@@ -6,17 +6,18 @@ records the *decisions and rejected alternatives* (the information architecture)
 this doc records *how it looks and flows* — it iterates as the UI is built, and is
 not a binding contract.
 
-The atomic config panels (object designer, field editor, validation-rule editor,
-form designer, …) already exist. This doc is about the **overall layout** that
-composes them into one coherent builder, optimized for operation experience.
+This doc specifies the **shell and layout** — how the builder composes surfaces. It
+does **not** re-specify the per-item config panels: those are Studio's existing
+protocol-generated metadata forms, reused as-is (§1.4). What the builder actually
+builds is the composition; the panels are dropped in.
 
 ---
 
-## 1. Core constraint — AI-first, human-confirmable authoring
+## 1. Core constraints — AI-first, human-confirmable, reuse-first
 
-Every layout and interaction decision in the builder is judged against three
-requirements. They are the north star: a design that fails any of them is wrong,
-however convenient it looks. Each pillar's design (below) is checked against them.
+Every layout and interaction decision in the builder is judged against these. They
+are the north star: a design that fails any of them is wrong, however convenient it
+looks. Each pillar's design (below) is checked against them.
 
 1. **AI generates it in one shot.** The builder must let the agent produce a whole,
    correct artifact — an object with its fields, validations, and layout — in a
@@ -27,7 +28,7 @@ however convenient it looks. Each pillar's design (below) is checked against the
 
 2. **The design prevents AI mistakes.** Constrain the space so an invalid result is
    hard to express: declarative over code (a condition builder, not hand-written CEL,
-   §3 Validation), typed and enumerated inputs, and the pre-publish validation gates
+   §4 Validation), typed and enumerated inputs, and the pre-publish validation gates
    (`os validate` / `os build`). Nothing the AI writes goes live implicitly — it lands
    as a **draft** (ADR-0033), never auto-published.
 
@@ -36,27 +37,35 @@ however convenient it looks. Each pillar's design (below) is checked against the
    canvas (the grid + inspector) with no modals hiding state (§3.7) and a non-blocking
    inspector, so the whole thing stays visible while it is reviewed.
 
-These three are *why* the shell is what it is — same-renderer, declarative surfaces,
-no-modal, draft/publish all fall out of them.
+4. **Reuse, never rebuild.** Every per-item config panel — the field editor, the
+   validation-rule editor, object settings, and every other metadata form — **is
+   Studio's existing protocol-generated form**, generated from the metadata-type
+   schemas, and is dropped into the inspector unchanged. The builder does **not**
+   hand-roll config UI. This is not just tidiness: reused, already-verified panels are
+   panels the AI cannot get wrong and a human has seen before, which is what makes
+   constraints 1–3 achievable in practice.
+
+### Build boundary — what the builder builds vs. reuses
+This is the answer to *"how do we ensure code written against this doc is correct?"* —
+shrink the novel surface to almost nothing:
+
+- **Built here (the shell / composition):** the top bar + pillar tabs, the left rail,
+  the per-object facet tab bar, the work-surface chrome, and the wiring that routes a
+  selection into the inspector and edits into draft metadata.
+- **Reused (not rebuilt):** the data grid (the existing ListView renderer), and every
+  config panel in the inspector (Studio protocol-generated forms). These are
+  referenced by name; the builder composes them, it does not reimplement them.
+
+Solid vs. dashed in the wireframes marks this boundary.
 
 ---
 
 ## 2. The shell (every pillar shares it)
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│ app ▾   Data · Automation · Interface · Access      ⚙   Save · Publish │  ← top bar
-├─────────┬───────────────────────────────────────────┬──────────────┤
-│ left     │ main (the work surface)                    │ right         │
-│ rail     │                                            │ inspector     │
-│          │  grid / canvas / builder / matrix           │ = selected    │
-│ entities │  + a per-entity facet tab bar (see Data)    │   item's      │
-│ + search │                                            │   config      │
-│ + new    │                                            │  (non-block)  │
-├─────────┴───────────────────────────────────────────┴──────────────┤
-│ breadcrumb · hints                                                    │
-└───────────────────────────────────────────────────────────────────┘
-```
+![Data pillar shell — rail, facet tabs, grid, inspector](./builder-ui/data-pillar.svg)
+
+*Solid frame = shell/composition built in the builder; dashed frame = existing Studio
+component (grid = ListView; inspector = protocol-generated form) reused as-is.*
 
 - **Top bar** — the four pillar tabs (Data / Automation / Interface / Access), the
   ⚙ Settings entry, the app switcher, and the draft indicator + Save draft /
@@ -68,7 +77,7 @@ no-modal, draft/publish all fall out of them.
 - **Right inspector** — a *persistent, consistent* slot that shows the config panel
   for whatever is selected in the main zone. Non-blocking (the main surface stays
   visible); slides in on select, closable. This is the universal "inspector"
-  (Figma / Retool pattern).
+  (Figma / Retool pattern). Its contents are always reused protocol forms (§1.4).
 
 ## 3. Design principles (for best operation experience)
 
@@ -94,6 +103,8 @@ no-modal, draft/publish all fall out of them.
 7. **No modals.** Config surfaces in the inspector or as a focused sub-view with a
    breadcrumb; the work surface never fully disappears. Draft/publish is always
    visible.
+8. **Reuse, never rebuild (§1.4).** Config panels are Studio protocol-generated
+   forms; the builder composes, it does not reimplement.
 
 ---
 
@@ -103,18 +114,6 @@ Data is the **object-model workbench**: define objects, their fields, relationsh
 and validations, and work with records. Data owns the *data layer and the field
 designer*; runtime presentation surfaces (saved grid views, kanban, calendar, pages,
 dashboards) belong to Interface.
-
-### Layout
-
-```
-┌ objects ─┬ Task ┈ Records · Fields · Validations │ Actions · Hooks · ⋯ ┬ inspector ┐
-│ Account  │ ┌ filter · sort · hide ─────────────────────────────────┐ │ Edit field │
-│ Task ◄   │ │ #  Title           Status      [Priority ▾]   +        │ │ Priority   │
-│ Project  │ │ 1  Audit IA        In review    ● Medium               │ │ type: select│
-│ Invoice  │ │ 2  Design system   In progress  ● High                 │ │ options …   │
-│ + New    │ │ + New record                                          │ │ required    │
-└──────────┴─┴───────────────────────────────────────────────────────┴─┴────────────┘
-```
 
 ### Left rail
 The app's objects (v1: owned objects only), with search + New object.
@@ -166,10 +165,10 @@ Fields is the **pure field/layout** designer. They are also the conventional ter
 | **Relationships** | lookup / master-detail fields + reverse relationships (list / graph). Relationships are created by adding a `lookup` field type. |
 | **Actions / Hooks / Views / Forms / Permissions** | the object's scoped instances, opened in-context. |
 
-### Right inspector (per-item config — the existing panels)
-Selecting an item in the main zone opens its existing config panel in the inspector,
-non-blocking. The field editor is shared by both Records (selected column) and Fields
-(selected field):
+### Right inspector (per-item config — reused protocol forms, §1.4)
+Selecting an item in the main zone opens its **existing Studio protocol-generated
+form** in the inspector, non-blocking. Nothing here is bespoke to the builder. The
+field editor is shared by both Records (selected column) and Fields (selected field):
 - a column / field → the **field editor** (type, options, required/unique, field-level validation)
 - a validation rule → the **rule editor** (condition builder + message + severity + events)
 - a record → record detail
@@ -217,7 +216,10 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
 
 ---
 
-## Mockups
-Interactive layout mockups were produced during the design session (grid + inspector,
-form-style field designer, validation rule builder, object facet tabs). The ASCII
-sketches above capture their structure.
+## Wireframes
+- [`builder-ui/data-pillar.svg`](./builder-ui/data-pillar.svg) — the Data pillar shell
+  (rail · facet tabs · Records grid · field inspector), with the solid/dashed
+  build-boundary legend.
+
+Wireframes are committed as SVG so they render on GitHub and stay the unambiguous
+visual target for implementation. More are added per pillar as they are designed.

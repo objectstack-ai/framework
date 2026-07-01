@@ -1,0 +1,129 @@
+<svg viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
+  <!-- palette: surface #fff, rail/inspector #f7f8fa, border #e3e6ea, text #1f2733, muted #7a828c, accent #2f6feb, accent-bg #eaf1fe -->
+  <rect x="0" y="0" width="1000" height="620" fill="#ffffff"/>
+
+  <!-- ===== top bar ===== -->
+  <rect x="0" y="0" width="1000" height="44" fill="#ffffff" stroke="#e3e6ea"/>
+  <text x="16" y="27" font-size="13" fill="#1f2733" font-weight="600">app ▾</text>
+  <!-- pillar tabs -->
+  <text x="372" y="27" font-size="13" fill="#1f2733" font-weight="600">Data</text>
+  <rect x="368" y="36" width="38" height="2" fill="#2f6feb"/>
+  <text x="430" y="27" font-size="13" fill="#7a828c">Automation</text>
+  <text x="524" y="27" font-size="13" fill="#7a828c">Interface</text>
+  <text x="604" y="27" font-size="13" fill="#7a828c">Access</text>
+  <!-- right -->
+  <text x="864" y="27" font-size="14" fill="#7a828c">⚙</text>
+  <text x="884" y="27" font-size="13" fill="#7a828c">Save</text>
+  <rect x="924" y="10" width="62" height="24" rx="5" fill="#2f6feb"/>
+  <text x="936" y="27" font-size="12" fill="#ffffff" font-weight="600">Publish</text>
+
+  <!-- ===== left rail (objects) ===== -->
+  <rect x="0" y="44" width="190" height="576" fill="#f7f8fa" stroke="#e3e6ea"/>
+  <text x="16" y="72" font-size="10.5" fill="#7a828c" letter-spacing="0.6" font-weight="600">OBJECTS</text>
+  <rect x="12" y="82" width="166" height="26" rx="5" fill="#ffffff" stroke="#e3e6ea"/>
+  <text x="22" y="99" font-size="11.5" fill="#7a828c">Search</text>
+  <!-- list -->
+  <text x="18" y="136" font-size="12.5" fill="#1f2733">Account</text>
+  <!-- selected: Task -->
+  <rect x="6" y="144" width="178" height="28" rx="5" fill="#eaf1fe"/>
+  <rect x="6" y="144" width="3" height="28" fill="#2f6feb"/>
+  <text x="18" y="163" font-size="12.5" fill="#1f2733" font-weight="600">Task</text>
+  <text x="18" y="192" font-size="12.5" fill="#1f2733">Project</text>
+  <text x="18" y="220" font-size="12.5" fill="#1f2733">Invoice</text>
+  <text x="16" y="256" font-size="12" fill="#7a828c">+ New object</text>
+
+  <!-- ===== main zone ===== -->
+  <!-- object facet tab bar -->
+  <rect x="190" y="44" width="590" height="36" fill="#ffffff" stroke="#e3e6ea"/>
+  <text x="206" y="67" font-size="12.5" fill="#1f2733" font-weight="600">Records</text>
+  <rect x="204" y="76" width="52" height="2" fill="#2f6feb"/>
+  <text x="272" y="67" font-size="12.5" fill="#7a828c">Fields</text>
+  <text x="318" y="67" font-size="12.5" fill="#7a828c">Validations</text>
+  <line x1="392" y1="52" x2="392" y2="72" stroke="#e3e6ea"/>
+  <text x="404" y="67" font-size="12.5" fill="#7a828c">Actions</text>
+  <rect x="452" y="56" width="30" height="14" rx="7" fill="#f0f1f4"/>
+  <text x="457" y="66" font-size="8.5" fill="#7a828c">auto</text>
+  <text x="494" y="67" font-size="12.5" fill="#7a828c">Hooks</text>
+  <rect x="536" y="56" width="30" height="14" rx="7" fill="#f0f1f4"/>
+  <text x="540" y="66" font-size="8.5" fill="#7a828c">adv</text>
+  <text x="580" y="67" font-size="12.5" fill="#7a828c">⋯</text>
+
+  <!-- toolbar -->
+  <text x="206" y="103" font-size="11.5" fill="#7a828c">⌕ Filter</text>
+  <text x="270" y="103" font-size="11.5" fill="#7a828c">↕ Sort</text>
+  <text x="324" y="103" font-size="11.5" fill="#7a828c">◨ Hide</text>
+  <text x="380" y="103" font-size="11.5" fill="#7a828c">▦ Group</text>
+  <text x="690" y="103" font-size="11.5" fill="#2f6feb" font-weight="600">+ New record</text>
+
+  <!-- grid (reused ListView) — dashed = reused component -->
+  <rect x="200" y="116" width="570" height="270" rx="6" fill="#ffffff" stroke="#c8ccd2" stroke-dasharray="4 3"/>
+  <!-- header row -->
+  <rect x="200" y="116" width="570" height="30" fill="#f7f8fa"/>
+  <text x="214" y="136" font-size="11" fill="#7a828c" font-weight="600">#</text>
+  <text x="248" y="136" font-size="11" fill="#7a828c" font-weight="600">Title</text>
+  <text x="430" y="136" font-size="11" fill="#7a828c" font-weight="600">Status</text>
+  <!-- selected column header: Priority -->
+  <rect x="556" y="116" width="150" height="270" fill="#eaf1fe" opacity="0.6"/>
+  <text x="566" y="136" font-size="11" fill="#2f6feb" font-weight="700">Priority ▾</text>
+  <text x="726" y="136" font-size="13" fill="#7a828c">+</text>
+  <!-- data rows -->
+  <line x1="200" y1="146" x2="770" y2="146" stroke="#eef0f2"/>
+  <text x="214" y="166" font-size="11.5" fill="#1f2733">1</text>
+  <text x="248" y="166" font-size="11.5" fill="#1f2733">Audit IA</text>
+  <text x="430" y="166" font-size="11.5" fill="#7a828c">In review</text>
+  <text x="566" y="166" font-size="11.5" fill="#1f2733">● Medium</text>
+  <line x1="200" y1="180" x2="770" y2="180" stroke="#eef0f2"/>
+  <text x="214" y="200" font-size="11.5" fill="#1f2733">2</text>
+  <text x="248" y="200" font-size="11.5" fill="#1f2733">Design system</text>
+  <text x="430" y="200" font-size="11.5" fill="#7a828c">In progress</text>
+  <text x="566" y="200" font-size="11.5" fill="#1f2733">● High</text>
+  <line x1="200" y1="214" x2="770" y2="214" stroke="#eef0f2"/>
+  <text x="214" y="234" font-size="11.5" fill="#1f2733">3</text>
+  <text x="248" y="234" font-size="11.5" fill="#1f2733">API surface</text>
+  <text x="430" y="234" font-size="11.5" fill="#7a828c">Todo</text>
+  <text x="566" y="234" font-size="11.5" fill="#1f2733">● Low</text>
+  <line x1="200" y1="248" x2="770" y2="248" stroke="#eef0f2"/>
+  <text x="214" y="268" font-size="11.5" fill="#1f2733">4</text>
+  <text x="248" y="268" font-size="11.5" fill="#1f2733">Release notes</text>
+  <text x="430" y="268" font-size="11.5" fill="#7a828c">Done</text>
+  <text x="566" y="268" font-size="11.5" fill="#1f2733">● Medium</text>
+  <text x="214" y="300" font-size="11.5" fill="#7a828c">+ New record</text>
+  <text x="210" y="376" font-size="9.5" fill="#9aa0a8" font-style="italic">grid = existing ListView renderer (reused)</text>
+
+  <!-- ===== right inspector (reused protocol form) ===== -->
+  <rect x="780" y="44" width="220" height="576" fill="#f7f8fa" stroke="#e3e6ea"/>
+  <text x="796" y="72" font-size="10.5" fill="#7a828c" letter-spacing="0.4">EDIT FIELD</text>
+  <text x="796" y="92" font-size="14" fill="#1f2733" font-weight="700">Priority</text>
+  <line x1="792" y1="104" x2="988" y2="104" stroke="#e3e6ea"/>
+  <!-- protocol-form fields, dashed frame = reused -->
+  <rect x="788" y="116" width="204" height="380" rx="6" fill="#ffffff" stroke="#c8ccd2" stroke-dasharray="4 3"/>
+  <text x="800" y="140" font-size="10.5" fill="#7a828c">Label</text>
+  <rect x="800" y="146" width="180" height="26" rx="5" fill="#ffffff" stroke="#e3e6ea"/>
+  <text x="810" y="163" font-size="11.5" fill="#1f2733">Priority</text>
+  <text x="800" y="192" font-size="10.5" fill="#7a828c">Type</text>
+  <rect x="800" y="198" width="180" height="26" rx="5" fill="#ffffff" stroke="#e3e6ea"/>
+  <text x="810" y="215" font-size="11.5" fill="#1f2733">Select ▾</text>
+  <text x="800" y="244" font-size="10.5" fill="#7a828c">Options</text>
+  <rect x="800" y="250" width="52" height="22" rx="11" fill="#f0f1f4"/>
+  <text x="812" y="265" font-size="10.5" fill="#1f2733">Low</text>
+  <rect x="858" y="250" width="66" height="22" rx="11" fill="#f0f1f4"/>
+  <text x="870" y="265" font-size="10.5" fill="#1f2733">Medium</text>
+  <rect x="800" y="278" width="52" height="22" rx="11" fill="#f0f1f4"/>
+  <text x="812" y="293" font-size="10.5" fill="#1f2733">High</text>
+  <text x="928" y="293" font-size="11" fill="#2f6feb">+ add</text>
+  <text x="800" y="332" font-size="11.5" fill="#1f2733">Required</text>
+  <rect x="944" y="322" width="36" height="18" rx="9" fill="#d7dbe0"/>
+  <circle cx="953" cy="331" r="7" fill="#ffffff"/>
+  <text x="800" y="364" font-size="11.5" fill="#1f2733">Unique</text>
+  <rect x="944" y="354" width="36" height="18" rx="9" fill="#d7dbe0"/>
+  <circle cx="953" cy="363" r="7" fill="#ffffff"/>
+  <text x="800" y="482" font-size="9.5" fill="#9aa0a8" font-style="italic">Studio protocol-</text>
+  <text x="800" y="494" font-size="9.5" fill="#9aa0a8" font-style="italic">generated field form (reused)</text>
+
+  <!-- ===== footer legend ===== -->
+  <rect x="0" y="590" width="1000" height="30" fill="#ffffff" stroke="#e3e6ea"/>
+  <rect x="16" y="599" width="14" height="12" fill="#ffffff" stroke="#1f2733"/>
+  <text x="36" y="609" font-size="10.5" fill="#7a828c">solid = shell / composition (built in the builder)</text>
+  <rect x="330" y="599" width="14" height="12" fill="#ffffff" stroke="#c8ccd2" stroke-dasharray="3 2"/>
+  <text x="350" y="609" font-size="10.5" fill="#7a828c">dashed = existing Studio component (reused, not rebuilt)</text>
+</svg>
