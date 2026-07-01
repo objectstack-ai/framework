@@ -300,11 +300,15 @@ export type ImportMapping = z.infer<typeof ImportMappingSchema>;
  * }
  */
 export const ImportRequestSchema = lazySchema(() => z.object({
-  format: z.enum(['csv', 'json']).optional()
-    .describe('Payload shape: csv text or a rows[] array (inferred when omitted)'),
+  format: z.enum(['csv', 'json', 'xlsx']).optional()
+    .describe('Payload shape: csv text, a rows[] array, or a base64 xlsx (inferred when omitted)'),
   csv: z.string().optional().describe('CSV text (when format = csv)'),
   rows: z.array(z.record(z.string(), z.unknown())).optional()
     .describe('Row objects (when format = json)'),
+  xlsxBase64: z.string().optional()
+    .describe('Base64-encoded .xlsx workbook bytes (when format = xlsx); parsed server-side'),
+  sheet: z.union([z.string(), z.number().int()]).optional()
+    .describe('Worksheet name or 1-based index to read (xlsx; defaults to the first sheet)'),
   mapping: ImportMappingSchema.optional()
     .describe('Source column → target field mapping'),
   dryRun: z.boolean().default(false)

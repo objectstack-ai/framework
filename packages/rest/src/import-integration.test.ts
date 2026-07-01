@@ -237,4 +237,49 @@ describe('import route — real engine + protocol integration', () => {
     expect(res._status).toBe(400);
     expect(res._json.code).toBe('INVALID_REQUEST');
   });
+
+  it('parses a native xlsx workbook server-side and coerces cells like csv', async () => {
+    const ExcelJS: any = (await import('exceljs')).default ?? (await import('exceljs'));
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Sheet1');
+    ws.addRow(['ID', '标题', '完成', '优先级', '分数', '截止', '负责人']);
+    ws.addRow(['1', '写代码', '是', '高', 1200, new Date('2026-06-30T00:00:00Z'), '张三']);
+    ws.addRow(['2', '测试', '否', '低', 3, '2026/07/01', '李四']);
+    const buf = await wb.xlsx.writeBuffer();
+    const xlsxBase64 = Buffer.from(buf).toString('base64');
+
+    const res = await call(route, {
+      format: 'xlsx', xlsxBase64,
+      mapping: { ID: 'id', 标题: 'title', 完成: 'done', 优先级: 'priority', 分数: 'score', 截止: 'due', 负责人: 'owner' },
+    });
+    expect(res._json).toMatchObject({ total: 2, ok: 2, errors: 0, created: 2 });
+    const one = await engine.findOne('task', { where: { id: '1' } });
+    expect(one).toMatchObject({ title: '写代码', done: true, priority: 'high', score: 1200, owner: 'u1' });
+    expect(String(one.due)).toContain('2026-06-30');
+    const two = await engine.findOne('task', { where: { id: '2' } });
+    expect(two).toMatchObject({ title: '测试', done: false, priority: 'low', score: 3, owner: 'u2' });
+  });
+
+  it('reads xlsxBase64 without an explicit format and honors the sheet selector', async () => {
+    const ExcelJS: any = (await import('exceljs')).default ?? (await import('exceljs'));
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('Empty'); // decoy first sheet
+    const ws = wb.addWorksheet('Data');
+    ws.addRow(['id', 'title', 'score']);
+    ws.addRow(['x1', 'from-named-sheet', 7]);
+    const buf = await wb.xlsx.writeBuffer();
+    const xlsxBase64 = Buffer.from(buf).toString('base64');
+
+    const res = await call(route, { xlsxBase64, sheet: 'Data' });
+    expect(res._json).toMatchObject({ total: 1, ok: 1, created: 1 });
+    const row = await engine.findOne('task', { where: { id: 'x1' } });
+    expect(row).toMatchObject({ title: 'from-named-sheet', score: 7 });
+  });
+
+  it('rejects a malformed xlsx payload with 400', async () => {
+    const res = await call(route, { format: 'xlsx', xlsxBase64: Buffer.from('not a workbook').toString('base64') });
+    expect(res._status).toBe(400);
+    expect(res._json.code).toBe('INVALID_REQUEST');
+    expect(String(res._json.error)).toMatch(/xlsx/i);
+  });
 });

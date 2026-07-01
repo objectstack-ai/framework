@@ -383,6 +383,75 @@ function parseCsvToRows(csv: string, mapping: Record<string, string> = {}): Arra
 }
 
 /**
+ * Flatten one ExcelJS cell value to the raw string the coercion layer expects.
+ * ExcelJS hands back rich objects for formulas / hyperlinks / rich text / dates;
+ * we reduce each to the human-visible text so a server-parsed xlsx yields the
+ * same cells a CSV export would (dates → ISO, so parseDateCell can re-read them).
+ */
+function xlsxCellToString(value: any): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object') {
+        // Formula cell → prefer its computed result.
+        if ('result' in value && value.result !== undefined && value.result !== null) return xlsxCellToString(value.result);
+        // Hyperlink cell → the visible text, not the target.
+        if ('text' in value && typeof value.text === 'string') return value.text;
+        if ('hyperlink' in value && typeof value.hyperlink === 'string') return value.hyperlink;
+        // Rich text → concatenate runs.
+        if (Array.isArray(value.richText)) return value.richText.map((r: any) => r?.text ?? '').join('');
+        if ('error' in value && value.error) return String(value.error);
+    }
+    try { return String(value); } catch { return ''; }
+}
+
+/**
+ * Parse an .xlsx workbook (raw bytes) into row objects, mirroring
+ * {@link parseCsvToRows}: first non-empty row is the header, each subsequent row
+ * becomes `{ header→cell }` with the optional `mapping` renaming columns. Reads
+ * the named/indexed `sheet` when given, else the first worksheet. Dynamically
+ * imports ExcelJS (already a dependency of the export path) so CSV/JSON imports
+ * don't pay for it.
+ */
+async function parseXlsxToRows(
+    buffer: Buffer | ArrayBuffer,
+    mapping: Record<string, string> = {},
+    sheet?: string | number,
+): Promise<Array<Record<string, any>>> {
+    const ExcelJS: any = (await import('exceljs')).default ?? (await import('exceljs'));
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = sheet !== undefined ? wb.getWorksheet(sheet as any) : wb.worksheets[0];
+    if (!ws) return [];
+
+    const cells: string[][] = [];
+    ws.eachRow({ includeEmpty: false }, (row: any) => {
+        const values = row.values as any[]; // 1-based; index 0 is unused
+        const line: string[] = [];
+        for (let c = 1; c < values.length; c++) line.push(xlsxCellToString(values[c]));
+        cells.push(line);
+    });
+    while (cells.length > 0 && cells[cells.length - 1].every(c => c === '')) cells.pop();
+    if (cells.length < 2) return [];
+
+    const header = cells[0].map(h => h.trim());
+    const fields = header.map(h => mapping[h] ?? h);
+    const out: Array<Record<string, any>> = [];
+    for (let r = 1; r < cells.length; r++) {
+        const line = cells[r];
+        const obj: Record<string, any> = {};
+        for (let c = 0; c < fields.length; c++) {
+            const key = fields[c];
+            if (!key) continue;
+            obj[key] = line[c] ?? '';
+        }
+        out.push(obj);
+    }
+    return out;
+}
+
+/**
  * Escape a single value into an RFC-4180 CSV cell. Values containing
  * commas, quotes, CR, or LF are wrapped in double-quotes with embedded
  * quotes doubled. `null` / `undefined` become an empty cell. Objects and
@@ -3259,19 +3328,32 @@ export class RestServer {
                         return out;
                     };
 
-                    // Build rows[] from either explicit JSON array or CSV text.
+                    // Build rows[] from JSON array, CSV text, or a base64 xlsx.
                     let rows: Array<Record<string, any>> = [];
                     if (body.format === 'json' && Array.isArray(body.rows)) {
                         rows = (body.rows as Array<Record<string, any>>).map(applyMapping);
                     } else if ((body.format === 'csv' || typeof body.csv === 'string') && typeof body.csv === 'string') {
                         rows = parseCsvToRows(body.csv, mapping);
+                    } else if ((body.format === 'xlsx' || typeof body.xlsxBase64 === 'string') && typeof body.xlsxBase64 === 'string') {
+                        // Native server-side xlsx parse — the client uploads raw
+                        // workbook bytes (base64) instead of pre-flattening to CSV.
+                        try {
+                            const buf = Buffer.from(body.xlsxBase64, 'base64');
+                            rows = await parseXlsxToRows(buf, mapping, body.sheet);
+                        } catch (e: any) {
+                            res.status(400).json({
+                                code: 'INVALID_REQUEST',
+                                error: `Failed to parse xlsx: ${e?.message ?? String(e)}`,
+                            });
+                            return;
+                        }
                     } else if (Array.isArray(body)) {
                         // Permissive: a bare JSON array at the top level.
                         rows = (body as Array<Record<string, any>>).map(applyMapping);
                     } else {
                         res.status(400).json({
                             code: 'INVALID_REQUEST',
-                            error: 'Provide either format:"csv" with csv text or format:"json" with rows[]',
+                            error: 'Provide format:"csv" with csv text, format:"json" with rows[], or format:"xlsx" with xlsxBase64',
                         });
                         return;
                     }
