@@ -84,6 +84,13 @@ import {
   ApiRoutes,
   ImportRequest,
   ImportResponse,
+  CreateImportJobRequest,
+  CreateImportJobResponse,
+  ImportJobProgress,
+  ImportJobResults,
+  ImportJobSummary,
+  ListImportJobsRequest,
+  ListImportJobsResponse,
 } from '@objectstack/spec/api';
 import type {
   ApprovalRequestRow,
@@ -3067,6 +3074,62 @@ export class ObjectStackClient {
         return this.unwrapResponse<ImportResponse>(res);
     },
 
+    /**
+     * Import-job namespace — the asynchronous counterpart to {@link import} for
+     * large files (up to 50,000 rows). `createImportJob` posts the whole payload
+     * once and returns immediately with a `jobId`; a server worker processes the
+     * batch in the background. Poll {@link getImportJobProgress} for live
+     * counters, {@link getImportJobResults} for the capped per-row report, and
+     * {@link listImportJobs} for history. {@link cancelImportJob} stops a
+     * pending/running job cooperatively.
+     *
+     * These routes require a server new enough to expose them — older servers
+     * return 404, which surfaces here as a rejected promise. Callers that want
+     * graceful degradation should feature-detect (e.g. try the job, fall back
+     * to the synchronous {@link import} on 404).
+     */
+    createImportJob: async (object: string, request: CreateImportJobRequest): Promise<CreateImportJobResponse> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/${object}/import/jobs`, {
+            method: 'POST',
+            body: JSON.stringify(request),
+        });
+        return this.unwrapResponse<CreateImportJobResponse>(res);
+    },
+
+    getImportJobProgress: async (jobId: string): Promise<ImportJobProgress> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/import/jobs/${encodeURIComponent(jobId)}`);
+        return this.unwrapResponse<ImportJobProgress>(res);
+    },
+
+    getImportJobResults: async (jobId: string): Promise<ImportJobResults> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/import/jobs/${encodeURIComponent(jobId)}/results`);
+        return this.unwrapResponse<ImportJobResults>(res);
+    },
+
+    listImportJobs: async (query: Partial<ListImportJobsRequest> = {}): Promise<ImportJobSummary[]> => {
+        const route = this.getRoute('data');
+        const qs = new URLSearchParams();
+        if (query.object) qs.set('object', query.object);
+        if (query.status) qs.set('status', query.status);
+        if (query.limit != null) qs.set('limit', String(query.limit));
+        if (query.offset != null) qs.set('offset', String(query.offset));
+        const suffix = qs.toString() ? `?${qs.toString()}` : '';
+        const res = await this.fetch(`${this.baseUrl}${route}/import/jobs${suffix}`);
+        const body = await this.unwrapResponse<ListImportJobsResponse>(res);
+        return body.jobs;
+    },
+
+    cancelImportJob: async (jobId: string): Promise<{ success: boolean }> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/import/jobs/${encodeURIComponent(jobId)}/cancel`, {
+            method: 'POST',
+        });
+        return this.unwrapResponse<{ success: boolean }>(res);
+    },
+
     update: async <T = any>(
         object: string,
         id: string,
@@ -3492,6 +3555,43 @@ export class ScopedProjectClient {
       });
       return this.parent._unwrap<ImportResponse>(res);
     },
+    /**
+     * Asynchronous import jobs (scoped) — see the top-level `data.createImportJob`
+     * for semantics. Large payloads are posted once; a server worker processes
+     * them in the background while callers poll progress / results / history.
+     */
+    createImportJob: async (object: string, request: CreateImportJobRequest): Promise<CreateImportJobResponse> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/import/jobs`), {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return this.parent._unwrap<CreateImportJobResponse>(res);
+    },
+    getImportJobProgress: async (jobId: string): Promise<ImportJobProgress> => {
+      const res = await this.parent._fetch(this.url(`/data/import/jobs/${encodeURIComponent(jobId)}`));
+      return this.parent._unwrap<ImportJobProgress>(res);
+    },
+    getImportJobResults: async (jobId: string): Promise<ImportJobResults> => {
+      const res = await this.parent._fetch(this.url(`/data/import/jobs/${encodeURIComponent(jobId)}/results`));
+      return this.parent._unwrap<ImportJobResults>(res);
+    },
+    listImportJobs: async (query: Partial<ListImportJobsRequest> = {}): Promise<ImportJobSummary[]> => {
+      const qs = new URLSearchParams();
+      if (query.object) qs.set('object', query.object);
+      if (query.status) qs.set('status', query.status);
+      if (query.limit != null) qs.set('limit', String(query.limit));
+      if (query.offset != null) qs.set('offset', String(query.offset));
+      const suffix = qs.toString() ? `?${qs.toString()}` : '';
+      const res = await this.parent._fetch(this.url(`/data/import/jobs${suffix}`));
+      const body = await this.parent._unwrap<ListImportJobsResponse>(res);
+      return body.jobs;
+    },
+    cancelImportJob: async (jobId: string): Promise<{ success: boolean }> => {
+      const res = await this.parent._fetch(this.url(`/data/import/jobs/${encodeURIComponent(jobId)}/cancel`), {
+        method: 'POST',
+      });
+      return this.parent._unwrap<{ success: boolean }>(res);
+    },
     update: async <T = any>(object: string, id: string, data: Partial<T>): Promise<UpdateDataResult<T>> => {
       const res = await this.parent._fetch(this.url(`/data/${object}/${id}`), {
         method: 'PATCH',
@@ -3674,6 +3774,13 @@ export type {
   AuthProviderInfo,
   EmailPasswordConfigPublic,
   AuthFeaturesConfig,
+  CreateImportJobRequest,
+  CreateImportJobResponse,
+  ImportJobProgress,
+  ImportJobResults,
+  ImportJobSummary,
+  ListImportJobsRequest,
+  ListImportJobsResponse,
 } from '@objectstack/spec/api';
 
 // Approval runtime types (ADR-0019) — surfaced so SDK consumers can type the
