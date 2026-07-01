@@ -12,7 +12,36 @@ composes them into one coherent builder, optimized for operation experience.
 
 ---
 
-## 1. The shell (every pillar shares it)
+## 1. Core constraint — AI-first, human-confirmable authoring
+
+Every layout and interaction decision in the builder is judged against three
+requirements. They are the north star: a design that fails any of them is wrong,
+however convenient it looks. Each pillar's design (below) is checked against them.
+
+1. **AI generates it in one shot.** The builder must let the agent produce a whole,
+   correct artifact — an object with its fields, validations, and layout — in a
+   single pass. This works because the agent edits the *same flat, explicit metadata*
+   a human does (same-renderer, §3.6) and authors within *constrained, declarative*
+   surfaces (typed fields, enum options, the condition builder — not free-form code).
+   The *shape of the metadata*, not a click-through wizard, is what the AI targets.
+
+2. **The design prevents AI mistakes.** Constrain the space so an invalid result is
+   hard to express: declarative over code (a condition builder, not hand-written CEL,
+   §3 Validation), typed and enumerated inputs, and the pre-publish validation gates
+   (`os validate` / `os build`). Nothing the AI writes goes live implicitly — it lands
+   as a **draft** (ADR-0033), never auto-published.
+
+3. **A human confirms it in one pass.** A reviewer approves or rejects with one look:
+   AI changes arrive as a **draft diff** (ADR-0033), and the artifact renders on one
+   canvas (the grid + inspector) with no modals hiding state (§3.7) and a non-blocking
+   inspector, so the whole thing stays visible while it is reviewed.
+
+These three are *why* the shell is what it is — same-renderer, declarative surfaces,
+no-modal, draft/publish all fall out of them.
+
+---
+
+## 2. The shell (every pillar shares it)
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -41,7 +70,7 @@ composes them into one coherent builder, optimized for operation experience.
   visible); slides in on select, closable. This is the universal "inspector"
   (Figma / Retool pattern).
 
-## 2. Design principles (for best operation experience)
+## 3. Design principles (for best operation experience)
 
 1. **Consistent three zones across all four pillars** — rail / main / inspector.
    Muscle memory: config is always on the right, entities always on the left.
@@ -60,15 +89,15 @@ composes them into one coherent builder, optimized for operation experience.
    metadata is stored once; there are two navigational entries, no duplication.
 6. **Same renderer.** The builder manipulates the same live artifact the end user
    sees (edit a field on the real grid; set a permission on the real matrix). This
-   is also what keeps AI authoring safe — the agent edits the same flat, explicit
-   metadata a human does.
+   is also what keeps AI authoring safe (§1) — the agent edits the same flat,
+   explicit metadata a human does.
 7. **No modals.** Config surfaces in the inspector or as a focused sub-view with a
    breadcrumb; the work surface never fully disappears. Draft/publish is always
    visible.
 
 ---
 
-## 3. Data pillar
+## 4. Data pillar
 
 Data is the **object-model workbench**: define objects, their fields, relationships,
 and validations, and work with records. Data owns the *data layer and the field
@@ -98,7 +127,8 @@ Per selected object, a tab bar of its facets — grouped:
 - **⋯ More**: `Views` · `Forms` (Interface) · `Permissions` (Access) · `Settings` · `Indexes`
 
 `Records` is the default. Cross-pillar tabs carry a pillar tag and open **in-context,
-scoped to this object** (their pillar is the cross-object lens — two doors, §2.5).
+scoped to this object** (their pillar is the cross-object lens — the two-doors
+principle, §3.5).
 
 Note: `Actions` / `Hooks` / `Validations` are the three authoring surfaces for logic
 on an object, routed by intent per [ADR-0077](../adr/0077-authoring-surface-boundary-hook-flow-validation.md):
@@ -120,6 +150,12 @@ and both configure a selected field through the *same* right-hand **field editor
 
 The choice between them is a working preference: reach for `Records` when you want to
 see data while shaping fields, `Fields` when you want to arrange and group them.
+
+**Why keep the names `Records` / `Fields`** (rather than `Grid` / `Form`): each name
+states the tab's *distinguishing* trait — Records is the one that shows **data**,
+Fields is the **pure field/layout** designer. They are also the conventional terms
+(Salesforce, Airtable). Style-based names would collide with Interface's existing
+`Views` (saved grid/kanban) and `Forms` (end-user form surfaces).
 
 ### Main zone (content of the active tab)
 | Tab | Main-zone content |
@@ -152,6 +188,8 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
   list; each rule edits in the inspector via a **condition builder** (field /
   operator / value, and/or) with a raw-expression escape hatch — never hand-written
   CEL as the primary path. Validation stays **declarative** (not a hook); Data-owned.
+  The condition builder is also what makes validation AI-generatable and
+  human-confirmable in one pass (§1).
 
 ### v1 scope
 - **Ship**: owned objects · `Records` grid (data + add/configure columns) · `Fields`
@@ -164,7 +202,7 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
 
 ---
 
-## 4. Other pillars (to design — same shell)
+## 5. Other pillars (to design — same shell)
 
 - **Automation** — left: automations grouped by trigger (record-change / scheduled /
   API / manual action); main: the flow **canvas**; inspector: the selected node's
