@@ -1051,3 +1051,62 @@ describe('ObjectStackClient locale → Accept-Language', () => {
         expect(lastHeaders(fetchMock)['Accept-Language']).toBeUndefined();
     });
 });
+
+describe('Import-job namespace', () => {
+    it('createImportJob POSTs the payload to /data/:object/import/jobs', async () => {
+        const { client, fetchMock } = createMockClient({ jobId: 'imp_x', object: 'task', status: 'pending', total: 3, createdAt: '2026-07-01T00:00:00Z' });
+        const res = await client.data.createImportJob('task', { format: 'json', rows: [{ id: 'a' }] } as any);
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe('http://localhost:3000/api/v1/data/task/import/jobs');
+        expect(init.method).toBe('POST');
+        expect(res).toMatchObject({ jobId: 'imp_x', status: 'pending', total: 3 });
+    });
+
+    it('getImportJobProgress GETs /data/import/jobs/:jobId', async () => {
+        const { client, fetchMock } = createMockClient({ jobId: 'imp_x', object: 'task', status: 'running', percentComplete: 40 });
+        const res = await client.data.getImportJobProgress('imp_x');
+        expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/v1/data/import/jobs/imp_x');
+        expect(res.percentComplete).toBe(40);
+    });
+
+    it('getImportJobResults GETs the /results sub-route', async () => {
+        const { client, fetchMock } = createMockClient({ jobId: 'imp_x', status: 'succeeded', results: [{ row: 1, ok: true, action: 'created' }], resultsTruncated: false });
+        const res = await client.data.getImportJobResults('imp_x');
+        expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/v1/data/import/jobs/imp_x/results');
+        expect(res.results).toHaveLength(1);
+        expect(res.resultsTruncated).toBe(false);
+    });
+
+    it('listImportJobs builds the query string and unwraps the jobs array', async () => {
+        const { client, fetchMock } = createMockClient({ jobs: [{ jobId: 'imp_x', object: 'task', status: 'succeeded' }] });
+        const jobs = await client.data.listImportJobs({ object: 'task', status: 'succeeded', limit: 10, offset: 5 });
+        const url = fetchMock.mock.calls[0][0] as string;
+        expect(url.startsWith('http://localhost:3000/api/v1/data/import/jobs?')).toBe(true);
+        expect(url).toContain('object=task');
+        expect(url).toContain('status=succeeded');
+        expect(url).toContain('limit=10');
+        expect(url).toContain('offset=5');
+        expect(jobs).toHaveLength(1);
+        expect(jobs[0].jobId).toBe('imp_x');
+    });
+
+    it('cancelImportJob POSTs the /cancel sub-route', async () => {
+        const { client, fetchMock } = createMockClient({ success: true });
+        const res = await client.data.cancelImportJob('imp_x');
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe('http://localhost:3000/api/v1/data/import/jobs/imp_x/cancel');
+        expect(init.method).toBe('POST');
+        expect(res.success).toBe(true);
+    });
+
+    it('undoImportJob POSTs the /undo sub-route', async () => {
+        const { client, fetchMock } = createMockClient({ success: true, jobId: 'imp_x', object: 'task', deleted: 3, restored: 2, failed: 0 });
+        const res = await client.data.undoImportJob('imp_x');
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe('http://localhost:3000/api/v1/data/import/jobs/imp_x/undo');
+        expect(init.method).toBe('POST');
+        expect(res.success).toBe(true);
+        expect(res.deleted).toBe(3);
+        expect(res.restored).toBe(2);
+    });
+});

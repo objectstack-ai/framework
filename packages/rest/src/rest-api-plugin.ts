@@ -6,6 +6,7 @@ import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
 import { registerPackageRoutes } from './package-routes.js';
 import { registerExternalDatasourceRoutes } from './external-datasource-routes.js';
 import type { PackageService } from '@objectstack/service-package';
+import { SysImportJob } from '@objectstack/platform-objects/audit';
 
 export interface RestApiPluginConfig {
     serverServiceName?: string;
@@ -32,8 +33,25 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
         name: 'com.objectstack.rest.api',
         version: '1.0.0',
         
-        init: async (_ctx: PluginContext) => {
-            // No service registration, this is a consumer plugin
+        init: async (ctx: PluginContext) => {
+            // Register the async-import job object so its state/progress/history
+            // is queryable in Studio and readable by the import-job routes.
+            // The REST plugin owns the import feature, so it owns this object
+            // (there is no separate import service). Mirrors JobServicePlugin.
+            try {
+                ctx.getService<{ register(m: any): void }>('manifest').register({
+                    id: 'com.objectstack.rest.api',
+                    name: 'REST API',
+                    version: '1.0.0',
+                    type: 'plugin',
+                    scope: 'system',
+                    defaultDatasource: 'cloud',
+                    namespace: 'sys',
+                    objects: [SysImportJob],
+                });
+            } catch (err) {
+                ctx.logger.warn('RestApiPlugin: manifest service unavailable; sys_import_job not registered', err as any);
+            }
         },
         
         start: async (ctx: PluginContext) => {
