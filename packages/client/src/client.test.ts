@@ -1098,4 +1098,15 @@ describe('Import-job namespace', () => {
         expect(init.method).toBe('POST');
         expect(res.success).toBe(true);
     });
+
+    it('undoImportJob POSTs the /undo sub-route', async () => {
+        const { client, fetchMock } = createMockClient({ success: true, jobId: 'imp_x', object: 'task', deleted: 3, restored: 2, failed: 0 });
+        const res = await client.data.undoImportJob('imp_x');
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe('http://localhost:3000/api/v1/data/import/jobs/imp_x/undo');
+        expect(init.method).toBe('POST');
+        expect(res.success).toBe(true);
+        expect(res.deleted).toBe(3);
+        expect(res.restored).toBe(2);
+    });
 });

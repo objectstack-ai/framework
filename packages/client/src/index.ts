@@ -91,6 +91,7 @@ import {
   ImportJobSummary,
   ListImportJobsRequest,
   ListImportJobsResponse,
+  UndoImportJobResponse,
 } from '@objectstack/spec/api';
 import type {
   ApprovalRequestRow,
@@ -3130,6 +3131,20 @@ export class ObjectStackClient {
         return this.unwrapResponse<{ success: boolean }>(res);
     },
 
+    /**
+     * Logically roll back a finished import: delete the records it created and
+     * restore the fields it updated to their pre-import values. Only jobs that
+     * captured an undo log (small, non-dry-run, not yet reverted) are undoable —
+     * others return 422. See {@link ImportJobProgress.undoable}.
+     */
+    undoImportJob: async (jobId: string): Promise<UndoImportJobResponse> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/import/jobs/${encodeURIComponent(jobId)}/undo`, {
+            method: 'POST',
+        });
+        return this.unwrapResponse<UndoImportJobResponse>(res);
+    },
+
     update: async <T = any>(
         object: string,
         id: string,
@@ -3592,6 +3607,12 @@ export class ScopedProjectClient {
       });
       return this.parent._unwrap<{ success: boolean }>(res);
     },
+    undoImportJob: async (jobId: string): Promise<UndoImportJobResponse> => {
+      const res = await this.parent._fetch(this.url(`/data/import/jobs/${encodeURIComponent(jobId)}/undo`), {
+        method: 'POST',
+      });
+      return this.parent._unwrap<UndoImportJobResponse>(res);
+    },
     update: async <T = any>(object: string, id: string, data: Partial<T>): Promise<UpdateDataResult<T>> => {
       const res = await this.parent._fetch(this.url(`/data/${object}/${id}`), {
         method: 'PATCH',
@@ -3781,6 +3802,7 @@ export type {
   ImportJobSummary,
   ListImportJobsRequest,
   ListImportJobsResponse,
+  UndoImportJobResponse,
 } from '@objectstack/spec/api';
 
 // Approval runtime types (ADR-0019) — surfaced so SDK consumers can type the

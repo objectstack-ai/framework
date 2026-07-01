@@ -74,6 +74,20 @@ export const SysImportJob = ObjectSchema.create({
       group: 'Outcome',
     }),
 
+    // ── undo / logical rollback ──
+    undo_log: Field.json({
+      label: 'Undo Log',
+      required: false,
+      description: 'Reversal instructions ({created:[ids], updated:[{id,before}]}) captured for small non-dry-run jobs so the import can be undone',
+      group: 'Outcome',
+    }),
+    reverted_at: Field.datetime({
+      label: 'Reverted At',
+      required: false,
+      description: 'Set when the import was undone (created records deleted, updated records restored)',
+      group: 'Outcome',
+    }),
+
     // ── lifecycle timestamps ──
     started_at: Field.datetime({ label: 'Started At', required: false, group: 'State' }),
     completed_at: Field.datetime({ label: 'Completed At', required: false, group: 'State' }),

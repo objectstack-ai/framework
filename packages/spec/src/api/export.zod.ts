@@ -426,6 +426,8 @@ export const ImportJobProgressSchema = lazySchema(() => z.object({
   skipped: z.number().int().describe('Rows skipped'),
   errors: z.number().int().describe('Rows that failed'),
   percentComplete: z.number().min(0).max(100).describe('processed / total as a percentage'),
+  undoable: z.boolean().describe('Whether this job can still be logically rolled back (undo log captured, terminal state, not yet reverted)'),
+  revertedAt: z.string().optional().describe('When the job was undone / rolled back (ISO 8601)'),
   error: z.string().optional().describe('Fatal error message (when status = failed)'),
   startedAt: z.string().optional().describe('Processing start timestamp (ISO 8601)'),
   completedAt: z.string().optional().describe('Completion timestamp (ISO 8601)'),
@@ -467,6 +469,8 @@ export const ImportJobSummarySchema = lazySchema(() => z.object({
   errors: z.number().int().describe('Rows failed'),
   createdAt: z.string().describe('Job creation timestamp (ISO 8601)'),
   completedAt: z.string().optional().describe('Completion timestamp (ISO 8601)'),
+  undoable: z.boolean().describe('Whether this job can still be logically rolled back'),
+  revertedAt: z.string().optional().describe('When the job was undone / rolled back (ISO 8601)'),
 }));
 export type ImportJobSummary = z.infer<typeof ImportJobSummarySchema>;
 
@@ -475,6 +479,20 @@ export const ListImportJobsResponseSchema = lazySchema(() => z.object({
   jobs: z.array(ImportJobSummarySchema).describe('Import jobs, newest first'),
 }));
 export type ListImportJobsResponse = z.infer<typeof ListImportJobsResponseSchema>;
+
+/**
+ * Undo Import Job Response — the outcome of a logical rollback: created records
+ * deleted, updated records restored to their pre-import field values.
+ */
+export const UndoImportJobResponseSchema = lazySchema(() => z.object({
+  success: z.boolean().describe('Whether the undo completed'),
+  jobId: z.string().describe('Import job id'),
+  object: z.string().describe('Target object name'),
+  deleted: z.number().int().describe('Created records deleted'),
+  restored: z.number().int().describe('Updated records restored to pre-import values'),
+  failed: z.number().int().describe('Reversal operations that failed'),
+}));
+export type UndoImportJobResponse = z.infer<typeof UndoImportJobResponseSchema>;
 
 // ==========================================
 // 5. Scheduled Export Jobs
@@ -742,5 +760,11 @@ export const ImportJobApiContracts = {
     path: '/api/v1/data/import/jobs/:jobId/cancel',
     input: z.object({ jobId: z.string() }),
     output: BaseResponseSchema,
+  },
+  undoImportJob: {
+    method: 'POST' as const,
+    path: '/api/v1/data/import/jobs/:jobId/undo',
+    input: z.object({ jobId: z.string() }),
+    output: UndoImportJobResponseSchema,
   },
 };

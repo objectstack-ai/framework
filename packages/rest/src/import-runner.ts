@@ -35,10 +35,25 @@ export interface ImportProgress {
   errors: number;
 }
 
+/**
+ * Records exactly what a non-dry-run import changed, so the job can be undone:
+ * created records are deleted, and updated records have the touched fields
+ * restored to their pre-import values. Only the fields the import wrote are
+ * captured (keyed to `before`), keeping the log precise and bounded.
+ */
+export interface ImportUndoLog {
+  /** Ids of records this import created (delete to undo). */
+  created: string[];
+  /** Per updated record: the touched fields' values *before* the import. */
+  updated: Array<{ id: string; before: Record<string, any> }>;
+}
+
 export interface ImportRunSummary extends ImportProgress {
   ok: number;
   results: ImportRowResult[];
   cancelled: boolean;
+  /** Present only when `captureUndo` was set — the reversal instructions. */
+  undoLog?: ImportUndoLog;
 }
 
 /** Minimal protocol surface the runner needs (find / create / update). */
@@ -80,6 +95,12 @@ export interface RunImportOptions {
    * truthy the runner stops and returns `cancelled: true` with partial results.
    */
   shouldCancel?: () => boolean | Promise<boolean>;
+  /**
+   * When true (and not a dry run), accumulate an {@link ImportUndoLog} so the
+   * import can be reverted later. Callers gate this on row count to bound the
+   * stored snapshot size.
+   */
+  captureUndo?: boolean;
 }
 
 export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
@@ -87,8 +108,18 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
     p, objectName, environmentId, context, rows, metaMap,
     writeMode, matchFields, dryRun, runAutomations,
     trimWhitespace, nullValues, createMissingOptions, skipBlankMatchKey,
-    onProgress, shouldCancel,
+    onProgress, shouldCancel, captureUndo,
   } = opts;
+  const collectUndo = !!captureUndo && !dryRun;
+  const undoLog: ImportUndoLog = { created: [], updated: [] };
+  // Snapshot only the fields the import touched, so undo restores exactly what
+  // changed. A field absent before the import is recorded as null → undo clears
+  // it. Never captured on dry runs (nothing was written).
+  const captureBefore = (before: Record<string, any>, written: Record<string, any>): Record<string, any> => {
+    const snap: Record<string, any> = {};
+    for (const k of Object.keys(written)) snap[k] = before[k] ?? null;
+    return snap;
+  };
   const progressEvery = Math.max(1, opts.progressEvery ?? 200);
 
   const findRows = (r: any): any[] =>
@@ -213,11 +244,15 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
               const res2 = await p.updateData({ object: objectName, id: target.id, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
               const id = (res2 as any)?.id ?? (res2 as any)?.record?.id ?? target.id;
               okCount++; updated++;
+              if (collectUndo && target.id != null) {
+                undoLog.updated.push({ id: String(target.id), before: captureBefore(target, data) });
+              }
               results.push({ row: rowNo, ok: true, action: 'updated', id: id != null ? String(id) : undefined });
             } else {
               const res2 = await p.createData({ object: objectName, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
               const id = (res2 as any)?.id ?? (res2 as any)?.record?.id;
               okCount++; created++;
+              if (collectUndo && id != null) undoLog.created.push(String(id));
               results.push({ row: rowNo, ok: true, action: 'created', id: id != null ? String(id) : undefined });
             }
           }
@@ -238,6 +273,9 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
       }
     }
 
-    return { ...snapshot(results.length), ok: okCount, results, cancelled };
+    return {
+      ...snapshot(results.length), ok: okCount, results, cancelled,
+      ...(collectUndo ? { undoLog } : {}),
+    };
   })();
 }

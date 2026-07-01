@@ -582,6 +582,9 @@ const IMPORT_JOB_OBJECT = 'sys_import_job';
 const IMPORT_JOB_MAX_ROWS = 50_000;
 /** Cap on per-row results persisted on the job (failures first). */
 const IMPORT_JOB_RESULTS_CAP = 500;
+/** Undo (logical rollback) is only recorded for jobs at or under this row
+ *  count — larger jobs skip the undo log to bound the stored before-snapshots. */
+const IMPORT_JOB_UNDO_MAX_ROWS = 5_000;
 
 /** Generate a sortable-ish, collision-resistant import job id. */
 function newImportJobId(): string {
@@ -597,11 +600,36 @@ function capImportResults(results: Array<{ ok: boolean }>): { items: any[]; trun
     return { items, truncated: true };
 }
 
+/** Parse the persisted undo log (json column may arrive as object or string). */
+function parseUndoLog(raw: any): { created: string[]; updated: Array<{ id: string; before: Record<string, any> }> } | undefined {
+    if (!raw) return undefined;
+    let v = raw;
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch { return undefined; } }
+    if (!v || typeof v !== 'object') return undefined;
+    const created = Array.isArray(v.created) ? v.created.map(String) : [];
+    const updated = Array.isArray(v.updated)
+        ? v.updated.filter((u: any) => u && u.id != null).map((u: any) => ({ id: String(u.id), before: u.before ?? {} }))
+        : [];
+    return { created, updated };
+}
+
+/** True when a job can still be undone: it wrote data (undo log present with
+ *  entries), hasn't already been reverted, and finished in a terminal state. */
+function importJobUndoable(row: any): boolean {
+    if (row?.reverted_at) return false;
+    const status = String(row?.status ?? '');
+    if (status !== 'succeeded' && status !== 'cancelled') return false;
+    const log = parseUndoLog(row?.undo_log);
+    return !!log && (log.created.length > 0 || log.updated.length > 0);
+}
+
 /** Map a persisted `sys_import_job` row to the ImportJobProgress DTO. */
 function importJobToProgress(row: any): Record<string, any> {
     const total = Number(row?.total_rows ?? 0);
     const processed = Number(row?.processed_rows ?? 0);
     return {
+        undoable: importJobUndoable(row),
+        ...(row?.reverted_at ? { revertedAt: String(row.reverted_at) } : {}),
         jobId: String(row?.id ?? ''),
         object: String(row?.object_name ?? ''),
         status: String(row?.status ?? 'pending'),
@@ -629,7 +657,9 @@ function importJobToSummary(row: any): Record<string, any> {
         total: p.total, processed: p.processed,
         created: p.created, updated: p.updated, skipped: p.skipped, errors: p.errors,
         createdAt: p.createdAt,
+        undoable: p.undoable,
         ...(p.completedAt ? { completedAt: p.completedAt } : {}),
+        ...(p.revertedAt ? { revertedAt: p.revertedAt } : {}),
     };
 }
 
@@ -3583,11 +3613,15 @@ export class RestServer {
                             logError('[REST] import job progress write failed:', err);
                         }
                     };
+                    // Record undo instructions for small non-dry-run jobs so the
+                    // import can be logically rolled back later.
+                    const captureUndo = !prepared.dryRun && prepared.rows.length <= IMPORT_JOB_UNDO_MAX_ROWS;
                     void (async () => {
                         await patch({ status: 'running', started_at: new Date().toISOString() });
                         try {
                             const summary = await runImport({
                                 p, objectName, environmentId, context, ...prepared,
+                                captureUndo,
                                 progressEvery: 200,
                                 onProgress: (pr) => patch({
                                     processed_rows: pr.processed,
@@ -3607,6 +3641,7 @@ export class RestServer {
                                 error_count: summary.errors,
                                 results: capImportResults(summary.results),
                                 completed_at: new Date().toISOString(),
+                                ...(summary.undoLog ? { undo_log: summary.undoLog } : {}),
                             });
                         } catch (err: any) {
                             await patch({
@@ -3675,6 +3710,67 @@ export class RestServer {
                 }
             },
             metadata: { summary: 'Cancel an in-flight import job', tags: ['data', 'import'] },
+        });
+
+        // POST /data/import/jobs/:jobId/undo — logical rollback of a finished
+        // job: delete the records it created and restore the fields it updated
+        // to their pre-import values (from the captured undo log).
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/import/jobs/:jobId/undo`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const jobId = String(req.params.jobId || '');
+                    const row = await loadImportJob(p, jobId, environmentId, context);
+                    if (!row) {
+                        res.status(404).json({ code: 'NOT_FOUND', error: `No import job ${jobId}` });
+                        return;
+                    }
+                    if (row.reverted_at) {
+                        res.status(409).json({ code: 'ALREADY_REVERTED', error: 'This import has already been undone' });
+                        return;
+                    }
+                    if (!importJobUndoable(row)) {
+                        res.status(422).json({ code: 'NOT_UNDOABLE', error: 'This import cannot be undone (too large, still running, or nothing was written)' });
+                        return;
+                    }
+                    const objectName = String(row.object_name ?? '');
+                    const log = parseUndoLog(row.undo_log)!;
+                    // Undo automations too: reversing writes shouldn't re-fire triggers.
+                    const writeCtx = { ...(context ?? {}), skipAutomations: true };
+                    let deleted = 0, restored = 0, failed = 0;
+
+                    // Delete created records first (they didn't exist before).
+                    for (const id of log.created) {
+                        try {
+                            await (p as any).deleteData({ object: objectName, id, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
+                            deleted++;
+                        } catch { failed++; }
+                    }
+                    // Restore the touched fields on updated records.
+                    for (const u of log.updated) {
+                        try {
+                            await (p as any).updateData({ object: objectName, id: u.id, data: u.before, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
+                            restored++;
+                        } catch { failed++; }
+                    }
+
+                    await (p as any).updateData({
+                        object: IMPORT_JOB_OBJECT, id: jobId,
+                        data: { reverted_at: new Date().toISOString() },
+                        context, ...(environmentId ? { environmentId } : {}),
+                    });
+                    res.json({ success: true, jobId, object: objectName, deleted, restored, failed });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, '');
+                }
+            },
+            metadata: { summary: 'Undo (logically roll back) a finished import job', tags: ['data', 'import'] },
         });
 
         // GET /data/import/jobs/:jobId/results — progress + capped per-row report.

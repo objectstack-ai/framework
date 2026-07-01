@@ -140,6 +140,7 @@ async function boot() {
     results: find('GET', '/api/v1/data/import/jobs/:jobId/results'),
     list: find('GET', '/api/v1/data/import/jobs'),
     cancel: find('POST', '/api/v1/data/import/jobs/:jobId/cancel'),
+    undo: find('POST', '/api/v1/data/import/jobs/:jobId/undo'),
   };
 }
 
@@ -168,7 +169,7 @@ describe('async import job — real engine + protocol integration', () => {
   beforeEach(async () => {
     ctx = await boot();
     expect(ctx.create).toBeDefined();
-    expect(ctx.progress && ctx.results && ctx.list && ctx.cancel).toBeTruthy();
+    expect(ctx.progress && ctx.results && ctx.list && ctx.cancel && ctx.undo).toBeTruthy();
   });
 
   it('creates a job, processes it in the background, and persists rows', async () => {
@@ -242,5 +243,57 @@ describe('async import job — real engine + protocol integration', () => {
     // Terminal state preserved.
     const after = await callJob(ctx.progress, jobId);
     expect(after._json.status).toBe('succeeded');
+  });
+
+  it('undoes a job: deletes created records and restores updated ones', async () => {
+    // Seed one existing record so an upsert both creates and updates.
+    await ctx.protocol.createData({ object: 'task', data: { id: 'u_existing', title: 'old title', score: 1 } });
+
+    const created = await callCreate(ctx.create, {
+      format: 'json', writeMode: 'upsert', matchFields: ['id'],
+      rows: [
+        { id: 'u_existing', title: 'new title', score: 99 }, // update
+        { id: 'u_new1', title: 'fresh one' },                // create
+        { id: 'u_new2', title: 'fresh two' },                // create
+      ],
+    });
+    const jobId = created._json.jobId;
+    const done = await waitForTerminal(ctx.progress, jobId);
+    expect(done).toMatchObject({ status: 'succeeded', created: 2, updated: 1 });
+    expect(done.undoable).toBe(true);
+
+    // Writes really landed.
+    expect(await ctx.engine.findOne('task', { where: { id: 'u_new1' } })).toBeTruthy();
+    expect(await ctx.engine.findOne('task', { where: { id: 'u_existing' } })).toMatchObject({ title: 'new title', score: 99 });
+
+    // Undo.
+    const u = await callJob(ctx.undo, jobId);
+    expect(u._json).toMatchObject({ success: true, deleted: 2, restored: 1, failed: 0 });
+
+    // Created records are gone; the updated record is back to its pre-import values.
+    expect(await ctx.engine.findOne('task', { where: { id: 'u_new1' } })).toBeFalsy();
+    expect(await ctx.engine.findOne('task', { where: { id: 'u_new2' } })).toBeFalsy();
+    expect(await ctx.engine.findOne('task', { where: { id: 'u_existing' } })).toMatchObject({ title: 'old title', score: 1 });
+
+    // Job now flags as reverted + no longer undoable.
+    const after = await callJob(ctx.progress, jobId);
+    expect(after._json.undoable).toBe(false);
+    expect(after._json.revertedAt).toBeTruthy();
+  });
+
+  it('undoing twice is rejected (409 already reverted)', async () => {
+    const created = await callCreate(ctx.create, { format: 'json', rows: [{ id: 'uu1', title: 'x' }] });
+    const jobId = created._json.jobId;
+    await waitForTerminal(ctx.progress, jobId);
+    const first = await callJob(ctx.undo, jobId);
+    expect(first._json.success).toBe(true);
+    const second = await callJob(ctx.undo, jobId);
+    expect(second._status).toBe(409);
+    expect(second._json.code).toBe('ALREADY_REVERTED');
+  });
+
+  it('404s undo for an unknown job id', async () => {
+    const res = await callJob(ctx.undo, 'imp_nope');
+    expect(res._status).toBe(404);
   });
 });
