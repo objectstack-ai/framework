@@ -72,7 +72,7 @@ table.grid td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
 table.grid td.muted, table.grid th.muted { color: var(--muted); }
 table.grid .col-selected { background: color-mix(in srgb, var(--accent-bg) 60%, transparent); }
 table.grid th.col-selected { color: var(--accent); }
-.grid-add { color: var(--muted); padding: 8px 12px; }
+.grid-add { color: var(--muted); padding: 8px 12px 26px; }
 
 /* ---- right inspector (reused protocol form) ---- */
 .inspector { width: 220px; background: var(--surface-2); border-left: 1px solid var(--border); padding: 14px 16px; }
