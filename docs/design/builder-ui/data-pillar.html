@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Builder — Data pillar</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<!-- Data pillar: object model workbench. Object "Task" selected, Records tab active,
+     Priority column selected -> field editor in the inspector.
+     data-build="shell"  = built in the builder (composition/chrome)
+     data-reuse="<comp>" = existing Studio/objectui component, dropped in unchanged -->
+<div class="builder">
+
+  <!-- ===== top bar (built) ===== -->
+  <div class="topbar" data-build="shell">
+    <span class="app">app &#9662;</span>
+    <nav class="pilltabs">
+      <a class="active" href="#">Data</a>
+      <a href="#">Automation</a>
+      <a href="#">Interface</a>
+      <a href="#">Access</a>
+    </nav>
+    <div class="right">
+      <span>&#9881;</span>
+      <span>Save draft</span>
+      <button class="btn-publish">Publish</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== left rail: objects (built) ===== -->
+    <aside class="rail" data-build="shell">
+      <div class="label">OBJECTS</div>
+      <div class="search">Search</div>
+      <ul>
+        <li>Account</li>
+        <li class="active">Task</li>
+        <li>Project</li>
+        <li>Invoice</li>
+      </ul>
+      <div class="new">+ New object</div>
+    </aside>
+
+    <!-- ===== main: facet tabs + Records grid ===== -->
+    <main class="main">
+
+      <!-- object facet tabs (built) -->
+      <nav class="facettabs" data-build="shell">
+        <a class="active" href="#">Records</a>
+        <a href="#">Fields</a>
+        <a href="#">Validations</a>
+        <span class="sep"></span>
+        <a href="#">Actions <span class="tag">auto</span></a>
+        <a href="#">Hooks <span class="tag">adv</span></a>
+        <a href="#">&#8943;</a>
+      </nav>
+
+      <!-- ephemeral view toolbar (built) -->
+      <div class="toolbar" data-build="shell">
+        <span>&#9906; Filter</span>
+        <span>&#8597; Sort</span>
+        <span>&#9640; Hide</span>
+        <span>&#9638; Group</span>
+        <span class="spacer"></span>
+        <span class="add">+ New record</span>
+      </div>
+
+      <!-- data grid = reused ListView renderer -->
+      <div class="workarea">
+        <div class="reuse" data-reuse="ListView">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th class="muted">#</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th class="col-selected">Priority &#9662;</th>
+                <th class="muted">+</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="muted">1</td><td>Audit IA</td><td class="muted">In review</td><td class="col-selected">&#9679; Medium</td><td></td></tr>
+              <tr><td class="muted">2</td><td>Design system</td><td class="muted">In progress</td><td class="col-selected">&#9679; High</td><td></td></tr>
+              <tr><td class="muted">3</td><td>API surface</td><td class="muted">Todo</td><td class="col-selected">&#9679; Low</td><td></td></tr>
+              <tr><td class="muted">4</td><td>Release notes</td><td class="muted">Done</td><td class="col-selected">&#9679; Medium</td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="grid-add">+ New record</div>
+          <span class="reuse-tag">grid = existing ListView renderer (reused)</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== right inspector: field editor = reused protocol form ===== -->
+    <aside class="inspector" data-build="shell">
+      <div class="eyebrow">EDIT FIELD</div>
+      <h3>Priority</h3>
+      <hr>
+      <div class="reuse form" data-reuse="protocol-form:field">
+        <div class="flabel">Label</div>
+        <div class="field">Priority</div>
+        <div class="flabel">Type</div>
+        <div class="field">Select &#9662;</div>
+        <div class="flabel">Options</div>
+        <div class="chips">
+          <span class="chip">Low</span>
+          <span class="chip">Medium</span>
+          <span class="chip">High</span>
+          <span class="add">+ add</span>
+        </div>
+        <div class="toggle-row"><span>Required</span><span class="toggle"></span></div>
+        <div class="toggle-row"><span>Unique</span><span class="toggle"></span></div>
+        <span class="reuse-tag">protocol-generated field form (reused)</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== legend ===== -->
+  <div class="legend">
+    <span><span class="sw built"></span>solid = shell / composition (built in the builder)</span>
+    <span><span class="sw reused"></span>dashed = existing Studio component (reused, not rebuilt)</span>
+  </div>
+</div>
+</body>
+</html>

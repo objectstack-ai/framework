@@ -11,6 +11,11 @@ does **not** re-specify the per-item config panels: those are Studio's existing
 protocol-generated metadata forms, reused as-is (§1.4). What the builder actually
 builds is the composition; the panels are dropped in.
 
+Each surface has an **HTML mockup** under [`builder-ui/`](./builder-ui/) — the precise
+visual target and, because its DOM maps to the component tree and its regions are
+tagged `data-build` / `data-reuse`, the implementation blueprint (see
+[Mockups](#mockups)). The ASCII sketches inline below are for quick reading.
+
 ---
 
 ## 1. Core constraints — AI-first, human-confirmable, reuse-first
@@ -56,16 +61,29 @@ shrink the novel surface to almost nothing:
   config panel in the inspector (Studio protocol-generated forms). These are
   referenced by name; the builder composes them, it does not reimplement them.
 
-Solid vs. dashed in the wireframes marks this boundary.
+In every mockup this boundary is explicit: regions carry `data-build="shell"` or
+`data-reuse="<component>"`, and reused blocks are drawn with a dashed outline.
 
 ---
 
 ## 2. The shell (every pillar shares it)
 
-![Data pillar shell — rail, facet tabs, grid, inspector](./builder-ui/data-pillar.svg)
+```
+┌───────────────────────────────────────────────────────────────────┐
+│ app ▾   Data · Automation · Interface · Access      ⚙   Save · Publish │  ← top bar
+├─────────┬───────────────────────────────────────────┬──────────────┤
+│ left     │ main (the work surface)                    │ right         │
+│ rail     │  + a per-entity facet tab bar (see Data)    │ inspector     │
+│ entities │  grid / canvas / builder / matrix           │ = selected    │
+│ + search │  ─────────────────────────────────────      │   item's      │
+│ + new    │  [ reused renderer, e.g. ListView ]         │   config      │
+│          │                                            │ [reused form] │
+├─────────┴───────────────────────────────────────────┴──────────────┤
+│ legend:  solid = built (shell) · dashed = reused (Studio component)  │
+└───────────────────────────────────────────────────────────────────┘
+```
 
-*Solid frame = shell/composition built in the builder; dashed frame = existing Studio
-component (grid = ListView; inspector = protocol-generated form) reused as-is.*
+Mockup: [`builder-ui/data-pillar.html`](./builder-ui/data-pillar.html) (open in a browser).
 
 - **Top bar** — the four pillar tabs (Data / Automation / Interface / Access), the
   ⚙ Settings entry, the app switcher, and the draft indicator + Save draft /
@@ -114,6 +132,18 @@ Data is the **object-model workbench**: define objects, their fields, relationsh
 and validations, and work with records. Data owns the *data layer and the field
 designer*; runtime presentation surfaces (saved grid views, kanban, calendar, pages,
 dashboards) belong to Interface.
+
+Mockup: [`builder-ui/data-pillar.html`](./builder-ui/data-pillar.html).
+
+```
+┌ objects ─┬ Task ┈ Records · Fields · Validations │ Actions · Hooks · ⋯ ┬ inspector ┐
+│ Account  │ ┌ filter · sort · hide ─────────────────────────────────┐ │ Edit field │
+│ Task ◄   │ │ #  Title           Status      [Priority ▾]   +        │ │ Priority   │
+│ Project  │ │ 1  Audit IA        In review    ● Medium               │ │ type: select│
+│ Invoice  │ │ 2  Design system   In progress  ● High                 │ │ options …   │
+│ + New    │ │ + New record                                          │ │ required    │
+└──────────┴─┴───────────────────────────────────────────────────────┴─┴────────────┘
+```
 
 ### Left rail
 The app's objects (v1: owned objects only), with search + New object.
@@ -216,10 +246,27 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
 
 ---
 
-## Wireframes
-- [`builder-ui/data-pillar.svg`](./builder-ui/data-pillar.svg) — the Data pillar shell
-  (rail · facet tabs · Records grid · field inspector), with the solid/dashed
-  build-boundary legend.
+## Mockups
 
-Wireframes are committed as SVG so they render on GitHub and stay the unambiguous
-visual target for implementation. More are added per pillar as they are designed.
+Mockups live under [`builder-ui/`](./builder-ui/) as **HTML**, not images — HTML is
+the better artifact for an AI to build against and it scales to the many surfaces
+still to design:
+
+- **DOM ≈ component tree.** The markup maps almost 1:1 to the React components to
+  build, so there is little to infer or get wrong.
+- **The build boundary is machine-readable.** Every region is tagged
+  `data-build="shell"` (built in the builder) or `data-reuse="<component>"` (an
+  existing Studio/objectui component — e.g. `ListView`, `protocol-form:field` — to
+  drop in unchanged). Reused blocks render with a dashed outline.
+- **One shared look.** [`shell.css`](./builder-ui/shell.css) holds the tokens and
+  layout primitives (top bar, rail, facet tabs, grid, inspector, form rows, toggles);
+  each pillar mockup composes them, so a new surface is a small file and stays
+  visually consistent for free.
+
+Open any `*.html` in a browser to view it. Current mockups:
+
+| Surface | Mockup |
+|---|---|
+| Data pillar | [`data-pillar.html`](./builder-ui/data-pillar.html) |
+
+More are added per pillar as they are designed.
