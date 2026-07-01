@@ -12,7 +12,7 @@ import {
     formatRowForJson,
     type ExportFieldMeta,
 } from './export-format.js';
-import { coerceRow, type RefResolver, type RefMatch } from './import-coerce.js';
+import { runImport } from './import-runner.js';
 
 // Node-safe logger — avoids importing 'console' which is absent from ES2020 lib typings.
 const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
@@ -451,6 +451,188 @@ async function parseXlsxToRows(
     return out;
 }
 
+/** Everything the import runner needs, parsed & validated from a request body. */
+interface PreparedImport {
+    rows: Array<Record<string, any>>;
+    metaMap: Map<string, ExportFieldMeta>;
+    writeMode: 'insert' | 'update' | 'upsert';
+    matchFields: string[];
+    dryRun: boolean;
+    runAutomations: boolean;
+    trimWhitespace: boolean;
+    nullValues?: string[];
+    createMissingOptions: boolean;
+    skipBlankMatchKey: boolean;
+}
+
+type PrepareImportResult =
+    | { ok: true; prepared: PreparedImport }
+    | { ok: false; status: number; code: string; error: string };
+
+/**
+ * Parse & validate a bulk-import request body into a {@link PreparedImport}.
+ *
+ * Shared by the synchronous `POST /data/:object/import` route and the async
+ * import-job create route so both accept byte-identical payloads (writeMode +
+ * matchFields, mapping in either shape, rows[]/csv/xlsxBase64) and resolve the
+ * same field metadata. The only knob that differs is `maxRows` (5k sync vs
+ * 50k async). Returns a discriminated result; the caller maps `!ok` to an HTTP
+ * error using the returned status/code/error.
+ */
+async function prepareImportRequest(
+    body: any,
+    opts: { p: any; objectName: string; environmentId?: string; maxRows: number },
+): Promise<PrepareImportResult> {
+    const { p, objectName, environmentId, maxRows } = opts;
+    const dryRun = body?.dryRun === true;
+
+    const writeMode: 'insert' | 'update' | 'upsert' =
+        body?.writeMode === 'update' || body?.writeMode === 'upsert' ? body.writeMode : 'insert';
+    const matchFields: string[] = Array.isArray(body?.matchFields)
+        ? body.matchFields.filter((f: any) => typeof f === 'string' && f.length > 0)
+        : [];
+    const runAutomations = body?.runAutomations === true;
+    const trimWhitespace = body?.trimWhitespace !== false;
+    const nullValues: string[] | undefined = Array.isArray(body?.nullValues)
+        ? body.nullValues.filter((v: any) => typeof v === 'string')
+        : undefined;
+    const createMissingOptions = body?.createMissingOptions === true;
+    const skipBlankMatchKey = body?.skipBlankMatchKey === true;
+
+    if (writeMode !== 'insert' && matchFields.length === 0) {
+        return { ok: false, status: 400, code: 'INVALID_REQUEST', error: `writeMode "${writeMode}" requires a non-empty matchFields[]` };
+    }
+
+    // Normalize `mapping` to a `{ sourceColumn: targetField }` record. Accepts
+    // either that compact form or a FieldMappingEntry[].
+    const mapping: Record<string, string> = {};
+    if (Array.isArray(body?.mapping)) {
+        for (const e of body.mapping) {
+            if (e && typeof e.sourceField === 'string' && typeof e.targetField === 'string') {
+                mapping[e.sourceField] = e.targetField;
+            }
+        }
+    } else if (body?.mapping && typeof body.mapping === 'object') {
+        for (const [k, v] of Object.entries(body.mapping)) {
+            if (typeof v === 'string') mapping[k] = v;
+        }
+    }
+    const applyMapping = (row: Record<string, any>): Record<string, any> => {
+        if (Object.keys(mapping).length === 0) return row;
+        const out: Record<string, any> = {};
+        for (const [k, val] of Object.entries(row)) out[mapping[k] ?? k] = val;
+        return out;
+    };
+
+    // Build rows[] from JSON array, CSV text, or a base64 xlsx.
+    let rows: Array<Record<string, any>> = [];
+    if (body?.format === 'json' && Array.isArray(body.rows)) {
+        rows = (body.rows as Array<Record<string, any>>).map(applyMapping);
+    } else if ((body?.format === 'csv' || typeof body?.csv === 'string') && typeof body?.csv === 'string') {
+        rows = parseCsvToRows(body.csv, mapping);
+    } else if ((body?.format === 'xlsx' || typeof body?.xlsxBase64 === 'string') && typeof body?.xlsxBase64 === 'string') {
+        // Native server-side xlsx parse — the client uploads raw workbook bytes
+        // (base64) instead of pre-flattening to CSV.
+        try {
+            const buf = Buffer.from(body.xlsxBase64, 'base64');
+            rows = await parseXlsxToRows(buf, mapping, body.sheet);
+        } catch (e: any) {
+            return { ok: false, status: 400, code: 'INVALID_REQUEST', error: `Failed to parse xlsx: ${e?.message ?? String(e)}` };
+        }
+    } else if (Array.isArray(body)) {
+        // Permissive: a bare JSON array at the top level.
+        rows = (body as Array<Record<string, any>>).map(applyMapping);
+    } else {
+        return { ok: false, status: 400, code: 'INVALID_REQUEST', error: 'Provide format:"csv" with csv text, format:"json" with rows[], or format:"xlsx" with xlsxBase64' };
+    }
+
+    if (rows.length > maxRows) {
+        return { ok: false, status: 413, code: 'PAYLOAD_TOO_LARGE', error: `Import limit is ${maxRows} rows per request (got ${rows.length}).` };
+    }
+
+    // Resolve the object's field metadata so cells coerce to storage values
+    // (booleans, numbers, dates→ISO, select label→code) and lookup names resolve
+    // to record ids. Best-effort: a failed lookup leaves `metaMap` empty and
+    // every value passes through untouched.
+    let metaMap = new Map<string, ExportFieldMeta>();
+    try {
+        let schema: any = undefined;
+        if (typeof p.getMetaItem === 'function') {
+            const r = await p.getMetaItem({ type: 'object', name: objectName });
+            schema = isMetaEnvelope(r) ? r.item : r;
+        }
+        if (!schema && typeof p.getObjectSchema === 'function') {
+            schema = await p.getObjectSchema(objectName, environmentId);
+        }
+        metaMap = buildFieldMetaMap(schema);
+    } catch { /* pass-through coercion */ }
+
+    return {
+        ok: true,
+        prepared: {
+            rows, metaMap, writeMode, matchFields, dryRun, runAutomations,
+            trimWhitespace, nullValues, createMissingOptions, skipBlankMatchKey,
+        },
+    };
+}
+
+/** Platform object backing async import jobs (see sys-import-job.object.ts). */
+const IMPORT_JOB_OBJECT = 'sys_import_job';
+/** Hard ceiling on rows per async import job (mirrors spec IMPORT_JOB_MAX_ROWS). */
+const IMPORT_JOB_MAX_ROWS = 50_000;
+/** Cap on per-row results persisted on the job (failures first). */
+const IMPORT_JOB_RESULTS_CAP = 500;
+
+/** Generate a sortable-ish, collision-resistant import job id. */
+function newImportJobId(): string {
+    return `imp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Cap a results list to {@link IMPORT_JOB_RESULTS_CAP}, keeping failures first. */
+function capImportResults(results: Array<{ ok: boolean }>): { items: any[]; truncated: boolean } {
+    if (results.length <= IMPORT_JOB_RESULTS_CAP) return { items: results, truncated: false };
+    const failures = results.filter(r => !r.ok);
+    const successes = results.filter(r => r.ok);
+    const items = [...failures, ...successes].slice(0, IMPORT_JOB_RESULTS_CAP);
+    return { items, truncated: true };
+}
+
+/** Map a persisted `sys_import_job` row to the ImportJobProgress DTO. */
+function importJobToProgress(row: any): Record<string, any> {
+    const total = Number(row?.total_rows ?? 0);
+    const processed = Number(row?.processed_rows ?? 0);
+    return {
+        jobId: String(row?.id ?? ''),
+        object: String(row?.object_name ?? ''),
+        status: String(row?.status ?? 'pending'),
+        dryRun: !!row?.dry_run,
+        writeMode: String(row?.write_mode ?? 'insert'),
+        total,
+        processed,
+        created: Number(row?.created_count ?? 0),
+        updated: Number(row?.updated_count ?? 0),
+        skipped: Number(row?.skipped_count ?? 0),
+        errors: Number(row?.error_count ?? 0),
+        percentComplete: total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : (processed > 0 ? 100 : 0),
+        ...(row?.error ? { error: String(row.error) } : {}),
+        ...(row?.started_at ? { startedAt: String(row.started_at) } : {}),
+        ...(row?.completed_at ? { completedAt: String(row.completed_at) } : {}),
+        createdAt: String(row?.created_at ?? ''),
+    };
+}
+
+/** Map a persisted `sys_import_job` row to the ImportJobSummary DTO (list). */
+function importJobToSummary(row: any): Record<string, any> {
+    const p = importJobToProgress(row);
+    return {
+        jobId: p.jobId, object: p.object, status: p.status,
+        total: p.total, processed: p.processed,
+        created: p.created, updated: p.updated, skipped: p.skipped, errors: p.errors,
+        createdAt: p.createdAt,
+        ...(p.completedAt ? { completedAt: p.completedAt } : {}),
+    };
+}
+
 /**
  * Escape a single value into an RFC-4180 CSV cell. Values containing
  * commas, quotes, CR, or LF are wrapped in double-quotes with embedded
@@ -697,6 +879,13 @@ export class RestServer {
      *  capability gates (ADR-0057 D10) — resolveExecCtx sets no kernel in
      *  single-kernel deployments, so this prevents the gate failing open. */
     private serviceExistsProvider?: (name: string) => boolean;
+    /**
+     * In-flight async import jobs the caller has asked to cancel. The worker
+     * checks membership at each progress boundary and stops cooperatively. This
+     * is process-local (single-node); the persisted `sys_import_job.status` is
+     * the durable source of truth a restarted/other node reads.
+     */
+    private readonly cancelledImportJobs = new Set<string>();
 
     constructor(
         server: IHttpServer,
@@ -3278,265 +3467,35 @@ export class RestServer {
                     }
                     if (await this.enforceApiAccess(req, res, p, environmentId, 'import')) return;
                     const body = req.body ?? {};
-                    const dryRun = body.dryRun === true;
 
-                    // Write mode + dedup config (M10.9.1). insert = always create;
-                    // update = only touch an existing record matched by matchFields;
-                    // upsert = update when matched, else create.
-                    const writeMode: 'insert' | 'update' | 'upsert' =
-                        body.writeMode === 'update' || body.writeMode === 'upsert' ? body.writeMode : 'insert';
-                    const matchFields: string[] = Array.isArray(body.matchFields)
-                        ? body.matchFields.filter((f: any) => typeof f === 'string' && f.length > 0)
-                        : [];
-                    // `runAutomations` is threaded into the write context so the engine
-                    // can honour it once hook-suppression lands (P1). Until then hooks
-                    // always fire — see import spec §L4.
-                    const runAutomations = body.runAutomations === true;
-                    const trimWhitespace = body.trimWhitespace !== false;
-                    const nullValues: string[] | undefined = Array.isArray(body.nullValues)
-                        ? body.nullValues.filter((v: any) => typeof v === 'string')
-                        : undefined;
-                    const createMissingOptions = body.createMissingOptions === true;
-                    const skipBlankMatchKey = body.skipBlankMatchKey === true;
-
-                    if (writeMode !== 'insert' && matchFields.length === 0) {
-                        res.status(400).json({
-                            code: 'INVALID_REQUEST',
-                            error: `writeMode "${writeMode}" requires a non-empty matchFields[]`,
-                        });
+                    // Parse + validate the payload (shared with the async job route).
+                    // The synchronous path caps at 5k rows; larger files must use the
+                    // async import-job endpoint.
+                    const prep = await prepareImportRequest(body, { p, objectName, environmentId, maxRows: 5000 });
+                    if (!prep.ok) {
+                        if (prep.status === 413) prep.error += ' Use an async import job for larger files.';
+                        res.status(prep.status).json({ code: prep.code, error: prep.error });
                         return;
                     }
+                    const { rows, writeMode, dryRun } = prep.prepared;
 
-                    // Normalize `mapping` to a `{ sourceColumn: targetField }` record.
-                    // Accepts either that compact form or a FieldMappingEntry[].
-                    const mapping: Record<string, string> = {};
-                    if (Array.isArray(body.mapping)) {
-                        for (const e of body.mapping) {
-                            if (e && typeof e.sourceField === 'string' && typeof e.targetField === 'string') {
-                                mapping[e.sourceField] = e.targetField;
-                            }
-                        }
-                    } else if (body.mapping && typeof body.mapping === 'object') {
-                        for (const [k, v] of Object.entries(body.mapping)) {
-                            if (typeof v === 'string') mapping[k] = v;
-                        }
-                    }
-                    const applyMapping = (row: Record<string, any>): Record<string, any> => {
-                        if (Object.keys(mapping).length === 0) return row;
-                        const out: Record<string, any> = {};
-                        for (const [k, val] of Object.entries(row)) out[mapping[k] ?? k] = val;
-                        return out;
-                    };
-
-                    // Build rows[] from JSON array, CSV text, or a base64 xlsx.
-                    let rows: Array<Record<string, any>> = [];
-                    if (body.format === 'json' && Array.isArray(body.rows)) {
-                        rows = (body.rows as Array<Record<string, any>>).map(applyMapping);
-                    } else if ((body.format === 'csv' || typeof body.csv === 'string') && typeof body.csv === 'string') {
-                        rows = parseCsvToRows(body.csv, mapping);
-                    } else if ((body.format === 'xlsx' || typeof body.xlsxBase64 === 'string') && typeof body.xlsxBase64 === 'string') {
-                        // Native server-side xlsx parse — the client uploads raw
-                        // workbook bytes (base64) instead of pre-flattening to CSV.
-                        try {
-                            const buf = Buffer.from(body.xlsxBase64, 'base64');
-                            rows = await parseXlsxToRows(buf, mapping, body.sheet);
-                        } catch (e: any) {
-                            res.status(400).json({
-                                code: 'INVALID_REQUEST',
-                                error: `Failed to parse xlsx: ${e?.message ?? String(e)}`,
-                            });
-                            return;
-                        }
-                    } else if (Array.isArray(body)) {
-                        // Permissive: a bare JSON array at the top level.
-                        rows = (body as Array<Record<string, any>>).map(applyMapping);
-                    } else {
-                        res.status(400).json({
-                            code: 'INVALID_REQUEST',
-                            error: 'Provide format:"csv" with csv text, format:"json" with rows[], or format:"xlsx" with xlsxBase64',
-                        });
-                        return;
-                    }
-
-                    const max = 5000;
-                    if (rows.length > max) {
-                        res.status(413).json({
-                            code: 'PAYLOAD_TOO_LARGE',
-                            error: `Import limit is ${max} rows per request (got ${rows.length}). Use an async import job for larger files.`,
-                        });
-                        return;
-                    }
-
-                    // Resolve the object's field metadata so cells coerce to storage
-                    // values (booleans, numbers, dates→ISO, select label→code) and
-                    // lookup names resolve to record ids. Best-effort: a failed lookup
-                    // leaves `metaMap` empty and every value passes through untouched.
-                    let metaMap = new Map<string, ExportFieldMeta>();
-                    try {
-                        let schema: any = undefined;
-                        if (typeof (p as any).getMetaItem === 'function') {
-                            const r = await (p as any).getMetaItem({ type: 'object', name: objectName });
-                            schema = isMetaEnvelope(r) ? r.item : r;
-                        }
-                        if (!schema && typeof (p as any).getObjectSchema === 'function') {
-                            schema = await (p as any).getObjectSchema(objectName, environmentId);
-                        }
-                        metaMap = buildFieldMetaMap(schema);
-                    } catch { /* pass-through coercion */ }
-
-                    const findRows = (r: any): any[] =>
-                        Array.isArray(r?.records) ? r.records
-                            : Array.isArray(r?.data) ? r.data
-                                : Array.isArray(r?.rows) ? r.rows
-                                    : Array.isArray(r) ? r : [];
-                    const findArgsBase = (query: any) => ({
-                        object: '',
-                        query,
-                        ...(environmentId ? { environmentId } : {}),
-                        ...(context ? { context } : {}),
+                    // Delegate the per-row coercion + upsert loop to the shared
+                    // runner (also used by the async import-job worker).
+                    const summary = await runImport({
+                        p, objectName, environmentId, context, ...prep.prepared,
                     });
-
-                    // Reference resolver: name/email/id → referenced record id. Cached
-                    // per (object, display) so a name repeated across rows costs one query.
-                    const refCache = new Map<string, RefMatch>();
-                    const resolveRef: RefResolver = async (referenceObject, display, meta) => {
-                        const cacheKey = `${referenceObject}::${display}`;
-                        const cached = refCache.get(cacheKey);
-                        if (cached) return cached;
-                        // Try an exact id first (authoritative + unique when the user pasted
-                        // an id), then the configured display field, then the usual human
-                        // identifiers. De-dupe so a field isn't queried twice. The first
-                        // candidate field to match wins; if that field matches >1 record we
-                        // stop and report ambiguity rather than silently linking the first.
-                        const candidates = [...new Set([
-                            'id',
-                            ...(meta.displayField ? [meta.displayField] : []),
-                            'name', 'title', 'label', 'full_name', 'email', 'username',
-                        ])];
-                        let match: RefMatch = {};
-                        for (const f of candidates) {
-                            try {
-                                const r = await (p as any).findData({
-                                    ...findArgsBase({ $filter: { [f]: display }, $top: 2 }),
-                                    object: referenceObject,
-                                });
-                                const recs = findRows(r);
-                                if (recs.length === 0) continue;
-                                if (recs.length > 1) { match = { ambiguous: true, matchedField: f }; break; }
-                                if (recs[0]?.id != null) { match = { id: String(recs[0].id), matchedField: f }; break; }
-                            } catch { /* field absent on target object — try the next candidate */ }
-                        }
-                        refCache.set(cacheKey, match);
-                        return match;
-                    };
-
-                    // Locate an existing record for update/upsert by matchFields. Returns
-                    // the record, or a sentinel: 'blank' (a match field was empty),
-                    // 'none' (no match), 'ambiguous' (>1 match — too risky to update).
-                    const findExisting = async (
-                        data: Record<string, any>,
-                    ): Promise<Record<string, any> | 'blank' | 'none' | 'ambiguous'> => {
-                        const filter: Record<string, any> = {};
-                        for (const f of matchFields) {
-                            const v = data[f];
-                            if (v === undefined || v === null || v === '') return 'blank';
-                            filter[f] = v;
-                        }
-                        const r = await (p as any).findData({ ...findArgsBase({ $filter: filter, $top: 2 }), object: objectName });
-                        const recs = findRows(r);
-                        if (recs.length === 0) return 'none';
-                        if (recs.length > 1) return 'ambiguous';
-                        return recs[0];
-                    };
-
-                    const writeCtx = { ...(context ?? {}), skipAutomations: !runAutomations };
-
-                    type Action = 'created' | 'updated' | 'skipped' | 'failed';
-                    const results: Array<{ row: number; ok: boolean; action: Action; id?: string; field?: string; error?: string; code?: string }> = [];
-                    let okCount = 0, errCount = 0, created = 0, updated = 0, skipped = 0;
-
-                    for (let i = 0; i < rows.length; i++) {
-                        const rowNo = i + 1;
-                        try {
-                            // 1. Coerce every cell to its storage value (+ resolve lookups).
-                            const { data, errors } = await coerceRow(rows[i], metaMap, {
-                                trimWhitespace, nullValues, createMissingOptions, resolveRef,
-                            });
-                            if (errors.length > 0) {
-                                const first = errors[0];
-                                errCount++;
-                                results.push({ row: rowNo, ok: false, action: 'failed', field: first.field, code: first.code, error: first.message });
-                                continue;
-                            }
-
-                            // 2. Decide create vs update vs skip.
-                            let existing: Record<string, any> | 'blank' | 'none' | 'ambiguous' = 'none';
-                            if (writeMode !== 'insert') {
-                                existing = await findExisting(data);
-                                if (existing === 'ambiguous') {
-                                    errCount++;
-                                    results.push({ row: rowNo, ok: false, action: 'failed', code: 'AMBIGUOUS_MATCH', error: `matchFields matched more than one ${objectName} record` });
-                                    continue;
-                                }
-                                if (existing === 'blank') {
-                                    // Blank match key: skip when asked, else fall through to
-                                    // create (upsert) / skip (update).
-                                    if (skipBlankMatchKey || writeMode === 'update') {
-                                        skipped++;
-                                        results.push({ row: rowNo, ok: true, action: 'skipped', code: 'BLANK_MATCH_KEY' });
-                                        continue;
-                                    }
-                                }
-                            }
-
-                            const willUpdate = existing && typeof existing === 'object';
-                            const willCreate = !willUpdate && (writeMode === 'insert' || writeMode === 'upsert');
-
-                            if (!willUpdate && !willCreate) {
-                                // update mode, no match → skip.
-                                skipped++;
-                                results.push({ row: rowNo, ok: true, action: 'skipped', code: 'NO_MATCH' });
-                                continue;
-                            }
-
-                            if (dryRun) {
-                                okCount++;
-                                if (willUpdate) { updated++; results.push({ row: rowNo, ok: true, action: 'updated', id: String((existing as any).id ?? '') || undefined }); }
-                                else { created++; results.push({ row: rowNo, ok: true, action: 'created' }); }
-                                continue;
-                            }
-
-                            if (willUpdate) {
-                                const target = existing as Record<string, any>;
-                                const res2 = await (p as any).updateData({ object: objectName, id: target.id, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
-                                const id = (res2 as any)?.id ?? (res2 as any)?.record?.id ?? target.id;
-                                okCount++; updated++;
-                                results.push({ row: rowNo, ok: true, action: 'updated', id: id != null ? String(id) : undefined });
-                            } else {
-                                const res2 = await (p as any).createData({ object: objectName, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
-                                const id = (res2 as any)?.id ?? (res2 as any)?.record?.id;
-                                okCount++; created++;
-                                results.push({ row: rowNo, ok: true, action: 'created', id: id != null ? String(id) : undefined });
-                            }
-                        } catch (err: any) {
-                            errCount++;
-                            const code = err?.code ?? 'IMPORT_ROW_FAILED';
-                            const message = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Row failed';
-                            results.push({ row: rowNo, ok: false, action: 'failed', error: message, code });
-                        }
-                    }
 
                     res.json({
                         object: objectName,
                         dryRun,
                         writeMode,
                         total: rows.length,
-                        ok: okCount,
-                        errors: errCount,
-                        created,
-                        updated,
-                        skipped,
-                        results,
+                        ok: summary.ok,
+                        errors: summary.errors,
+                        created: summary.created,
+                        updated: summary.updated,
+                        skipped: summary.skipped,
+                        results: summary.results,
                     });
                 } catch (error: any) {
                     logError('[REST] Unhandled error:', error);
@@ -3547,6 +3506,262 @@ export class RestServer {
                 summary: 'Bulk-import rows into an object (CSV or JSON, with optional dry-run)',
                 tags: ['data', 'import'],
             },
+        });
+
+        // ── Asynchronous import jobs (P1) ──────────────────────────────────
+        //
+        // For files too large for the synchronous route (up to 50k rows), the
+        // client POSTs the whole payload once; the server persists a
+        // `sys_import_job`, responds immediately with a jobId, then processes
+        // the batch in the background — updating progress on the job row as it
+        // streams. Callers poll progress/results and list history. These routes
+        // are registered inside registerDataActionEndpoints (before the greedy
+        // CRUD `:object/:id`), so the literal `import/jobs` segments win.
+
+        // POST /data/:object/import/jobs — create an async import job.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/:object/import/jobs`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const objectName = String(req.params.object || '');
+                    if (!objectName) {
+                        res.status(400).json({ code: 'INVALID_REQUEST', error: 'object is required' });
+                        return;
+                    }
+                    if (await this.enforceApiAccess(req, res, p, environmentId, 'import')) return;
+
+                    const prep = await prepareImportRequest(req.body ?? {}, { p, objectName, environmentId, maxRows: IMPORT_JOB_MAX_ROWS });
+                    if (!prep.ok) {
+                        if (prep.status === 413) prep.error += ` This is the async import ceiling; split the file into batches of ${IMPORT_JOB_MAX_ROWS}.`;
+                        res.status(prep.status).json({ code: prep.code, error: prep.error });
+                        return;
+                    }
+                    const prepared = prep.prepared;
+
+                    const jobId = newImportJobId();
+                    const createdAt = new Date().toISOString();
+                    const createdBy = String((context as any)?.userId ?? (context as any)?.user?.id ?? '') || undefined;
+                    const jobRow: Record<string, any> = {
+                        id: jobId,
+                        object_name: objectName,
+                        status: 'pending',
+                        total_rows: prepared.rows.length,
+                        processed_rows: 0,
+                        created_count: 0,
+                        updated_count: 0,
+                        skipped_count: 0,
+                        error_count: 0,
+                        write_mode: prepared.writeMode,
+                        dry_run: prepared.dryRun,
+                        run_automations: prepared.runAutomations,
+                        created_at: createdAt,
+                        ...(createdBy ? { created_by: createdBy } : {}),
+                    };
+
+                    try {
+                        await (p as any).createData({ object: IMPORT_JOB_OBJECT, data: jobRow, context, ...(environmentId ? { environmentId } : {}) });
+                    } catch (err: any) {
+                        logError('[REST] Failed to persist import job:', err);
+                        res.status(500).json({ code: 'IMPORT_JOB_CREATE_FAILED', error: 'Could not create import job' });
+                        return;
+                    }
+
+                    // Respond immediately; process in the background.
+                    res.status(201).json({ jobId, object: objectName, status: 'pending', total: prepared.rows.length, createdAt });
+
+                    // Background worker. Fire-and-forget: it owns its own error
+                    // handling and persists terminal state to the job row.
+                    const patch = async (data: Record<string, any>) => {
+                        try {
+                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data, context, ...(environmentId ? { environmentId } : {}) });
+                        } catch (err) {
+                            logError('[REST] import job progress write failed:', err);
+                        }
+                    };
+                    void (async () => {
+                        await patch({ status: 'running', started_at: new Date().toISOString() });
+                        try {
+                            const summary = await runImport({
+                                p, objectName, environmentId, context, ...prepared,
+                                progressEvery: 200,
+                                onProgress: (pr) => patch({
+                                    processed_rows: pr.processed,
+                                    created_count: pr.created,
+                                    updated_count: pr.updated,
+                                    skipped_count: pr.skipped,
+                                    error_count: pr.errors,
+                                }),
+                                shouldCancel: () => this.cancelledImportJobs.has(jobId),
+                            });
+                            await patch({
+                                status: summary.cancelled ? 'cancelled' : 'succeeded',
+                                processed_rows: summary.processed,
+                                created_count: summary.created,
+                                updated_count: summary.updated,
+                                skipped_count: summary.skipped,
+                                error_count: summary.errors,
+                                results: capImportResults(summary.results),
+                                completed_at: new Date().toISOString(),
+                            });
+                        } catch (err: any) {
+                            await patch({
+                                status: 'failed',
+                                error: String(err?.message ?? err).slice(0, 1000),
+                                completed_at: new Date().toISOString(),
+                            });
+                        } finally {
+                            this.cancelledImportJobs.delete(jobId);
+                        }
+                    })();
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, String(req.params?.object || ''));
+                }
+            },
+            metadata: {
+                summary: 'Create an asynchronous import job (large files, up to 50k rows)',
+                tags: ['data', 'import'],
+            },
+        });
+
+        // Shared loader for the read routes: fetch one job row by id.
+        const loadImportJob = async (p: any, jobId: string, environmentId?: string, context?: any): Promise<any | undefined> => {
+            const r = await p.findData({
+                object: IMPORT_JOB_OBJECT,
+                query: { $filter: { id: jobId }, $top: 1 },
+                ...(environmentId ? { environmentId } : {}),
+                ...(context ? { context } : {}),
+            });
+            const rows = Array.isArray(r?.records) ? r.records
+                : Array.isArray(r?.data) ? r.data
+                    : Array.isArray(r?.rows) ? r.rows
+                        : Array.isArray(r) ? r : [];
+            return rows[0];
+        };
+
+        // POST /data/import/jobs/:jobId/cancel — request cancellation.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/import/jobs/:jobId/cancel`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const jobId = String(req.params.jobId || '');
+                    const row = await loadImportJob(p, jobId, environmentId, context);
+                    if (!row) {
+                        res.status(404).json({ code: 'NOT_FOUND', error: `No import job ${jobId}` });
+                        return;
+                    }
+                    const status = String(row.status ?? '');
+                    if (status === 'pending' || status === 'running') {
+                        // Signal the in-process worker and mark the durable row.
+                        this.cancelledImportJobs.add(jobId);
+                        try {
+                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data: { status: 'cancelled', completed_at: new Date().toISOString() }, context, ...(environmentId ? { environmentId } : {}) });
+                        } catch { /* worker will still stop via the in-memory flag */ }
+                    }
+                    res.json({ success: true });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, '');
+                }
+            },
+            metadata: { summary: 'Cancel an in-flight import job', tags: ['data', 'import'] },
+        });
+
+        // GET /data/import/jobs/:jobId/results — progress + capped per-row report.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/import/jobs/:jobId/results`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const jobId = String(req.params.jobId || '');
+                    const row = await loadImportJob(p, jobId, environmentId, context);
+                    if (!row) {
+                        res.status(404).json({ code: 'NOT_FOUND', error: `No import job ${jobId}` });
+                        return;
+                    }
+                    const stored = row.results;
+                    const items = Array.isArray(stored?.items) ? stored.items : Array.isArray(stored) ? stored : [];
+                    res.json({ ...importJobToProgress(row), results: items, resultsTruncated: !!stored?.truncated });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, '');
+                }
+            },
+            metadata: { summary: 'Import job results (capped per-row report)', tags: ['data', 'import'] },
+        });
+
+        // GET /data/import/jobs/:jobId — live progress counters.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/import/jobs/:jobId`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const jobId = String(req.params.jobId || '');
+                    const row = await loadImportJob(p, jobId, environmentId, context);
+                    if (!row) {
+                        res.status(404).json({ code: 'NOT_FOUND', error: `No import job ${jobId}` });
+                        return;
+                    }
+                    res.json(importJobToProgress(row));
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, '');
+                }
+            },
+            metadata: { summary: 'Import job progress', tags: ['data', 'import'] },
+        });
+
+        // GET /data/import/jobs — history list (newest first).
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/import/jobs`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const q = req.query ?? {};
+                    const filter: Record<string, any> = {};
+                    if (typeof q.object === 'string' && q.object) filter.object_name = q.object;
+                    if (typeof q.status === 'string' && q.status) filter.status = q.status;
+                    const limit = Math.min(200, Math.max(1, Number(q.limit) || 50));
+                    const offset = Math.max(0, Number(q.offset) || 0);
+                    const r = await (p as any).findData({
+                        object: IMPORT_JOB_OBJECT,
+                        query: { $filter: filter, $orderby: { created_at: 'desc' }, $top: limit, $skip: offset },
+                        ...(environmentId ? { environmentId } : {}),
+                        ...(context ? { context } : {}),
+                    });
+                    const rows = Array.isArray(r?.records) ? r.records
+                        : Array.isArray(r?.data) ? r.data
+                            : Array.isArray(r?.rows) ? r.rows
+                                : Array.isArray(r) ? r : [];
+                    res.json({ jobs: rows.map(importJobToSummary) });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, '');
+                }
+            },
+            metadata: { summary: 'List import jobs (history)', tags: ['data', 'import'] },
         });
 
         // GET /data/:object/export  — streaming export (M10.21 / C.21)

@@ -366,6 +366,117 @@ export const ImportResponseSchema = lazySchema(() => z.object({
 export type ImportResponse = z.infer<typeof ImportResponseSchema>;
 
 // ==========================================
+// 4b. Asynchronous Import Jobs
+// ==========================================
+
+/**
+ * Hard ceiling on rows accepted by a single async import job. The client sends
+ * the whole payload in one request (rows[] or a base64 xlsx); this caps memory
+ * and worker time. Files larger than this must be split client-side.
+ */
+export const IMPORT_JOB_MAX_ROWS = 50_000;
+
+/**
+ * Import Job Status. Mirrors {@link ExportJobStatus} but with the terminal
+ * states the import worker actually uses (`succeeded` rather than `completed`).
+ */
+export const ImportJobStatus = z.enum([
+  'pending',    // Row persisted, worker not yet started
+  'running',    // Worker streaming through the batch
+  'succeeded',  // Finished (rows may still have per-row errors)
+  'failed',     // Aborted on a fatal error
+  'cancelled',  // Cancelled by the caller before completion
+]);
+export type ImportJobStatus = z.infer<typeof ImportJobStatus>;
+
+/**
+ * Create Import Job Request — body for `POST /api/v1/data/:object/import/jobs`.
+ * Identical to the synchronous {@link ImportRequestSchema} payload; the only
+ * difference is the endpoint processes it in the background and streams
+ * progress instead of blocking until done.
+ */
+export const CreateImportJobRequestSchema = ImportRequestSchema;
+export type CreateImportJobRequest = z.infer<typeof CreateImportJobRequestSchema>;
+
+/**
+ * Create Import Job Response — the freshly-created job's id + initial status.
+ */
+export const CreateImportJobResponseSchema = lazySchema(() => z.object({
+  jobId: z.string().describe('Import job id — poll progress/results with this'),
+  object: z.string().describe('Target object name'),
+  status: ImportJobStatus.describe('Initial job status (usually "pending")'),
+  total: z.number().int().describe('Rows accepted for processing'),
+  createdAt: z.string().describe('Job creation timestamp (ISO 8601)'),
+}));
+export type CreateImportJobResponse = z.infer<typeof CreateImportJobResponseSchema>;
+
+/**
+ * Import Job Progress — the live counters a client polls while the job runs.
+ */
+export const ImportJobProgressSchema = lazySchema(() => z.object({
+  jobId: z.string().describe('Import job id'),
+  object: z.string().describe('Target object name'),
+  status: ImportJobStatus.describe('Current job status'),
+  dryRun: z.boolean().describe('Whether this is a validate-only pass'),
+  writeMode: ImportWriteMode.describe('Write mode used'),
+  total: z.number().int().describe('Total rows to process'),
+  processed: z.number().int().describe('Rows processed so far'),
+  created: z.number().int().describe('Rows that created a new record'),
+  updated: z.number().int().describe('Rows that updated an existing record'),
+  skipped: z.number().int().describe('Rows skipped'),
+  errors: z.number().int().describe('Rows that failed'),
+  percentComplete: z.number().min(0).max(100).describe('processed / total as a percentage'),
+  error: z.string().optional().describe('Fatal error message (when status = failed)'),
+  startedAt: z.string().optional().describe('Processing start timestamp (ISO 8601)'),
+  completedAt: z.string().optional().describe('Completion timestamp (ISO 8601)'),
+  createdAt: z.string().describe('Job creation timestamp (ISO 8601)'),
+}));
+export type ImportJobProgress = z.infer<typeof ImportJobProgressSchema>;
+
+/**
+ * Import Job Results — the progress payload plus a capped sample of per-row
+ * outcomes (failures first) so a UI can render the report / failed-row export.
+ */
+export const ImportJobResultsSchema = lazySchema(() => ImportJobProgressSchema.extend({
+  results: z.array(ImportRowResultSchema).describe('Capped sample of per-row outcomes (failures first)'),
+  resultsTruncated: z.boolean().describe('Whether `results` is a capped sample of a larger set'),
+}));
+export type ImportJobResults = z.infer<typeof ImportJobResultsSchema>;
+
+/**
+ * List Import Jobs Request — query params for the history endpoint.
+ */
+export const ListImportJobsRequestSchema = lazySchema(() => z.object({
+  object: z.string().optional().describe('Filter to one target object'),
+  status: ImportJobStatus.optional().describe('Filter by job status'),
+  limit: z.number().int().min(1).max(200).default(50).describe('Max rows to return'),
+  offset: z.number().int().min(0).default(0).describe('Pagination offset'),
+}));
+export type ListImportJobsRequest = z.infer<typeof ListImportJobsRequestSchema>;
+
+/** One row in the import-job history list. */
+export const ImportJobSummarySchema = lazySchema(() => z.object({
+  jobId: z.string().describe('Import job id'),
+  object: z.string().describe('Target object name'),
+  status: ImportJobStatus.describe('Job status'),
+  total: z.number().int().describe('Total rows'),
+  processed: z.number().int().describe('Rows processed'),
+  created: z.number().int().describe('Rows created'),
+  updated: z.number().int().describe('Rows updated'),
+  skipped: z.number().int().describe('Rows skipped'),
+  errors: z.number().int().describe('Rows failed'),
+  createdAt: z.string().describe('Job creation timestamp (ISO 8601)'),
+  completedAt: z.string().optional().describe('Completion timestamp (ISO 8601)'),
+}));
+export type ImportJobSummary = z.infer<typeof ImportJobSummarySchema>;
+
+/** List Import Jobs Response — newest first. */
+export const ListImportJobsResponseSchema = lazySchema(() => z.object({
+  jobs: z.array(ImportJobSummarySchema).describe('Import jobs, newest first'),
+}));
+export type ListImportJobsResponse = z.infer<typeof ListImportJobsResponseSchema>;
+
+// ==========================================
 // 5. Scheduled Export Jobs
 // ==========================================
 
@@ -587,6 +698,48 @@ export const ExportApiContracts = {
   cancelExportJob: {
     method: 'POST' as const,
     path: '/api/v1/data/export/:jobId/cancel',
+    input: z.object({ jobId: z.string() }),
+    output: BaseResponseSchema,
+  },
+};
+
+// ==========================================
+// 10. Import API Contracts (async jobs)
+// ==========================================
+
+/**
+ * Import Job API Contract Registry — the async counterpart to the synchronous
+ * `POST /api/v1/data/:object/import`. The wizard submits a large payload once,
+ * then polls progress/results and lists history.
+ */
+export const ImportJobApiContracts = {
+  createImportJob: {
+    method: 'POST' as const,
+    path: '/api/v1/data/:object/import/jobs',
+    input: CreateImportJobRequestSchema,
+    output: CreateImportJobResponseSchema,
+  },
+  getImportJobProgress: {
+    method: 'GET' as const,
+    path: '/api/v1/data/import/jobs/:jobId',
+    input: z.object({ jobId: z.string() }),
+    output: ImportJobProgressSchema,
+  },
+  getImportJobResults: {
+    method: 'GET' as const,
+    path: '/api/v1/data/import/jobs/:jobId/results',
+    input: z.object({ jobId: z.string() }),
+    output: ImportJobResultsSchema,
+  },
+  listImportJobs: {
+    method: 'GET' as const,
+    path: '/api/v1/data/import/jobs',
+    input: ListImportJobsRequestSchema,
+    output: ListImportJobsResponseSchema,
+  },
+  cancelImportJob: {
+    method: 'POST' as const,
+    path: '/api/v1/data/import/jobs/:jobId/cancel',
     input: z.object({ jobId: z.string() }),
     output: BaseResponseSchema,
   },

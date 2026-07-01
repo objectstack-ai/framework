@@ -19,3 +19,4 @@ export { SysReportSchedule } from './sys-report-schedule.object.js';
 export { SysJob } from './sys-job.object.js';
 export { SysJobRun } from './sys-job-run.object.js';
 export { SysJobQueue } from './sys-job-queue.object.js';
+export { SysImportJob } from './sys-import-job.object.js';
