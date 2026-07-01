@@ -52,7 +52,7 @@ composes them into one coherent builder, optimized for operation experience.
    tab is `Records` (the grid) — you always land on the data; tabs make the other
    facets one click away without burying the grid.
 4. **Small config → inspector; big designer → main.** A field / rule / node /
-   component configures in the right inspector. A full designer (form designer,
+   component configures in the right inspector. A full designer (the field designer,
    flow canvas) *is* the main zone.
 5. **Two doors, one metadata.** An object-scoped surface that lives in another
    pillar (an object's Actions, Hooks, Views, Permissions) is reachable from the
@@ -71,8 +71,9 @@ composes them into one coherent builder, optimized for operation experience.
 ## 3. Data pillar
 
 Data is the **object-model workbench**: define objects, their fields, relationships,
-validations, and work with records. Data owns the *data layer*; presentation (saved
-views, kanban, calendar, forms, dashboards) belongs to Interface.
+and validations, and work with records. Data owns the *data layer and the field
+designer*; runtime presentation surfaces (saved grid views, kanban, calendar, pages,
+dashboards) belong to Interface.
 
 ### Layout
 
@@ -103,18 +104,36 @@ Note: `Actions` / `Hooks` / `Validations` are the three authoring surfaces for l
 on an object, routed by intent per [ADR-0077](../adr/0077-authoring-surface-boundary-hook-flow-validation.md):
 declarative validation · user-triggered action · write-path hook.
 
+### Records and Fields — two views of one field designer
+Both tabs design the *same* thing (the object's fields); they differ in presentation,
+and both configure a selected field through the *same* right-hand **field editor**.
+
+- **`Records` — grid / list style (data-forward).** The functional grid: columns =
+  fields, rows = real records. Preview and inline-edit data, `+` add a column
+  (= add a field), select a column header to configure that field's properties in
+  the inspector, `+ New record`. Ephemeral filter / sort / hide / group for looking
+  at the data (not saved — saved views are Interface).
+- **`Fields` — form style (layout-forward).** The field designer as a form canvas:
+  drag to reorder fields, group them into sections, and configure field properties.
+  No data rows — this is where the object's default field layout (order + grouping)
+  is authored. (This is the existing form-style field designer, reused here.)
+
+The choice between them is a working preference: reach for `Records` when you want to
+see data while shaping fields, `Fields` when you want to arrange and group them.
+
 ### Main zone (content of the active tab)
 | Tab | Main-zone content |
 |---|---|
-| **Records** | the functional **grid** — columns = fields, rows = records, inline edit, `+` add field (column header menu configures it), `+ New record`, ephemeral filter/sort/hide/group (not saved — saved views are Interface). |
-| **Fields** | the **field manager** — a searchable vertical list (add without horizontal scroll, drag-reorder, type icons). Grouping into sections is *not* here — that is the form designer (layout is Interface). |
+| **Records** | grid-style field designer — preview data, add columns, select a column → configure the field (see above). |
+| **Fields** | form-style field designer — drag-reorder, section grouping, field-property config (see above). |
 | **Validations** | the **rules list** (declarative). See below. |
 | **Relationships** | lookup / master-detail fields + reverse relationships (list / graph). Relationships are created by adding a `lookup` field type. |
 | **Actions / Hooks / Views / Forms / Permissions** | the object's scoped instances, opened in-context. |
 
 ### Right inspector (per-item config — the existing panels)
 Selecting an item in the main zone opens its existing config panel in the inspector,
-non-blocking:
+non-blocking. The field editor is shared by both Records (selected column) and Fields
+(selected field):
 - a column / field → the **field editor** (type, options, required/unique, field-level validation)
 - a validation rule → the **rule editor** (condition builder + message + severity + events)
 - a record → record detail
@@ -135,10 +154,10 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
   CEL as the primary path. Validation stays **declarative** (not a hook); Data-owned.
 
 ### v1 scope
-- **Ship**: owned objects · `Records` grid · `Fields` manager · field editor (incl.
-  field-level validation) · `Validations` (condition builder) · object `Settings`
-  (label / icon / name field / compact / search). Relationships via the `lookup`
-  field type.
+- **Ship**: owned objects · `Records` grid (data + add/configure columns) · `Fields`
+  form-style designer (reorder + grouping + field editor, incl. field-level
+  validation) · `Validations` (condition builder) · object `Settings` (label / icon /
+  name field / compact / search). Relationships via the `lookup` field type.
 - **Defer**: Extended objects (objectExtensions) · External objects (datasources) ·
   the ERD / model view · formal `Lifecycle` (v1 status = a select field) · `Indexes` ·
   seed-data UI · saved views / kanban / calendar (presentation → Interface).
@@ -162,5 +181,5 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
 
 ## Mockups
 Interactive layout mockups were produced during the design session (grid + inspector,
-field manager, validation rule builder, object facet tabs). The ASCII sketches above
-capture their structure.
+form-style field designer, validation rule builder, object facet tabs). The ASCII
+sketches above capture their structure.
