@@ -2,7 +2,7 @@
 
 **Status**: Accepted (2026-07-01)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: the metadata-type taxonomy (ADR-0083, in review — Airtable's Data/Automation/Interface plus the types Airtable lacks), [ADR-0077](./0077-authoring-surface-boundary-hook-flow-validation.md) (route authoring by intent + audience + verifiability — the hook/flow/validation boundary), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring), [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)/[ADR-0064](./0064-tool-scoping-to-agent.md) (two kernel agents — AI is a platform capability, not app metadata), [ADR-0080](./0080-ai-authored-ui-jsx-source.md)/[ADR-0081](./0081-trusted-react-page-tier.md) (the Interface pillar's page-authoring depth).
+**Builds on**: [ADR-0077](./0077-authoring-surface-boundary-hook-flow-validation.md) (route authoring by intent + audience + verifiability — the hook/flow/validation boundary), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring), [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)/[ADR-0064](./0064-tool-scoping-to-agent.md) (two kernel agents — AI is a platform capability, not app metadata), [ADR-0080](./0080-ai-authored-ui-jsx-source.md)/[ADR-0081](./0081-trusted-react-page-tier.md) (the Interface pillar's page-authoring depth).
 **Consumers**: `studio.app.ts` (the builder navigation), the Studio UI, `packages/cli/src/utils/format.ts` (`os` stats grouping), and the build agent (which surface authors which type).
 
 **Premise**: ObjectStack has far more metadata types than Airtable's clean three, but the **application builder** — the surface a person (or the build agent) uses to *build an app* — must not expose all of them at one altitude, or it stops being learnable. Studio's current grouping is inconsistent (mixes Data with Interface, splits "Logic" from "Automation", scatters the rest). This ADR fixes the builder's information architecture, once, after a long design pass that repeatedly corrected itself. The core question it answers: **which metadata types are the app builder's job, at what altitude, and which belong to entirely different surfaces?**
@@ -65,15 +65,6 @@ Charts/metrics are **blocks** inside a dashboard/page bound inline to objects �
 - **Inline-by-default analytics.** A chart carries its query inline (self-contained); a **dataset** is an explicit opt-in only when the query can't be expressed inline (see #2502), and a dashboard filter is a dashboard variable broadcast to inline charts (see #2501). No implicit/auto-generated datasets — hidden linked entities are hostile to both humans and AI authoring.
 
 ---
-
-## Relationship to ADR-0083
-
-ADR-0083 categorizes *all* metadata types (Airtable's three plus Access, plus the types Airtable lacks). This ADR is the **builder-surface** decision layered on top, and it **refines** two of 0083's presentation choices for the app-builder specifically:
-
-- **AI (agent/tool/skill) is not a builder pillar** — it's a Platform capability (the build/ask agents), out of the builder.
-- **Integration is not a peer tier** — connections fold into Advanced (technical, developer audience).
-
-0083's taxonomy stands; 0084 decides how the builder *surfaces* it.
 
 ## Consequences
 
