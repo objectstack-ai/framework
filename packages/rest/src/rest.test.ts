@@ -1063,6 +1063,69 @@ describe('RestServer', () => {
       // First match wins → the more-specific export route must come first.
       expect(exportIdx).toBeLessThan(getByIdIdx);
     });
+
+    // Regression: the header row must carry the same localized field labels the
+    // UI renders (Accept-Language / ?locale=), not the raw `field.label` from the
+    // object schema. The route translates the schema via `translateMetaItem`
+    // before building the header, so a locale switch flips the header language.
+    it('localizes the export header row to the request locale', async () => {
+      // Schema field labels are deliberately distinct from the bundle so a
+      // green assertion proves the bundle was applied (not the raw labels).
+      const NAMED_SCHEMA = {
+        name: 'task',
+        fields: [
+          { name: 'id', type: 'text', label: 'ID' },
+          { name: 'title', type: 'text', label: 'RawTitle' },
+          { name: 'done', type: 'boolean', label: 'RawDone' },
+        ],
+      };
+      const bundle: Record<string, any> = {
+        en: { objects: { task: { fields: { title: { label: 'Title' }, done: { label: 'Done' } } } } },
+        zh: { objects: { task: { fields: { title: { label: '标题' }, done: { label: '完成' } } } } },
+      };
+      const i18n = {
+        getLocales: () => ['en', 'zh'],
+        getTranslations: (l: string) => bundle[l],
+        getDefaultLocale: () => 'en',
+      };
+
+      const p: any = createMockProtocol();
+      p.getMetaItem = vi.fn().mockResolvedValue({ type: 'object', name: 'task', item: NAMED_SCHEMA });
+      // First page returns one row, subsequent pages are empty (ends the stream).
+      p.findData = vi.fn(async ({ query }: any) =>
+        (query?.$skip ?? 0) === 0 ? { data: [{ id: '1', title: 'x', done: true }] } : { data: [] },
+      );
+
+      // i18nServiceProvider is the 14th constructor arg (after server, protocol,
+      // config, and the 10 service providers preceding it).
+      const rest = new RestServer(
+        server as any, p as any, {},
+        undefined, undefined, undefined, undefined, undefined,
+        undefined, undefined, undefined, undefined, undefined,
+        async () => i18n as any,
+      );
+      rest.registerRoutes();
+      const route = getExportRoute(rest);
+
+      // locale=zh → Chinese header; `id` has no override so it keeps its label.
+      const zh = makeRes();
+      await route!.handler({
+        params: { object: 'task' },
+        query: { format: 'csv', fields: 'id,title,done', locale: 'zh' },
+        headers: {},
+      } as any, zh.res);
+      expect(zh.chunks.join('').split('\r\n')[0]).toBe('ID,标题,完成');
+
+      // Default locale (en, no ?locale=) → English header from the bundle,
+      // i.e. 'Title'/'Done', never the raw 'RawTitle'/'RawDone'.
+      const en = makeRes();
+      await route!.handler({
+        params: { object: 'task' },
+        query: { format: 'csv', fields: 'id,title,done' },
+        headers: {},
+      } as any, en.res);
+      expect(en.chunks.join('').split('\r\n')[0]).toBe('ID,Title,Done');
+    });
   });
 
   // -----------------------------------------------------------------------
