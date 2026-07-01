@@ -82,6 +82,8 @@ import {
   UnsubscribeResponse,
   WellKnownCapabilities,
   ApiRoutes,
+  ImportRequest,
+  ImportResponse,
 } from '@objectstack/spec/api';
 import type {
   ApprovalRequestRow,
@@ -3046,6 +3048,25 @@ export class ObjectStackClient {
         return this.unwrapResponse<T[]>(res);
     },
 
+    /**
+     * Bulk-import rows (CSV text or JSON row objects) into an object.
+     *
+     * The server coerces each cell to its storage value using the object's field
+     * metadata (booleans, numbers, dates→ISO, select label→code, lookup name→id),
+     * so callers send raw spreadsheet values plus an optional column `mapping`.
+     * `writeMode` selects insert / update / upsert (the latter two need
+     * `matchFields`); `dryRun` validates + previews without persisting. The
+     * response carries per-row outcomes for an import report.
+     */
+    import: async (object: string, request: ImportRequest): Promise<ImportResponse> => {
+        const route = this.getRoute('data');
+        const res = await this.fetch(`${this.baseUrl}${route}/${object}/import`, {
+            method: 'POST',
+            body: JSON.stringify(request),
+        });
+        return this.unwrapResponse<ImportResponse>(res);
+    },
+
     update: async <T = any>(
         object: string,
         id: string,
@@ -3455,6 +3476,21 @@ export class ScopedProjectClient {
         body: JSON.stringify(data),
       });
       return this.parent._unwrap<T[]>(res);
+    },
+    /**
+     * Bulk-import rows (CSV text or JSON row objects) into an object. The server
+     * coerces each cell to its storage value from field metadata (booleans,
+     * numbers, dates→ISO, select label→code, lookup name→id); callers send raw
+     * values plus an optional column `mapping`. `writeMode` selects
+     * insert/update/upsert (update/upsert need `matchFields`); `dryRun`
+     * validates + previews without persisting.
+     */
+    import: async (object: string, request: ImportRequest): Promise<ImportResponse> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/import`), {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return this.parent._unwrap<ImportResponse>(res);
     },
     update: async <T = any>(object: string, id: string, data: Partial<T>): Promise<UpdateDataResult<T>> => {
       const res = await this.parent._fetch(this.url(`/data/${object}/${id}`), {

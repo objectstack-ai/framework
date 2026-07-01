@@ -12,6 +12,7 @@ import {
     formatRowForJson,
     type ExportFieldMeta,
 } from './export-format.js';
+import { coerceRow, type RefResolver } from './import-coerce.js';
 
 // Node-safe logger — avoids importing 'console' which is absent from ES2020 lib typings.
 const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
@@ -3209,17 +3210,64 @@ export class RestServer {
                     if (await this.enforceApiAccess(req, res, p, environmentId, 'import')) return;
                     const body = req.body ?? {};
                     const dryRun = body.dryRun === true;
-                    const mapping: Record<string, string> = body.mapping ?? {};
+
+                    // Write mode + dedup config (M10.9.1). insert = always create;
+                    // update = only touch an existing record matched by matchFields;
+                    // upsert = update when matched, else create.
+                    const writeMode: 'insert' | 'update' | 'upsert' =
+                        body.writeMode === 'update' || body.writeMode === 'upsert' ? body.writeMode : 'insert';
+                    const matchFields: string[] = Array.isArray(body.matchFields)
+                        ? body.matchFields.filter((f: any) => typeof f === 'string' && f.length > 0)
+                        : [];
+                    // `runAutomations` is threaded into the write context so the engine
+                    // can honour it once hook-suppression lands (P1). Until then hooks
+                    // always fire — see import spec §L4.
+                    const runAutomations = body.runAutomations === true;
+                    const trimWhitespace = body.trimWhitespace !== false;
+                    const nullValues: string[] | undefined = Array.isArray(body.nullValues)
+                        ? body.nullValues.filter((v: any) => typeof v === 'string')
+                        : undefined;
+                    const createMissingOptions = body.createMissingOptions === true;
+                    const skipBlankMatchKey = body.skipBlankMatchKey === true;
+
+                    if (writeMode !== 'insert' && matchFields.length === 0) {
+                        res.status(400).json({
+                            code: 'INVALID_REQUEST',
+                            error: `writeMode "${writeMode}" requires a non-empty matchFields[]`,
+                        });
+                        return;
+                    }
+
+                    // Normalize `mapping` to a `{ sourceColumn: targetField }` record.
+                    // Accepts either that compact form or a FieldMappingEntry[].
+                    const mapping: Record<string, string> = {};
+                    if (Array.isArray(body.mapping)) {
+                        for (const e of body.mapping) {
+                            if (e && typeof e.sourceField === 'string' && typeof e.targetField === 'string') {
+                                mapping[e.sourceField] = e.targetField;
+                            }
+                        }
+                    } else if (body.mapping && typeof body.mapping === 'object') {
+                        for (const [k, v] of Object.entries(body.mapping)) {
+                            if (typeof v === 'string') mapping[k] = v;
+                        }
+                    }
+                    const applyMapping = (row: Record<string, any>): Record<string, any> => {
+                        if (Object.keys(mapping).length === 0) return row;
+                        const out: Record<string, any> = {};
+                        for (const [k, val] of Object.entries(row)) out[mapping[k] ?? k] = val;
+                        return out;
+                    };
 
                     // Build rows[] from either explicit JSON array or CSV text.
                     let rows: Array<Record<string, any>> = [];
                     if (body.format === 'json' && Array.isArray(body.rows)) {
-                        rows = body.rows as Array<Record<string, any>>;
+                        rows = (body.rows as Array<Record<string, any>>).map(applyMapping);
                     } else if ((body.format === 'csv' || typeof body.csv === 'string') && typeof body.csv === 'string') {
                         rows = parseCsvToRows(body.csv, mapping);
                     } else if (Array.isArray(body)) {
                         // Permissive: a bare JSON array at the top level.
-                        rows = body as Array<Record<string, any>>;
+                        rows = (body as Array<Record<string, any>>).map(applyMapping);
                     } else {
                         res.status(400).json({
                             code: 'INVALID_REQUEST',
@@ -3232,47 +3280,174 @@ export class RestServer {
                     if (rows.length > max) {
                         res.status(413).json({
                             code: 'PAYLOAD_TOO_LARGE',
-                            error: `Import limit is ${max} rows per request (got ${rows.length})`,
+                            error: `Import limit is ${max} rows per request (got ${rows.length}). Use an async import job for larger files.`,
                         });
                         return;
                     }
 
-                    const results: Array<{ row: number; ok: boolean; id?: string; error?: string; code?: string }> = [];
-                    let okCount = 0;
-                    let errCount = 0;
+                    // Resolve the object's field metadata so cells coerce to storage
+                    // values (booleans, numbers, dates→ISO, select label→code) and
+                    // lookup names resolve to record ids. Best-effort: a failed lookup
+                    // leaves `metaMap` empty and every value passes through untouched.
+                    let metaMap = new Map<string, ExportFieldMeta>();
+                    try {
+                        let schema: any = undefined;
+                        if (typeof (p as any).getMetaItem === 'function') {
+                            const r = await (p as any).getMetaItem({ type: 'object', name: objectName });
+                            schema = isMetaEnvelope(r) ? r.item : r;
+                        }
+                        if (!schema && typeof (p as any).getObjectSchema === 'function') {
+                            schema = await (p as any).getObjectSchema(objectName, environmentId);
+                        }
+                        metaMap = buildFieldMetaMap(schema);
+                    } catch { /* pass-through coercion */ }
+
+                    const findRows = (r: any): any[] =>
+                        Array.isArray(r?.records) ? r.records
+                            : Array.isArray(r?.data) ? r.data
+                                : Array.isArray(r?.rows) ? r.rows
+                                    : Array.isArray(r) ? r : [];
+                    const findArgsBase = (query: any) => ({
+                        object: '',
+                        query,
+                        ...(environmentId ? { environmentId } : {}),
+                        ...(context ? { context } : {}),
+                    });
+
+                    // Reference resolver: name/email/id → referenced record id. Cached
+                    // per (object, display) so a name repeated across rows costs one query.
+                    const refCache = new Map<string, string | undefined>();
+                    const resolveRef: RefResolver = async (referenceObject, display, meta) => {
+                        const cacheKey = `${referenceObject}::${display}`;
+                        if (refCache.has(cacheKey)) return refCache.get(cacheKey);
+                        // Try the configured display field first, then fall back to the
+                        // usual human identifiers (name/email/id): users paste whichever
+                        // uniquely names the record. De-dupe so displayField isn't retried.
+                        const candidates = [...new Set([
+                            ...(meta.displayField ? [meta.displayField] : []),
+                            'name', 'title', 'label', 'full_name', 'email', 'username', 'id',
+                        ])];
+                        let id: string | undefined;
+                        for (const f of candidates) {
+                            try {
+                                const r = await (p as any).findData({
+                                    ...findArgsBase({ $filter: { [f]: display }, $top: 2 }),
+                                    object: referenceObject,
+                                });
+                                const recs = findRows(r);
+                                if (recs.length > 0 && recs[0]?.id != null) { id = String(recs[0].id); break; }
+                            } catch { /* try next candidate field */ }
+                        }
+                        refCache.set(cacheKey, id);
+                        return id;
+                    };
+
+                    // Locate an existing record for update/upsert by matchFields. Returns
+                    // the record, or a sentinel: 'blank' (a match field was empty),
+                    // 'none' (no match), 'ambiguous' (>1 match — too risky to update).
+                    const findExisting = async (
+                        data: Record<string, any>,
+                    ): Promise<Record<string, any> | 'blank' | 'none' | 'ambiguous'> => {
+                        const filter: Record<string, any> = {};
+                        for (const f of matchFields) {
+                            const v = data[f];
+                            if (v === undefined || v === null || v === '') return 'blank';
+                            filter[f] = v;
+                        }
+                        const r = await (p as any).findData({ ...findArgsBase({ $filter: filter, $top: 2 }), object: objectName });
+                        const recs = findRows(r);
+                        if (recs.length === 0) return 'none';
+                        if (recs.length > 1) return 'ambiguous';
+                        return recs[0];
+                    };
+
+                    const writeCtx = { ...(context ?? {}), skipAutomations: !runAutomations };
+
+                    type Action = 'created' | 'updated' | 'skipped' | 'failed';
+                    const results: Array<{ row: number; ok: boolean; action: Action; id?: string; field?: string; error?: string; code?: string }> = [];
+                    let okCount = 0, errCount = 0, created = 0, updated = 0, skipped = 0;
 
                     for (let i = 0; i < rows.length; i++) {
-                        const data = rows[i];
+                        const rowNo = i + 1;
                         try {
-                            if (dryRun) {
-                                // Validate via protocol's metadata layer when available, else
-                                // best-effort: treat any non-empty row as syntactically OK.
-                                const validate = (p as any).validate;
-                                if (typeof validate === 'function') {
-                                    await validate.call(p, { object: objectName, data, context });
+                            // 1. Coerce every cell to its storage value (+ resolve lookups).
+                            const { data, errors } = await coerceRow(rows[i], metaMap, {
+                                trimWhitespace, nullValues, createMissingOptions, resolveRef,
+                            });
+                            if (errors.length > 0) {
+                                const first = errors[0];
+                                errCount++;
+                                results.push({ row: rowNo, ok: false, action: 'failed', field: first.field, code: first.code, error: first.message });
+                                continue;
+                            }
+
+                            // 2. Decide create vs update vs skip.
+                            let existing: Record<string, any> | 'blank' | 'none' | 'ambiguous' = 'none';
+                            if (writeMode !== 'insert') {
+                                existing = await findExisting(data);
+                                if (existing === 'ambiguous') {
+                                    errCount++;
+                                    results.push({ row: rowNo, ok: false, action: 'failed', code: 'AMBIGUOUS_MATCH', error: `matchFields matched more than one ${objectName} record` });
+                                    continue;
                                 }
-                                results.push({ row: i + 1, ok: true });
+                                if (existing === 'blank') {
+                                    // Blank match key: skip when asked, else fall through to
+                                    // create (upsert) / skip (update).
+                                    if (skipBlankMatchKey || writeMode === 'update') {
+                                        skipped++;
+                                        results.push({ row: rowNo, ok: true, action: 'skipped', code: 'BLANK_MATCH_KEY' });
+                                        continue;
+                                    }
+                                }
+                            }
+
+                            const willUpdate = existing && typeof existing === 'object';
+                            const willCreate = !willUpdate && (writeMode === 'insert' || writeMode === 'upsert');
+
+                            if (!willUpdate && !willCreate) {
+                                // update mode, no match → skip.
+                                skipped++;
+                                results.push({ row: rowNo, ok: true, action: 'skipped', code: 'NO_MATCH' });
+                                continue;
+                            }
+
+                            if (dryRun) {
                                 okCount++;
+                                if (willUpdate) { updated++; results.push({ row: rowNo, ok: true, action: 'updated', id: String((existing as any).id ?? '') || undefined }); }
+                                else { created++; results.push({ row: rowNo, ok: true, action: 'created' }); }
+                                continue;
+                            }
+
+                            if (willUpdate) {
+                                const target = existing as Record<string, any>;
+                                const res2 = await (p as any).updateData({ object: objectName, id: target.id, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
+                                const id = (res2 as any)?.id ?? (res2 as any)?.record?.id ?? target.id;
+                                okCount++; updated++;
+                                results.push({ row: rowNo, ok: true, action: 'updated', id: id != null ? String(id) : undefined });
                             } else {
-                                const created = await (p as any).createData({ object: objectName, data, context });
-                                const id = (created as any)?.id ?? (created as any)?.record?.id;
-                                results.push({ row: i + 1, ok: true, id });
-                                okCount++;
+                                const res2 = await (p as any).createData({ object: objectName, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
+                                const id = (res2 as any)?.id ?? (res2 as any)?.record?.id;
+                                okCount++; created++;
+                                results.push({ row: rowNo, ok: true, action: 'created', id: id != null ? String(id) : undefined });
                             }
                         } catch (err: any) {
                             errCount++;
                             const code = err?.code ?? 'IMPORT_ROW_FAILED';
                             const message = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Row failed';
-                            results.push({ row: i + 1, ok: false, error: message, code });
+                            results.push({ row: rowNo, ok: false, action: 'failed', error: message, code });
                         }
                     }
 
                     res.json({
                         object: objectName,
                         dryRun,
+                        writeMode,
                         total: rows.length,
                         ok: okCount,
                         errors: errCount,
+                        created,
+                        updated,
+                        skipped,
                         results,
                     });
                 } catch (error: any) {

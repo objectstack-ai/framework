@@ -259,6 +259,109 @@ export const ExportImportTemplateSchema = lazySchema(() => z.object({
 export type ExportImportTemplate = z.infer<typeof ExportImportTemplateSchema>;
 
 // ==========================================
+// 4b. Import Request / Result (POST /data/:object/import)
+// ==========================================
+
+/**
+ * Import Write Mode
+ * How each incoming row is committed against existing data.
+ */
+export const ImportWriteMode = z.enum([
+  'insert',   // Always create a new record (default; ignores matchFields)
+  'update',   // Update an existing record matched by matchFields; skip if none
+  'upsert',   // Update when matched by matchFields, else create
+]);
+export type ImportWriteMode = z.infer<typeof ImportWriteMode>;
+
+/**
+ * Field Mapping (import)
+ * Either a compact `{ sourceColumn: targetField }` record, or the richer
+ * `FieldMappingEntry[]` form (per-column transform + default + required).
+ */
+export const ImportMappingSchema = lazySchema(() => z.union([
+  z.record(z.string(), z.string()),
+  z.array(FieldMappingEntrySchema),
+]));
+export type ImportMapping = z.infer<typeof ImportMappingSchema>;
+
+/**
+ * Import Request Schema
+ * Body for `POST /api/v1/data/:object/import`.
+ *
+ * The server coerces every cell to its storage value using the object's field
+ * metadata (booleans, numbers, dates→ISO, select label→code, lookup name→id),
+ * so the client sends raw spreadsheet values plus an optional column mapping.
+ *
+ * @example
+ * {
+ *   format: 'csv', csv: 'Name,Owner,Stage\nAcme,jane@x.com,Won',
+ *   mapping: { Name: 'name', Owner: 'owner', Stage: 'stage' },
+ *   writeMode: 'upsert', matchFields: ['name'], runAutomations: false,
+ * }
+ */
+export const ImportRequestSchema = lazySchema(() => z.object({
+  format: z.enum(['csv', 'json']).optional()
+    .describe('Payload shape: csv text or a rows[] array (inferred when omitted)'),
+  csv: z.string().optional().describe('CSV text (when format = csv)'),
+  rows: z.array(z.record(z.string(), z.unknown())).optional()
+    .describe('Row objects (when format = json)'),
+  mapping: ImportMappingSchema.optional()
+    .describe('Source column → target field mapping'),
+  dryRun: z.boolean().default(false)
+    .describe('Validate + coerce every row without persisting'),
+  writeMode: ImportWriteMode.default('insert')
+    .describe('insert / update / upsert semantics'),
+  matchFields: z.array(z.string()).optional()
+    .describe('Fields that identify an existing record (required for update/upsert)'),
+  runAutomations: z.boolean().default(false)
+    .describe('Fire triggers/hooks for each imported row (off by default for bulk)'),
+  trimWhitespace: z.boolean().default(true)
+    .describe('Trim leading/trailing whitespace from string cells'),
+  nullValues: z.array(z.string()).optional()
+    .describe('Strings treated as null/blank (besides empty string)'),
+  createMissingOptions: z.boolean().default(false)
+    .describe('Keep unmatched select values instead of failing the row'),
+  skipBlankMatchKey: z.boolean().default(false)
+    .describe('Skip rows whose matchFields are blank (default: upsert creates them, update skips them)'),
+}));
+export type ImportRequest = z.infer<typeof ImportRequestSchema>;
+
+/**
+ * Import Row Result
+ * Per-row outcome so a UI can render an import report and offer a failed-row
+ * re-export.
+ */
+export const ImportRowResultSchema = lazySchema(() => z.object({
+  row: z.number().int().describe('1-based row number in the source data'),
+  ok: z.boolean().describe('Whether the row succeeded'),
+  action: z.enum(['created', 'updated', 'skipped', 'failed'])
+    .describe('What happened to the row'),
+  id: z.string().optional().describe('Record id (created/updated rows)'),
+  field: z.string().optional().describe('Field that caused a coercion/validation error'),
+  code: z.string().optional().describe('Error code (failed rows)'),
+  error: z.string().optional().describe('Human-readable error message (failed rows)'),
+}));
+export type ImportRowResult = z.infer<typeof ImportRowResultSchema>;
+
+/**
+ * Import Response Schema
+ * Aggregate summary + per-row results returned by the import route.
+ */
+export const ImportResponseSchema = lazySchema(() => z.object({
+  object: z.string().describe('Target object name'),
+  dryRun: z.boolean().describe('Whether this was a validate-only pass'),
+  writeMode: ImportWriteMode.describe('Write mode used'),
+  total: z.number().int().describe('Rows processed'),
+  ok: z.number().int().describe('Rows that succeeded'),
+  errors: z.number().int().describe('Rows that failed'),
+  created: z.number().int().describe('Rows that created a new record'),
+  updated: z.number().int().describe('Rows that updated an existing record'),
+  skipped: z.number().int().describe('Rows skipped (no match in update mode, etc.)'),
+  results: z.array(ImportRowResultSchema).describe('Per-row outcomes'),
+}));
+export type ImportResponse = z.infer<typeof ImportResponseSchema>;
+
+// ==========================================
 // 5. Scheduled Export Jobs
 // ==========================================
 
