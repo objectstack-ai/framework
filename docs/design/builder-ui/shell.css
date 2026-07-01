@@ -1,0 +1,99 @@
+/* Application-builder mockup shell — shared design primitives.
+   One source of truth for the look; every pillar mockup composes these classes.
+   Build boundary is encoded in markup: data-build="shell" = built in the builder,
+   .reuse (data-reuse="<component>") = existing Studio/objectui component, dropped in. */
+
+:root {
+  --surface-1: #ffffff;
+  --surface-2: #f7f8fa;
+  --border:    #e3e6ea;
+  --line:      #eef0f2;
+  --text:      #1f2733;
+  --muted:     #7a828c;
+  --faint:     #9aa0a8;
+  --accent:    #2f6feb;
+  --accent-bg: #eaf1fe;
+  --chip:      #f0f1f4;
+  --radius:    6px;
+  --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #eceef1; padding: 24px; font-family: var(--font); }
+
+/* ---- shell frame ---- */
+.builder {
+  width: 1000px; margin: 0 auto; background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  color: var(--text); font-size: 13px;
+}
+.topbar {
+  height: 44px; display: flex; align-items: center; gap: 24px;
+  padding: 0 16px; border-bottom: 1px solid var(--border);
+}
+.topbar .app { font-weight: 600; }
+.topbar .pilltabs { display: flex; gap: 26px; margin: 0 auto; }
+.topbar .pilltabs a { color: var(--muted); text-decoration: none; padding-bottom: 6px; }
+.topbar .pilltabs a.active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--accent); }
+.topbar .right { display: flex; align-items: center; gap: 14px; color: var(--muted); }
+.btn-publish { background: var(--accent); color: #fff; border: 0; border-radius: 5px; padding: 5px 12px; font-weight: 600; font-size: 12px; }
+
+.body { display: flex; height: 560px; }
+
+/* ---- left rail ---- */
+.rail { width: 190px; background: var(--surface-2); border-right: 1px solid var(--border); padding: 14px 12px; }
+.rail .label { font-size: 10.5px; letter-spacing: .6px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.rail .search { width: 100%; height: 26px; border: 1px solid var(--border); border-radius: 5px; background: #fff; color: var(--muted); font-size: 11.5px; padding: 0 10px; line-height: 26px; }
+.rail ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.rail li { padding: 6px 8px; border-radius: 5px; margin-bottom: 2px; }
+.rail li.active { background: var(--accent-bg); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.rail .new { color: var(--muted); padding: 6px 8px; margin-top: 6px; }
+
+/* ---- main zone ---- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.facettabs { height: 36px; display: flex; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.facettabs a { color: var(--muted); text-decoration: none; padding-bottom: 8px; margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; }
+.facettabs a.active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--accent); }
+.facettabs .sep { width: 1px; height: 18px; background: var(--border); }
+.facettabs .tag { font-size: 8.5px; color: var(--muted); background: var(--chip); border-radius: 7px; padding: 1px 6px; }
+.toolbar { display: flex; align-items: center; gap: 18px; padding: 8px 16px; color: var(--muted); font-size: 11.5px; }
+.toolbar .spacer { flex: 1; }
+.toolbar .add { color: var(--accent); font-weight: 600; }
+.workarea { flex: 1; padding: 0 16px 16px; overflow: auto; }
+
+/* ---- reused-component marker ---- */
+.reuse { position: relative; border: 1px dashed #c8ccd2; border-radius: var(--radius); }
+.reuse > .reuse-tag { position: absolute; left: 10px; bottom: 6px; font-size: 9.5px; font-style: italic; color: var(--faint); background: var(--surface-1); padding: 0 4px; white-space: nowrap; }
+
+/* ---- data grid (reused ListView) ---- */
+table.grid { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.grid th { text-align: left; background: var(--surface-2); color: var(--muted); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+table.grid td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+table.grid td.muted, table.grid th.muted { color: var(--muted); }
+table.grid .col-selected { background: color-mix(in srgb, var(--accent-bg) 60%, transparent); }
+table.grid th.col-selected { color: var(--accent); }
+.grid-add { color: var(--muted); padding: 8px 12px 26px; }
+
+/* ---- right inspector (reused protocol form) ---- */
+.inspector { width: 220px; background: var(--surface-2); border-left: 1px solid var(--border); padding: 14px 16px; }
+.inspector .eyebrow { font-size: 10.5px; letter-spacing: .4px; color: var(--muted); }
+.inspector h3 { margin: 4px 0 10px; font-size: 14px; }
+.inspector hr { border: 0; border-top: 1px solid var(--border); margin: 0 0 12px; }
+.form { padding: 12px 12px 30px; }
+.form .flabel { font-size: 10.5px; color: var(--muted); margin: 12px 0 5px; }
+.form .flabel:first-child { margin-top: 0; }
+.form .field { height: 26px; border: 1px solid var(--border); border-radius: 5px; background: #fff; font-size: 11.5px; padding: 0 10px; line-height: 26px; }
+.form .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { background: var(--chip); border-radius: 11px; padding: 3px 10px; font-size: 10.5px; }
+.form .add { color: var(--accent); font-size: 11px; }
+.form .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.toggle { width: 36px; height: 18px; border-radius: 9px; background: #d7dbe0; position: relative; }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+.toggle.on { background: var(--accent); }
+.toggle.on::after { left: 20px; }
+
+/* ---- legend ---- */
+.legend { display: flex; gap: 26px; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted); }
+.legend .sw { display: inline-block; width: 14px; height: 12px; vertical-align: -1px; margin-right: 6px; }
+.legend .sw.built { border: 1px solid var(--text); }
+.legend .sw.reused { border: 1px dashed #c8ccd2; }
