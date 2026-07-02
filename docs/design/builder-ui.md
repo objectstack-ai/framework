@@ -242,11 +242,32 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
   name field / compact / search). Relationships via the `lookup` field type.
 - **Built so far** (2026-07): owned-objects rail · `Records` grid with inline data,
   add-column / add-field, drag-reorder columns, and the reused object/field inspector
-  (field-level required · unique · options · default · help). Draft → publish wired.
-- **Still to build** (v1 gap — the facet tabs never landed): left-rail **search + New
-  object** · the `Fields` **form-style layout designer** · the `Validations` **rules
-  list + condition builder** · the object **`Settings`** facet. These are the
-  Phase-B build (tracked against this doc); each reuses an existing Studio panel.
+  (field-level required · unique · options · default · help) · the **Form view** —
+  **布局** (the WYSIWYG form-layout designer: sections = `fieldGroups`, drag within /
+  across sections, click-to-inspect) ⇄ **预览** (the live runtime `ObjectForm`) ·
+  **package-level publish** (drafts accumulate per item; the top bar reviews and
+  publishes the whole package's drafts in one governed pass — no per-item publish).
+- **Still to build** (v1 gap): left-rail **search + New object** · the `Validations`
+  **rules list + condition builder** · the object **`Settings`** facet. Each reuses
+  an existing Studio panel.
+
+### Draft vs. preview — what each Form sub-mode shows
+The two Form sub-modes intentionally read **different states**:
+
+- **布局 = the draft-confirmation surface.** It renders from the **draft**
+  (`fields` + `fieldGroups`, including unpublished changes) at the metadata level —
+  faithful per-type control previews, no object-data SQL. That is what makes it safe
+  *by construction*: a draft with structural changes has **no physical columns yet**
+  (DDL lands at publish), so any data-bound rendering of the draft would break.
+- **预览 = the published runtime reference.** It renders the real `ObjectForm` from
+  the **published** definition — deliberately *not* the draft, for the same physical
+  reason. Publishing is a **deliberate user action** (nothing auto-publishes); when
+  unpublished changes exist the preview says so ("有未发布改动 — 预览为已发布定义的
+  效果"), pointing to 布局 for draft confirmation and to the top-bar publish for the
+  post-publish effect.
+- **Deferred**: a data-bound *draft* preview requires the physical schema to exist
+  pre-publish (a structural-authoring / DDL-timing decision, tracked separately) —
+  it is not a rendering-layer feature and is intentionally out of scope here.
 - **Defer**: Extended objects (objectExtensions) · External objects (datasources) ·
   the ERD / model view · formal `Lifecycle` (v1 status = a select field) · `Indexes` ·
   seed-data UI · saved views / kanban / calendar (presentation → Interface).
