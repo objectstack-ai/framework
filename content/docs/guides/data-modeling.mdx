@@ -39,7 +39,7 @@ export const MyObject = ObjectSchema.create({
   
   // Display configuration
   titleFormat: '{{record.field1}} - {{record.field2}}',
-  compactLayout: ['field1', 'field2', 'field3'],
+  highlightFields: ['field1', 'field2', 'field3'],
   
   // Fields definition
   fields: {
@@ -67,7 +67,7 @@ export const MyObject = ObjectSchema.create({
 | `icon` | string | Icon identifier | `'building'` |
 | `description` | string | Help text | `'Companies...'` |
 | `titleFormat` | string | Record title template (`{{record.field}}` interpolation) | `'{{record.name}} - {{record.id}}'` |
-| `compactLayout` | string[] | Quick view fields | `['name', 'status']` |
+| `highlightFields` | string[] | Most-important fields, in priority order (default columns, cards, previews, detail highlight strip; ADR-0085 — formerly `compactLayout`, still accepted as an alias) | `['name', 'status']` |
 
 ### Enable Features
 

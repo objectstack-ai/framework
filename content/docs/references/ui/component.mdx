@@ -274,9 +274,9 @@ const result = AIChatWindowProps.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **columns** | `Enum<'1' \| '2' \| '3' \| '4'>` | ✅ | Number of columns for field layout (1-4) |
-| **layout** | `Enum<'auto' \| 'custom'>` | ✅ | Layout mode: auto uses object compactLayout, custom uses explicit sections |
+| **layout** | `Enum<'auto' \| 'custom'>` | ✅ | Layout mode: auto uses object highlightFields (formerly compactLayout), custom uses explicit sections |
 | **sections** | `string[]` | optional | Section IDs to show (required when layout is "custom") |
-| **fields** | `string[]` | optional | Explicit field list to display (optional, overrides compactLayout) |
+| **fields** | `string[]` | optional | Explicit field list to display (optional, overrides highlightFields) |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
 
 

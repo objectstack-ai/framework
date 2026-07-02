@@ -68,7 +68,8 @@ export const Account = ObjectSchema.create({
 | :--- | :--- | :--- | :--- |
 | `displayNameField` | `string` | optional | Field used as record display name (defaults to `'name'`) |
 | `titleFormat` | `string` | optional | Title expression (e.g. `'{name} - {code}'`) |
-| `compactLayout` | `string[]` | optional | Primary fields for hover cards and lookups |
+| `highlightFields` | `string[]` | optional | Most-important fields in priority order — default list columns, cards, previews, detail highlight strip (ADR-0085; formerly `compactLayout`, accepted as an alias) |
+| `stageField` | `string \| false` | optional | Linear lifecycle field; `false` declares the status field non-linear and suppresses stage heuristics (ADR-0085) |
 | `recordName` | `object` | optional | Record name auto-generation config |
 
 ### Capabilities (`enable`)
