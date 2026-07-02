@@ -108,7 +108,10 @@ export const EXPRESSION_SURFACE: ExprSurface[] = [
     dialect: 'cel', mode: 'interpret', state: 'enforced', failPolicy: 'fail-soft-log',
     enforcement: 'console (objectui) SchemaRenderer + server celEngine (interpret)',
     covers: [
-      'data/object.zod.ts:visibleOn',
+      // data/object.zod.ts:visibleOn (fieldGroups group-level CEL visibility)
+      // was removed by ADR-0085 §3 — declared but never consumed anywhere
+      // (enforce-or-remove, ADR-0049). Re-add the row when the key returns
+      // WITH an enforcement path.
       'ui/action.zod.ts:visible',
       'ui/app.zod.ts:visible',
       'ui/page.zod.ts:visibility',
