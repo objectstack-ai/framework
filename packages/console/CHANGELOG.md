@@ -1,5 +1,25 @@
 # @objectstack/console
 
+## 11.6.0
+
+### Minor Changes
+
+- e778a93: chore(console): refresh vendored `@object-ui/console` SPA to objectui@d006128c
+
+  Bumps the pinned `.objectui-sha` from `46a12ef9` to `d006128c` (6 commits) and rebuilds the prebuilt Console SPA shipped in `@objectstack/console`.
+
+  Notable upstream changes pulled in:
+
+  - feat(detail): wire object fieldGroups into detail sections; read hints from spec-writable `detail.*` block
+  - fix(form): render object fieldGroups in create/edit modal; auto-layout parity for grouped ObjectForm
+  - fix(grid): refresh list after a bulk/row action succeeds
+  - fix(grid): inline-edit toggle takes effect immediately + staged editor closes on save
+  - fix(components): keep dialog/drawer open when a click closes an open dropdown
+
+### Patch Changes
+
+- b990bc2: 修复 console 产物打包旧版 @objectstack/client 的问题:`build-console.sh` 现在通过 `OBJECTSTACK_CLIENT_DIST` 把本仓库、本版本的 client 注入 console bundle(此前由 objectui lockfile 决定,11.5.0 因此发布了新导入 UI + client 11.2.0,运行时报 "does not support async import jobs")。构建拆为 deps(turbo)+ console 本体(直跑,避开 turbo strict env 剥离环境变量),并新增产物 canary 断言防止旧 client 再次静默发布。
+
 ## 11.5.0
 
 ### Minor Changes

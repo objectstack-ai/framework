@@ -1,5 +1,12 @@
 # @objectstack/service-messaging
 
+## 11.6.0
+
+### Patch Changes
+
+- @objectstack/spec@11.6.0
+- @objectstack/core@11.6.0
+
 ## 11.5.0
 
 ### Patch Changes

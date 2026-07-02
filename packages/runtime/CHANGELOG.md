@@ -1,5 +1,27 @@
 # @objectstack/runtime
 
+## 11.6.0
+
+### Patch Changes
+
+- @objectstack/spec@11.6.0
+- @objectstack/core@11.6.0
+- @objectstack/types@11.6.0
+- @objectstack/metadata@11.6.0
+- @objectstack/objectql@11.6.0
+- @objectstack/observability@11.6.0
+- @objectstack/formula@11.6.0
+- @objectstack/rest@11.6.0
+- @objectstack/driver-memory@11.6.0
+- @objectstack/driver-sql@11.6.0
+- @objectstack/driver-sqlite-wasm@11.6.0
+- @objectstack/plugin-auth@11.6.0
+- @objectstack/plugin-org-scoping@11.6.0
+- @objectstack/plugin-security@11.6.0
+- @objectstack/service-cluster@11.6.0
+- @objectstack/service-datasource@11.6.0
+- @objectstack/service-i18n@11.6.0
+
 ## 11.5.0
 
 ### Patch Changes

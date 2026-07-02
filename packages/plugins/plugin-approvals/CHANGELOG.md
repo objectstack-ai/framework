@@ -1,5 +1,15 @@
 # @objectstack/plugin-approvals
 
+## 11.6.0
+
+### Patch Changes
+
+- @objectstack/spec@11.6.0
+- @objectstack/core@11.6.0
+- @objectstack/metadata-core@11.6.0
+- @objectstack/formula@11.6.0
+- @objectstack/platform-objects@11.6.0
+
 ## 11.5.0
 
 ### Patch Changes
