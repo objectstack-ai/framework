@@ -31,7 +31,7 @@ export const SysOauthAccessToken = ObjectSchema.create({
     docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
   },
   description: 'Opaque OAuth access tokens issued to client applications',
-  compactLayout: ['client_id', 'user_id', 'expires_at'],
+  highlightFields: ['client_id', 'user_id', 'expires_at'],
 
   fields: {
     id: Field.text({

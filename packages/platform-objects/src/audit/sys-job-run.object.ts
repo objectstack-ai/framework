@@ -26,7 +26,7 @@ export const SysJobRun = ObjectSchema.create({
   displayNameField: 'job_name',
   nameField: 'job_name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{job_name} @ {started_at}',
-  compactLayout: ['job_name', 'status', 'started_at', 'duration_ms', 'attempt'],
+  highlightFields: ['job_name', 'status', 'started_at', 'duration_ms', 'attempt'],
 
   fields: {
     id: Field.text({ label: 'Run ID', required: true, readonly: true, group: 'System' }),

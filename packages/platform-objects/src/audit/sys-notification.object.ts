@@ -36,7 +36,7 @@ export const SysNotification = ObjectSchema.create({
   displayNameField: 'topic',
   nameField: 'topic', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{topic}',
-  compactLayout: ['topic', 'severity', 'source_object', 'created_at'],
+  highlightFields: ['topic', 'severity', 'source_object', 'created_at'],
 
   listViews: {
     recent: {

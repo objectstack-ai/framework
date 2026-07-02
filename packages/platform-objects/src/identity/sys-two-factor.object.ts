@@ -27,7 +27,7 @@ export const SysTwoFactor = ObjectSchema.create({
   },
   description: 'Two-factor authentication credentials',
   titleFormat: 'Two-factor for {user_id}',
-  compactLayout: ['user_id', 'created_at'],
+  highlightFields: ['user_id', 'created_at'],
 
   listViews: {
     mine: {

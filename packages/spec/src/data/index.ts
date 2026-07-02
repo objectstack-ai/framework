@@ -49,6 +49,10 @@ export * from './aggregation-policy';
 // enrichment, search field resolution, and lint.
 export * from './display-name';
 
+// fieldGroups layout derivation (ADR-0085 §5) — the single source of the
+// grouping semantics every renderer (form, detail, drawer, designer) applies.
+export * from './field-group-layout';
+
 // Feed & Activity Protocol
 export * from './feed.zod';
 

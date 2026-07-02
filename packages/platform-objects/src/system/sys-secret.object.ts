@@ -37,7 +37,7 @@ export const SysSecret = ObjectSchema.create({
   isSystem: true,
   managedBy: 'system',
   description: 'Cipher store referenced by sys_setting handles. Never holds plaintext.',
-  compactLayout: ['namespace', 'key', 'kms_key_id', 'version', 'rotated_at'],
+  highlightFields: ['namespace', 'key', 'kms_key_id', 'version', 'rotated_at'],
   listViews: {
     all: {
       type: 'grid',

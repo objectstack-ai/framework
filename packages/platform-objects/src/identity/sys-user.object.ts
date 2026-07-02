@@ -30,7 +30,7 @@ export const SysUser = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'email', 'email_verified'],
+  highlightFields: ['name', 'email', 'email_verified'],
 
   // Custom actions — generic CRUD is suppressed because user accounts are
   // managed by better-auth, but we still need first-class affordances for

@@ -26,7 +26,7 @@ export const SysJob = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'schedule_type', 'active', 'last_run_at', 'last_status'],
+  highlightFields: ['name', 'schedule_type', 'active', 'last_run_at', 'last_status'],
 
   fields: {
     id: Field.text({ label: 'Job ID', required: true, readonly: true, group: 'System' }),

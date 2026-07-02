@@ -848,11 +848,10 @@ describe('ObjectFieldGroupSchema', () => {
     const result = ObjectFieldGroupSchema.parse(group);
     expect(result.key).toBe('contact_info');
     expect(result.label).toBe('Contact Information');
-    // defaultExpanded defaults to true
-    expect(result.defaultExpanded).toBe(true);
+    // collapse defaults to 'none' (ADR-0085)
+    expect(result.collapse).toBe('none');
     expect(result.icon).toBeUndefined();
     expect(result.description).toBeUndefined();
-    expect(result.visibleOn).toBeUndefined();
   });
 
   it('should accept a fully-specified group', () => {
@@ -861,11 +860,16 @@ describe('ObjectFieldGroupSchema', () => {
       label: 'Billing',
       icon: 'credit-card',
       description: 'Billing and payment details',
-      defaultExpanded: false,
-      visibleOn: '$user.isAdmin',
+      collapse: 'collapsed' as const,
     };
     const result = ObjectFieldGroupSchema.parse(group);
-    expect(result).toEqual({ ...group, visibleOn: { dialect: 'cel', source: '$user.isAdmin' } });
+    expect(result).toEqual(group);
+  });
+
+  it('should reject an invalid collapse value', () => {
+    expect(() =>
+      ObjectFieldGroupSchema.parse({ key: 'billing', label: 'Billing', collapse: 'maybe' }),
+    ).toThrow();
   });
 
   it('should reject missing key or label', () => {
@@ -878,6 +882,60 @@ describe('ObjectFieldGroupSchema', () => {
     expect(() => ObjectFieldGroupSchema.parse({ key: 'Contact Info', label: 'x' })).toThrow();
     expect(() => ObjectFieldGroupSchema.parse({ key: 'contact-info', label: 'x' })).toThrow();
     expect(() => ObjectFieldGroupSchema.parse({ key: 'ContactInfo',  label: 'x' })).toThrow();
+  });
+});
+
+// =================================================================
+// Object-level semantic roles (ADR-0085)
+// =================================================================
+
+describe('ObjectSchema semantic roles (ADR-0085)', () => {
+  it('accepts stageField as a string or literal false, rejects other values', () => {
+    expect(ObjectSchema.parse({ name: 'lead', fields: {}, stageField: 'status' }).stageField).toBe('status');
+    expect(ObjectSchema.parse({ name: 'lead', fields: {}, stageField: false }).stageField).toBe(false);
+    expect(ObjectSchema.safeParse({ name: 'lead', fields: {}, stageField: true }).success).toBe(false);
+    expect(ObjectSchema.safeParse({ name: 'lead', fields: {}, stageField: 3 }).success).toBe(false);
+  });
+
+  it('accepts highlightFields and aliases the deprecated compactLayout onto it', () => {
+    const direct = ObjectSchema.parse({
+      name: 'account', fields: {}, highlightFields: ['name', 'industry'],
+    });
+    expect(direct.highlightFields).toEqual(['name', 'industry']);
+
+    const aliased = ObjectSchema.parse({
+      name: 'account', fields: {}, compactLayout: ['name', 'industry'],
+    });
+    expect(aliased.highlightFields).toEqual(['name', 'industry']);
+    // Deprecated key preserved on output (ADR-0079 alias pattern).
+    expect(aliased.compactLayout).toEqual(['name', 'industry']);
+
+    // Canonical key wins when both are present.
+    const both = ObjectSchema.parse({
+      name: 'account', fields: {}, highlightFields: ['a'], compactLayout: ['b'],
+    });
+    expect(both.highlightFields).toEqual(['a']);
+  });
+
+  it('rejects the removed detail UI-hints block at create()', () => {
+    expect(() =>
+      ObjectSchema.create({
+        name: 'product',
+        fields: {},
+        // @ts-expect-error — `detail` was removed by ADR-0085
+        detail: { hideReferenceRail: true },
+      }),
+    ).toThrow(/detail/);
+  });
+
+  it('strips the removed detail block on safeParse (no key on output)', () => {
+    const result = ObjectSchema.safeParse({
+      name: 'product', fields: {}, detail: { renderViaSchema: false },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as Record<string, unknown>).detail).toBeUndefined();
+    }
   });
 });
 
@@ -950,8 +1008,27 @@ describe('ObjectSchema.fieldGroups', () => {
       ],
     });
     expect(obj.fieldGroups).toEqual([
-      { key: 'workflow', label: 'Workflow', icon: 'workflow', defaultExpanded: true },
+      { key: 'workflow', label: 'Workflow', icon: 'workflow', collapse: 'none' },
     ]);
+  });
+
+  // ADR-0085: deprecated collapse aliases normalize onto the enum at parse.
+  it('maps deprecated defaultExpanded / collapsible+collapsed onto collapse', () => {
+    const parsed = ObjectSchema.parse({
+      name: 'account',
+      fields: { a: { type: 'text', group: 'g1' } },
+      fieldGroups: [
+        { key: 'g1', label: 'G1', defaultExpanded: false },
+        { key: 'g2', label: 'G2', collapsible: true, collapsed: true },
+        { key: 'g3', label: 'G3', collapsible: true },
+        { key: 'g4', label: 'G4', collapse: 'none', collapsed: true }, // canonical wins
+      ],
+    });
+    expect(parsed.fieldGroups?.map((g) => g.collapse)).toEqual([
+      'collapsed', 'collapsed', 'expanded', 'none',
+    ]);
+    // Deprecated keys are preserved on output (cross-repo back-compat).
+    expect(parsed.fieldGroups?.[0].defaultExpanded).toBe(false);
   });
 
   describe('External Binding (ADR-0015)', () => {

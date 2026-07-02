@@ -57,7 +57,7 @@ export const SysSsoProvider = ObjectSchema.create({
   displayNameField: 'provider_id',
   nameField: 'provider_id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{provider_id}',
-  compactLayout: ['provider_id', 'issuer', 'domain'],
+  highlightFields: ['provider_id', 'issuer', 'domain'],
 
   // All mutations go through @better-auth/sso's endpoints under
   // /api/v1/auth/sso/* (register / delete-provider) rather than the generic

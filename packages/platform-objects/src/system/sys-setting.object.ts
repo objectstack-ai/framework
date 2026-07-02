@@ -42,7 +42,7 @@ export const SysSetting = ObjectSchema.create({
   displayNameField: 'key',
   nameField: 'key', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{namespace}.{key}',
-  compactLayout: ['namespace', 'key', 'scope', 'updated_at'],
+  highlightFields: ['namespace', 'key', 'scope', 'updated_at'],
 
   listViews: {
     by_namespace: {

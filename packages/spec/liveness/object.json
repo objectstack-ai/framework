@@ -37,7 +37,15 @@
     },
     "compactLayout": {
       "status": "live",
-      "note": "objectui hover/cards/lookups."
+      "note": "[DEPRECATED → highlightFields, ADR-0085] parse-time alias copied onto highlightFields; preserved on output for back-compat."
+    },
+    "highlightFields": {
+      "status": "live",
+      "note": "ADR-0085 semantic role (renamed from compactLayout): objectui default list/grid columns (ObjectGrid/ObjectView/InterfaceListPage), child-record previews (first entry), record:details auto layout, detail highlight strip (first 4)."
+    },
+    "stageField": {
+      "status": "live",
+      "note": "ADR-0085 semantic role: objectui plugin-detail detectStatusField drives the record:path stepper; string names the lifecycle field, false suppresses heuristic stage detection."
     },
     "fieldGroups": {
       "status": "live",
@@ -46,10 +54,6 @@
     "listViews": {
       "status": "live",
       "note": "objectui segmented tabs."
-    },
-    "detail": {
-      "status": "live",
-      "note": "objectui plugin-detail (detail.renderViaSchema)."
     },
     "fields": {
       "status": "live",

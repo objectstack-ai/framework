@@ -30,7 +30,7 @@ export const SysJwks = ObjectSchema.create({
     docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
   },
   description: 'Asymmetric key pairs used to sign and verify issued JWTs',
-  compactLayout: ['id', 'created_at', 'expires_at'],
+  highlightFields: ['id', 'created_at', 'expires_at'],
 
   fields: {
     id: Field.text({

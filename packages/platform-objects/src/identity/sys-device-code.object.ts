@@ -37,7 +37,7 @@ export const SysDeviceCode = ObjectSchema.create({
   description: 'OAuth 2.0 Device Authorization Grant (RFC 8628) pending requests',
   nameField: 'user_code', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{user_code}',
-  compactLayout: ['user_code', 'status', 'client_id', 'expires_at'],
+  highlightFields: ['user_code', 'status', 'client_id', 'expires_at'],
 
   fields: {
     id: Field.text({

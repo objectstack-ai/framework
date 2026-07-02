@@ -30,7 +30,7 @@ export const SysOauthRefreshToken = ObjectSchema.create({
     docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
   },
   description: 'Opaque OAuth refresh tokens (linked to a session)',
-  compactLayout: ['client_id', 'user_id', 'expires_at'],
+  highlightFields: ['client_id', 'user_id', 'expires_at'],
 
   fields: {
     id: Field.text({

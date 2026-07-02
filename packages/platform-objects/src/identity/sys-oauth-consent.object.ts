@@ -32,7 +32,7 @@ export const SysOauthConsent = ObjectSchema.create({
     docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
   },
   description: 'User consent records for OAuth client applications',
-  compactLayout: ['client_id', 'user_id', 'scopes'],
+  highlightFields: ['client_id', 'user_id', 'scopes'],
 
   fields: {
     id: Field.text({

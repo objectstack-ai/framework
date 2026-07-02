@@ -27,7 +27,7 @@ export const SysVerification = ObjectSchema.create({
   },
   description: 'Email and phone verification tokens',
   titleFormat: 'Verification for {identifier}',
-  compactLayout: ['identifier', 'expires_at', 'created_at'],
+  highlightFields: ['identifier', 'expires_at', 'created_at'],
   
   fields: {
     id: Field.text({

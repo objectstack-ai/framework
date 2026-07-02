@@ -35,7 +35,7 @@ export const SysJobQueue = ObjectSchema.create({
   displayNameField: 'queue',
   nameField: 'queue', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{queue} #{id}',
-  compactLayout: ['queue', 'status', 'attempts', 'scheduled_for', 'last_error'],
+  highlightFields: ['queue', 'status', 'attempts', 'scheduled_for', 'last_error'],
 
   fields: {
     id: Field.text({ label: 'Message ID', required: true, readonly: true, group: 'System' }),

@@ -29,7 +29,7 @@ export const SysEmail = ObjectSchema.create({
   displayNameField: 'subject',
   nameField: 'subject', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{subject}',
-  compactLayout: ['subject', 'to', 'status', 'sent_at'],
+  highlightFields: ['subject', 'to', 'status', 'sent_at'],
 
   fields: {
     id: Field.text({

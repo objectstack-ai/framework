@@ -50,3 +50,11 @@ export {
   TITLE_UNRESOLVABLE,
 } from './validate-record-title.js';
 export type { RecordTitleFinding, RecordTitleSeverity } from './validate-record-title.js';
+
+export {
+  validateSemanticRoles,
+  FIELD_GROUP_UNDECLARED,
+  FIELD_GROUP_EMPTY,
+  SEMANTIC_ROLE_FIELD_UNKNOWN,
+} from './validate-semantic-roles.js';
+export type { SemanticRoleFinding, SemanticRoleSeverity } from './validate-semantic-roles.js';

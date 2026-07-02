@@ -23,7 +23,7 @@ export const SysBusinessUnitMember = ObjectSchema.create({
   managedBy: 'platform',
   description: 'User assignment to a business unit (matrix-org friendly, effective-dated).',
   titleFormat: '{user_id} in {business_unit_id}',
-  compactLayout: ['user_id', 'business_unit_id', 'role_in_business_unit', 'is_primary'],
+  highlightFields: ['user_id', 'business_unit_id', 'role_in_business_unit', 'is_primary'],
 
   fields: {
     id: Field.text({

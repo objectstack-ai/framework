@@ -34,7 +34,7 @@ export const SysSavedReport = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'object_name', 'format', 'owner_id', 'updated_at'],
+  highlightFields: ['name', 'object_name', 'format', 'owner_id', 'updated_at'],
 
   fields: {
     id: Field.text({

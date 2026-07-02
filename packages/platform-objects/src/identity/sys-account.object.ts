@@ -27,7 +27,7 @@ export const SysAccount = ObjectSchema.create({
   },
   description: 'OAuth and authentication provider accounts',
   titleFormat: '{provider_id} - {account_id}',
-  compactLayout: ['provider_id', 'user_id', 'account_id'],
+  highlightFields: ['provider_id', 'user_id', 'account_id'],
 
   // Custom actions — sysadmins routinely need to revoke a user's OAuth
   // link (e.g. when an SSO provider is decommissioned or the user

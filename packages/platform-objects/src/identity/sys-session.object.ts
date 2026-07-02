@@ -33,7 +33,7 @@ export const SysSession = ObjectSchema.create({
   displayNameField: 'user_id',
   nameField: 'user_id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: 'Session — {user_id}',
-  compactLayout: ['user_id', 'ip_address', 'expires_at'],
+  highlightFields: ['user_id', 'ip_address', 'expires_at'],
 
   // Custom actions — sessions are managed by better-auth (generic CRUD
   // suppressed). "Sign out other devices" is the high-value self-service

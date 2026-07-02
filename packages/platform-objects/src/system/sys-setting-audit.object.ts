@@ -34,7 +34,7 @@ export const SysSettingAudit = ObjectSchema.create({
   isSystem: true,
   managedBy: 'system',
   description: 'Append-only audit trail for SettingsService mutations.',
-  compactLayout: ['namespace', 'key', 'scope', 'action', 'actor_id', 'created_at'],
+  highlightFields: ['namespace', 'key', 'scope', 'action', 'actor_id', 'created_at'],
   listViews: {
     recent: {
       type: 'grid',

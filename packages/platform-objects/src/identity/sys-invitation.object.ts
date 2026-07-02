@@ -30,7 +30,7 @@ export const SysInvitation = ObjectSchema.create({
   // single-org mode (renders "Invitation to null"), and the recipient email is
   // the more useful identifier in both modes anyway.
   titleFormat: 'Invitation for {email}',
-  compactLayout: ['email', 'organization_id', 'status'],
+  highlightFields: ['email', 'organization_id', 'status'],
 
   // Custom actions — generic CRUD is suppressed (better-auth-managed).
   // Mirror the `invite_user` toolbar action from sys_user here so admins

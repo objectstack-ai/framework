@@ -181,7 +181,7 @@ export const Task = ObjectSchema.create({
   ],
   
   nameField: 'subject',
-  compactLayout: ['subject', 'status', 'priority', 'due_date', 'owner'],
+  highlightFields: ['subject', 'status', 'priority', 'due_date', 'owner'],
   
   validations: [
     {

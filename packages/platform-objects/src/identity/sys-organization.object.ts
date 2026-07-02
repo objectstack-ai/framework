@@ -29,7 +29,7 @@ export const SysOrganization = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'slug'],
+  highlightFields: ['name', 'slug'],
 
   // Custom actions — generic CRUD is suppressed (better-auth-managed),
   // but admins still need to create new orgs from the Setup app.

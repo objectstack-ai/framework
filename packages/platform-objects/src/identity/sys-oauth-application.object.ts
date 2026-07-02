@@ -36,7 +36,7 @@ export const SysOauthApplication = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'client_id', 'type', 'disabled'],
+  highlightFields: ['name', 'client_id', 'type', 'disabled'],
 
   // Custom actions — all OAuth-application mutations are routed through
   // better-auth's `@better-auth/oauth-provider` endpoints (and a thin

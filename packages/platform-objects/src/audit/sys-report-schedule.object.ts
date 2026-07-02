@@ -38,7 +38,7 @@ export const SysReportSchedule = ObjectSchema.create({
   managedBy: 'platform',
   description: 'Recurring delivery of a sys_saved_report via email',
   titleFormat: '{report_id} → {recipients}',
-  compactLayout: ['report_id', 'recipients', 'interval_minutes', 'active', 'next_run_at'],
+  highlightFields: ['report_id', 'recipients', 'interval_minutes', 'active', 'next_run_at'],
 
   fields: {
     id: Field.text({

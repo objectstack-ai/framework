@@ -43,7 +43,7 @@ export const SysScimProvider = ObjectSchema.create({
   displayNameField: 'provider_id',
   nameField: 'provider_id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{provider_id}',
-  compactLayout: ['provider_id', 'organization_id'],
+  highlightFields: ['provider_id', 'organization_id'],
 
   listViews: {
     all: {

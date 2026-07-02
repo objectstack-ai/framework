@@ -27,7 +27,7 @@ export const SysTeamMember = ObjectSchema.create({
   },
   description: 'Team membership records linking users to teams',
   titleFormat: '{user_id} in {team_id}',
-  compactLayout: ['user_id', 'team_id', 'created_at'],
+  highlightFields: ['user_id', 'team_id', 'created_at'],
 
   // Custom actions calling better-auth's team-member endpoints. Generic
   // CRUD is suppressed (managedBy: 'better-auth') so these are the

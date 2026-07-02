@@ -9,7 +9,7 @@ import { ListViewSchema } from '../ui/view.zod';
 /**
  * API Operations Enum
  */
-import { ExpressionInputSchema , TemplateExpressionInputSchema } from '../shared/expression.zod';
+import { TemplateExpressionInputSchema } from '../shared/expression.zod';
 import { lazySchema } from '../shared/lazy-schema';
 import { MetadataProtectionFields } from '../kernel/metadata-protection.zod';
 import { ProtectionSchema } from '../shared/protection.zod';
@@ -224,14 +224,22 @@ export const VersioningConfigSchema = lazySchema(() => z.object({
  * Deferred (not part of MVP):
  *   - explicit per-field in-group ordering
  *   - nested groups / sub-groups
- *   - permission-scoped group visibility beyond `visibleOn`
- * 
+ *   - group-level visibility predicates (a `visibleOn` key existed here
+ *     briefly with no consumer anywhere; removed per ADR-0085 / ADR-0049
+ *     enforce-or-remove — re-add together with its enforcement when a
+ *     surface actually evaluates it)
+ *
+ * Derivation semantics (declared order, empty groups dropped, ungrouped
+ * trailing bucket, collapse passthrough) are single-sourced in
+ * `deriveFieldGroupLayout` (field-group-layout.ts, ADR-0085 §5) — UI
+ * renderers consume that helper instead of re-implementing the rules.
+ *
  * @example
  * ```ts
  * fieldGroups: [
  *   { key: 'contact_info', label: 'Contact Information', icon: 'user' },
- *   { key: 'billing',      label: 'Billing',             defaultExpanded: false },
- *   { key: 'system',       label: 'System',              visibleOn: '$user.isAdmin' },
+ *   { key: 'billing',      label: 'Billing',             collapse: 'collapsed' },
+ *   { key: 'system',       label: 'System' },
  * ]
  * ```
  */
@@ -250,11 +258,27 @@ export const ObjectFieldGroupSchema = lazySchema(() => z.object({
   /** Optional description / help text shown under the group header. */
   description: z.string().optional().describe('Optional description shown under the group header'),
 
-  /** Whether the group is expanded by default. Defaults to `true`. */
-  defaultExpanded: z.boolean().optional().default(true).describe('Whether the group is expanded by default'),
+  /**
+   * [ADR-0085] Collapse behaviour of the group's rendered section, on every
+   * surface (form, detail, drawer). One enum, three valid states — replaces
+   * the old `defaultExpanded` flag AND the UI-dialect `collapsible`/`collapsed`
+   * boolean pair, which could express contradictions and had drifted between
+   * spec and renderer (spec declared a key no renderer read; renderers read
+   * keys the spec rejected).
+   */
+  collapse: z.enum(['none', 'expanded', 'collapsed']).optional().default('none')
+    .describe("[ADR-0085] Section collapse behaviour: 'none' (always open, no toggle), 'expanded' (collapsible, starts open), 'collapsed' (collapsible, starts closed)."),
 
-  /** Optional visibility expression — when false, the entire group is hidden (e.g., "$user.isAdmin", "status == \'closed\'"). */
-  visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL); group is hidden when FALSE.'),
+  /**
+   * @deprecated [ADR-0085 → `collapse`] Accepted as a parse-time alias:
+   * `defaultExpanded: false` maps to `collapse: 'collapsed'`, `true` to
+   * `'expanded'`, when `collapse` is absent. New metadata sets `collapse`.
+   */
+  defaultExpanded: z.boolean().optional().describe("[DEPRECATED → collapse] true → 'expanded', false → 'collapsed'."),
+  /** @deprecated [ADR-0085 → `collapse`] UI-dialect alias (pair with `collapsed`); mapped onto `collapse` at parse. */
+  collapsible: z.boolean().optional().describe("[DEPRECATED → collapse] Boolean pair with `collapsed`; use the `collapse` enum."),
+  /** @deprecated [ADR-0085 → `collapse`] UI-dialect alias (pair with `collapsible`); mapped onto `collapse` at parse. */
+  collapsed: z.boolean().optional().describe("[DEPRECATED → collapse] Boolean pair with `collapsible`; use the `collapse` enum."),
 }));
 
 export type ObjectFieldGroup = z.infer<typeof ObjectFieldGroupSchema>;
@@ -570,7 +594,33 @@ const ObjectSchemaBase = z.object({
     startNumber: z.number().int().min(0).optional().describe('Starting number for autonumber (default: 1)'),
   }).optional().describe('Record name generation configuration (Salesforce pattern)'),
   titleFormat: TemplateExpressionInputSchema.optional().describe('[DEPRECATED → nameField (ADR-0079)] Render-only title template; the server cannot return or query it, and an explicit nameField now takes precedence. Migrate a single-field title to nameField, a composite to a formula field designated as nameField.'),
-  compactLayout: z.array(z.string()).optional().describe('Primary fields for hover/cards/lookups'),
+  /**
+   * [ADR-0085] Semantic role: the object's most important fields, in priority
+   * order (the first entry wins wherever only one field fits, e.g. child-record
+   * previews). Cross-surface by definition — drives default list/grid columns,
+   * cards, hover/lookup previews, and the record-detail highlight strip (first
+   * 4). Renamed from `compactLayout` (the value is an ordered field list, not
+   * a layout); Salesforce compact-layout semantics.
+   */
+  highlightFields: z.array(z.string()).optional().describe('[ADR-0085] Ordered most-important fields; first entry wins where only one fits. Drives default columns, cards, previews, detail highlight strip. Renamed from compactLayout.'),
+  /**
+   * @deprecated [ADR-0085 → `highlightFields`] Accepted as a parse-time alias:
+   * copied onto `highlightFields` when that key is absent (both preserved on
+   * output for cross-repo back-compat, the ADR-0079 alias pattern). New
+   * metadata sets `highlightFields`.
+   */
+  compactLayout: z.array(z.string()).optional().describe('[DEPRECATED → highlightFields] Accepted as an alias for highlightFields.'),
+  /**
+   * [ADR-0085] Semantic role: the field that represents the record's LINEAR
+   * lifecycle (an ordered pipeline / stage progression). A string names the
+   * field; `false` declares the object's status-like field NON-linear (an
+   * unordered state set such as active/suspended/void) and suppresses every
+   * consumer's stage heuristics. Absent = consumers may heuristically detect
+   * a stage field (status/stage/state/phase). Consumed by the record-detail
+   * path/stepper today; kanban default grouping, list badges and report
+   * bucketing are natural future consumers.
+   */
+  stageField: z.union([z.string(), z.literal(false)]).optional().describe('[ADR-0085] Lifecycle stage field (linear/ordered), or false to declare the status field non-linear and suppress stage heuristics. Absent = heuristic detection allowed.'),
 
   /**
    * Built-in List Views
@@ -689,30 +739,13 @@ const ObjectSchemaBase = z.object({
   /** Key Prefix */
   keyPrefix: z.string().max(5).optional().describe('Short prefix for record IDs (e.g., "001" for Account)'),
 
-  /**
-   * Detail-page UI hints
-   *
-   * Per-object overrides for the synthesized record detail page (kind:'auto'
-   * / slotted defaults). Each flag is consumed by the UI runtime
-   * (`@object-ui/plugin-detail`'s `buildDefaultPageSchema`) when no explicit
-   * `Page` covers this object. Authored full Pages should set these regions
-   * directly instead.
-   *
-   * - `renderViaSchema=false` opts the object out of the schema-driven
-   *   rendering path entirely (legacy `RecordDetailView`).
-   * - `hideReferenceRail=true` suppresses the right-hand reference-rail
-   *   (related-list summary cards) so the form gets full width — useful for
-   *   catalog/atomic objects (Product, Task) where lateral relationships
-   *   aren't the user's main job.
-   * - `hideRelatedTab=true` suppresses the "Related" tab. By default the
-   *   synth removes the Related tab automatically when the rail is shown to
-   *   avoid duplication; set this flag to force hide/show regardless.
-   */
-  detail: z.object({
-    renderViaSchema: z.boolean().optional().describe('Opt this object out of the schema-driven detail renderer'),
-    hideReferenceRail: z.boolean().optional().describe('Suppress the right-hand reference-rail on the detail page'),
-    hideRelatedTab: z.boolean().optional().describe('Suppress the Related tab on the detail page'),
-  }).passthrough().optional().describe('Detail-page UI hints consumed by @object-ui/plugin-detail synth'),
+  // [ADR-0085] The former `detail: { … }.passthrough()` UI-hints block is
+  // REMOVED. Presentation intent lives in the cross-surface semantic roles
+  // above (nameField / highlightFields / stageField / fieldGroups); per-page
+  // control is an assigned Page. The passthrough block bred silently-inert
+  // keys (9 read by renderers vs 3 typed; the typed `hideReferenceRail` was
+  // itself a no-op for spec authors) — see the ADR for the full inventory.
+  // `renderViaSchema` retires together with the legacy monolith render path.
 
   /**
    * Object Actions
@@ -868,6 +901,50 @@ function normalizeNameFieldAlias(input: unknown): unknown {
 }
 
 /**
+ * [ADR-0085] Parse-time alias normalization for the semantic-role renames
+ * (same pattern as `normalizeNameFieldAlias`; deprecated keys are PRESERVED
+ * on output for cross-repo back-compat):
+ *
+ * - `compactLayout` → `highlightFields` when the canonical key is absent.
+ * - `fieldGroups[].collapse` derived from the deprecated flags when absent:
+ *   the UI-dialect `collapsible`/`collapsed` pair wins over the old
+ *   `defaultExpanded` (it is what designer-authored metadata actually
+ *   carries); mapping: collapsed:true → 'collapsed'; collapsible:true →
+ *   'expanded'; collapsible:false → 'none'; defaultExpanded:false →
+ *   'collapsed'; defaultExpanded:true → 'expanded'.
+ */
+function normalizeSemanticRoleAliases(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const obj = input as Record<string, unknown>;
+  let out = obj;
+
+  if (obj.highlightFields == null && Array.isArray(obj.compactLayout)) {
+    out = { ...out, highlightFields: obj.compactLayout };
+  }
+
+  if (Array.isArray(obj.fieldGroups)) {
+    let changed = false;
+    const groups = (obj.fieldGroups as unknown[]).map((g) => {
+      if (!g || typeof g !== 'object' || Array.isArray(g)) return g;
+      const grp = g as Record<string, unknown>;
+      if (grp.collapse != null) return g;
+      let collapse: string | undefined;
+      if (typeof grp.collapsible === 'boolean' || typeof grp.collapsed === 'boolean') {
+        collapse = grp.collapsed === true ? 'collapsed' : grp.collapsible === true ? 'expanded' : 'none';
+      } else if (typeof grp.defaultExpanded === 'boolean') {
+        collapse = grp.defaultExpanded ? 'expanded' : 'collapsed';
+      }
+      if (collapse === undefined) return g;
+      changed = true;
+      return { ...grp, collapse };
+    });
+    if (changed) out = { ...out, fieldGroups: groups };
+  }
+
+  return out;
+}
+
+/**
  * Enhanced ObjectSchema with Factory
  */
 export const ObjectSchema = lazySchema(() => {
@@ -883,10 +960,10 @@ export const ObjectSchema = lazySchema(() => {
    * so `.shape` / `.create()`'s internal `ObjectSchemaBase.parse` keep working.
    */
   parse(data: unknown, params?: Parameters<typeof ObjectSchemaBase.parse>[1]) {
-    return baseParse(normalizeNameFieldAlias(data), params);
+    return baseParse(normalizeSemanticRoleAliases(normalizeNameFieldAlias(data)), params);
   },
   safeParse(data: unknown, params?: Parameters<typeof ObjectSchemaBase.safeParse>[1]) {
-    return baseSafeParse(normalizeNameFieldAlias(data), params);
+    return baseSafeParse(normalizeSemanticRoleAliases(normalizeNameFieldAlias(data)), params);
   },
   /**
    * Type-safe factory for creating business object definitions.

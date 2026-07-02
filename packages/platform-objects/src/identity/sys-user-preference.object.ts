@@ -29,7 +29,7 @@ export const SysUserPreference = ObjectSchema.create({
   description: 'Per-user key-value preferences (theme, locale, etc.)',
   nameField: 'key', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{key}',
-  compactLayout: ['user_id', 'key'],
+  highlightFields: ['user_id', 'key'],
 
   listViews: {
     mine: {

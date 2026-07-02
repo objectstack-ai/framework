@@ -1,0 +1,143 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * Field-group layout derivation — the single source of the `fieldGroups`
+ * rendering semantics (ADR-0085 §5).
+ *
+ * An object's `fieldGroups` + each field's `Field.group` membership are a
+ * cross-surface semantic role: forms, detail pages, drawers and the designer
+ * all render the SAME grouping. The rules live here — a pure, dependency-free
+ * helper next to the schema that defines the keys (the ADR-0078 §2
+ * shared-predicate pattern) — so renderers consume one implementation instead
+ * of re-deriving it (two near-identical copies in `@object-ui` predate this
+ * module and are retired by it).
+ *
+ * Rules (per the ObjectFieldGroupSchema contract):
+ *   - sections come back in declared-group order;
+ *   - declared groups no visible field references are dropped;
+ *   - fields without a (declared) group collect into a trailing untitled
+ *     bucket, preserving field declaration order — EXCEPT audit/system
+ *     fields, which only surface when an author EXPLICITLY groups them
+ *     (explicit listing wins, same as authored page sections);
+ *   - hidden fields never surface;
+ *   - `collapse` passes through (deprecated `defaultExpanded` /
+ *     `collapsible`+`collapsed` aliases are honoured for pre-ADR-0085
+ *     metadata that reaches consumers un-normalized, e.g. bare DB rows).
+ *
+ * Returns `null` when grouping does not apply — no declared groups, or no
+ * visible field references one — so callers fall back to their existing
+ * flat/auto layout.
+ */
+
+/** Collapse behaviour of a derived section (mirrors ObjectFieldGroupSchema.collapse). */
+export type FieldGroupCollapse = 'none' | 'expanded' | 'collapsed';
+
+/** One derived section. `key` is absent on the trailing ungrouped bucket. */
+export interface FieldGroupSection {
+  /** Group machine key; i18n anchor (`…objects.{obj}._sections.{key}.label`). Absent = ungrouped bucket. */
+  key?: string;
+  /** Group display label (default text; i18n overrides at render time). */
+  label?: string;
+  /** Optional icon name declared on the group. */
+  icon?: string;
+  /** Optional description declared on the group. */
+  description?: string;
+  /** Collapse behaviour; 'none' when the group declared nothing. */
+  collapse: FieldGroupCollapse;
+  /** Member field NAMES in field-declaration order. Renderers resolve defs themselves. */
+  fields: string[];
+}
+
+/**
+ * Audit/system fields excluded from the derived UNGROUPED bucket (they carry
+ * no business meaning in a default layout). A field an author explicitly
+ * assigns to a group is kept. Exported so renderers filtering flat layouts
+ * agree with the derivation.
+ */
+export const FIELD_GROUP_SYSTEM_FIELDS: ReadonlySet<string> = new Set([
+  'created_at', 'created_by', 'updated_at', 'updated_by',
+  'organization_id', 'tenant_id', 'is_deleted', 'deleted_at',
+]);
+
+type AnyRec = Record<string, unknown>;
+
+/** Normalize one declared group entry; null for malformed/keyless entries. */
+function readGroup(g: unknown): { key: string; label?: string; icon?: string; description?: string; collapse: FieldGroupCollapse } | null {
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return null;
+  const grp = g as AnyRec;
+  if (typeof grp.key !== 'string' || grp.key.length === 0) return null;
+  let collapse: FieldGroupCollapse = 'none';
+  if (grp.collapse === 'expanded' || grp.collapse === 'collapsed' || grp.collapse === 'none') {
+    collapse = grp.collapse;
+  } else if (typeof grp.collapsible === 'boolean' || typeof grp.collapsed === 'boolean') {
+    // Deprecated UI-dialect pair (pre-ADR-0085 designer metadata).
+    collapse = grp.collapsed === true ? 'collapsed' : grp.collapsible === true ? 'expanded' : 'none';
+  } else if (typeof grp.defaultExpanded === 'boolean') {
+    // Deprecated spec flag.
+    collapse = grp.defaultExpanded ? 'expanded' : 'collapsed';
+  }
+  return {
+    key: grp.key,
+    label: typeof grp.label === 'string' ? grp.label : undefined,
+    icon: typeof grp.icon === 'string' ? grp.icon : undefined,
+    description: typeof grp.description === 'string' ? grp.description : undefined,
+    collapse,
+  };
+}
+
+/**
+ * Derive the grouped layout for an object definition (or any bare metadata
+ * record shaped like one — the helper is deliberately tolerant of
+ * un-parsed/legacy input so every consumer can call it).
+ */
+export function deriveFieldGroupLayout(def: unknown): FieldGroupSection[] | null {
+  if (!def || typeof def !== 'object' || Array.isArray(def)) return null;
+  const obj = def as AnyRec;
+
+  const declared = (Array.isArray(obj.fieldGroups) ? obj.fieldGroups : [])
+    .map(readGroup)
+    .filter((g): g is NonNullable<ReturnType<typeof readGroup>> => g !== null);
+  if (declared.length === 0) return null;
+
+  const declaredKeys = new Set(declared.map((g) => g.key));
+  const fields = (obj.fields && typeof obj.fields === 'object' && !Array.isArray(obj.fields))
+    ? (obj.fields as Record<string, AnyRec | undefined>)
+    : {};
+
+  const buckets = new Map<string, string[]>();
+  for (const g of declared) buckets.set(g.key, []);
+  const ungrouped: string[] = [];
+  let anyGrouped = false;
+  for (const [name, f] of Object.entries(fields)) {
+    if (f?.hidden === true) continue;
+    const g = typeof f?.group === 'string' && declaredKeys.has(f.group) ? (f.group as string) : null;
+    if (g) {
+      buckets.get(g)!.push(name);
+      anyGrouped = true;
+    } else if (!FIELD_GROUP_SYSTEM_FIELDS.has(name)) {
+      ungrouped.push(name);
+    }
+  }
+  // No visible field references a declared group → grouping doesn't apply.
+  if (!anyGrouped) return null;
+
+  const sections: FieldGroupSection[] = [];
+  for (const g of declared) {
+    const names = buckets.get(g.key)!;
+    if (names.length === 0) continue; // declared-but-empty groups are dropped
+    sections.push({
+      key: g.key,
+      label: g.label ?? g.key,
+      ...(g.icon !== undefined ? { icon: g.icon } : {}),
+      ...(g.description !== undefined ? { description: g.description } : {}),
+      collapse: g.collapse,
+      fields: names,
+    });
+  }
+  // Trailing untitled bucket: ungrouped fields render flat (no key/label →
+  // renderers show no card chrome) after the declared groups.
+  if (ungrouped.length > 0) {
+    sections.push({ collapse: 'none', fields: ungrouped });
+  }
+  return sections.length > 0 ? sections : null;
+}

@@ -30,7 +30,7 @@ export const SysImportJob = ObjectSchema.create({
   displayNameField: 'object_name',
   nameField: 'object_name', // [ADR-0079] canonical primary-title pointer
   titleFormat: '{object_name} import @ {created_at}',
-  compactLayout: ['object_name', 'status', 'processed_rows', 'total_rows', 'created_at'],
+  highlightFields: ['object_name', 'status', 'processed_rows', 'total_rows', 'created_at'],
 
   fields: {
     id: Field.text({ label: 'Job ID', required: true, readonly: true, group: 'System' }),

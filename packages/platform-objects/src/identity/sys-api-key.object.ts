@@ -32,7 +32,7 @@ export const SysApiKey = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'prefix', 'user_id', 'expires_at', 'revoked'],
+  highlightFields: ['name', 'prefix', 'user_id', 'expires_at', 'revoked'],
 
   // Custom actions — sys_api_key is managed-by 'better-auth' but the
   // `revoked` boolean is a column we control via the data API. These row

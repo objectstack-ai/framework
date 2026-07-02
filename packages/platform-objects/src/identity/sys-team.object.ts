@@ -29,7 +29,7 @@ export const SysTeam = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{name}',
-  compactLayout: ['name', 'organization_id'],
+  highlightFields: ['name', 'organization_id'],
 
   // Custom actions calling better-auth's team endpoints. Generic CRUD is
   // suppressed (managedBy: 'better-auth'), so these are the canonical
