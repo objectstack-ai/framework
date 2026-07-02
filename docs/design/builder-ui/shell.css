@@ -97,3 +97,58 @@ table.grid th.col-selected { color: var(--accent); }
 .legend .sw { display: inline-block; width: 14px; height: 12px; vertical-align: -1px; margin-right: 6px; }
 .legend .sw.built { border: 1px solid var(--text); }
 .legend .sw.reused { border: 1px dashed #c8ccd2; }
+
+/* ================================================================
+   Pillar-specific primitives — composed by the automation / interface
+   / access / settings mockups. Same tokens; one shared look. */
+
+/* ---- rail sub-groups + kind badges (interface nav tree, access, settings) ---- */
+.rail .group { font-size: 10px; letter-spacing: .5px; color: var(--faint); text-transform: uppercase; margin: 14px 0 4px; }
+.rail li { display: flex; align-items: center; gap: 6px; }
+.rail li .kind { margin-left: auto; font-size: 8px; color: var(--faint); background: var(--chip); border-radius: 6px; padding: 1px 5px; text-transform: uppercase; letter-spacing: .3px; }
+
+/* ---- flow canvas (automation) ---- */
+.canvas-strip { display: flex; align-items: center; gap: 12px; padding: 7px 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.canvas-strip .pill { border: 1px solid var(--border); border-radius: 5px; padding: 2px 8px; }
+.canvas-strip .pill.on { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.canvas-strip .spacer { flex: 1; }
+.canvas-strip .add { color: var(--accent); font-weight: 600; }
+.canvas-wrap { flex: 1; padding: 0 16px 16px; overflow: auto; }
+.canvas { position: relative; height: 100%; border: 1px dashed #c8ccd2; border-radius: var(--radius); padding: 28px 12px;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 16px 16px; }
+.canvas .reuse-tag { position: absolute; left: 10px; bottom: 6px; font-size: 9.5px; font-style: italic; color: var(--faint); background: var(--surface-1); padding: 0 4px; }
+.node { width: 260px; margin: 0 auto; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; display: flex; gap: 10px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.node .ic { width: 26px; height: 26px; border-radius: 7px; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.node .nlabel { font-weight: 600; font-size: 12px; }
+.node .kind { font-size: 9px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; }
+.node-link { width: 1px; height: 22px; background: var(--border); margin: 0 auto; }
+
+/* ---- source + live preview split (interface) ---- */
+.split { display: flex; height: 100%; }
+.split .code { flex: 1; background: #f6f8fa; border-right: 1px solid var(--border); padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #4b5563; white-space: pre; overflow: auto; line-height: 1.75; }
+.split .preview { flex: 1; padding: 16px 18px; overflow: auto; }
+.split .preview .eyebrow { font-size: 9px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.split .preview h2 { font-size: 19px; margin: 6px 0 10px; }
+.split .preview .card { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+
+/* ---- permission matrix (access) ---- */
+table.matrix { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.matrix th { text-align: center; background: var(--surface-2); color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+table.matrix th:first-child { text-align: left; }
+table.matrix td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: center; }
+table.matrix td:first-child { text-align: left; font-weight: 500; }
+.ck { display: inline-block; width: 15px; height: 15px; border-radius: 4px; border: 1px solid #cfd4da; vertical-align: -2px; }
+.ck.on { background: var(--accent); border-color: var(--accent); position: relative; }
+.ck.on::after { content: "\2713"; color: #fff; font-size: 10px; line-height: 15px; position: absolute; left: 2.5px; top: -1px; }
+.scope { font-size: 10px; color: var(--muted); background: var(--chip); border-radius: 10px; padding: 2px 9px; }
+
+/* ---- settings (audience groups) ---- */
+.settings { flex: 1; padding: 18px 22px; overflow: auto; }
+.settings .sgroup { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.settings .sgroup > h4 { margin: 0; padding: 9px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.settings .sgroup > h4 .aud { margin-left: auto; font-size: 9px; color: var(--faint); background: var(--chip); border-radius: 6px; padding: 1px 7px; text-transform: uppercase; letter-spacing: .4px; }
+.settings .sub { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.settings .sub:last-child { border-bottom: 0; }
+.settings .sub .subhead { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
+.settings .later { color: var(--faint); font-style: italic; }
+.settings .tag { font-size: 8.5px; color: var(--muted); background: var(--chip); border-radius: 7px; padding: 1px 6px; }

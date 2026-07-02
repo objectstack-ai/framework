@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Builder — Settings (⚙)</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<!-- Settings [designed]: NOT a content pillar — the app's own config, split by AUDIENCE.
+     General (builder) vs Advanced (developers). Every panel is a reused protocol form;
+     the area only composes them.
+     data-build="shell"  = built in the builder (composition/chrome)
+     data-reuse="<comp>" = existing Studio/objectui component, dropped in unchanged -->
+<div class="builder">
+
+  <!-- ===== top bar (built) — none of the 4 pillar tabs active; the gear is ===== -->
+  <div class="topbar" data-build="shell">
+    <span class="app">app &#9662;</span>
+    <nav class="pilltabs">
+      <a href="#">Data</a>
+      <a href="#">Automation</a>
+      <a href="#">Interface</a>
+      <a href="#">Access</a>
+    </nav>
+    <div class="right">
+      <span style="color:var(--accent);font-weight:600">&#9881; Settings</span>
+      <span>Save draft</span>
+      <button class="btn-publish">Publish</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== left rail: settings sections (built) ===== -->
+    <aside class="rail" data-build="shell">
+      <div class="label">SETTINGS</div>
+      <div class="group">General</div>
+      <ul>
+        <li class="active">Basics</li>
+        <li>Navigation</li>
+      </ul>
+      <div class="group">Advanced</div>
+      <ul>
+        <li>Code <span class="kind">dev</span></li>
+        <li>Connections <span class="kind">dev</span></li>
+      </ul>
+    </aside>
+
+    <!-- ===== main: audience-grouped panels ===== -->
+    <div class="settings">
+
+      <!-- General — builder audience -->
+      <div class="sgroup">
+        <h4>General <span class="aud">Builder</span></h4>
+        <div class="sub">
+          <div class="subhead">Basics</div>
+          <div class="reuse form" data-reuse="protocol-form:app" style="padding-top:0">
+            <div class="flabel">Name</div>
+            <div class="field">Showcase</div>
+            <div class="flabel">App id</div>
+            <div class="field">com.example.showcase</div>
+            <div class="flabel">Icon</div>
+            <div class="field">&#9670; layout-dashboard</div>
+            <div class="flabel">Default landing</div>
+            <div class="field">Start Here &#9662;</div>
+            <span class="reuse-tag">app protocol form (reused)</span>
+          </div>
+        </div>
+        <div class="sub">
+          <div class="subhead">Navigation</div>
+          <div class="reuse" data-reuse="nav-editor" style="padding:12px 12px 26px">
+            <div style="font-size:11.5px;color:var(--muted)">Workspace &middot; Data model &middot; Analytics &mdash; drag to reorder groups &amp; items</div>
+            <span class="reuse-tag">app navigation editor (reused)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced — developer audience -->
+      <div class="sgroup">
+        <h4>Advanced <span class="aud">Developers</span></h4>
+        <div class="sub">
+          <div class="subhead">Code <span class="tag">v1: Hooks</span></div>
+          <div class="reuse" data-reuse="protocol-form:hook" style="padding:12px">
+            <div style="font-size:11.5px;color:var(--muted)">
+              Hooks &mdash; before/after write-path logic. Select a hook &rarr; reused hook form.
+            </div>
+            <div class="chips" style="margin-top:8px">
+              <span class="chip">beforeInsert: stampOwner</span>
+              <span class="chip">afterUpdate: notify</span>
+              <span class="add">+ add</span>
+            </div>
+            <span class="reuse-tag">hooks list + hook form (reused)</span>
+          </div>
+          <div class="subhead later" style="margin-top:10px">functions &middot; custom components &middot; custom field types &mdash; later</div>
+        </div>
+        <div class="sub">
+          <div class="subhead">Connections</div>
+          <div class="later" style="font-size:11.5px">datasource &middot; connector &middot; webhook &middot; mapping &mdash; later</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== legend ===== -->
+  <div class="legend">
+    <span><span class="sw built"></span>solid = shell / composition (built in the builder)</span>
+    <span><span class="sw reused"></span>dashed = existing Studio component (reused, not rebuilt)</span>
+  </div>
+</div>
+</body>
+</html>

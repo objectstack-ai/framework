@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Builder — Interface pillar</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<!-- Interface pillar [built]: the app's surfaces on the same renderer the end user gets.
+     Left rail = the app's REAL navigation tree (not a by-type list). React page
+     "Start Here" selected -> source + live preview; a component selected -> props.
+     data-build="shell"  = built in the builder (composition/chrome)
+     data-reuse="<comp>" = existing Studio/objectui component, dropped in unchanged -->
+<div class="builder">
+
+  <!-- ===== top bar (built) ===== -->
+  <div class="topbar" data-build="shell">
+    <span class="app">app &#9662;</span>
+    <nav class="pilltabs">
+      <a href="#">Data</a>
+      <a href="#">Automation</a>
+      <a class="active" href="#">Interface</a>
+      <a href="#">Access</a>
+    </nav>
+    <div class="right">
+      <span>&#9881;</span>
+      <span>Save draft</span>
+      <button class="btn-publish">Publish</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== left rail: the app's real navigation tree (built) ===== -->
+    <aside class="rail" data-build="shell">
+      <div class="label">SHOWCASE &middot; NAV</div>
+      <div class="group">Workspace</div>
+      <ul>
+        <li class="active">Start Here</li>
+        <li>My Work</li>
+        <li>Approvals</li>
+      </ul>
+      <div class="group">Data model</div>
+      <ul>
+        <li>Projects <span class="kind">object</span></li>
+        <li>Tasks <span class="kind">object</span></li>
+      </ul>
+      <div class="group">Analytics</div>
+      <ul>
+        <li>Delivery Ops <span class="kind">dashboard</span></li>
+        <li>Hours by Status <span class="kind">report</span></li>
+      </ul>
+    </aside>
+
+    <!-- ===== main: source + live preview (react/html pages) ===== -->
+    <main class="main">
+      <div class="toolbar" data-build="shell">
+        <span>&#128065; preview = runtime</span>
+        <span>page &middot; showcase_start_here</span>
+      </div>
+      <div class="workarea">
+        <div class="reuse" data-reuse="SchemaRenderer" style="height:100%">
+          <div class="split">
+            <div class="code">&lt;flex dir="col" gap={8}&gt;
+  &lt;div style={{ fontWeight: 600,
+    textTransform: "uppercase" }}&gt;
+    ObjectStack Showcase
+  &lt;/div&gt;
+  &lt;div style={{ fontSize: 32,
+    fontWeight: 700 }}&gt;
+    Pick the right page
+    authoring model
+  &lt;/div&gt;
+  &lt;card&gt; Decision tree &hellip; &lt;/card&gt;
+&lt;/flex&gt;</div>
+            <div class="preview">
+              <div class="eyebrow">OBJECTSTACK SHOWCASE</div>
+              <h2>Pick the right page authoring model</h2>
+              <div class="card">Every page has two axes &mdash; its <b>type</b> (home &middot; record &middot; list &middot; app) and its <b>kind</b> (how you author it).</div>
+              <div class="card">Decision tree &middot; full/slotted &rarr; html &rarr; react</div>
+            </div>
+          </div>
+          <span class="reuse-tag">source + preview = SchemaRenderer (reused)</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== right inspector: component props = reused form ===== -->
+    <aside class="inspector" data-build="shell">
+      <div class="eyebrow">COMPONENT</div>
+      <h3>flex &rsaquo; div</h3>
+      <hr>
+      <div class="reuse form" data-reuse="component-props">
+        <div class="flabel">Font size</div>
+        <div class="field">32</div>
+        <div class="flabel">Font weight</div>
+        <div class="field">700 &#9662;</div>
+        <div class="flabel">Color</div>
+        <div class="field">foreground &#9662;</div>
+        <div class="flabel">Max width</div>
+        <div class="field">680</div>
+        <span class="reuse-tag">component props (reused)</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== legend ===== -->
+  <div class="legend">
+    <span><span class="sw built"></span>solid = shell / composition (built in the builder)</span>
+    <span><span class="sw reused"></span>dashed = existing Studio component (reused, not rebuilt)</span>
+  </div>
+</div>
+</body>
+</html>

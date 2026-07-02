@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Builder — Automation pillar</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<!-- Automation pillar [built]: the package's flows on the same canvas the engine runs.
+     Flow "Notify on Task Completed" selected; "Send Completion Email" node selected
+     -> node config in the inspector.
+     data-build="shell"  = built in the builder (composition/chrome)
+     data-reuse="<comp>" = existing Studio/objectui component, dropped in unchanged -->
+<div class="builder">
+
+  <!-- ===== top bar (built) ===== -->
+  <div class="topbar" data-build="shell">
+    <span class="app">app &#9662;</span>
+    <nav class="pilltabs">
+      <a href="#">Data</a>
+      <a class="active" href="#">Automation</a>
+      <a href="#">Interface</a>
+      <a href="#">Access</a>
+    </nav>
+    <div class="right">
+      <span>&#9881;</span>
+      <span>Save draft</span>
+      <button class="btn-publish">Publish</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== left rail: flows (built) — flat list today; target = grouped by trigger ===== -->
+    <aside class="rail" data-build="shell">
+      <div class="label">AUTOMATIONS</div>
+      <div class="search">Search</div>
+      <ul>
+        <li class="active">Notify on Task Completed</li>
+        <li>Reassign Task</li>
+        <li>Project Budget Approval</li>
+        <li>Scheduled Project Digest</li>
+        <li>Inbound Task Webhook</li>
+      </ul>
+      <div class="new">+ New flow</div>
+    </aside>
+
+    <!-- ===== main: canvas strip + flow canvas ===== -->
+    <main class="main">
+
+      <!-- canvas strip (built chrome around the reused canvas) -->
+      <div class="canvas-strip" data-build="shell">
+        <span>Trigger: <b>autolaunched</b></span>
+        <span>Status: <b>draft</b></span>
+        <span>Run as: <b>user</b></span>
+        <span>v1</span>
+        <span class="pill on">Variables</span>
+        <span class="pill">Runs</span>
+        <span class="pill">Problems</span>
+        <span class="pill">Debug</span>
+        <span class="spacer"></span>
+        <span class="add">+ Add node</span>
+        <span>100%</span>
+      </div>
+
+      <!-- flow canvas = reused FlowCanvas -->
+      <div class="canvas-wrap">
+        <div class="canvas reuse" data-reuse="FlowCanvas">
+          <div class="node">
+            <span class="ic">&#9654;</span>
+            <span><span class="nlabel">On Task Update</span><br><span class="kind">START &middot; status == "done"</span></span>
+          </div>
+          <div class="node-link"></div>
+          <div class="node">
+            <span class="ic">&lt;/&gt;</span>
+            <span><span class="nlabel">Send Completion Email</span><br><span class="kind">SCRIPT &middot; email</span></span>
+          </div>
+          <div class="node-link"></div>
+          <div class="node">
+            <span class="ic">&#9673;</span>
+            <span><span class="nlabel">End</span><br><span class="kind">END</span></span>
+          </div>
+          <span class="reuse-tag">flow canvas = existing FlowCanvas (reused)</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== right inspector: node config = reused form ===== -->
+    <aside class="inspector" data-build="shell">
+      <div class="eyebrow">NODE</div>
+      <h3>Send Completion Email</h3>
+      <hr>
+      <div class="reuse form" data-reuse="node-config:flow">
+        <div class="flabel">Type</div>
+        <div class="field">Script &#9662;</div>
+        <div class="flabel">Email template</div>
+        <div class="field">task_completed &#9662;</div>
+        <div class="flabel">To</div>
+        <div class="field">{{record.owner.email}}</div>
+        <div class="toggle-row"><span>Continue on error</span><span class="toggle"></span></div>
+        <span class="reuse-tag">node config form (reused)</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== legend ===== -->
+  <div class="legend">
+    <span><span class="sw built"></span>solid = shell / composition (built in the builder)</span>
+    <span><span class="sw reused"></span>dashed = existing Studio component (reused, not rebuilt)</span>
+  </div>
+</div>
+</body>
+</html>

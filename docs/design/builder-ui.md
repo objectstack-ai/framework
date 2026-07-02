@@ -16,6 +16,16 @@ visual target and, because its DOM maps to the component tree and its regions ar
 tagged `data-build` / `data-reuse`, the implementation blueprint (see
 [Mockups](#mockups)). The ASCII sketches inline below are for quick reading.
 
+> **Implementation status (2026-07).** The builder is live in the console as
+> `StudioDesignSurface` (routed at `/studio/:packageId/:tab`). Shipping **today**:
+> three pillars — **Data · Automation · Interface** — each composed around existing
+> renderers, plus draft → publish. **Not yet built:** the **Access** and **Settings**
+> pillars (designed below, §7–§8), and part of the Data pillar's own v1 scope (the
+> `Fields` form designer, the `Validations` rules list, object `Settings`, and the
+> left-rail search / New object — §4). Where the built UI deliberately improved on an
+> earlier sketch, this doc has been updated to the built shape (noted inline). Each
+> per-pillar surface below is marked **[built]** or **[designed]**.
+
 ---
 
 ## 1. Core constraints — AI-first, human-confirmable, reuse-first
@@ -87,7 +97,9 @@ Mockup: [`builder-ui/data-pillar.html`](./builder-ui/data-pillar.html) (open in 
 
 - **Top bar** — the four pillar tabs (Data / Automation / Interface / Access), the
   ⚙ Settings entry, the app switcher, and the draft indicator + Save draft /
-  Publish (draft-gated, ADR-0033).
+  Publish (draft-gated, ADR-0033). *(Built today: three tabs — Access and ⚙ pending;
+  the package name stands in for the app switcher; Save draft / Publish currently
+  render per-pillar rather than in the top bar. Target remains as drawn.)*
 - **Left rail** — the current pillar's primary entities (objects / automations /
   surfaces / roles), with search and New. Collapsible.
 - **Main** — the pillar's primary work surface, shaped to the pillar (Data = grid,
@@ -169,9 +181,12 @@ and both configure a selected field through the *same* right-hand **field editor
 
 - **`Records` — grid / list style (data-forward).** The functional grid: columns =
   fields, rows = real records. Preview and inline-edit data, `+` add a column
-  (= add a field), select a column header to configure that field's properties in
-  the inspector, `+ New record`. Ephemeral filter / sort / hide / group for looking
-  at the data (not saved — saved views are Interface).
+  (= add a field), select a column's **edit (pencil) affordance** to configure that
+  field's properties in the inspector, `+ New record`. Ephemeral filter / sort / hide
+  / group for looking at the data (not saved — saved views are Interface). *(A bare
+  header click **sorts** — the grid is the runtime `ListView`, so the header's native
+  gesture wins; field config is opened by the per-column pencil, not the header. This
+  is the built behaviour, corrected from the earlier "click the header" sketch.)*
 - **`Fields` — form style (layout-forward).** The field designer as a form canvas:
   drag to reorder fields, group them into sections, and configure field properties.
   No data rows — this is where the object's default field layout (order + grouping)
@@ -225,24 +240,152 @@ union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`)
   form-style designer (reorder + grouping + field editor, incl. field-level
   validation) · `Validations` (condition builder) · object `Settings` (label / icon /
   name field / compact / search). Relationships via the `lookup` field type.
+- **Built so far** (2026-07): owned-objects rail · `Records` grid with inline data,
+  add-column / add-field, drag-reorder columns, and the reused object/field inspector
+  (field-level required · unique · options · default · help). Draft → publish wired.
+- **Still to build** (v1 gap — the facet tabs never landed): left-rail **search + New
+  object** · the `Fields` **form-style layout designer** · the `Validations` **rules
+  list + condition builder** · the object **`Settings`** facet. These are the
+  Phase-B build (tracked against this doc); each reuses an existing Studio panel.
 - **Defer**: Extended objects (objectExtensions) · External objects (datasources) ·
   the ERD / model view · formal `Lifecycle` (v1 status = a select field) · `Indexes` ·
   seed-data UI · saved views / kanban / calendar (presentation → Interface).
 
 ---
 
-## 5. Other pillars (to design — same shell)
+## 5. Automation pillar · **[built]**
 
-- **Automation** — left: automations grouped by trigger (record-change / scheduled /
-  API / manual action); main: the flow **canvas**; inspector: the selected node's
-  config; a Runs view for execution history.
-- **Interface** — left: surfaces (Apps · Pages · Views · Dashboards · Reports);
-  main: the page **builder** (structured canvas) or **source + preview** (html/react
-  pages); inspector: component props.
-- **Access** — left: roles; main: the permission **matrix** (objects × CRUD + record
-  scope); inspector: role / field-level detail.
-- **Settings** (⚙) — General (app basic info) and Advanced (Code: hooks · functions;
-  Connections: datasources), grouped by audience.
+Automation is the **behaviour workbench**: the package's flows, each edited on the
+same flow **canvas** the runtime engine executes. Nothing here is a new editor — the
+canvas and node config are the existing Studio flow builder, dropped into the shell.
+
+Mockup: [`builder-ui/automation-pillar.html`](./builder-ui/automation-pillar.html).
+
+```
+┌ flows ────┬ 可视化编排 · flow · showcase_task_completed ──────────┬ inspector ┐
+│ Notify… ◄ │ Trigger: autolaunched · draft · Run as: user · v1     │ Node       │
+│ Reassign  │ [Variables] [Runs] [Problems] [Debug]   + 添加节点     │ config     │
+│ Approval  │ ┌ On Task Update (START) ┐                             │            │
+│ Digest…   │ └──────────┬─────────────┘                            │ [reused    │
+│ + …       │ ┌ Send Completion Email (SCRIPT) ┐ → End              │  node form]│
+└───────────┴──────────────────────────────────────────────────────┴────────────┘
+```
+
+- **Left rail** — the package's flows. *Built today: a **flat list** (`client.list('flow')`).
+  The design target is **grouped by trigger** (record-change / scheduled / API / manual) —
+  that grouping is a pending refinement, not yet applied.*
+- **Main** — the flow **canvas** = reused `FlowCanvas` (the Studio flow builder). Top
+  strip: Trigger · Status · Run as · version, plus **Variables · Runs · Problems ·
+  Debug** and add-node / zoom. Flows land **default OFF — review-then-enable**.
+- **Right inspector** — the selected node's config, reused (`getMetadataInspector('flow')`).
+- **Runs** — a canvas-strip toggle showing execution history *inside the builder*. This
+  is the read-only peek that reconciles [ADR-0084](../adr/0084-application-builder-information-architecture.md)
+  ("flow runs live in **Operate**, out of the builder"): the builder gets a glance;
+  the full run inspector stays in Operate.
+- **Build boundary** — rail + shell = built; **canvas = reused `FlowCanvas`**;
+  **inspector = reused node config**.
+
+---
+
+## 6. Interface pillar · **[built]**
+
+Interface is the **presentation workbench**: the app's surfaces (pages · dashboards ·
+reports · views), each rendered by the **same renderer the end user gets** — edit the
+live artifact, not a proxy.
+
+Mockup: [`builder-ui/interface-pillar.html`](./builder-ui/interface-pillar.html).
+
+```
+┌ app nav ─┬ 预览即运行 · page · showcase_start_here ────────┬ inspector ┐
+│ Workspace│ ┌ source (JSX) ─────┐ ┌ live preview ─────────┐ │ Component  │
+│  Start ◄ │ │ <flex dir="col">  │ │  Pick the right page   │ │ props      │
+│ Data     │ │   <div …>Showcase │ │  authoring model       │ │            │
+│  Tasks   │ │   …               │ │  [Decision tree]       │ │ [reused    │
+│ Analytics│ └───────────────────┘ └────────────────────────┘ │  props]    │
+└──────────┴─────────────────────────────────────────────────┴────────────┘
+```
+
+- **Left rail** — the app's **real navigation tree** (groups + typed leaves:
+  page / object / dashboard / report / view), read from the App metadata. *This
+  **supersedes** the earlier "Apps · Pages · Views · Dashboards · Reports" by-type
+  sketch: the built rail shows the app's actual IA (what a builder edits), which is
+  truer than a type index. A by-type filter can be a later lens.*
+- **Main** — two modes, auto-selected by the surface:
+  - **source + live preview** for react / html pages — a code editor beside a live
+    `SchemaRenderer` ("预览即运行 · 同一渲染器" = preview *is* runtime; ADR-0080/0081).
+  - **structured canvas** for dashboards / slotted pages — widget blocks with
+    `+ add widget`, edited by selecting a block.
+- **Right inspector** — component / block props, reused.
+- **Build boundary** — rail (`NavTree` / `AppNavCanvas`) = built; **main = reused
+  `SchemaRenderer` (react/html) or the dashboard/page renderer (structured)**;
+  **inspector = reused component props**.
+
+---
+
+## 7. Access pillar · **[designed]**
+
+Access is the **permission workbench**: who can do what to which object. Its natural
+shape is a **matrix** (roles × objects × CRUD + record scope), which already exists as
+a Studio panel — so the pillar is that matrix dropped into the shell, nothing new.
+
+Mockup: [`builder-ui/access-pillar.html`](./builder-ui/access-pillar.html).
+
+```
+┌ roles ───┬ Permission matrix · role: Sales Rep ──────────────────┬ inspector ┐
+│ Admin    │        Create  Read   Update  Delete   Record scope    │ Role       │
+│ Sales ◄  │ Account  ☑      ☑      ☑       ☐       Owned + team     │ detail     │
+│ Support  │ Contact  ☑      ☑      ☑       ☐       Owned            │            │
+│ Viewer   │ Invoice  ☐      ☑      ☐       ☐       All              │ [reused    │
+│ + New    │ Task     ☑      ☑      ☑       ☑       Owned            │  role form]│
+└──────────┴───────────────────────────────────────────────────────┴────────────┘
+```
+
+- **Left rail** — roles (and permission sets), with search + New role.
+- **Main** — the permission **matrix** = reused `PermissionMatrixEditor`: rows =
+  objects, columns = **C / R / U / D** plus a **record-scope** column (owned / team /
+  all). Toggling a cell edits the role's object-permission metadata as a draft.
+- **Right inspector** — the selected role (or object-permission) detail = reused
+  protocol form for `role`, with `RolePreview` / `PermissionPreview` for a live "what
+  this role can see" read-out.
+- **Build boundary** — rail + shell = built; **matrix = reused `PermissionMatrixEditor`**;
+  **inspector = reused `role` protocol form + `RolePreview`/`PermissionPreview`**.
+- **v1 scope** — roles × objects **CRUD + record scope**. **Defer**: the field-level
+  permission matrix, sharing rules, and capability / permission-set *composition*
+  (the "concept overload" risk — v1 stays at roles × objects × CRUD, one clear grid).
+
+---
+
+## 8. Settings (⚙) · **[designed]**
+
+Settings is **not** a content pillar — it is the app's own configuration, split by
+**audience** (ADR-0084 §5): a builder opening Settings for app info must not land in
+code. Every panel is a reused protocol form; the area only composes them.
+
+Mockup: [`builder-ui/settings.html`](./builder-ui/settings.html).
+
+```
+┌ ⚙ Settings ─────────────────────────────────────────────────────────────────┐
+│  General            │  the app's identity & defaults   [reused app form]      │
+│   · Basics          │    name · id · icon · description · branding            │
+│   · Navigation      │    default landing · nav structure                      │
+│  ─────────────────  │                                                         │
+│  Advanced  (devs)   │  Code       Hooks (v1) · functions · components (later)  │
+│   · Code            │             [reused hooks list + hook form]             │
+│   · Connections     │  Connections  datasource · connector · webhook (later)  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **General** — the app's identity and defaults: name · id · icon · description ·
+  branding · default landing · navigation structure. This is the `app` definition →
+  reused **`app` protocol form**.
+- **Advanced** — the technical tier, kept visually separate from General so a builder
+  isn't dropped into code. Sub-grouped **Code** (v1: **Hooks** — a hooks list + reused
+  hook protocol form; later: functions, custom components, custom field types) and
+  **Connections** (later: datasources, connectors, webhooks, mappings).
+- **Build boundary** — the ⚙ area chrome + audience grouping = built; **every panel =
+  reused protocol form** (`app`, `hook`, …).
+- **v1 scope** — **General + Advanced/Hooks only** (ADR-0084 §7). The rest of Advanced
+  is deferred.
 
 ---
 
@@ -265,8 +408,13 @@ still to design:
 
 Open any `*.html` in a browser to view it. Current mockups:
 
-| Surface | Mockup |
-|---|---|
-| Data pillar | [`data-pillar.html`](./builder-ui/data-pillar.html) |
+| Surface | Mockup | Status |
+|---|---|---|
+| Data pillar | [`data-pillar.html`](./builder-ui/data-pillar.html) | built (partial — see §4) |
+| Automation pillar | [`automation-pillar.html`](./builder-ui/automation-pillar.html) | built |
+| Interface pillar | [`interface-pillar.html`](./builder-ui/interface-pillar.html) | built |
+| Access pillar | [`access-pillar.html`](./builder-ui/access-pillar.html) | designed |
+| Settings (⚙) | [`settings.html`](./builder-ui/settings.html) | designed |
 
-More are added per pillar as they are designed.
+The **built** mockups depict the shipped `StudioDesignSurface` (2026-07); the
+**designed** ones are the target for the not-yet-built pillars (§7–§8).

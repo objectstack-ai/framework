@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Builder — Access pillar</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<!-- Access pillar [designed]: who can do what to which object. Natural shape = matrix
+     (roles x objects x CRUD + record scope). Role "Sales Rep" selected -> role detail.
+     data-build="shell"  = built in the builder (composition/chrome)
+     data-reuse="<comp>" = existing Studio/objectui component, dropped in unchanged -->
+<div class="builder">
+
+  <!-- ===== top bar (built) ===== -->
+  <div class="topbar" data-build="shell">
+    <span class="app">app &#9662;</span>
+    <nav class="pilltabs">
+      <a href="#">Data</a>
+      <a href="#">Automation</a>
+      <a href="#">Interface</a>
+      <a class="active" href="#">Access</a>
+    </nav>
+    <div class="right">
+      <span>&#9881;</span>
+      <span>Save draft</span>
+      <button class="btn-publish">Publish</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== left rail: roles (built) ===== -->
+    <aside class="rail" data-build="shell">
+      <div class="label">ROLES</div>
+      <div class="search">Search</div>
+      <ul>
+        <li>Admin</li>
+        <li class="active">Sales Rep</li>
+        <li>Support</li>
+        <li>Viewer</li>
+      </ul>
+      <div class="new">+ New role</div>
+    </aside>
+
+    <!-- ===== main: permission matrix ===== -->
+    <main class="main">
+      <div class="toolbar" data-build="shell">
+        <span>Permission matrix</span>
+        <span>role &middot; Sales Rep</span>
+      </div>
+      <div class="workarea">
+        <div class="reuse" data-reuse="PermissionMatrixEditor">
+          <table class="matrix">
+            <thead>
+              <tr><th>Object</th><th>Create</th><th>Read</th><th>Update</th><th>Delete</th><th>Record scope</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Account</td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck"></span></td><td><span class="scope">Owned + team</span></td></tr>
+              <tr><td>Contact</td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck"></span></td><td><span class="scope">Owned</span></td></tr>
+              <tr><td>Invoice</td><td><span class="ck"></span></td><td><span class="ck on"></span></td><td><span class="ck"></span></td><td><span class="ck"></span></td><td><span class="scope">All</span></td></tr>
+              <tr><td>Task</td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="ck on"></span></td><td><span class="scope">Owned</span></td></tr>
+            </tbody>
+          </table>
+          <div class="grid-add">Toggle a cell to edit this role's object permission (draft)</div>
+          <span class="reuse-tag">matrix = existing PermissionMatrixEditor (reused)</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== right inspector: role detail = reused form + preview ===== -->
+    <aside class="inspector" data-build="shell">
+      <div class="eyebrow">ROLE</div>
+      <h3>Sales Rep</h3>
+      <hr>
+      <div class="reuse form" data-reuse="protocol-form:role">
+        <div class="flabel">Label</div>
+        <div class="field">Sales Rep</div>
+        <div class="flabel">API name</div>
+        <div class="field">sales_rep</div>
+        <div class="flabel">Description</div>
+        <div class="field">Front-line sellers</div>
+        <div class="flabel">Preview &mdash; can see</div>
+        <div class="chips">
+          <span class="chip">Accounts</span>
+          <span class="chip">Contacts</span>
+          <span class="chip">Own tasks</span>
+        </div>
+        <span class="reuse-tag">role form + RolePreview (reused)</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== legend ===== -->
+  <div class="legend">
+    <span><span class="sw built"></span>solid = shell / composition (built in the builder)</span>
+    <span><span class="sw reused"></span>dashed = existing Studio component (reused, not rebuilt)</span>
+  </div>
+</div>
+</body>
+</html>
