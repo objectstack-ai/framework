@@ -1,5 +1,12 @@
 # @objectstack/service-cluster-redis
 
+## 11.5.1
+
+### Patch Changes
+
+- @objectstack/spec@11.5.1
+- @objectstack/service-cluster@11.5.1
+
 ## 11.5.0
 
 ### Patch Changes

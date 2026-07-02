@@ -1,5 +1,16 @@
 # @objectstack/dogfood
 
+## 0.0.13
+
+### Patch Changes
+
+- @objectstack/example-crm@4.0.65
+- @objectstack/example-showcase@0.2.11
+- @objectstack/spec@11.5.1
+- @objectstack/objectql@11.5.1
+- @objectstack/plugin-security@11.5.1
+- @objectstack/verify@11.5.1
+
 ## 0.0.12
 
 ### Patch Changes

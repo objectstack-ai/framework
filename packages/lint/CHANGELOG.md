@@ -1,5 +1,13 @@
 # @objectstack/lint
 
+## 11.5.1
+
+### Patch Changes
+
+- @objectstack/spec@11.5.1
+- @objectstack/formula@11.5.1
+- @objectstack/sdui-parser@11.5.1
+
 ## 11.5.0
 
 ### Minor Changes

@@ -1,5 +1,57 @@
 # @objectstack/cli
 
+## 11.5.1
+
+### Patch Changes
+
+- Updated dependencies [b990bc2]
+  - @objectstack/console@11.5.1
+  - @objectstack/spec@11.5.1
+  - @objectstack/cloud-connection@11.5.1
+  - @objectstack/core@11.5.1
+  - @objectstack/client@11.5.1
+  - @objectstack/types@11.5.1
+  - @objectstack/objectql@11.5.1
+  - @objectstack/observability@11.5.1
+  - @objectstack/formula@11.5.1
+  - @objectstack/lint@11.5.1
+  - @objectstack/platform-objects@11.5.1
+  - @objectstack/studio@11.5.1
+  - @objectstack/setup@11.5.1
+  - @objectstack/runtime@11.5.1
+  - @objectstack/rest@11.5.1
+  - @objectstack/driver-memory@11.5.1
+  - @objectstack/driver-sql@11.5.1
+  - @objectstack/driver-mongodb@11.5.1
+  - @objectstack/driver-sqlite-wasm@11.5.1
+  - @objectstack/plugin-approvals@11.5.1
+  - @objectstack/plugin-audit@11.5.1
+  - @objectstack/plugin-auth@11.5.1
+  - @objectstack/plugin-email@11.5.1
+  - @objectstack/plugin-hono-server@11.5.1
+  - @objectstack/mcp@11.5.1
+  - @objectstack/plugin-org-scoping@11.5.1
+  - @objectstack/plugin-reports@11.5.1
+  - @objectstack/plugin-security@11.5.1
+  - @objectstack/plugin-sharing@11.5.1
+  - @objectstack/plugin-webhooks@11.5.1
+  - @objectstack/trigger-record-change@11.5.1
+  - @objectstack/trigger-api@11.5.1
+  - @objectstack/trigger-schedule@11.5.1
+  - @objectstack/service-analytics@11.5.1
+  - @objectstack/service-automation@11.5.1
+  - @objectstack/service-cache@11.5.1
+  - @objectstack/service-datasource@11.5.1
+  - @objectstack/service-job@11.5.1
+  - @objectstack/service-messaging@11.5.1
+  - @objectstack/service-package@11.5.1
+  - @objectstack/service-queue@11.5.1
+  - @objectstack/service-realtime@11.5.1
+  - @objectstack/service-settings@11.5.1
+  - @objectstack/service-storage@11.5.1
+  - @objectstack/account@11.5.1
+  - @objectstack/verify@11.5.1
+
 ## 11.5.0
 
 ### Minor Changes

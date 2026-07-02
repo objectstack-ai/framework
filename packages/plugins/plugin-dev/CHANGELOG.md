@@ -1,5 +1,25 @@
 # @objectstack/plugin-dev
 
+## 11.5.1
+
+### Patch Changes
+
+- @objectstack/spec@11.5.1
+- @objectstack/core@11.5.1
+- @objectstack/types@11.5.1
+- @objectstack/objectql@11.5.1
+- @objectstack/studio@11.5.1
+- @objectstack/setup@11.5.1
+- @objectstack/runtime@11.5.1
+- @objectstack/rest@11.5.1
+- @objectstack/driver-memory@11.5.1
+- @objectstack/plugin-auth@11.5.1
+- @objectstack/plugin-hono-server@11.5.1
+- @objectstack/plugin-org-scoping@11.5.1
+- @objectstack/plugin-security@11.5.1
+- @objectstack/service-i18n@11.5.1
+- @objectstack/account@11.5.1
+
 ## 11.5.0
 
 ### Patch Changes
