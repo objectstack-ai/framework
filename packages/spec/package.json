@@ -176,7 +176,8 @@
     "prompts",
     "llms.txt",
     "README.md",
-    "src/**/*.zod.ts"
+    "src/**/*.zod.ts",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "pnpm gen:schema && pnpm gen:openapi && tsup && if [ -z \"$OS_SKIP_DTS\" ]; then NODE_OPTIONS=\"--max-old-space-size=12288\" BUILD_DTS=true tsup; fi",

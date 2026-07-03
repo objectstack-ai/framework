@@ -779,6 +779,60 @@ describe('ObjectSchema.create()', () => {
       expect(message).toContain('#1535');
     });
 
+    // Tombstones: a RETIRED key's rejection must carry the upgrade
+    // prescription — the compile/validation error is the one channel every
+    // upgrading consumer (human or agent) is guaranteed to hit.
+    it('tombstone: retired compactLayout names its replacement and versions', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — compactLayout was retired (#2536)
+          compactLayout: ['name'],
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('highlightFields');
+      expect(message).toContain('11.7.0');
+      expect(message).toContain('#2536');
+    });
+
+    it('tombstone: removed detail block routes each job to its semantic role', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — the detail block was removed (ADR-0085)
+          detail: { stageField: 'status' },
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('stageField');
+      expect(message).toContain('highlightFields');
+      expect(message).toContain('fieldGroups');
+      expect(message).toContain('ADR-0085');
+    });
+
+    it('tombstone: object-level views dialect points at semantic roles + listViews', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — object-level views.* was never a spec key
+          views: { form: { sections: [] } },
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('listViews');
+      expect(message).toContain('ADR-0085');
+    });
+
     it('suggests the intended key on a typo (`validation` → `validations`)', () => {
       expect(() => ObjectSchema.create({
         name: 'demo',

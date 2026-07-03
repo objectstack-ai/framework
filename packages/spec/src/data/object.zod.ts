@@ -800,6 +800,34 @@ const UNKNOWN_KEY_GUIDANCE: Record<string, string> = {
   triggers:
     '`triggers` is not an ObjectSchema field. Use a lifecycle hook ' +
     '(`src/objects/<name>.hook.ts`) or a top-level `record_change` flow.',
+
+  // ── Tombstones for RETIRED keys (upgrade prescriptions) ────────────────
+  // A retired key's error must carry the fix: the compile/validation error is
+  // the one upgrade channel every consumer is guaranteed to hit — an agent
+  // bumping @objectstack/spec sees THIS message, not our docs site. Each entry
+  // names what replaced the key and the version/decision that removed it.
+  // Tombstones age out too: drop an entry ~two majors after the removal
+  // (by then it's archaeology, not an upgrade; see CHANGELOG.md for history).
+  compactLayout:
+    '`compactLayout` was renamed to `highlightFields` in @objectstack/spec 11.7.0 ' +
+    '(ADR-0085 semantic roles) and the alias was retired in 11.9.1 (#2536). ' +
+    'Rename the key — the value shape (ordered field-name list) is unchanged.',
+  detail:
+    'The `detail` UI-hints block was removed by ADR-0085 (spec 11.7.0). Its ' +
+    'jobs moved to top-level semantic roles: `detail.stageField` → `stageField` ' +
+    '(string | false), `detail.highlightFields` → `highlightFields`, section ' +
+    'layout → `fieldGroups` + `Field.group`. Whole-page customization is done ' +
+    'by assigning a custom Page schema instead of per-page hint keys.',
+  views:
+    '`views` is not an ObjectSchema field: the object-level `views.form/*` and ' +
+    '`views.detail/*` UI-hint dialect was never part of the spec and its ' +
+    'renderer support was removed (ADR-0085). Use the semantic roles ' +
+    '(`highlightFields`, `stageField`, `fieldGroups`) for hints and `listViews` ' +
+    'for named list views.',
+  defaultDetailForm:
+    '`defaultDetailForm` was never implemented and was removed from the spec ' +
+    '(#2402). Curate the record page by assigning a custom Page schema; form ' +
+    'layout derives from `fieldGroups` + `Field.group`.',
 };
 
 /** Levenshtein edit distance — backs the "did you mean" hint for typo'd keys. */
