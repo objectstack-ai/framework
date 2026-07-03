@@ -739,29 +739,42 @@ export class SqlDriver implements IDataDriver {
    * generous non-indexed column. Fixed-prefix formats use the empty scope and
    * keep their single global counter (backward compatible).
    */
-  protected async ensureSequencesTable(): Promise<void> {
+  protected async ensureSequencesTable(parentTrx?: Knex.Transaction): Promise<void> {
     if (this.sequencesTableReady) return;
     if (this.sequencesTableEnsurePromise) {
       await this.sequencesTableEnsurePromise;
       return;
     }
+    // Which connection runs the DDL below. Normally a fresh pooled connection
+    // (`this.knex`), because `initObjects` pre-creates the table outside any data
+    // transaction. This lazy path is the fallback (e.g. an external object, or a
+    // consumer that writes without `initObjects`). If we are already inside the
+    // caller's transaction AND the pool can only ever hand out one connection
+    // (SQLite, pool max=1), that connection is busy with the open transaction —
+    // a bare `this.knex` here would block forever acquiring a second one and then
+    // fail with a Knex acquire-timeout (the reported batch/autonumber deadlock).
+    // Run the DDL on the caller's own transaction instead; SQLite permits DDL
+    // inside a transaction. We deliberately do NOT route DDL through `parentTrx`
+    // on MySQL, where DDL implicitly commits the caller's transaction; there the
+    // roomy pool (max=10) lets a fresh connection create the table safely.
+    const runner: Knex | Knex.Transaction = parentTrx && this.isSqlite ? parentTrx : this.knex;
     this.sequencesTableEnsurePromise = (async () => {
-      const exists = await this.knex.schema.hasTable(SEQUENCES_TABLE);
+      const exists = await runner.schema.hasTable(SEQUENCES_TABLE);
       if (!exists) {
         try {
-          await this.createSequencesTable(SEQUENCES_TABLE);
+          await this.createSequencesTable(SEQUENCES_TABLE, runner);
           this.sequencesHasKeyHash = true;
         } catch (err: any) {
           // Race or cross-process create — re-check existence; ignore
           // "already exists" errors from any dialect.
-          const stillMissing = !(await this.knex.schema.hasTable(SEQUENCES_TABLE));
+          const stillMissing = !(await runner.schema.hasTable(SEQUENCES_TABLE));
           if (stillMissing) throw err;
           // A racing creator may have used an older schema. Migrate in place.
-          await this.ensureSequencesKeyHashShape();
+          await this.ensureSequencesKeyHashShape(runner);
         }
       } else {
         // Pre-existing table may predate the `key_hash`/`scope` shape. Migrate.
-        await this.ensureSequencesKeyHashShape();
+        await this.ensureSequencesKeyHashShape(runner);
       }
       this.sequencesTableReady = true;
     })();
@@ -779,9 +792,16 @@ export class SqlDriver implements IDataDriver {
       .digest('hex');
   }
 
-  /** Create the current `key_hash`-keyed sequences table shape. */
-  protected async createSequencesTable(table: string): Promise<void> {
-    await this.knex.schema.createTable(table, (t) => {
+  /**
+   * Create the current `key_hash`-keyed sequences table shape. `runner` is the
+   * connection the DDL runs on (a fresh pooled connection by default, or the
+   * caller's transaction on SQLite — see {@link ensureSequencesTable}).
+   */
+  protected async createSequencesTable(
+    table: string,
+    runner: Knex | Knex.Transaction = this.knex,
+  ): Promise<void> {
+    await runner.schema.createTable(table, (t) => {
       t.string('key_hash', 64).notNullable().primary();
       t.string('object').notNullable();
       t.string('tenant_id').notNullable();
@@ -806,17 +826,19 @@ export class SqlDriver implements IDataDriver {
    * sequences keep working via the legacy key and per-scope writes error
    * actionably (see getNextSequenceValue), rather than corrupting data.
    */
-  protected async ensureSequencesKeyHashShape(): Promise<void> {
-    if (await this.knex.schema.hasColumn(SEQUENCES_TABLE, 'key_hash')) {
+  protected async ensureSequencesKeyHashShape(
+    runner: Knex | Knex.Transaction = this.knex,
+  ): Promise<void> {
+    if (await runner.schema.hasColumn(SEQUENCES_TABLE, 'key_hash')) {
       this.sequencesHasKeyHash = true;
       return;
     }
-    const hasScope = await this.knex.schema.hasColumn(SEQUENCES_TABLE, 'scope');
+    const hasScope = await runner.schema.hasColumn(SEQUENCES_TABLE, 'scope');
     const TMP = `${SEQUENCES_TABLE}__rebuild`;
     try {
-      const rows: any[] = await this.knex(SEQUENCES_TABLE).select('*');
-      await this.knex.schema.dropTableIfExists(TMP);
-      await this.createSequencesTable(TMP);
+      const rows: any[] = await runner(SEQUENCES_TABLE).select('*');
+      await runner.schema.dropTableIfExists(TMP);
+      await this.createSequencesTable(TMP, runner);
       const migrated = rows.map((r) => {
         const scope = hasScope && r.scope != null ? String(r.scope) : '';
         return {
@@ -829,15 +851,15 @@ export class SqlDriver implements IDataDriver {
           updated_at: r.updated_at ?? this.knex.fn.now(),
         };
       });
-      if (migrated.length > 0) await this.knex(TMP).insert(migrated);
-      await this.knex.schema.dropTable(SEQUENCES_TABLE);
-      await this.knex.schema.renameTable(TMP, SEQUENCES_TABLE);
+      if (migrated.length > 0) await runner(TMP).insert(migrated);
+      await runner.schema.dropTable(SEQUENCES_TABLE);
+      await runner.schema.renameTable(TMP, SEQUENCES_TABLE);
       this.sequencesHasKeyHash = true;
     } catch (err) {
       // Leave the original table intact; fall back to legacy keying for
       // fixed-prefix sequences and refuse per-scope writes until migrated.
       this.sequencesHasKeyHash = false;
-      await this.knex.schema.dropTableIfExists(TMP).catch(() => {});
+      await runner.schema.dropTableIfExists(TMP).catch(() => {});
       this.logger.warn(
         `[autonumber] Failed to migrate ${SEQUENCES_TABLE} to the key_hash shape. ` +
           `Fixed-prefix autonumbers keep working; date/{field}/per-parent formats will ` +
@@ -902,7 +924,11 @@ export class SqlDriver implements IDataDriver {
     parentTrx?: Knex.Transaction,
     scope = '',
   ): Promise<number> {
-    await this.ensureSequencesTable();
+    // Pass the caller's transaction so a cold-cache first write inside a batch
+    // transaction ensures the table on the right connection instead of dead-
+    // locking on a second one (SQLite pool max=1). `initObjects` normally warms
+    // this up front, making the call a no-op — this only bites the lazy path.
+    await this.ensureSequencesTable(parentTrx);
     const resolvedTenantId = tenantField && tenantId ? String(tenantId) : GLOBAL_TENANT;
     if (scope !== '' && !this.sequencesHasKeyHash) {
       // The legacy sequences table could not be migrated to the key_hash shape,
@@ -1719,6 +1745,21 @@ export class SqlDriver implements IDataDriver {
       if (exists) {
         await this.reconcileAndWarnDrift(tableName, obj.fields ?? {});
       }
+    }
+
+    // Pre-create the auto_number counter table now, while we hold a fresh pooled
+    // connection and are NOT inside any data transaction. Creating it lazily on
+    // the first autonumber INSERT dead-locks a `/api/v1/batch` write on SQLite
+    // (pool max=1: the open batch transaction owns the only connection, so the
+    // lazy `ensureSequencesTable` blocks forever acquiring a second one) and
+    // risks the same pool exhaustion under concurrent first-writes on
+    // Postgres/MySQL. Idempotent and skipped entirely when nothing uses
+    // auto_number, so it costs one `hasTable` at boot in the common case.
+    const usesAutoNumber = Object.values(this.autoNumberFields).some(
+      (cols) => Array.isArray(cols) && cols.length > 0,
+    );
+    if (usesAutoNumber) {
+      await this.ensureSequencesTable();
     }
   }
 
