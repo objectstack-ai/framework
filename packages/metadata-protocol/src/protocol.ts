@@ -4455,6 +4455,21 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
 
+        // #2532 counterpart: also drop the durable `sys_packages` record —
+        // service-package hydrates that table back into the registry at boot,
+        // so leaving the row behind would RESURRECT an uninstalled package on
+        // the next restart. Best-effort, same posture as install persistence.
+        try {
+            const pkgSvc = this.getServicesRegistry?.()?.get('package') as
+                | { delete?: (id: string) => Promise<unknown> }
+                | undefined;
+            if (pkgSvc?.delete) await pkgSvc.delete(request.packageId);
+        } catch (e) {
+            console.warn(
+                `[protocol.deletePackage] sys_packages cleanup skipped for '${request.packageId}': ${(e as Error)?.message}`,
+            );
+        }
+
         return {
             success: failed.length === 0 && deleted.length > 0,
             deletedCount: deleted.length,
@@ -5622,25 +5637,49 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * registered in-memory and visible for the lifetime of the process.
      */
     async installPackage(request: InstallPackageRequest): Promise<InstallPackageResponse> {
-        const manifest = request.manifest;
+        // #2532 — runtime-created base packages routinely arrive versionless
+        // ({id, name} from the builder / Setup). `sys_packages.version` is NOT
+        // NULL, and the old guard here (`pkgSvc?.publish && manifest.version`)
+        // silently SKIPPED persistence for exactly those packages — so they
+        // lived only in the in-memory registry and vanished on restart, while
+        // their metadata (objects, tables) survived. Default the version
+        // instead of skipping: the registry and the durable row must agree.
+        const manifest: any = { ...(request.manifest as any) };
+        if (typeof manifest.version !== 'string' || !manifest.version) {
+            manifest.version = '0.1.0';
+        }
         const pkg = this.engine.registry.installPackage(manifest as any, request.settings);
 
-        // Best-effort durable persistence to `sys_packages`.
+        // Best-effort durable persistence to `sys_packages` (non-fatal by
+        // design — without the `package` service the install stays visible
+        // for the process lifetime) — but never SILENT: a skipped persist is
+        // a restart-loss, so it must at least leave a trace.
         try {
             const services = this.getServicesRegistry?.();
             const pkgSvc = services?.get('package') as
-                | { publish?: (data: { manifest: unknown; metadata: unknown }) => Promise<unknown> }
+                | { publish?: (data: { manifest: unknown; metadata: unknown }) => Promise<{ success?: boolean; error?: string } | unknown> }
                 | undefined;
-            if (pkgSvc?.publish && (manifest as any)?.version) {
-                await pkgSvc.publish({ manifest, metadata: {} });
+            if (pkgSvc?.publish) {
+                const out = (await pkgSvc.publish({ manifest, metadata: {} })) as
+                    | { success?: boolean; error?: string }
+                    | undefined;
+                if (out && out.success === false) {
+                    console.warn(
+                        `[protocol.installPackage] sys_packages persist FAILED for '${manifest?.id}': ${out.error ?? 'unknown error'} — package will not survive a restart`,
+                    );
+                }
+            } else {
+                console.warn(
+                    `[protocol.installPackage] no 'package' service — '${manifest?.id}' registered in-memory only (will not survive a restart)`,
+                );
             }
         } catch (e) {
             // Non-fatal: registry write already succeeded; log and continue.
             console.warn(
-                `[protocol.installPackage] sys_packages persist skipped for '${(manifest as any)?.id}': ${(e as Error)?.message}`,
+                `[protocol.installPackage] sys_packages persist skipped for '${manifest?.id}': ${(e as Error)?.message}`,
             );
         }
 
-        return { package: pkg as any, message: `Installed package: ${(manifest as any)?.id}` };
+        return { package: pkg as any, message: `Installed package: ${manifest?.id}` };
     }
 }
