@@ -49,7 +49,7 @@ export const SysShareLink = ObjectSchema.create({
   managedBy: 'system',
   description: 'Opaque capability token granting access to a single record. Notion/Figma-style public link sharing.',
   titleFormat: '{object_name}/{record_id} ({permission})',
-  compactLayout: ['object_name', 'record_id', 'permission', 'audience', 'expires_at', 'revoked_at'],
+  highlightFields: ['object_name', 'record_id', 'permission', 'audience', 'expires_at', 'revoked_at'],
 
   listViews: {
     active_links: {

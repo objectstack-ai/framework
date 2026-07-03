@@ -26,7 +26,7 @@ export const NotificationSubscription = ObjectSchema.create({
     managedBy: 'system',
     description: 'Standing subscription of a principal (role/team/user) to a notification topic.',
     titleFormat: '{principal} · {topic}',
-    compactLayout: ['topic', 'principal', 'enabled', 'created_at'],
+    highlightFields: ['topic', 'principal', 'enabled', 'created_at'],
 
     fields: {
         id: Field.text({ label: 'Subscription ID', required: true, readonly: true }),

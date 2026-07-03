@@ -74,7 +74,7 @@ jobs:
           # ADR-0085 (hotcrm#423) — the intended break, explicitly digested
           # downstream. Bump this ref whenever a deliberate spec surface
           # removal ships a matching hotcrm release.
-          HOTCRM_REF: v1.2.1
+          HOTCRM_REF: v1.2.2
         run: bash scripts/downstream-smoke.sh
 
       - name: Create Release Pull Request or Publish to npm
