@@ -1,5 +1,42 @@
 # @objectstack/runtime
 
+## 11.9.0
+
+### Patch Changes
+
+- 852bc8e: fix(runtime): surface the clean business message from a failed action, not the sandbox debug wrapper
+
+  A user throw inside a script/action body is wrapped by the sandbox as
+  `<kind> '<name>' threw: <msg>` for server logs, but the action HTTP endpoint
+  returned that whole wrapper as the client-facing `error` — so an action's error
+  toast leaked the debug prefix to end users (e.g. `action 'lead_apply_convert'
+threw: Error: 线索信息不完整…` instead of just `线索信息不完整…`).
+
+  `SandboxError` now also carries `innerMessage`: the plain business message with
+  no `<kind> '<name>' threw:` wrapper and no default `Error: ` name prefix. The
+  action route surfaces `innerMessage` to the client and keeps the full wrapper in
+  the server log.
+
+- Updated dependencies [d3595d9]
+- Updated dependencies [8d87930]
+  - @objectstack/spec@11.9.0
+  - @objectstack/driver-sql@11.9.0
+  - @objectstack/core@11.9.0
+  - @objectstack/formula@11.9.0
+  - @objectstack/metadata@11.9.0
+  - @objectstack/objectql@11.9.0
+  - @objectstack/observability@11.9.0
+  - @objectstack/driver-memory@11.9.0
+  - @objectstack/driver-sqlite-wasm@11.9.0
+  - @objectstack/plugin-auth@11.9.0
+  - @objectstack/plugin-org-scoping@11.9.0
+  - @objectstack/plugin-security@11.9.0
+  - @objectstack/rest@11.9.0
+  - @objectstack/service-cluster@11.9.0
+  - @objectstack/service-datasource@11.9.0
+  - @objectstack/service-i18n@11.9.0
+  - @objectstack/types@11.9.0
+
 ## 11.8.0
 
 ### Patch Changes

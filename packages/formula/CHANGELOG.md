@@ -1,5 +1,12 @@
 # @objectstack/formula
 
+## 11.9.0
+
+### Patch Changes
+
+- Updated dependencies [d3595d9]
+  - @objectstack/spec@11.9.0
+
 ## 11.8.0
 
 ### Patch Changes

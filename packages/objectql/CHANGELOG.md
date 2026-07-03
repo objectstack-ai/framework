@@ -1,5 +1,17 @@
 # @objectstack/objectql
 
+## 11.9.0
+
+### Patch Changes
+
+- Updated dependencies [d3595d9]
+  - @objectstack/spec@11.9.0
+  - @objectstack/core@11.9.0
+  - @objectstack/formula@11.9.0
+  - @objectstack/metadata-core@11.9.0
+  - @objectstack/metadata-protocol@11.9.0
+  - @objectstack/types@11.9.0
+
 ## 11.8.0
 
 ### Patch Changes

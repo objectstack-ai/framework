@@ -1,5 +1,7 @@
 # @objectstack/sdui-parser
 
+## 11.9.0
+
 ## 11.8.0
 
 ## 11.7.0
