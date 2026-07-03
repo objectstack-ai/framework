@@ -47,7 +47,7 @@ export const SysWebhook = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
-  compactLayout: ['name', 'object_name', 'url', 'active', 'updated_at'],
+  highlightFields: ['name', 'object_name', 'url', 'active', 'updated_at'],
 
   listViews: {
     active: {

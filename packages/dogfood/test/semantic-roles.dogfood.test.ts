@@ -46,11 +46,10 @@ describe('ADR-0085 semantic roles survive the served pipeline', () => {
     const def = await servedObject('showcase_semantic_zoo');
 
     expect(def.highlightFields).toEqual(['name', 'status', 'amount']);
-    // Transition mirror for pre-11.7 renderers (ObjectGrid & friends read the
-    // old spelling). Deliberately asserted: when the deprecated alias is
-    // retired, this expectation is DELETED IN THE SAME PR — a red here after
-    // that removal means the retirement missed a consumer.
-    expect(def.compactLayout).toEqual(['name', 'status', 'amount']);
+    // Alias retired (framework#2536): served meta carries the canonical key
+    // ONLY. This flip happened in the same PR that removed the transition
+    // mirror, per the plan the mirror assertion carried.
+    expect(def.compactLayout).toBeUndefined();
 
     expect(def.stageField).toBe('status');
 
@@ -62,13 +61,11 @@ describe('ADR-0085 semantic roles survive the served pipeline', () => {
     expect(def.fields?.amount?.group).toBe('money');
   });
 
-  it('deprecated spellings alias onto the canonical keys when served', async () => {
+  it('the legacy fixture serves canonical highlightFields only (alias retired)', async () => {
     const def = await servedObject('showcase_semantic_zoo_legacy');
 
-    // compactLayout (deprecated) must surface as highlightFields…
     expect(def.highlightFields).toEqual(['name', 'amount']);
-    // …and stay readable under the old name (ADR-0079 alias pattern).
-    expect(def.compactLayout).toEqual(['name', 'amount']);
+    expect(def.compactLayout).toBeUndefined();
   });
 
   it('stageField:false survives serialization as a strict false', async () => {

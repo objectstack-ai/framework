@@ -603,13 +603,10 @@ const ObjectSchemaBase = z.object({
    * a layout); Salesforce compact-layout semantics.
    */
   highlightFields: z.array(z.string()).optional().describe('[ADR-0085] Ordered most-important fields; first entry wins where only one fits. Drives default columns, cards, previews, detail highlight strip. Renamed from compactLayout.'),
-  /**
-   * @deprecated [ADR-0085 → `highlightFields`] Accepted as a parse-time alias:
-   * copied onto `highlightFields` when that key is absent (both preserved on
-   * output for cross-repo back-compat, the ADR-0079 alias pattern). New
-   * metadata sets `highlightFields`.
-   */
-  compactLayout: z.array(z.string()).optional().describe('[DEPRECATED → highlightFields] Accepted as an alias for highlightFields.'),
+  // `compactLayout` (the pre-ADR-0085 spelling of `highlightFields`) was an
+  // accepted parse-time alias for one deprecation window and is now RETIRED
+  // (framework#2536): authoring it is rejected by `create()` like any unknown
+  // key. All first-party consumers read `highlightFields` since objectui#2168.
   /**
    * [ADR-0085] Semantic role: the field that represents the record's LINEAR
    * lifecycle (an ordered pipeline / stage progression). A string names the
@@ -803,6 +800,34 @@ const UNKNOWN_KEY_GUIDANCE: Record<string, string> = {
   triggers:
     '`triggers` is not an ObjectSchema field. Use a lifecycle hook ' +
     '(`src/objects/<name>.hook.ts`) or a top-level `record_change` flow.',
+
+  // ── Tombstones for RETIRED keys (upgrade prescriptions) ────────────────
+  // A retired key's error must carry the fix: the compile/validation error is
+  // the one upgrade channel every consumer is guaranteed to hit — an agent
+  // bumping @objectstack/spec sees THIS message, not our docs site. Each entry
+  // names what replaced the key and the version/decision that removed it.
+  // Tombstones age out too: drop an entry ~two majors after the removal
+  // (by then it's archaeology, not an upgrade; see CHANGELOG.md for history).
+  compactLayout:
+    '`compactLayout` was renamed to `highlightFields` in @objectstack/spec 11.7.0 ' +
+    '(ADR-0085 semantic roles) and the alias was retired in 11.9.1 (#2536). ' +
+    'Rename the key — the value shape (ordered field-name list) is unchanged.',
+  detail:
+    'The `detail` UI-hints block was removed by ADR-0085 (spec 11.7.0). Its ' +
+    'jobs moved to top-level semantic roles: `detail.stageField` → `stageField` ' +
+    '(string | false), `detail.highlightFields` → `highlightFields`, section ' +
+    'layout → `fieldGroups` + `Field.group`. Whole-page customization is done ' +
+    'by assigning a custom Page schema instead of per-page hint keys.',
+  views:
+    '`views` is not an ObjectSchema field: the object-level `views.form/*` and ' +
+    '`views.detail/*` UI-hint dialect was never part of the spec and its ' +
+    'renderer support was removed (ADR-0085). Use the semantic roles ' +
+    '(`highlightFields`, `stageField`, `fieldGroups`) for hints and `listViews` ' +
+    'for named list views.',
+  defaultDetailForm:
+    '`defaultDetailForm` was never implemented and was removed from the spec ' +
+    '(#2402). Curate the record page by assigning a custom Page schema; form ' +
+    'layout derives from `fieldGroups` + `Field.group`.',
 };
 
 /** Levenshtein edit distance — backs the "did you mean" hint for typo'd keys. */
@@ -894,12 +919,8 @@ function normalizeNameFieldAlias(input: unknown): unknown {
  * (same pattern as `normalizeNameFieldAlias`; deprecated keys are PRESERVED
  * on output for cross-repo back-compat):
  *
- * - `compactLayout` ⇄ `highlightFields`: whichever key is present is mirrored
- *   onto the other (canonical wins when both exist). The BACK-fill
- *   (highlightFields → compactLayout) is a transition mirror so renderers
- *   that still read the old key (current objectui / vendored console) keep
- *   their default columns for metadata authored with the new name; it is
- *   removed together with the alias.
+ * - (`compactLayout` ⇄ `highlightFields` mirrored here during the ADR-0085
+ *   deprecation window; RETIRED by framework#2536 once objectui#2168 shipped.)
  * - `fieldGroups[].collapse` derived from the deprecated flags when absent:
  *   the UI-dialect `collapsible`/`collapsed` pair wins over the old
  *   `defaultExpanded` (it is what designer-authored metadata actually
@@ -911,13 +932,6 @@ function normalizeSemanticRoleAliases(input: unknown): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
   const obj = input as Record<string, unknown>;
   let out = obj;
-
-  if (obj.highlightFields == null && Array.isArray(obj.compactLayout)) {
-    out = { ...out, highlightFields: obj.compactLayout };
-  } else if (obj.compactLayout == null && Array.isArray(obj.highlightFields)) {
-    // Transition mirror for old-key readers (see doc comment above).
-    out = { ...out, compactLayout: obj.highlightFields };
-  }
 
   if (Array.isArray(obj.fieldGroups)) {
     let changed = false;

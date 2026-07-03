@@ -779,6 +779,60 @@ describe('ObjectSchema.create()', () => {
       expect(message).toContain('#1535');
     });
 
+    // Tombstones: a RETIRED key's rejection must carry the upgrade
+    // prescription — the compile/validation error is the one channel every
+    // upgrading consumer (human or agent) is guaranteed to hit.
+    it('tombstone: retired compactLayout names its replacement and versions', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — compactLayout was retired (#2536)
+          compactLayout: ['name'],
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('highlightFields');
+      expect(message).toContain('11.7.0');
+      expect(message).toContain('#2536');
+    });
+
+    it('tombstone: removed detail block routes each job to its semantic role', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — the detail block was removed (ADR-0085)
+          detail: { stageField: 'status' },
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('stageField');
+      expect(message).toContain('highlightFields');
+      expect(message).toContain('fieldGroups');
+      expect(message).toContain('ADR-0085');
+    });
+
+    it('tombstone: object-level views dialect points at semantic roles + listViews', () => {
+      let message = '';
+      try {
+        ObjectSchema.create({
+          name: 'demo',
+          fields: {},
+          // @ts-expect-error — object-level views.* was never a spec key
+          views: { form: { sections: [] } },
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('listViews');
+      expect(message).toContain('ADR-0085');
+    });
+
     it('suggests the intended key on a typo (`validation` → `validations`)', () => {
       expect(() => ObjectSchema.create({
         name: 'demo',
@@ -897,27 +951,31 @@ describe('ObjectSchema semantic roles (ADR-0085)', () => {
     expect(ObjectSchema.safeParse({ name: 'lead', fields: {}, stageField: 3 }).success).toBe(false);
   });
 
-  it('accepts highlightFields and aliases the deprecated compactLayout onto it', () => {
+  it('accepts highlightFields; the retired compactLayout alias no longer parses through (framework#2536)', () => {
     const direct = ObjectSchema.parse({
       name: 'account', fields: {}, highlightFields: ['name', 'industry'],
     });
     expect(direct.highlightFields).toEqual(['name', 'industry']);
-    // Transition mirror: old-key readers (current objectui) still see
-    // compactLayout for metadata authored with the canonical name.
-    expect(direct.compactLayout).toEqual(['name', 'industry']);
+    // The transition mirror is gone: output carries the canonical key only.
+    expect((direct as Record<string, unknown>).compactLayout).toBeUndefined();
 
-    const aliased = ObjectSchema.parse({
+    // Lenient parse: the retired key is STRIPPED, not aliased — an old-key
+    // author gets no highlightFields rather than silently working.
+    const legacy = ObjectSchema.parse({
       name: 'account', fields: {}, compactLayout: ['name', 'industry'],
     });
-    expect(aliased.highlightFields).toEqual(['name', 'industry']);
-    // Deprecated key preserved on output (ADR-0079 alias pattern).
-    expect(aliased.compactLayout).toEqual(['name', 'industry']);
+    expect(legacy.highlightFields).toBeUndefined();
+    expect((legacy as Record<string, unknown>).compactLayout).toBeUndefined();
 
-    // Canonical key wins when both are present.
-    const both = ObjectSchema.parse({
-      name: 'account', fields: {}, highlightFields: ['a'], compactLayout: ['b'],
-    });
-    expect(both.highlightFields).toEqual(['a']);
+    // Authoring path: create() REJECTS the retired key like any unknown key.
+    expect(() =>
+      ObjectSchema.create({
+        name: 'account',
+        fields: {},
+        // @ts-expect-error — compactLayout was retired by framework#2536
+        compactLayout: ['name'],
+      }),
+    ).toThrow(/compactLayout/);
   });
 
   it('rejects the removed detail UI-hints block at create()', () => {

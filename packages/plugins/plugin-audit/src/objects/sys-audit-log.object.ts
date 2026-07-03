@@ -24,7 +24,7 @@ export const SysAuditLog = ObjectSchema.create({
   displayNameField: 'action',
   nameField: 'action', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{action} · {object_name}',
-  compactLayout: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
+  highlightFields: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
 
   listViews: {
     recent: {

@@ -9,14 +9,14 @@
  * strips nor mangles them. Guarded by
  * `packages/dogfood/test/semantic-roles.dogfood.test.ts`.
  *
- * Two objects because the alias runs both directions:
- *  - `SemanticZoo` authors the CANONICAL spellings (highlightFields,
- *    stageField: 'status', collapse enum) — served meta must also carry the
- *    deprecated `compactLayout` mirror for pre-11.7 renderers.
- *  - `SemanticZooLegacy` authors the DEPRECATED spelling (compactLayout) and
- *    `stageField: false` — served meta must carry the canonical
- *    `highlightFields`, and `false` must survive (it is the only "stop
- *    guessing" signal; a falsy-check regression turns the stepper back on).
+ * Two objects, two role postures:
+ *  - `SemanticZoo` authors the full canonical role set (highlightFields,
+ *    stageField: 'status', collapse enum).
+ *  - `SemanticZooLegacy` carries `stageField: false` — `false` must survive
+ *    serialization strictly (it is the only "stop guessing" signal; a
+ *    falsy-check regression turns the stepper back on). It exercised the
+ *    deprecated `compactLayout` alias during the ADR-0085 window; the alias
+ *    was retired by framework#2536.
  */
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
@@ -55,7 +55,7 @@ export const SemanticZooLegacy = ObjectSchema.create({
   label: 'Semantic Zoo (Legacy)',
   pluralLabel: 'Semantic Zoo Legacies',
   icon: 'flask-round',
-  description: 'ADR-0085 semantic-role runtime fixture (deprecated spellings)',
+  description: 'ADR-0085 semantic-role runtime fixture (stageField:false suppression)',
 
   fields: {
     name: Field.text({ label: 'Name', required: true }),
@@ -71,8 +71,9 @@ export const SemanticZooLegacy = ObjectSchema.create({
     amount: Field.number({ label: 'Amount' }),
   },
 
-  // Deprecated alias on purpose — must surface as highlightFields when served.
-  compactLayout: ['name', 'amount'],
+  // (This fixture authored the deprecated `compactLayout` spelling during the
+  // ADR-0085 alias window; retired by framework#2536.)
+  highlightFields: ['name', 'amount'],
   // This status is a color, not a lifecycle.
   stageField: false,
 });

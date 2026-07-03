@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/spec",
-  "version": "11.9.0",
+  "version": "11.10.0",
   "description": "ObjectStack Protocol & Specification - TypeScript Interfaces, JSON Schemas, and Convention Configurations",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -176,7 +176,8 @@
     "prompts",
     "llms.txt",
     "README.md",
-    "src/**/*.zod.ts"
+    "src/**/*.zod.ts",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "pnpm gen:schema && pnpm gen:openapi && tsup && if [ -z \"$OS_SKIP_DTS\" ]; then NODE_OPTIONS=\"--max-old-space-size=12288\" BUILD_DTS=true tsup; fi",

@@ -33,7 +33,7 @@ export const SysApprovalRequest = ObjectSchema.create({
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{process_name} · {record_id}',
-  compactLayout: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'submitter_id', 'updated_at'],
+  highlightFields: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'submitter_id', 'updated_at'],
 
   // Curated built-in list views — render as segmented tabs in the console.
   // Filters use {current_user_id} substitution wired by the console.

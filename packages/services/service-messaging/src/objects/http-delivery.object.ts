@@ -38,7 +38,7 @@ export const HttpDelivery = ObjectSchema.create({
     displayNameField: 'id',
     nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
     titleFormat: '{label} → {url}',
-    compactLayout: ['source', 'url', 'status', 'attempts', 'next_retry_at'],
+    highlightFields: ['source', 'url', 'status', 'attempts', 'next_retry_at'],
 
     listViews: {
         recent: {

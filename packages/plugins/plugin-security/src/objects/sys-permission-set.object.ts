@@ -29,7 +29,7 @@ export const SysPermissionSet = ObjectSchema.create({
   displayNameField: 'label',
   nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
-  compactLayout: ['label', 'name', 'active'],
+  highlightFields: ['label', 'name', 'active'],
 
   // Custom actions — permission sets are templates assigned to roles or
   // users (via sys_role_permission_set / sys_user_permission_set). The
