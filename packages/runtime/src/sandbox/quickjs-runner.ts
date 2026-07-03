@@ -149,7 +149,10 @@ export class QuickJSScriptRunner implements ScriptRunner {
         if (result.error) {
           const err = vm.dump(result.error);
           result.error.dispose();
-          throw new SandboxError(`${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`);
+          throw new SandboxError(
+            `${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`,
+            userFacingMessage(formatErr(err)),
+          );
         }
         result.value.dispose();
         const resH = vm.getProp(vm.global, '__result');
@@ -182,7 +185,10 @@ export class QuickJSScriptRunner implements ScriptRunner {
       if (evalRes.error) {
         const err = vm.dump(evalRes.error);
         evalRes.error.dispose();
-        throw new SandboxError(`${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`);
+        throw new SandboxError(
+          `${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`,
+          userFacingMessage(formatErr(err)),
+        );
       }
       evalRes.value.dispose();
 
@@ -206,14 +212,20 @@ export class QuickJSScriptRunner implements ScriptRunner {
         if (pending.error) {
           const err = vm.dump(pending.error);
           pending.error.dispose();
-          throw new SandboxError(`${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`);
+          throw new SandboxError(
+            `${args.origin.kind} '${args.origin.name}' threw: ${formatErr(err)}`,
+            userFacingMessage(formatErr(err)),
+          );
         }
 
         const errH = vm.getProp(vm.global, '__error');
         const errStr = vm.dump(errH);
         errH.dispose();
         if (errStr) {
-          throw new SandboxError(`${args.origin.kind} '${args.origin.name}' threw: ${errStr}`);
+          throw new SandboxError(
+            `${args.origin.kind} '${args.origin.name}' threw: ${errStr}`,
+            userFacingMessage(String(errStr)),
+          );
         }
 
         const resH = vm.getProp(vm.global, '__result');
@@ -645,8 +657,28 @@ function formatErr(err: unknown): string {
 }
 
 export class SandboxError extends Error {
-  constructor(message: string) {
+  /**
+   * For errors thrown by *user* script/hook/action code: the original business
+   * message without the `<kind> '<name>' threw:` debug wrapper that lives in
+   * `.message`. Safe to surface to end users (e.g. an action's error toast);
+   * the wrapped `.message` stays for server logs. Undefined for the sandbox's
+   * own internal errors (capability denials, timeouts, marshalling failures),
+   * which have no user-meaningful inner message.
+   */
+  readonly innerMessage?: string;
+  constructor(message: string, innerMessage?: string) {
     super(message);
     this.name = 'SandboxError';
+    this.innerMessage = innerMessage;
   }
+}
+
+/**
+ * Strip a leading default `Error: ` name prefix so a thrown business message
+ * (`new Error('线索信息不完整…')`) reads as plain text for end users. Non-default
+ * names (`TypeError:`, `RangeError:`) are kept — they signal a genuine bug
+ * rather than a deliberately thrown business rule, which is useful context.
+ */
+function userFacingMessage(raw: string): string {
+  return raw.startsWith('Error: ') ? raw.slice('Error: '.length) : raw;
 }

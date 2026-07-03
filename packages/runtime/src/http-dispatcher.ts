@@ -3186,8 +3186,15 @@ export class HttpDispatcher {
             }
             return { handled: true, response: this.success({ success: true, data: result }) };
         } catch (err: any) {
-            const msg = err?.message ?? String(err);
-            return { handled: true, response: this.success({ success: false, error: msg }) };
+            const full = err?.message ?? String(err);
+            // The sandbox wraps a user throw as `<kind> '<name>' threw: <msg>` for
+            // server logs; surface only the business `<msg>` (SandboxError.innerMessage)
+            // to the client so an action's error toast reads as plain text instead of
+            // leaking the debug prefix. Keep the full wrapper in the log for debugging.
+            const inner: unknown = err?.innerMessage;
+            const clientMsg = (typeof inner === 'string' && inner) ? inner : full;
+            if (clientMsg !== full) console.error(`[action ${objectName}/${actionName}] ${full}`);
+            return { handled: true, response: this.success({ success: false, error: clientMsg }) };
         }
     }
 

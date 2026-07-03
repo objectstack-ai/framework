@@ -146,6 +146,22 @@ describe('QuickJSScriptRunner — L2 hook script', () => {
       ),
     ).rejects.toThrow(/hook 'oops'/);
   });
+
+  it('exposes the clean business message via SandboxError.innerMessage', async () => {
+    // `.message` keeps the `<kind> '<name>' threw: …` debug wrapper for logs;
+    // `.innerMessage` is the plain business message (no wrapper, no `Error: `
+    // name prefix) that the HTTP layer surfaces to end users.
+    const err = await runner
+      .runScript(
+        { language: 'js', source: "throw new Error('线索信息不完整');", capabilities: [] },
+        ctx(),
+        { origin: { kind: 'action', name: 'lead_apply_convert' } },
+      )
+      .then(() => null, (e) => e as SandboxError);
+    expect(err).toBeInstanceOf(SandboxError);
+    expect(err!.message).toContain("action 'lead_apply_convert' threw:");
+    expect(err!.innerMessage).toBe('线索信息不完整');
+  });
 });
 
 describe('QuickJSScriptRunner — L2 action script', () => {
