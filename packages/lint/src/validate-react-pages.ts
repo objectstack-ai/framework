@@ -10,7 +10,40 @@
 // validate runtime behaviour (a transpiling page can still throw at render);
 // the render-time error boundary owns that.
 
-import { transform } from 'sucrase';
+import { createRequire } from 'node:module';
+import type { transform as sucraseTransform } from 'sucrase';
+
+// Sucrase must NOT be imported at module top level: it is ~1.5 MB of CJS
+// (~16 ms cold require), and @objectstack/lint sits on the kernel boot path —
+// while this gate only runs when a `kind:'react'` page is actually validated
+// (rare, trusted tier). Same boot-path contract as the TypeScript compiler in
+// validate-react-page-props.ts: loaded lazily, on first use, staying a regular
+// dependency in package.json. Guarded by lazy-deps.test.ts.
+//
+// `node:module` is a Node builtin, untouched by esbuild/tsup, so the static
+// `createRequire` import survives bundling; the `createRequire(...)` call is
+// deferred because `import.meta.url` is rewritten to an empty stub in the CJS
+// build (same pattern as driver-sqlite-wasm's knex-wasm-dialect).
+let cachedTransform: typeof sucraseTransform | null = null;
+function loadSucraseTransform(): typeof sucraseTransform {
+  if (cachedTransform) return cachedTransform;
+  const anchor =
+    typeof import.meta !== 'undefined' && import.meta.url
+      ? import.meta.url
+      : typeof __filename !== 'undefined'
+        ? __filename
+        : process.cwd() + '/';
+  try {
+    cachedTransform = (createRequire(anchor)('sucrase') as { transform: typeof sucraseTransform }).transform;
+  } catch (err) {
+    throw new Error(
+      `@objectstack/lint: validating a kind:'react' page requires the "sucrase" package, which could not be loaded ` +
+        `(${err instanceof Error ? err.message : String(err)}). It is a declared dependency of @objectstack/lint — ` +
+        `if this deployment prunes packages, keep "sucrase" in the image; it is only loaded when a react-source page is validated.`,
+    );
+  }
+  return cachedTransform;
+}
 
 export type ReactPageSeverity = 'error' | 'warning';
 
@@ -45,6 +78,9 @@ export function validateReactPages(stack: AnyRec): ReactPageFinding[] {
       });
       continue;
     }
+    // Outside the try below on purpose: a missing transpiler must surface as
+    // an error, not be swallowed as a syntax finding.
+    const transform = loadSucraseTransform();
     try {
       // transpile-only (no eval) — catches syntax errors, unterminated JSX, etc.
       transform(source, { transforms: ['jsx', 'typescript'], production: true });

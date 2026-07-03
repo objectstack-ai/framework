@@ -26,7 +26,7 @@ import { REACT_BLOCKS } from '@objectstack/spec/ui';
 // eager import also hard-crashes boot in deployments that prune the package
 // from the image (cloud's Docker pruner did exactly that). So the compiler is
 // loaded lazily, on first use, and stays a regular dependency in package.json.
-// Guarded by lazy-typescript.test.ts.
+// Guarded by lazy-deps.test.ts.
 //
 // `node:module` is a Node builtin, untouched by esbuild/tsup, so the static
 // `createRequire` import survives bundling; the `createRequire(...)` call is
