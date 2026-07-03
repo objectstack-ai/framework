@@ -4549,14 +4549,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 // Route through installPackage (not a bare registry write) so the
                 // duplicated base ALSO lands in sys_packages — otherwise the copy
                 // would vanish from GET /packages on the next restart (#2532).
-                await this.installPackage({
-                    manifest: {
-                        ...srcPkg.manifest,
-                        id: request.targetPackageId,
-                        name: request.targetName ?? `${srcPkg.manifest.name ?? request.sourcePackageId} (copy)`,
-                        namespace: targetNs,
-                    },
-                } as InstallPackageRequest);
+                // Spread-then-strip: the source may carry `scope` (e.g. 'project'
+                // on a code package) — copying it would brand the duplicate as
+                // read-only in every writability heuristic, when the whole point
+                // of a duplicate is a WRITABLE base. The copy is scope-less.
+                const dupManifest: Record<string, unknown> = {
+                    ...srcPkg.manifest,
+                    id: request.targetPackageId,
+                    name: request.targetName ?? `${srcPkg.manifest.name ?? request.sourcePackageId} (copy)`,
+                    namespace: targetNs,
+                };
+                delete dupManifest.scope;
+                await this.installPackage({ manifest: dupManifest } as InstallPackageRequest);
             } catch {
                 /* best-effort — the per-item package binding still works without a manifest row */
             }
