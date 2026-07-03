@@ -1,5 +1,28 @@
 # @objectstack/platform-objects
 
+## 11.8.0
+
+### Patch Changes
+
+- 53d491a: feat(setup): Packages entry in Setup's Apps group
+
+  Package administration (install / inspect / manage) is an operator concern
+  (ADR-0084: packages are Operate, out of the builder), so it gains a home in the
+  Setup app: `group_apps` now carries a **Packages** entry bound to the console's
+  existing `developer:packages` page. Building apps remains a separate journey
+  (the Home builder cover → `/studio`); this entry is for administration.
+
+- b84726b: feat(studio): "App Builder" navigation entry — the pillar builder joins the journey
+
+  The Studio app's Overview group gains an **App Builder** entry (componentRef
+  `studio:builder`, bound by the console to the builder landing page). This makes the
+  pillar application builder reachable from the moment a user logs in — Home → Studio
+  → App Builder → pick/create a writable base package → the full-screen builder at
+  `/studio/:packageId/:tab` — instead of being a URL-only surface.
+
+  - @objectstack/spec@11.8.0
+  - @objectstack/metadata-core@11.8.0
+
 ## 11.7.0
 
 ### Patch Changes

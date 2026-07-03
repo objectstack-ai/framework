@@ -1,5 +1,25 @@
 # @objectstack/plugin-dev
 
+## 11.8.0
+
+### Patch Changes
+
+- @objectstack/account@11.8.0
+- @objectstack/setup@11.8.0
+- @objectstack/studio@11.8.0
+- @objectstack/plugin-auth@11.8.0
+- @objectstack/plugin-org-scoping@11.8.0
+- @objectstack/plugin-security@11.8.0
+- @objectstack/rest@11.8.0
+- @objectstack/runtime@11.8.0
+- @objectstack/spec@11.8.0
+- @objectstack/core@11.8.0
+- @objectstack/types@11.8.0
+- @objectstack/objectql@11.8.0
+- @objectstack/driver-memory@11.8.0
+- @objectstack/plugin-hono-server@11.8.0
+- @objectstack/service-i18n@11.8.0
+
 ## 11.7.0
 
 ### Patch Changes

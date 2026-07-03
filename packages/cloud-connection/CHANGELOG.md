@@ -1,5 +1,14 @@
 # @objectstack/cloud-connection
 
+## 11.8.0
+
+### Patch Changes
+
+- @objectstack/runtime@11.8.0
+- @objectstack/spec@11.8.0
+- @objectstack/core@11.8.0
+- @objectstack/types@11.8.0
+
 ## 11.7.0
 
 ### Patch Changes

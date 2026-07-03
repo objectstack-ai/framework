@@ -1,5 +1,59 @@
 # @objectstack/cli
 
+## 11.8.0
+
+### Patch Changes
+
+- Updated dependencies [5c15ccd]
+- Updated dependencies [53d491a]
+- Updated dependencies [b84726b]
+  - @objectstack/console@11.8.0
+  - @objectstack/platform-objects@11.8.0
+  - @objectstack/account@11.8.0
+  - @objectstack/setup@11.8.0
+  - @objectstack/studio@11.8.0
+  - @objectstack/plugin-approvals@11.8.0
+  - @objectstack/plugin-audit@11.8.0
+  - @objectstack/plugin-auth@11.8.0
+  - @objectstack/plugin-email@11.8.0
+  - @objectstack/plugin-org-scoping@11.8.0
+  - @objectstack/plugin-reports@11.8.0
+  - @objectstack/plugin-security@11.8.0
+  - @objectstack/plugin-sharing@11.8.0
+  - @objectstack/rest@11.8.0
+  - @objectstack/service-job@11.8.0
+  - @objectstack/service-queue@11.8.0
+  - @objectstack/service-realtime@11.8.0
+  - @objectstack/service-settings@11.8.0
+  - @objectstack/service-storage@11.8.0
+  - @objectstack/runtime@11.8.0
+  - @objectstack/verify@11.8.0
+  - @objectstack/client@11.8.0
+  - @objectstack/cloud-connection@11.8.0
+  - @objectstack/spec@11.8.0
+  - @objectstack/core@11.8.0
+  - @objectstack/types@11.8.0
+  - @objectstack/objectql@11.8.0
+  - @objectstack/observability@11.8.0
+  - @objectstack/formula@11.8.0
+  - @objectstack/lint@11.8.0
+  - @objectstack/driver-memory@11.8.0
+  - @objectstack/driver-sql@11.8.0
+  - @objectstack/driver-mongodb@11.8.0
+  - @objectstack/driver-sqlite-wasm@11.8.0
+  - @objectstack/plugin-hono-server@11.8.0
+  - @objectstack/mcp@11.8.0
+  - @objectstack/plugin-webhooks@11.8.0
+  - @objectstack/trigger-record-change@11.8.0
+  - @objectstack/trigger-api@11.8.0
+  - @objectstack/trigger-schedule@11.8.0
+  - @objectstack/service-analytics@11.8.0
+  - @objectstack/service-automation@11.8.0
+  - @objectstack/service-cache@11.8.0
+  - @objectstack/service-datasource@11.8.0
+  - @objectstack/service-messaging@11.8.0
+  - @objectstack/service-package@11.8.0
+
 ## 11.7.0
 
 ### Patch Changes
