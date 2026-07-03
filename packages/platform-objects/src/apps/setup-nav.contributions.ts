@@ -38,9 +38,19 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
       { id: 'nav_system_overview', type: 'dashboard', label: 'System Overview', dashboardName: 'system_overview', icon: 'activity' },
     ],
   },
-  // No group_apps contribution left here — both marketplace entries moved
-  // out (see header note); the group_apps shell anchor in setup.app.ts is
-  // filled entirely by capability plugins now.
+  {
+    // Package ADMINISTRATION is a platform/operator concern (ADR-0084:
+    // packages are Operate, out of the builder) — so its home is Setup, not
+    // the application builder. The console binds `developer:packages` to the
+    // existing package-management page. Building/creating apps is a separate
+    // journey (Home cover → /studio); this entry is for install/inspect/admin.
+    app: 'setup',
+    group: 'group_apps',
+    priority: BASE_PRIORITY,
+    items: [
+      { id: 'nav_packages', type: 'component', label: 'Packages', componentRef: 'developer:packages', icon: 'package' },
+    ],
+  },
   {
     app: 'setup',
     group: 'group_people_org',
