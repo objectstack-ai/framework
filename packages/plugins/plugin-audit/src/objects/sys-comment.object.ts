@@ -28,7 +28,7 @@ export const SysComment = ObjectSchema.create({
   displayNameField: 'body',
   nameField: 'body', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{author_name}: {body}',
-  compactLayout: ['created_at', 'author_name', 'body'],
+  highlightFields: ['created_at', 'author_name', 'body'],
 
   fields: {
     id: Field.text({

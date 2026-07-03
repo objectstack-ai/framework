@@ -27,7 +27,7 @@ export const SysUserRole = ObjectSchema.create({
   managedBy: 'system',
   description: 'Assigns an RBAC role (sys_role.name) to a user. Platform-owned (ADR-0057 D4).',
   titleFormat: '{user_id} → {role}',
-  compactLayout: ['user_id', 'role', 'organization_id'],
+  highlightFields: ['user_id', 'role', 'organization_id'],
 
   fields: {
     id: Field.text({

@@ -24,7 +24,7 @@ export const SysApprovalAction = ObjectSchema.create({
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{action} · {step_name}',
-  compactLayout: ['request_id', 'step_name', 'action', 'actor_id', 'created_at'],
+  highlightFields: ['request_id', 'step_name', 'action', 'actor_id', 'created_at'],
 
   listViews: {
     recent: {

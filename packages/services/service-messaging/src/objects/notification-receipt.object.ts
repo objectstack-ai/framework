@@ -28,7 +28,7 @@ export const NotificationReceipt = ObjectSchema.create({
     managedBy: 'system',
     description: 'Per-recipient × channel receipt; the source of truth for notification read-state.',
     titleFormat: '{state}',
-    compactLayout: ['notification_id', 'user_id', 'channel', 'state', 'at'],
+    highlightFields: ['notification_id', 'user_id', 'channel', 'state', 'at'],
 
     fields: {
         id: Field.text({

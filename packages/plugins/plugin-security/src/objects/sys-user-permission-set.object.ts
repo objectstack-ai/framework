@@ -26,7 +26,7 @@ export const SysUserPermissionSet = ObjectSchema.create({
   managedBy: 'system',
   description: 'Direct assignment of a permission set to a user (optionally scoped to an organization).',
   titleFormat: '{user_id} → {permission_set_id}',
-  compactLayout: ['user_id', 'permission_set_id', 'organization_id'],
+  highlightFields: ['user_id', 'permission_set_id', 'organization_id'],
 
   fields: {
     id: Field.text({

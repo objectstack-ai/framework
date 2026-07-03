@@ -26,7 +26,7 @@ export const SystemFile = ObjectSchema.create({
   description: 'Storage service file metadata (fileId ↔ key mapping)',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{name}',
-  compactLayout: ['name', 'mime_type', 'size', 'status', 'created_at'],
+  highlightFields: ['name', 'mime_type', 'size', 'status', 'created_at'],
 
   fields: {
     id: Field.text({

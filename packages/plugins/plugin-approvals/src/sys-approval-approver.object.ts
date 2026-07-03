@@ -35,7 +35,7 @@ export const SysApprovalApprover = ObjectSchema.create({
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{approver} · {request_id}',
-  compactLayout: ['request_id', 'approver', 'created_at'],
+  highlightFields: ['request_id', 'approver', 'created_at'],
 
   fields: {
     id: Field.text({ label: 'Row ID', required: true, readonly: true, group: 'System' }),

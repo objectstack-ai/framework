@@ -25,7 +25,7 @@ export const NotificationTemplate = ObjectSchema.create({
     managedBy: 'system',
     description: 'Per (topic × channel × locale) render template for notifications.',
     titleFormat: '{topic} · {channel} · {locale}',
-    compactLayout: ['topic', 'channel', 'locale', 'is_active'],
+    highlightFields: ['topic', 'channel', 'locale', 'is_active'],
 
     fields: {
         id: Field.text({ label: 'Template ID', required: true, readonly: true }),

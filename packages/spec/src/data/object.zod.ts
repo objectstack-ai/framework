@@ -603,13 +603,10 @@ const ObjectSchemaBase = z.object({
    * a layout); Salesforce compact-layout semantics.
    */
   highlightFields: z.array(z.string()).optional().describe('[ADR-0085] Ordered most-important fields; first entry wins where only one fits. Drives default columns, cards, previews, detail highlight strip. Renamed from compactLayout.'),
-  /**
-   * @deprecated [ADR-0085 → `highlightFields`] Accepted as a parse-time alias:
-   * copied onto `highlightFields` when that key is absent (both preserved on
-   * output for cross-repo back-compat, the ADR-0079 alias pattern). New
-   * metadata sets `highlightFields`.
-   */
-  compactLayout: z.array(z.string()).optional().describe('[DEPRECATED → highlightFields] Accepted as an alias for highlightFields.'),
+  // `compactLayout` (the pre-ADR-0085 spelling of `highlightFields`) was an
+  // accepted parse-time alias for one deprecation window and is now RETIRED
+  // (framework#2536): authoring it is rejected by `create()` like any unknown
+  // key. All first-party consumers read `highlightFields` since objectui#2168.
   /**
    * [ADR-0085] Semantic role: the field that represents the record's LINEAR
    * lifecycle (an ordered pipeline / stage progression). A string names the
@@ -894,12 +891,8 @@ function normalizeNameFieldAlias(input: unknown): unknown {
  * (same pattern as `normalizeNameFieldAlias`; deprecated keys are PRESERVED
  * on output for cross-repo back-compat):
  *
- * - `compactLayout` ⇄ `highlightFields`: whichever key is present is mirrored
- *   onto the other (canonical wins when both exist). The BACK-fill
- *   (highlightFields → compactLayout) is a transition mirror so renderers
- *   that still read the old key (current objectui / vendored console) keep
- *   their default columns for metadata authored with the new name; it is
- *   removed together with the alias.
+ * - (`compactLayout` ⇄ `highlightFields` mirrored here during the ADR-0085
+ *   deprecation window; RETIRED by framework#2536 once objectui#2168 shipped.)
  * - `fieldGroups[].collapse` derived from the deprecated flags when absent:
  *   the UI-dialect `collapsible`/`collapsed` pair wins over the old
  *   `defaultExpanded` (it is what designer-authored metadata actually
@@ -911,13 +904,6 @@ function normalizeSemanticRoleAliases(input: unknown): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
   const obj = input as Record<string, unknown>;
   let out = obj;
-
-  if (obj.highlightFields == null && Array.isArray(obj.compactLayout)) {
-    out = { ...out, highlightFields: obj.compactLayout };
-  } else if (obj.compactLayout == null && Array.isArray(obj.highlightFields)) {
-    // Transition mirror for old-key readers (see doc comment above).
-    out = { ...out, compactLayout: obj.highlightFields };
-  }
 
   if (Array.isArray(obj.fieldGroups)) {
     let changed = false;

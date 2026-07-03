@@ -32,7 +32,7 @@ export const SysRole = ObjectSchema.create({
   displayNameField: 'label',
   nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
-  compactLayout: ['label', 'name', 'active', 'is_default'],
+  highlightFields: ['label', 'name', 'active', 'is_default'],
 
   // Custom actions — system roles drive RBAC and are edited rarely but
   // require the four high-frequency sysadmin affordances every IdP

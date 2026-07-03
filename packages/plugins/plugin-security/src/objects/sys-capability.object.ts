@@ -41,7 +41,7 @@ export const SysCapability = ObjectSchema.create({
   displayNameField: 'label',
   nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
-  compactLayout: ['label', 'name', 'scope', 'managed_by', 'active'],
+  highlightFields: ['label', 'name', 'scope', 'managed_by', 'active'],
 
   actions: [
     {

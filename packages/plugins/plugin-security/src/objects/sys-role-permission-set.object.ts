@@ -22,7 +22,7 @@ export const SysRolePermissionSet = ObjectSchema.create({
   managedBy: 'system',
   description: 'Binds a permission set to a role.',
   titleFormat: '{role_id} → {permission_set_id}',
-  compactLayout: ['role_id', 'permission_set_id'],
+  highlightFields: ['role_id', 'permission_set_id'],
 
   fields: {
     id: Field.text({

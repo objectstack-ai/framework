@@ -28,7 +28,7 @@ export const NotificationPreference = ObjectSchema.create({
     managedBy: 'system',
     description: 'Per-user × topic × channel notification toggle (mute/allow), with admin-global defaults.',
     titleFormat: '{user_id} · {topic} · {channel}',
-    compactLayout: ['user_id', 'topic', 'channel', 'enabled', 'digest'],
+    highlightFields: ['user_id', 'topic', 'channel', 'enabled', 'digest'],
 
     fields: {
         id: Field.text({ label: 'Preference ID', required: true, readonly: true }),

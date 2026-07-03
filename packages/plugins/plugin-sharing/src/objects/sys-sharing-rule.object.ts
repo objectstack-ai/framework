@@ -41,7 +41,7 @@ export const SysSharingRule = ObjectSchema.create({
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
-  compactLayout: ['name', 'object_name', 'recipient_type', 'recipient_id', 'access_level', 'active'],
+  highlightFields: ['name', 'object_name', 'recipient_type', 'recipient_id', 'access_level', 'active'],
 
   listViews: {
     active: {

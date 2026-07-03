@@ -26,7 +26,7 @@ export const NotificationDelivery = ObjectSchema.create({
     managedBy: 'system',
     description: 'Durable per-recipient × channel delivery outbox (ADR-0030 Layer 4).',
     titleFormat: '{channel} → {recipient_id}',
-    compactLayout: ['notification_id', 'recipient_id', 'channel', 'status', 'attempts'],
+    highlightFields: ['notification_id', 'recipient_id', 'channel', 'status', 'attempts'],
 
     fields: {
         id: Field.text({ label: 'Delivery ID', required: true, readonly: true }),

@@ -27,7 +27,7 @@ export const SysActivity = ObjectSchema.create({
   displayNameField: 'summary',
   nameField: 'summary', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{type} · {summary}',
-  compactLayout: ['timestamp', 'type', 'actor_name', 'summary'],
+  highlightFields: ['timestamp', 'type', 'actor_name', 'summary'],
 
   fields: {
     id: Field.text({

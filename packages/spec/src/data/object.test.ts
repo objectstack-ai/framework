@@ -897,27 +897,31 @@ describe('ObjectSchema semantic roles (ADR-0085)', () => {
     expect(ObjectSchema.safeParse({ name: 'lead', fields: {}, stageField: 3 }).success).toBe(false);
   });
 
-  it('accepts highlightFields and aliases the deprecated compactLayout onto it', () => {
+  it('accepts highlightFields; the retired compactLayout alias no longer parses through (framework#2536)', () => {
     const direct = ObjectSchema.parse({
       name: 'account', fields: {}, highlightFields: ['name', 'industry'],
     });
     expect(direct.highlightFields).toEqual(['name', 'industry']);
-    // Transition mirror: old-key readers (current objectui) still see
-    // compactLayout for metadata authored with the canonical name.
-    expect(direct.compactLayout).toEqual(['name', 'industry']);
+    // The transition mirror is gone: output carries the canonical key only.
+    expect((direct as Record<string, unknown>).compactLayout).toBeUndefined();
 
-    const aliased = ObjectSchema.parse({
+    // Lenient parse: the retired key is STRIPPED, not aliased — an old-key
+    // author gets no highlightFields rather than silently working.
+    const legacy = ObjectSchema.parse({
       name: 'account', fields: {}, compactLayout: ['name', 'industry'],
     });
-    expect(aliased.highlightFields).toEqual(['name', 'industry']);
-    // Deprecated key preserved on output (ADR-0079 alias pattern).
-    expect(aliased.compactLayout).toEqual(['name', 'industry']);
+    expect(legacy.highlightFields).toBeUndefined();
+    expect((legacy as Record<string, unknown>).compactLayout).toBeUndefined();
 
-    // Canonical key wins when both are present.
-    const both = ObjectSchema.parse({
-      name: 'account', fields: {}, highlightFields: ['a'], compactLayout: ['b'],
-    });
-    expect(both.highlightFields).toEqual(['a']);
+    // Authoring path: create() REJECTS the retired key like any unknown key.
+    expect(() =>
+      ObjectSchema.create({
+        name: 'account',
+        fields: {},
+        // @ts-expect-error — compactLayout was retired by framework#2536
+        compactLayout: ['name'],
+      }),
+    ).toThrow(/compactLayout/);
   });
 
   it('rejects the removed detail UI-hints block at create()', () => {
