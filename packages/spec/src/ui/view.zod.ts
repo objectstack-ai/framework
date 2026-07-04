@@ -1171,17 +1171,50 @@ function cloneViewConfig(v: any): any {
 }
 
 /**
- * Expand an aggregated view container into independent ViewItems.
+ * A view-key collision detected while expanding one `defineView` container.
+ *
+ * List and form views share a single `<object>.<key>` namespace during
+ * expansion (see {@link expandViewContainer}), and the default `list`
+ * implicitly claims `<object>.default`. When a later view competes for a name
+ * already taken, it is renamed (`<object>.<key>` → `<object>.<key>_2`) to keep
+ * the runtime registry key unique. That rename is a silent footgun: references
+ * to the requested name (form action `target`s, navigation `viewName`s) resolve
+ * to the OTHER view. The build-time view-ref lint turns each collision into a
+ * hard error so the author fixes the key instead of shipping a broken reference.
+ */
+export interface ViewKeyCollision {
+  /** The `<object>.<key>` name that was already registered by an earlier view. */
+  requested: string;
+  /** The disambiguated name the colliding view was renamed to (e.g. `…_2`). */
+  renamedTo: string;
+  /** Which family the renamed (losing) view belongs to. */
+  viewKind: 'list' | 'form';
+  /** The raw author-supplied key that collided. */
+  key: string;
+}
+
+/** Result of {@link expandViewContainerWithDiagnostics}. */
+export interface ExpandViewResult {
+  items: ExpandedViewItem[];
+  collisions: ViewKeyCollision[];
+}
+
+/**
+ * Expand an aggregated view container into independent ViewItems, ALSO reporting
+ * every name collision that forced a rename.
  *
  * List family: `listViews` entries first (keys taken from the author), then the
  * default `list` — deduped by structural signature so a `listViews.all` that
  * merely restates `list` collapses into one item. The view matching the
- * declared default is flagged `isDefault`.
+ * declared default is flagged `isDefault`. Form family: `formViews` entries,
+ * then the default `form`.
  *
- * Form family: `formViews` entries, then the default `form`.
+ * Collisions are captured at the exact points the shared `used` set forces a
+ * rename, so the diagnostic can never drift from the expansion it describes.
  */
-export function expandViewContainer(object: string, container: any): ExpandedViewItem[] {
+export function expandViewContainerWithDiagnostics(object: string, container: any): ExpandViewResult {
   const out: ExpandedViewItem[] = [];
+  const collisions: ViewKeyCollision[] = [];
   const used = new Set<string>();
   let order = 0;
 
@@ -1191,7 +1224,9 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
     container.listViews && typeof container.listViews === 'object' ? container.listViews : {};
   for (const [k, v] of Object.entries<any>(listViews)) {
     if (!v || typeof v !== 'object') continue;
-    const name = uniqueViewName(`${object}.${k}`, used);
+    const requested = `${object}.${k}`;
+    const name = uniqueViewName(requested, used);
+    if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'list', key: k });
     listSigToName.set(viewSignature(v), name);
     out.push({ name, object, viewKind: 'list', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
   }
@@ -1203,7 +1238,9 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
       defaultListName = dup; // already represented by a named listViews entry
     } else {
       const key = typeof defaultList.name === 'string' && defaultList.name ? defaultList.name : 'default';
-      const name = uniqueViewName(`${object}.${key}`, used);
+      const requested = `${object}.${key}`;
+      const name = uniqueViewName(requested, used);
+      if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'list', key });
       out.push({ name, object, viewKind: 'list', label: defaultList.label, config: cloneViewConfig(defaultList), order: order++, scope: 'package' });
       defaultListName = name;
     }
@@ -1220,7 +1257,9 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
     container.formViews && typeof container.formViews === 'object' ? container.formViews : {};
   for (const [k, v] of Object.entries<any>(formViews)) {
     if (!v || typeof v !== 'object') continue;
-    const name = uniqueViewName(`${object}.${k}`, used);
+    const requested = `${object}.${k}`;
+    const name = uniqueViewName(requested, used);
+    if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'form', key: k });
     formSigSeen.add(viewSignature(v));
     out.push({ name, object, viewKind: 'form', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
   }
@@ -1228,7 +1267,9 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
   let defaultFormName: string | undefined;
   if (defaultForm && typeof defaultForm === 'object' && !formSigSeen.has(viewSignature(defaultForm))) {
     const key = typeof defaultForm.name === 'string' && defaultForm.name ? defaultForm.name : 'form';
-    const name = uniqueViewName(`${object}.${key}`, used);
+    const requested = `${object}.${key}`;
+    const name = uniqueViewName(requested, used);
+    if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'form', key });
     out.push({ name, object, viewKind: 'form', label: defaultForm.label, config: cloneViewConfig(defaultForm), order: order++, scope: 'package' });
     defaultFormName = name;
   }
@@ -1237,7 +1278,18 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
     if (out[i].name === defaultFormName) out[i].isDefault = true;
   }
 
-  return out;
+  return { items: out, collisions };
+}
+
+/**
+ * Expand an aggregated view container into independent ViewItems.
+ *
+ * Thin wrapper over {@link expandViewContainerWithDiagnostics} that discards the
+ * collision diagnostics — the shape every runtime loader consumes. Behaviour is
+ * unchanged: colliding names are still renamed so the registry key stays unique.
+ */
+export function expandViewContainer(object: string, container: any): ExpandedViewItem[] {
+  return expandViewContainerWithDiagnostics(object, container).items;
 }
 
 /**

@@ -37,7 +37,10 @@ export const BusinessUnitViews = defineView({
     },
   },
   formViews: {
-    default: {
+    // `edit`, not `default`: the main `list` implicitly claims `<object>.default`
+    // in the shared view namespace, so a `default` form key collides (build-time
+    // view-ref lint, framework #2554).
+    edit: {
       type: 'simple',
       data,
       sections: [

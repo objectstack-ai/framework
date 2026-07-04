@@ -229,8 +229,13 @@ export const TaskViews = defineView({
   },
 
   formViews: {
+    // Keyed `edit`, NOT `default`: list and form views share one
+    // `<object>.<key>` namespace, and the main `list` implicitly claims
+    // `showcase_task.default`. A `default` form key collides — the build-time
+    // view-ref lint fails on it (framework #2554) instead of silently renaming
+    // it to `default_2` and breaking any action target that references it.
     // simple ── single-section form ──────────────────────────────────────
-    default: {
+    edit: {
       type: 'simple',
       data,
       sections: [
