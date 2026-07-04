@@ -1,0 +1,165 @@
+---
+title: Authorization Architecture
+description: The one-page map of ObjectStack authorization — the enforcement chain, combination semantics, package provenance, lifecycle coverage, and the CI governance that keeps "declared" equal to "enforced". Stitches ADR-0049/0054/0056/0057/0066/0068/0069/0078/0086 into a single narrative.
+---
+
+# Authorization Architecture
+
+This page is the consolidated overview of how authorization works across the
+platform. Every decision summarized here is owned by an ADR (index at the
+bottom) — this page adds no new decisions; it exists so you don't have to read
+nine ADRs to hold the model in your head.
+
+<Callout type="info">
+**TL;DR** — A request passes through six gates, each fail-closed at its own
+layer: anonymous deny → declaration-derived public-form grant → object CRUD
+(permission-set union) → OWD/sharing → row-level security → field-level
+security. Grants **union** most-permissively; hard prerequisites (**AND-gates**)
+and fail-closed defaults are the only implicit denies. The whole surface is
+governed by a CI-checked conformance matrix: a declared-but-unenforced
+primitive fails the build.
+</Callout>
+
+---
+
+## The three-way separation (ADR-0066)
+
+Authorization splits into three concerns that stay decoupled:
+
+1. **Capability** — *what can be done* (`manage_users`, `export_data`).
+   Defined by the platform or a package; extended by admins.
+2. **Assignment** — *who holds it* — permission sets / roles / user bindings
+   (`sys_permission_set`, `sys_role`, `sys_user_permission_set`,
+   `sys_role_permission_set`). Runtime records, maintained by admins in Setup.
+3. **Requirement** — *what a resource needs* — an object / field / action
+   references a capability as a contract. A resource never bakes in "who",
+   only "what is required".
+
+## The enforcement chain
+
+Every data request traverses these gates in order. Each names its enforcement
+site — the file you read when behavior surprises you.
+
+| # | Gate | What it decides | Enforcement site | Failure direction |
+|---|---|---|---|---|
+| 1 | **Anonymous deny** | No identity → HTTP 401 on `/data/*`. **Default-on** (ADR-0056 D2): public data serving requires an explicit `api.requireAuth: false` opt-out, which logs a boot warning. Control plane (`/auth`, `/health`, `/discovery`) is exempt; share-links validate their token then read as SYSTEM. | `packages/rest/src/rest-server.ts` `enforceAuth` (default in `packages/spec/src/api/rest-server.zod.ts`) | fail-closed |
+| 2 | **Public-form grant** | An anonymous form submission carries a declaration-derived `publicFormGrant` authorizing ONLY create + read-back on the form's declared target object — never anything else (ADR-0056 Option A). No `guest_portal` profile needed. | `packages/plugins/plugin-security/src/security-plugin.ts` (ObjectQL middleware) | scope-limited allow |
+| 3 | **Object CRUD** | `allowRead/Create/Edit/Delete` (+ the destructive lifecycle class `allowTransfer/Restore/Purge`, gated ahead of the M2 operations — #1883) resolved across the caller's permission sets. | `packages/plugins/plugin-security/src/permission-evaluator.ts` `checkObjectPermission` | fail-closed 403 |
+| 4 | **OWD / sharing** | Org-wide default (`private` / `public_read` / `public_read_write` / `controlled_by_parent`), manual record shares, criteria/owner sharing rules, business-unit hierarchy widening (ADR-0057 D5: hierarchy lives on `sys_business_unit`, not roles). | `packages/plugins/plugin-sharing/src/sharing-service.ts` + `sharing-rule-service.ts` | owner-only baseline |
+| 5 | **Row-level security** | CEL predicates (`using` read filter, `check` write post-image) compiled into the query. An applicable-but-uncompilable policy **denies** — it is never silently dropped. Tenant isolation is a wildcard RLS rule AND-ed on top. | `packages/plugins/plugin-security/src/rls-compiler.ts` + `security-plugin.ts` | fail-closed |
+| 6 | **Field-level security** | Read mask (strip non-readable fields) + write deny per `fields` rules. | `packages/plugins/plugin-security/src/field-masker.ts` | see posture note below |
+
+Two orthogonal identity-layer gates run before all of this: the ADR-0069
+**authentication-policy gate** (password expiry / enforced MFA blocks a gated
+session from protected resources while keeping remediation reachable), and
+**anti-escalation** (RBAC tables are read-only for `organization_admin`, so an
+org admin cannot self-grant platform admin).
+
+## Combination semantics (the fixed order)
+
+From ADR-0066 *Precedence / combination semantics* — the contract, not an
+implementation detail:
+
+1. **AND-gates first (hard prerequisites).** A resource's
+   `requiredPermissions` and a `private` object posture must ALL clear before
+   any grant is consulted. Missing one denies regardless of everything else.
+2. **Grants union (most-permissive).** Object CRUD and field grants combine
+   across all of the caller's permission sets — any set that allows, wins.
+   Keys never collide across packages because object api names are
+   package-namespaced.
+3. **RLS: OR within an object, AND with tenant-global.** Multiple row policies
+   for the same object/operation OR-combine; the wildcard tenant-isolation
+   policy ANDs on top. `viewAllRecords` / `modifyAllRecords` (super-user
+   bypass, posture-gated) short-circuit RLS for the object.
+4. **Explicit deny — reserved.** There is no deny layer yet; the only implicit
+   denies are the AND-gates in (1) and fail-closed defaults. Permission-set
+   groups + subtractive *muting* (Salesforce-style) are the planned step 4
+   (ADR-0066 ⑦) — when they land they must cover **field** grants too
+   (ADR-0066 ⑧).
+
+<Callout type="warn">
+**FLS posture (ADR-0066 ⑧):** runtime field security is block-list-shaped —
+an **undeclared** field is visible by default, and field grants union (one
+set's `readable: true` out-votes another's `false`). Until the muting layer
+lands, protect sensitive fields by granting them only in the sets that need
+them, and treat "sensitive field on a public object" as a review smell.
+</Callout>
+
+## Package provenance & composition (ADR-0086)
+
+The metadata↔config boundary follows one line: **definitions travel with the
+package (metadata); subject bindings and env-specific values stay as config.**
+
+- A package ships **its own permission sets** (Shape B), recorded with
+  `managedBy: 'package'` + owning `packageId` on `sys_permission_set`
+  (`package_id` / `managed_by` columns). `bootstrapDeclaredPermissions`
+  (`packages/plugins/plugin-security/src/bootstrap-declared-permissions.ts`)
+  seeds `stack.permissions` at boot — idempotent, re-seeded on upgrade, and it
+  **never clobbers** env-authored (`platform`/`user`/legacy) rows. A package
+  never writes into a foreign record.
+- The environment admin **assigns** sets to roles/users; the runtime unions
+  them. One shared set with hand-picked cross-package grants remains an
+  env-admin-only construct.
+- This is what makes package **uninstall** well-defined (drop the package's
+  own sets) and the objectui Access matrix scopable to `{ packageId }`.
+- Declared roles and sharing rules seed the same way
+  (`bootstrapDeclaredRoles`, ADR-0057 D6) — a declarable-but-never-seeded
+  array is exactly the inert-metadata smell ADR-0078 prohibits.
+
+## Lifecycle coverage (five stages)
+
+| Stage | What holds today | Owned by |
+|---|---|---|
+| 1 · Package development | Zod-validated authoring; roles / sharingRules / permissions seeded at boot with provenance | ADR-0057 D6, ADR-0086 D5, ADR-0049/0078 gates |
+| 2 · Distribution / install / upgrade / uninstall | Install-consent scopes (ADR-0025 — consent ≠ RBAC grants); namespaced, collision-free composition; provenance axis makes uninstall well-defined | ADR-0025/0028/0048/0086 |
+| 3 · Environment composition / assignment | Platform-owned assignment records (`sys_user_role` etc.); anti-escalation; union semantics | ADR-0057 D4 |
+| 4 · Runtime enforcement | The six-gate chain above; ~18 primitives enforced and CI-guarded | ADR-0056 D10 matrix |
+| 5 · Production / enterprise | Honest `[EXPERIMENTAL]` markers on the unenforced surface (field encryption, masking, compliance configs); enterprise authentication hardening staged per ADR-0069 | ADR-0049/0056 D8, ADR-0069 |
+
+## Governance: how "declared = enforced" is kept true
+
+Two CI mechanisms make the security posture a **checked artifact** rather than
+a belief:
+
+- **Conformance matrix** (`packages/dogfood/test/authz-conformance.matrix.ts`,
+  ADR-0056 D10): every authorization primitive sits in exactly one honest
+  state — `enforced` (must name its enforcement site; high-risk rows must
+  reference an end-to-end dogfood proof), `experimental`, or `removed`. A new
+  fail-open or a deleted proof fails CI.
+- **Liveness ledger** (`packages/spec/liveness/`, ADR-0049/0054): every
+  governed spec property is classified live / experimental / dead, with
+  author-time warnings for declared-but-unenforced flags.
+
+The operating rule behind both (ADR-0049): **never advertise a capability the
+runtime doesn't deliver** — enforce it, mark it experimental, or remove it.
+
+## Known gaps & roadmap
+
+The complete, prioritized gap map lives in issue **#2561** (the production
+"definition of done" for authorization). The headline items:
+
+- **Deny/muting layer** (ADR-0066 ⑦⑧) — union-only grants can't take access
+  away; needed for large-org governance and packaged-set adjustment.
+- **Capability registry** (ADR-0066 D1) — `systemPermissions` strings become
+  `sys_permission` records, with an authoring lint for unregistered
+  references (ADR-0066 ⑨).
+- **Per-operation `requiredPermissions`** (ADR-0066 ⑤) — read-open /
+  write-gated objects.
+- **Enterprise authentication** (ADR-0069) — password policy, lockout,
+  enforced MFA (P1); session lifecycle, IP allowlists (P2); SSO/SCIM (P3).
+- **Two doors** (ADR-0086 D6/D7) — package Access door under draft/publish;
+  env-admin door live, cross-package.
+
+## ADR index
+
+| ADR | Owns |
+|---|---|
+| [0049](/adr/0049-no-unenforced-security-properties) | No unenforced security properties (enforce / mark / remove) |
+| [0054](/adr/0054-prove-it-runs) | Prove-it-runs — high-risk classes need runtime proofs |
+| [0056](/adr/0056-permission-model-landing-verification) | Permission-model landing: OWD, anonymous deny default, D10 matrix |
+| [0057](/adr/0057-erp-authorization-core-business-units-and-scope-depth) | Business units, scope depth, declarative RBAC seeding, platform-owned assignment |
+| [0066](/adr/0066-unified-authorization-model) | Unified model: capability registry, posture, precedence, future refinements |
+| [0068](/adr/0068-identity-roles) | Built-in identity roles, `EvalUser` |
+| [0069](/adr/0069-enterprise-authentication-hardening) | Enterprise authentication hardening (phased) |
+| [0078](/adr/0078-no-inert-declarable-metadata) | No inert declarable metadata |
+| [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |
