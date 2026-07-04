@@ -577,7 +577,7 @@ export class SysMetadataRepository implements MetadataRepository {
   async promoteDraft(
     ref: MetaRef,
     opts: { actor: string; source?: string; message?: string; intent?: MetadataWriteIntent },
-  ): Promise<{ version: string; seq: number; item: MetadataItem }> {
+  ): Promise<{ version: string; seq: number; item: MetadataItem; packageId: string | null }> {
     this.assertOpen();
     // Read the RAW draft row (not just the body) so the promotion can carry
     // the draft's package binding onto the active row. ADR-0048 keys overlay
@@ -629,7 +629,10 @@ export class SysMetadataRepository implements MetadataRepository {
       // best-effort: a concurrent publisher may have already drained
       // the draft; the active row's authoritative content is intact.
     }
-    return result;
+    // Surface the promoted draft's package binding so publish-time
+    // materializers (ADR-0086 P2 — package-door permission sets) can stamp
+    // the data-plane row with the owning `package_id`.
+    return { ...result, packageId: draftPackageId };
   }
 
   /**

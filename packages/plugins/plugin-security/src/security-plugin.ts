@@ -4,7 +4,7 @@ import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { PermissionEvaluator } from './permission-evaluator.js';
 import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
-import { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
+import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-roles.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
@@ -335,6 +335,19 @@ export class SecurityPlugin implements Plugin {
           { operation: opCtx.operation, object: opCtx.object },
         );
       }
+
+      // [ADR-0086 P2 — 块2] Two-doors write gate. A permission set stamped
+      // `managed_by:'package'` is owned by the PACKAGE door: it is authored in
+      // the package and lands via publish (块1). The ADMIN door (this data-plane
+      // write path) must NOT edit, delete, or forge that provenance — otherwise
+      // the next boot re-seed silently reverts the admin's change and the
+      // provenance axis becomes a lie. Placed BEFORE the empty-principal
+      // fall-open and the CRUD check so it is a real, unconditional data-layer
+      // boundary — it holds even for a principal-less context and even for a
+      // superuser with modifyAllRecords. System/boot writes carry `isSystem` and
+      // already short-circuited the whole middleware above, so the seeder and
+      // the publish materializer pass straight through.
+      await this.assertPackageManagedWriteGate(opCtx);
 
       const roles = opCtx.context?.roles ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
@@ -743,6 +756,45 @@ export class SecurityPlugin implements Plugin {
         } catch (e) {
           ctx.logger.warn('[security] declared-permission seeding failed', { error: (e as Error).message });
         }
+        // [ADR-0086 P2 — 块1] Register the publish-time materializer so a
+        // permission set authored/edited through the PACKAGE door (saved as a
+        // `permission` draft, then published) lands in sys_permission_set with
+        // managed_by:'package' + package_id — the exact provenance the boot
+        // seeder stamps, only now on the runtime publish path instead of only at
+        // boot. Idempotent: registerPublishMaterializer replaces on re-run, and
+        // upsertPackagePermissionSet refuses to clobber env- or foreign-owned
+        // rows (ADR-0086 D4), so the two doors never overwrite each other.
+        try {
+          const protocol: any = ctx.getService?.('protocol');
+          if (protocol && typeof protocol.registerPublishMaterializer === 'function') {
+            protocol.registerPublishMaterializer(
+              'permission',
+              async (args: { body: unknown; packageId: string | null }) => {
+                const r = await upsertPackagePermissionSet(ql, args.body, args.packageId, ctx.logger);
+                const applied = r.seeded + r.updated;
+                // A publish that materialized nothing did NOT go live — report it
+                // as a failure with the reason so the package-door UI never shows
+                // a clean publish over a set the admin surface can't see (ADR-0049
+                // honesty). The upsert only lands zero rows when it refused: the
+                // name is owned by another package, owned by the env door, or the
+                // publish carried no owning package_id to stamp.
+                if (applied === 0) {
+                  return {
+                    success: false, inserted: 0, updated: 0,
+                    error: r.skippedForeign > 0
+                      ? 'permission set name is owned by another package'
+                      : r.skippedEnvAuthored > 0
+                        ? 'permission set name is owned by the environment (edit it through the admin door)'
+                        : 'permission set was not materialized (publish carried no owning package)',
+                  };
+                }
+                return { success: true, inserted: r.seeded, updated: r.updated };
+              },
+            );
+          }
+        } catch (e) {
+          ctx.logger.warn('[security] permission publish-materializer registration failed', { error: (e as Error).message });
+        }
         // [ADR-0068 D2] Seed the framework's reserved built-in identity roles
         // (platform_admin / org_*) so the role catalog is self-describing.
         try {
@@ -970,6 +1022,87 @@ export class SecurityPlugin implements Plugin {
    * multi-row predicate and returns `null` (multi-row writes route through the
    * `*Many` paths, out of scope for the by-id pre-image check).
    */
+  /**
+   * [ADR-0086 P2 — 块2] Two-doors data-layer write gate for `sys_permission_set`.
+   *
+   * A row with `managed_by:'package'` is owned by the package door (authored in
+   * the package, materialized on publish). The admin door — the generic
+   * `/api/v1/data/sys_permission_set` write path this middleware guards — must
+   * not mutate or delete it, nor may it forge that provenance on insert. Fails
+   * CLOSED and never depends on the caller's grants, so a platform admin with
+   * `modifyAllRecords` is blocked just the same. System/boot writes never reach
+   * here (the middleware short-circuits on `isSystem`), so the seeder and the
+   * publish materializer are unaffected.
+   */
+  private async assertPackageManagedWriteGate(opCtx: any): Promise<void> {
+    if (opCtx?.object !== 'sys_permission_set') return;
+    const op = opCtx.operation;
+    if (!['insert', 'update', 'delete', 'transfer', 'restore', 'purge'].includes(op)) return;
+
+    // (a) Reject any admin-door PAYLOAD that CLAIMS package provenance
+    //     (`managed_by:'package'`), on insert OR update, single object OR array
+    //     (`engine.insert`/`update` both accept `T | T[]` and route arrays
+    //     through this same middleware). Only the package publish path — which
+    //     carries `isSystem` and short-circuited the whole middleware above —
+    //     may stamp package provenance. This also closes update-to-forge: an
+    //     env row cannot be re-badged package-managed through the admin door.
+    const payloadRows = Array.isArray(opCtx.data)
+      ? opCtx.data
+      : (opCtx.data && typeof opCtx.data === 'object' ? [opCtx.data] : []);
+    if (payloadRows.some((r: unknown) => r && typeof r === 'object' && (r as Record<string, unknown>).managed_by === 'package')) {
+      throw new PermissionDeniedError(
+        `[Security] Access denied: cannot set 'managed_by:package' on a permission set through the admin door — ` +
+          `package permission sets are authored in their package and land via publish (ADR-0086 two-doors).`,
+        { operation: op, object: opCtx.object },
+      );
+    }
+    if (op === 'insert') return; // no existing row to protect
+
+    if (!this.ql) return;
+
+    const targetId = this.extractSingleId(opCtx);
+    if (targetId == null) {
+      // Multi-row / filter write with no single id. Deny ONLY if a package-owned
+      // row actually falls within the write's own filter — so a bulk edit that
+      // targets only env-authored rows still succeeds (no over-broad block). A
+      // whole-table write (no filter) matches every package row, so it is denied.
+      const writeWhere = opCtx?.options?.where;
+      const packageWhere = writeWhere && typeof writeWhere === 'object'
+        ? { $and: [writeWhere, { managed_by: 'package' }] }
+        : { managed_by: 'package' };
+      const hitsPackageRow = await this.ql
+        .findOne('sys_permission_set', { where: packageWhere, context: { isSystem: true } })
+        .catch(() => null);
+      if (hitsPackageRow) {
+        throw new PermissionDeniedError(
+          `[Security] Access denied: this '${op}' on 'sys_permission_set' targets one or more package-managed ` +
+            `rows — change those by editing their package and re-publishing, not through the admin door ` +
+            `(ADR-0086 two-doors separation).`,
+          { operation: op, object: opCtx.object },
+        );
+      }
+      return;
+    }
+
+    const existing = await this.ql
+      .findOne('sys_permission_set', { where: { id: targetId }, context: { isSystem: true } })
+      .catch(() => null);
+    if (existing && (existing as Record<string, unknown>).managed_by === 'package') {
+      const row = existing as Record<string, unknown>;
+      throw new PermissionDeniedError(
+        `[Security] Access denied: '${String(row.name ?? targetId)}' is a package-managed permission set ` +
+          `(managed_by:'package') — change it by editing its package and re-publishing, not through the ` +
+          `admin door (ADR-0086 two-doors separation).`,
+        {
+          operation: op,
+          object: opCtx.object,
+          recordId: targetId,
+          packageId: (row.package_id as string | null) ?? null,
+        },
+      );
+    }
+  }
+
   private extractSingleId(opCtx: any): string | number | bigint | null {
     const isScalar = (v: unknown): v is string | number | bigint =>
       v !== null && (typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint');

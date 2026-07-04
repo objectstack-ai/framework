@@ -1,7 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
+import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
 
 /** Minimal in-memory ql + registry for sys_permission_set seeding. */
 function makeQl(declared: any[] = []) {
@@ -109,5 +109,62 @@ describe('bootstrapDeclaredPermissions (ADR-0086 D5)', () => {
     const r = await bootstrapDeclaredPermissions(ql, undefined);
     expect(r.seeded).toBe(1);
     expect(ql.rows[0].package_id).toBe('com.example.declared');
+  });
+});
+
+// ADR-0086 P2 块1 — the publish-time materializer shares this helper. Here the
+// packageId is supplied explicitly (the draft's binding), not read off the body.
+describe('upsertPackagePermissionSet (ADR-0086 P2 — publish materialization)', () => {
+  const publishedBody = (over: Record<string, any> = {}) => ({
+    name: 'crm_sales_rep',
+    label: 'Sales Rep',
+    objects: { crm_lead: { allowRead: true } },
+    ...over,
+  });
+
+  it('materializes a published set into a package-managed row under the draft packageId', async () => {
+    const ql = makeQl();
+    const r = await upsertPackagePermissionSet(ql, publishedBody(), 'com.example.crm');
+    expect(r.seeded).toBe(1);
+    expect(ql.rows[0].managed_by).toBe('package');
+    expect(ql.rows[0].package_id).toBe('com.example.crm');
+    expect(JSON.parse(ql.rows[0].object_permissions)).toEqual({ crm_lead: { allowRead: true } });
+  });
+
+  it('re-publish of its OWN row updates in place (idempotent)', async () => {
+    const ql = makeQl();
+    await upsertPackagePermissionSet(ql, publishedBody(), 'com.example.crm');
+    const r2 = await upsertPackagePermissionSet(
+      ql, publishedBody({ objects: { crm_lead: { allowRead: true, allowEdit: true } } }), 'com.example.crm',
+    );
+    expect(r2.updated).toBe(1);
+    expect(ql.rows.length).toBe(1);
+    expect(JSON.parse(ql.rows[0].object_permissions)).toEqual({ crm_lead: { allowRead: true, allowEdit: true } });
+  });
+
+  it('refuses to clobber an env-authored row of the same name (two-doors: env door owns it)', async () => {
+    const ql = makeQl();
+    ql.rows.push({ id: 'ps_env', name: 'crm_sales_rep', managed_by: 'user', object_permissions: '{"kept":true}' });
+    const r = await upsertPackagePermissionSet(ql, publishedBody(), 'com.example.crm');
+    expect(r.skippedEnvAuthored).toBe(1);
+    expect(r.seeded + r.updated).toBe(0);
+    expect(ql.rows[0].object_permissions).toBe('{"kept":true}');
+  });
+
+  it('refuses a name owned by a DIFFERENT package', async () => {
+    const ql = makeQl();
+    ql.rows.push({ id: 'ps_1', name: 'crm_sales_rep', managed_by: 'package', package_id: 'com.example.other', object_permissions: '{}' });
+    const r = await upsertPackagePermissionSet(ql, publishedBody(), 'com.example.crm');
+    expect(r.skippedForeign).toBe(1);
+    expect(ql.rows[0].package_id).toBe('com.example.other');
+  });
+
+  it('skips (does not materialize) when the publish carries no packageId', async () => {
+    const ql = makeQl();
+    const warns: string[] = [];
+    const r = await upsertPackagePermissionSet(ql, publishedBody(), null, { info: () => {}, warn: (m) => warns.push(m) });
+    expect(r.seeded).toBe(0);
+    expect(ql.rows.length).toBe(0);
+    expect(warns.some((w) => w.includes('no owning package'))).toBe(true);
   });
 });

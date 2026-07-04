@@ -695,6 +695,30 @@ function detectDestructiveObjectChanges(prev: any, next: any): Array<{
     return issues;
 }
 
+/**
+ * Result of projecting a published metadata body into its data-plane
+ * representation. `success:false` with an `error` is the surfaced-not-thrown
+ * failure contract — publishing the metadata itself always succeeds.
+ */
+export interface PublishMaterializeResult {
+    success: boolean;
+    inserted: number;
+    updated: number;
+    error?: string;
+}
+
+/**
+ * Publish-time materializer (ADR-0086 P2). Receives the just-published body
+ * plus the draft's package binding and org scope. Registered per metadata type
+ * via {@link ObjectStackProtocolImplementation.registerPublishMaterializer}.
+ */
+export type PublishMaterializer = (args: {
+    body: unknown;
+    packageId: string | null;
+    organizationId: string | null;
+    actor: string;
+}) => Promise<PublishMaterializeResult>;
+
 export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     private engine: MetadataHostEngine;
     private getServicesRegistry?: () => Map<string, any>;
@@ -717,6 +741,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      */
     private overlayRepos = new Map<string, SysMetadataRepository>();
 
+    /**
+     * Publish-time materializers keyed by singular metadata type (ADR-0086 P2).
+     * When a draft of a registered type is published, its body is projected
+     * into a data-plane representation the admin surface reads — e.g. a
+     * `permission` set is upserted into `sys_permission_set` with
+     * `managed_by:'package'`. Domain plugins own the projection (the generic
+     * protocol layer must not know `sys_permission_set`'s field shape), so they
+     * register here at init. Best-effort — a materializer failure is surfaced on
+     * the publish response, never thrown (publishing metadata always succeeds
+     * independently; the same contract as `seed` apply).
+     */
+    private publishMaterializers = new Map<string, PublishMaterializer>();
+
     constructor(
         engine: IDataEngine,
         getServicesRegistry?: () => Map<string, any>,
@@ -727,6 +764,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
         this.environmentId = environmentId;
+    }
+
+    /**
+     * Register a publish-time materializer for a metadata type (ADR-0086 P2).
+     * Called by domain plugins at init (e.g. plugin-security registers the
+     * `permission` → `sys_permission_set` projection). The singular type name is
+     * used — `permissions` and `permission` both resolve here. One materializer
+     * per type; a second registration replaces the first (idempotent re-init).
+     */
+    registerPublishMaterializer(type: string, materializer: PublishMaterializer): void {
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        this.publishMaterializers.set(singular, materializer);
     }
 
     /**
@@ -4042,6 +4091,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             error?: string;
             errors?: unknown[];
         };
+        /**
+         * Present when a publish-time materializer is registered for this type
+         * (ADR-0086 P2 — e.g. `permission` → `sys_permission_set`): the result
+         * of projecting the published body into its data-plane row. Best-effort,
+         * same contract as `seedApplied` — surfaced, never thrown.
+         */
+        materializeApplied?: PublishMaterializeResult;
     }> {
         const singularType = PLURAL_TO_SINGULAR[request.type] ?? request.type;
         if (!ObjectStackProtocolImplementation.isOverlayAllowed(singularType)
@@ -4098,6 +4154,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 seq: number;
                 message?: string;
                 seedApplied?: { success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] };
+                materializeApplied?: PublishMaterializeResult;
             } = {
                 success: true,
                 version: result.version,
@@ -4111,6 +4168,29 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             // the promote — no read-back, so no org-scope resolution pitfalls.
             if (singularType === 'seed' && !request._skipSeedApply) {
                 response.seedApplied = await this.applySeedBodies([result.item.body], orgId);
+            }
+            // Publish-time materializer (ADR-0086 P2): project the published body
+            // into its data-plane row (e.g. `permission` → `sys_permission_set`
+            // with `managed_by:'package'`). Unlike seeds this needs no batch
+            // ordering — permission sets carry no cross-item references — so it
+            // runs on every publish path, package-draft batch included. The
+            // owning `package_id` rides on `result.packageId` (the draft's
+            // binding), so a package-door set materializes under the right owner.
+            const materializer = this.publishMaterializers.get(singularType);
+            if (materializer) {
+                try {
+                    response.materializeApplied = await materializer({
+                        body: result.item.body,
+                        packageId: result.packageId,
+                        organizationId: orgId,
+                        actor: request.actor ?? 'system',
+                    });
+                } catch (e: any) {
+                    response.materializeApplied = {
+                        success: false, inserted: 0, updated: 0,
+                        error: e?.message ?? 'materialize failed',
+                    };
+                }
             }
             return response;
         } catch (err: any) {
@@ -4244,6 +4324,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         /** Aggregate result of materializing every published `seed` (absent when no seeds). */
         seedApplied?: { success: boolean; inserted: number; updated: number; error?: string; errors?: unknown[] };
         /**
+         * ADR-0086 P2 — aggregate result of publish-time materializers across the
+         * batch (e.g. `permission` → `sys_permission_set`). Absent when no
+         * published item had a registered materializer. `failures` names each
+         * item whose projection did NOT land (e.g. a permission-set name owned by
+         * the env door or another package) so the caller surfaces it instead of
+         * reporting a clean publish over a set that never went live.
+         */
+        materializeApplied?: {
+            success: boolean;
+            inserted: number;
+            updated: number;
+            failures: Array<{ type: string; name: string; error: string }>;
+        };
+        /**
          * ADR-0038 L3 — post-publish runtime probe report (absent when nothing
          * was publishable). One real read per published artifact: seeded
          * objects must have rows, views must be readable, dashboard widgets'
@@ -4295,6 +4389,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
         const publishedSeqs: number[] = [];
+        // ADR-0086 P2 — accumulate each item's publish-time materialization so a
+        // batch package publish surfaces a permission set that failed to go live
+        // (owned by the env door / another package), not just a clean count.
+        const materialize = { any: false, inserted: 0, updated: 0, failures: [] as Array<{ type: string; name: string; error: string }> };
 
         for (const d of ordered) {
             try {
@@ -4316,6 +4414,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 });
                 published.push({ type: d.type, name: d.name, version: r.version });
                 if (typeof r.seq === 'number') publishedSeqs.push(r.seq);
+                if (r.materializeApplied) {
+                    materialize.any = true;
+                    materialize.inserted += r.materializeApplied.inserted;
+                    materialize.updated += r.materializeApplied.updated;
+                    if (!r.materializeApplied.success) {
+                        materialize.failures.push({
+                            type: d.type, name: d.name,
+                            error: r.materializeApplied.error ?? 'materialize failed',
+                        });
+                    }
+                }
             } catch (e: any) {
                 failed.push({
                     type: d.type,
@@ -4384,6 +4493,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             published,
             failed,
             ...(seedApplied ? { seedApplied } : {}),
+            ...(materialize.any
+                ? { materializeApplied: {
+                    success: materialize.failures.length === 0,
+                    inserted: materialize.inserted,
+                    updated: materialize.updated,
+                    failures: materialize.failures,
+                } }
+                : {}),
             ...(probes ? { probes } : {}),
             ...(commit ? { commitId: commit.commitId } : {}),
         };

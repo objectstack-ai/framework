@@ -942,6 +942,155 @@ describe('SecurityPlugin', () => {
       await expect(h.run(opCtx)).resolves.toBeDefined();
     });
   });
+
+  // ── ADR-0086 P2 (块2) — two-doors data-layer write gate ────────────────
+  // A `managed_by:'package'` sys_permission_set row is owned by the package
+  // door; the admin data-plane write path must refuse to mutate it, even for a
+  // superuser (modifyAllRecords). System/boot writes carry isSystem and never
+  // reach the gate.
+  describe('two-doors write gate (sys_permission_set managed_by:package)', () => {
+    // Superuser set — proves the gate is NOT grant-gated (blocks even
+    // modifyAllRecords) and carries no RLS so the pre-image check is a no-op.
+    const adminSet: PermissionSet = {
+      name: 'admin_full_access', label: 'Admin', isProfile: true,
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true } },
+    } as any;
+    const adminCtx = { userId: 'admin1', tenantId: 'org-1', roles: [], permissions: ['admin_full_access'] };
+
+    const runGate = async (opCtx: any, findOneImpl?: (q: any) => any) => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'admin_full_access' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [adminSet],
+        objectFields: ['id', 'name', 'managed_by', 'package_id'],
+        ...(findOneImpl ? { findOneImpl } : {}),
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      return harness.run(opCtx);
+    };
+
+    it('DENIES an admin update of a package-managed set (even with modifyAllRecords)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_pkg', label: 'hijack' }, options: { where: { id: 'ps_pkg' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', name: 'crm_sales_rep', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an admin delete of a package-managed set', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { id: 'ps_pkg' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', name: 'crm_sales_rep', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS an admin update of an env-authored set (managed_by:user)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_env', label: 'renamed' }, options: { where: { id: 'ps_env' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_env', name: 'my_custom', managed_by: 'user' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('DENIES an admin-door insert that forges package provenance', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: { name: 'forged', managed_by: 'package', package_id: 'com.example.crm' },
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES a bulk/ARRAY insert that forges package provenance on any element', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: [
+          { name: 'ok_custom' },
+          { name: 'forged', managed_by: 'package', package_id: 'com.example.crm' },
+        ],
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an update that RE-BADGES an env row as package-managed (update-to-forge)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_env', managed_by: 'package', package_id: 'com.example.crm' },
+        options: { where: { id: 'ps_env' } },
+        context: adminCtx,
+      };
+      // Even though the EXISTING row is env-owned, the payload forges provenance.
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_env', name: 'my_custom', managed_by: 'user' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES even a principal-less write to a package row (gate is before the fall-open)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { id: 'ps_pkg' } },
+        context: {}, // no roles, no permissions, no userId, not isSystem
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a normal admin-door insert (no forged provenance)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: { name: 'my_custom', label: 'Custom' },
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).resolves.toBeDefined();
+    });
+
+    it('DENIES a filter write whose filter matches a package-managed row', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { active: true } }, // no single id → filter path
+        context: adminCtx,
+      };
+      await expect(
+        // the gate probes for a package row within the filter → found → deny
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a filter write that matches only env-authored rows (no over-broad block)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { label: 'bulk-rename' }, options: { where: { managed_by: 'user' } },
+        context: adminCtx,
+      };
+      await expect(
+        // the gate's package-row probe finds nothing within the filter → allow
+        runGate(opCtx, () => null),
+      ).resolves.toBeDefined();
+    });
+
+    it('lets system/boot writes through (isSystem bypass) even on a package row', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_pkg' }, options: { where: { id: 'ps_pkg' } },
+        context: { isSystem: true },
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).resolves.toBeDefined();
+    });
+  });
 });
 // ---------------------------------------------------------------------------
 describe('PermissionEvaluator', () => {

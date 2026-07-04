@@ -85,12 +85,82 @@ function toRowFields(ps: any): Record<string, any> {
   };
 }
 
+export interface PermissionSeedOutcome {
+  seeded: number;
+  updated: number;
+  skippedEnvAuthored: number;
+  skippedForeign: number;
+}
+
+/**
+ * Upsert ONE declared/published PermissionSet body into `sys_permission_set`
+ * under the owning `packageId`, applying the ADR-0086 provenance rules
+ * (own-row re-seed, foreign-package refuse, env-authored never clobbered).
+ * Shared by the boot seeder (every declared set) and the publish-time
+ * materializer (ADR-0086 P2 — a package-door set promoted from a draft). Returns
+ * a one-hot outcome so callers can aggregate.
+ */
+export async function upsertPackagePermissionSet(
+  ql: any,
+  ps: any,
+  packageId: string | null | undefined,
+  logger?: SeedOptions['logger'],
+): Promise<PermissionSeedOutcome> {
+  const out: PermissionSeedOutcome = { seeded: 0, updated: 0, skippedEnvAuthored: 0, skippedForeign: 0 };
+  if (!ps?.name) return out;
+  // A `managed_by:'package'` row without a `package_id` would make uninstall
+  // undefined again — the exact ambiguity ADR-0086 D3 exists to remove — so a
+  // set with no resolvable owner is skipped rather than materialized unowned.
+  if (!packageId) {
+    logger?.warn?.('[security] permission set has no owning package — not materialized', { name: ps.name });
+    return out;
+  }
+
+  const existing = (await tryFind(ql, 'sys_permission_set', { name: ps.name }, 1))[0];
+  if (!existing?.id) {
+    const created = await tryInsert(ql, 'sys_permission_set', {
+      id: genId('ps'),
+      name: ps.name,
+      ...toRowFields(ps),
+      active: true,
+      package_id: packageId,
+      managed_by: 'package',
+    });
+    if (created) out.seeded += 1;
+    return out;
+  }
+
+  if (existing.managed_by === 'package') {
+    if (existing.package_id === packageId) {
+      // Our own row — re-seed so the record always reflects the shipped/published
+      // declaration (idempotent; covers version bumps without bookkeeping).
+      if (await tryUpdate(ql, 'sys_permission_set', { id: existing.id, ...toRowFields(ps) })) {
+        out.updated += 1;
+      }
+    } else {
+      // Package-namespaced object api names make set-name collisions a
+      // packaging bug, not a merge case — refuse loudly (ADR-0086 D4:
+      // a package never writes into a foreign record).
+      out.skippedForeign += 1;
+      logger?.warn?.('[security] permission set name owned by another package — skipped', {
+        name: ps.name, declaredBy: packageId, ownedBy: existing.package_id,
+      });
+    }
+    return out;
+  }
+
+  // `platform`/`user` — or absent (legacy rows, incl. bootstrapPlatformAdmin
+  // defaults): env-authored config. Never clobbered by package materialization.
+  out.skippedEnvAuthored += 1;
+  return out;
+}
+
 export async function bootstrapDeclaredPermissions(
   ql: any,
   metadataService: any,
   options: SeedOptions = {},
-): Promise<{ seeded: number; updated: number; skippedEnvAuthored: number; skippedForeign: number }> {
-  const out = { seeded: 0, updated: 0, skippedEnvAuthored: 0, skippedForeign: 0 };
+): Promise<PermissionSeedOutcome> {
+  const out: PermissionSeedOutcome = { seeded: 0, updated: 0, skippedEnvAuthored: 0, skippedForeign: 0 };
   if (!ql || typeof ql.find !== 'function' || typeof ql.insert !== 'function') return out;
 
   let sets: any[] = readDeclared(ql, 'permission');
@@ -105,52 +175,13 @@ export async function bootstrapDeclaredPermissions(
   for (const ps of sets) {
     if (!ps?.name) continue;
     // Registry provenance first (ADR-0010 `_packageId`), author-declared
-    // spec `packageId` (ADR-0086 D3) as fallback. A declared set with NO
-    // resolvable owner is skipped: a `managed_by:'package'` row without a
-    // `package_id` would make uninstall undefined again — the exact
-    // ambiguity D3 exists to remove.
+    // spec `packageId` (ADR-0086 D3) as fallback.
     const packageId: string | undefined = ps._packageId ?? ps.packageId ?? undefined;
-    if (!packageId) {
-      options.logger?.warn?.('[security] declared permission set has no owning package — not seeded', { name: ps.name });
-      continue;
-    }
-
-    const existing = (await tryFind(ql, 'sys_permission_set', { name: ps.name }, 1))[0];
-    if (!existing?.id) {
-      const created = await tryInsert(ql, 'sys_permission_set', {
-        id: genId('ps'),
-        name: ps.name,
-        ...toRowFields(ps),
-        active: true,
-        package_id: packageId,
-        managed_by: 'package',
-      });
-      if (created) out.seeded += 1;
-      continue;
-    }
-
-    if (existing.managed_by === 'package') {
-      if (existing.package_id === packageId) {
-        // Our own row — re-seed so the record always reflects the shipped
-        // declaration (idempotent; covers version bumps without bookkeeping).
-        if (await tryUpdate(ql, 'sys_permission_set', { id: existing.id, ...toRowFields(ps) })) {
-          out.updated += 1;
-        }
-      } else {
-        // Package-namespaced object api names make set-name collisions a
-        // packaging bug, not a merge case — refuse loudly (ADR-0086 D4:
-        // a package never writes into a foreign record).
-        out.skippedForeign += 1;
-        options.logger?.warn?.('[security] declared permission set name owned by another package — skipped', {
-          name: ps.name, declaredBy: packageId, ownedBy: existing.package_id,
-        });
-      }
-      continue;
-    }
-
-    // `platform`/`user` — or absent (legacy rows, incl. bootstrapPlatformAdmin
-    // defaults): env-authored config. Never clobbered by package seeding.
-    out.skippedEnvAuthored += 1;
+    const r = await upsertPackagePermissionSet(ql, ps, packageId, options.logger);
+    out.seeded += r.seeded;
+    out.updated += r.updated;
+    out.skippedEnvAuthored += r.skippedEnvAuthored;
+    out.skippedForeign += r.skippedForeign;
   }
 
   options.logger?.info?.('[security] declared permission sets seeded into sys_permission_set (ADR-0086 D5)', {
