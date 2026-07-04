@@ -97,22 +97,12 @@ export const TaskViews = defineView({
         { field: 'estimate_hours' },
       ],
 
-      // ADR-0047 — end-user quick-filter dropdowns (Airtable "User
-      // filters", Elements: dropdowns). Options/labels are inferred from
-      // the field definitions; `priority` shows per-option record counts.
-      // Counterpart to the default view's `tabs` — one element style per
-      // view, never both.
-      userFilters: {
-        element: 'dropdown',
-        fields: [
-          { field: 'status' },
-          { field: 'priority', showCount: true },
-          { field: 'done', type: 'boolean' },
-          // Lookup field — renders as a record-picker dropdown (the
-          // CRM-parity case: filter by a referenced record, e.g. owner).
-          { field: 'project' },
-        ],
-      },
+      // ADR-0053 — NO `userFilters` here: on an object list view ("views"
+      // mode) the console suppresses them by design (the view switcher is
+      // the only nav control; objectui warns since #2220). End-user filter
+      // elements live in interface pages ("filters" mode) — see
+      // task-workbench / task-triage / active-projects *.page.ts. Status
+      // presets on this object are the named views above instead.
     },
 
     // 1 ── Grid ─────────────────────────────────────────────────────────
