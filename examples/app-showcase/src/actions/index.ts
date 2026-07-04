@@ -117,7 +117,9 @@ export const LogTimeAction = defineAction({
   icon: 'clock',
   objectName: task,
   type: 'form',
-  target: 'showcase_task.default',
+  // Targets the `edit` form view — `showcase_task.default` is the LIST view
+  // (the container's main `list` implicitly claims the `default` key).
+  target: 'showcase_task.edit',
   // `record_section` so it surfaces in the Task Detail quick-actions bar too.
   locations: ['record_header', 'record_related', 'record_section'],
   refreshAfter: true,

@@ -103,3 +103,51 @@ describe('expandViewContainer — default list with no listViews dup', () => {
     expect(items[0].isDefault).toBe(true);
   });
 });
+
+describe('expandViewContainer — name collisions carry _diagnostics warnings (#2554)', () => {
+  it('warns when formViews.default collides with the implicit default list', () => {
+    const items = expandViewContainer('task', {
+      list: { type: 'grid', label: 'All Tasks', columns: ['title'], data: { provider: 'object', object: 'task' } },
+      formViews: {
+        default: { type: 'simple', data: { provider: 'object', object: 'task' }, sections: [] },
+      },
+    });
+    const list = items.find((i) => i.viewKind === 'list');
+    const form = items.find((i) => i.viewKind === 'form');
+    // Rename behaviour itself is unchanged (backward compat)…
+    expect(list?.name).toBe('task.default');
+    expect(form?.name).toBe('task.default_2');
+    // …but the renamed item now carries a loud, machine-readable warning.
+    expect(list?._diagnostics).toBeUndefined();
+    expect(form?._diagnostics?.valid).toBe(true);
+    expect(form?._diagnostics?.warnings).toHaveLength(1);
+    expect(form?._diagnostics?.warnings[0].path).toBe('name');
+    expect(form?._diagnostics?.warnings[0].message).toContain("'task.default'");
+    expect(form?._diagnostics?.warnings[0].message).toContain("'task.default_2'");
+  });
+
+  it('warns when a formViews key collides with a listViews key', () => {
+    const items = expandViewContainer('task', {
+      listViews: {
+        mine: { type: 'grid', label: 'Mine', columns: ['title'], data: { provider: 'object', object: 'task' } },
+      },
+      formViews: {
+        mine: { type: 'simple', data: { provider: 'object', object: 'task' }, sections: [] },
+      },
+    });
+    const form = items.find((i) => i.viewKind === 'form');
+    expect(form?.name).toBe('task.mine_2');
+    expect(form?._diagnostics?.warnings?.[0].message).toContain("'task.mine'");
+  });
+
+  it('does not stamp _diagnostics on collision-free expansions', () => {
+    const items = expandViewContainer('task', {
+      list: { type: 'grid', label: 'All', columns: ['title'], data: { provider: 'object', object: 'task' } },
+      formViews: {
+        edit: { type: 'simple', data: { provider: 'object', object: 'task' }, sections: [] },
+      },
+    });
+    expect(items).toHaveLength(2);
+    for (const item of items) expect(item._diagnostics).toBeUndefined();
+  });
+});

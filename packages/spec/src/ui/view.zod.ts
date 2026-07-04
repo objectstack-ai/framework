@@ -1131,6 +1131,11 @@ export interface ExpandedViewItem {
   isDefault?: boolean;
   order: number;
   scope: 'package';
+  /** Non-blocking expansion diagnostics (MetadataValidationResult wire shape).
+   *  Present only when the item's name had to be rewritten to avoid a
+   *  collision — loaders surface `warnings` in their boot/HMR logs and
+   *  Studio can badge the view. */
+  _diagnostics?: { valid: boolean; warnings: Array<{ path: string; message: string }> };
 }
 
 /** True when a raw view artifact still uses the aggregated container shape
@@ -1162,6 +1167,29 @@ function uniqueViewName(base: string, used: Set<string>): string {
   return name;
 }
 
+/** Stamp a rename warning on an expanded item whose `<object>.<key>` name was
+ *  already taken (e.g. `formViews.default` vs the implicit default `list`).
+ *  The rename itself is kept for backward compatibility — this makes it LOUD:
+ *  loaders log the warning and Studio can render it, so authors discover that
+ *  references to the requested name (form action `target`s, navigation
+ *  `viewName`s) resolve to a DIFFERENT view. */
+function stampRenameWarning(item: ExpandedViewItem, requestedName: string): void {
+  if (item.name === requestedName) return;
+  item._diagnostics = {
+    valid: true,
+    warnings: [{
+      path: 'name',
+      message:
+        `View key collision: '${requestedName}' is already registered by another view in this `
+        + `defineView container (list and form views share one '<object>.<key>' namespace, and the `
+        + `default 'list' implicitly claims '<object>.default'). This ${item.viewKind} view was `
+        + `renamed to '${item.name}'. References targeting '${requestedName}' — form action `
+        + `targets, navigation viewNames — will resolve to the OTHER view. Rename the view key `
+        + `to something unique to remove this warning.`,
+    }],
+  };
+}
+
 function cloneViewConfig(v: any): any {
   try {
     return structuredClone(v);
@@ -1191,9 +1219,12 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
     container.listViews && typeof container.listViews === 'object' ? container.listViews : {};
   for (const [k, v] of Object.entries<any>(listViews)) {
     if (!v || typeof v !== 'object') continue;
-    const name = uniqueViewName(`${object}.${k}`, used);
+    const requested = `${object}.${k}`;
+    const name = uniqueViewName(requested, used);
     listSigToName.set(viewSignature(v), name);
-    out.push({ name, object, viewKind: 'list', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
+    const item: ExpandedViewItem = { name, object, viewKind: 'list', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
   }
   const defaultList = container.list;
   let defaultListName: string | undefined;
@@ -1203,8 +1234,11 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
       defaultListName = dup; // already represented by a named listViews entry
     } else {
       const key = typeof defaultList.name === 'string' && defaultList.name ? defaultList.name : 'default';
-      const name = uniqueViewName(`${object}.${key}`, used);
-      out.push({ name, object, viewKind: 'list', label: defaultList.label, config: cloneViewConfig(defaultList), order: order++, scope: 'package' });
+      const requested = `${object}.${key}`;
+      const name = uniqueViewName(requested, used);
+      const item: ExpandedViewItem = { name, object, viewKind: 'list', label: defaultList.label, config: cloneViewConfig(defaultList), order: order++, scope: 'package' };
+      stampRenameWarning(item, requested);
+      out.push(item);
       defaultListName = name;
     }
   }
@@ -1220,16 +1254,22 @@ export function expandViewContainer(object: string, container: any): ExpandedVie
     container.formViews && typeof container.formViews === 'object' ? container.formViews : {};
   for (const [k, v] of Object.entries<any>(formViews)) {
     if (!v || typeof v !== 'object') continue;
-    const name = uniqueViewName(`${object}.${k}`, used);
+    const requested = `${object}.${k}`;
+    const name = uniqueViewName(requested, used);
     formSigSeen.add(viewSignature(v));
-    out.push({ name, object, viewKind: 'form', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
+    const item: ExpandedViewItem = { name, object, viewKind: 'form', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
   }
   const defaultForm = container.form;
   let defaultFormName: string | undefined;
   if (defaultForm && typeof defaultForm === 'object' && !formSigSeen.has(viewSignature(defaultForm))) {
     const key = typeof defaultForm.name === 'string' && defaultForm.name ? defaultForm.name : 'form';
-    const name = uniqueViewName(`${object}.${key}`, used);
-    out.push({ name, object, viewKind: 'form', label: defaultForm.label, config: cloneViewConfig(defaultForm), order: order++, scope: 'package' });
+    const requested = `${object}.${key}`;
+    const name = uniqueViewName(requested, used);
+    const item: ExpandedViewItem = { name, object, viewKind: 'form', label: defaultForm.label, config: cloneViewConfig(defaultForm), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
     defaultFormName = name;
   }
   if (!defaultFormName && out.length > formStart) defaultFormName = out[formStart].name;

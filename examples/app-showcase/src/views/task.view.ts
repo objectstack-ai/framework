@@ -230,7 +230,12 @@ export const TaskViews = defineView({
 
   formViews: {
     // simple ── single-section form ──────────────────────────────────────
-    default: {
+    // Keyed `edit`, NOT `default`: the container's main `list` implicitly
+    // claims `showcase_task.default`, and list + form views share one
+    // `<object>.<key>` namespace — a `default` form key would be renamed to
+    // `default_2` at expansion (with a boot warning), breaking any action
+    // `target` that references it. See framework issue #2554.
+    edit: {
       type: 'simple',
       data,
       sections: [
