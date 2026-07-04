@@ -217,6 +217,29 @@ export class HttpDispatcher {
     }
 
     /**
+     * Build an error response from a THROWN service/protocol error, preserving
+     * the error's own HTTP `status` and — critically — any structured `issues`
+     * array (e.g. spec-validation `{ path, message, code }[]` from
+     * `protocol.saveMetaItem`). The plain `error(msg, code)` path collapses a
+     * validation failure to a single message, so the UI can only show a generic
+     * banner; carrying `issues` (and the semantic `code`) in `details` lets it
+     * map each error back to the offending field. Falls back to `fallbackStatus`
+     * and behaves exactly like `error()` for errors that carry neither.
+     */
+    private errorFromThrown(e: any, fallbackStatus = 500) {
+        const status =
+            typeof e?.status === 'number' ? e.status
+            : typeof e?.statusCode === 'number' ? e.statusCode
+            : fallbackStatus;
+        const issues = Array.isArray(e?.issues) ? e.issues : undefined;
+        const details =
+            issues || e?.code
+                ? { ...(e?.code ? { code: e.code } : {}), ...(issues ? { issues } : {}) }
+                : undefined;
+        return this.error(e?.message ?? String(e), status, details);
+    }
+
+    /**
      * ADR-0046: `doc` list responses omit `content` by default — manuals
      * are the one metadata payload that grows unbounded, and the list
      * surface only needs `name` + `label`. `?include=content` opts back in
@@ -1489,7 +1512,10 @@ export class HttpDispatcher {
                         const result = await protocol.saveMetaItem({ type, name, item: body, organizationId, ...(packageId ? { packageId } : {}) });
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
-                        return { handled: true, response: this.error(e.message, 400) };
+                        // Preserve the 422 + structured spec-validation `issues` so
+                        // the Studio can point at the offending field, not just a
+                        // generic banner (the old path hardcoded 400 + dropped them).
+                        return { handled: true, response: this.errorFromThrown(e, 400) };
                     }
                 }
 
@@ -2200,7 +2226,10 @@ export class HttpDispatcher {
                         }
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
-                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                        // Carry spec-validation `issues` (and the real 422 status —
+                        // the protocol sets `.status`, not `.statusCode`) through to
+                        // the publish surface so failures are field-anchored.
+                        return { handled: true, response: this.errorFromThrown(e, 500) };
                     }
                 }
                 return { handled: true, response: this.error('Draft publishing not supported', 501) };
