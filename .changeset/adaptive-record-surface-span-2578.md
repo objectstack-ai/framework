@@ -37,4 +37,11 @@ object — silently never renders) and `absolute-colspan-discouraged` (steers au
 to `span: 'full'`). Both warnings, with fix hints, held to the same bar for AI and
 hand authors.
 
+**`NavigationConfig.size` (new) replaces pixel `width`.** A T-shirt bucket
+(`auto`/sm/md/lg/xl/full, default `auto`, aligned with `FormView.modalSize`) for a
+drawer/modal detail overlay. `width`/`drawerWidth` (pixel) are deprecated: a pixel
+width cannot be authored blind — the author (often an AI) does not know the client
+viewport. `auto` means the renderer derives the size from field count and clamps to
+the viewport, so AI writes nothing.
+
 All additive: no exports removed, no behavior change for existing metadata.
