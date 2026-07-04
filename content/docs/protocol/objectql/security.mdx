@@ -100,9 +100,9 @@ Beyond the four CRUD flags, the schema also exposes lifecycle and super-user gra
 | Flag | Meaning |
 | --- | --- |
 | `allowCreate` / `allowRead` / `allowEdit` / `allowDelete` | Standard CRUD |
-| `allowTransfer` | Change record ownership |
-| `allowRestore` | Restore from trash (undelete) |
-| `allowPurge` | Permanently delete (hard delete / GDPR) |
+| `allowTransfer` | Change record ownership — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
+| `allowRestore` | Restore from trash (undelete) — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
+| `allowPurge` | Permanently delete (hard delete / GDPR) — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
 | `viewAllRecords` | Read every record, bypassing sharing & ownership |
 | `modifyAllRecords` | Write every record, bypassing sharing & ownership |
 

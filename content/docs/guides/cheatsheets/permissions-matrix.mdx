@@ -30,7 +30,11 @@ ObjectStack's `ObjectPermission` schema defines these boolean flags for object a
 | **Modify All** | `modifyAllRecords` | Edit/delete all records regardless of ownership | Full object access (bypass sharing) |
 
 <Callout type="tip">
-**Super-user bypass:** When `modifyAllRecords` is set it satisfies write checks (`allowEdit`/`allowDelete`) on any record; `viewAllRecords` (or `modifyAllRecords`) satisfies `allowRead` on any record — both bypass ownership and sharing. See `packages/plugins/plugin-security/src/permission-evaluator.ts`.
+**Super-user bypass:** When `modifyAllRecords` is set it satisfies write checks (`allowEdit`/`allowDelete`, and the lifecycle class `allowTransfer`/`allowRestore`/`allowPurge`) on any record; `viewAllRecords` (or `modifyAllRecords`) satisfies `allowRead` on any record — both bypass ownership and sharing. See `packages/plugins/plugin-security/src/permission-evaluator.ts`.
+</Callout>
+
+<Callout type="warn">
+**Lifecycle operations are pending:** the `transfer` / `restore` / `purge` operations do not exist in ObjectQL yet (roadmap M2). Their RBAC gate is already mapped in the permission evaluator — the moment the operations ship they are denied unless the matching flag (or `modifyAllRecords`) is granted — but authoring these flags today grants nothing (#1883).
 </Callout>
 
 ---
