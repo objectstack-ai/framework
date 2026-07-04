@@ -1,5 +1,16 @@
 # @objectstack/hono
 
+## 12.0.0
+
+### Patch Changes
+
+- Updated dependencies [9693a36]
+- Updated dependencies [2d567cb]
+- Updated dependencies [e3498fb]
+  - @objectstack/runtime@12.0.0
+  - @objectstack/plugin-hono-server@12.0.0
+  - @objectstack/types@12.0.0
+
 ## 11.10.0
 
 ### Patch Changes
