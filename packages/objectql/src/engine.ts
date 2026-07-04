@@ -1060,6 +1060,9 @@ export class ObjectQL implements IDataEngine {
                       // the per-view `package` layer the switcher + Studio consume.
                       if (key === 'views' && isAggregatedViewContainer(toRegister)) {
                           for (const vi of expandViewContainer(itemName, toRegister)) {
+                              for (const w of vi._diagnostics?.warnings ?? []) {
+                                  this.logger.warn(`View expansion warning for '${vi.name}': ${w.message}`, { from: id });
+                              }
                               this._registry.registerItem('view', vi, 'name' as any, id);
                           }
                       }

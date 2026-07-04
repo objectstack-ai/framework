@@ -2173,6 +2173,31 @@ export class HttpDispatcher {
                         } catch (e: any) {
                             (result as any).unhideError = e?.message ?? 'visibility flip failed';
                         }
+                        // A publish promoted drafts to active (or unhid an additive
+                        // app) at RUNTIME — but boot-cached consumers still hold the
+                        // pre-publish view. The load-bearing one is the automation
+                        // engine: a record-triggered flow authored + published in the
+                        // Studio does NOT bind its trigger (record-change automations
+                        // never fire) until the next restart. Announce
+                        // 'metadata:reloaded' — the same signal a dev artifact reload
+                        // fires (MetadataPlugin._reloadAndAnnounce) — so subscribers
+                        // re-sync WITHOUT a restart. #2560 covers the cold-boot bind;
+                        // this covers publish-while-running. `this.kernel.context` is
+                        // the same handle the service resolver uses above. Best-effort:
+                        // a subscriber failure must never fail the publish (the drafts
+                        // are already live), so it rides the response instead.
+                        try {
+                            const changed = [
+                                ...(((result as any)?.published ?? []) as Array<{ type: string; name: string }>)
+                                    .map((p) => `${p.type}/${p.name}`),
+                                ...(((result as any)?.unhiddenApps ?? []) as string[]).map((n) => `app/${n}`),
+                            ];
+                            if (changed.length > 0 && this.kernel?.context?.trigger) {
+                                await this.kernel.context.trigger('metadata:reloaded', { changed });
+                            }
+                        } catch (e: any) {
+                            (result as any).rebindError = e?.message ?? 'metadata:reloaded announce failed';
+                        }
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
                         return { handled: true, response: this.error(e.message, e.statusCode || 500) };

@@ -24,5 +24,6 @@ export {
   backfillOrgAdminGrants,
 } from './auto-org-admin-grant.js';
 export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
+export { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
 export { appDefaultProfileName } from './app-default-profile.js';

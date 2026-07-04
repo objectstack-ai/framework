@@ -558,6 +558,9 @@ export class MetadataPlugin implements Plugin {
                     await this.manager.register('view', viewObject, item);
                     totalRegistered++;
                     for (const vi of expandViewContainer(viewObject, item)) {
+                        for (const w of vi._diagnostics?.warnings ?? []) {
+                            ctx.logger.warn(`[MetadataPlugin] View expansion warning for '${vi.name}': ${w.message}`);
+                        }
                         applyProtection(vi as any, {
                             packageId: manifestPackageId,
                             packageVersion: manifestVersion,

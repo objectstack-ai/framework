@@ -1381,11 +1381,20 @@ export default class Serve extends Command {
         // `api.enforceProjectMembership: false`. Undefined → dispatcher default.
         const enforceProjectMembership = apiConfig.enforceProjectMembership;
         // `requireAuth: true` rejects anonymous requests on `/api/v1/data/*`
-        // with HTTP 401 before they reach ObjectQL. Default-on when the
-        // stack opts in OR when the resolved tier set includes `auth`
-        // (because anonymous data access is almost never desirable when
-        // auth is enabled). Apps can override via stack `api.requireAuth`.
-        const requireAuth = apiConfig.requireAuth ?? (tierEnabled('auth') ? true : false);
+        // with HTTP 401 before they reach ObjectQL. The platform default is
+        // now secure-by-default (ADR-0056 D2): deny anonymous. The CLI keeps
+        // one deliberate carve-out — a stack with NO `auth` tier has no way
+        // to authenticate anyone, so denying would brick its data API
+        // entirely; such auth-less playgrounds get an EXPLICIT `false`
+        // (fail-open), which the REST plugin surfaces with a boot warning.
+        // Apps can always override via stack `api.requireAuth`.
+        // Auth availability = tier auto-registers it OR the stack mounts
+        // AuthPlugin explicitly (hasAuthPlugin, computed above). Keying only on
+        // the tier would hand an explicit fail-open to a stack that ships auth
+        // via `plugins:` under a minimal tier set — re-opening the very hole
+        // the flip closes. Only a stack with NO auth at all gets the carve-out.
+        const requireAuth = apiConfig.requireAuth
+          ?? ((tierEnabled('auth') || hasAuthPlugin) ? true : false);
 
         try {
           const { createRestApiPlugin } = await import('@objectstack/rest');

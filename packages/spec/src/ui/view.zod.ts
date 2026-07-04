@@ -1131,6 +1131,11 @@ export interface ExpandedViewItem {
   isDefault?: boolean;
   order: number;
   scope: 'package';
+  /** Non-blocking expansion diagnostics (MetadataValidationResult wire shape).
+   *  Present only when the item's name had to be rewritten to avoid a
+   *  collision — loaders surface `warnings` in their boot/HMR logs and
+   *  Studio can badge the view. */
+  _diagnostics?: { valid: boolean; warnings: Array<{ path: string; message: string }> };
 }
 
 /** True when a raw view artifact still uses the aggregated container shape
@@ -1160,6 +1165,29 @@ function uniqueViewName(base: string, used: Set<string>): string {
   while (used.has(name)) name = `${base}_${i++}`;
   used.add(name);
   return name;
+}
+
+/** Stamp a rename warning on an expanded item whose `<object>.<key>` name was
+ *  already taken (e.g. `formViews.default` vs the implicit default `list`).
+ *  The rename itself is kept for backward compatibility — this makes it LOUD:
+ *  loaders log the warning and Studio can render it, so authors discover that
+ *  references to the requested name (form action `target`s, navigation
+ *  `viewName`s) resolve to a DIFFERENT view. */
+function stampRenameWarning(item: ExpandedViewItem, requestedName: string): void {
+  if (item.name === requestedName) return;
+  item._diagnostics = {
+    valid: true,
+    warnings: [{
+      path: 'name',
+      message:
+        `View key collision: '${requestedName}' is already registered by another view in this `
+        + `defineView container (list and form views share one '<object>.<key>' namespace, and the `
+        + `default 'list' implicitly claims '<object>.default'). This ${item.viewKind} view was `
+        + `renamed to '${item.name}'. References targeting '${requestedName}' — form action `
+        + `targets, navigation viewNames — will resolve to the OTHER view. Rename the view key `
+        + `to something unique to remove this warning.`,
+    }],
+  };
 }
 
 function cloneViewConfig(v: any): any {
@@ -1228,7 +1256,9 @@ export function expandViewContainerWithDiagnostics(object: string, container: an
     const name = uniqueViewName(requested, used);
     if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'list', key: k });
     listSigToName.set(viewSignature(v), name);
-    out.push({ name, object, viewKind: 'list', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
+    const item: ExpandedViewItem = { name, object, viewKind: 'list', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
   }
   const defaultList = container.list;
   let defaultListName: string | undefined;
@@ -1241,7 +1271,9 @@ export function expandViewContainerWithDiagnostics(object: string, container: an
       const requested = `${object}.${key}`;
       const name = uniqueViewName(requested, used);
       if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'list', key });
-      out.push({ name, object, viewKind: 'list', label: defaultList.label, config: cloneViewConfig(defaultList), order: order++, scope: 'package' });
+      const item: ExpandedViewItem = { name, object, viewKind: 'list', label: defaultList.label, config: cloneViewConfig(defaultList), order: order++, scope: 'package' };
+      stampRenameWarning(item, requested);
+      out.push(item);
       defaultListName = name;
     }
   }
@@ -1261,7 +1293,9 @@ export function expandViewContainerWithDiagnostics(object: string, container: an
     const name = uniqueViewName(requested, used);
     if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'form', key: k });
     formSigSeen.add(viewSignature(v));
-    out.push({ name, object, viewKind: 'form', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' });
+    const item: ExpandedViewItem = { name, object, viewKind: 'form', label: v.label, config: cloneViewConfig(v), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
   }
   const defaultForm = container.form;
   let defaultFormName: string | undefined;
@@ -1270,7 +1304,9 @@ export function expandViewContainerWithDiagnostics(object: string, container: an
     const requested = `${object}.${key}`;
     const name = uniqueViewName(requested, used);
     if (name !== requested) collisions.push({ requested, renamedTo: name, viewKind: 'form', key });
-    out.push({ name, object, viewKind: 'form', label: defaultForm.label, config: cloneViewConfig(defaultForm), order: order++, scope: 'package' });
+    const item: ExpandedViewItem = { name, object, viewKind: 'form', label: defaultForm.label, config: cloneViewConfig(defaultForm), order: order++, scope: 'package' };
+    stampRenameWarning(item, requested);
+    out.push(item);
     defaultFormName = name;
   }
   if (!defaultFormName && out.length > formStart) defaultFormName = out[formStart].name;

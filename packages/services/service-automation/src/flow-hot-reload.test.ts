@@ -9,8 +9,12 @@
 // This proves the fix end-to-end on the automation side: the 'metadata:reloaded'
 // hook re-registers every current flow (re-binding its trigger — for a scheduled
 // flow that is the job cancel + reschedule the ScheduleTrigger performs) and
-// tears down flows that vanished from the artifact. A recording trigger stands in
-// for the concrete ScheduleTrigger (whose idempotent job re-bind is covered by
+// tears down flows that vanished from the artifact. The re-sync reads the
+// protocol's flattened flow view (`getMetaItems({type:'flow'})`) — the SAME
+// source #2560's cold-boot bind uses — so the fake here is a `protocol` service,
+// not a `metadata` one (`metadata.list('flow')` returns 0 in a real server; the
+// same hook also fires on a Studio publish). A recording trigger stands in for
+// the concrete ScheduleTrigger (whose idempotent job re-bind is covered by
 // trigger-schedule's schedule-runas-e2e test) so this stays dependency-light.
 
 import { describe, it, expect } from 'vitest';
@@ -84,20 +88,24 @@ function captureRunAs(engine: AutomationEngine): Array<string | undefined> {
     return seen;
 }
 
-/** A mutable fake `metadata` service exposing just the `list('flow')` the re-sync uses. */
-function fakeMetadataService(initial: unknown[]) {
+/**
+ * A mutable fake `protocol` service exposing just the flattened
+ * `getMetaItems({type:'flow'})` view the re-sync reads (returned as the
+ * `{ items: [...] }` envelope the real protocol serves).
+ */
+function fakeProtocolService(initial: unknown[]) {
     let flows = initial;
     return {
         service: {
-            async list(type: string) {
-                return type === 'flow' ? flows : [];
+            async getMetaItems(q: { type: string }) {
+                return { items: q.type === 'flow' ? flows : [] };
             },
         },
         setFlows: (next: unknown[]) => { flows = next; },
     };
 }
 
-async function bootKernel(meta: { service: unknown }) {
+async function bootKernel(proto: { service: unknown }) {
     const kernel = new LiteKernel({ logger: { level: 'silent' } } as never);
     const harness = {
         name: 'test.harness',
@@ -105,7 +113,7 @@ async function bootKernel(meta: { service: unknown }) {
         version: '1.0.0',
         dependencies: [] as string[],
         async init(ctx: any) {
-            ctx.registerService('metadata', meta.service);
+            ctx.registerService('protocol', proto.service);
         },
         async start() {},
     };
@@ -119,8 +127,8 @@ const reload = (kernel: LiteKernel) => (kernel as any).context.trigger('metadata
 
 describe("scheduled flow hot-reload re-bind (metadata:reloaded re-sync)", () => {
     it('re-binds an edited scheduled flow to its NEW definition without a restart', async () => {
-        const meta = fakeMetadataService([scheduledFlow('sweep', 'user', 1000)]);
-        const kernel = await bootKernel(meta);
+        const proto = fakeProtocolService([scheduledFlow('sweep', 'user', 1000)]);
+        const kernel = await bootKernel(proto);
         const engine = kernel.getService<AutomationEngine>('automation');
         const seen = captureRunAs(engine);
         const sched = recordingScheduleTrigger();
@@ -136,7 +144,7 @@ describe("scheduled flow hot-reload re-bind (metadata:reloaded re-sync)", () => 
 
         // Edit the flow: runAs:system + interval 5000. Recompile → reload.
         sched.events.length = 0;
-        meta.setFlows([scheduledFlow('sweep', 'system', 5000)]);
+        proto.setFlows([scheduledFlow('sweep', 'system', 5000)]);
         await reload(kernel);
         await flush();
 
@@ -155,8 +163,8 @@ describe("scheduled flow hot-reload re-bind (metadata:reloaded re-sync)", () => 
     });
 
     it('tears down a scheduled flow that was deleted from the artifact', async () => {
-        const meta = fakeMetadataService([scheduledFlow('sweep', 'user', 1000)]);
-        const kernel = await bootKernel(meta);
+        const proto = fakeProtocolService([scheduledFlow('sweep', 'user', 1000)]);
+        const kernel = await bootKernel(proto);
         const engine = kernel.getService<AutomationEngine>('automation');
         const sched = recordingScheduleTrigger();
         engine.registerTrigger(sched.trigger);
@@ -166,7 +174,7 @@ describe("scheduled flow hot-reload re-bind (metadata:reloaded re-sync)", () => 
         expect(sched.has('sweep')).toBe(true);
 
         // Delete the flow file → recompiled artifact no longer carries it.
-        meta.setFlows([]);
+        proto.setFlows([]);
         await reload(kernel);
         await flush();
 

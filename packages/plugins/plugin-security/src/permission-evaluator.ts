@@ -3,7 +3,13 @@
 import type { PermissionSet, ObjectPermission, FieldPermission } from '@objectstack/spec/security';
 
 /**
- * Operation type mapping to permission checks
+ * Operation type mapping to permission checks.
+ *
+ * `transfer`/`restore`/`purge` are pre-mapped to their RBAC bits (#1883) even
+ * though the ObjectQL operations do not exist yet (roadmap M2): the moment such
+ * an operation is dispatched through the security middleware it is gated by the
+ * corresponding `allow*` bit — deny unless a resolved permission set grants it.
+ * There is no window where the ops could ship ungated.
  */
 const OPERATION_TO_PERMISSION: Record<string, keyof ObjectPermission> = {
   find: 'allowRead',
@@ -13,18 +19,38 @@ const OPERATION_TO_PERMISSION: Record<string, keyof ObjectPermission> = {
   insert: 'allowCreate',
   update: 'allowEdit',
   delete: 'allowDelete',
+  transfer: 'allowTransfer',
+  restore: 'allowRestore',
+  purge: 'allowPurge',
 };
 
 /**
  * Destructive operation class — operations that must FAIL CLOSED when they are
  * not mapped to a concrete permission key. See ADR-0049: an unrecognised
- * destructive operation (e.g. a future `transfer`/`restore`/`purge` added
- * without a matching `OPERATION_TO_PERMISSION` entry, gated by the spec's
- * `allowTransfer`/`allowRestore`/`allowPurge` bits) must be DENIED rather than
- * silently allowed by the default-allow fallthrough. Non-destructive unknown
- * operations retain default-allow so custom read-side operations are not broken.
+ * destructive operation must be DENIED rather than silently allowed by the
+ * default-allow fallthrough. `transfer`/`restore`/`purge` are now mapped above
+ * (#1883), so this set acts as a backstop: it keeps them (and any future
+ * destructive op prefixed here before its mapping lands) fail-closed if the
+ * mapping is ever removed. Non-destructive unknown operations retain
+ * default-allow so custom read-side operations are not broken.
  */
 const DESTRUCTIVE_OPERATIONS = new Set<string>(['transfer', 'restore', 'purge']);
+
+/**
+ * Permission keys covered by the `modifyAllRecords` super-user WRITE bypass:
+ * edit/delete plus the destructive lifecycle class, DERIVED from the two
+ * constants above so a future destructive op added to the map+set is covered
+ * automatically (hand-listing it inline is how bypass gaps happen — #1883).
+ * NOTE this means "Modify All Data" grants (incl. the wildcard on
+ * organization_admin / admin_full_access defaults) will cover
+ * transfer/restore/purge the moment the M2 ops ship — Salesforce semantics,
+ * confirmed in the #1883 disposition; revisit per-op when M2 lands.
+ */
+const MODIFY_ALL_WRITE_KEYS = new Set<keyof ObjectPermission>([
+  'allowEdit',
+  'allowDelete',
+  ...[...DESTRUCTIVE_OPERATIONS].map((op) => OPERATION_TO_PERMISSION[op]),
+]);
 
 /**
  * [ADR-0066 D2] Resolve the object permission a permission set contributes for
@@ -82,8 +108,9 @@ export class PermissionEvaluator {
       // but a `private` object is excluded from a non-super-user wildcard.
       const objPerm = resolveObjectPermission(ps, objectName, opts.isPrivate ?? false);
       if (objPerm) {
-        // Check if modifyAllRecords is set (super-user bypass for write ops)
-        if (['allowEdit', 'allowDelete'].includes(permKey) && objPerm.modifyAllRecords) {
+        // Super-user WRITE bypass ("Modify All Data") — covers edit/delete and
+        // the destructive lifecycle class (see MODIFY_ALL_WRITE_KEYS).
+        if (MODIFY_ALL_WRITE_KEYS.has(permKey) && objPerm.modifyAllRecords) {
           return true;
         }
         // Check if viewAllRecords is set (super-user bypass for read ops)
@@ -239,9 +266,15 @@ export class PermissionEvaluator {
     /**
      * Optional async loader for permission set names that aren't found in
      * metadata or bootstrap. Lets callers query user-defined permission
-     * sets persisted in `sys_permission_set`. Failures are swallowed.
+     * sets persisted in `sys_permission_set`. Failures are swallowed
+     * (fail-closed: unresolvable sets grant nothing) but SURFACED via
+     * `options.logger` — see #2565: without the warn, a transient DB error
+     * makes custom permission sets silently vanish and the resulting 403s
+     * are undiagnosable.
      */
-    dbLoader?: (unresolved: string[]) => Promise<PermissionSet[]>
+    dbLoader?: (unresolved: string[]) => Promise<PermissionSet[]>,
+    /** Optional logger; only `warn` is used. Resolution behavior is unchanged. */
+    options: { logger?: { warn?: (msg: string, meta?: Record<string, any>) => void } } = {},
   ): Promise<PermissionSet[]> {
     if (identifiers.length === 0) return [];
 
@@ -256,8 +289,12 @@ export class PermissionEvaluator {
         ?? metadataService?.list?.('permissions')
         ?? [];
       allPermSets = typeof (listed as any)?.then === 'function' ? await listed : listed;
-    } catch {
+    } catch (e) {
       allPermSets = [];
+      options.logger?.warn?.(
+        '[security] permission-set metadata list() failed — falling back to bootstrap/db sources (#2565)',
+        { requested: identifiers, error: (e as Error)?.message },
+      );
     }
     if (!Array.isArray(allPermSets)) allPermSets = [];
 
@@ -295,9 +332,16 @@ export class PermissionEvaluator {
               result.push(ps);
             }
           }
-        } catch {
+        } catch (e) {
           // Swallow — the request shouldn't fail just because the DB
-          // lookup is unavailable.
+          // lookup is unavailable (fail-closed: the unresolved sets simply
+          // grant nothing). But surface it: without this warn a transient
+          // DB error silently drops custom permission sets and the
+          // resulting 403s point nowhere near the cause (#2565).
+          options.logger?.warn?.(
+            '[security] sys_permission_set db lookup failed — unresolved sets grant nothing this request (#2565)',
+            { unresolved, error: (e as Error)?.message },
+          );
         }
       }
     }

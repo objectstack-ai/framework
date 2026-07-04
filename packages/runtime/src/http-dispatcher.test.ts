@@ -971,6 +971,48 @@ describe('HttpDispatcher', () => {
             expect((result.response as any)?.body?.data?.publishedCount).toBe(3);
         });
 
+        it('POST /packages/:id/publish-drafts announces metadata:reloaded so boot-cached consumers re-sync', async () => {
+            // #2560 follow-up: a flow published while the server runs must bind its
+            // trigger WITHOUT a restart. The publish path fires 'metadata:reloaded'
+            // — the same signal a dev artifact reload fires — so the automation
+            // service re-syncs the just-published flow from the protocol.
+            const publishPackageDrafts = vi.fn().mockResolvedValue({
+                success: true, publishedCount: 1, failedCount: 0,
+                published: [{ type: 'flow', name: 'ticket_closed', version: '1' }], failed: [],
+            });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ publishPackageDrafts });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+            const trigger = vi.fn().mockResolvedValue(undefined);
+            (kernel as any).context.trigger = trigger;
+
+            const result = await dispatcher.handlePackages('/com.example.ops/publish-drafts', 'POST', {}, {}, { request: {} });
+
+            expect(result.response?.status).toBe(200);
+            expect(trigger).toHaveBeenCalledWith(
+                'metadata:reloaded',
+                expect.objectContaining({ changed: expect.arrayContaining(['flow/ticket_closed']) }),
+            );
+        });
+
+        it('POST /packages/:id/publish-drafts does NOT announce when nothing was published', async () => {
+            const publishPackageDrafts = vi.fn().mockResolvedValue({
+                success: false, publishedCount: 0, failedCount: 0, published: [], failed: [],
+            });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ publishPackageDrafts });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+            const trigger = vi.fn().mockResolvedValue(undefined);
+            (kernel as any).context.trigger = trigger;
+
+            await dispatcher.handlePackages('/app.empty/publish-drafts', 'POST', {}, {}, { request: {} });
+            expect(trigger).not.toHaveBeenCalled();
+        });
+
         it('POST /packages/:id/publish-drafts returns 501 when protocol lacks the method', async () => {
             (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'protocol') return Promise.resolve({});

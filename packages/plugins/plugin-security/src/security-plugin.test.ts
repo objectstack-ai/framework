@@ -292,6 +292,36 @@ describe('SecurityPlugin', () => {
       expect(harness.findOne).toHaveBeenCalledTimes(1);
     });
 
+    it('DENIES a purge of a not-owned row via the pre-image check (#1883 — destructive ops inherit row-level gating)', async () => {
+      // The destructive lifecycle class (transfer/restore/purge) is pre-wired
+      // into OPERATION_TO_PERMISSION, so it clears the object-level RBAC gate.
+      // The record-level pre-image RLS check must therefore ALSO cover it —
+      // otherwise a grant-holder could destroy out-of-scope rows by id. purge
+      // maps onto the `delete` RLS class.
+      const purgerSet: PermissionSet = {
+        name: 'purger', label: 'Purger', isProfile: true,
+        objects: { '*': { allowRead: true, allowPurge: true } },
+        rowLevelSecurity: [
+          { name: 'owner_only_deletes', object: '*', operation: 'delete', using: 'created_by = current_user.id' },
+        ],
+      } as any;
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'purger' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [purgerSet],
+        objectFields: ownerFields,
+        findOneImpl: () => null, // row exists but not owned → filtered out → deny
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'purge',
+        options: { where: { id: 'r1' } },
+        context: memberCtx,
+      };
+      await expect(harness.run(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+      expect(harness.findOne).toHaveBeenCalledTimes(1);
+    });
+
     it('SKIPS the check when no RLS policy applies (e.g. modifyAllRecords / admin) — no extra read', async () => {
       const adminSet: PermissionSet = {
         name: 'admin_full_access', label: 'Admin', isProfile: true,
@@ -912,6 +942,155 @@ describe('SecurityPlugin', () => {
       await expect(h.run(opCtx)).resolves.toBeDefined();
     });
   });
+
+  // ── ADR-0086 P2 (块2) — two-doors data-layer write gate ────────────────
+  // A `managed_by:'package'` sys_permission_set row is owned by the package
+  // door; the admin data-plane write path must refuse to mutate it, even for a
+  // superuser (modifyAllRecords). System/boot writes carry isSystem and never
+  // reach the gate.
+  describe('two-doors write gate (sys_permission_set managed_by:package)', () => {
+    // Superuser set — proves the gate is NOT grant-gated (blocks even
+    // modifyAllRecords) and carries no RLS so the pre-image check is a no-op.
+    const adminSet: PermissionSet = {
+      name: 'admin_full_access', label: 'Admin', isProfile: true,
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true } },
+    } as any;
+    const adminCtx = { userId: 'admin1', tenantId: 'org-1', roles: [], permissions: ['admin_full_access'] };
+
+    const runGate = async (opCtx: any, findOneImpl?: (q: any) => any) => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'admin_full_access' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [adminSet],
+        objectFields: ['id', 'name', 'managed_by', 'package_id'],
+        ...(findOneImpl ? { findOneImpl } : {}),
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      return harness.run(opCtx);
+    };
+
+    it('DENIES an admin update of a package-managed set (even with modifyAllRecords)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_pkg', label: 'hijack' }, options: { where: { id: 'ps_pkg' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', name: 'crm_sales_rep', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an admin delete of a package-managed set', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { id: 'ps_pkg' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', name: 'crm_sales_rep', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS an admin update of an env-authored set (managed_by:user)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_env', label: 'renamed' }, options: { where: { id: 'ps_env' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_env', name: 'my_custom', managed_by: 'user' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('DENIES an admin-door insert that forges package provenance', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: { name: 'forged', managed_by: 'package', package_id: 'com.example.crm' },
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES a bulk/ARRAY insert that forges package provenance on any element', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: [
+          { name: 'ok_custom' },
+          { name: 'forged', managed_by: 'package', package_id: 'com.example.crm' },
+        ],
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an update that RE-BADGES an env row as package-managed (update-to-forge)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_env', managed_by: 'package', package_id: 'com.example.crm' },
+        options: { where: { id: 'ps_env' } },
+        context: adminCtx,
+      };
+      // Even though the EXISTING row is env-owned, the payload forges provenance.
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_env', name: 'my_custom', managed_by: 'user' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES even a principal-less write to a package row (gate is before the fall-open)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { id: 'ps_pkg' } },
+        context: {}, // no roles, no permissions, no userId, not isSystem
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a normal admin-door insert (no forged provenance)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'insert',
+        data: { name: 'my_custom', label: 'Custom' },
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).resolves.toBeDefined();
+    });
+
+    it('DENIES a filter write whose filter matches a package-managed row', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'delete',
+        options: { where: { active: true } }, // no single id → filter path
+        context: adminCtx,
+      };
+      await expect(
+        // the gate probes for a package row within the filter → found → deny
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a filter write that matches only env-authored rows (no over-broad block)', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { label: 'bulk-rename' }, options: { where: { managed_by: 'user' } },
+        context: adminCtx,
+      };
+      await expect(
+        // the gate's package-row probe finds nothing within the filter → allow
+        runGate(opCtx, () => null),
+      ).resolves.toBeDefined();
+    });
+
+    it('lets system/boot writes through (isSystem bypass) even on a package row', async () => {
+      const opCtx: any = {
+        object: 'sys_permission_set', operation: 'update',
+        data: { id: 'ps_pkg' }, options: { where: { id: 'ps_pkg' } },
+        context: { isSystem: true },
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'ps_pkg', managed_by: 'package', package_id: 'com.example.crm' })),
+      ).resolves.toBeDefined();
+    });
+  });
 });
 // ---------------------------------------------------------------------------
 describe('PermissionEvaluator', () => {
@@ -940,17 +1119,40 @@ describe('PermissionEvaluator', () => {
     expect(evaluator.checkObjectPermission('unknownOp', 'contact', [])).toBe(true);
   });
 
-  it('should fail CLOSED for unmapped destructive operations (ADR-0049)', () => {
+  it('denies transfer/restore/purge without the matching RBAC bit (#1883)', () => {
     const evaluator = new PermissionEvaluator();
-    // transfer/restore/purge are not in OPERATION_TO_PERMISSION; they must be
-    // denied rather than falling through to default-allow — even for an
-    // otherwise fully-permissioned set.
-    const ps = makePermSet('admin', {
-      contact: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true },
+    // Full CRUD does NOT imply the destructive lifecycle class: each op is
+    // gated by its own bit (allowTransfer/allowRestore/allowPurge) and must
+    // be denied when the bit is absent — never default-allow (ADR-0049).
+    const ps = makePermSet('member', {
+      contact: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
     });
     expect(evaluator.checkObjectPermission('transfer', 'contact', [ps])).toBe(false);
     expect(evaluator.checkObjectPermission('restore', 'contact', [ps])).toBe(false);
     expect(evaluator.checkObjectPermission('purge', 'contact', [ps])).toBe(false);
+    // …and an empty permission-set list denies too (fail-closed baseline).
+    expect(evaluator.checkObjectPermission('purge', 'contact', [])).toBe(false);
+  });
+
+  it('allows transfer/restore/purge via their specific RBAC bits (#1883)', () => {
+    const evaluator = new PermissionEvaluator();
+    const transferOnly = makePermSet('t', { contact: { allowTransfer: true } });
+    const restoreOnly = makePermSet('r', { contact: { allowRestore: true } });
+    const purgeOnly = makePermSet('p', { contact: { allowPurge: true } });
+    expect(evaluator.checkObjectPermission('transfer', 'contact', [transferOnly])).toBe(true);
+    expect(evaluator.checkObjectPermission('restore', 'contact', [restoreOnly])).toBe(true);
+    expect(evaluator.checkObjectPermission('purge', 'contact', [purgeOnly])).toBe(true);
+    // A bit on one op never leaks to another.
+    expect(evaluator.checkObjectPermission('purge', 'contact', [transferOnly])).toBe(false);
+    expect(evaluator.checkObjectPermission('transfer', 'contact', [purgeOnly])).toBe(false);
+  });
+
+  it('modifyAllRecords super-user bypass covers transfer/restore/purge (#1883)', () => {
+    const evaluator = new PermissionEvaluator();
+    const admin = makePermSet('admin', { contact: { modifyAllRecords: true } });
+    expect(evaluator.checkObjectPermission('transfer', 'contact', [admin])).toBe(true);
+    expect(evaluator.checkObjectPermission('restore', 'contact', [admin])).toBe(true);
+    expect(evaluator.checkObjectPermission('purge', 'contact', [admin])).toBe(true);
   });
 
   it('should allow via viewAllRecords', () => {
@@ -1014,6 +1216,51 @@ describe('PermissionEvaluator', () => {
     );
     expect(metadata.list).toHaveBeenCalledWith('permission');
     expect(result).toEqual([psAdmin]);
+  });
+
+  it('warns (and keeps resolving) when the dbLoader throws — #2565 observability', async () => {
+    const evaluator = new PermissionEvaluator();
+    const psAdmin = { name: 'admin_full_access' };
+    const metadata = { list: vi.fn().mockReturnValue([psAdmin]) };
+    const warns: Array<{ msg: string; meta?: Record<string, any> }> = [];
+    const result = await evaluator.resolvePermissionSets(
+      ['admin_full_access', 'custom_sales'],
+      metadata,
+      [],
+      async () => { throw new Error('db down'); },
+      { logger: { warn: (msg, meta) => warns.push({ msg, meta }) } },
+    );
+    // behavior unchanged: metadata-resolved set still returned, unresolved grants nothing
+    expect(result).toEqual([psAdmin]);
+    // ...but the swallow is surfaced, naming the unresolved sets
+    expect(warns.length).toBe(1);
+    expect(warns[0].msg).toContain('db lookup failed');
+    expect(warns[0].meta?.unresolved).toEqual(['custom_sales']);
+    expect(warns[0].meta?.error).toBe('db down');
+  });
+
+  it('warns (and keeps resolving via bootstrap) when metadata list() throws — #2565', async () => {
+    const evaluator = new PermissionEvaluator();
+    const metadata = { list: vi.fn().mockImplementation(() => { throw new Error('index broken'); }) };
+    const bootstrap = [{ name: 'member_default', objects: {} } as any];
+    const warns: string[] = [];
+    const result = await evaluator.resolvePermissionSets(
+      ['member_default'],
+      metadata,
+      bootstrap,
+      undefined,
+      { logger: { warn: (msg) => warns.push(msg) } },
+    );
+    expect(result.map((p) => p.name)).toEqual(['member_default']);
+    expect(warns.some((w) => w.includes('metadata list() failed'))).toBe(true);
+  });
+
+  it('stays silent when no logger is provided (back-compat)', async () => {
+    const evaluator = new PermissionEvaluator();
+    const metadata = { list: vi.fn().mockReturnValue([]) };
+    await expect(
+      evaluator.resolvePermissionSets(['x'], metadata, [], async () => { throw new Error('db down'); }),
+    ).resolves.toEqual([]);
   });
 
   it('matches by both role and explicit permission-set identifiers', async () => {

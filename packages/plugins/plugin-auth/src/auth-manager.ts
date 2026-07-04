@@ -348,6 +348,17 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * `/reset-password`). Multi-node deployments need a shared `storage`.
    */
   rateLimit?: BetterAuthOptions['rateLimit'];
+
+  /**
+   * ADR-0069 D2 — shared KV store for cross-node state. When set, better-auth
+   * uses it for **rate-limit counters** (the manager also flips
+   * `rateLimit.storage` to `'secondary-storage'`) and session caching, so both
+   * are enforced against ONE store across every node — closing the multi-node
+   * rate-limit-bypass hole (each node otherwise counts independently). Wired by
+   * `AuthPlugin` from the kernel `cache` service (memory single-node, Redis in
+   * a cluster). Absent → better-auth keeps its per-process in-memory store.
+   */
+  secondaryStorage?: BetterAuthOptions['secondaryStorage'];
 }
 
 /**
@@ -643,8 +654,20 @@ export class AuthManager {
 
       // ADR-0069 D2 — per-IP rate limiting (native). Only set when configured
       // so better-auth keeps its own defaults otherwise. The settings bind
-      // supplies stricter `customRules` for the auth endpoints.
-      ...(this.config.rateLimit ? { rateLimit: this.config.rateLimit } : {}),
+      // supplies stricter `customRules` for the auth endpoints. When a shared
+      // secondaryStorage is wired, flip the rate-limit store to it so counters
+      // are enforced across nodes (default 'memory' is per-process).
+      ...(this.config.rateLimit || this.config.secondaryStorage
+        ? {
+            rateLimit: {
+              ...(this.config.rateLimit ?? {}),
+              ...(this.config.secondaryStorage ? { storage: 'secondary-storage' as const } : {}),
+            },
+          }
+        : {}),
+
+      // ADR-0069 D2 — shared KV for cross-node rate-limit + session state.
+      ...(this.config.secondaryStorage ? { secondaryStorage: this.config.secondaryStorage } : {}),
 
       // better-auth plugins — registered based on AuthPluginConfig flags
       plugins,
@@ -900,6 +923,21 @@ export class AuthManager {
               if (succeeded) {
                 const uid = ctx?.context?.returned?.user?.id;
                 if (typeof uid === 'string') await this.enforceConcurrentCap(uid);
+                // ADR-0069 D7 — login audit: stamp last_login_at/ip on success.
+                // Independent of lockout config (recordSignInOutcome no-ops when
+                // lockout is off). IP from the trusted forwarded headers, same
+                // precedence as the D5 allow-list middleware.
+                if (typeof uid === 'string') {
+                  const hdr = (k: string): string =>
+                    ((ctx?.headers?.get?.(k) ?? ctx?.request?.headers?.get?.(k)) as string) || '';
+                  const fwd = hdr('x-forwarded-for');
+                  const ip =
+                    (fwd && fwd.split(',')[0].trim()) ||
+                    hdr('cf-connecting-ip') ||
+                    hdr('x-real-ip') ||
+                    undefined;
+                  await this.stampLastLogin(uid, ip);
+                }
               }
             }
             return;
@@ -2717,6 +2755,27 @@ export class AuthManager {
       await engine.update('sys_user', patch, { context: SYSTEM_CTX } as any);
     } catch {
       // Lockout accounting is best-effort — never break the auth response.
+    }
+  }
+
+  /**
+   * ADR-0069 D7 — stamp `last_login_at` (+ `last_login_ip` when known) on a
+   * successful sign-in. Best-effort and always fire-and-forget safe: a login
+   * audit write must never turn a valid login into an error, and it runs
+   * unconditionally (unlike lockout accounting, which is gated on a threshold).
+   */
+  private async stampLastLogin(userId: string, ip: string | undefined): Promise<void> {
+    const engine = this.getDataEngine();
+    if (!engine || !userId) return;
+    try {
+      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const patch: Record<string, unknown> = { id: userId, last_login_at: new Date() };
+      // Cap to the column width (IPv6 textual max 45) — a malformed/oversized
+      // forwarded header must not blow up the write.
+      if (ip) patch.last_login_ip = ip.slice(0, 45);
+      await engine.update('sys_user', patch, { context: SYSTEM_CTX } as any);
+    } catch {
+      // Login audit is best-effort — never break the auth response.
     }
   }
 

@@ -214,17 +214,27 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
 
                 ctx.logger.info('REST API successfully registered');
 
-                // ADR-0056 D2 (warn → enforce): surface the fail-open posture.
-                // When `requireAuth` is off, anonymous requests reach the data API
-                // and read any object with no OWD/RLS — secure-by-default would deny
-                // them and route public access through share-links / `publicSharing`.
-                // We do NOT flip the default here (it would break deployments that
-                // rely on anonymous reads); we make the posture explicit instead.
-                if (!(config.api as any)?.requireAuth) {
+                // ADR-0056 D2 (warn → enforce, ENFORCED): the global default is
+                // secure-by-default — anonymous /data/* is denied unless the
+                // deployment explicitly opts out. The warning remains for that
+                // explicit opt-out so a fail-open posture is always visible.
+                if ((config.api as any)?.api?.requireAuth === false) {
                     ctx.logger.warn(
-                        '[security] anonymous access to the data API is ALLOWED (api.requireAuth=false) — ' +
-                        'objects without OWD/RLS are world-readable. For secure-by-default set ' +
-                        'api.requireAuth=true and expose public records via share-links / publicSharing (ADR-0056 D2).',
+                        '[security] anonymous access to the data API is ALLOWED (api.requireAuth=false, explicit opt-out) — ' +
+                        'objects without OWD/RLS are world-readable. Remove the opt-out for secure-by-default and ' +
+                        'expose public records via share-links / publicSharing / public forms (ADR-0056 D2).',
+                    );
+                }
+                // Misplaced-key guard: the effective key is `api.api.requireAuth`
+                // (RestApiPluginConfig.api is the full RestServerConfig). A flat
+                // `api.requireAuth` is silently ignored by normalizeConfig — under
+                // the deny default that turns an INTENDED public deployment into a
+                // 401 outage with no diagnostic, so name the mistake loudly.
+                if ((config.api as any)?.requireAuth !== undefined) {
+                    ctx.logger.warn(
+                        '[security] `api.requireAuth` is set at the WRONG nesting level and has NO effect — ' +
+                        'move it to `api.api.requireAuth` (RestServerConfig.api.requireAuth). ' +
+                        `The effective value this boot is ${(config.api as any)?.api?.requireAuth ?? true}.`,
                     );
                 }
             } catch (err: any) {

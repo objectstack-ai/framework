@@ -34,16 +34,19 @@ export const ObjectPermissionSchema = lazySchema(() => z.object({
   /**
    * Lifecycle Operations.
    *
-   * EXPERIMENTAL — not enforced (ADR-0049). The `transfer`/`restore`/`purge`
-   * operations these bits gate do not yet exist as ObjectQL operations, and no
-   * runtime consumer reads these bits. Authoring them is currently a no-op.
-   * The runtime fails CLOSED if such an operation is ever introduced without a
-   * matching permission mapping (see `permission-evaluator.ts`
-   * DESTRUCTIVE_OPERATIONS). Tracked by #1883.
+   * RBAC-gated, operations pending (#1883 / roadmap M2). The
+   * `transfer`/`restore`/`purge` ObjectQL operations do not exist yet, but the
+   * permission evaluator PRE-MAPS them to these bits
+   * (`permission-evaluator.ts` OPERATION_TO_PERMISSION): the moment such an
+   * operation is dispatched it is denied unless a resolved permission set
+   * grants the bit (or `modifyAllRecords`). Until the operations ship,
+   * authoring these bits grants nothing — there is no ungated window either
+   * way (unmapped destructive ops additionally fail CLOSED via
+   * DESTRUCTIVE_OPERATIONS, per ADR-0049).
    */
-  allowTransfer: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Change record ownership'),
-  allowRestore: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Restore from trash (Undelete)'),
-  allowPurge: z.boolean().default(false).describe('[EXPERIMENTAL — not enforced] Permanently delete (Hard Delete/GDPR)'),
+  allowTransfer: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Change record ownership'),
+  allowRestore: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Restore from trash (Undelete)'),
+  allowPurge: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Permanently delete (Hard Delete/GDPR)'),
 
   /** 
    * View All Records: Super-user read access. 
@@ -111,7 +114,28 @@ export const PermissionSetSchema = lazySchema(() => z.object({
   
   /** Display label */
   label: z.string().optional().describe('Display label'),
-  
+
+  /**
+   * [ADR-0086 D3] Owning package for a package-shipped permission set
+   * (absent ⇒ environment-authored). Persisted on `sys_permission_set`
+   * records together with the per-record `managedBy` provenance, this is
+   * what makes the metadata↔config boundary machine-checkable and package
+   * uninstall well-defined (remove the package's own sets).
+   */
+  packageId: z.string().optional().describe('[ADR-0086 D3] Owning package id for a package-shipped set (absent = env-authored)'),
+
+  /**
+   * [ADR-0086 D3] Per-record provenance on the existing
+   * metadata-persistence axis (`package | platform | user`):
+   * `package` = versioned package metadata (seeded by
+   * `bootstrapDeclaredPermissions`, re-seeded on upgrade, read-mostly for
+   * admins per ADR-0010); `platform`/`user` = environment config, live-edited
+   * and never touched by package seeding. Distinct from the `sys_permission_set`
+   * TABLE's object-affordance `managedBy: 'config'`, which stays.
+   */
+  managedBy: z.enum(['package', 'platform', 'user']).optional()
+    .describe('[ADR-0086 D3] Record provenance: package (upgrade-owned metadata) vs platform/user (env config)'),
+
   /** Is this a Profile? (Base set for a user) */
   isProfile: z.boolean().default(false).describe('Whether this is a user profile'),
   isDefault: z.boolean().default(false).describe('[ADR-0056 D7] When true, this profile is the FALLBACK assigned to authenticated users who have no explicit grants — an app declares its default access posture here instead of relying on the built-in member_default. Foundation for SSO/JIT provisioning.'),
