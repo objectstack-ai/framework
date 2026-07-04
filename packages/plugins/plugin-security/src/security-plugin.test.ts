@@ -1069,6 +1069,51 @@ describe('PermissionEvaluator', () => {
     expect(result).toEqual([psAdmin]);
   });
 
+  it('warns (and keeps resolving) when the dbLoader throws — #2565 observability', async () => {
+    const evaluator = new PermissionEvaluator();
+    const psAdmin = { name: 'admin_full_access' };
+    const metadata = { list: vi.fn().mockReturnValue([psAdmin]) };
+    const warns: Array<{ msg: string; meta?: Record<string, any> }> = [];
+    const result = await evaluator.resolvePermissionSets(
+      ['admin_full_access', 'custom_sales'],
+      metadata,
+      [],
+      async () => { throw new Error('db down'); },
+      { logger: { warn: (msg, meta) => warns.push({ msg, meta }) } },
+    );
+    // behavior unchanged: metadata-resolved set still returned, unresolved grants nothing
+    expect(result).toEqual([psAdmin]);
+    // ...but the swallow is surfaced, naming the unresolved sets
+    expect(warns.length).toBe(1);
+    expect(warns[0].msg).toContain('db lookup failed');
+    expect(warns[0].meta?.unresolved).toEqual(['custom_sales']);
+    expect(warns[0].meta?.error).toBe('db down');
+  });
+
+  it('warns (and keeps resolving via bootstrap) when metadata list() throws — #2565', async () => {
+    const evaluator = new PermissionEvaluator();
+    const metadata = { list: vi.fn().mockImplementation(() => { throw new Error('index broken'); }) };
+    const bootstrap = [{ name: 'member_default', objects: {} } as any];
+    const warns: string[] = [];
+    const result = await evaluator.resolvePermissionSets(
+      ['member_default'],
+      metadata,
+      bootstrap,
+      undefined,
+      { logger: { warn: (msg) => warns.push(msg) } },
+    );
+    expect(result.map((p) => p.name)).toEqual(['member_default']);
+    expect(warns.some((w) => w.includes('metadata list() failed'))).toBe(true);
+  });
+
+  it('stays silent when no logger is provided (back-compat)', async () => {
+    const evaluator = new PermissionEvaluator();
+    const metadata = { list: vi.fn().mockReturnValue([]) };
+    await expect(
+      evaluator.resolvePermissionSets(['x'], metadata, [], async () => { throw new Error('db down'); }),
+    ).resolves.toEqual([]);
+  });
+
   it('matches by both role and explicit permission-set identifiers', async () => {
     const evaluator = new PermissionEvaluator();
     const sets = [

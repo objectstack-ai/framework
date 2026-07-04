@@ -266,9 +266,15 @@ export class PermissionEvaluator {
     /**
      * Optional async loader for permission set names that aren't found in
      * metadata or bootstrap. Lets callers query user-defined permission
-     * sets persisted in `sys_permission_set`. Failures are swallowed.
+     * sets persisted in `sys_permission_set`. Failures are swallowed
+     * (fail-closed: unresolvable sets grant nothing) but SURFACED via
+     * `options.logger` — see #2565: without the warn, a transient DB error
+     * makes custom permission sets silently vanish and the resulting 403s
+     * are undiagnosable.
      */
-    dbLoader?: (unresolved: string[]) => Promise<PermissionSet[]>
+    dbLoader?: (unresolved: string[]) => Promise<PermissionSet[]>,
+    /** Optional logger; only `warn` is used. Resolution behavior is unchanged. */
+    options: { logger?: { warn?: (msg: string, meta?: Record<string, any>) => void } } = {},
   ): Promise<PermissionSet[]> {
     if (identifiers.length === 0) return [];
 
@@ -283,8 +289,12 @@ export class PermissionEvaluator {
         ?? metadataService?.list?.('permissions')
         ?? [];
       allPermSets = typeof (listed as any)?.then === 'function' ? await listed : listed;
-    } catch {
+    } catch (e) {
       allPermSets = [];
+      options.logger?.warn?.(
+        '[security] permission-set metadata list() failed — falling back to bootstrap/db sources (#2565)',
+        { requested: identifiers, error: (e as Error)?.message },
+      );
     }
     if (!Array.isArray(allPermSets)) allPermSets = [];
 
@@ -322,9 +332,16 @@ export class PermissionEvaluator {
               result.push(ps);
             }
           }
-        } catch {
+        } catch (e) {
           // Swallow — the request shouldn't fail just because the DB
-          // lookup is unavailable.
+          // lookup is unavailable (fail-closed: the unresolved sets simply
+          // grant nothing). But surface it: without this warn a transient
+          // DB error silently drops custom permission sets and the
+          // resulting 403s point nowhere near the cause (#2565).
+          options.logger?.warn?.(
+            '[security] sys_permission_set db lookup failed — unresolved sets grant nothing this request (#2565)',
+            { unresolved, error: (e as Error)?.message },
+          );
         }
       }
     }
