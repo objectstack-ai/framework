@@ -555,4 +555,4 @@ Apache-2.0. See [LICENSING.md](../../LICENSING.md).
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [@objectstack/spec/ai](../../spec/src/ai/)
-- [Building MCP Servers Guide](/content/docs/guides/mcp/)
+- [Building MCP Servers Guide](/content/docs/ai/)
