@@ -60,6 +60,17 @@ export const Invoice = ObjectSchema.create({
       ],
       lookupFilters: [{ field: 'status', operator: 'ne', value: 'churned' }],
     }),
+    // Dependent (cascading) lookup — the billing contact must belong to the
+    // selected account. `dependsOn: ['account']` scopes this picker by the
+    // invoice's own `account` value: string form = same key on both sides
+    // (invoice.account ↔ showcase_contact.account). Until an account is
+    // chosen the picker has nothing to scope by; after switching accounts the
+    // candidate list changes with it.
+    contact: Field.lookup('showcase_contact', {
+      label: 'Contact',
+      descriptionField: 'email',
+      dependsOn: ['account'],
+    }),
     // Owner email — the row-level-security anchor. The `showcase_contributor`
     // permission set scopes invoice SELECT to `owner = current_user.email` (email
     // is the unique, seedable identifier), so a contributor sees only their own

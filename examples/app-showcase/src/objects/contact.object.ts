@@ -43,6 +43,11 @@ export const Contact = ObjectSchema.create({
     // ── Work group: useful context, not required to bring a contact into being. ──
     company: Field.text({ label: 'Company', maxLength: 120, searchable: true, group: 'work' }),
     title: Field.text({ label: 'Job title', maxLength: 120, group: 'work' }),
+    // Which account this person belongs to — the parent side of the dependent
+    // (cascading) lookup demo: showcase_invoice.contact declares
+    // `dependsOn: ['account']`, so the invoice's contact picker only offers
+    // contacts whose `account` matches the invoice's selected account.
+    account: Field.lookup('showcase_account', { label: 'Account', group: 'work' }),
 
     // ── Status group: lifecycle. `stage` has a default (so it can be omitted
     //    from create); `lead_score` is derived/readonly (so it must never be

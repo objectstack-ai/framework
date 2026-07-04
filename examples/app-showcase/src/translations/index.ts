@@ -43,6 +43,7 @@ export const ShowcaseTranslationBundle = {
           created_at: { label: 'Created' },
           location: { label: 'Work Location' },
           cover: { label: 'Cover' },
+          notes: { label: 'Notes' },
         },
       },
       showcase_account: {
@@ -61,12 +62,28 @@ export const ShowcaseTranslationBundle = {
           churn_reason: { label: 'Churn Reason' },
         },
       },
+      showcase_contact: {
+        label: 'Contact',
+        pluralLabel: 'Contacts',
+        fields: {
+          name: { label: 'Full name' },
+          email: { label: 'Email' },
+          phone: { label: 'Phone' },
+          company: { label: 'Company' },
+          title: { label: 'Job title' },
+          account: { label: 'Account' },
+          stage: { label: 'Stage' },
+          lead_score: { label: 'Lead score' },
+          notes: { label: 'Notes' },
+        },
+      },
       showcase_invoice: {
         label: 'Invoice',
         pluralLabel: 'Invoices',
         fields: {
           name: { label: 'Invoice Number' },
           account: { label: 'Account' },
+          contact: { label: 'Contact' },
           owner: { label: 'Owner' },
           status: { label: 'Status' },
           issued_on: { label: 'Issued On' },
@@ -143,6 +160,7 @@ export const ShowcaseTranslationBundle = {
           created_at: { label: '创建时间' },
           location: { label: '工作地点' },
           cover: { label: '封面' },
+          notes: { label: '备注' },
         },
       },
       showcase_account: {
@@ -161,12 +179,28 @@ export const ShowcaseTranslationBundle = {
           churn_reason: { label: '流失原因' },
         },
       },
+      showcase_contact: {
+        label: '联系人',
+        pluralLabel: '联系人',
+        fields: {
+          name: { label: '姓名' },
+          email: { label: '邮箱' },
+          phone: { label: '电话' },
+          company: { label: '公司' },
+          title: { label: '职务' },
+          account: { label: '客户' },
+          stage: { label: '阶段' },
+          lead_score: { label: '线索评分' },
+          notes: { label: '备注' },
+        },
+      },
       showcase_invoice: {
         label: '发票',
         pluralLabel: '发票',
         fields: {
           name: { label: '发票号' },
           account: { label: '客户' },
+          contact: { label: '联系人' },
           owner: { label: '负责人' },
           status: { label: '状态' },
           issued_on: { label: '开具日期' },

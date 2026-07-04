@@ -10,6 +10,7 @@ import { Category } from '../objects/category.object.js';
 import { BusinessUnit } from '../objects/business-unit.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
 import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
+import { Contact } from '../objects/contact.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
 
 /**
@@ -40,6 +41,21 @@ const accounts = defineSeed(Account, {
     { name: 'Vandelay Industries', industry: 'finance', annual_revenue: 6_700_000, website: 'https://vandelay.example', status: 'active', hq: { lat: 40.6782, lng: -73.9442 }, tax_id: '11-3344556', billing_email: 'ap@vandelay.example' },
     { name: 'Umbrella Health', industry: 'healthcare', annual_revenue: 33_000_000, website: 'https://umbrella.example', status: 'churned', hq: { lat: 39.9526, lng: -75.1652 }, tax_id: '88-2200117', churn_reason: 'Switched to in-house platform', billing_email: 'accounts@umbrella.example' },
     { name: 'Wonka Brands', industry: 'retail', annual_revenue: 14_500_000, website: 'https://wonka.example', status: 'churned', hq: { lat: 41.4993, lng: -81.6944 }, tax_id: '52-7741093', churn_reason: 'Budget cuts', billing_email: 'ap@wonka.example' },
+  ],
+});
+
+// Contacts spread across three accounts — the data behind the dependent
+// (cascading) lookup demo: picking an Account on an invoice scopes its
+// Contact picker to that account's people (invoice.contact dependsOn account).
+const contacts = defineSeed(Contact, {
+  mode: 'upsert',
+  externalId: 'email',
+  records: [
+    { name: 'Nora West', email: 'nora@northwind.example', phone: '+1 555 010 1111', company: 'Northwind', title: 'Procurement Lead', account: 'Northwind', stage: 'qualified' },
+    { name: 'Noah Bell', email: 'noah@northwind.example', phone: '+1 555 010 2222', company: 'Northwind', title: 'CFO', account: 'Northwind', stage: 'working' },
+    { name: 'Cara Ito', email: 'cara@contoso.example', phone: '+1 555 020 1111', company: 'Contoso', title: 'IT Director', account: 'Contoso', stage: 'new' },
+    { name: 'Carl Fox', email: 'carl@contoso.example', phone: '+1 555 020 2222', company: 'Contoso', title: 'Data Lead', account: 'Contoso', stage: 'qualified' },
+    { name: 'Faye Lin', email: 'faye@fabrikam.example', phone: '+1 555 030 1111', company: 'Fabrikam', title: 'Compliance Officer', account: 'Fabrikam', stage: 'new' },
   ],
 });
 
@@ -214,4 +230,4 @@ const preferences = defineSeed(Preference, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, products, projects, tasks, categories, businessUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];
+export const ShowcaseSeedData = [accounts, contacts, products, projects, tasks, categories, businessUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];

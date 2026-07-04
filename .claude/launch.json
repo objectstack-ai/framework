@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "showcase-dogfood-3777",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "-C",
+        "examples/app-showcase",
+        "exec",
+        "objectstack",
+        "dev",
+        "--ui",
+        "--seed-admin",
+        "-p",
+        "3777",
+        "-d",
+        "file:/tmp/showcase-dogfood-3777/data.db"
+      ],
+      "port": 3777
+    }
+  ]
+}

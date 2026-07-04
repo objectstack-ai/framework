@@ -45,6 +45,7 @@ export const ShowcaseApp = App.create({
         { id: 'nav_projects', type: 'object', objectName: 'showcase_project', label: 'Projects', icon: 'folder-kanban' },
         { id: 'nav_tasks', type: 'object', objectName: 'showcase_task', label: 'Tasks', icon: 'check-square' },
         { id: 'nav_accounts', type: 'object', objectName: 'showcase_account', label: 'Accounts', icon: 'building' },
+        { id: 'nav_contacts', type: 'object', objectName: 'showcase_contact', label: 'Contacts', icon: 'user' },
         { id: 'nav_invoices', type: 'object', objectName: 'showcase_invoice', label: 'Invoices', icon: 'receipt' },
         { id: 'nav_products', type: 'object', objectName: 'showcase_product', label: 'Products', icon: 'package' },
         { id: 'nav_teams', type: 'object', objectName: 'showcase_team', label: 'Teams', icon: 'users' },

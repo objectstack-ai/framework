@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { defineView } from '@objectstack/spec';
+import { defineView, P } from '@objectstack/spec';
 
 const data = { provider: 'object' as const, object: 'showcase_task' };
 
@@ -129,6 +129,10 @@ export const TaskViews = defineView({
         { field: 'due_date' },
       ],
       rowColor: { field: 'priority' },
+      // List-level inline edit — cells become editable in place, with a
+      // per-row edit affordance and a save-all/cancel-all toolbar (view-level
+      // master switch; distinct from the master-detail `inlineEdit` on fields).
+      inlineEdit: true,
     },
 
     // 2 ── Kanban ───────────────────────────────────────────────────────
@@ -240,6 +244,10 @@ export const TaskViews = defineView({
             { field: 'status', required: true },
             { field: 'priority' },
             { field: 'due_date' },
+            // View-level conditional visibility (FormField.visibleOn, CEL):
+            // the notes box only appears while the task is Urgent. Data-level
+            // counterpart is `visibleWhen` on invoice.paid_on.
+            { field: 'notes', visibleOn: P`record.priority == 'urgent'`, colSpan: 2 },
           ],
         },
       ],

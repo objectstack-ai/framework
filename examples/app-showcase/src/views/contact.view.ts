@@ -51,7 +51,7 @@ export const ContactViews = defineView({
     data,
     sections: [
       { name: 'contact', label: 'Contact', columns: 2, fields: ['name', 'email', 'phone'] },
-      { name: 'work', label: 'Work', columns: 2, fields: ['company', 'title'] },
+      { name: 'work', label: 'Work', columns: 2, fields: ['company', 'title', 'account'] },
       { name: 'status', label: 'Status', columns: 2, fields: ['stage', 'lead_score'] },
       { name: 'notes', label: 'Notes', columns: 1, fields: ['notes'] },
     ],
