@@ -117,8 +117,9 @@ export const LogTimeAction = defineAction({
   icon: 'clock',
   objectName: task,
   type: 'form',
-  // Targets the `edit` form view — `showcase_task.default` is the LIST view
-  // (the container's main `list` implicitly claims the `default` key).
+  // Targets the `edit` FORM view. `showcase_task.default` is the LIST view (the
+  // container's main `list` implicitly claims the `default` key), so pointing a
+  // form action there opens a list as a form — now a build error (#2554).
   target: 'showcase_task.edit',
   // `record_section` so it surfaces in the Task Detail quick-actions bar too.
   locations: ['record_header', 'record_related', 'record_section'],

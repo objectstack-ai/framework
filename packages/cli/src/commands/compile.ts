@@ -14,6 +14,7 @@ import { validateResponsiveStyles } from '@objectstack/lint';
 import { lintFlowPatterns } from '../utils/lint-flow-patterns.js';
 import { lintAutonumberFormats } from '../utils/lint-autonumber-formats.js';
 import { lintLivenessProperties } from '../utils/lint-liveness-properties.js';
+import { lintViewRefs } from '../utils/lint-view-refs.js';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
@@ -284,6 +285,38 @@ export default class Compile extends Command {
       if (autonumberWarnings.length > 0 && !flags.json) {
         console.log('');
         for (const f of autonumberWarnings) {
+          printWarning(`${f.where}: ${f.message}`);
+          console.log(chalk.dim(`    ${f.hint}`));
+          console.log(chalk.dim(`    rule: ${f.rule}`));
+        }
+      }
+
+      // 3d-quater. View-reference lint (#2554) — resolves form action targets
+      //     and view-key collisions at build time. A `type:'form'` target that
+      //     names a missing view or a LIST view opens a broken/blank form at
+      //     runtime; a list/form key collision silently renames one view so
+      //     references resolve to the OTHER. Both are broken → fail the build.
+      //     This shifts objectui's runtime `viewKind` guard left to compile.
+      const viewRefLint = lintViewRefs(result.data as Record<string, unknown>);
+      const viewRefErrors = viewRefLint.filter((f) => f.severity === 'error');
+      const viewRefWarnings = viewRefLint.filter((f) => f.severity === 'warning');
+      if (viewRefErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'view reference validation failed', issues: viewRefErrors }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`View reference validation failed (${viewRefErrors.length} issue${viewRefErrors.length > 1 ? 's' : ''})`);
+        for (const f of viewRefErrors) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}`));
+        }
+        this.exit(1);
+      }
+      if (viewRefWarnings.length > 0 && !flags.json) {
+        console.log('');
+        for (const f of viewRefWarnings) {
           printWarning(`${f.where}: ${f.message}`);
           console.log(chalk.dim(`    ${f.hint}`));
           console.log(chalk.dim(`    rule: ${f.rule}`));

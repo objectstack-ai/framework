@@ -2,6 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { expandViewContainer, isAggregatedViewContainer } from './plugin.js';
+import { expandViewContainerWithDiagnostics } from '@objectstack/spec';
 
 // Mirrors examples/app-crm/src/views/lead.view.ts — the canonical case where
 // the default `list` and `listViews.all` are structurally identical (the
@@ -101,6 +102,46 @@ describe('expandViewContainer — default list with no listViews dup', () => {
     expect(items).toHaveLength(1);
     expect(items[0].name).toBe('acct.default');
     expect(items[0].isDefault).toBe(true);
+  });
+});
+
+describe('expandViewContainerWithDiagnostics — collision capture (#2554)', () => {
+  it('is behaviour-preserving: items match expandViewContainer, no false collisions', () => {
+    const { items, collisions } = expandViewContainerWithDiagnostics('crm_lead', leadContainer);
+    // The deduped lead container has no real collision (list folds into `all`,
+    // so `default` is free for the form).
+    expect(collisions).toEqual([]);
+    expect(items.map((i) => i.name)).toEqual(
+      expandViewContainer('crm_lead', leadContainer).map((i) => i.name),
+    );
+  });
+
+  it('captures a formViews key colliding with the implicit default list', () => {
+    const { items, collisions } = expandViewContainerWithDiagnostics('task', {
+      list: { type: 'grid', label: 'All', columns: ['title'], data: { provider: 'object', object: 'task' } },
+      formViews: { default: { type: 'simple', data: { provider: 'object', object: 'task' }, sections: [] } },
+    });
+    // Rename behaviour is unchanged (backward compat): list keeps the name,
+    // the form loses and is renamed.
+    expect(items.find((i) => i.viewKind === 'list')!.name).toBe('task.default');
+    expect(items.find((i) => i.viewKind === 'form')!.name).toBe('task.default_2');
+    // …and the collision is captured, naming both sides + the losing kind.
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]).toMatchObject({
+      requested: 'task.default',
+      renamedTo: 'task.default_2',
+      viewKind: 'form',
+      key: 'default',
+    });
+  });
+
+  it('captures a formViews key colliding with a listViews key', () => {
+    const { collisions } = expandViewContainerWithDiagnostics('task', {
+      listViews: { mine: { type: 'grid', label: 'Mine', columns: ['title'], data: { provider: 'object', object: 'task' } } },
+      formViews: { mine: { type: 'simple', data: { provider: 'object', object: 'task' }, sections: [] } },
+    });
+    expect(collisions.map((c) => c.requested)).toContain('task.mine');
+    expect(collisions.find((c) => c.requested === 'task.mine')!.viewKind).toBe('form');
   });
 });
 
