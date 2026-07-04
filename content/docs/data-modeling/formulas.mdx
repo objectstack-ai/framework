@@ -153,13 +153,22 @@ All functions are pure given a pinned `now`, which is what makes
 | Function | Returns | Description |
 |:---|:---|:---|
 | `now()` | timestamp | Pinned wall-clock at evaluation start |
-| `today()` | timestamp | `now()` truncated to UTC start-of-day |
-| `daysFromNow(n)` | timestamp | `now() + n` days (preserves wall-clock time, not start-of-day) |
-| `daysAgo(n)` | timestamp | `now() - n` days |
+| `today()` | timestamp | Calendar day in the business timezone, as UTC midnight |
+| `daysFromNow(n)` / `daysAgo(n)` | timestamp | `today() ± n` days (calendar-day, not wall-clock) |
+| `addDays(d, n)` / `addMonths(d, n)` | timestamp | Shift a *given* date; `addMonths` clamps to month end (Jan 31 + 1mo → Feb 28) |
+| `date(s)` / `datetime(s)` | timestamp | Parse an ISO date / date-time string (aliases) |
+| `daysBetween(a, b)` | int | Whole days from `a` to `b` (negative when `b` is earlier) |
 | `isBlank(v)` | bool | True for `null`, `undefined`, `''`, `[]` |
+| `isEmpty(v)` | bool | True for `null` or zero-length string/list/map |
 | `coalesce(v, fallback)` | dyn | `v` when non-null, else `fallback` |
 | `trim(v)` | string | `v` with leading/trailing whitespace removed |
 | `joinNonEmpty(list, sep)` | string | `list` joined by `sep`, skipping blank entries |
+| `upper(s)` / `lower(s)` | string | Case conversion |
+| `contains(s, sub)` / `startsWith(s, p)` / `endsWith(s, p)` | bool | Substring checks (free-function form) |
+| `matches(s, regex)` | bool | Regex test |
+| `len(v)` | int | Length of a string / list / map (mirrors CEL's built-in `size()`) |
+| `abs(x)` / `round(x)` | number | Numeric helpers |
+| `min(a, b)` / `max(a, b)` | dyn | Smaller / larger operand (numeric comparison) |
 
 Add new helpers in
 [`packages/formula/src/stdlib.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/formula/src/stdlib.ts).
@@ -213,7 +222,7 @@ Building the string by hand with `+` would also work, but CEL throws on
 ```ts
 {
   name: 'rating',
-  type: 'picklist',
+  type: 'select',
   visibleWhen: P`record.status == 'qualified'`,
 }
 
@@ -232,13 +241,13 @@ identical SHA-1 across builds while still being "fresh" relative to whoever
 installs the package.
 
 ```ts
-import { defineDataset, cel } from '@objectstack/spec';
+import { defineSeed } from '@objectstack/spec/data';
+import { cel } from '@objectstack/spec';
+import { Opportunity } from './objects/opportunity.object';
 
-export const opportunityDataset = defineDataset({
-  object: 'opportunity',
+export const opportunitySeed = defineSeed(Opportunity, {
   records: [
     {
-      id: 'opp_acme',
       name: 'Acme Q3 Renewal',
       close_date: cel`daysFromNow(45)`,
       created_at: cel`now()`,

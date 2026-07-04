@@ -1,11 +1,15 @@
 ---
 title: "Role Hierarchy"
-description: "Roles control record-level access through a hierarchy derived from each role's parent link — access is granted upward to managers over their subordinates' records."
+description: "Roles bundle permissions (via role-based permission-set grants) and form a reporting hierarchy derived from each role's parent link — consumed by role_and_subordinates sharing-rule recipients."
 ---
 
 # Role Hierarchy
 
-Roles control record-level access through a hierarchy.
+Roles serve two purposes: they are an **assignment target for permission sets**
+(grant a set to a role via a `sys_role_permission_set` row — see
+[Permission Sets](/docs/permissions/permission-sets#assigning-permission-sets)),
+and their `parent` links form a **reporting hierarchy** that sharing rules can
+reference to widen record access.
 
 The hierarchy is derived from the `parent` link on each role — there is no
 `RoleHierarchy` container schema. Author roles as individual `*.role.ts`
@@ -43,12 +47,27 @@ export const roles: Role[] = [
          Sales Rep          Service Agent
 ```
 
-**Grant Access UP:** Users see records owned by:
-- Themselves
-- Their subordinates
-- Their subordinates' subordinates (all levels down)
+**There is no implicit "managers see subordinates' records" grant.** Unlike
+Salesforce, the role hierarchy by itself does not widen record visibility
+(ADR-0057 D5: the visibility hierarchy does not live on roles). Upward
+visibility is always an explicit, opt-in grant:
 
-**Example:** Sales Director sees all records owned by Sales Managers and Sales Reps.
+- **Sharing rules** — a criteria rule whose recipient is
+  `{ type: 'role', value: 'sales_director' }` or
+  `{ type: 'role_and_subordinates', value: 'sales_manager' }`. The
+  `role_and_subordinates` recipient is where the `parent` graph is consumed:
+  it expands to everyone holding the named role *or any role beneath it*.
+  See [Sharing Rules](/docs/permissions/sharing-rules#recipient-types).
+- **Scope-depth grants** — an owner-scoped object grant with
+  `readScope: 'own_and_reports'` (manager chain via `sys_user.manager_id`) or
+  `'unit'` / `'unit_and_below'` (business units). These require the paid
+  hierarchy resolver and **fail closed to `own`** without it — see
+  [Access depth](/docs/permissions/profiles#access-depth--readscope--writescope-adr-0057-d1).
+
+**Example:** to let a Sales Director see records owned by Sales Managers and
+Sales Reps, author a criteria sharing rule with the director role as recipient,
+or grant the director's permission set `readScope: 'unit_and_below'` — neither
+happens automatically.
 
 ---
 

@@ -5,7 +5,7 @@ description: Default validation behavior, required properties, and constraints f
 
 # Field Validation Rules
 
-Every ObjectStack field type has built-in validation behavior that runs automatically at the schema level. This reference documents the **default constraints**, **required properties**, and **validation semantics** for each of the 48 field types.
+Every ObjectStack field type has built-in validation behavior that runs automatically at the schema level. This reference documents the **default constraints**, **required properties**, and **validation semantics** for each field type.
 
 <Callout type="info">
 **Source:** `packages/spec/src/data/field.zod.ts`  
@@ -22,7 +22,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 |:---|:---|:---|:---|
 | `name` | `string` | — | Must match `^[a-z_][a-z0-9_]*$` (snake_case) |
 | `label` | `string` | — | Human-readable display name |
-| `type` | `FieldType` | — | Must be one of the 48 defined types |
+| `type` | `FieldType` | — | Must be a member of the `FieldType` enum |
 | `required` | `boolean` | `false` | Rejects `null`/`undefined` at runtime when `true` |
 | `unique` | `boolean` | `false` | Enforces database-level uniqueness constraint |
 | `multiple` | `boolean` | `false` | Stores value as array (applicable for select, lookup, file, image) |
@@ -31,7 +31,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `sortable` | `boolean` | `true` | Whether field appears in list view sort options |
 | `index` | `boolean` | `false` | Creates standard database index |
 | `externalId` | `boolean` | `false` | Marks field as external ID for upsert operations |
-| `auditTrail` | `boolean` | `false` | Tracks all changes with user and timestamp |
+| `trackHistory` | `boolean` | — | Render this field's value changes as entries on the record activity timeline |
 | `visibleWhen` | `string \| Expression` | — | CEL predicate; field is shown only when `TRUE` |
 | `readonlyWhen` | `string \| Expression` | — | CEL predicate; field is read-only when `TRUE` |
 | `requiredWhen` | `string \| Expression` | — | CEL predicate; field is required when `TRUE` |
@@ -48,7 +48,6 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `maxLength` | `number` | — | Rejects values exceeding character count |
 | `minLength` | `number` | — | Rejects values below character count |
 | `format` | `string` | — | Validates against format pattern (e.g., regex) |
-| `caseSensitive` | `boolean` | — | Controls case-sensitivity in uniqueness checks |
 
 **Default constraints:** None. Unbounded text unless `maxLength` is set.
 
@@ -66,7 +65,6 @@ These properties apply to **all** field types and are validated by the base `Fie
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
 | `format` | `string` | `email` | Validates RFC 5322 email format |
-| `caseSensitive` | `boolean` | — | Controls case-sensitivity in uniqueness checks |
 
 **Default constraints:** Must conform to valid email format.
 
@@ -93,7 +91,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `maxLength` | `number` | — | Maximum password length |
 | `minLength` | `number` | — | Minimum password length |
 
-**Default constraints:** Value is never returned in read operations. Stored encrypted.
+**Default constraints:** Value is never returned in read operations. Stored as a one-way hash owned by the auth subsystem — for reversible encrypted-at-rest secrets, use the `secret` type instead.
 
 ---
 
@@ -257,10 +255,10 @@ These properties apply to **all** field types and are validated by the base `Fie
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
 | `reference` | `string` | — | **Required.** Parent object name |
-| `deleteBehavior` | `enum` | `set_null` | Typically `cascade` for master-detail |
+| `deleteBehavior` | `enum` | `cascade` | Master-detail cascades at runtime unless set to `restrict` |
 | `writeRequiresMasterRead` | `boolean` | — | Require read access to master record |
 
-**Default constraints:** Enforces parent-child ownership. Child records cascade-delete with parent by convention.
+**Default constraints:** Enforces parent-child ownership. Child records cascade-delete with the parent by default.
 
 ### `tree`
 
@@ -337,7 +335,6 @@ These properties apply to **all** field types and are validated by the base `Fie
 |:---|:---|:---|:---|
 | `expression` | `string` | — | **Required.** Formula expression |
 | `dependencies` | `string[]` | — | Fields this formula depends on |
-| `cached` | `object` | — | Caching configuration with TTL and invalidation triggers |
 
 **Default constraints:** Read-only. Value computed at runtime from `expression`. Not directly writable.
 
@@ -347,8 +344,7 @@ These properties apply to **all** field types and are validated by the base `Fie
   label: 'Full Name',
   type: 'formula',
   expression: 'record.first_name + " " + record.last_name',
-  dependencies: ['first_name', 'last_name'],
-  cached: { enabled: true, ttl: 3600, invalidateOn: ['first_name', 'last_name'] }
+  dependencies: ['first_name', 'last_name']
 }
 ```
 
@@ -377,28 +373,17 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 ### `location`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `displayMap` | `boolean` | — | Show map widget in UI |
-| `allowGeocoding` | `boolean` | — | Enable address-to-coordinate conversion |
-
-**Default constraints:** Stored as `{ latitude, longitude, altitude?, accuracy? }`. Latitude: -90 to 90. Longitude: -180 to 180.
+**Default constraints:** Stored as `{ latitude, longitude, altitude?, accuracy? }`. Latitude: -90 to 90. Longitude: -180 to 180. No per-type config properties.
 
 ### `address`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `addressFormat` | `enum` | — | `us`, `uk`, or `international` |
-
-**Default constraints:** Stored as structured object with `street`, `city`, `state`, `postalCode`, `country`, `countryCode`, `formatted`.
+**Default constraints:** Stored as structured object with `street`, `city`, `state`, `postalCode`, `country`, `countryCode`, `formatted` (all parts optional). No per-type config properties.
 
 ### `code`
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
 | `language` | `string` | — | Programming language for syntax highlighting |
-| `theme` | `string` | — | Editor theme (e.g., `dark`, `monokai`) |
-| `lineNumbers` | `boolean` | — | Show line numbers in editor |
 
 **Default constraints:** Stored as plain text. Language used for UI syntax highlighting only.
 
@@ -408,22 +393,15 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 ### `color`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `colorFormat` | `enum` | — | `hex`, `rgb`, `rgba`, or `hsl` |
-| `allowAlpha` | `boolean` | — | Allow transparency channel |
-| `presetColors` | `string[]` | — | Predefined color swatches |
-
-**Default constraints:** Validated against the specified `colorFormat`. Defaults to hex if not specified.
+**Default constraints:** Stores the color value as a string. No per-type config properties.
 
 ### `rating`
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
-| `maxRating` | `number` | `5` | Maximum rating value |
-| `allowHalf` | `boolean` | — | Allow half-step increments |
+| `max` | `number` | `5` | Maximum rating value (set by the `Field.rating(max)` factory) |
 
-**Default constraints:** Integer between 0 and `maxRating`. Half-steps allowed when `allowHalf` is true.
+**Default constraints:** Integer between 0 and `max`.
 
 ### `slider`
 
@@ -432,8 +410,6 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `min` | `number` | — | Minimum slider value |
 | `max` | `number` | — | Maximum slider value |
 | `step` | `number` | `1` | Step increment |
-| `showValue` | `boolean` | — | Display current value |
-| `marks` | `Record<string, string>` | — | Custom labels at specific values |
 
 **Default constraints:** Numeric value between `min` and `max` in `step` increments.
 
@@ -443,14 +419,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 ### `qrcode`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `barcodeFormat` | `enum` | — | `qr`, `ean13`, `ean8`, `code128`, `code39`, `upca`, `upce` |
-| `qrErrorCorrection` | `enum` | — | `L` (7%), `M` (15%), `Q` (25%), `H` (30%) — only for `qr` format |
-| `displayValue` | `boolean` | — | Show human-readable value below code |
-| `allowScanning` | `boolean` | — | Enable camera scanning input |
-
-**Default constraints:** `qrErrorCorrection` only applies when `barcodeFormat` is `qr`. Value validated against barcode format rules.
+**Default constraints:** Stores the encoded value; rendered as a scannable code. No per-type config properties.
 
 ### `progress`
 
@@ -473,51 +442,16 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
-| `vectorConfig.dimensions` | `number` | — | **Required.** Vector size (1–10,000) |
-| `vectorConfig.distanceMetric` | `enum` | `cosine` | `cosine`, `euclidean`, `dotProduct`, `manhattan` |
-| `vectorConfig.normalized` | `boolean` | `false` | Whether vectors are unit-length |
-| `vectorConfig.indexed` | `boolean` | `true` | Create vector index for similarity search |
-| `vectorConfig.indexType` | `enum` | — | `hnsw`, `ivfflat`, or `flat` |
+| `dimensions` | `number` | — | **Required.** Vector size (1–10,000) |
 
-**Default constraints:** Must be a numeric array of exactly `dimensions` length. Indexed by default for fast similarity search.
+**Default constraints:** Must be a numeric array of exactly `dimensions` length. The nested `vectorConfig` object is retained for back-compat only and is a runtime no-op — set the flat `dimensions` property instead.
 
 ```typescript
 {
   name: 'content_embedding',
   label: 'Content Embedding',
   type: 'vector',
-  vectorConfig: {
-    dimensions: 1536,
-    distanceMetric: 'cosine',
-    indexed: true,
-    indexType: 'hnsw'
-  }
-}
-```
-
----
-
-## Data Quality Rules
-
-Any field can optionally include `dataQuality` rules for governance and monitoring:
-
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `dataQuality.uniqueness` | `boolean` | `false` | Enforce unique values across all records |
-| `dataQuality.completeness` | `number` | `0` | Minimum ratio of non-null values (0–1) |
-| `dataQuality.accuracy.source` | `string` | — | Reference data source for validation |
-| `dataQuality.accuracy.threshold` | `number` | — | Minimum accuracy threshold (0–1) |
-
-```typescript
-{
-  name: 'social_security',
-  label: 'SSN',
-  type: 'text',
-  dataQuality: {
-    uniqueness: true,
-    completeness: 0.95,
-    accuracy: { source: 'government_db', threshold: 0.98 }
-  }
+  dimensions: 1536
 }
 ```
 
@@ -525,13 +459,16 @@ Any field can optionally include `dataQuality` rules for governance and monitori
 
 ## Security & Compliance Properties
 
-Fields supporting sensitive data can leverage encryption and masking:
+For sensitive data, use the properties and types the platform actually enforces:
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `encryptionConfig` | `EncryptionConfig` | — | Field-level encryption (GDPR/HIPAA/PCI-DSS) |
-| `maskingRule` | `MaskingRule` | — | Data masking rules for PII protection |
-| `auditTrail` | `boolean` | `false` | Track all changes with user and timestamp |
+| `requiredPermissions` | `string[]` | — | Capabilities required to read/edit the field — masked on read, denied on write unless the caller holds all of them (ADR-0066 D3) |
+| `trackHistory` | `boolean` | — | Render the field's value changes as entries on the record activity timeline |
+
+For reversible encrypted-at-rest values (API keys, tokens, DB passwords), use the
+`secret` field type; for credentials, use `password` (one-way hash). See the
+[Field Type Gallery](/docs/data-modeling/field-types).
 
 ---
 
@@ -544,7 +481,7 @@ Fields supporting sensitive data can leverage encryption and masking:
 | `email` | — | RFC 5322 email format |
 | `url` | — | Valid URL with protocol |
 | `phone` | — | E.164 / national format |
-| `password` | — | Stored encrypted, never returned |
+| `password` | — | One-way hash, never returned |
 | `markdown` | — | `maxLength` |
 | `html` | — | Sanitized, `maxLength` |
 | `richtext` | — | Sanitized, `maxLength` |
@@ -572,14 +509,14 @@ Fields supporting sensitive data can leverage encryption and masking:
 | `summary` | `summaryOperations` | Read-only, roll-up from children |
 | `autonumber` | — | Read-only, auto-incremented |
 | `location` | — | Lat: -90–90, Lng: -180–180 |
-| `address` | — | Structured object, `addressFormat` |
+| `address` | — | Structured object (street, city, …) |
 | `code` | — | Plain text, `language` for highlighting |
 | `json` | — | Must be valid JSON |
-| `color` | — | Validated against `colorFormat` |
-| `rating` | — | 0 to `maxRating` (default 5) |
+| `color` | — | Stored as a string |
+| `rating` | — | 0 to `max` (default 5) |
 | `slider` | — | `min` to `max` in `step` increments |
 | `signature` | — | Base64 image, typically immutable |
 | `qrcode` | — | Format-specific validation |
 | `progress` | — | Numeric, typically 0–100 |
 | `tags` | — | String array, trimmed, deduplicated |
-| `vector` | `vectorConfig` | Numeric array of exact `dimensions` length |
+| `vector` | `dimensions` | Numeric array of exact `dimensions` length |

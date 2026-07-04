@@ -26,12 +26,13 @@ This guide maps every chatbot configuration knob to its framework endpoint
 so you can drop the plugin into an app without reverse-engineering the
 contract.
 
-## 1. Enable the AI tier on the framework side
+## 1. Enable the AI tier on the backend
 
-The `default` and `full` plugin tier presets both include the `ai`
-capability, so `objectstack dev` boots the AI services unless you opt out
-with `--preset minimal`. Provide a Vercel AI Gateway model and key via env
-vars:
+On a cloud / EE dev host (where `@objectstack/service-ai` is available —
+see the callout above), the `default` and `full` plugin tier presets both
+include the `ai` capability, so `objectstack dev` boots the AI services
+unless you opt out with `--preset minimal`. Provide a Vercel AI Gateway
+model and key via env vars:
 
 ```bash
 AI_GATEWAY_API_KEY=vck_*** \

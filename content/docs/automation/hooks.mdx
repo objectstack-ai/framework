@@ -16,8 +16,10 @@ such as `beforeFind`/`afterFind` are also available).
 
 ## Before Hook
 
-Mutate the incoming record before it is saved. The pending record lives on
-`ctx.input` (`ctx.input.doc` for insert/update):
+Mutate the incoming record before it is saved. The engine exposes the pending
+record's fields **directly on `ctx.input`** (a flat view over the internal
+`{ data, options }` wrapper — reads and writes of record fields route through
+`ctx.input.data`):
 
 ```typescript
 import { Hook } from '@objectstack/spec/data';
@@ -28,7 +30,7 @@ export const AccountBeforeWrite: Hook = {
   events: ['beforeInsert', 'beforeUpdate'],
 
   handler: async (ctx) => {
-    const record = ctx.input.doc as Record<string, any>;
+    const record = ctx.input as Record<string, any>;
 
     // Normalize phone numbers
     if (record.phone) {
@@ -80,7 +82,7 @@ ctx = {
   id,           // tracing id
   object,       // target object name
   event,        // e.g. 'beforeInsert' | 'afterUpdate'
-  input,        // mutable input (e.g. input.doc for insert/update)
+  input,        // mutable input — record fields exposed flat (raw wrapper: input.data, input.options)
   result,       // mutable operation result (after* events)
   previous,     // record state before the operation (update/delete)
   session,      // { userId, tenantId, roles, accessToken, isSystem }

@@ -122,7 +122,7 @@ The `@objectstack/client` SDK aims to implement the ObjectStack API protocol spe
 | **storage** | ✅ | 2 | File upload & download |
 | **i18n** | ✅ | 3 | Internationalization |
 | **notifications** | 🟡 | 7 | Legacy notification helpers; receipt/inbox cut-over pending |
-| **realtime** | ✅ | 6 | WebSocket subscriptions |
+| **realtime** | ✅ | 6 | Connection/subscription/presence calls (server transport is plugin-provided) |
 | **ai** | ✅ | 3 | AI services (NLQ, suggest, insights) |
 
 <Callout type="info">
@@ -553,18 +553,18 @@ For detailed information about the client's protocol implementation:
 
 <Cards>
   <Card 
-    href="./api-reference" 
-    title="API Reference"
+    href="/docs/api/data-api" 
+    title="Data API"
     description="Complete REST endpoint documentation"
   />
   <Card 
-    href="./kernel-services" 
+    href="/docs/kernel/services-checklist" 
     title="Kernel Services"
     description="Service checklist and plugin development guide"
   />
   <Card 
-    href="../references/api/protocol" 
+    href="/docs/references/api/protocol" 
     title="Protocol Types"
-    description="All 57 Zod protocol schemas"
+    description="The Zod protocol schemas"
   />
 </Cards>

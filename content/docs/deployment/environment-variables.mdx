@@ -28,6 +28,9 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 | `OS_MODE` | enum | `standalone` | Runtime mode. `standalone` \| `cloud`. |
 | `OS_BOOT_EMPTY` | flag | `0` | When `1`, boot the kernel with no metadata artifact (CLI internal). |
 | `OS_MIGRATE_AND_EXIT` | flag | `0` | When `1`, run pending migrations and exit (suitable for one-shot jobs). |
+| `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Console portal under `/_console`. |
+| `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, eagerly materialise all object schemas at boot (slower start, faster first request). |
+| `OS_SKIP_SCHEMA_SYNC` | flag | `0` | When `1`, skip the implicit `db:sync` on boot. Use after running migrations manually. |
 
 > **Port conflicts behave differently by mode.** In **dev** (`os dev`, or
 > `NODE_ENV=development`) a busy port auto-hops to the next free one (up to
@@ -35,11 +38,8 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 > (`os start`) a busy port is a hard error (exit 1) — it never silently
 > drifts, because a shifted port breaks reverse-proxy upstreams, `OS_AUTH_URL`
 > callbacks, and `OS_TRUSTED_ORIGINS` (CORS). Pin the port explicitly in
-> production (`PORT=8080 os start`) and keep `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`
+> production (`OS_PORT=8080 os start`) and keep `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`
 > in sync with it.
-| `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Console portal under `/_console`. |
-| `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, eagerly materialise all object schemas at boot (slower start, faster first request). |
-| `OS_SKIP_SCHEMA_SYNC` | flag | `0` | When `1`, skip the implicit `db:sync` on boot. Use after running migrations manually. |
 
 ---
 
@@ -51,6 +51,17 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 | `OS_DATABASE_DRIVER` | enum | inferred | Force a specific driver when the URL is ambiguous. `sqlite` \| `postgres` \| `libsql`. |
 | `OS_STORAGE_ROOT` | path | `<OS_HOME>/storage` | Root directory for the local file storage adapter. |
 | `OS_ARTIFACT_PATH` | path | — | Path or `http(s)://` URL to a compiled `objectstack.json` artifact to boot the kernel from. |
+
+---
+
+## Secrets & Clustering
+
+| Variable | Type | Default | Description |
+|:---|:---|:---|:---|
+| `OS_SECRET_KEY` | string | — | 32-byte master key (64 hex chars or base64) for `sys_secret` encryption — encrypted settings, `secret` fields, datasource credentials. **Required** for containerized or multi-node deployments; on a single durable host `os start` mints and persists a dev key instead. See [Deployment Modes](/docs/deployment#environment-variables). |
+| `OS_DEV_CRYPTO_KEY` | string | — | Development convenience crypto key, consulted after `OS_SECRET_KEY`. Do not use in production. |
+| `OS_CLUSTER_DRIVER` | string | `memory` | Cluster coordination driver id. When set to anything other than `memory`, the runtime treats the deployment as multi-node (and requires `OS_SECRET_KEY`). Non-memory drivers (e.g. `redis`) ship in the EE distribution. |
+| `OS_REDIS_URL` | url | — | Connection URL passed to a non-memory cluster driver (e.g. `OS_CLUSTER_DRIVER=redis`). |
 
 ---
 

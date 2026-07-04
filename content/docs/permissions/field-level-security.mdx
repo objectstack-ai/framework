@@ -1,6 +1,6 @@
 ---
 title: "Field-Level Security"
-description: "Control visibility and editability of specific fields — readable/editable rules, hidden vs. read-only semantics, and fail-closed server-side enforcement."
+description: "Control visibility and editability of specific fields — readable/editable rules, hidden vs. read-only semantics, and server-side enforcement of declared rules."
 ---
 
 # Field-Level Security
@@ -36,7 +36,7 @@ fields: {
 { readable: true, editable: true }
 ```
 
-## Server-side enforcement (fail-closed)
+## Server-side enforcement of declared rules
 
 The client-side ObjectForm / inline grid hides non-editable fields from
 the UI — but that is a **UX layer only**. The SecurityPlugin middleware
@@ -73,9 +73,19 @@ field exists. Throwing makes the boundary observable in both directions
 — legitimate UIs get an actionable error to fix; probing clients learn
 nothing they could not already infer.
 
-**Allow-list semantics.** Fields without an explicit rule pass through
-untouched. Permission sets only constrain fields they explicitly
-enumerate.
+**Default-visible (block-list) semantics.** Fields without an explicit
+rule pass through untouched — readable *and* writable. Permission sets
+only constrain fields they explicitly enumerate, and field grants union
+most-permissively across a user's sets (one set's `readable: true`
+out-votes another set's `false`). Until a subtractive muting layer lands
+(ADR-0066 ⑧), a `{ readable: false }` rule masks the field only as long
+as **no other set the user holds** declares it `readable: true` — so
+protect sensitive fields by granting them only in the sets that need
+them, and treat a sensitive field on a broadly-granted object as a
+review smell — see the
+[FLS posture warning](/docs/permissions/authorization#combination-semantics-the-fixed-order).
+Declared rules themselves are enforced fail-closed: a masked field is
+stripped on read and a write to a non-editable field throws.
 
 **Bulk inserts.** Arrays are checked row-by-row; a single offending
 field in any row rejects the whole batch atomically.

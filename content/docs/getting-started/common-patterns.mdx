@@ -406,39 +406,33 @@ Restrict field visibility and editability based on user profiles.
       name: { label: 'Name', type: 'text', required: true },
       email: { label: 'Email', type: 'email', required: true },
       department: { label: 'Department', type: 'lookup', reference: 'department' },
-      // Sensitive fields with encryption
       salary: { label: 'Salary', type: 'currency',
         hidden: true,  // Hidden from default views
-        encryptionConfig: {
-          enabled: true,
-          algorithm: 'aes-256-gcm',
-          scope: 'field',
-          keyManagement: {
-            provider: 'local',
-            rotationPolicy: { enabled: true, frequencyDays: 90 }
-          }
-        }
       },
-      ssn: { label: 'SSN', type: 'text',
-        hidden: true,
-        maskingRule: {
-          field: 'ssn',
-          strategy: 'partial',
-          pattern: '\\d{4}$'
-        },
-        encryptionConfig: {
-          enabled: true,
-          algorithm: 'aes-256-gcm',
-          scope: 'field',
-          keyManagement: {
-            provider: 'local',
-            rotationPolicy: { enabled: true, frequencyDays: 90 }
-          }
-        }
-      },
+      // `secret` values are stored encrypted and never returned in plain reads
+      api_token: { label: 'API Token', type: 'secret' },
     }
   }]
 }
+```
+
+Who can actually read or edit a field is governed by permission sets — grant per-object CRUD, then narrow individual fields:
+
+```typescript
+import { definePermissionSet } from '@objectstack/spec';
+
+export const HrRepPermission = definePermissionSet({
+  name: 'hr_rep',
+  label: 'HR Rep',
+  isProfile: true,
+  objects: {
+    employee: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
+  },
+  fields: {
+    // <object>.<field> — field-level security
+    'employee.salary': { readable: true, editable: false }, // Read-only
+  },
+});
 ```
 
 ---

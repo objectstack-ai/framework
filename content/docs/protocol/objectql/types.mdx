@@ -936,32 +936,23 @@ How types convert between databases:
 
 ## Sensitive Data: Masking & Encryption
 
-There is no user-defined "custom type" registry. Instead, sensitive-data behavior
-is configured directly on a field via the `maskingRule` and `encryptionConfig`
-properties (and the `secret` type for reversible encrypted-at-rest values).
+There is no user-defined "custom type" registry. For sensitive values, use the
+dedicated `secret` field type, which encrypts on write and masks on read, and
+restrict reader access with [field-level security](/docs/permissions/field-level-security)
+(`readable: false`) or `hidden`.
 
 ```yaml
-# PII masking — show only the last 4 digits to most roles
-ssn:
-  type: text
-  label: Social Security Number
-  maskingRule:
-    field: ssn
-    strategy: partial
-    pattern: "\\d{3}-\\d{2}-(\\d{4})"
-    exemptRoles: [compliance_officer]
-
-# Field-level encryption (PCI/HIPAA/GDPR)
-card_number:
-  type: text
-  label: Credit Card
-  encryptionConfig:
-    enabled: true
-    algorithm: aes-256-gcm
+# Reversible secret (API keys, DB passwords)
+api_key:
+  type: secret
+  label: API Key
 ```
 
-For reversible secrets (API keys, DB passwords) use the dedicated `secret` field
-type, which encrypts on write and masks on read.
+> The per-field `maskingRule` and `encryptionConfig` properties were **pruned
+> from the Field schema in 2026-06** — they were declared surface with no
+> runtime consumer. The `MaskingRuleSchema`/`EncryptionConfigSchema` shapes
+> remain in the System namespace for implementers; see
+> [Security & Access Control](/docs/protocol/objectql/security) for their status.
 
 ## Type Selection Guide
 

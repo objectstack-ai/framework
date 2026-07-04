@@ -104,7 +104,7 @@ export interface IDataEngine {
 ```
 
 <Callout type="tip">
-**Convention:** Contract interfaces are prefixed with `I` (e.g., `IDataEngine`). Services are registered and resolved by **string name** through the kernel service registry (e.g., `ctx.registerService('dataEngine', impl)`).
+**Convention:** Contract interfaces are prefixed with `I` (e.g., `IDataEngine`). Services are registered and resolved by **string name** through the kernel service registry (e.g., `ctx.registerService('data', impl)` — see the `CoreServiceName` enum for the standard names).
 </Callout>
 
 ---
@@ -125,7 +125,7 @@ export const myPlugin: Plugin = {
 
   // Init phase: register the services this plugin provides
   init(ctx) {
-    ctx.registerService('dataEngine', new MyDataEngine(ctx));
+    ctx.registerService('data', new MyDataEngine(ctx));
 
     // Consume a service another plugin registered
     const cache = ctx.getService('cache');
@@ -157,6 +157,6 @@ flowchart LR
 
 <Callout type="info">
 **See also:**
-- [Plugin Development Guide](/guides/plugin-development) for implementing contracts
-- [Kernel Services Guide](/guides/kernel-services) for runtime architecture
+- [Plugin Development](/docs/plugins/development) for implementing contracts
+- [Service Registry](/docs/kernel/services) for runtime architecture
 </Callout>

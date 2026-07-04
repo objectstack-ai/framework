@@ -5,7 +5,7 @@ description: Complete reference for all ObjectStack error codes with causes, fix
 
 # Error Code Catalog
 
-ObjectStack uses a structured error system with **9 error categories** and **41+ standardized error codes**. Every error includes a machine-readable code, HTTP status mapping, and retry guidance.
+ObjectStack uses a structured error system with **9 error categories** and **51 standardized error codes**. Every error includes a machine-readable code, HTTP status mapping, and retry guidance.
 
 <Callout type="info">
 **Source:** `packages/spec/src/api/errors.zod.ts`  
@@ -391,7 +391,7 @@ import type { EnhancedApiError } from '@objectstack/spec/api';
 
 async function handleApiCall() {
   try {
-    const result = await client.records.create('task', { title: 'New Task' });
+    const result = await client.data.create('task', { title: 'New Task' });
     return result;
   } catch (error) {
     const apiError = error as EnhancedApiError;

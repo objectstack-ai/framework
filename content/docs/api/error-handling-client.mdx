@@ -8,7 +8,7 @@ description: Best practices for handling ObjectStack errors in client applicatio
 This guide covers best practices for handling ObjectStack API errors in client applications — from parsing error responses to displaying validation errors in forms and implementing retry strategies.
 
 <Callout type="info">
-**Error Format:** All ObjectStack API errors follow the `ErrorResponseSchema` structure. See [Wire Format](/docs/api/wire-format#7-error-response-format) for the full JSON shape.
+**Error Format:** The patterns in this guide target the spec error envelope (`ErrorResponseSchema`). Note that today's kernel REST data routes emit a flatter `{ error, code }` shape — see the [API Overview](/docs/api#error-handling) for the two wire formats in use and [Wire Format](/docs/api/wire-format#7-error-response-format) for full JSON examples; adapt the parser accordingly.
 </Callout>
 
 ---

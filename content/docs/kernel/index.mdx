@@ -5,7 +5,7 @@ description: The ObjectKernel runtime — plugin host, event bus, service regist
 
 # Kernel & Services
 
-The kernel is ObjectStack's runtime: it loads your metadata artifact, hosts plugins, wires up services, and enforces the lifecycle that keeps the system stable. This module documents the **ObjectOS layer** in practice — the [System Protocol](/docs/protocol/objectos) is its normative spec. If you write hooks or plugins, this is where the APIs you call and the contracts they implement are documented.
+The kernel is ObjectStack's runtime: it loads your metadata artifact, hosts plugins, wires up services, and enforces the lifecycle that keeps the system stable. This module documents the **ObjectOS layer** in practice — the [System Protocol](/docs/protocol/objectos) is its normative spec. If you write hooks or plugins, this is where the capability surface you call — `ctx.api`, `ctx.getService(...)`, and the `services.*` contract they implement — is documented.
 
 ## How it fits together
 

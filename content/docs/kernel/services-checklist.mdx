@@ -61,9 +61,9 @@ The ObjectStack protocol defines **17 kernel services** registered via the `Core
 | 11 | **i18n** | `core` | 3 | ✅ Built-in (in-memory fallback) | `@objectstack/service-i18n` |
 | 12 | **file-storage** | `optional` | — | ❌ Plugin Required | TBD plugin |
 | 13 | **search** | `optional` | — | ❌ Plugin Required | TBD plugin |
-| 14 | **cache** | `core` | — | ❌ Plugin Required | TBD plugin |
-| 15 | **queue** | `core` | — | ❌ Plugin Required | TBD plugin |
-| 16 | **job** | `core` | — | ❌ Plugin Required | TBD plugin |
+| 14 | **cache** | `core` | — | ✅ Built-in (in-memory fallback) | `@objectstack/service-cache` |
+| 15 | **queue** | `core` | — | ✅ Built-in (in-memory fallback) | `@objectstack/service-queue` |
+| 16 | **job** | `core` | — | ✅ Built-in (in-memory fallback) | `@objectstack/service-job` |
 | 17 | **graphql** | `optional` | — | ❌ Plugin Required | TBD plugin |
 
 <Callout type="warn">
@@ -260,7 +260,6 @@ The i18n service is a **core built-in service** with automatic in-memory fallbac
 | **Production** | `I18nServicePlugin` | File-based `FileI18nAdapter` loads JSON locale files from disk |
 | **Built-in Fallback** | Kernel | In-memory Map-backed stub, auto-injected when no plugin provides `i18n` |
 | **Development** | `DevPlugin` | In-memory Map-backed stub, supports `loadTranslations()` |
-| **Mock / MSW** | `MswPlugin` | Routes via `HttpDispatcher.dispatch()` catch-all — requires one of the above |
 
 ```typescript
 // Production (overrides built-in fallback)
@@ -315,15 +314,17 @@ AppPlugin will:
 
 ---
 
-## 12–17. Infrastructure Services ❌ Plugin Required
+## 12–17. Infrastructure Services
+
+`cache`, `queue`, and `job` are `core` services: like `i18n`, the kernel auto-injects an in-memory fallback when no plugin registers them (see `CORE_FALLBACK_FACTORIES` in `packages/core/src/fallbacks/`). The `optional` services (`file-storage`, `search`, `graphql`) stay disabled until a plugin provides them.
 
 | Service | Description |
 |:--------|:------------|
 | **file-storage** | Unified upload/download/delete. Drivers: local FS, S3, MinIO. |
 | **search** | Full-text search. Drivers: in-memory, Elasticsearch, Meilisearch. |
-| **cache** | General-purpose cache. Drivers: in-memory LRU, Redis. |
-| **queue** | Message queue. Drivers: in-memory, BullMQ / Redis Streams. |
-| **job** | Scheduled task execution. Cron-based, concurrency control. |
+| **cache** | General-purpose cache. In-memory fallback; Redis via `@objectstack/service-cache`. |
+| **queue** | Message queue. In-memory fallback; BullMQ / Redis via `@objectstack/service-queue`. |
+| **job** | Scheduled task execution. In-memory fallback; cron-based, concurrency control. |
 | **graphql** | Auto-generate GraphQL schema from Object metadata. |
 
 ---
@@ -368,24 +369,26 @@ AppPlugin will:
 ```typescript
 import type { Plugin } from '@objectstack/core';
 
+let authService: AuthServiceImpl;
+
 export const authPlugin: Plugin = {
   name: 'plugin-auth',
-  provides: ['auth'], // CoreServiceName value
-  
+
   async init(ctx) {
+    // Register the 'auth' CoreServiceName value
     const engine = ctx.getService<IDataEngine>('data');
-    const authService = new AuthServiceImpl(engine);
+    authService = new AuthServiceImpl(engine);
     ctx.registerService('auth', authService);
   },
-  
+
   async start(ctx) {
     const auth = ctx.getService<IAuthService>('auth');
     await auth.onReady();
   },
-  
-  async stop(ctx) {
-    const auth = ctx.getService<IAuthService>('auth');
-    await auth.shutdown();
+
+  // destroy() takes no arguments — capture what you need in module scope
+  async destroy() {
+    await authService.shutdown();
   },
 };
 ```
@@ -401,17 +404,17 @@ When a plugin registers a service, the discovery endpoint automatically updates:
 
 <Cards>
   <Card 
-    href="./api-reference" 
+    href="/docs/api" 
     title="API Reference"
     description="Complete REST API endpoint documentation"
   />
   <Card 
-    href="./client-sdk" 
+    href="/docs/api/client-sdk" 
     title="Client SDK"
     description="TypeScript client for ObjectStack"
   />
   <Card 
-    href="../concepts/implementation-status" 
+    href="/docs/releases/implementation-status" 
     title="Implementation Status"
     description="Full protocol implementation matrix"
   />

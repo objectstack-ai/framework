@@ -29,10 +29,18 @@ export const OrganizationDefaults = {
 
 | Level | Description |
 |-------|-------------|
-| `private` | Owner only (+ role hierarchy) |
+| `private` | Owner only (+ scope-depth grants and record shares) |
 | `public_read` | All users can read |
 | `public_read_write` | All users can read and edit |
 | `controlled_by_parent` | Controlled by parent object |
+
+> **The default is open, not private.** An object that declares **no
+> `sharingModel`** — or that has no `owner_id` field for the owner-match to key
+> on — gets **no record-level OWD filter at all** (it behaves as public within
+> the tenant; only tenant-isolation RLS still applies). If records should be
+> owner-scoped, declare `sharingModel: 'private'` explicitly on the object.
+> See `effectiveSharingModel` in
+> `packages/plugins/plugin-sharing/src/sharing-service.ts`.
 
 ## Criteria-Based Sharing Rules
 
@@ -69,7 +77,7 @@ export const AccountTeamSharingRule = defineSharingRule({
 | `type` | Shares with |
 |:--|:--|
 | `user` | A single user |
-| `group` | All members of a public group |
+| `group` | All members of a public group — **declared but not enforced**: there is no runtime recipient mapping yet, so a rule with a `group` recipient is skipped at seed time with a warning (ADR-0049) |
 | `role` | Everyone assigned that role |
 | `role_and_subordinates` | Everyone in that role **and every role below it** in the hierarchy (ADR-0056 D6) — configurable per rule, so one rule can cascade down a branch of the org chart |
 
@@ -82,7 +90,20 @@ The recipient set is expanded by `@objectstack/plugin-sharing` when the rule is
 evaluated (`afterInsert` / `afterUpdate`); `role_and_subordinates` walks the
 `sys_role.parent` graph (cycle-safe).
 
+A criteria `condition` must be compilable by the CEL → filter pushdown compiler.
+A condition the compiler cannot lower (functions, cross-object traversal) is
+**skipped and logged — never seeded as a permissive match-all** (ADR-0049), so a
+bad condition under-shares rather than over-shares.
+
 ## Owner-Based Sharing Rules
+
+> **[Experimental — not enforced.]** Owner-based (`type: 'owner'`) rules depend
+> on live role membership and have no static `criteria_json` equivalent, so the
+> seeder **skips them with a warning** — they materialize **no** record shares
+> today (see `packages/plugins/plugin-sharing/src/bootstrap-declared-sharing-rules.ts`
+> and the `SharingRuleSchema` notes in `packages/spec/src/security/sharing.zod.ts`).
+> Do not rely on an owner-based rule to deliver access; use a criteria rule or a
+> scope-depth grant until this ships.
 
 Share based on record owner characteristics:
 

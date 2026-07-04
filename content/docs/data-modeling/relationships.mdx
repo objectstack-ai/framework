@@ -50,6 +50,14 @@ Child records automatically appear in related lists when a lookup points to the 
 - Account has many Contacts (Contact.account → Account)
 - Account detail page shows "Contacts" related list
 
+### Other relationship types
+
+- **Master-detail** (`Field.masterDetail`) — parent-child ownership with cascade delete and optional inline line-item editing on the parent form; see [`master_detail`](/docs/data-modeling/field-types#master_detail).
+- **Tree** (`type: 'tree'`) — self-referential hierarchies (categories, org charts); see [`tree`](/docs/data-modeling/field-types#tree).
+- **User** (`Field.user`) — a person picker, i.e. a lookup specialized to the built-in `sys_user` object; see [`user`](/docs/data-modeling/field-types#user).
+- **Roll-ups over children** — aggregate child records onto the parent with a [`summary` field](/docs/data-modeling/fields#calculation-types).
+- **Querying across relationships** — load related records with `expand`; see the [query cheat sheet](/docs/data-modeling/queries#expand-related-records).
+
 ---
 
 ## See also

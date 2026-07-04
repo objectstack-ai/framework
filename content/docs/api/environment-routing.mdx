@@ -73,7 +73,7 @@ const client = new ObjectStackClient({
 
 const env = client.project('env_prod');
 
-await env.data.find('customer', { top: 20 });
+await env.data.find('customer', { limit: 20 });
 await env.meta.getItems('object');
 await env.packages.list();
 ```

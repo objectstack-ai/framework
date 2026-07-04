@@ -77,8 +77,8 @@ object (imported from `@objectstack/spec/data`) with `object`, `events`
 (an array of lifecycle events such as `beforeInsert` / `afterUpdate`), and a
 `handler: async (ctx) => { ... }`. Errors thrown from a hook handler abort the
 operation and propagate to the API layer. The handler receives a `HookContext`:
-the pending record lives on `ctx.input.doc`, the pre-change snapshot on
-`ctx.previous`, and the persisted result (after hooks) on `ctx.result`.
+the pending record's fields are exposed directly on `ctx.input`, the pre-change
+snapshot on `ctx.previous`, and the persisted result (after hooks) on `ctx.result`.
 
 ### Before Hooks (Validation / Guard)
 
@@ -90,7 +90,7 @@ export const ValidateStatusTransition: Hook = {
   object: 'task',
   events: ['beforeUpdate'],
   handler: async (ctx) => {
-    const changes = ctx.input.doc as Record<string, any>;
+    const changes = ctx.input as Record<string, any>;
     const previous = ctx.previous ?? {};
 
     // Guard: prevent modifying completed tasks
@@ -182,7 +182,7 @@ export const ValidateTaskData: Hook = {
   object: 'task',
   events: ['beforeInsert'],
   handler: async (ctx) => {
-    const data = ctx.input.doc as Record<string, any>;
+    const data = ctx.input as Record<string, any>;
     const schema = z.object({
       title: z.string().min(1, 'Title is required').max(200),
       priority: z.enum(['low', 'medium', 'high', 'critical']),
@@ -218,7 +218,7 @@ export const TaskWriteWithLogging: Hook = {
   onError: 'abort',   // failure aborts the write (default); use 'log' to continue
   handler: async (ctx) => {
     try {
-      await runBusinessRules(ctx.input.doc);
+      await runBusinessRules(ctx.input);
     } catch (error) {
       const httpStatus = (error as AppError).httpStatus ?? 500;
       const logEntry = {
@@ -496,7 +496,7 @@ export const ValidateBusinessRules: Hook = {
   object: 'task',
   events: ['beforeInsert'],
   handler: async (ctx) => {
-    const result = safeParsePretty(TaskBusinessRules, ctx.input.doc);
+    const result = safeParsePretty(TaskBusinessRules, ctx.input);
     if (!result.success) {
       throw new AppError(
         'validation_error',

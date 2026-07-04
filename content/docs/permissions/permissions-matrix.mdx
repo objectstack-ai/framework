@@ -8,7 +8,7 @@ description: Visual reference for ObjectStack's security model — permission ty
 This page provides a comprehensive visual reference for ObjectStack's security model — from object-level permissions to field-level security, sharing rules, and role hierarchies.
 
 <Callout type="info">
-**Security Model:** ObjectStack uses a layered security model inspired by Salesforce. Permissions are evaluated in order: Object Permission → Organization-Wide Defaults → Record Ownership → Role Hierarchy → Sharing Rules → Field-Level Security.
+**Security Model:** ObjectStack uses a layered security model inspired by Salesforce. Permissions are evaluated in order: Object Permission → Organization-Wide Defaults → Record Ownership / Scope Depth → Sharing (rules + manual shares) → Row-Level Security → Field-Level Security. Unlike Salesforce, the role hierarchy is **not** an automatic layer — it widens access only where a sharing rule's `role_and_subordinates` recipient or a scope-depth grant explicitly invokes it.
 </Callout>
 
 ---
@@ -135,8 +135,12 @@ Sharing rules extend access beyond ownership and role hierarchy. The declarative
 
 | Mechanism | `type` | Description | Example |
 |:---|:---|:---|:---|
-| **Owner-Based** | `owner` | Share records owned by a specific group/role with another recipient | All accounts owned by "West Region" team are shared with "Sales Directors" |
+| **Owner-Based** | `owner` | Share records owned by a specific group/role with another recipient — **[experimental — not enforced]**: owner rules are skipped at seed time and materialize no shares yet | All accounts owned by "West Region" team are shared with "Sales Directors" |
 | **Criteria-Based** | `criteria` | Share records matching a CEL predicate over field values | All opportunities where `record.amount > 100000` are shared with "VP Sales" |
+
+<Callout type="warn">
+**Enforcement status:** only **criteria** rules are enforced today. Declared `owner`-type rules, and rules with `group` / `guest` recipients, are skipped at seed time with a warning (ADR-0049 — never silently advertised as live). See [Sharing Rules](/docs/permissions/sharing-rules#owner-based-sharing-rules).
+</Callout>
 
 <Callout type="info">
 **Beyond declarative rules:** Two other sharing mechanisms exist but are **not** `SharingRule` types. **Manual sharing** is a runtime grant — `sys_record_share` rows created with `source: 'manual'` (see `packages/plugins/plugin-sharing/src/sharing-service.ts`). **Territories** are a separate matrix model (`TerritorySchema` in `packages/spec/src/security/territory.zod.ts`) with their own account/opportunity/case access levels, parallel to the role hierarchy. Owner/criteria rules are re-evaluated on insert/update via internal sharing rule hooks.
@@ -180,7 +184,7 @@ OWD sets the baseline access level for each object across the entire organizatio
 | **Public Read/Write** | `read_write` | All users | All users | Low-sensitivity data (e.g., tasks, wiki pages) |
 | **Public Read Only** | `read` | All users | Owner + shared | Moderate sensitivity (e.g., accounts, contacts) |
 | **Private** | `private` | Owner + shared | Owner + shared | High sensitivity (e.g., opportunities, HR records) |
-| **Full Access** | `full` | All users | All users (incl. transfer/share) | Fully collaborative data |
+| **Full Access** | `full` | All users | All users | Legacy alias — enforced identically to `public_read_write` |
 
 <Callout type="info">
 Since ADR-0056 (D1), `object.sharingModel` accepts the **canonical OWD vocabulary** — `private`, `public_read`, `public_read_write`, and `controlled_by_parent` — *in addition to* the legacy `read` / `read_write` / `full` spellings shown above (both are valid; the canonical values are preferred for new objects). `controlled_by_parent` is for child objects in a master-detail relationship, where access is **derived from the parent record** (a line is visible/editable only if its master is). These models are enforced by `plugin-sharing` + `plugin-security` and dogfood-proven over the real HTTP stack.
@@ -209,7 +213,10 @@ defineStack({
 
 ## 6. Role Hierarchy
 
-The role hierarchy determines which users can see records owned by users below them.
+The role hierarchy is a reporting structure that sharing rules can reference to
+widen record access. It grants **nothing automatically**: a user's position
+above another role does not by itself expose that role's records (ADR-0057 D5 —
+the visibility hierarchy does not live on roles).
 
 ```mermaid
 graph TD
@@ -258,11 +265,19 @@ graph TD
     style ENG_MGR fill:#0284c7,color:#fff
 ```
 
-**How it works:** Each role can see all records owned by users in roles below it. For example:
-- **CEO** can see all records in the organization
-- **VP Sales** can see records owned by Directors and Sales Reps
-- **Director - East** can see records owned by East Sales Reps only
-- **Sales Rep** can only see their own records (plus sharing rules)
+**How it is consumed:** the `parent` graph powers the `role_and_subordinates`
+sharing-rule recipient — one rule can grant access to a role *and every role
+beneath it* (see [Recipient types](/docs/permissions/sharing-rules#recipient-types)).
+Manager-over-subordinate record visibility is built explicitly, per grant:
+
+- **VP Sales sees Directors' and Reps' records** — author a criteria sharing
+  rule with `sharedWith: { type: 'role', value: 'vp_sales' }`, or grant the VP's
+  permission set `readScope: 'unit_and_below'` (scope depth, ADR-0057).
+- **Cascade one rule down a branch** — share with
+  `{ type: 'role_and_subordinates', value: 'director_east' }` to reach the
+  director and everyone below that role.
+- **Sales Rep** sees only their own records (plus whatever sharing rules and
+  manual shares grant) — this part needs no configuration under a `private` OWD.
 
 ### Configuration Example
 
@@ -293,7 +308,7 @@ flowchart TD
     C -->|Public Read/Write| ALLOW[✅ Access Granted]
     C -->|No| D{Is owner?}
     D -->|Yes| ALLOW
-    D -->|No| E{Role hierarchy grants?}
+    D -->|No| E{Scope-depth grant? readScope}
     E -->|Yes| ALLOW
     E -->|No| F{Sharing rule matches?}
     F -->|Yes| ALLOW
@@ -311,11 +326,11 @@ flowchart TD
 | 1 | **Object Permission** | Does the profile grant any access to this object? |
 | 2 | **OWD** | Is the object public? If so, grant access immediately |
 | 3 | **Record Ownership** | Does the user own this record? |
-| 4 | **Role Hierarchy** | Does the user's role sit above the owner's role? |
-| 5 | **Sharing Rules** | Do any sharing rules grant access to this record? |
-| 6 | **Manual Sharing** | Was this record explicitly shared with the user? |
+| 4 | **Scope Depth** | Does a `readScope` / `writeScope` grant (`own_and_reports` / `unit` / `unit_and_below` / `org`) widen the owner-match to cover the record's owner? |
+| 5 | **Sharing Rules** | Did a criteria sharing rule materialize a share for this user on this record? |
+| 6 | **Manual Sharing** | Was this record explicitly shared with the user (`sys_record_share`, `source: 'manual'`)? |
 | 7 | **Field-Level Security** | Which fields is the user allowed to see/edit? |
 
 <Callout type="tip">
-**Performance:** Steps 2–6 are compiled into SQL WHERE clauses (RLS) at query time, not evaluated record-by-record. This ensures security checks are efficient even on tables with millions of rows.
+**Performance:** For reads, steps 2–6 are compiled into a query filter (owner-match ∪ materialized shares, AND-ed with RLS) at query time, not evaluated record-by-record. By-id writes are verified with a pre-image check: the target row is re-read through the write-scope filter before the mutation. This keeps security checks efficient even on tables with millions of rows.
 </Callout>

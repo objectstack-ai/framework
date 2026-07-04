@@ -33,14 +33,16 @@ The following endpoints become available when the corresponding plugin is instal
 | GET | `/workflow/:object/config` | Get workflow configuration |
 | GET | `/workflow/:object/:recordId/state` | Get record's workflow state |
 | POST | `/workflow/:object/:recordId/transition` | Execute state transition |
-| POST | `/workflow/:object/:recordId/approve` | Approve workflow step |
-| POST | `/workflow/:object/:recordId/reject` | Reject workflow step |
+
+Approve/reject are **not** workflow routes (ADR-0019): approval is a flow node, and decisions are recorded on the approvals runtime via `POST /approvals/requests/:id/approve` and `POST /approvals/requests/:id/reject`.
 
 ### Automation (`/automation`) — Plugin Required
 
 | Method | Endpoint | Description |
 |:-------|:---------|:------------|
-| POST | `/automation/trigger/:name` | Trigger an automation flow by name |
+| POST | `/automation/:name/trigger` | Trigger an automation flow by name (legacy alias: `/automation/trigger/:name`) |
+
+The automation dispatcher also exposes flow CRUD (`GET`/`POST /automation`, `GET`/`PUT`/`DELETE /automation/:name`) and run observability/resume routes — see [Durable pause & resume](/docs/automation/flows#durable-pause--resume-adr-0019).
 
 ### Views (`/ui`) — Plugin Required
 
@@ -60,7 +62,7 @@ The following endpoints become available when the corresponding plugin is instal
 | POST | `/realtime/disconnect` | Close connection |
 | POST | `/realtime/subscribe` | Subscribe to channel |
 | POST | `/realtime/unsubscribe` | Unsubscribe |
-| POST | `/realtime/presence` | Set presence |
+| PUT | `/realtime/presence/:channel` | Set presence |
 | GET | `/realtime/presence/:channel` | Get channel presence |
 
 ### Notifications (`/notifications`) — Plugin Required

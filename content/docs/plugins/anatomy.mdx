@@ -71,7 +71,7 @@ ObjectStack uses `type` discrimination to optimize runtime behavior, allowing th
 *   **Use Cases:** Admin Console, Low-code Studio, SPA Dashboard.
 *   **Behavior:**
     *   **Passive:** Driven by `plugin-hono-server` (or other HTTP adapters).
-    *   **Static Assets:** Must verify `staticPath` pointing to a build output (e.g., `dist/`).
+    *   **Static Assets:** Must provide `staticPath` pointing to a build output (e.g., `dist/`).
     *   **Routing:** Automatically mounted to `/{slug}` with SPA fallback support.
     *   **Assets:** Files are served locally under `/{slug}/assets`.
 

@@ -30,7 +30,7 @@ export const Account = ObjectSchema.create({
       ],
     }),
     annual_revenue: Field.currency({ label: 'Annual Revenue', scale: 2 }),
-    owner: Field.lookup('user', { label: 'Owner', required: true }),
+    owner: Field.user({ label: 'Owner', required: true }),
   },
 
   enable: {
@@ -66,8 +66,8 @@ export const Account = ObjectSchema.create({
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `displayNameField` | `string` | optional | Field used as record display name (defaults to `'name'`) |
-| `titleFormat` | `string` | optional | Title expression (e.g. `'{name} - {code}'`) |
+| `nameField` | `string` | optional | The stored field used as the record display name, e.g. `'name'` or `'title'` (ADR-0079). The deprecated alias `displayNameField` is still accepted. |
+| `titleFormat` | `string` | optional | Deprecated (ADR-0079 → `nameField`). Render-only title template (e.g. `'{{record.name}} - {{record.code}}'`); an explicit `nameField` takes precedence |
 | `highlightFields` | `string[]` | optional | Most-important fields in priority order — default list columns, cards, previews, detail highlight strip (ADR-0085; formerly `compactLayout` — the old spelling was retired and is now rejected) |
 | `stageField` | `string \| false` | optional | Linear lifecycle field; `false` declares the status field non-linear and suppresses stage heuristics (ADR-0085) |
 | `recordName` | `object` | optional | Record name auto-generation config |
@@ -138,27 +138,6 @@ versioning: {
 }
 ```
 
-#### Change Data Capture
-
-```typescript
-cdc: {
-  enabled: true,
-  events: ['insert', 'update', 'delete'],
-  destination: 'kafka://my-topic',
-}
-```
-
-#### Table Partitioning
-
-```typescript
-partitioning: {
-  enabled: true,
-  strategy: 'range',          // 'range' | 'hash' | 'list'
-  key: 'created_at',
-  interval: '1 month',        // Required for range strategy
-}
-```
-
 ### Record Name
 
 Auto-generate unique record identifiers:
@@ -206,7 +185,6 @@ indexes: [
 | `abstract` | `boolean` | Abstract base, cannot be instantiated (default: `false`) |
 | `sharingModel` | `enum` | Org-Wide Default record visibility (ADR-0055/0056). Canonical: `'private'`, `'public_read'`, `'public_read_write'`, `'controlled_by_parent'` (detail visibility derived from its master). Legacy aliases: `'read'`=public_read, `'read_write'`/`'full'`=public_read_write |
 | `keyPrefix` | `string` | Short prefix for record IDs (e.g. `'001'`) |
-| `recordTypes` | `string[]` | Record type names for this object |
 | `validations` | `ValidationRule[]` | Object-level validation rules (see [Validation](/docs/data-modeling/validation)) |
 
 ## Naming Conventions
@@ -249,7 +227,7 @@ export const ProjectTask = ObjectSchema.create({
       ],
     }),
     due_date: Field.date({ label: 'Due Date' }),
-    assignee: Field.lookup('user', { label: 'Assignee' }),
+    assignee: Field.user({ label: 'Assignee' }),
     project: Field.lookup('project', { label: 'Project', required: true }),
     estimated_hours: Field.number({ label: 'Estimated Hours', min: 0 }),
   },
@@ -273,7 +251,7 @@ export const ProjectTask = ObjectSchema.create({
       type: 'script',
       severity: 'warning',
       message: 'Due date should be in the future',
-      condition: 'due_date < today()',
+      condition: 'record.due_date < today()',
       events: ['insert'],
     },
   ],

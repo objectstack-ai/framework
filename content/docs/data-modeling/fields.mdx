@@ -172,7 +172,7 @@ order: Field.masterDetail('order', {
 | `reference` (1st arg) | `string` | Target object name |
 | `referenceFilters` | `string[]` | Filter conditions for the lookup |
 | `deleteBehavior` | `enum` | `'set_null'`, `'cascade'`, `'restrict'` |
-| `inlineEdit` | `boolean` | Render child records inline on the parent create/edit form |
+| `inlineEdit` | `boolean \| 'grid' \| 'form'` | Render child records inline on the parent create/edit form (`true` = auto-pick, `'grid'`, or `'form'`) |
 | `inlineColumns` | `array` | Optional explicit columns for the inline grid |
 | `inlineAmountField` | `string` | Optional numeric child field for the inline running total |
 
@@ -248,9 +248,9 @@ when multiple relationships target the same parent object.
 | `progress` | — | Progress bar |
 
 ```typescript
-office: Field.address({ label: 'Office Address', addressFormat: 'international' }),
-coordinates: Field.location({ label: 'Location', displayMap: true }),
-brand_color: Field.color({ label: 'Color', colorFormat: 'hex' }),
+office: Field.address({ label: 'Office Address' }),
+coordinates: Field.location({ label: 'Location' }),
+brand_color: Field.color({ label: 'Color' }),
 satisfaction: Field.rating(5, { label: 'Rating' }),
 approval_signature: Field.signature({ label: 'Signature' }),
 embedding: Field.vector(1536, { label: 'Embedding' }),
@@ -296,9 +296,11 @@ These properties are available on all field types:
 
 | Property | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `encryptionConfig` | `object` | — | Field-level encryption settings |
-| `maskingRule` | `object` | — | Data masking rules for display |
-| `auditTrail` | `boolean` | `false` | Track all changes to this field |
+| `requiredPermissions` | `string[]` | — | Capabilities required to read/edit this field — masked on read, denied on write unless the caller holds all of them (ADR-0066 D3) |
+| `trackHistory` | `boolean` | — | Render this field's value changes as entries on the record activity timeline |
+
+For values that must be encrypted at rest (API keys, tokens, DB passwords), use the
+`secret` field type — see the [Field Type Gallery](/docs/data-modeling/field-types#secret).
 
 ### Conditional Logic
 

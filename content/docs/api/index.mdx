@@ -14,7 +14,7 @@ ObjectStack exposes a fully typed REST API. All endpoints use JSON request/respo
 | Surface | Status in this repo |
 | :--- | :--- |
 | **REST** | ✅ Auto-generated from the protocol (`@objectstack/rest`) — CRUD, query, batch, metadata, packages |
-| **Realtime** | ✅ WebSocket subscriptions plus SSE streaming (`@objectstack/service-realtime`) |
+| **Realtime** | ⚠️ In-process pub/sub service (`@objectstack/service-realtime`, single-instance); the `/realtime/*` REST routes and WebSocket/SSE transport are plugin-provided — none ships in the open framework |
 | **MCP** | ✅ Objects and opted-in actions exposed as Model Context Protocol tools ([AI module](/docs/ai)) |
 | **GraphQL** | ⚠️ Route is wired but **bring-your-own service**: `/graphql` returns 501 unless an implementation of the `IGraphQLService` contract is registered — none ships in the open framework |
 | **OData** | ⚠️ Vocabulary only: REST list endpoints accept OData-style operators (e.g. `$top`), but there is no standalone OData endpoint |

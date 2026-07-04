@@ -183,7 +183,7 @@ export const HighValueCustomerFlow = defineFlow({
   nodes: [
     { id: 'start', type: 'start', label: 'Customer created' },
     { id: 'assign', type: 'update_record', label: 'Assign owner' },
-    { id: 'notify', type: 'send_email', label: 'Alert leadership' },
+    { id: 'notify', type: 'notify', label: 'Alert leadership' },
     { id: 'end', type: 'end', label: 'End' },
   ],
   edges: [
@@ -430,7 +430,7 @@ export const OpportunityWonFlow = defineFlow({
   nodes: [
     { id: 'start', type: 'start', label: 'Stage changed' },
     { id: 'invoice', type: 'create_record', label: 'Create invoice' },
-    { id: 'notify', type: 'send_email', label: 'Notify sales team' },
+    { id: 'notify', type: 'notify', label: 'Notify sales team' },
     { id: 'end', type: 'end', label: 'End' },
   ],
   edges: [

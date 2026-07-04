@@ -62,7 +62,7 @@ const homePage = {
 | `type` | `enum` | optional | Page type (see below; default `'record'`) |
 | `object` | `string` | optional | Associated object (for `record` type) |
 | `template` | `string` | optional | Layout template name (default: `'default'`) |
-| `regions` | `PageRegion[]` | ✅ | Layout regions with components |
+| `regions` | `PageRegion[]` | optional | Layout regions with components (default `[]` — `list` pages render via `interfaceConfig`, and an empty `record`/`home`/`app` page falls back to the synthesized default layout) |
 | `variables` | `PageVariable[]` | optional | Local state variables |
 | `isDefault` | `boolean` | optional | Is default page for its type |
 | `assignedProfiles` | `string[]` | optional | Profiles that can access this page |
@@ -77,7 +77,7 @@ const homePage = {
 | `utility` | Utility/helper panel | Tools, settings, wizards |
 | `list` | Record list/interface surface | Data-driven interface pages |
 
-The schema also declares roadmap types (`dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`) that currently fall back to the list renderer; only the five types above have dedicated renderers today.
+Earlier roadmap types (`dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`) were **removed from the schema** because they never shipped a renderer (ADR-0049 enforce-or-remove); only the five types above are valid.
 
 ## Regions
 
@@ -132,7 +132,7 @@ Components are the building blocks placed inside regions.
 | `type` | `string` | ✅ | Component type (standard `PageComponentType` enum or custom string) |
 | `id` | `string` | optional | Unique component instance identifier |
 | `label` | `string` | optional | Display label |
-| `properties` | `Record<string, unknown>` | ✅ | Component-specific configuration |
+| `properties` | `Record<string, unknown>` | optional | Component-specific configuration (default `{}` — many components carry no props) |
 | `events` | `Record<string, string>` | optional | Event handlers (action expressions) |
 | `style` | `object` | optional | CSS styles |
 | `className` | `string` | optional | CSS class names |
@@ -146,7 +146,7 @@ The `type` field is a union of the standard `PageComponentType` enum and any cus
 - **Navigation:** `app:launcher`, `nav:menu`, `nav:breadcrumb`
 - **Utility:** `global:search`, `global:notifications`, `user:profile`
 - **AI:** `ai:chat_window`, `ai:suggestion`
-- **Elements:** `element:text`, `element:number`, `element:image`, `element:divider`, `element:button`, `element:filter`, `element:form`, `element:record_picker`
+- **Elements:** `element:text`, `element:number`, `element:image`, `element:divider`, `element:button`, `element:filter`, `element:form`, `element:record_picker`, `element:text_input`
 
 Components may also carry `dataSource` (per-element object binding for multi-object pages), `responsive`, and `aria` configuration. Custom string types are also accepted for project-specific widgets.
 
@@ -188,7 +188,7 @@ const accountRecordPage = {
       width: 'full',
       components: [
         {
-          type: 'record_header',
+          type: 'record:highlights',
           id: 'header',
           properties: {
             fields: ['name', 'type', 'industry', 'owner'],
@@ -202,7 +202,7 @@ const accountRecordPage = {
       width: 'small',
       components: [
         {
-          type: 'record_detail',
+          type: 'record:details',
           id: 'key_fields',
           label: 'Key Fields',
           properties: {
@@ -210,7 +210,7 @@ const accountRecordPage = {
           },
         },
         {
-          type: 'activity_timeline',
+          type: 'record:activity',
           id: 'activities',
           label: 'Activity',
         },
@@ -221,13 +221,13 @@ const accountRecordPage = {
       width: 'large',
       components: [
         {
-          type: 'related_list',
+          type: 'record:related_list',
           id: 'contacts',
           label: 'Contacts',
           properties: { object: 'contact', relationship: 'account' },
         },
         {
-          type: 'related_list',
+          type: 'record:related_list',
           id: 'opportunities',
           label: 'Opportunities',
           properties: { object: 'opportunity', relationship: 'account' },

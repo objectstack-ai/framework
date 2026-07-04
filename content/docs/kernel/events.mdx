@@ -81,15 +81,15 @@ Every data hook is a single-argument handler `(ctx: HookContext) => void | Promi
 ```typescript
 // Enrich a record before it is created
 engine.registerHook('beforeInsert', async (ctx) => {
-  if (ctx.object === 'order' && ctx.input.doc.amount > 10000) {
+  if (ctx.object === 'order' && ctx.input.amount > 10000) {
     ctx.logger?.warn?.('Large order detected!');
-    ctx.input.doc.requires_approval = true;
+    ctx.input.requires_approval = true;
   }
 }, { object: 'order' });
 
 // React after a record is created
 engine.registerHook('afterInsert', async (ctx) => {
-  await notifyWebhook(ctx.object, ctx.input.doc.id);
+  await notifyWebhook(ctx.object, ctx.input.id);
 }, { object: 'order' });
 ```
 
@@ -102,7 +102,7 @@ What happens when a data hook throws is governed by the hook's **`onError`** pol
 
 ```typescript
 engine.registerHook('beforeInsert', async (ctx) => {
-  if (ctx.object === 'invoice' && !ctx.input.doc.customer_id) {
+  if (ctx.object === 'invoice' && !ctx.input.customer_id) {
     throw new Error('Invoice must have a customer'); // Aborts the insert (default onError)
   }
 });

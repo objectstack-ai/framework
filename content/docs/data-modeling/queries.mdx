@@ -201,6 +201,33 @@ position from the previous page. There is no `keyset`/`after` query property.
 
 ---
 
+## Expand (Related Records)
+
+Load related records through `lookup` / `master_detail` fields with `expand`.
+Each key is a relationship field name; the value is a nested query that can
+select fields, filter, and expand further (default max depth: 3).
+
+```typescript
+{
+  object: 'task',
+  fields: ['title', 'assignee'],
+  expand: {
+    assignee: { object: 'user', fields: ['name', 'email'] },
+    project: {
+      object: 'project',
+      where: { is_active: { $eq: true } },     // AND-merged with the batch lookup
+      expand: { org: { object: 'org' } }        // nested expand
+    }
+  }
+}
+```
+
+The engine resolves `expand` via batch `$in` queries (driver-agnostic), so it
+works on every driver. Per-parent `limit` / `offset` / `orderBy` are **not**
+applied on this path.
+
+---
+
 ## Aggregations
 
 ### Available Functions

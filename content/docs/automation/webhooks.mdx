@@ -373,15 +373,17 @@ better-auth session (any authenticated user). Responses: `200` on success,
 
 ## 9. Concurrency & rate-limiting
 
-Each dispatcher partition runs at most `maxConcurrency` (default 16) HTTP
-requests in flight. Beyond that, claimed rows wait in an in-memory
-queue. This caps per-node outbound load.
+Outbound load is shaped by the claim loop, not an explicit concurrency knob:
+within a held partition the dispatcher claims up to `batchSize` rows (default
+32) per tick and POSTs them **sequentially**, so at most one request per
+partition is in flight at a time (default 8 partitions per node). Both
+`batchSize`, `partitionCount`, and the tick `intervalMs` are configurable via
+`HttpDispatcherOptions`.
 
-For per-receiver rate limiting (some receivers like Slack publish strict
-limits), the dispatcher tracks `requests_in_last_second` per
-`hostname(url)` and delays further requests to that host with the same
-exponential backoff used for retries. This shields well-behaved
-receivers from being driven into 429s by our bulk traffic.
+> **Not yet implemented.** Per-receiver rate limiting (tracking request rate
+> per `hostname(url)` and delaying further requests to a busy host) is future
+> work — see Phase 4 of the plan below. Today nothing shields a receiver from
+> bulk traffic beyond the sequential-per-partition send loop.
 
 ## 10. Observability
 
@@ -469,7 +471,7 @@ Every design choice matches one or more established systems:
 - **GitHub webhooks** — `X-…-Signature: sha256=<hmac-over-raw-body>` signing
   scheme, redelivery, per-delivery detail with request/response bytes.
 - **Shopify webhooks** — HMAC-SHA256 header, `X-Shopify-Topic` event
-  hint (we use `type` in payload instead — simpler).
+  hint (we carry the event hint in the `X-Objectstack-Event` header instead).
 - **AWS EventBridge / SQS** — at-least-once durability, dead-letter
   queue model (our `status = dead`).
 - **Kubernetes admission webhooks** — egress validation and TLS-only
@@ -477,7 +479,7 @@ Every design choice matches one or more established systems:
 
 ## 15. Migration plan
 
-Three phases. Each phase delivers visible user value.
+Four phases. Each phase delivers visible user value.
 
 > **How it actually shipped.** The implementation did **not** introduce new
 > `system/*` Zod schemas. There is no `system/webhook-delivery.zod.ts` and no

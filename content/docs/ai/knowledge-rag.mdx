@@ -40,7 +40,10 @@ kernel.use(new KnowledgeMemoryPlugin());
 // kernel.use(new KnowledgeRagflowPlugin({ endpoint, apiKey }));
 ```
 
-Then register the AI tool so agents can call it:
+Then register the AI tool so agents can call it. (This step uses
+`@objectstack/service-ai`, i.e. the **cloud / Enterprise** in-UI AI runtime —
+see the callout in the [AI Overview](/docs/ai). The Knowledge Protocol itself
+and the adapter plugins above ship in the open framework.)
 
 ```ts
 import { registerKnowledgeTools } from '@objectstack/service-ai';

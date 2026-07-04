@@ -119,12 +119,16 @@ Generates sequential numbers automatically:
 ```typescript
 Field.autonumber({
   label: 'Account Number',
-  format: 'ACC-{0000}',      // ACC-0001, ACC-0002, ...
+  autonumberFormat: 'ACC-{0000}',   // ACC-0001, ACC-0002, ...
 })
 
-// The format string supports a single zero-pad token, e.g.:
-// 'INV-{000}'   // INV-001, INV-002, ...
-// Date tokens like {YYYY}/{MM}/{DD} are not interpolated.
+// The format string is literal text plus {…} tokens:
+//   {0000}                            — the sequence counter, zero-padded (at most one)
+//   {YYYY} {YY} {MM} {DD} {YYYYMMDD}  — generation date in the business timezone
+//   {field_name}                      — another field on the same record
+// The counter is scoped to whatever renders before the {0000} slot, so
+// 'AD{YYYYMMDD}{0000}' resets daily and '{plan_no}{000}' counts per parent —
+// no separate reset config. A fixed prefix like 'INV-{000}' keeps one global counter.
 ```
 
 ### User Fields
@@ -200,7 +204,7 @@ export const Account = ObjectSchema.create({
     vat_id:          { type: 'text',                   group: 'billing' },
     billing_address: { type: 'address',                group: 'billing' },
     created_at:      { type: 'datetime', readonly: true, group: 'system' },
-    created_by:      { type: 'lookup', reference: 'user', readonly: true, group: 'system' },
+    created_by:      { type: 'user', reference: 'sys_user', readonly: true, group: 'system' },
   },
 });
 ```
@@ -311,7 +315,7 @@ export const Account = ObjectSchema.create({
   fields: {
     account_number: Field.autonumber({
       label: 'Account Number',
-      format: 'ACC-{0000}',
+      autonumberFormat: 'ACC-{0000}',
     }),
     
     name: Field.text({
@@ -338,10 +342,9 @@ export const Account = ObjectSchema.create({
     
     billing_address: Field.address({
       label: 'Billing Address',
-      addressFormat: 'international',
     }),
     
-    owner: Field.lookup('user', {
+    owner: Field.user({
       label: 'Account Owner',
       required: true,
     }),
@@ -367,7 +370,7 @@ export const Account = ObjectSchema.create({
       type: 'script',
       severity: 'error',
       message: 'Revenue must be positive',
-      condition: 'annual_revenue < 0',
+      condition: 'record.annual_revenue < 0',
     },
   ],
 });

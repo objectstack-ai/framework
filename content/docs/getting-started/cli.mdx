@@ -13,7 +13,7 @@ Command Line Interface for building metadata-driven applications with the Object
 pnpm add -D @objectstack/cli
 ```
 
-The CLI is available as `objectstack` or the shorter alias `os`.
+The CLI is available as `objectstack` or the shorter alias `os`. Installed as a dev dependency, the bins are project-local — invoke them as `npx os …` / `pnpm exec os …` or via your package scripts.
 
 ## Your First App in 2 Minutes
 
@@ -66,12 +66,6 @@ os compile           # Build production artifact → dist/objectstack.json
 | `os init [name]` | | Initialize a new ObjectStack project in the current directory |
 | `os dev [package]` | | Start development mode with hot reload |
 | `os serve [config]` | | Start the ObjectStack server with plugin auto-detection |
-
-### Production
-
-| Command | Description |
-|---------|-------------|
-| `os start` | Serve a pre-compiled `objectstack.json` artifact (no `objectstack.config.ts` required) |
 
 #### `os init`
 
@@ -269,6 +263,7 @@ os start
 | `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
 | `-p, --port <port>` | `PORT` / `OS_PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
 | `--ui` / `--no-ui` | — | Mount the Console portal at `/_console/`. Enabled by default (so you can install marketplace apps); pass `--no-ui` to disable it. |
+| `-v, --verbose` | — | Verbose output |
 
 > **Port conflicts: production never auto-shifts.** Unlike `os dev` (which
 > hops to the next free port for local convenience), `os start` exits with an
@@ -276,7 +271,6 @@ os start
 > your reverse-proxy upstream, `OS_AUTH_URL` callbacks, and `OS_TRUSTED_ORIGINS`
 > (CORS). **Pin the port explicitly** (`PORT=8080 os start`) and keep
 > `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` in sync when you change it.
-| `-v, --verbose` | — | Verbose output |
 
 **Resolution priority (artifact):** `--artifact` > `OS_ARTIFACT_PATH` > `<cwd>/dist/objectstack.json`.
 **Resolution priority (database):** `--database` > `OS_DATABASE_URL` > `DATABASE_URL` (legacy) > `file:<home>/data/objectstack.db`.

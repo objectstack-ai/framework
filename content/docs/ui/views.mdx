@@ -45,6 +45,7 @@ const taskListView = {
 | `gantt` | Gantt chart with dependencies | Project management |
 | `map` | Geographic map pins | Location-based data |
 | `chart` | Aggregate chart visualization | Dashboards and summaries |
+| `tree` | Self-referencing hierarchy (tree-grid) | Org charts, category trees |
 
 ### List View Properties
 
@@ -52,8 +53,8 @@ const taskListView = {
 | :--- | :--- | :--- | :--- |
 | `name` | `string` | ✅ | Machine name (`snake_case`) |
 | `label` | `string` | ✅ | Display label |
-| `type` | `enum` | ✅ | View type (see table above) |
-| `data` | `ViewData` | ✅ | Data source configuration |
+| `type` | `enum` | optional | View type (see table above; default `'grid'`) |
+| `data` | `ViewData` | optional | Data source configuration (defaults to the `object` provider) |
 | `columns` | `ListColumn[]` | optional | Column definitions |
 | `filter` | `array` | optional | Filter criteria |
 | `sort` | `array` | optional | Sort configuration |

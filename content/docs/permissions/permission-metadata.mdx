@@ -121,7 +121,7 @@ fields: {
 | `readable` | User can see the field value |
 | `editable` | User can modify the field value |
 
-**Note:** `editable: true` requires `readable: true`. A field that is not readable is completely hidden from the user.
+**Note:** `readable` defaults to `true` and `editable` to `false`. The schema does not force `editable: true` to be paired with `readable: true`, but a field with `readable: false` is stripped from every read regardless of `editable` — always declare them together, and treat `{ readable: false }` as completely hiding the field.
 
 ## Tab Permissions
 

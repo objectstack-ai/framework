@@ -37,7 +37,7 @@ definePermissionSet({
 });
 ```
 
-- **"My own"** vs **"my team's"** vs **"the org's"** is the RLS *depth* axis (`readScope` / `writeScope`: `own | own_and_reports | unit | unit_and_below | org`, ADR-0057). A manager set uses `unit`; a rep uses `own`.
+- **"My own"** vs **"my team's"** vs **"the org's"** is the RLS *depth* axis (`readScope` / `writeScope`: `own | own_and_reports | unit | unit_and_below | org`, ADR-0057). A manager set uses `unit`; a rep uses `own`. The hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`) need the enterprise hierarchy resolver and **fail closed to `own`** without it — see [Access depth](/docs/permissions/profiles#access-depth--readscope--writescope-adr-0057-d1).
 - Grants combine **most-permissively** across a user's sets; the tenant-isolation policy `AND`s on top; the superuser bypass (`viewAllRecords` / `modifyAllRecords`) short-circuits RLS where the object's posture allows it (ADR-0066).
 - For genuinely sensitive objects, set `access: { default: 'private' }` so they are **not** covered by blanket wildcard grants — access needs an explicit grant.
 
@@ -58,7 +58,7 @@ Two separate questions:
 
 ## Why
 
-Keeping capability, assignment and requirement decoupled means resources stay stable (`requiredPermissions: ['export_data']`) while admins re-assign who holds `export_data` at runtime, with no code change. The fixed precedence (AND-gates → most-permissive grant union → RLS → explicit deny) is specified in ADR-0066, so combinations are predictable rather than ad-hoc.
+Keeping capability, assignment and requirement decoupled means resources stay stable (`requiredPermissions: ['export_data']`) while admins re-assign who holds `export_data` at runtime, with no code change. The fixed precedence (AND-gates → most-permissive grant union → RLS; an explicit deny/muting layer is reserved but [not yet implemented](/docs/permissions/authorization#combination-semantics-the-fixed-order)) is specified in ADR-0066, so combinations are predictable rather than ad-hoc.
 
 ## Runnable example
 

@@ -13,7 +13,10 @@ The model has five layers, each with schema **and** runtime support: **profiles*
 (one per user) and additive **permission sets** for object/field rights, a **role
 hierarchy** for reporting structure, **sharing rules + Organization-Wide Defaults**
 for record visibility, **row-level security** (compiled into every query), and
-**field-level security** (masked server-side, fail-closed). Object access scopes
+**field-level security** (declared rules masked and enforced server-side; fields
+without a declared rule stay visible by default — see the
+[FLS posture note](/docs/permissions/authorization#combination-semantics-the-fixed-order)).
+Object access scopes
 go from `own` through `own_and_reports`, `unit`, `unit_and_below`, to `org`.
 
 Access rules are metadata like everything else — this is a real sharing rule from
@@ -36,7 +39,7 @@ export const HighValueOpportunitySharingRule = defineSharingRule({
 Because AI agents act through the same permission-aware surface, these rules bound
 agent access exactly as they bound users ([Actions as Tools](/docs/ai/actions-as-tools)).
 
-> **Implementation status — Phase-1 RBAC is live.** REST → ObjectQL now propagates a populated `ExecutionContext` (userId, tenantId, roles, permissions) into the SecurityPlugin middleware, so CRUD / FLS / RLS checks actually fire on every authenticated request. The default `member_default` permission set ships a wildcard RLS rule `organization_id == current_user.organization_id` plus explicit per-object overrides `sys_organization_self` (`id == current_user.organization_id`) and `sys_user_self` (`id == current_user.id`) for the two global tables that lack an `organization_id` column. RLS expressions, the physical column, and `RLSUserContext.organization_id` all use the same canonical name — there is no `tenantField` rewrite indirection (schemas with a different physical tenant column should fork the defaults). The legacy `objectql.registerTenantMiddleware` has been removed; SecurityPlugin is the sole authority for tenant isolation. Analytics also reuses the same read scope: `@objectstack/service-analytics` auto-bridges to `security.getReadFilter(object, context)` when the security service is registered, so dataset-bound dashboards/reports do not bypass RLS. End-to-end verified on `pnpm dev:crm` across `sys_organization`, `sys_member`, `sys_user`, `sys_user_permission_set`, `sys_role_permission_set`. **Anonymous traffic is denied by default** (the ADR-0056 D2 default-deny flip landed: `requireAuth` defaults to `true`); an explicit `requireAuth: false` opt-out logs a boot-time warning, and public forms self-authorize via a declaration-derived `publicFormGrant` (ADR-0056 Option A — see [Public Forms](/docs/ui/forms)). Organization-Wide Defaults (`private` / `public_read` / `public_read_write` / `controlled_by_parent`) and Sharing Rules (owner + criteria, with `role_and_subordinates` hierarchy widening) are live and dogfood-proven (ADR-0056); the Studio RLS visual editor, per-user×org permission cache, and audit UI for denied access are queued. See `CHANGELOG.md` and [Implementation Status](/docs/releases/implementation-status) for the latest matrix.
+> **Implementation status — Phase-1 RBAC is live.** REST → ObjectQL now propagates a populated `ExecutionContext` (userId, tenantId, roles, permissions) into the SecurityPlugin middleware, so CRUD / FLS / RLS checks actually fire on every authenticated request. The default `member_default` permission set ships a wildcard RLS rule `organization_id == current_user.organization_id` plus explicit per-object overrides `sys_organization_self` (`id == current_user.organization_id`) and `sys_user_self` (`id == current_user.id`) for the two global tables that lack an `organization_id` column. RLS expressions, the physical column, and `RLSUserContext.organization_id` all use the same canonical name — there is no `tenantField` rewrite indirection (schemas with a different physical tenant column should fork the defaults). The legacy `objectql.registerTenantMiddleware` has been removed; SecurityPlugin is the sole authority for tenant isolation. Analytics also reuses the same read scope: `@objectstack/service-analytics` auto-bridges to `security.getReadFilter(object, context)` when the security service is registered, so dataset-bound dashboards/reports do not bypass RLS. End-to-end verified on `pnpm dev:crm` across `sys_organization`, `sys_member`, `sys_user`, `sys_user_permission_set`, `sys_role_permission_set`. **Anonymous traffic is denied by default** (the ADR-0056 D2 default-deny flip landed: `requireAuth` defaults to `true`); an explicit `requireAuth: false` opt-out logs a boot-time warning, and public forms self-authorize via a declaration-derived `publicFormGrant` (ADR-0056 Option A — see [Public Forms](/docs/ui/forms)). Organization-Wide Defaults (`private` / `public_read` / `public_read_write` / `controlled_by_parent`) and criteria Sharing Rules (with `role_and_subordinates` hierarchy widening) are live and dogfood-proven (ADR-0056); **owner-type sharing rules and `group`/`guest` recipients are declared but not enforced** — the seeder skips them with a warning ([Sharing Rules](/docs/permissions/sharing-rules#owner-based-sharing-rules)); the Studio RLS visual editor, per-user×org permission cache, and audit UI for denied access are queued. See `CHANGELOG.md` and [Implementation Status](/docs/releases/implementation-status) for the latest matrix.
 
 ## What's in this module
 
@@ -75,7 +78,7 @@ ObjectStack implements a multi-layered security model:
 ├─────────────────────────────────────┤
 │   Record-Level Security             │ ← Which records can be accessed?
 │   - Organization-Wide Defaults      │
-│   - Role Hierarchy                  │
+│   - Scope-Depth Grants (readScope)  │
 │   - Sharing Rules                   │
 │   - Manual Sharing                  │
 ├─────────────────────────────────────┤

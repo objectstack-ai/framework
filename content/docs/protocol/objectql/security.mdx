@@ -251,7 +251,15 @@ fields:
 
 ## 4. Data Masking
 
-Masking is configured **on the field** via `maskingRule` (`MaskingRuleSchema` in `packages/spec/src/system/masking.zod.ts`). The strategy enum is one of: `redact`, `partial`, `hash`, `tokenize`, `randomize`, `nullify`, `substitute`.
+> **Status: schema exists, field wiring removed.** `MaskingRuleSchema`
+> (`packages/spec/src/system/masking.zod.ts`, strategies `redact`, `partial`,
+> `hash`, `tokenize`, `randomize`, `nullify`, `substitute`) remains in the
+> System namespace, but the per-field `maskingRule` property was **pruned from
+> the Field schema in 2026-06** as dead surface — it was never read by the
+> runtime (see `docs/audits/2026-06-dead-surface-disposition-plan.md`). To keep
+> a value out of reader hands today, use FLS (`readable: false`), `hidden`, or
+> a `type: 'secret'` field. The examples below show the *schema shapes* for
+> implementers, not a wired runtime capability.
 
 ### Partial Masking
 
@@ -374,7 +382,15 @@ publicSharing:
 
 ## 6. Field-Level Encryption
 
-Sensitive fields can be encrypted at rest via `encryptionConfig` (`EncryptionConfigSchema` in `packages/spec/src/system/encryption.zod.ts`). Supported algorithms are `aes-256-gcm` (default), `aes-256-cbc`, and `chacha20-poly1305`. Keys are held by a key-management provider (`local`, `aws-kms`, `azure-key-vault`, `gcp-kms`, `hashicorp-vault`).
+> **Status: schema exists, field wiring removed.** `EncryptionConfigSchema`
+> (`packages/spec/src/system/encryption.zod.ts`, algorithms `aes-256-gcm`
+> default / `aes-256-cbc` / `chacha20-poly1305`; key providers `local`,
+> `aws-kms`, `azure-key-vault`, `gcp-kms`, `hashicorp-vault`) remains in the
+> System namespace, but the per-field `encryptionConfig` property was **pruned
+> from the Field schema in 2026-06** — at-rest field encryption was never
+> implemented by the runtime. The supported channel for secret values is a
+> `type: 'secret'` field (one-way handling via the settings crypto provider).
+> The example below shows the *schema shape* for implementers.
 
 ```yaml
 fields:
@@ -440,7 +456,7 @@ rowLevelSecurity:
 
 ### Defense in Depth
 
-Combine OWD (`sharingModel: private`), an RLS `using` policy, FLS (`readable: false`) on sensitive fields, and `encryptionConfig` for data at rest.
+Combine OWD (`sharingModel: private`), an RLS `using` policy, FLS (`readable: false`) on sensitive fields, and `type: 'secret'` for values that must never round-trip to clients.
 
 ### Security by Default
 

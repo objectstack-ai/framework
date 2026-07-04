@@ -147,8 +147,10 @@ async function updateObjectDefinition(
   name: string,
   changes: Partial<ObjectDefinition>
 ): Promise<ObjectDefinition> {
-  // Update source of truth
-  const updated = await metadataService.updateObject(name, changes);
+  // Update source of truth — register() saves the full definition
+  const current = await metadataService.getObject(name);
+  const updated = { ...(current as ObjectDefinition), ...changes };
+  await metadataService.register('object', name, updated);
 
   // Update cache immediately
   await cacheService.set(`meta:object:${name}`, updated, 3600);
@@ -160,11 +162,12 @@ async function updateObjectDefinition(
 ### Cache Invalidation on Events
 
 ```typescript
-metadataService.onChange((event) => {
+// watch() is optional on IMetadataService — check before subscribing
+const handle = metadataService.watch?.('object', (event) => {
   // Invalidate the affected key when metadata changes.
   // The contract deletes individual keys — track related keys
   // (e.g. cached queries) yourself to invalidate them.
-  cacheService.delete(`meta:object:${event.objectName}`);
+  cacheService.delete(`meta:object:${event.name}`);
 });
 ```
 
