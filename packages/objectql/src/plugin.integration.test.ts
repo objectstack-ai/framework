@@ -941,14 +941,18 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
 
     // A driver that serves one runtime-created object (with inline fields)
     // from sys_metadata — models an isolated, proxy-free project kernel.
-    const makeLocalMetadataDriver = (findCalls: Array<{ object: string }>) => ({
+    const makeLocalMetadataDriver = (findCalls: Array<{ object: string; query?: any }>) => ({
       name: 'local-meta-driver',
       version: '1.0.0',
       connect: async () => {},
       disconnect: async () => {},
-      find: async (object: string) => {
-        findCalls.push({ object });
+      find: async (object: string, query?: any) => {
+        findCalls.push({ object, query });
         if (object === 'sys_metadata') {
+          // Honour a type filter (the authored-hook resync queries
+          // type='hook'); the object-hydration path queries without one.
+          const typeFilter = query?.where?.type;
+          if (typeFilter !== undefined && typeFilter !== 'object') return [];
           return [
             {
               id: '1',
@@ -975,8 +979,10 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
 
     it('does NOT hydrate a project kernel (environmentId set) without the opt-in', async () => {
       // Default behavior: a project kernel sources metadata from the artifact /
-      // control-plane proxy, so boot must not read a local sys_metadata.
-      const findCalls: Array<{ object: string }> = [];
+      // control-plane proxy, so boot must not hydrate OBJECTS from a local
+      // sys_metadata. The only permitted boot read is the runtime-authored
+      // hook re-sync (#2588), which is narrowly scoped to type='hook'.
+      const findCalls: Array<{ object: string; query?: any }> = [];
       await kernel.use({
         name: 'mock-noopt-driver',
         type: 'driver',
@@ -988,7 +994,10 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       await kernel.use(plugin);
       await kernel.bootstrap();
 
-      expect(findCalls.find((c) => c.object === 'sys_metadata')).toBeUndefined();
+      const metaReads = findCalls.filter((c) => c.object === 'sys_metadata');
+      for (const read of metaReads) {
+        expect(read.query?.where?.type).toMatch(/^hooks?$/);
+      }
       const registry = (kernel.getService('objectql') as any).registry;
       expect(registry.getObject('product')).toBeUndefined();
     });

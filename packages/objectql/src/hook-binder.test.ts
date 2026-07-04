@@ -95,6 +95,51 @@ describe('bindHooksToEngine', () => {
     expect(calls).toEqual(['v2']);
   });
 
+  it('skips body-hooks when no bodyRunner is supplied and no default is installed', () => {
+    const engine = makeEngine();
+    const hook: Hook = {
+      name: 'body-no-runner', object: 'account', events: ['beforeInsert'], priority: 100,
+      body: { language: 'js', source: "ctx.input.x = 1;" },
+    } as unknown as Hook;
+    const result = bindHooksToEngine(engine, [hook], { packageId: 'p' });
+    expect(result.registered).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.errors[0]?.reason).toMatch(/no bodyRunner/);
+  });
+
+  it('falls back to the engine default bodyRunner via engine.bindHooks (#2588)', async () => {
+    const engine = makeEngine();
+    const calls: string[] = [];
+    // Fake runner — the real QuickJS bridge lives in @objectstack/runtime;
+    // here we only verify the engine-level fallback plumbing.
+    engine.setDefaultBodyRunner((hook: Hook) => async () => {
+      calls.push(hook.name);
+    });
+    const hook: Hook = {
+      name: 'body-default-runner', object: 'account', events: ['beforeInsert'], priority: 100,
+      body: { language: 'js', source: "ctx.input.x = 1;" },
+    } as unknown as Hook;
+    engine.bindHooks([hook], { packageId: 'metadata-service' });
+    await engine.triggerHooks('beforeInsert', makeCtx());
+    expect(calls).toEqual(['body-default-runner']);
+  });
+
+  it('explicit bodyRunner wins over the engine default', async () => {
+    const engine = makeEngine();
+    const calls: string[] = [];
+    engine.setDefaultBodyRunner(() => async () => { calls.push('default'); });
+    const hook: Hook = {
+      name: 'body-explicit', object: 'account', events: ['beforeInsert'], priority: 100,
+      body: { language: 'js', source: "ctx.input.x = 1;" },
+    } as unknown as Hook;
+    engine.bindHooks([hook], {
+      packageId: 'app:x',
+      bodyRunner: () => async () => { calls.push('explicit'); },
+    });
+    await engine.triggerHooks('beforeInsert', makeCtx());
+    expect(calls).toEqual(['explicit']);
+  });
+
   it('keeps hooks bound under different packageIds isolated', async () => {
     const engine = makeEngine();
     const calls: string[] = [];

@@ -719,6 +719,20 @@ export type PublishMaterializer = (args: {
     actor: string;
 }) => Promise<PublishMaterializeResult>;
 
+/**
+ * Post-persistence metadata-mutation notification (#2588). Emitted by
+ * `saveMetaItem` / `publishMetaItem` / `deleteMetaItem` AFTER the write
+ * landed. `type` is the singular metadata type name. Subscribe via
+ * {@link ObjectStackProtocolImplementation.onMetadataMutation}.
+ */
+export interface MetadataMutationEvent {
+    type: string;
+    name: string;
+    /** Resulting lifecycle state of the row the mutation produced. */
+    state: 'active' | 'draft' | 'deleted';
+    organizationId?: string | null;
+}
+
 export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     private engine: MetadataHostEngine;
     private getServicesRegistry?: () => Map<string, any>;
@@ -776,6 +790,50 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     registerPublishMaterializer(type: string, materializer: PublishMaterializer): void {
         const singular = PLURAL_TO_SINGULAR[type] ?? type;
         this.publishMaterializers.set(singular, materializer);
+    }
+
+    /**
+     * Runtime-mutation listeners (#2588). Every metadata mutation that lands
+     * through this protocol — `saveMetaItem` (draft AND direct-active saves),
+     * `publishMetaItem` (per-item and package publish-drafts), and
+     * `deleteMetaItem` — notifies these listeners AFTER persistence succeeds.
+     *
+     * This is the ONE choke point every authoring surface funnels through
+     * (rest-server, http-dispatcher, AI builders, direct protocol callers),
+     * so boot-cached runtime consumers can re-sync on authoring without each
+     * HTTP surface hand-announcing. First consumer: ObjectQLPlugin re-binds
+     * runtime-authored hooks when a `hook` row changes.
+     *
+     * Server-side extension only — NOT part of the ObjectStackProtocol wire
+     * contract (same status as `loadMetaFromDb`).
+     */
+    private metadataMutationListeners: Array<(evt: MetadataMutationEvent) => void> = [];
+
+    /** Subscribe to post-persistence metadata mutations. Returns an unsubscribe fn. */
+    onMetadataMutation(listener: (evt: MetadataMutationEvent) => void): () => void {
+        this.metadataMutationListeners.push(listener);
+        return () => {
+            const i = this.metadataMutationListeners.indexOf(listener);
+            if (i >= 0) this.metadataMutationListeners.splice(i, 1);
+        };
+    }
+
+    /**
+     * Notify mutation listeners (best-effort, synchronous fan-out). A
+     * listener failure must never fail the write it observes — the row is
+     * already persisted — so each listener is isolated in its own try/catch.
+     */
+    private emitMetadataMutation(evt: MetadataMutationEvent): void {
+        for (const listener of this.metadataMutationListeners) {
+            try {
+                listener(evt);
+            } catch (e) {
+                console.warn(
+                    `[Protocol] metadata-mutation listener failed for ${evt.type}/${evt.name}: `
+                    + `${e instanceof Error ? e.message : String(e)}`,
+                );
+            }
+        }
     }
 
     /**
@@ -3905,6 +3963,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     source: 'protocol.saveMetaItem',
                     note: mode === 'draft' ? 'draft' : 'active',
                 });
+                this.emitMetadataMutation({
+                    type: singularTypeForRepo,
+                    name: request.name,
+                    state: mode === 'draft' ? 'draft' : 'active',
+                    organizationId: orgId,
+                });
                 return {
                     success: true,
                     version: result.version,
@@ -3996,6 +4060,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 await this.engine.insert('sys_metadata', row);
             }
 
+            this.emitMetadataMutation({
+                type: PLURAL_TO_SINGULAR[request.type] ?? request.type,
+                name: request.name,
+                state: 'active',
+                organizationId: orgId,
+            });
             return {
                 success: true,
                 message: orgId
@@ -4192,6 +4262,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     };
                 }
             }
+            this.emitMetadataMutation({
+                type: singularType,
+                name: request.name,
+                state: 'active',
+                organizationId: orgId,
+            });
             return response;
         } catch (err: any) {
             if (err instanceof ConflictError) {
@@ -5434,6 +5510,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     note: targetState,
                 });
 
+                this.emitMetadataMutation({
+                    type: singularTypeForRepo,
+                    name: request.name,
+                    state: 'deleted',
+                    organizationId: orgId,
+                });
                 return {
                     success: true,
                     reset: true,

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppPlugin } from './app-plugin';
 import { PluginContext } from '@objectstack/core';
 
@@ -313,6 +313,84 @@ describe('AppPlugin', () => {
             const bundle = { manifest: { name: 'name-only' } };
             const plugin = new AppPlugin(bundle as any);
             expect(plugin.name).toBe('plugin.app.name-only');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Default hook body runner (#2588)
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('default hook body runner install', () => {
+        let mockQL: any;
+        let mockManifest: any;
+
+        beforeEach(() => {
+            delete process.env.OS_DISABLE_AUTHORED_HOOKS;
+            mockQL = { setDefaultBodyRunner: vi.fn(), registry: {} };
+            mockManifest = { register: vi.fn() };
+            vi.mocked(mockContext.getService).mockImplementation(((name: string) => {
+                if (name === 'objectql') return mockQL;
+                if (name === 'manifest') return mockManifest;
+                throw new Error(`service '${name}' not found`);
+            }) as any);
+        });
+
+        afterEach(() => {
+            delete process.env.OS_DISABLE_AUTHORED_HOOKS;
+        });
+
+        it('installs the engine default body runner during init', async () => {
+            const plugin = new AppPlugin({ id: 'com.test.app' });
+            await plugin.init(mockContext);
+            expect(mockQL.setDefaultBodyRunner).toHaveBeenCalledTimes(1);
+            const runner = mockQL.setDefaultBodyRunner.mock.calls[0][0];
+            expect(typeof runner).toBe('function');
+            // The factory-produced runner yields a handler for body-hooks…
+            const handler = runner({
+                name: 'h',
+                object: 'a',
+                events: ['beforeInsert'],
+                body: { language: 'js', source: 'ctx.input.x = 1;' },
+            });
+            expect(typeof handler).toBe('function');
+            // …and nothing for hooks without a body.
+            expect(runner({ name: 'nobody', object: 'a', events: ['beforeInsert'] })).toBeUndefined();
+        });
+
+        it('installs the runner even for empty environments', async () => {
+            // An empty env is exactly where a user authors their first hook.
+            const plugin = new AppPlugin(
+                { manifest: { plugins: [] }, functions: [] } as any,
+                { environmentId: 'env-a', organizationId: 'org-a' } as any,
+            );
+            await plugin.init(mockContext);
+            expect(mockQL.setDefaultBodyRunner).toHaveBeenCalledTimes(1);
+            // Empty env still short-circuits the rest of init.
+            expect(mockManifest.register).not.toHaveBeenCalled();
+        });
+
+        it('does not replace an already-installed default runner', async () => {
+            mockQL._defaultBodyRunner = () => undefined;
+            const plugin = new AppPlugin({ id: 'com.test.app' });
+            await plugin.init(mockContext);
+            expect(mockQL.setDefaultBodyRunner).not.toHaveBeenCalled();
+        });
+
+        it('honours the OS_DISABLE_AUTHORED_HOOKS=1 opt-out', async () => {
+            process.env.OS_DISABLE_AUTHORED_HOOKS = '1';
+            const plugin = new AppPlugin({ id: 'com.test.app' });
+            await plugin.init(mockContext);
+            expect(mockQL.setDefaultBodyRunner).not.toHaveBeenCalled();
+        });
+
+        it('init survives a kernel without an objectql service', async () => {
+            vi.mocked(mockContext.getService).mockImplementation(((name: string) => {
+                if (name === 'manifest') return mockManifest;
+                throw new Error(`service '${name}' not found`);
+            }) as any);
+            const plugin = new AppPlugin({ id: 'com.test.app' });
+            await expect(plugin.init(mockContext)).resolves.toBeUndefined();
+            expect(mockManifest.register).toHaveBeenCalled();
         });
     });
 });

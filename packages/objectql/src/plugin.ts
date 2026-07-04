@@ -215,6 +215,28 @@ export class ObjectQLPlugin implements Plugin {
     ctx.registerService('protocol', protocolShim);
     ctx.logger.info('Protocol service registered');
 
+    // ── Runtime-authored hook rebind on authoring (#2588) ────────────────
+    // The protocol is the ONE choke point every metadata-authoring surface
+    // funnels through (rest-server PUT /meta, dispatcher, publish-drafts, AI
+    // builders). When a `hook` row lands (direct-active save, publish) or is
+    // deleted, re-bind the authored-hook set so the change is live without a
+    // restart. Draft saves are skipped — drafts are not live by design.
+    // Fire-and-forget: a rebind failure is logged, never fails the write.
+    if (typeof (protocolShim as any).onMetadataMutation === 'function') {
+      const unsubscribe = (protocolShim as any).onMetadataMutation(
+        (evt: { type: string; name: string; state: string }) => {
+          if (evt?.type !== 'hook' || evt.state === 'draft') return;
+          void this.resyncAuthoredHooks(ctx).catch((e: any) => {
+            ctx.logger.warn('[ObjectQLPlugin] authored-hook rebind after mutation failed', {
+              hook: evt.name,
+              error: e?.message,
+            });
+          });
+        },
+      );
+      this.metadataUnsubscribes.push(unsubscribe);
+    }
+
     // Register an `analytics` service adapter that maps the dispatcher's
     // expected interface (query / getMeta / generateSql) onto the
     // protocol shim's `analyticsQuery`. Without this, HttpDispatcher's
@@ -284,7 +306,27 @@ export class ObjectQLPlugin implements Plugin {
     } catch (e: any) {
         ctx.logger.debug('No external metadata service to sync from');
     }
-    
+
+    // ── Runtime-authored hook bind (#2588) ───────────────────────────────
+    // Hooks authored in the Studio live as `sys_metadata` rows, which the
+    // metadata service's loadMany() above does NOT surface on env-scoped
+    // kernels (no DatabaseLoader there) — so the boot bind never sees them
+    // and their bodies never run, even after a restart. Re-bind from the
+    // rows themselves:
+    //   • at `kernel:ready` — cold-boot coverage, once every plugin has
+    //     registered its packages (so the artifact filter can classify);
+    //   • on `metadata:reloaded` — publish-while-running coverage (the
+    //     runtime dispatcher announces after publishPackageDrafts, #2576),
+    //     mirroring service-automation's flow re-sync.
+    // Idempotent: the bind fully replaces the 'metadata-service' package
+    // set, so edited hooks re-bind and deleted hooks tear down.
+    ctx.hook('kernel:ready', async () => {
+        await this.resyncAuthoredHooks(ctx);
+    });
+    ctx.hook('metadata:reloaded', async () => {
+        await this.resyncAuthoredHooks(ctx);
+    });
+
     // Discover features from Kernel Services
     if (ctx.getServices && this.ql) {
         const services = ctx.getServices();
@@ -912,6 +954,169 @@ export class ObjectQLPlugin implements Plugin {
   }
 
   /**
+   * True when a hook of this name is shipped by an installed CODE package —
+   * i.e. the SchemaRegistry holds a composite (`<packageId>:<name>`) artifact
+   * entry for it (registered by `registerApp` / the artifact loader). Those
+   * hooks are bound by AppPlugin under `app:<appId>` with an explicit
+   * bodyRunner + functions map, so every OTHER bind path must skip them or
+   * they execute twice per event.
+   *
+   * Runtime-authored hooks — including ones published INTO a runtime-created
+   * package (their sys_metadata row carries a `package_id`) — have no
+   * artifact entry and are NOT matched. `getArtifactItem` is immune to
+   * plain-key overlay shadows, so an authored customization of a packaged
+   * hook classifies as artifact-shipped (the packaged version stays the one
+   * that runs — same artifact-wins rule as ADR-0010 lock resolution).
+   */
+  private isArtifactShippedHook(name: unknown): boolean {
+    if (typeof name !== 'string' || name.length === 0) return false;
+    const registry: any = this.ql?.registry;
+    if (!registry || typeof registry.getArtifactItem !== 'function') return false;
+    return registry.getArtifactItem('hook', name) !== undefined;
+  }
+
+  /**
+   * Read the ACTIVE runtime-authored hook rows from `sys_metadata`.
+   *
+   * Reads the table directly (like `protocol.getMetaItems` does) instead of
+   * going through the metadata service, because (a) env-scoped kernels have
+   * no DatabaseLoader so the service never surfaces these rows, and (b) rows
+   * published from a Studio session are org-scoped — engine hooks fire
+   * process-wide, so we take active rows across ALL organizations rather
+   * than one org's overlay view.
+   *
+   * Returns `null` when the read failed (e.g. no sys_metadata table on this
+   * kernel) — callers must treat that as "couldn't read", NOT "zero hooks",
+   * so a failed read never tears down live bindings.
+   */
+  private async readAuthoredHookRows(ctx: PluginContext): Promise<any[] | null> {
+    if (!this.ql) return null;
+    try {
+      // No environment filter: per ADR-0005 (revised 2026-05) each
+      // environment has its own physical DB, so this kernel's sys_metadata
+      // only ever holds its own rows (saveMetaItem no longer stamps
+      // environment_id). Rows across ALL organizations are taken — engine
+      // hooks fire process-wide, matching flow-trigger semantics.
+      let rows: any[] = (await this.ql.find('sys_metadata', {
+        where: { type: 'hook', state: 'active' },
+      })) ?? [];
+      if (rows.length === 0) {
+        // Legacy plural rows — mirrors getMetaItems' singular/plural fallback.
+        rows = (await this.ql.find('sys_metadata', {
+          where: { type: 'hooks', state: 'active' },
+        })) ?? [];
+      }
+      const hooks: any[] = [];
+      for (const row of rows) {
+        try {
+          const data = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+          if (!data || typeof data !== 'object' || typeof data.name !== 'string') continue;
+          // Surface the persisted package binding (parity with getMetaItems)
+          // so provenance-aware consumers of the bound hook can read it.
+          const recPkg = row.package_id ?? undefined;
+          if (recPkg && data._packageId === undefined) data._packageId = recPkg;
+          hooks.push(data);
+        } catch {
+          // Malformed row — skip it, keep the rest.
+        }
+      }
+      return hooks;
+    } catch (e: any) {
+      ctx.logger.debug('[ObjectQLPlugin] authored-hook read from sys_metadata failed', {
+        error: e?.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Serializes {@link resyncAuthoredHooks} runs. Mutation events, publishes,
+   * and the boot sync can overlap; two interleaved read→bind sequences could
+   * otherwise finish out of order and leave the OLDER snapshot bound.
+   */
+  private authoredHookResyncChain: Promise<void> = Promise.resolve();
+
+  /**
+   * (Re-)bind runtime-authored hooks into the execution pipeline (#2588).
+   *
+   * Serialized: overlapping calls queue behind each other so the last
+   * completed bind always reflects the newest read.
+   *
+   * Sources, unioned by hook name (fresher DB row wins):
+   *   1. `metadataService.loadMany('hook')` — the same view the boot bind in
+   *      {@link loadMetadataFromService} consumed (covers FS-scanned hooks
+   *      and, on platform kernels, the DatabaseLoader), re-read so the set
+   *      reflects post-boot changes;
+   *   2. active `sys_metadata` hook rows read directly — the ONLY source
+   *      that surfaces Studio-authored hooks on env-scoped kernels.
+   *
+   * Package-artifact hooks are filtered out (bound by AppPlugin — see
+   * {@link isArtifactShippedHook}). The result replaces the whole
+   * `'metadata-service'` package set (`bindHooksToEngine` unregisters it
+   * first), so this is idempotent: edited hooks re-bind with their new
+   * definition and hooks whose rows were deleted tear down. Bodies execute
+   * through the engine's default bodyRunner installed at boot by the
+   * runtime's AppPlugin; when that runner is absent (e.g.
+   * `OS_DISABLE_AUTHORED_HOOKS=1`) the binder skips bodies with a warning,
+   * exactly as before.
+   *
+   * Best-effort: when BOTH sources are unavailable the resync is a no-op —
+   * it never tears down live hooks on a failed read.
+   */
+  private resyncAuthoredHooks(ctx: PluginContext): Promise<void> {
+    const run = this.authoredHookResyncChain.then(() => this.resyncAuthoredHooksNow(ctx));
+    // The chain itself must never hold a rejection (it would poison every
+    // later resync); callers still see the failure through `run`.
+    this.authoredHookResyncChain = run.catch(() => undefined);
+    return run;
+  }
+
+  private async resyncAuthoredHooksNow(ctx: PluginContext): Promise<void> {
+    const ql: any = this.ql;
+    if (!ql || typeof ql.bindHooks !== 'function') return;
+
+    let serviceHooks: any[] | null = null;
+    try {
+      const metadataService = ctx.getService('metadata') as any;
+      if (metadataService && typeof metadataService.loadMany === 'function') {
+        serviceHooks = (await metadataService.loadMany('hook')) ?? [];
+      }
+    } catch {
+      serviceHooks = null; // no metadata service on this kernel
+    }
+
+    const authoredHooks = await this.readAuthoredHookRows(ctx);
+    if (serviceHooks === null && authoredHooks === null) return; // nothing readable — keep current bindings
+
+    const byName = new Map<string, any>();
+    for (const h of serviceHooks ?? []) {
+      if (h && typeof h.name === 'string') byName.set(h.name, h);
+    }
+    for (const h of authoredHooks ?? []) {
+      if (h && typeof h.name === 'string') byName.set(h.name, h);
+    }
+
+    const bindable = Array.from(byName.values()).filter(
+      (h) => !this.isArtifactShippedHook(h.name),
+    );
+    if (bindable.length === 0) {
+      // bindHooksToEngine early-returns on an empty list BEFORE its
+      // unregister step, so deleting the last authored hook would leave the
+      // stale binding firing forever. Tear the package set down explicitly.
+      if (typeof ql.unregisterHooksByPackage === 'function') {
+        ql.unregisterHooksByPackage('metadata-service');
+      }
+    } else {
+      ql.bindHooks(bindable, { packageId: 'metadata-service' });
+    }
+    ctx.logger.info('[ObjectQLPlugin] re-synced runtime-authored hooks', {
+      bound: bindable.length,
+      authoredRows: authoredHooks?.length ?? 0,
+      artifactSkipped: byName.size - bindable.length,
+    });
+  }
+
+  /**
    * Load metadata from external metadata service into ObjectQL registry
    * This enables ObjectQL to use file-based or remote metadata
    */
@@ -974,8 +1179,18 @@ export class ObjectQLPlugin implements Plugin {
                     // canonical binder so declarative semantics (condition,
                     // retry, timeout, async, onError, priority, packageId)
                     // are honoured uniformly with the AppPlugin path.
+                    //
+                    // Package-artifact hooks are EXCLUDED: AppPlugin already
+                    // binds the same hooks (from the bundle) under
+                    // `app:<appId>` WITH an explicit bodyRunner + functions
+                    // map. Binding them here too used to be harmless only
+                    // because this path had no bodyRunner (bodies were
+                    // silently skipped); now that the engine carries a
+                    // default runner (#2588) a second bind would execute
+                    // every artifact hook twice per event.
                     if (type === 'hook' && this.ql && typeof (this.ql as any).bindHooks === 'function') {
-                        (this.ql as any).bindHooks(items, {
+                        const bindable = items.filter((h: any) => !this.isArtifactShippedHook(h?.name));
+                        (this.ql as any).bindHooks(bindable, {
                             packageId: 'metadata-service',
                         });
                     }

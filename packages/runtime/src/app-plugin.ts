@@ -113,6 +113,11 @@ export class AppPlugin implements Plugin {
     }
 
     init = async (ctx: PluginContext) => {
+        // Install the engine-wide default hook body runner FIRST — even for
+        // empty envs (an empty env is exactly where a user will author their
+        // first Studio hook). Runs in init (Phase 1) so it is in place before
+        // ObjectQLPlugin.start binds metadata-service hooks in Phase 2 (#2588).
+        this.installDefaultHookBodyRunner(ctx);
         if (this.empty) {
             ctx.logger.debug('[AppPlugin] empty env — no app payload, skipping init', {
                 pluginName: this.name,
@@ -163,6 +168,47 @@ export class AppPlugin implements Plugin {
         }
 
         ctx.getService<{ register(m: any): void }>('manifest').register(servicePayload);
+    }
+
+    /**
+     * Install the engine's DEFAULT hook body runner (`engine.setDefaultBodyRunner`).
+     *
+     * Hooks authored at runtime (Studio → `protocol.saveMetaItem` → publish)
+     * bind through paths that pass no explicit `bodyRunner` — notably
+     * ObjectQLPlugin's metadata-service bind — so without this default their
+     * L1/L2 `body` is silently dropped by `bindHooksToEngine` and the hook
+     * never runs (#2588). The runtime owns the sandbox bridge (objectql stays
+     * sandbox-free), so this is the boot point that wires it: same
+     * QuickJS-sandboxed, capability-gated runner the `defineStack({ hooks })`
+     * bind already uses.
+     *
+     * `OS_DISABLE_AUTHORED_HOOKS=1` opts out for deployments that want
+     * runtime-authored (DB-stored, non-code-reviewed) hook bodies to stay
+     * inert; code-shipped hooks are unaffected (AppPlugin passes its own
+     * runner explicitly).
+     *
+     * Idempotent: the first AppPlugin to run installs it; the runner is
+     * bundle-agnostic (it only closes over the engine + logger).
+     */
+    private installDefaultHookBodyRunner(ctx: PluginContext): void {
+        if (process.env.OS_DISABLE_AUTHORED_HOOKS === '1') {
+            ctx.logger.info('[AppPlugin] OS_DISABLE_AUTHORED_HOOKS=1 — runtime-authored hook bodies will not execute');
+            return;
+        }
+        let ql: any;
+        try {
+            ql = ctx.getService('objectql');
+        } catch {
+            return; // no engine on this kernel — nothing to wire
+        }
+        if (!ql || typeof ql.setDefaultBodyRunner !== 'function') return;
+        if (ql._defaultBodyRunner) return; // another AppPlugin already installed one
+        ql.setDefaultBodyRunner(hookBodyRunnerFactory(new QuickJSScriptRunner(), {
+            ql,
+            logger: ctx.logger,
+            appId: 'runtime-authored',
+        }));
+        ctx.logger.info('[AppPlugin] Installed default hook body runner (runtime-authored hooks can execute)');
     }
 
     start = async (ctx: PluginContext) => {
