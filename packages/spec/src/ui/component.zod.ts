@@ -71,7 +71,7 @@ export const RecordDetailsProps = z.object({
 export const RecordRelatedListProps = z.object({
   objectName: z.string().describe('Related object name (e.g., "task", "opportunity")'),
   relationshipField: z.string().describe('Field on related object that points to this record (e.g., "account_id")'),
-  columns: z.array(z.string()).describe('Fields to display in the related list'),
+  columns: z.array(z.string()).optional().describe('Fields to display in the related list. Optional: when omitted, columns derive from the related object\'s highlightFields / default list columns (a related list is just another surface that lists that object). Override chain: child highlightFields → field-level relatedListColumns → this inline list.'),
   sort: z.union([
     z.string(),
     z.array(z.object({

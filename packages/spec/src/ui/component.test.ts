@@ -146,6 +146,12 @@ describe('RecordRelatedListProps', () => {
     expect(() => RecordRelatedListProps.parse({})).toThrow();
     expect(() => RecordRelatedListProps.parse({ objectName: 'x' })).toThrow();
   });
+
+  it('should accept a related list without columns (columns derive from the child object)', () => {
+    const props = { objectName: 'contact', relationshipField: 'account_id' };
+    expect(() => RecordRelatedListProps.parse(props)).not.toThrow();
+    expect(RecordRelatedListProps.parse(props).columns).toBeUndefined();
+  });
 });
 
 describe('RecordHighlightsProps', () => {
