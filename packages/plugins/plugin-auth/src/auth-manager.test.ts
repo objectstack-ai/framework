@@ -1806,6 +1806,36 @@ describe('AuthManager', () => {
       warn.mockRestore();
       expect(captured).not.toHaveProperty('rateLimit');
     });
+
+    // ── ADR-0069 D2 — shared secondaryStorage → cross-node rate limiting ──
+    it('wires secondaryStorage and flips rateLimit.storage to "secondary-storage"', async () => {
+      let captured: any;
+      (betterAuth as any).mockImplementation((cfg: any) => { captured = cfg; return { handler: vi.fn(), api: {} }; });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ss = { get: vi.fn(), set: vi.fn(), delete: vi.fn() };
+      const m = new AuthManager({
+        secret: SECRET, baseUrl: 'http://localhost:3000',
+        rateLimit: { enabled: true, window: 60, max: 10 } as any,
+        secondaryStorage: ss as any,
+      });
+      await m.getAuthInstance();
+      warn.mockRestore();
+      expect(captured.secondaryStorage).toBe(ss);
+      expect(captured.rateLimit.storage).toBe('secondary-storage');
+      expect(captured.rateLimit).toMatchObject({ enabled: true, max: 10, window: 60 });
+    });
+
+    it('flips rateLimit.storage even when no explicit rateLimit config is given (secondaryStorage alone)', async () => {
+      let captured: any;
+      (betterAuth as any).mockImplementation((cfg: any) => { captured = cfg; return { handler: vi.fn(), api: {} }; });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ss = { get: vi.fn(), set: vi.fn(), delete: vi.fn() };
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', secondaryStorage: ss as any });
+      await m.getAuthInstance();
+      warn.mockRestore();
+      expect(captured.secondaryStorage).toBe(ss);
+      expect(captured.rateLimit.storage).toBe('secondary-storage');
+    });
   });
 
   // ADR-0069 D1: password complexity validator (custom; better-auth only does
