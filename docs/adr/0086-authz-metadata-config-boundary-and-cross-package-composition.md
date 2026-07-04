@@ -349,3 +349,6 @@ each door only writes what it owns.
 - Related issues: objectui#2196 (trigger), objectui#2197 (Interfaces scope-fix template),
   framework#1828 (ADR-0048), #1892/#1893 (aspirational-metadata hygiene), #2377 (ADR-0049
   enforce-or-remove), #1883 (permission lifecycle ops ungated).
+- **Lifecycle context**: this ADR covers the package-authoring/composition slice of the authz
+  surface; the whole-lifecycle gap map (P0–P3, package dev → production) is tracked in
+  umbrella issue #2561.
