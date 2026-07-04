@@ -929,6 +929,7 @@ export class SecurityPlugin implements Plugin {
       this.metadata,
       this.bootstrapPermissionSets,
       this.dbLoader,
+      { logger: this.logger },
     );
     // Post-resolution fallback — closes the fail-open hole where a populated
     // `roles` array maps to no permission set yet (no sys_role binding), which
@@ -943,6 +944,7 @@ export class SecurityPlugin implements Plugin {
         this.metadata,
         this.bootstrapPermissionSets,
         this.dbLoader,
+        { logger: this.logger },
       );
     }
     return permissionSets;
