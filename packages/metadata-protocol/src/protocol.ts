@@ -4355,7 +4355,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const drafts = await repo.listDrafts({ packageId: request.packageId });
 
         const published: Array<{ type: string; name: string; version: string }> = [];
-        const failed: Array<{ type: string; name: string; error: string; code?: string }> = [];
+        const failed: Array<{ type: string; name: string; error: string; code?: string; issues?: Array<{ path: string; message: string; code?: string }> }> = [];
 
         // Structure first, seeds LAST — a seed's rows can only land after its
         // object's table exists (publishMetaItem creates it). Within the seeds we
@@ -4431,6 +4431,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     name: d.name,
                     error: e?.message ?? 'publish failed',
                     ...(e?.code ? { code: e.code } : {}),
+                    // Carry structured spec-validation issues so the publish
+                    // surface can point at the offending field, not just report
+                    // "N failed" (this catch used to flatten them to a message).
+                    ...(Array.isArray(e?.issues) ? { issues: e.issues } : {}),
                 });
             }
         }

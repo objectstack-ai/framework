@@ -119,7 +119,30 @@ describe('HttpDispatcher', () => {
             expect(result.response?.status).toBe(400);
             expect(result.response?.body?.error?.message).toBe('Save failed');
         });
-        
+
+        it('preserves the 422 status + structured spec-validation issues on save', async () => {
+            // protocol.saveMetaItem throws a spec-validation error carrying the
+            // field-anchored issues; the dispatcher must pass them through (not
+            // flatten to a single 400 message) so the Studio can point at fields.
+            const err: any = new Error('[invalid_metadata] object/bad failed spec validation: fields.amount.type: Required');
+            err.code = 'invalid_metadata';
+            err.status = 422;
+            err.issues = [
+                { path: 'fields.amount.type', message: 'Required', code: 'invalid_type' },
+                { path: 'label', message: 'Required', code: 'invalid_type' },
+            ];
+            mockProtocol.saveMetaItem.mockRejectedValue(err);
+
+            const result = await dispatcher.handleMetadata('/objects/bad', { request: {} }, 'PUT', {});
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(422); // NOT the old hardcoded 400
+            const error = result.response?.body?.error;
+            expect(error?.details?.code).toBe('invalid_metadata');
+            expect(error?.details?.issues).toEqual(err.issues);
+            expect(error?.details?.issues[0].path).toBe('fields.amount.type');
+        });
+
         it('should handle READ operations via ObjectQL registry', async () => {
              mockObjectQL.registry.getObject.mockReturnValue({ name: 'my_obj', fields: {} });
              
