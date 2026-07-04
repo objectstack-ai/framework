@@ -53,6 +53,10 @@ export * from './display-name';
 // grouping semantics every renderer (form, detail, drawer, designer) applies.
 export * from './field-group-layout';
 
+// record-surface derivation (ADR-0085 §5) — the single source for how a record's
+// create/edit/detail opens by default (full page vs drawer/modal overlay).
+export * from './record-surface';
+
 // Feed & Activity Protocol
 export * from './feed.zod';
 

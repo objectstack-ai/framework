@@ -61,3 +61,10 @@ export {
   SEMANTIC_ROLE_FIELD_UNKNOWN,
 } from './validate-semantic-roles.js';
 export type { SemanticRoleFinding, SemanticRoleSeverity } from './validate-semantic-roles.js';
+
+export {
+  validateFormLayout,
+  FORM_FIELD_UNKNOWN,
+  FORM_COLSPAN_ABSOLUTE,
+} from './validate-form-layout.js';
+export type { FormLayoutFinding, FormLayoutSeverity } from './validate-form-layout.js';

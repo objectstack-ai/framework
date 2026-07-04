@@ -65,7 +65,7 @@ A new presentation-intent key enters `ObjectSchema` only if **both** hold:
 1. it injects business intent **not inferable** from the schema (the machine cannot know whether `status` is ordinal, or which four fields this business watches);
 2. it binds to the object **across surfaces** — if the honest name for the key contains a page name, it fails.
 
-Keys that merely hide/re-arrange correct information (`hideRelatedTab`, `showReferenceRail`, `relatedLayout`, `useFieldGroups`, explicit `detail.sections`) are rejected at this layer. The supported path for per-page control is the one that already exists and is honestly scoped: an **assigned page** (full page schema). If a genuine relationship-level need appears (e.g. "this child object is noise on every parent"), it gets modeled at the relationship layer, not as a page toggle.
+Keys that merely hide/re-arrange correct information (`hideRelatedTab`, `showReferenceRail`, `relatedLayout`, `useFieldGroups`, explicit `detail.sections`, or a **modal-vs-page presentation surface** such as a `recordSurface` key) are rejected at this layer. The supported path for per-page control is the one that already exists and is honestly scoped: an **assigned page** (full page schema). A record's *default* surface (full page vs. drawer/modal overlay) is not authored at all: it is **derived** from how heavy the record is — `deriveRecordSurface` (#2578) — because field count is exactly the kind of fact a machine can infer, so a `recordSurface` key fails admission test #1. If a genuine relationship-level need appears (e.g. "this child object is noise on every parent"), it gets modeled at the relationship layer, not as a page toggle.
 
 ### 3. Deletions (all evidenced zero-author)
 
