@@ -1,27 +1,47 @@
 ---
 title: UI Engine
-description: Apps, pages, views, dashboards, and forms — server-driven UI declared as metadata and rendered by the ObjectUI runtime.
+description: Apps, 9 view render types, dashboards, themes, and public portals — server-driven UI declared as metadata and rendered by the ObjectUI runtime.
 ---
 
 # UI Engine
 
-The UI engine turns metadata into user interfaces: you declare **apps**, **pages**, **views**, and **dashboards** as data, and any compliant renderer draws them. This module is the practical documentation for the **ObjectUI layer** — the UI Protocol described normatively in the [ObjectUI spec](/docs/protocol/objectui). Because the UI is data, it ships inside the same artifact as your schema, respects the same permissions, and can be generated or modified by AI agents through the same typed surface.
+The UI engine turns metadata into user interfaces: you declare **apps**, **views**, **pages**, and **dashboards** as data, and any compliant renderer draws them. This module is the practical documentation for the **ObjectUI layer** — the UI Protocol specified normatively in the [ObjectUI spec](/docs/protocol/objectui). Because the UI is data, it ships inside the same artifact as your schema, respects the same permissions, and can be generated or modified by AI agents through the same typed surface.
+
+An app is a navigation shell over your objects (from the CRM example app):
+
+```typescript
+import { App } from '@objectstack/spec/ui';
+
+export const CrmApp = App.create({
+  name: 'crm_app',
+  label: 'CRM',
+  icon: 'briefcase',
+  branding: { primaryColor: '#2563EB' },
+  navigation: [
+    { id: 'group_sales', type: 'group', label: 'Sales', icon: 'briefcase', children: [
+      { id: 'nav_leads', type: 'object', objectName: 'crm_lead', label: 'Leads', icon: 'funnel' },
+      { id: 'nav_accounts', type: 'object', objectName: 'crm_account', label: 'Accounts', icon: 'building' },
+    ]},
+  ],
+});
+```
 
 ## The building blocks
 
-- An **App** groups navigation, branding, and entry points for one audience.
-- **Views** present object records as list, form, kanban, or calendar; **Pages** compose free-form layouts from widgets.
-- **Dashboards** combine charts and datasets for analytics.
-- **Forms** capture data — both internal record forms and public, unauthenticated collection forms.
-- The **Setup App** is the platform's built-in administration UI, itself rendered from the same protocol.
+- **Apps** group navigation, branding, and entry points for one audience.
+- **Views** present object records in **9 render types**: `grid` (the standard data table), `kanban`, `gallery`, `calendar`, `timeline`, `gantt`, `map`, `chart`, and `tree`. Forms are their own view kind with per-mode layouts ([Views](/docs/ui/views)).
+- **Pages** compose free-form layouts from widgets; **Dashboards** combine charts, reports, and datasets for analytics.
+- **Themes** define palettes, typography, and spacing as metadata — the CRM example ships light and dark theme variants.
+- **Portals** open a scoped slice of the app to external audiences, including **anonymous entry routes** for public data collection ([Forms](/docs/ui/forms), [public data collection](/docs/ui/public-data-collection)).
+- The **Setup App** — the platform's built-in administration UI — is itself rendered from the same protocol ([Setup App](/docs/ui/setup-app)).
 
 ## What's in this module
 
 <Cards>
   <Card href="/docs/ui/apps" title="Apps" description="App metadata: navigation, branding, entry points" />
+  <Card href="/docs/ui/views" title="Views" description="Grid, kanban, calendar, gantt, map & more — 9 render types" />
   <Card href="/docs/ui/pages" title="Pages" description="Page metadata and layout composition" />
-  <Card href="/docs/ui/views" title="Views" description="List, form, kanban, and calendar views" />
-  <Card href="/docs/ui/dashboards" title="Dashboards" description="Dashboard metadata and datasets" />
+  <Card href="/docs/ui/dashboards" title="Dashboards" description="Dashboard metadata, charts, and datasets" />
   <Card href="/docs/ui/forms" title="Forms" description="Public and internal form patterns" />
   <Card href="/docs/ui/doc-pages" title="Doc Pages" description="Ship package documentation rendered in the console" />
   <Card href="/docs/ui/setup-app" title="Setup App" description="The built-in administration UI" />
@@ -33,7 +53,7 @@ The UI engine turns metadata into user interfaces: you declare **apps**, **pages
   <Card href="/docs/ui/create-vs-edit-form" title="Create form ≠ edit form" description="Different layouts per form mode" />
   <Card href="/docs/ui/field-grouping-and-order" title="Field grouping & order" description="Control form structure" />
   <Card href="/docs/ui/role-based-interfaces" title="Role-based interfaces" description="Different UIs per audience" />
-  <Card href="/docs/ui/public-data-collection" title="Collect data from the public" description="Unauthenticated forms end to end" />
+  <Card href="/docs/ui/public-data-collection" title="Collect data from the public" description="Anonymous portal routes end to end" />
 </Cards>
 
 ## Related

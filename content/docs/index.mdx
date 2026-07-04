@@ -5,7 +5,9 @@ description: Technical documentation for ObjectStack.
 
 # ObjectStack Documentation
 
-ObjectStack is an AI-native business backend protocol for structured, auditable business applications. You declare your application — data model, logic, permissions, and UI — as metadata, and the platform derives the database, APIs, automation, and interface from that single artifact.
+ObjectStack is an AI-native business backend protocol for structured, auditable business applications. You author your application — data model, logic, permissions, and UI — as typed metadata in TypeScript (`defineStack()`), compile it to a self-contained artifact (`objectstack.json`), and the runtime derives everything else: the database schema across four interchangeable drivers, a generated REST + realtime API, permission-checked automation, and server-driven UI. AI agents act through the same typed, permission-aware surface — never through raw SQL or scraped UI.
+
+One protocol definition, 15 namespaces, 49 field types, one artifact — every engine (SQL, React, MCP) is a consumer of the same source of truth.
 
 ## Start here
 

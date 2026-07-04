@@ -1,31 +1,50 @@
 ---
 title: Automation
-description: Hooks, flows, workflows, approvals, and webhooks — the process engine that reacts to data changes and drives business processes.
+description: 18 hook events, 20+ extensible flow node types, scheduled flows, approvals, and durable webhooks — the process engine that reacts to your data.
 ---
 
 # Automation
 
-Automation is ObjectStack's process engine: it lets you attach business logic to your data model **declaratively** — as metadata — instead of scattering it through application code. It is a cross-protocol capability: automations are declared in the Automation Protocol namespace and executed by the ObjectOS runtime against ObjectQL data.
+Automation is ObjectStack's process engine: you attach business logic to the data model **declaratively** — as metadata — instead of scattering it through application code. It is a cross-protocol capability: automations are declared in the Automation Protocol namespace and executed by the ObjectOS runtime against ObjectQL data.
+
+The smallest useful automation is a hook (from the CRM example app):
+
+```typescript
+import type { Hook, HookContext } from '@objectstack/spec/data';
+
+export const OpportunityStageHook: Hook = {
+  name: 'opportunity_stage_probability',
+  object: 'crm_opportunity',
+  events: ['beforeInsert', 'beforeUpdate'],
+  priority: 100,
+  handler: async (ctx: HookContext) => {
+    const input = ctx.input as { stage?: string; probability?: number };
+    if (input.stage === 'closed_won') input.probability = 100;
+    if (input.stage === 'closed_lost') input.probability = 0;
+  },
+};
+```
 
 ## The building blocks
 
-- **Hooks** run custom logic before/after record operations (create, update, delete) — the workhorse for validation-with-side-effects, denormalization, and integrations.
-- **Flows** are node-based visual logic (screen flows, autolaunched flows, scheduled flows).
-- **Workflows** model a record's lifecycle as a **finite state machine**: states, transitions, and guards.
-- **Approvals** add human sign-off steps to a process.
-- **Webhooks** deliver events to external systems over HTTP with retry semantics.
+- **Hooks** intercept **18 lifecycle events** — before/after each of find, findOne, count, aggregate, insert, update, delete, updateMany, deleteMany. Hooks support priority ordering, fire-and-forget `async` mode, CEL `condition` guards, and a `retryPolicy` with backoff ([Hooks](/docs/automation/hooks)).
+- **Flows** are node-based processes with **20 built-in node types** (decision, loop, create/update/delete record, http, notify, script, screen, wait, subflow, parallel/join gateways, …) — and the set is **registry-extensible**: plugins can contribute new node types via `registerNodeExecutor`. Flows launch on record changes, on a schedule, from a screen, or via API ([Flows](/docs/automation/flows)).
+- **Workflows** model a record's lifecycle as a **finite state machine**: states, transitions, and guards ([Workflows](/docs/automation/workflows)).
+- **Approvals** are flow nodes with approver resolution, approve/reject decisions, and escalation ([Approvals](/docs/automation/approvals)).
+- **Webhooks** deliver events to external systems through a **durable outbox** — exponential/linear/fixed retry with dead-lettering, HMAC signing, and an admin redeliver endpoint ([Webhook Delivery](/docs/automation/webhooks)).
+- **Scheduled jobs** run on `setInterval` or cron via the job service, alongside `schedule`-type flows.
 
 Rule of thumb: model *state* with workflows, model *steps* with flows, use hooks for *code-level* reactions, and webhooks to *notify the outside world*.
 
 ## What's in this module
 
 <Cards>
-  <Card href="/docs/automation/hooks" title="Hooks" description="Before/after hooks on record operations" />
+  <Card href="/docs/automation/hooks" title="Hooks" description="18 before/after events on record operations" />
   <Card href="/docs/automation/hook-bodies" title="Hook & Action Bodies (L1/L2)" description="The two authoring levels for hook logic" />
-  <Card href="/docs/automation/flows" title="Flows" description="Flow metadata and node-based automation" />
+  <Card href="/docs/automation/flows" title="Flows" description="Node-based automation, screen flows, scheduled flows" />
   <Card href="/docs/automation/workflows" title="Workflows" description="State-machine lifecycle modeling" />
-  <Card href="/docs/automation/approvals" title="Approvals" description="Approval process recipe" />
-  <Card href="/docs/automation/webhooks" title="Webhook Delivery" description="Outbound event delivery and retries" />
+  <Card href="/docs/automation/approvals" title="Approvals" description="Approval nodes: approvers, decisions, escalation" />
+  <Card href="/docs/automation/webhooks" title="Webhook Delivery" description="Durable outbox, retries, HMAC signing" />
 </Cards>
 
 ## Related

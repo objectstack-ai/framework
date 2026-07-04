@@ -1,19 +1,30 @@
 ---
 title: Kernel & Services
-description: The ObjectKernel runtime — plugin host, event bus, service registry, and the services.* APIs your hooks and plugins call.
+description: The ObjectKernel runtime — plugin host, event bus, service registry, and the versioned services.* APIs your hooks and plugins call.
 ---
 
 # Kernel & Services
 
-The kernel is ObjectStack's runtime: it loads your metadata artifact, hosts plugins, wires up services, and enforces the lifecycle that keeps the system stable. This module documents the **ObjectOS layer** in practice — the [System Protocol](/docs/protocol/objectos) is its normative spec. If you write hooks or plugins, this is where the APIs you call (`services.data`, `services.email`, `services.queue`, …) and the contracts they implement are documented.
+The kernel is ObjectStack's runtime: it loads your metadata artifact, hosts plugins, wires up services, and enforces the lifecycle that keeps the system stable. This module documents the **ObjectOS layer** in practice — the [System Protocol](/docs/protocol/objectos) is its normative spec. If you write hooks or plugins, this is where the APIs you call and the contracts they implement are documented.
 
 ## How it fits together
 
 - The **ObjectKernel** boots through a strict lifecycle and exposes a **service registry**; everything else — data engine, auth, storage — is a service registered by a plugin.
 - **Events & hooks** are the kernel-level extension points plugins use to react to system activity.
-- **Runtime services** (`services.*`) are the stable, versioned API surface exposed to hook and action bodies.
-- **Service contracts** (`IDataEngine`, `IAuthService`, `ICacheService`, `IMetadataService`, `IStorageService`) define what any implementation must provide, so services are swappable.
-- **Cluster semantics** describe how the runtime behaves when scaled beyond a single node.
+- **Runtime services** (`services.*`) are the stable, versioned API surface exposed to hook and action bodies:
+
+| API | Stability | What it does |
+| :--- | :--- | :--- |
+| [`services.data`](/docs/kernel/runtime-services/data-service) | stable | CRUD and queries with the caller's permission context |
+| [`services.sharing`](/docs/kernel/runtime-services/sharing-service) | stable | `buildReadFilter`, `canEdit`, `grant`/`revoke`, `listShares` |
+| [`services.email`](/docs/kernel/runtime-services/email-service) | stable | `send`, `sendTemplate` |
+| [`services.queue`](/docs/kernel/runtime-services/queue-service) | stable | Background work and queues |
+| [`services.settings`](/docs/kernel/runtime-services/settings-service) | stable | App/environment settings |
+| [`services.storage`](/docs/kernel/runtime-services/storage-service) | stable | File storage |
+| [`services.audit`](/docs/kernel/runtime-services/audit-service) | experimental | Append-only audit sink (query history via `services.data`) |
+
+- **Service contracts** (28 interface files in `packages/spec/src/contracts/` — `IDataEngine`, `IAuthService`, `ICacheService`, `IMetadataService`, `IStorageService`, …) define what any implementation must provide, so services are swappable. Fifteen runtime service packages ship in this repo (cache, cluster, datasource, i18n, job, knowledge, messaging, realtime, …).
+- **Cluster semantics** define how the runtime behaves beyond a single node — including the per-partition locking the webhook outbox relies on.
 
 ## What's in this module
 
@@ -22,7 +33,7 @@ The kernel is ObjectStack's runtime: it loads your metadata artifact, hosts plug
   <Card href="/docs/kernel/events" title="Events & Hooks" description="Kernel-level extension points" />
   <Card href="/docs/kernel/services" title="Service Registry" description="How services are registered and resolved" />
   <Card href="/docs/kernel/services-checklist" title="Kernel Services Checklist" description="Every kernel service at a glance" />
-  <Card href="/docs/kernel/runtime-services" title="Runtime Service APIs" description="services.data, email, queue, storage, sharing, settings, audit" />
+  <Card href="/docs/kernel/runtime-services" title="Runtime Service APIs" description="The services.* surface with versioning guarantees" />
   <Card href="/docs/kernel/contracts" title="Service Contracts" description="The interfaces services implement" />
   <Card href="/docs/kernel/cluster" title="Cluster Semantics" description="Multi-node runtime behavior" />
 </Cards>
