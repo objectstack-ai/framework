@@ -145,22 +145,27 @@ inline grid, not just invoices:
 **Read side — detail-page related lists.** The mirror of `inlineEdit` is the
 related list on the parent's record DETAIL page. You don't author it: every
 child relationship is shown as a related list by default (owned `master_detail`
-children first). Refine on the relationship — `relatedList: false` to suppress a
-noisy child, `relatedListTitle` / `relatedListColumns` to override title /
-columns (see objectstack-data → Relationships → Detail-page related lists).
-Authored record pages can still place an explicit `record:related_list` (or
-inline-editable `record:line_items`) when they need bespoke placement.
+children first). Refine on the relationship:
+- `relatedList: 'primary'` — mark a CORE relationship; the detail page promotes
+  it to its **own tab** (see layout below). A *prominence* intent, not a layout
+  switch (ADR-0085).
+- `relatedList: false` — suppress a noisy child from the detail page.
+- `relatedListTitle` / `relatedListColumns` — override the derived title /
+  columns (both optional; columns otherwise auto-derive from the child object's
+  `highlightFields`). See objectstack-data → Relationships → Detail-page related lists.
 
-**Related-list layout.** Every related list stacks under a single **Related**
-tab on the synthesized record detail page — that is the only built-in layout.
-The old `detail.relatedLayout` (`'stack'` | `'tabs'`) toggle — like the whole
-object-level `detail: {...}` block — was **removed** (ADR-0085): an object
-declares no per-surface layout hints. When a record's child tables deserve
-first-class navigation (their own tabs, bespoke placement), assign the object a
-**custom record Page** and lay it out explicitly with `record:related_list`
-(or inline-editable `record:line_items`) blocks. For lighter tweaks stay at the
-relationship layer: `relatedList: false` to suppress a noisy child,
-`relatedListTitle` / `relatedListColumns` to override title / columns.
+**Related-list layout.** On the synthesized record detail page, each
+`relatedList: 'primary'` child gets its **own tab**; every other related list
+stacks under a single shared **Related** tab. Promoting a child table to a
+first-class tab is therefore a one-word change on the relationship — no custom
+page needed. The object still declares no per-surface *layout* hints: the old
+`detail.relatedLayout` toggle and object-level `detail: {...}` block stay
+**removed** (ADR-0085); `relatedLayout: 'tabs' | 'stack'` survives only as an
+app-level default override, not an object key. For arrangements the
+relationship layer can't express — filtered splits (e.g. Open vs Closed tabs), a
+chart/report tab, exact tab ordering — assign the object a **custom record
+Page** and lay it out explicitly with `record:related_list` (or inline-editable
+`record:line_items`) blocks.
 
 ### Field Conditional Rules in Forms
 

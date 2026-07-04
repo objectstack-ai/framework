@@ -83,15 +83,19 @@ record detail page. Both intents live on the same relationship:
 | Side | Flag (on the child's FK field) | Effect |
 |---|---|---|
 | Write | `inlineEdit: true` | child rendered as an editable grid inside the parent's create/edit form (atomic save) |
-| Read | `relatedList` (+ `relatedListTitle` / `relatedListColumns`) | child rendered as a related list on the parent's detail page |
+| Read | `relatedList: boolean \| 'primary'` (+ `relatedListTitle` / `relatedListColumns`) | child rendered as a related list on the parent's detail page; `'primary'` promotes it to its own tab |
 
 Related lists are **shown by default** for every child relationship
 (`master_detail` and `lookup`) — owned (`master_detail`) children are ordered
-first. The flag is opt-*out*: set `relatedList: false` to suppress a noisy
-association/audit link from the detail page. `relatedListTitle` /
-`relatedListColumns` override the derived title / columns. Audit FKs
-(`created_by` / `updated_by` / `owner_id`) are skipped and children deduped to
-one related list each (first eligible FK wins).
+first. `relatedList` is tri-state (a *prominence* hint, not a layout switch —
+see ADR-0085): `false` suppresses a noisy association/audit link; `true` /
+omitted shows the child under a single shared **Related** tab; `'primary'`
+promotes the relationship to its **own tab** on the detail page. `relatedListTitle` /
+`relatedListColumns` override the derived title / columns — both optional, with
+columns auto-deriving from the child object's `highlightFields` when omitted.
+Audit FKs (`created_by` / `updated_by` / `owner_id`) are skipped; a child that
+references the parent through several FKs yields **one related list per FK**, and
+a self-referential FK surfaces a "children" list.
 
 The derivation is a pure function — `deriveRelatedLists(objectDef, objects)` in
 `@object-ui/app-shell` (`utils/deriveRelatedLists.ts`) — the read-side analogue

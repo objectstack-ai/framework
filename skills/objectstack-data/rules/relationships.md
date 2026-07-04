@@ -302,7 +302,8 @@ project: {
   type: 'master_detail',
   reference: 'project',
   inlineEdit: true,                 // write side: edit inline in the Project form
-  relatedListTitle: 'Tasks',        // read side: title of the detail-page list
+  relatedList: 'primary',           // read side: promote to its OWN detail-page tab
+  relatedListTitle: 'Tasks',        // title of the detail-page list
   relatedListColumns: ['title', 'status', 'priority', 'due_date'],
 },
 
@@ -310,14 +311,24 @@ project: {
 audit_ref: { type: 'master_detail', reference: 'invoice', relatedList: false },
 ```
 
-- `relatedList: false` — suppress this child from the parent's detail page
-  (use for chatty association/log children you don't want surfaced).
-- `relatedListTitle` / `relatedListColumns` — override the derived title /
-  columns (columns are otherwise auto-derived from the child object's fields).
+`relatedList` is tri-state — a *prominence* hint, not a layout switch (ADR-0085):
 
-Audit FKs (`created_by`/`updated_by`/`owner_id`) never become related lists, and
-each child object yields at most one related list. See the objectstack-ui skill
-for the rendering side.
+- `'primary'` — CORE relationship: the detail page gives it its **own tab**.
+  Every non-primary related list stacks under a single shared **Related** tab,
+  so `'primary'` is the one-word way to promote a child table to a first-class
+  tab without a custom page.
+- `false` — suppress this child from the parent's detail page (chatty
+  association/log children you don't want surfaced).
+- `true` / omitted — shown in the shared **Related** tab.
+
+`relatedListTitle` / `relatedListColumns` override the derived title / columns;
+both are optional — when omitted, columns auto-derive from the child object's
+`highlightFields` (the same source the lookup picker uses). Audit FKs
+(`created_by`/`updated_by`/`owner_id`) never become related lists. A child that
+references the parent through several FKs (e.g. `primary_account` +
+`partner_account`) yields **one related list per FK**; a self-referential FK
+(a hierarchy) surfaces a "children" list. See the objectstack-ui skill for the
+rendering side.
 
 ## Incorrect vs Correct
 
