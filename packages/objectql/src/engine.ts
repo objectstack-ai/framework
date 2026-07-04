@@ -30,7 +30,7 @@ import { ExpressionEngine } from '@objectstack/formula';
 import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
-import { validateRecord } from './validation/record-validator.js';
+import { validateRecord, normalizeMultiValueFields } from './validation/record-validator.js';
 import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
@@ -2129,6 +2129,7 @@ export class ObjectQL implements IDataEngine {
             await this.encryptSecretFields(object, r, opCtx.context, hookContext.input.options);
           }
           for (const r of rows) {
+            normalizeMultiValueFields(schemaForValidation, r);
             validateRecord(schemaForValidation, r, 'insert');
             evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger });
           }
@@ -2147,6 +2148,7 @@ export class ObjectQL implements IDataEngine {
           );
           await this.applyAutonumbers(object, row, opCtx.context, driverOwnsAutonumber);
           await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
+          normalizeMultiValueFields(schemaForValidation, row);
           validateRecord(schemaForValidation, row, 'insert');
           evaluateValidationRules(schemaForValidation as any, row, 'insert', { logger: this.logger });
           result = await driver.create(object, row, hookContext.input.options as any);
@@ -2263,6 +2265,7 @@ export class ObjectQL implements IDataEngine {
            const updateSchema = this._registry.getObject(object);
            if (hookContext.input.id) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
+               normalizeMultiValueFields(updateSchema, hookContext.input.data as Record<string, unknown>);
                validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
                if (needsPriorRecord(updateSchema as any) || (this.hooks.get('afterUpdate')?.length ?? 0) > 0) {
                    const priorAst: QueryAST = { object, where: { id: hookContext.input.id }, limit: 1 };
@@ -2276,6 +2279,7 @@ export class ObjectQL implements IDataEngine {
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
+               normalizeMultiValueFields(updateSchema, hookContext.input.data as Record<string, unknown>);
                validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
                // Multi-row update: per-row prior state is not fetched (one query
                // per matched row would be unbounded). state_machine /

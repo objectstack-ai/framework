@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { validateRecord } from './record-validator.js';
+import { validateRecord, normalizeMultiValueFields } from './record-validator.js';
 
 /**
  * Required-field validation, with the autonumber exemption (#1603).
@@ -63,5 +63,129 @@ describe('validateRecord — time field accepts time-of-day', () => {
     const ds = { fields: { d: { type: 'date' }, dt: { type: 'datetime' } } };
     expect(() => validateRecord(ds, { d: '2026-06-17', dt: '2026-06-17T10:00:00Z' }, 'insert')).not.toThrow();
     expect(() => validateRecord(ds, { d: 'not-a-date' }, 'insert')).toThrow(/invalid_date/i);
+  });
+});
+
+/**
+ * Multi-value field shape enforcement + scalar normalization (#2552).
+ *
+ * A multiselect (and every other array-shaped field) used to accept a lone
+ * scalar and store it VERBATIM — `PATCH { labels: "frontend" }` returned 200
+ * and read back as a string, corrupting the column for every consumer that
+ * expects an array (found via the console bulk-edit dialog, which pre-#2186
+ * sent scalars for multi params). `select`+`multiple` was worse: a legal
+ * ARRAY was stringified to "a,b" and rejected as invalid_option.
+ */
+describe('normalizeMultiValueFields — scalar → single-element array', () => {
+  const schema = {
+    fields: {
+      labels: { type: 'multiselect', options: ['frontend', 'backend', 'design'] },
+      tags: { type: 'tags' },
+      channels: { type: 'select', multiple: true, options: ['email', 'sms'] },
+      team_members: { type: 'lookup', multiple: true },
+      // Field.user expands to type 'user' at runtime (NOT 'lookup') — the
+      // showcase team_members regression that motivated widening the type set.
+      watchers: { type: 'user', multiple: true, reference: 'sys_user' },
+      attachments: { type: 'file', multiple: true },
+      status: { type: 'select', options: ['active', 'done'] },
+      owner: { type: 'lookup' },
+      assignee: { type: 'user' },
+    },
+  };
+
+  it('wraps a scalar for multiselect / tags / select+multiple / lookup+multiple / user+multiple / file+multiple', () => {
+    const data: Record<string, unknown> = {
+      labels: 'frontend',
+      tags: 'urgent',
+      channels: 'email',
+      team_members: 'user-1',
+      watchers: 'user-2',
+      attachments: 'file-key-1',
+    };
+    normalizeMultiValueFields(schema, data);
+    expect(data).toEqual({
+      labels: ['frontend'],
+      tags: ['urgent'],
+      channels: ['email'],
+      team_members: ['user-1'],
+      watchers: ['user-2'],
+      attachments: ['file-key-1'],
+    });
+  });
+
+  it('leaves arrays, null/undefined, and single-value fields untouched', () => {
+    const data: Record<string, unknown> = {
+      labels: ['frontend', 'design'],
+      tags: null,
+      status: 'active',
+      owner: 'user-1',
+      assignee: 'user-2',
+    };
+    normalizeMultiValueFields(schema, data);
+    expect(data).toEqual({
+      labels: ['frontend', 'design'],
+      tags: null,
+      status: 'active',
+      owner: 'user-1',
+      assignee: 'user-2',
+    });
+  });
+
+  it('does NOT wrap non-scalar junk (left for validateRecord to reject)', () => {
+    const data: Record<string, unknown> = { labels: { nested: true } };
+    normalizeMultiValueFields(schema, data);
+    expect(data.labels).toEqual({ nested: true });
+  });
+});
+
+describe('validateRecord — multi-value fields must be arrays', () => {
+  const schema = {
+    fields: {
+      labels: { type: 'multiselect', options: ['frontend', 'backend'] },
+      tags: { type: 'tags' },
+      channels: { type: 'select', multiple: true, options: ['email', 'sms'] },
+      team_members: { type: 'lookup', multiple: true },
+      watchers: { type: 'user', multiple: true, reference: 'sys_user' },
+      attachments: { type: 'file', multiple: true },
+      status: { type: 'select', options: ['active', 'done'] },
+    },
+  };
+
+  it('rejects a raw (un-normalized) scalar with invalid_type', () => {
+    for (const payload of [
+      { labels: 'frontend' },
+      { tags: 'urgent' },
+      { channels: 'email' },
+      { team_members: 'user-1' },
+      { watchers: 'user-1' },
+      { attachments: 'file-key-1' },
+    ]) {
+      expect(() => validateRecord(schema, payload, 'update')).toThrow(/invalid_type/i);
+    }
+  });
+
+  it('rejects a plain-object shape with invalid_type', () => {
+    expect(() => validateRecord(schema, { labels: { nested: true } }, 'update')).toThrow(/invalid_type/i);
+    expect(() => validateRecord(schema, { team_members: { id: 'u1' } }, 'update')).toThrow(/invalid_type/i);
+  });
+
+  it('accepts arrays (including for select+multiple, previously mis-rejected)', () => {
+    expect(() =>
+      validateRecord(
+        schema,
+        { labels: ['frontend'], tags: ['a', 'b'], channels: ['email', 'sms'], team_members: ['u1', 'u2'], watchers: ['u1'], attachments: ['k1', 'k2'] },
+        'update',
+      ),
+    ).not.toThrow();
+  });
+
+  it('still validates array ELEMENTS against options', () => {
+    expect(() => validateRecord(schema, { labels: ['nope'] }, 'update')).toThrow(/invalid_option/i);
+    expect(() => validateRecord(schema, { channels: ['fax'] }, 'update')).toThrow(/invalid_option/i);
+  });
+
+  it('does NOT regress single select / radio', () => {
+    expect(() => validateRecord(schema, { status: 'active' }, 'update')).not.toThrow();
+    expect(() => validateRecord(schema, { status: 'nope' }, 'update')).toThrow(/invalid_option/i);
   });
 });

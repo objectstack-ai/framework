@@ -67,6 +67,7 @@ export interface FieldValidationError {
     | 'invalid_date'
     | 'invalid_time'
     | 'invalid_option'
+    | 'invalid_type'
     // Object-level validation rules (ADR-0020, see rule-validator.ts)
     | 'invalid_transition'
     | 'rule_violation'
@@ -116,6 +117,50 @@ function optionValues(options: FieldDef['options']): string[] {
   return options.map((o) =>
     typeof o === 'object' && o !== null ? String((o as any).value) : String(o),
   );
+}
+
+/**
+ * A field whose persisted value is an ARRAY of scalars: either an
+ * inherently-multi type, or a single-value type flagged `multiple: true`.
+ * Per the spec (field.zod.ts), `multiple` applies to select/lookup/file/image;
+ * `radio` shares the select branch and `user` is stored identically to
+ * `lookup` (FK column, `multiple` ⇒ JSON array) — the runtime expands
+ * `Field.user` with `type: 'user'`, so it must be recognized here too.
+ */
+const MULTI_CAPABLE_TYPES = new Set(['select', 'radio', 'lookup', 'user', 'file', 'image']);
+
+function isMultiValueField(def: FieldDef): boolean {
+  const t = def.type;
+  if (t === 'multiselect' || t === 'checkboxes' || t === 'tags') return true;
+  return MULTI_CAPABLE_TYPES.has(t as string) && def.multiple === true;
+}
+
+/**
+ * Coerce lone scalars into single-element arrays for multi-value fields,
+ * IN PLACE, before validation (#2552). Legacy clients (e.g. pre-#2186
+ * console bulk-edit) PATCH `{ labels: "frontend" }` at a multiselect —
+ * without this the scalar used to be stored verbatim, silently corrupting
+ * the column's shape for every consumer that expects an array.
+ *
+ * Only unambiguous scalars (string/number/boolean) are wrapped; anything
+ * else (plain objects, nested garbage) is left untouched so that
+ * `validateRecord` can reject it with `invalid_type`.
+ */
+export function normalizeMultiValueFields(
+  objectSchema: { fields?: Record<string, FieldDef> } | undefined | null,
+  data: Record<string, unknown> | undefined | null,
+): void {
+  if (!objectSchema?.fields || !data) return;
+  for (const [name, value] of Object.entries(data)) {
+    if (SKIP_FIELDS.has(name) || isMissing(value)) continue;
+    const def = objectSchema.fields[name];
+    if (!def || def.system || def.readonly || !isMultiValueField(def)) continue;
+    if (Array.isArray(value)) continue;
+    const t = typeof value;
+    if (t === 'string' || t === 'number' || t === 'boolean') {
+      data[name] = [value];
+    }
+  }
 }
 
 function validateOne(name: string, def: FieldDef, value: unknown): FieldValidationError | null {
@@ -199,19 +244,33 @@ function validateOne(name: string, def: FieldDef, value: unknown): FieldValidati
     return { field: name, code: 'invalid_time', message: `${name} must be a valid time (HH:MM or HH:MM:SS)` };
   }
 
-  // ── select / multiselect / radio ────────────────────────────────
-  if (t === 'select' || t === 'radio') {
+  // ── select / radio (single-value) ───────────────────────────────
+  // A `select`/`radio` flagged `multiple: true` is a multiselect in
+  // disguise — it falls through to the multi-value branch below (#2552;
+  // previously an array here was stringified to "a,b" and wrongly
+  // rejected as invalid_option, while a scalar slipped straight through).
+  if ((t === 'select' || t === 'radio') && def.multiple !== true) {
     const allowed = optionValues(def.options);
     if (allowed.length > 0 && !allowed.includes(String(value))) {
       return { field: name, code: 'invalid_option', message: `${name} must be one of: ${allowed.join(', ')}`, options: allowed };
     }
     return null;
   }
-  if (t === 'multiselect' || t === 'checkboxes' || t === 'tags') {
+
+  // ── multi-value fields: value must be an ARRAY ──────────────────
+  // Scalars are wrapped upstream by `normalizeMultiValueFields`; whatever
+  // still isn't an array here (objects, nested junk) is a shape error —
+  // storing it verbatim corrupts the column for every array-consumer (#2552).
+  if (isMultiValueField(def)) {
+    if (!Array.isArray(value)) {
+      return { field: name, code: 'invalid_type', message: `${name} must be an array of values` };
+    }
+    // Reference / attachment types carry IDs or storage keys, not options —
+    // reference integrity is handled elsewhere.
+    if (t === 'lookup' || t === 'user' || t === 'file' || t === 'image') return null;
     const allowed = optionValues(def.options);
-    if (allowed.length === 0) return null;
-    const arr = Array.isArray(value) ? value : [value];
-    for (const v of arr) {
+    if (allowed.length === 0) return null; // free-form (tags without options)
+    for (const v of value) {
       if (!allowed.includes(String(v))) {
         return { field: name, code: 'invalid_option', message: `${name}: "${v}" is not one of: ${allowed.join(', ')}`, options: allowed };
       }
