@@ -1,6 +1,6 @@
 ---
 title: Automation
-description: 18 hook events, 20+ extensible flow node types, scheduled flows, approvals, and durable webhooks — the process engine that reacts to your data.
+description: Hooks, flows, workflows, approvals, scheduled jobs, and durable webhooks — the process engine that reacts to your data.
 ---
 
 # Automation
@@ -27,8 +27,8 @@ export const OpportunityStageHook: Hook = {
 
 ## The building blocks
 
-- **Hooks** intercept **18 lifecycle events** — before/after each of find, findOne, count, aggregate, insert, update, delete, updateMany, deleteMany. Hooks support priority ordering, fire-and-forget `async` mode, CEL `condition` guards, and a `retryPolicy` with backoff ([Hooks](/docs/automation/hooks)).
-- **Flows** are node-based processes with **20 built-in node types** (decision, loop, create/update/delete record, http, notify, script, screen, wait, subflow, parallel/join gateways, …) — and the set is **registry-extensible**: plugins can contribute new node types via `registerNodeExecutor`. Flows launch on record changes, on a schedule, from a screen, or via API ([Flows](/docs/automation/flows)).
+- **Hooks** intercept every record operation with before/after events — reads, writes, deletes, and their bulk variants. Hooks support priority ordering, fire-and-forget `async` mode, CEL `condition` guards, and a `retryPolicy` with backoff ([Hooks](/docs/automation/hooks)).
+- **Flows** are node-based processes built from nodes like decision, loop, record operations, http, notify, script, screen, wait, subflow, and parallel/join gateways — and the set is **registry-extensible**: plugins can contribute new node types via `registerNodeExecutor`. Flows launch on record changes, on a schedule, from a screen, or via API ([Flows](/docs/automation/flows)).
 - **Workflows** model a record's lifecycle as a **finite state machine**: states, transitions, and guards ([Workflows](/docs/automation/workflows)).
 - **Approvals** are flow nodes with approver resolution, approve/reject decisions, and escalation ([Approvals](/docs/automation/approvals)).
 - **Webhooks** deliver events to external systems through a **durable outbox** — exponential/linear/fixed retry with dead-lettering, HMAC signing, and an admin redeliver endpoint ([Webhook Delivery](/docs/automation/webhooks)).
@@ -39,7 +39,7 @@ Rule of thumb: model *state* with workflows, model *steps* with flows, use hooks
 ## What's in this module
 
 <Cards>
-  <Card href="/docs/automation/hooks" title="Hooks" description="18 before/after events on record operations" />
+  <Card href="/docs/automation/hooks" title="Hooks" description="Before/after events on record operations" />
   <Card href="/docs/automation/hook-bodies" title="Hook & Action Bodies (L1/L2)" description="The two authoring levels for hook logic" />
   <Card href="/docs/automation/flows" title="Flows" description="Node-based automation, screen flows, scheduled flows" />
   <Card href="/docs/automation/workflows" title="Workflows" description="State-machine lifecycle modeling" />

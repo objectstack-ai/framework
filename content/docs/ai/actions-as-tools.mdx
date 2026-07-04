@@ -116,21 +116,13 @@ The queue is exposed via four REST endpoints (`GET`, `GET/:id`, `POST/:id/approv
 
 ### End-to-end example
 
-Two runnable demos live in `examples/app-todo/test/`:
-
-- **`ai-hitl.test.ts`** — drives the tool registry directly (no LLM dependency). Asserts the full lifecycle: `variant:'danger'` action registered as a tool → invocation returns `pending_approval` without executing → row persisted → `approvePendingAction(id, actor)` re-runs the handler → row transitions to `executed`. Reject path is also covered.
-
-  ```bash
-  pnpm --filter @example/app-todo test:hitl
-  ```
-
-- **`ai-hitl-llm.test.ts`** — same scenario but with a real model behind Vercel AI Gateway. The LLM is given the auto-generated tool description and asked to "delete all completed tasks"; the framework returns `pending_approval` so the model summarises the wait instead of retrying. After we call approve from the test, the deletion completes.
-
-  ```bash
-  AI_GATEWAY_API_KEY=vck_... pnpm --filter @example/app-todo test:hitl:llm
-  ```
-
-  Gated on `AI_GATEWAY_API_KEY` (or `OPENAI_API_KEY`); exits 0 with a notice if no key is provided, so it can be wired into CI without leaking spend.
+The full lifecycle: a `variant:'danger'` action registered as a tool →
+invocation returns `pending_approval` without executing → row persisted →
+`approvePendingAction(id, actor)` re-runs the handler → row transitions to
+`executed` (the reject path mirrors it). The todo example's
+`delete_completed` action (`examples/app-todo/src/actions/task.actions.ts`)
+is authored exactly for this: `variant: 'danger'` + `confirmText` route it
+through the approval queue.
 
 A trimmed view of the integration path:
 

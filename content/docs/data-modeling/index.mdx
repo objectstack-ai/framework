@@ -1,6 +1,6 @@
 ---
 title: Data Modeling
-description: Objects, 49 field types, relationships, validation, CEL formulas, and a compiled query AST — the ObjectQL layer every other module builds on.
+description: Objects, fields, relationships, validation, CEL formulas, and a compiled query AST — the ObjectQL layer every other module builds on.
 ---
 
 # Data Modeling
@@ -31,7 +31,7 @@ That one definition is enough to get a persisted table, CRUD + query endpoints, 
 
 ## What the data layer actually gives you
 
-- **49 field types** — from `text`, `currency`, and `lookup`/`master_detail` relationships to `formula`, `summary`, `signature`, `qrcode`, and `vector` (with HNSW/IVFFlat index config for AI embeddings). See the [Field Types gallery](/docs/data-modeling/field-types).
+- **A full spectrum of field types** — from `text`, `currency`, and `lookup`/`master_detail` relationships to `formula`, `summary`, `signature`, and `vector` (with index config for AI embeddings). See the [Field Types gallery](/docs/data-modeling/field-types).
 - **Validation as metadata** — required/format rules, CEL script validation with access to `previous.<field>`, uniqueness via indexes, and severity levels — enforced identically in API, UI, and automation.
 - **CEL expressions** — formula fields and computed defaults share one expression language ([Expressions](/docs/data-modeling/formulas)).
 - **A compiled query AST** — queries are JSON documents validated against the protocol, then compiled by a driver into native queries with joins, aggregations, window functions, HAVING, and subqueries. The [query cheat sheet](/docs/data-modeling/queries) covers the syntax; the [spec](/docs/protocol/objectql/query-syntax) is normative.
@@ -44,7 +44,7 @@ That one definition is enough to get a persisted table, CRUD + query endpoints, 
   <Card href="/docs/data-modeling/schema-design" title="Schema Design" description="End-to-end guide: designing objects, field groups, and real-world schemas" />
   <Card href="/docs/data-modeling/objects" title="Objects" description="Object metadata: definition, options, and API operations" />
   <Card href="/docs/data-modeling/fields" title="Fields" description="Field metadata and configuration" />
-  <Card href="/docs/data-modeling/field-types" title="Field Types" description="Gallery of all 49 field types with examples" />
+  <Card href="/docs/data-modeling/field-types" title="Field Types" description="Gallery of every field type with examples" />
   <Card href="/docs/data-modeling/relationships" title="Relationships & Lookups" description="Lookup, master-detail, and cross-object modeling" />
   <Card href="/docs/data-modeling/validation" title="Validation" description="Validation metadata and CEL rule authoring" />
   <Card href="/docs/data-modeling/formulas" title="Expressions (CEL)" description="Formula fields and computed logic" />

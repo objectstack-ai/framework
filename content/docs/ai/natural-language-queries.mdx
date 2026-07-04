@@ -7,6 +7,11 @@ description: How agents query live data through the built-in data tools (query_r
 
 Part of the [AI module](/docs/ai) — how natural-language questions become ObjectQL queries at runtime.
 
+The data tools described here ship with `@objectstack/service-ai`, i.e. the
+**cloud / Enterprise** in-UI AI runtime (see the callout in the
+[AI Overview](/docs/ai)). On the open edition, point your own AI at the same
+objects and queries through `@objectstack/mcp` instead.
+
 Agents query your data through the built-in **data tools** —
 `query_records`, `get_record`, and `aggregate_data` — which the LLM calls with
 structured arguments. These run as ordinary [ObjectQL](/docs/protocol/objectql) queries over

@@ -1,11 +1,11 @@
 ---
 title: Field Type Gallery
-description: Complete reference for all 48 ObjectStack field types with per-type configuration properties
+description: Complete reference for every ObjectStack field type with per-type configuration properties
 ---
 
 # Field Type Gallery
 
-ObjectStack provides **49 field types** covering every data modeling need — from basic text and numbers to AI vectors and rich media. This guide organizes them by category with per-type configuration details.
+ObjectStack provides a **comprehensive set of field types** covering every data modeling need — from basic text and numbers to AI vectors and rich media. This guide organizes them by category with per-type configuration details.
 
 <Callout type="info">
 **Source:** `packages/spec/src/data/field.zod.ts`  
@@ -24,7 +24,6 @@ Single-line plain text input.
 | `maxLength` | `number` | — | Maximum character length |
 | `minLength` | `number` | — | Minimum character length |
 | `format` | `string` | — | Validation format pattern |
-| `caseSensitive` | `boolean` | — | Whether text comparisons are case-sensitive |
 
 ```typescript
 { name: 'first_name', label: 'First Name', type: 'text', maxLength: 100 }
@@ -303,10 +302,19 @@ Reference to a record in another object (foreign key).
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target object name (snake_case) |
 | `referenceFilters` | `string[]` | — | Filters applied to lookup dialogs (e.g. `"active = true"`) |
-| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'set_null'` | Behavior when referenced record is deleted |
+| `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'set_null'` | Behavior when referenced record is deleted (a *required* lookup left at the default `set_null` is escalated to `restrict`, since a NOT NULL foreign key cannot be cleared) |
 
 ```typescript
-{ name: 'assigned_to', label: 'Assigned To', type: 'lookup', reference: 'user' }
+{ name: 'company', label: 'Company', type: 'lookup', reference: 'account' }
+```
+
+### `user`
+Person picker — a lookup specialized to the built-in `sys_user` object. Stored identically to `lookup` (foreign key to `sys_user.id`; `multiple: true` stores an array) and resolved through the same `$expand` machinery. Supports `defaultValue: 'current_user'` to stamp the acting user's id on insert.
+
+```typescript
+Field.user({ label: 'Assignee' })
+Field.user({ label: 'Watchers', multiple: true })
+Field.user({ label: 'Owner', defaultValue: 'current_user' })
 ```
 
 ### `master_detail`
@@ -419,15 +427,16 @@ Audio file attachment.
 ## Computed Types
 
 ### `formula`
-Calculated field using an expression.
+Calculated field using a CEL expression (see [Expressions](/docs/data-modeling/formulas)).
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `expression` | `string` | **required** | Calculation expression |
-| `cached` | `object` | — | Cache settings for computed result |
+| `expression` | `string \| Expression` | **required** | CEL calculation expression |
+| `returnType` | `'number' \| 'text' \| 'boolean' \| 'date'` | — | Declared value type of the computed result |
+| `dependencies` | `string[]` | — | Fields the formula depends on |
 
 ```typescript
-{ name: 'total', label: 'Total', type: 'formula', expression: 'quantity * unit_price' }
+{ name: 'total', label: 'Total', type: 'formula', expression: 'record.quantity * record.unit_price', returnType: 'number' }
 ```
 
 ### `summary`
@@ -497,23 +506,14 @@ Name-keyed map of embedded sub-objects (`Record<string, SubObject>`). Insertion 
 ## Enhanced Types
 
 ### `location`
-Geographic coordinates with optional map display.
-
-| Property | Type | Default | Description |
-|:---|:---|:---|:---|
-| `displayMap` | `boolean` | — | Show interactive map |
-| `allowGeocoding` | `boolean` | — | Enable address-to-coordinates conversion |
+Geographic coordinates. Stored as `{ latitude, longitude, altitude?, accuracy? }` (latitude −90..90, longitude −180..180). No per-type config properties.
 
 ```typescript
-{ name: 'headquarters', label: 'Location', type: 'location', displayMap: true, allowGeocoding: true }
+{ name: 'headquarters', label: 'Location', type: 'location' }
 ```
 
 ### `address`
-Structured postal address.
-
-| Property | Type | Default | Description |
-|:---|:---|:---|:---|
-| `addressFormat` | `'us' \| 'uk' \| 'international'` | — | Address format template |
+Structured postal address. Stored as `{ street, city, state, postalCode, country, countryCode, formatted }` (all parts optional). No per-type config properties.
 
 ```typescript
 { name: 'billing_address', label: 'Billing Address', type: 'address' }
@@ -525,11 +525,9 @@ Source code with syntax highlighting.
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `language` | `string` | — | Programming language for highlighting |
-| `theme` | `string` | — | Editor theme |
-| `lineNumbers` | `boolean` | — | Show line numbers |
 
 ```typescript
-{ name: 'snippet', label: 'Code Snippet', type: 'code', language: 'typescript', lineNumbers: true }
+{ name: 'snippet', label: 'Code Snippet', type: 'code', language: 'typescript' }
 ```
 
 ### `json`
@@ -540,16 +538,10 @@ Raw JSON data.
 ```
 
 ### `color`
-Color picker with format options.
-
-| Property | Type | Default | Description |
-|:---|:---|:---|:---|
-| `colorFormat` | `'hex' \| 'rgb' \| 'rgba' \| 'hsl'` | — | Color value format |
-| `allowAlpha` | `boolean` | — | Allow alpha transparency |
-| `presetColors` | `string[]` | — | Preset color palette |
+Color picker. Stores the color value as a string. No per-type config properties.
 
 ```typescript
-{ name: 'brand_color', label: 'Brand Color', type: 'color', colorFormat: 'hex', presetColors: ['#FF0000', '#00FF00', '#0000FF'] }
+{ name: 'brand_color', label: 'Brand Color', type: 'color' }
 ```
 
 ### `rating`
@@ -557,11 +549,12 @@ Star rating input.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `maxRating` | `number` | `5` | Maximum rating value |
-| `allowHalf` | `boolean` | `false` | Allow half-star ratings |
+| `max` | `number` | `5` | Maximum rating value (set by the `Field.rating(max)` factory) |
 
 ```typescript
-{ name: 'satisfaction', label: 'Rating', type: 'rating', maxRating: 5, allowHalf: true }
+{ name: 'satisfaction', label: 'Rating', type: 'rating', max: 5 }
+// or with the factory:
+// satisfaction: Field.rating(5, { label: 'Rating' })
 ```
 
 ### `slider`
@@ -571,12 +564,10 @@ Range slider input.
 |:---|:---|:---|:---|
 | `min` | `number` | — | Minimum value |
 | `max` | `number` | — | Maximum value |
-| `step` | `number` | — | Step increment |
-| `showValue` | `boolean` | — | Display current value |
-| `marks` | `object` | — | Tick marks on slider |
+| `step` | `number` | `1` | Step increment |
 
 ```typescript
-{ name: 'confidence', label: 'Confidence', type: 'slider', min: 0, max: 100, step: 5, showValue: true }
+{ name: 'confidence', label: 'Confidence', type: 'slider', min: 0, max: 100, step: 5 }
 ```
 
 ### `signature`
@@ -587,17 +578,10 @@ Digital signature capture.
 ```
 
 ### `qrcode`
-QR/barcode generator and scanner.
-
-| Property | Type | Default | Description |
-|:---|:---|:---|:---|
-| `barcodeFormat` | `'qr' \| 'ean13' \| 'ean8' \| 'code128' \| 'code39' \| 'upca' \| 'upce'` | — | Barcode format type |
-| `qrErrorCorrection` | `'L' \| 'M' \| 'Q' \| 'H'` | — | QR error correction level (only when `barcodeFormat` is `'qr'`) |
-| `displayValue` | `boolean` | — | Display human-readable value below barcode/QR code |
-| `allowScanning` | `boolean` | — | Enable camera scanning |
+QR/barcode value rendered as a scannable code. No per-type config properties.
 
 ```typescript
-{ name: 'asset_tag', label: 'Asset Tag', type: 'qrcode', allowScanning: true }
+{ name: 'asset_tag', label: 'Asset Tag', type: 'qrcode' }
 ```
 
 ### `progress`
@@ -623,17 +607,14 @@ Vector embeddings for semantic search and similarity.
 
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
-| `vectorConfig.dimensions` | `number` | **required** | Vector dimensionality (e.g., 1536 for OpenAI) |
-| `vectorConfig.distanceMetric` | `'cosine' \| 'euclidean' \| 'dotProduct' \| 'manhattan'` | `'cosine'` | Distance calculation method |
-| `vectorConfig.normalized` | `boolean` | `false` | Whether vectors are pre-normalized |
-| `vectorConfig.indexed` | `boolean` | `true` | Enable vector indexing |
-| `vectorConfig.indexType` | `'hnsw' \| 'ivfflat' \| 'flat'` | — | Index algorithm |
+| `dimensions` | `number` | **required** | Vector dimensionality (e.g., 1536 for OpenAI embeddings) |
+
+The nested `vectorConfig` object (with `distanceMetric`, `indexed`, `indexType`, …) is retained for back-compat only and is a runtime no-op — set the flat `dimensions` property instead.
 
 ```typescript
-{
-  name: 'embedding', label: 'Embedding', type: 'vector',
-  vectorConfig: { dimensions: 1536, distanceMetric: 'cosine', indexed: true, indexType: 'hnsw' }
-}
+{ name: 'embedding', label: 'Embedding', type: 'vector', dimensions: 1536 }
+// or with the factory:
+// embedding: Field.vector(1536, { label: 'Embedding' })
 ```
 
 ---
@@ -647,7 +628,7 @@ These properties are available on **all** field types:
 | `name` | `string` | **required** | Machine name (snake_case) |
 | `label` | `string` | — | Human-readable display label |
 | `description` | `string` | — | Field description / help text |
-| `type` | `FieldType` | **required** | One of the 49 field types |
+| `type` | `FieldType` | **required** | One of the supported field types |
 | `required` | `boolean` | `false` | Whether the field is required |
 | `unique` | `boolean` | `false` | Enforce uniqueness |
 | `multiple` | `boolean` | `false` | Allow array of values |
@@ -660,11 +641,9 @@ These properties are available on **all** field types:
 | `defaultValue` | `any` | — | Default value for new records |
 | `group` | `string` | — | Field grouping / section |
 | `inlineHelpText` | `string` | — | Inline help tooltip |
-| `trackFeedHistory` | `boolean` | — | Track changes in activity feed |
-| `encryptionConfig` | `object` | — | Field-level encryption settings |
-| `maskingRule` | `object` | — | Data masking configuration |
+| `trackHistory` | `boolean` | — | Render this field's value changes as entries on the record activity timeline |
+| `requiredPermissions` | `string[]` | — | Capabilities required to read/edit this field (masked on read, denied on write) |
 | `dependencies` | `string[]` | — | Names of fields this field depends on (formulas, visibility rules, etc.) |
-| `dataQuality` | `object` | — | Data quality validation rules |
 | `visibleWhen` | `Expression` | — | Show field only when predicate is true |
 | `readonlyWhen` | `Expression` | — | Make field read-only when predicate is true |
 | `requiredWhen` | `Expression` | — | Require field when predicate is true |
@@ -672,71 +651,6 @@ These properties are available on **all** field types:
 
 ---
 
-## Field Type Decision Tree
+## Choosing a Field Type
 
-Use this guide to choose the right field type:
-
-```
-Is it text?
-├── Short text (< 255 chars) → text
-├── Long text → textarea
-├── Formatted text → markdown | html | richtext
-├── Email address → email
-├── URL → url
-├── Phone number → phone
-├── Login password (one-way hash) → password
-├── Reversible secret (API key/token) → secret
-└── Source code → code
-
-Is it a number?
-├── Integer or decimal → number
-├── Money amount → currency
-└── Percentage → percent
-
-Is it a date/time?
-├── Date only → date
-├── Date + time → datetime
-└── Time only → time
-
-Is it a choice?
-├── Single choice (dropdown) → select
-├── Single choice (visible) → radio
-├── Multiple choices (dropdown) → multiselect
-└── Multiple choices (visible) → checkboxes
-
-Is it a reference?
-├── Simple foreign key → lookup
-├── Parent-child (cascade delete) → master_detail
-└── Self-referential hierarchy → tree
-
-Is it a file?
-├── Any file → file
-├── Image → image
-├── Profile picture → avatar
-├── Video → video
-└── Audio → audio
-
-Is it computed?
-├── Formula calculation → formula
-├── Roll-up summary → summary
-└── Auto-incrementing ID → autonumber
-
-Is it embedded structured data (stored as JSON, no separate table)?
-├── Single embedded sub-object → composite
-├── Repeating embedded array → repeater
-└── Name-keyed map of sub-objects → record
-
-Is it specialized?
-├── Geographic location → location
-├── Postal address → address
-├── Yes/No toggle → boolean | toggle
-├── Star rating → rating
-├── Range slider → slider
-├── Color picker → color
-├── Raw JSON → json
-├── Tags/Labels → tags
-├── Progress bar → progress
-├── Signature → signature
-├── QR/Barcode → qrcode
-└── AI embedding → vector
-```
+Not sure which type fits your data? Follow the [Field Type Decision Tree](/docs/data-modeling/field-type-decision-tree) — a flowchart, quick-reference tables, and a use-case mapping for every type in this gallery.

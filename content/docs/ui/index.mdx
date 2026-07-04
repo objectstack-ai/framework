@@ -1,6 +1,6 @@
 ---
 title: UI Engine
-description: Apps, 9 view render types, dashboards, themes, and public portals — server-driven UI declared as metadata and rendered by the ObjectUI runtime.
+description: Apps, views, dashboards, themes, and public portals — server-driven UI declared as metadata and rendered by the ObjectUI runtime.
 ---
 
 # UI Engine
@@ -29,7 +29,7 @@ export const CrmApp = App.create({
 ## The building blocks
 
 - **Apps** group navigation, branding, and entry points for one audience.
-- **Views** present object records in **9 render types**: `grid` (the standard data table), `kanban`, `gallery`, `calendar`, `timeline`, `gantt`, `map`, `chart`, and `tree`. Forms are their own view kind with per-mode layouts ([Views](/docs/ui/views)).
+- **Views** present object records as `grid` (the standard data table), `kanban`, `gallery`, `calendar`, `timeline`, `gantt`, `map`, `chart`, or `tree`. Forms are their own view kind with per-mode layouts ([Views](/docs/ui/views)).
 - **Pages** compose free-form layouts from widgets; **Dashboards** combine charts, reports, and datasets for analytics.
 - **Themes** define palettes, typography, and spacing as metadata — the CRM example ships light and dark theme variants.
 - **Portals** open a scoped slice of the app to external audiences, including **anonymous entry routes** for public data collection ([Forms](/docs/ui/forms), [public data collection](/docs/ui/public-data-collection)).
@@ -39,7 +39,7 @@ export const CrmApp = App.create({
 
 <Cards>
   <Card href="/docs/ui/apps" title="Apps" description="App metadata: navigation, branding, entry points" />
-  <Card href="/docs/ui/views" title="Views" description="Grid, kanban, calendar, gantt, map & more — 9 render types" />
+  <Card href="/docs/ui/views" title="Views" description="Grid, kanban, calendar, gantt, map, and more" />
   <Card href="/docs/ui/pages" title="Pages" description="Page metadata and layout composition" />
   <Card href="/docs/ui/dashboards" title="Dashboards" description="Dashboard metadata, charts, and datasets" />
   <Card href="/docs/ui/forms" title="Forms" description="Public and internal form patterns" />

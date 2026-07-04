@@ -18,7 +18,8 @@ is in — the user never picks from a roster:
 
 Both agents are part of the **cloud / Enterprise** in-UI AI runtime (cloud ADR-0025).
 The **open edition** ships neither — it uses `@objectstack/mcp` (BYO-AI) for data
-query and source-mode authoring instead (see the note above).
+query and source-mode authoring instead (see the callout in the
+[AI Overview](/docs/ai)).
 
 Within the cloud / EE runtime there is no per-turn intent classifier and no agent
 dropdown: the surface binds the agent (data console → `ask`, Studio → `build`). A
@@ -64,7 +65,7 @@ them via the chat endpoint.
 <Callout type="info">
 Agent tools are **references** to existing Actions, Flows, or queries — you do
 not define ad-hoc tool names with inline parameter schemas here. See
-[Actions as Tools](#actions-as-tools-explicit-opt-in) for how an Action becomes
+[Actions as Tools](/docs/ai/actions-as-tools) for how an Action becomes
 LLM-callable.
 </Callout>
 
@@ -219,7 +220,7 @@ Use the data tools to query records and aggregate metrics.`,
   },
 
   // Built-in data tools (query_records / get_record / aggregate_data) are
-  // available to agents automatically once registered — see "Actions as Tools".
+  // available to agents automatically once registered — see "Natural Language Queries".
   tools: [
     { type: 'flow', name: 'analyze_pipeline', description: 'Analyze sales pipeline health' },
   ],
