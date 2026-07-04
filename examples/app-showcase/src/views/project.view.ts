@@ -26,8 +26,9 @@ export const ProjectViews = defineView({
     // control the dialog gained in #2185:
     //   • set_labels    → multi-select on a `select` param (fixed options)
     //   • assign_team   → multi-select on a `lookup` param (users; array patch)
+    //   • reassign_account → single-select on a `lookup` param (searchable
+    //                     reference picker, not a bare dropdown)
     //   • reschedule    → the new `date` control + a single-select together
-    // A def with no `multiple` still renders a single-select, unchanged.
     bulkActionDefs: [
       {
         name: 'set_labels',
@@ -63,6 +64,22 @@ export const ProjectViews = defineView({
             type: 'lookup',
             object: 'sys_user',
             multiple: true,
+            labelField: 'name',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'reassign_account',
+        label: 'Reassign Account',
+        operation: 'update',
+        confirmText: 'Move every selected project to this account?',
+        params: [
+          {
+            name: 'account',
+            label: 'Account',
+            type: 'lookup',
+            object: 'showcase_account',
             labelField: 'name',
             required: true,
           },
