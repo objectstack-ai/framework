@@ -1,5 +1,108 @@
 # @objectstack/cli
 
+## 12.0.0
+
+### Patch Changes
+
+- 7c09621: feat(security)!: `api.requireAuth` now defaults to `true` — anonymous access to the data API is denied by default (ADR-0056 D2 flip)
+
+  **BREAKING.** The global `requireAuth` default flipped FROM `false` TO `true`
+  (`RestApiConfigSchema.requireAuth` in `@objectstack/spec`, mirrored by
+  `RestServer.normalizeConfig` in `@objectstack/rest`). Anonymous requests to
+  the `/data/*` CRUD + batch endpoints are now rejected with HTTP 401 unless the
+  deployment explicitly opts out. (Scope note: this gate covers the REST
+  `/data/*` surface — the metadata read/write endpoints and the dispatcher
+  GraphQL route have their own pre-existing anonymous posture, tracked
+  separately; this flip does not change them.)
+
+  **Migration (one line):** a deployment that intentionally serves data publicly
+  (demo / playground / kiosk) sets the flag on the stack config — now a declared
+  `ObjectStackDefinitionSchema.api` field, so it survives `defineStack` strict
+  parsing (previously an undeclared top-level `api` key was silently stripped):
+
+  ```ts
+  export default defineStack({
+    // …
+    api: { requireAuth: false },
+  });
+  ```
+
+  The REST plugin logs a boot warning for the explicit opt-out so a fail-open
+  posture is always visible. A misplaced `api.requireAuth` at the plugin level
+  (one nesting short) is now also called out with a boot warning instead of
+  being silently ignored.
+
+  **What keeps working with no action:**
+
+  - **Share links** — validate their token, then read under a system context.
+  - **Public forms** — self-authorizing via the declaration-derived
+    `publicFormGrant` (create + read-back on the declared target object only);
+    no `guest_portal` profile needed.
+  - **Control plane** — `/auth`, `/health`, `/discovery` are exempt.
+  - **`objectstack serve` with an auth-less stack** — the CLI passes an explicit
+    `requireAuth: false` for stacks whose tier set has no `auth` (nothing could
+    authenticate against them), with the boot warning.
+
+- Updated dependencies [07f055c]
+- Updated dependencies [1b1b34e]
+- Updated dependencies [9796e7c]
+- Updated dependencies [f84f8d5]
+- Updated dependencies [9693a36]
+- Updated dependencies [ffafb30]
+- Updated dependencies [7c09621]
+- Updated dependencies [24b62ee]
+- Updated dependencies [7709db4]
+- Updated dependencies [48ad533]
+- Updated dependencies [7c09621]
+- Updated dependencies [c2fdbf9]
+- Updated dependencies [9860de4]
+  - @objectstack/platform-objects@12.0.0
+  - @objectstack/plugin-auth@12.0.0
+  - @objectstack/plugin-security@12.0.0
+  - @objectstack/service-automation@12.0.0
+  - @objectstack/runtime@12.0.0
+  - @objectstack/spec@12.0.0
+  - @objectstack/objectql@12.0.0
+  - @objectstack/rest@12.0.0
+  - @objectstack/verify@12.0.0
+  - @objectstack/account@12.0.0
+  - @objectstack/setup@12.0.0
+  - @objectstack/studio@12.0.0
+  - @objectstack/plugin-approvals@12.0.0
+  - @objectstack/plugin-audit@12.0.0
+  - @objectstack/plugin-email@12.0.0
+  - @objectstack/plugin-org-scoping@12.0.0
+  - @objectstack/plugin-reports@12.0.0
+  - @objectstack/plugin-sharing@12.0.0
+  - @objectstack/service-job@12.0.0
+  - @objectstack/service-queue@12.0.0
+  - @objectstack/service-realtime@12.0.0
+  - @objectstack/service-settings@12.0.0
+  - @objectstack/service-storage@12.0.0
+  - @objectstack/trigger-record-change@12.0.0
+  - @objectstack/trigger-schedule@12.0.0
+  - @objectstack/client@12.0.0
+  - @objectstack/cloud-connection@12.0.0
+  - @objectstack/core@12.0.0
+  - @objectstack/formula@12.0.0
+  - @objectstack/lint@12.0.0
+  - @objectstack/mcp@12.0.0
+  - @objectstack/observability@12.0.0
+  - @objectstack/driver-memory@12.0.0
+  - @objectstack/driver-mongodb@12.0.0
+  - @objectstack/driver-sql@12.0.0
+  - @objectstack/driver-sqlite-wasm@12.0.0
+  - @objectstack/plugin-hono-server@12.0.0
+  - @objectstack/plugin-webhooks@12.0.0
+  - @objectstack/service-analytics@12.0.0
+  - @objectstack/service-cache@12.0.0
+  - @objectstack/service-datasource@12.0.0
+  - @objectstack/service-messaging@12.0.0
+  - @objectstack/service-package@12.0.0
+  - @objectstack/trigger-api@12.0.0
+  - @objectstack/types@12.0.0
+  - @objectstack/console@12.0.0
+
 ## 11.10.0
 
 ### Patch Changes
