@@ -15,9 +15,80 @@ export const ProjectViews = defineView({
       { field: 'account' },
       { field: 'status' },
       { field: 'health' },
+      { field: 'labels' },
+      { field: 'team_members' },
       { field: 'budget' },
       { field: 'budget_remaining' },
       { field: 'end_date' },
+    ],
+    // Rich bulk-edit definitions (#2185) — select rows, then "set the same
+    // value on all of them" through the BulkActionDialog. Each def exercises a
+    // control the dialog gained in #2185:
+    //   • set_labels    → multi-select on a `select` param (fixed options)
+    //   • assign_team   → multi-select on a `lookup` param (users; array patch)
+    //   • reschedule    → the new `date` control + a single-select together
+    // A def with no `multiple` still renders a single-select, unchanged.
+    bulkActionDefs: [
+      {
+        name: 'set_labels',
+        label: 'Set Labels',
+        operation: 'update',
+        confirmText: 'Set these labels on every selected project?',
+        params: [
+          {
+            name: 'labels',
+            label: 'Labels',
+            type: 'select',
+            multiple: true,
+            required: true,
+            options: [
+              { label: 'Frontend', value: 'frontend' },
+              { label: 'Backend', value: 'backend' },
+              { label: 'Design', value: 'design' },
+              { label: 'QA', value: 'qa' },
+              { label: 'DevOps', value: 'devops' },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'assign_team',
+        label: 'Assign Team',
+        operation: 'update',
+        confirmText: 'Assign these team members to every selected project?',
+        params: [
+          {
+            name: 'team_members',
+            label: 'Team Members',
+            type: 'lookup',
+            object: 'sys_user',
+            multiple: true,
+            labelField: 'name',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'reschedule',
+        label: 'Reschedule',
+        operation: 'update',
+        confirmText: 'Apply this schedule/status to every selected project?',
+        params: [
+          { name: 'end_date', label: 'Target End Date', type: 'date' },
+          {
+            name: 'status',
+            label: 'Status',
+            type: 'select',
+            options: [
+              { label: 'Planned', value: 'planned' },
+              { label: 'Active', value: 'active' },
+              { label: 'On Hold', value: 'on_hold' },
+              { label: 'Completed', value: 'completed' },
+              { label: 'Cancelled', value: 'cancelled' },
+            ],
+          },
+        ],
+      },
     ],
   },
   listViews: {
