@@ -190,6 +190,30 @@ export const SysPermissionSet = ObjectSchema.create({
       group: 'Status',
     }),
 
+    // ── Provenance (ADR-0086 D3) ─────────────────────────────────
+    package_id: Field.text({
+      label: 'Owning Package',
+      required: false,
+      readonly: true,
+      maxLength: 255,
+      description:
+        'Package that ships this permission set (absent = environment-authored). ' +
+        'Populated by bootstrapDeclaredPermissions; makes package uninstall/upgrade well-defined.',
+      group: 'Provenance',
+    }),
+
+    managed_by: Field.text({
+      label: 'Managed By',
+      required: false,
+      readonly: true,
+      maxLength: 16,
+      description:
+        "Record provenance: 'package' = versioned package metadata (re-seeded on upgrade, " +
+        "read-mostly for admins); 'platform'/'user' = environment config (live-edited, never " +
+        'touched by package seeding). Absent on legacy rows.',
+      group: 'Provenance',
+    }),
+
     // ── System ───────────────────────────────────────────────────
     id: Field.text({
       label: 'Permission Set ID',
@@ -216,6 +240,8 @@ export const SysPermissionSet = ObjectSchema.create({
   indexes: [
     { fields: ['name'], unique: true },
     { fields: ['active'] },
+    // ADR-0086 D3 — uninstall/upgrade query: "this package's own sets".
+    { fields: ['package_id'] },
   ],
 
   enable: {

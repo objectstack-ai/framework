@@ -114,7 +114,28 @@ export const PermissionSetSchema = lazySchema(() => z.object({
   
   /** Display label */
   label: z.string().optional().describe('Display label'),
-  
+
+  /**
+   * [ADR-0086 D3] Owning package for a package-shipped permission set
+   * (absent ⇒ environment-authored). Persisted on `sys_permission_set`
+   * records together with the per-record `managedBy` provenance, this is
+   * what makes the metadata↔config boundary machine-checkable and package
+   * uninstall well-defined (remove the package's own sets).
+   */
+  packageId: z.string().optional().describe('[ADR-0086 D3] Owning package id for a package-shipped set (absent = env-authored)'),
+
+  /**
+   * [ADR-0086 D3] Per-record provenance on the existing
+   * metadata-persistence axis (`package | platform | user`):
+   * `package` = versioned package metadata (seeded by
+   * `bootstrapDeclaredPermissions`, re-seeded on upgrade, read-mostly for
+   * admins per ADR-0010); `platform`/`user` = environment config, live-edited
+   * and never touched by package seeding. Distinct from the `sys_permission_set`
+   * TABLE's object-affordance `managedBy: 'config'`, which stays.
+   */
+  managedBy: z.enum(['package', 'platform', 'user']).optional()
+    .describe('[ADR-0086 D3] Record provenance: package (upgrade-owned metadata) vs platform/user (env config)'),
+
   /** Is this a Profile? (Base set for a user) */
   isProfile: z.boolean().default(false).describe('Whether this is a user profile'),
   isDefault: z.boolean().default(false).describe('[ADR-0056 D7] When true, this profile is the FALLBACK assigned to authenticated users who have no explicit grants — an app declares its default access posture here instead of relying on the built-in member_default. Foundation for SSO/JIT provisioning.'),

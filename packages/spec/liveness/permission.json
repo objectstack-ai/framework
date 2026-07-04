@@ -11,6 +11,16 @@
       "status": "live",
       "note": "display metadata."
     },
+    "packageId": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-security/src/bootstrap-declared-permissions.ts (author-declared fallback for the registry `_packageId` provenance; persisted to sys_permission_set.package_id)",
+      "note": "ADR-0086 D3 — owning package for a package-shipped set; proven by packages/dogfood/test/showcase-permission-seeding.dogfood.test.ts."
+    },
+    "managedBy": {
+      "status": "live",
+      "evidence": "packages/plugins/plugin-security/src/bootstrap-declared-permissions.ts (persisted per record as sys_permission_set.managed_by; 'package' rows re-seeded, platform/user rows never clobbered)",
+      "note": "ADR-0086 D3 — per-record provenance on the metadata-persistence axis (package | platform | user)."
+    },
     "isProfile": {
       "status": "live",
       "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/PermissionPreview.tsx:92 (!!d.isProfile)",

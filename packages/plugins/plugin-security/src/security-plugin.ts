@@ -4,6 +4,7 @@ import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { PermissionEvaluator } from './permission-evaluator.js';
 import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
+import { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-roles.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
@@ -730,6 +731,17 @@ export class SecurityPlugin implements Plugin {
           await bootstrapDeclaredRoles(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
+        }
+        // [ADR-0086 D5] Seed stack-declared permission sets into
+        // sys_permission_set with package provenance (managed_by:'package' +
+        // package_id) — packages ship working default access for their own
+        // objects, and the admin surface finally sees them. Runs AFTER
+        // bootstrapPlatformAdmin so the platform defaults keep their
+        // insert-once, provenance-less shape (env config, never clobbered).
+        try {
+          await bootstrapDeclaredPermissions(ql, this.metadata, { logger: ctx.logger });
+        } catch (e) {
+          ctx.logger.warn('[security] declared-permission seeding failed', { error: (e as Error).message });
         }
         // [ADR-0068 D2] Seed the framework's reserved built-in identity roles
         // (platform_admin / org_*) so the role catalog is self-describing.
