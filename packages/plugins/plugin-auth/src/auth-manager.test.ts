@@ -1747,6 +1747,41 @@ describe('AuthManager', () => {
       expect(engine.update).not.toHaveBeenCalled();
     });
 
+    // ── ADR-0069 D7 — last-login audit stamping ──────────────────────────
+    it('stampLastLogin writes last_login_at (a Date) + last_login_ip on success', async () => {
+      const engine = makeEngine({ id: 'u1' });
+      const m = mgr(engine);
+      await (m as any).stampLastLogin('u1', '203.0.113.7');
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.id).toBe('u1');
+      expect(patch.last_login_at instanceof Date).toBe(true); // Date, never epoch-ms (ADR-0074)
+      expect(patch.last_login_ip).toBe('203.0.113.7');
+    });
+
+    it('stampLastLogin runs even when lockout is disabled (independent of threshold)', async () => {
+      const engine = makeEngine({ id: 'u1' });
+      const m = mgr(engine, { lockoutThreshold: 0 });
+      await (m as any).stampLastLogin('u1', undefined);
+      expect(engine.update).toHaveBeenCalledTimes(1);
+      const patch = engine.update.mock.calls[0][1];
+      expect(patch.last_login_at instanceof Date).toBe(true);
+      // IP omitted (undetermined) rather than written as null/empty
+      expect('last_login_ip' in patch).toBe(false);
+    });
+
+    it('stampLastLogin caps an oversized IP header to the column width (45)', async () => {
+      const engine = makeEngine({ id: 'u1' });
+      const m = mgr(engine);
+      await (m as any).stampLastLogin('u1', 'x'.repeat(200));
+      expect(engine.update.mock.calls[0][1].last_login_ip).toHaveLength(45);
+    });
+
+    it('stampLastLogin never throws when the engine write fails', async () => {
+      const engine = { ...makeEngine({ id: 'u1' }), update: vi.fn(async () => { throw new Error('db down'); }) };
+      const m = mgr(engine);
+      await expect((m as any).stampLastLogin('u1', '203.0.113.7')).resolves.toBeUndefined();
+    });
+
     it('passes a configured rateLimit through to betterAuth', async () => {
       let captured: any;
       (betterAuth as any).mockImplementation((cfg: any) => { captured = cfg; return { handler: vi.fn(), api: {} }; });

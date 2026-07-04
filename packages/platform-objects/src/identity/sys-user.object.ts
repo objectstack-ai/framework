@@ -469,6 +469,26 @@ export const SysUser = ObjectSchema.create({
       description: 'When enforced MFA first applied to this user (grace-period clock). Backs mfa_required; system-managed.',
     }),
 
+    // ADR-0069 D7 — login audit. Stamped on every successful `/sign-in/email`
+    // by the auth manager's after-hook (independent of lockout config). Backs
+    // the admin "last seen" surface + anomaly review; system-managed, read-only.
+    last_login_at: Field.datetime({
+      label: 'Last Login At',
+      required: false,
+      readonly: true,
+      group: 'Admin',
+      description: 'Timestamp of the last successful sign-in. Stamped by the auth manager; system-managed.',
+    }),
+
+    last_login_ip: Field.text({
+      label: 'Last Login IP',
+      required: false,
+      readonly: true,
+      maxLength: 45, // IPv6 max textual length
+      group: 'Admin',
+      description: 'Client IP of the last successful sign-in (from the trusted proxy forwarded header). System-managed.',
+    }),
+
     ai_access: Field.boolean({
       label: 'AI Access',
       defaultValue: false,

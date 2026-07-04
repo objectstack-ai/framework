@@ -1,6 +1,6 @@
 # ADR-0069: Enterprise authentication hardening — password policy, enforced MFA, SSO, session controls, network gating, and anti-brute-force, all enforcement-wired
 
-**Status**: Proposed (2026-06-24)
+**Status**: Accepted — **P1 + P2 implemented** (2026-07-04); P3 partially landed (see Addendum). Original proposal 2026-06-24.
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0049](./0049-no-unenforced-security-properties.md) (**the governing constraint** — a security property that isn't enforced at runtime is forbidden; no toggle may be a "false surface"), [ADR-0007](./0007-settings-manifest-and-kv-store.md) (settings manifest + cascade KV store), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (`sys_role` is platform-native, decoupled from better-auth; org scoping), [ADR-0066](./0066-unified-authorization-model.md) (capability/assignment split), [ADR-0068](./0068-unified-user-context-and-built-in-identity-roles.md) (`current_user` contract, built-in roles)
 **Consumers**: `@objectstack/plugin-auth` (better-auth wiring, `bindAuthSettings`/`applyConfigPatch`, auth route middleware), `@objectstack/service-settings` (`auth.manifest.ts`), `@objectstack/platform-objects` (identity objects `sys_user`/`sys_session`/`sys_account`), `@objectstack/rest` (auth request middleware seam), `../objectui` (settings UI rendering)
@@ -112,6 +112,8 @@ Legend: **[native]** = a better-auth config/plugin does the enforcing; **[custom
 
 Plus admin-facing surface: a `sys_user` list-view filter for locked accounts + an **Unlock** action; a "force password reset" action.
 
+**Implementation status (2026-07-04):** all `sys_user` (incl. `last_login_at`/`last_login_ip`), `sys_session`, `sys_account`, and `sys_organization.require_mfa` fields are landed, plus the `unlock_user` admin action. `last_login_at`/`last_login_ip` are stamped on every successful `/sign-in/email` by `AuthManager.stampLastLogin` (after-hook, independent of lockout config). **Not landed:** a per-record `sys_organization.allowed_ip_ranges` (and optional `sys_user.allowed_ip_ranges` override) — the IP allow-list currently exists only as the **global** `auth.allowed_ip_ranges` setting (D5); per-org/per-user IP scoping is tracked as remaining P2 work.
+
 ---
 
 ## Enforcement seam summary (where the code hooks)
@@ -131,6 +133,15 @@ Each row in D1-D6 names exactly one of these seams. No setting is introduced wit
 - **P1 (security floor for first real customers)**: D1 (complexity + HIBP + expiry/history), D2 (lockout + rate-limit tuning), D3 (enforced MFA + grace). + D7 fields for these.
 - **P2 (defense in depth)**: D4 (idle/absolute/concurrent sessions), D5 (IP allowlist), D6 OIDC trust-list UI.
 - **P3 (federation breadth)**: SAML assessment, broader social providers, per-org overrides UI polish.
+
+### Implementation status (2026-07-04)
+
+| Phase | Status | Notes |
+|---|---|---|
+| **P1** (D1/D2/D3 + D7 fields) | ✅ **implemented** | Password complexity/history/expiry (`assertPasswordComplexity`/`assertPasswordNotReused`/`stampPasswordChangedAt`), HIBP (`haveIBeenPwned` plugin), account lockout (`assertAccountNotLocked`/`recordSignInOutcome` + `unlock_user` action), enforced MFA + grace (`computeAuthGate` → `MFA_REQUIRED`, per-org `require_mfa`), rate-limit tuning (`customRules`). All settings in `auth.manifest.ts`, bound via `bindAuthSettings`. Login-audit fields `last_login_at`/`last_login_ip` stamped on sign-in (`stampLastLogin`). |
+| **P2** (D4/D5) | 🟡 **mostly implemented** | Session idle/absolute/concurrent (`enforceSessionControls`/`enforceConcurrentCap`) and the **global** IP allow-list (`isClientIpAllowed`, `auth.allowed_ip_ranges`) are landed. **Remaining:** per-org `sys_organization.allowed_ip_ranges` (+ optional `sys_user.allowed_ip_ranges` override); a **shared/Redis rate-limit store** for multi-node (current store is in-memory). |
+| **P2/P3** (D6) | 🟡 partial | Generic OIDC RP wired (`genericOAuth`/`sso`); admin OIDC **trust-list settings UI** still env/`sys_sso_provider`-only. |
+| **P3** (SAML, broader social) | 🟡 partial | `@better-auth/sso` present (SAML now better-auth-native — see Addendum); broader settings-driven social providers pending. |
 
 ## Out of scope / deferred
 
