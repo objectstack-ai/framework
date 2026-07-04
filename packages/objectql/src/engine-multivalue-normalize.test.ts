@@ -149,7 +149,7 @@ describe('engine write pipeline — multi-value scalar normalization (#2552)', (
     const ql = await makeEngine(driver);
     await expect(
       ql.update('project', { id: 'r1', labels: { nested: true } }),
-    ).rejects.toThrow(/invalid_type/i);
+    ).rejects.toThrow(/must be an array/i);
     expect(updated).toHaveLength(0);
   });
 
@@ -157,7 +157,7 @@ describe('engine write pipeline — multi-value scalar normalization (#2552)', (
     const { driver, created } = makeDriver();
     const ql = await makeEngine(driver);
     await expect(ql.insert('project', { name: 'P2', labels: 'nope' })).rejects.toThrow(
-      /invalid_option/i,
+      /is not one of/i,
     );
     expect(created).toHaveLength(0);
   });

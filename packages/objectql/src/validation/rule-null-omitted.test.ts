@@ -28,12 +28,12 @@ const schema = {
 describe('validation: `field == null` on insert with omitted field (#1871)', () => {
   it('fires when due_date is OMITTED from the insert payload', () => {
     expect(() => evaluateValidationRules(schema, { priority: 'urgent' }, 'insert', {}))
-      .toThrow(/rule_violation|_record|Validation failed/);
+      .toThrow(/Urgent tasks require a due date/);
   });
 
   it('fires when due_date is explicitly null (already worked)', () => {
     expect(() => evaluateValidationRules(schema, { priority: 'urgent', due_date: null }, 'insert', {}))
-      .toThrow(/rule_violation|_record|Validation failed/);
+      .toThrow(/Urgent tasks require a due date/);
   });
 
   it('does NOT fire when due_date is present', () => {

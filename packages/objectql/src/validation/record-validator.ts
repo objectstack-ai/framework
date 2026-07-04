@@ -83,9 +83,16 @@ export class ValidationError extends Error {
   readonly code = 'VALIDATION_FAILED';
   readonly fields: FieldValidationError[];
   constructor(fields: FieldValidationError[]) {
+    // The top-level message is what generic UI surfaces (toasts, CLI output)
+    // display verbatim, so it must carry the HUMAN messages — most notably a
+    // validation rule's author-written `message` (often localized), which used
+    // to be buried in `fields[]` while the toast showed only
+    // "Validation failed for 1 field(s): _record (rule_violation)".
+    // Machine-readable field/code pairs remain available on `.fields`.
     super(
-      `Validation failed for ${fields.length} field(s): ` +
-      fields.map((f) => `${f.field} (${f.code})`).join(', '),
+      fields
+        .map((f) => (f.message?.trim() ? f.message : `${f.field} (${f.code})`))
+        .join('; ') || 'Validation failed',
     );
     this.name = 'ValidationError';
     this.fields = fields;
