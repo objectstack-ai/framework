@@ -225,18 +225,21 @@ export class AutomationServicePlugin implements Plugin {
             ctx.logger.warn(`[Automation] flow pull from ObjectQL registry failed: ${msg}`);
         }
 
-        // ── Dev hot-reload: re-bind flow triggers when the artifact recompiles ──
-        // `os dev` recompiles dist/objectstack.json on a src edit; MetadataPlugin
-        // reloads it into the metadata service and fires 'metadata:reloaded'. The
-        // engine, however, still holds the flow definitions + trigger bindings it
-        // pulled ONCE above — including scheduled jobs bound through the schedule
-        // trigger. Without re-syncing, an edited schedule-triggered flow keeps
-        // firing its OLD definition (old runAs / schedule / logic) until a full
-        // restart. Re-register every current flow (registerFlow re-binds its
-        // trigger idempotently — ScheduleTrigger.start cancels + reschedules) and
-        // unregister flows that vanished from the artifact so their jobs stop.
+        // ── Runtime re-bind: re-sync flow triggers on 'metadata:reloaded' ──────
+        // Fires on two RUNTIME events (never on a cold boot — the kernel:ready
+        // bind below covers that): a dev `os dev` artifact recompile (MetadataPlugin
+        // reloads dist/objectstack.json and announces), and a Studio package publish
+        // (the runtime dispatcher announces after publishPackageDrafts promotes the
+        // drafts to active). The engine still holds the flow definitions + trigger
+        // bindings it pulled ONCE above — including scheduled jobs. Without
+        // re-syncing, an edited schedule-triggered flow keeps firing its OLD
+        // definition (old runAs / schedule / logic), and a newly-published
+        // record-triggered flow never binds its trigger at all, until a full
+        // restart. Re-register every current flow (registerFlow re-binds its trigger
+        // idempotently — ScheduleTrigger.start cancels + reschedules) and unregister
+        // flows that vanished so their jobs stop.
         ctx.hook('metadata:reloaded', async () => {
-            await this.resyncFlowsFromMetadata(ctx);
+            await this.resyncFlowsFromProtocol(ctx);
         });
 
         // ── Cold-boot bind via the PROTOCOL's flattened flow view ─────────────
@@ -280,48 +283,84 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     /**
-     * Re-pull flow definitions from the metadata service and re-register them
-     * into the engine, so an `os dev` artifact recompile re-binds flow triggers
-     * (notably scheduled jobs) instead of leaving the engine executing the
-     * boot-time definitions. Driven by the `metadata:reloaded` hook that
-     * MetadataPlugin fires after reloading the artifact from disk.
+     * Read the protocol's flattened flow view — `getMetaItems({ type: 'flow' })`,
+     * the same source `GET /meta/flow` serves and #2560's cold-boot bind uses.
+     * Returns the list of flow docs, or `null` when the protocol is unavailable
+     * or the read failed. Callers MUST treat `null` as "couldn't read", NOT as
+     * "zero flows" — tearing flows down on a failed read would unbind live
+     * automations.
      *
-     * Pulls from the metadata service — NOT the ObjectQL schema registry used by
-     * the boot pull. The schema registry is a boot-time cache the artifact reload
-     * does not refresh; `MetadataManager.register()` (the reload's write path) IS
-     * refreshed, so the metadata service is the only source carrying the edited
-     * definitions.
+     * Unlike `registry.listItems('flow')` (the boot pull) this surfaces flows
+     * defined inline in an app manifest, and unlike `metadata.list('flow')` — the
+     * source this re-sync read before this fix — it is actually populated in a
+     * real running server (`metadata.list('flow')` returns 0 there, so the old
+     * re-sync bound nothing).
+     */
+    private async readFlowDefsFromProtocol(
+        ctx: PluginContext,
+    ): Promise<Array<{ name?: string }> | null> {
+        let protocol: { getMetaItems?(q: { type: string }): Promise<unknown> } | undefined;
+        try {
+            protocol = ctx.getService('protocol');
+        } catch {
+            return null; // no protocol service (bare engine / tests) — nothing to sync
+        }
+        if (!protocol || typeof protocol.getMetaItems !== 'function') return null;
+
+        let raw: unknown;
+        try {
+            raw = await protocol.getMetaItems({ type: 'flow' });
+        } catch (err) {
+            ctx.logger.warn(
+                `[Automation] flow read from protocol failed: getMetaItems('flow'): ${(err as Error).message}`,
+            );
+            return null;
+        }
+
+        // getMetaItems hands back a bare array or an `{ items: [...] }` envelope,
+        // and each entry is either the flow doc or an `{ item: <flow> }` wrapper.
+        const list = Array.isArray(raw) ? raw : (((raw as { items?: unknown[] })?.items) ?? []);
+        return list.map((entry) =>
+            (entry && typeof entry === 'object' && 'item' in entry
+                ? (entry as { item: unknown }).item
+                : entry) as { name?: string },
+        );
+    }
+
+    /**
+     * Re-pull flow definitions from the protocol and re-register them into the
+     * engine, so a RUNTIME metadata change re-binds flow triggers instead of
+     * leaving the engine executing the boot-time definitions. Driven by the
+     * `metadata:reloaded` hook, which fires on two runtime events:
+     *   1. a dev `os dev` artifact recompile — MetadataPlugin reloads the
+     *      artifact from disk and announces; and
+     *   2. a Studio package publish — the runtime dispatcher announces after
+     *      `publishPackageDrafts` promotes the drafts to active. Without (2), a
+     *      flow authored + published while the server runs never bound its
+     *      trigger (record-change automations never fired) until the next
+     *      restart, even though #2560 fixed the cold-boot bind.
+     *
+     * Reads `protocol.getMetaItems({ type: 'flow' })` — the SAME source #2560's
+     * cold-boot bind and `GET /meta/flow` use. It does NOT read the ObjectQL
+     * schema registry (a boot-time cache the reload never refreshes) and — the
+     * bug this fixes — no longer reads `metadata.list('flow')`, which returns 0
+     * in a real running server (it does not surface inline app flows), so the old
+     * re-sync was a silent no-op that bound nothing on publish.
      *
      * Idempotent and best-effort: registerFlow() re-binds the trigger
      * (ScheduleTrigger.start cancels + reschedules), flows removed from the
-     * artifact are unregistered so their jobs stop firing, and any failure is
-     * logged without disturbing the rest of the runtime.
+     * artifact are unregistered so their jobs/triggers stop firing, and any
+     * failure is logged without disturbing the rest of the runtime. A failed or
+     * unavailable protocol read is a no-op — it never tears down live flows.
      */
-    private async resyncFlowsFromMetadata(ctx: PluginContext): Promise<void> {
+    private async resyncFlowsFromProtocol(ctx: PluginContext): Promise<void> {
         if (!this.engine) return;
-        let metadata: { list?(type: string): Promise<unknown[]> } | undefined;
-        try {
-            metadata = ctx.getService('metadata');
-        } catch {
-            // No metadata service (e.g. a bare engine / tests) — nothing to sync.
-            return;
-        }
-        if (!metadata || typeof metadata.list !== 'function') return;
-
-        let defs: unknown[];
-        try {
-            defs = await metadata.list('flow');
-        } catch (err) {
-            ctx.logger.warn(
-                `[Automation] flow re-sync skipped: metadata.list('flow') failed: ${(err as Error).message}`,
-            );
-            return;
-        }
+        const defs = await this.readFlowDefsFromProtocol(ctx);
+        if (!defs) return; // unavailable / failed read — do not tear down live flows
 
         const freshNames = new Set<string>();
         let resynced = 0;
-        for (const d of defs) {
-            const def = d as { name?: string };
+        for (const def of defs) {
             if (!def?.name) continue;
             freshNames.add(def.name);
             try {
@@ -353,43 +392,19 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     /**
-     * Bind flows from the protocol's flattened flow view — `getMetaItems({ type:
-     * 'flow' })`, the same source `GET /meta/flow` serves. Unlike
-     * `registry.listItems('flow')` (the boot pull) this surfaces flows defined
-     * inline in an app manifest, and unlike `metadata.list('flow')` (the
-     * `metadata:reloaded` re-sync) it is populated on a cold boot once the app
-     * is registered. Called at kernel:ready so record-triggered automations
-     * actually bind on a fresh start. registerFlow is idempotent, so re-binding
+     * Bind flows from the protocol's flattened flow view at `kernel:ready`, so
+     * record-triggered automations actually bind on a fresh start (#2560).
+     * Additive by design — unlike {@link resyncFlowsFromProtocol} it never tears
+     * flows down, so a transient empty/failed read at boot can't unbind the flows
+     * the boot pull already registered. registerFlow is idempotent, so re-binding
      * a flow the boot pull already registered is harmless.
      */
     private async syncFlowsFromProtocol(ctx: PluginContext): Promise<void> {
         if (!this.engine) return;
-        let protocol: { getMetaItems?(q: { type: string }): Promise<unknown> } | undefined;
-        try {
-            protocol = ctx.getService('protocol');
-        } catch {
-            return; // no protocol service (bare engine / tests) — nothing to sync
-        }
-        if (!protocol || typeof protocol.getMetaItems !== 'function') return;
-
-        let raw: unknown;
-        try {
-            raw = await protocol.getMetaItems({ type: 'flow' });
-        } catch (err) {
-            ctx.logger.warn(
-                `[Automation] cold-boot flow bind skipped: getMetaItems('flow') failed: ${(err as Error).message}`,
-            );
-            return;
-        }
-
-        // getMetaItems hands back a bare array or an `{ items: [...] }` envelope,
-        // and each entry is either the flow doc or an `{ item: <flow> }` wrapper.
-        const list = Array.isArray(raw) ? raw : (((raw as { items?: unknown[] })?.items) ?? []);
+        const defs = await this.readFlowDefsFromProtocol(ctx);
+        if (!defs) return;
         let bound = 0;
-        for (const entry of list) {
-            const def = (
-                entry && typeof entry === 'object' && 'item' in entry ? (entry as { item: unknown }).item : entry
-            ) as { name?: string } | undefined;
+        for (const def of defs) {
             if (!def?.name) continue; // registerFlow is idempotent, so re-binding is safe
             try {
                 this.engine.registerFlow(def.name, def as never);
