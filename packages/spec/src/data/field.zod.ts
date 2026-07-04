@@ -446,8 +446,23 @@ export const FieldSchema = lazySchema(() => z.object({
    * pulls a child INTO the parent's entry form (write side), `relatedList`
    * controls its appearance on the parent's detail page (read side). The intent
    * lives here in the data model; the detail page derives the UI.
+   *
+   * Tri-state (ADR-0085 semantic-role style — this is a PROMINENCE hint, NOT a
+   * layout switch):
+   *   - `false`         → suppress this child from the parent's detail page.
+   *   - `true` / absent  → shown; participates in the derived default layout
+   *                       (count-aware: few children → a tab each, many → the
+   *                       long tail collapses into a single "Related" tab).
+   *   - `'primary'`     → CORE relationship: always surfaced prominently. The
+   *                       detail renderer promotes it to its own tab regardless
+   *                       of child count. This states business intent (true
+   *                       across every surface — detail tab, mobile card, AI
+   *                       summary, search facet); "primary → own tab" is only
+   *                       the DETAIL renderer's interpretation. Being prominence
+   *                       (not a `relatedLayout` switch) is what admits it to the
+   *                       object model under ADR-0085's admission test.
    */
-  relatedList: z.boolean().optional().describe('Show this child collection as a related list on the parent\'s detail page (read-side mirror of inlineEdit). Defaults to shown for master_detail/lookup; set false to suppress.'),
+  relatedList: z.union([z.boolean(), z.literal('primary')]).optional().describe('Show this child collection as a related list on the parent\'s detail page (read-side mirror of inlineEdit). false = suppress; true/absent = shown in the count-aware derived default; \'primary\' = core relationship, always promoted to its own tab. Prominence intent, not a layout switch (ADR-0085).'),
   /** Optional section title for the detail-page related list (defaults to the child object label). */
   relatedListTitle: z.string().optional().describe('Title for the detail-page related list'),
   /** Optional explicit columns for the detail-page related list (derived from the child object when omitted). */

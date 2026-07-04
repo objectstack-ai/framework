@@ -24,6 +24,12 @@ export const Account = ObjectSchema.create({
   // to the stored value, plus the text identifiers.
   searchableFields: ['name', 'industry', 'status', 'billing_email', 'tax_id'],
 
+  // ADR-0085 semantic role: the record's most important fields. Drives the
+  // detail-page highlight strip (formerly the deleted account-detail page's
+  // `highlights` slot) plus default list columns / cards — one declaration,
+  // every surface, no per-page config.
+  highlightFields: ['status', 'industry', 'annual_revenue'],
+
   fields: {
     name: Field.text({ label: 'Account Name', required: true, searchable: true, maxLength: 200 }),
     industry: Field.select({

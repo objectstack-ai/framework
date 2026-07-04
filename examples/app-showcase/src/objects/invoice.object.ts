@@ -52,6 +52,12 @@ export const Invoice = ObjectSchema.create({
       label: 'Account',
       required: true,
       descriptionField: 'industry',
+      // Read side: a CORE relationship (`relatedList: 'primary'`) → its own
+      // "Invoices" tab on the Account detail page, derived from this lookup with
+      // NO hand-built page. Title/columns declared here on the relationship.
+      relatedList: 'primary',
+      relatedListTitle: 'Invoices',
+      relatedListColumns: ['name', 'status', 'total', 'issued_on'],
       lookupColumns: [
         'name',
         { field: 'industry', label: 'Industry', type: 'select' },

@@ -297,6 +297,31 @@ describe('FieldSchema', () => {
       expect(result.deleteBehavior).toBe('set_null');
     });
 
+    it('should accept the relatedList prominence tri-state (false | true | primary)', () => {
+      for (const relatedList of [false, true, 'primary'] as const) {
+        const field: Field = {
+          name: 'account',
+          label: 'Account',
+          type: 'lookup',
+          reference: 'crm_account',
+          relatedList,
+        };
+        const result = FieldSchema.parse(field);
+        expect(result.relatedList).toBe(relatedList);
+      }
+    });
+
+    it('should reject an unknown relatedList string (only \'primary\' is allowed)', () => {
+      const field = {
+        name: 'account',
+        label: 'Account',
+        type: 'lookup',
+        reference: 'crm_account',
+        relatedList: 'secondary',
+      };
+      expect(() => FieldSchema.parse(field)).toThrow();
+    });
+
     it('should preserve forward record-picker config (display/columns/filters/depends)', () => {
       const lookupField: Field = {
         name: 'account',
