@@ -91,6 +91,21 @@ export const SelectOptionSchema = lazySchema(() => z.object({
   value: SystemIdentifierSchema.describe('Stored value (lowercase machine identifier)'),
   color: z.string().optional().describe('Color code for badges/charts'),
   default: z.boolean().optional().describe('Is default option'),
+  /**
+   * Per-option visibility predicate (CEL) — the option is offered only when this
+   * evaluates TRUE. Omit = always available. Evaluated against the SAME binding
+   * environment as field-level `visibleWhen` (live `record` + `current_user`), so
+   * it expresses BOTH cascading/dependent options (`record.country == 'cn'`) AND
+   * role/context gating (`'admin' in current_user.roles`). When it references
+   * sibling fields, declare those on the field's `dependsOn` so the form can gate
+   * and re-evaluate the option list as the parent changes.
+   *
+   * ⚠️ Client-side hiding is UX, not authorization. When an option is gated for
+   * access-control reasons the server MUST also reject writes of its value (the
+   * rule-validator evaluates the picked value's `visibleWhen`) — hiding it in the
+   * dropdown alone is bypassable.
+   */
+  visibleWhen: ExpressionInputSchema.optional().describe("Per-option visibility predicate (CEL) — option is offered only when TRUE (else omitted). Same env as field visibleWhen (record + current_user). e.g. P`record.country == 'cn'` or P`'admin' in current_user.roles`"),
 }));
 
 /**
@@ -495,7 +510,7 @@ export const FieldSchema = lazySchema(() => z.object({
   dependsOn: z.array(z.union([z.string(), z.object({
     field: z.string(),
     param: z.string().optional(),
-  })])).optional().describe('Dependent lookup: restrict candidates by the value of other field(s) on the same record. String = same local/remote key; {field,param} when the remote filter key differs.'),
+  })])).optional().describe("Declares that this field's available values depend on the value of other field(s) on the same record — the form gates the field until they are set and re-evaluates as they change. For `lookup`/`master_detail` it scopes the candidate query (string = same local/remote key; {field,param} when the remote filter key differs — the {field,param} form is lookup-only). For `select`/`multiselect`/`radio` the actual per-option rule lives in each option's `visibleWhen`; list the referenced fields here (string form) so the option list gates and refreshes with the parent."),
   allowCreate: z.boolean().optional().describe('Allow inline quick-create from the record picker: when no match exists the user can create a record from the typed text (optimistic dataSource.create with the display field). Best for simple objects whose only required field is the display field.'),
 
   /** Calculation — CEL formula. Plain string accepted for back-compat; build emits canonical envelope. */
