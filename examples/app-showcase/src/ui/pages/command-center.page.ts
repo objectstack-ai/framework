@@ -115,7 +115,7 @@ export const CommandCenterPage = definePage({
           type: 'flex',
           responsiveStyles: {
             large: {
-              minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '16px',
+              minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '16px',
               padding: '22px 26px 32px',
               background:
                 'radial-gradient(1200px 540px at 50% -14%, hsl(192 86% 46% / 0.10) 0%, transparent 60%), ' +
