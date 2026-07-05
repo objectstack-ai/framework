@@ -612,6 +612,30 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
     }
   }
 
+  // Validate mapping → object references + executable-transform gate (#2611).
+  // A mapping whose targetObject doesn't exist can never be applied by the
+  // import endpoint (it 400s on target mismatch), and a `javascript`
+  // transform has no server-side sandbox — both must fail at build time,
+  // not at first use (Prime Directive #12: reject at the producer).
+  if (config.mappings) {
+    for (const m of config.mappings) {
+      if (m.targetObject && !objectNames.has(m.targetObject)) {
+        errors.push(
+          `Mapping '${m.name}' targets object '${m.targetObject}' which is not defined in objects.`,
+        );
+      }
+      for (const entry of m.fieldMapping ?? []) {
+        if (entry.transform === 'javascript') {
+          errors.push(
+            `Mapping '${m.name}' uses transform 'javascript', which the import path does not execute ` +
+              `(no server-side sandbox — see framework#2611). Use none/constant/map/split/join/lookup, ` +
+              `or model the logic as a flow.`,
+          );
+        }
+      }
+    }
+  }
+
   // Validate permission-set / profile object grants → object references.
   // A grant keyed by an object that isn't declared (e.g. a short `lead` instead
   // of the namespaced `crm_lead`) silently applies to NOTHING: the

@@ -13,6 +13,7 @@ import {
     type ExportFieldMeta,
 } from './export-format.js';
 import { runImport } from './import-runner.js';
+import { resolveNamedMapping, applyMappingToRows, type MappingArtifactLike } from './import-mapping.js';
 
 // Node-safe logger — avoids importing 'console' which is absent from ES2020 lib typings.
 const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
@@ -486,9 +487,9 @@ async function prepareImportRequest(
     const { p, objectName, environmentId, maxRows } = opts;
     const dryRun = body?.dryRun === true;
 
-    const writeMode: 'insert' | 'update' | 'upsert' =
+    let writeMode: 'insert' | 'update' | 'upsert' =
         body?.writeMode === 'update' || body?.writeMode === 'upsert' ? body.writeMode : 'insert';
-    const matchFields: string[] = Array.isArray(body?.matchFields)
+    let matchFields: string[] = Array.isArray(body?.matchFields)
         ? body.matchFields.filter((f: any) => typeof f === 'string' && f.length > 0)
         : [];
     const runAutomations = body?.runAutomations === true;
@@ -498,6 +499,43 @@ async function prepareImportRequest(
         : undefined;
     const createMissingOptions = body?.createMissingOptions === true;
     const skipBlankMatchKey = body?.skipBlankMatchKey === true;
+
+    // ── Named mapping artifact (#2611) ────────────────────────────────
+    // `mappingName` references a registered `mapping` artifact
+    // (defineMapping / stack `mappings:`) — the reusable, governed form for
+    // recurring & programmatic imports. Mutually exclusive with the inline
+    // `mapping` rename: one mapping source of truth per request.
+    const mappingName: string | undefined =
+        typeof body?.mappingName === 'string' && body.mappingName.length > 0 ? body.mappingName : undefined;
+    const hasInlineMapping =
+        (Array.isArray(body?.mapping) && body.mapping.length > 0) ||
+        (!Array.isArray(body?.mapping) && body?.mapping && typeof body.mapping === 'object' && Object.keys(body.mapping).length > 0);
+    if (mappingName && hasInlineMapping) {
+        return { ok: false, status: 400, code: 'CONFLICTING_MAPPING', error: 'Provide either mappingName or an inline mapping, not both' };
+    }
+    let mappingArtifact: MappingArtifactLike | undefined;
+    if (mappingName) {
+        const detectedFormat: 'csv' | 'json' | 'xlsx' | undefined =
+            (body?.format === 'json' && Array.isArray(body?.rows)) || Array.isArray(body) ? 'json'
+            : typeof body?.csv === 'string' ? 'csv'
+            : typeof body?.xlsxBase64 === 'string' ? 'xlsx'
+            : undefined;
+        if (!detectedFormat) {
+            return { ok: false, status: 400, code: 'INVALID_REQUEST', error: 'Provide format:"csv" with csv text, format:"json" with rows[], or format:"xlsx" with xlsxBase64' };
+        }
+        const resolved = await resolveNamedMapping(p, { mappingName, objectName, detectedFormat });
+        if (!resolved.ok) return resolved;
+        mappingArtifact = resolved.artifact;
+        // Artifact-declared write semantics apply as DEFAULTS: an explicit
+        // request writeMode/matchFields wins; absent ones fall back to the
+        // artifact's mode/upsertKey.
+        if (body?.writeMode === undefined && (mappingArtifact.mode === 'update' || mappingArtifact.mode === 'upsert')) {
+            writeMode = mappingArtifact.mode;
+        }
+        if (matchFields.length === 0 && Array.isArray(mappingArtifact.upsertKey)) {
+            matchFields = mappingArtifact.upsertKey.filter((f) => typeof f === 'string' && f.length > 0);
+        }
+    }
 
     if (writeMode !== 'insert' && matchFields.length === 0) {
         return { ok: false, status: 400, code: 'INVALID_REQUEST', error: `writeMode "${writeMode}" requires a non-empty matchFields[]` };
@@ -548,6 +586,15 @@ async function prepareImportRequest(
 
     if (rows.length > maxRows) {
         return { ok: false, status: 413, code: 'PAYLOAD_TOO_LARGE', error: `Import limit is ${maxRows} rows per request (got ${rows.length}).` };
+    }
+
+    // Apply the named mapping's fieldMapping pipeline (rename + transforms;
+    // strict projection — only mapped targets reach the write path). Inline
+    // `mapping` was empty in this branch, so rows still carry raw headers.
+    if (mappingArtifact) {
+        const applied = applyMappingToRows(rows, mappingArtifact);
+        if (!applied.ok) return applied;
+        rows = applied.rows;
     }
 
     // Resolve the object's field metadata so cells coerce to storage values
