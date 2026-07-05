@@ -24,6 +24,7 @@ const SURFACES: { name: string; path: string; chart?: boolean }[] = [
   { name: 'Field Zoo', path: base('showcase_field_zoo') },
   { name: 'Delivery Operations', path: base('dashboard/showcase_ops_dashboard'), chart: true },
   { name: 'Chart Gallery', path: base('dashboard/showcase_chart_gallery'), chart: true },
+  { name: 'Command Center', path: base('page/showcase_command_center'), chart: true },
   { name: 'Hours by Status', path: base('report/showcase_hours_by_status') },
   { name: 'Status × Priority', path: base('report/showcase_status_priority_matrix') },
   { name: 'Task Overview', path: base('report/showcase_task_overview') },
@@ -63,7 +64,9 @@ for (const surface of SURFACES) {
       await svg.waitFor({ state: 'visible', timeout: 25_000 });
       const box = await svg.boundingBox();
       expect(box, `${surface.name}: no chart SVG`).not.toBeNull();
-      expect(box!.width, `${surface.name}: chart width`).toBeGreaterThan(0);
+      // >0 alone previously passed even on a collapsed ~130px-wide chart panel
+      // (#2616 D) — require a width a real chart panel would actually have.
+      expect(box!.width, `${surface.name}: chart width`).toBeGreaterThan(200);
       expect(box!.height, `${surface.name}: chart height`).toBeGreaterThan(0);
     }
   });

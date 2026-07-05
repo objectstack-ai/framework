@@ -28,11 +28,16 @@ function Page() {
     let alive = true;
     (async () => {
       if (!adapter || !sel) { setRelated({ projects: 0, invoices: 0, openInvoices: 0 }); return; }
-      const pr = await adapter.find('showcase_project', { $filter: ['account', '=', sel.id], top: 500 });
-      const iv = await adapter.find('showcase_invoice', { $filter: ['account', '=', sel.id], top: 500 });
-      const projects = Array.isArray(pr) ? pr : (pr && pr.records) || [];
-      const invoices = Array.isArray(iv) ? iv : (iv && iv.records) || [];
-      if (alive) setRelated({ projects: projects.length, invoices: invoices.length, openInvoices: invoices.filter((r) => r.status !== 'paid' && r.status !== 'void').length });
+      try {
+        // Canonical QueryOptionsV2 keys only (where + limit, not the legacy
+        // $filter/top aliases removed in 11.0) — an unrecognized param here
+        // would leave the rollup cards silently stuck at 0.
+        const pr = await adapter.find('showcase_project', { where: { account: sel.id }, limit: 500 });
+        const iv = await adapter.find('showcase_invoice', { where: { account: sel.id }, limit: 500 });
+        const projects = Array.isArray(pr) ? pr : (pr && pr.records) || [];
+        const invoices = Array.isArray(iv) ? iv : (iv && iv.records) || [];
+        if (alive) setRelated({ projects: projects.length, invoices: invoices.length, openInvoices: invoices.filter((r) => r.status !== 'paid' && r.status !== 'void').length });
+      } catch (e) { console.warn('[Account Cockpit] failed to load related rollups', e); }
     })();
     return () => { alive = false; };
   }, [adapter, sel, reload]);

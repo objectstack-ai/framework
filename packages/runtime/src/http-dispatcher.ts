@@ -3280,6 +3280,15 @@ export class HttpDispatcher {
         }
 
         if (!aiService) {
+            // The console polls `GET /ai/agents` on every navigation to decide
+            // whether to show AI affordances. Reporting that as a 404 turns the
+            // normal "no AI service configured" state (the open-source default —
+            // service-ai is a Cloud/Enterprise package) into console error-log
+            // spam on every page. An empty list conveys the same information
+            // without looking like a fault. Every other /ai/* route still 404s.
+            if (method === 'GET' && subPath === '/ai/agents') {
+                return { handled: true, response: { status: 200, body: { agents: [] } } };
+            }
             return {
                 handled: true,
                 response: {

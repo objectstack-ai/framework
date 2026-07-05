@@ -35,6 +35,11 @@ export const NewProjectWizardPage = definePage({
               { label: 'Status & Health', description: 'Where does it stand today?', fields: ['status', 'health'] },
               { label: 'Budget & Schedule', description: 'Money and dates.', fields: ['budget', 'spent', 'start_date', 'end_date'] },
             ],
+            // Without this, a successful submit left the filled step-3 form in
+            // place with only a toast — re-clicking "Create" duplicated the
+            // record. `thank-you` swaps the form for a confirmation panel so
+            // there's nothing left to resubmit.
+            submitBehavior: { kind: 'thank-you', title: 'Project created', message: 'Your new project is ready — find it in Projects, or reopen this wizard to start another.' },
           },
         },
       ],

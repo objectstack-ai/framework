@@ -633,7 +633,7 @@ export class SqlDriver implements IDataDriver {
     const builder = buildBase();
 
     // SELECT
-    if (query.fields) {
+    if (Array.isArray(query.fields) && query.fields.length > 0) {
       builder.select((query.fields as string[]).map((f: string) => this.mapSortField(f)));
     } else {
       builder.select('*');
