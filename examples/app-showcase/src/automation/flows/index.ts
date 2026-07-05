@@ -1204,9 +1204,69 @@ export const InboundTaskWebhookFlow = defineFlow({
   ],
 });
 
+/**
+ * Inquiry Purge — the worked `get_record` + `delete_record` example, closing
+ * the CRUD node quartet (create: InboundTaskWebhookFlow · update:
+ * ReassignWizardFlow · get + delete: here). A janitor flow: fetch the
+ * already-closed inquiries (records mode), gate on whether any exist, delete
+ * by the same filter, and report. Config keys follow the executor contract
+ * exactly — `objectName` + `filter` (Prime Directive #12: no
+ * `object`/`filters` aliases). `runAs: 'system'` because a janitor acts
+ * across owners; autolaunched with no record trigger — invoke it on demand
+ * (API/subflow) rather than on every write.
+ */
+export const InquiryPurgeFlow = defineFlow({
+  name: 'showcase_inquiry_purge',
+  label: 'Purge Closed Inquiries',
+  description: 'Deletes inquiries already marked closed — demonstrates get_record + delete_record.',
+  type: 'autolaunched',
+  runAs: 'system',
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'purge_check',
+      type: 'get_record',
+      label: 'Find closed inquiries',
+      // records mode + outputVariable: the result lands in the variable
+      // context, where the out-edge CEL below reads it (the engine routes on
+      // EDGE conditions — same contract as BudgetApprovalFlow's gate).
+      config: {
+        objectName: 'showcase_inquiry',
+        filter: { status: 'closed' },
+        mode: 'records',
+        limit: 200,
+        outputVariable: 'closedInquiries',
+      },
+    },
+    { id: 'any_found', type: 'decision', label: 'Anything to purge?' },
+    {
+      id: 'purge',
+      type: 'delete_record',
+      label: 'Delete them',
+      config: { objectName: 'showcase_inquiry', filter: { status: 'closed' } },
+    },
+    {
+      id: 'report',
+      type: 'notify',
+      label: 'Report cleanup',
+      config: { topic: 'inquiry_purge', message: 'Closed inquiries purged.' },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'purge_check' },
+    { id: 'e2', source: 'purge_check', target: 'any_found' },
+    { id: 'e3', source: 'any_found', target: 'purge', label: 'yes', condition: 'size(closedInquiries) > 0' },
+    { id: 'e4', source: 'any_found', target: 'end', label: 'no', condition: 'size(closedInquiries) == 0' },
+    { id: 'e5', source: 'purge', target: 'report' },
+    { id: 'e6', source: 'report', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
+  InquiryPurgeFlow,
   BudgetApprovalFlow,
   InvoiceDualSignoffFlow,
   OneTaskSignoffSubflow,

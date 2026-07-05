@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { registerRecalcEndpoint } from '../src/server/recalc-endpoint.js';
+import { registerRecalcEndpoint } from '../src/system/server/recalc-endpoint.js';
 
 /**
  * Unit coverage for the custom REST endpoint behind the `showcase_recalc_estimate`

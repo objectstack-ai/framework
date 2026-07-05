@@ -2,9 +2,9 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { PageVariablesPage } from '../src/pages/index.js';
+import { PageVariablesPage } from '../src/ui/pages/index.js';
 import stack from '../objectstack.config.js';
-import { ShowcaseApp } from '../src/apps/index.js';
+import { ShowcaseApp } from '../src/ui/apps/index.js';
 
 /**
  * Dogfood gate for page-local state (PageSchema.variables, ADR-0049).

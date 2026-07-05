@@ -43,28 +43,36 @@ pnpm verify
 ## What it covers
 
 ### Data layer (ObjectQL)
-- **All 49 field types** — `src/objects/field-zoo.object.ts` carries one field
-  of every `FieldType`, with the remainder appearing naturally on the backbone
-  objects.
+- **All 49 field types** — `src/data/objects/field-zoo.object.ts` carries one
+  field of every `FieldType`, with the remainder appearing naturally on the
+  backbone objects.
 - **Every relationship kind** — `lookup` (project → account, category → self),
   `master_detail` (task → project), self-referencing **hierarchy/tree**
   (`Category.parent`), and **many-to-many** via the
   `showcase_project_membership` junction.
 - **Formulas, validations, and a status state machine** on `Project` and
-  `Task`.
+  `Task` — only the rule types the runtime actually **enforces** are
+  demonstrated (the unenforced ones are tracked in #1475, not faked here).
+- **An object extension** (`src/data/extensions/account.extension.ts`) merged
+  additively into `showcase_account` at registration — the package-extends-
+  an-object mechanism.
+- **An analytics cube** (`src/data/analytics/showcase.cube.ts`) served by the
+  analytics service at `/api/v1/analytics/*`.
 
 ### View layer (ObjectUI)
-- **All 8 list-view types** on a single object (`src/views/task.view.ts`):
+- **All 8 list-view types** on a single object (`src/ui/views/task.view.ts`):
   grid, kanban, gallery, calendar, timeline, gantt, map, chart. The Task object's
   fields are chosen so one object can back every type.
 - **All 5 form-view types**: simple, tabbed, wizard, split, drawer.
-- **The full chart taxonomy** — `src/dashboards/chart-gallery.dashboard.ts`
+- **The full chart taxonomy** — `src/ui/dashboards/chart-gallery.dashboard.ts`
   has one widget per chart family (all 38 `ChartType`s).
-- **All 4 report types**: tabular, summary, matrix, joined
-  (`src/reports/index.ts`).
+- **Every analytics report type**: summary, matrix, joined
+  (`src/ui/reports/index.ts`) — a flat *tabular* list is deliberately an
+  object-bound ListView lens, not a report (ADR-0021).
 - **The action matrix** — every `ActionType` (script/url/flow/modal/api/form)
   across every `ActionLocation`.
-- **A component-gallery page** placing the standard page components.
+- **Four page-authoring models** — structured (full/slotted), constrained-JSX
+  `html`, and executed `react`, taught by the **Page Authoring** index page.
 
 ### Capability chains (the "complex abilities")
 - **Security** (`src/security/index.ts`): a role hierarchy + a permission set
@@ -73,68 +81,105 @@ pnpm verify
   and an org **policy**.
 - **Automation**: a record-triggered flow → a screen-flow wizard → a multi-step
   **approval** → an outbound **webhook** → a scheduled **job** → an **email**
-  template.
-- **AI**: an **agent** wired to a **tool** and a **skill**.
+  template, plus live REST/Slack **connector actions**.
 - **i18n / theming / portals**: `en` + `zh-CN` translations, light + dark
   themes, and an external client portal.
 
+> **Where is AI?** Deliberately absent. Agents are platform-owned (ADR-0063 —
+> third parties author skills/tools, never agents), and the open framework
+> exposes AI via `@objectstack/mcp` only. Rather than fake a demo, the
+> coverage manifest **waives** `agent`/`tool`/`skill` with tracking issue
+> [#2610](https://github.com/objectstack-ai/framework/issues/2610).
+
 ## The coverage manifest — how "confirm" works
 
-`src/coverage.ts` declares what the showcase is supposed to cover and provides
-the collectors the test uses. `test/coverage.test.ts` then **introspects the
-protocol's own enums** (`FieldType`, `ChartTypeSchema`, `ReportType`,
-`ActionType`, `ACTION_LOCATIONS`) and asserts every member appears at least
-once across the registered metadata.
+`src/coverage.ts` declares what the showcase is supposed to cover at **two
+levels**, and `test/coverage.test.ts` proves both:
+
+- **Kind level** — `KIND_COVERAGE` enumerates every metadata kind in
+  `DEFAULT_METADATA_TYPE_REGISTRY`. Each kind is either `demonstrated`
+  (pointing at the proof files, which must exist) or explicitly `waived`
+  (with a reason **and a tracking-issue link**). A new registry kind fails CI
+  until it is accounted for; nothing can silently go missing. The same
+  contract covers stack collections that aren't registry kinds
+  (`STACK_COLLECTION_COVERAGE`: analyticsCubes, objectExtensions, and the
+  waived mappings/connectors).
+- **Variant level** — the test **introspects the protocol's own enums**
+  (`FieldType`, `ChartTypeSchema`, `ReportType`, `ActionType`,
+  `ACTION_LOCATIONS`) and asserts every member appears at least once across
+  the registered metadata.
 
 Because the expected sets come from the **spec** — not a hand-maintained list —
-the test fails automatically when the platform gains a new field type, chart
-type, or report type that the showcase hasn't demonstrated yet. That keeps this
-example a **living conformance fixture**, not a static snapshot. (`defineStack`
-itself also runs full schema + cross-reference validation when the config is
-imported, so `pnpm test` proves the whole stack loads cleanly.)
+the tests fail automatically when the platform gains a new kind, field type,
+chart type, or report type that the showcase hasn't demonstrated yet. That
+keeps this example a **living conformance fixture**, not a static snapshot.
+(`defineStack` itself also runs full schema + cross-reference validation when
+the config is imported, so `pnpm test` proves the whole stack loads cleanly.)
+
+The waiver policy is Prime Directive #10 in action: a capability the runtime
+doesn't deliver is **never demoed** — it is waived, loudly, with an issue.
+
+## Guided tour & capability map
+
+The app's landing page is the **Capability Map** (`src/ui/pages/
+capability-map.page.ts`) — one card per protocol domain linking the flagship
+demos. Five **tour docs** (`src/docs/showcase_tour_*.md`) walk each domain,
+with live ` ```metadata ` embeds (ADR-0051) rendered from the running
+metadata; the **Showcase Manual** book curates them into a Guided Tour group,
+served publicly via the library portal.
 
 ## Directory layout
+
+`src/` mirrors the six protocol domains of the metadata registry
+(`DEFAULT_METADATA_TYPE_REGISTRY`), with per-type directories inside each:
 
 ```
 app-showcase/
 ├── objectstack.config.ts        # defineStack — registers everything
 ├── src/
-│   ├── coverage.ts              # coverage manifest + collectors (the soul)
-│   ├── objects/                 # field-zoo + backbone + junction + tree
-│   ├── views/                   # all 8 list types + all 5 form types
-│   ├── dashboards/              # chart gallery (all 38 chart types)
-│   ├── reports/                 # tabular / summary / matrix / joined
-│   ├── actions/                 # type × location matrix
-│   ├── pages/                   # component gallery
-│   ├── apps/                    # navigation linking every surface
-│   ├── security/                # roles + FLS + RLS + sharing + policy
-│   ├── flows/ approvals/ webhooks/ jobs/ emails/   # automation chain
-│   ├── agents/                  # agent + tool + skill
-│   ├── themes/ translations/ datasources/ portals/
-│   └── data/                    # seed data sized to feed every view
+│   ├── coverage.ts              # coverage manifest (PINNED here: package export)
+│   ├── docs/                    # doc metadata (PINNED here & flat: CLI contract, ADR-0046)
+│   ├── data/                    # ── data domain ──
+│   │   ├── objects/             #   field-zoo + backbone + junction + tree + federated
+│   │   ├── extensions/          #   object-extension overlay on showcase_account
+│   │   ├── analytics/           #   showcase_delivery cube
+│   │   ├── hooks/  seed/        #   lifecycle hooks · seed data sized to feed every view
+│   ├── ui/                      # ── ui domain ──
+│   │   ├── apps/  views/  pages/  dashboards/  datasets/  reports/  actions/
+│   │   └── themes/  portals/
+│   ├── automation/              # ── automation domain ──
+│   │   └── flows/  jobs/  webhooks/
+│   ├── system/                  # ── system domain ──
+│   │   └── datasources/  emails/  translations/  books/  server/
+│   └── security/                # ── security domain: roles + FLS + RLS + sharing
 └── test/
-    ├── coverage.test.ts         # introspects spec enums, asserts coverage
+    ├── coverage.test.ts         # registry kinds + spec enums, asserted
+    ├── gap-fill.test.ts         # cube shape + extension merge (real registry)
     └── seed.test.ts             # stack-loads + breadth smoke test
 ```
+
+(The AI domain has no `src/ai/` on purpose — see the waiver note above.)
 
 ## Extending it
 
 When you add a new variant to the platform, the coverage test will go red and
 point at the gap. Add a field/view/widget that uses it, reference it in
-`COVERAGE`, and the test goes green again.
+`COVERAGE`, and the test goes green again. When you add a new **metadata
+kind**, the kind-level test goes red instead: demonstrate it under the right
+domain directory, or waive it with a reason + issue in `KIND_COVERAGE`.
 
 ## External datasource federation (ADR-0015)
 
 The showcase ships a **code-defined external datasource** that demonstrates the
 full federation path with **no external server** — `os dev` just works.
 
-- `src/datasources/showcase-external.datasource.ts` — a second, read-only SQLite
+- `src/system/datasources/showcase-external.datasource.ts` — a second, read-only SQLite
   database (`schemaMode: 'external'`), separate from the managed standalone DB.
-- `src/objects/external/{customer,order}.object.ts` — federated objects
+- `src/data/objects/external/{customer,order}.object.ts` — federated objects
   (`showcase_ext_customer`, `showcase_ext_order`) bound to the remote tables
   `customers` / `orders` via `external.remoteName`. The object names deliberately
   differ from the table names to show the remote-table remap.
-- `src/datasources/external-fixture.ts` — the stack's `onEnable` hook. It
+- `src/system/datasources/external-fixture.ts` — the stack's `onEnable` hook. It
   idempotently provisions the fixture SQLite file (tables + seed rows), registers
   a live read-only driver under the datasource name, and registers the federated
   objects' read metadata.

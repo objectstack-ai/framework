@@ -1,356 +1,93 @@
 # ObjectStack Examples Catalog
 
-> **Comprehensive examples demonstrating all ObjectStack protocols and features**
+> In-repo examples, organized by what you want to learn. Each one compiles,
+> boots, and is exercised by CI (`pnpm --filter <pkg> verify` / `test`).
 
-Welcome to the ObjectStack examples catalog! This directory contains carefully crafted examples organized by complexity and use case to help you get started quickly and learn the platform effectively.
+## The examples
 
-## 📚 Quick Navigation
+| Example | Level | What it is |
+|---------|-------|------------|
+| [App Todo](./app-todo/) | 🟢 Beginner | A complete but small task-management app — the fastest way to learn the by-type conventions (objects, actions, dashboards, reports, flows, i18n). |
+| [App CRM](./app-crm/) | 🟡 Intermediate | A deliberately minimal CRM that smoke-tests the metadata application loading pipeline (Account/Contact/Lead/Opportunity + cube, mapping, connector, extension, portal). Not a feature showcase. |
+| [App Showcase](./app-showcase/) | 🟣 Reference | The **kitchen-sink conformance fixture** — `src/` mirrors the six protocol domains; every metadata kind in the registry is demonstrated or explicitly waived, every field/view/chart/report/action variant appears at least once, and the coverage test enforces it. Start at its Capability Map landing page. |
+| [Embed ObjectQL](./embed-objectql/) | 🟢 Focused | Using the ObjectQL data engine as a plain library — no kernel, no plugins (ADR-0076). |
+| [HotCRM](https://github.com/objectstack-ai/hotcrm) | 🔴 Production reference | Full enterprise CRM in its own repository (10+ objects, sharing rules, approval flows, multi-driver E2E). |
 
-### By Learning Path
+**Note:** in-repo examples are intentionally lean; production-grade reference
+apps (HotCRM, …) live in dedicated repositories under the
+[objectstack-ai org](https://github.com/objectstack-ai).
 
-| Level | Examples | Description |
-|-------|----------|-------------|
-| 🟢 **Beginner** | [App Todo](#app-todo), [Plugin BI](#plugin-bi) | Start here - simple, focused examples |
-| 🟡 **Intermediate** | [HotCRM](https://github.com/objectstack-ai/hotcrm) | Real-world enterprise application (separate repo) |
-| 🟣 **Reference** | [App Showcase](./app-showcase/) | Kitchen-sink — **every** metadata type, view type, and chart type, plus a coverage test |
-| 🔴 **Advanced** | [Server](../apps/objectos/) | Server hosting & plugin orchestration |
+## Which example demonstrates what?
 
-### By Protocol Category
+The authoritative, CI-enforced answer is the showcase's coverage manifest:
+[`app-showcase/src/coverage.ts`](./app-showcase/src/coverage.ts). It maps
+**every metadata kind** in `DEFAULT_METADATA_TYPE_REGISTRY` to the files that
+demonstrate it — or to an explicit waiver with a reason and tracking issue
+(e.g. AI agent/tool/skill are waived per ADR-0063, not faked). The test suite
+fails whenever the platform gains a capability no example demonstrates.
 
-| Protocol | Examples | Status |
-|----------|----------|--------|
-| **Data (ObjectQL)** | [App Todo](./app-todo/), [HotCRM](https://github.com/objectstack-ai/hotcrm) | ✅ Complete |
-| **UI (ObjectUI)** | [App Todo](./app-todo/), [HotCRM](https://github.com/objectstack-ai/hotcrm) | ✅ Complete |
-| **System (ObjectOS)** | [HotCRM](https://github.com/objectstack-ai/hotcrm) | ✅ Complete |
-| **Automation** | [App Todo](./app-todo/), [HotCRM](https://github.com/objectstack-ai/hotcrm) | ✅ Complete |
-| **API** | [HotCRM](https://github.com/objectstack-ai/hotcrm) | ✅ Complete |
-| **BI / Analytics** | [Plugin BI](./plugin-bi/) | 🔴 Stub |
-| **Hub & Marketplace** | _Coming soon_ | 🔴 Planned |
-
-## 🎯 Example Descriptions
-
-### App Todo
-**Path:** [`examples/app-todo/`](./app-todo/)  
-**Level:** 🟢 Beginner  
-**Protocols:** Data, UI, Automation  
-
-A complete task management application demonstrating all core ObjectStack protocols using the by-type directory convention.
-
-**What you'll learn:**
-- Object definitions with validations and workflows
-- Actions (complete, defer, clone, bulk operations)
-- Dashboards with 10 widgets (metrics, charts, tables)
-- Reports (6 types: tabular, summary, matrix)
-- Automation flows (reminders, escalation, recurring tasks)
-- App navigation and branding configuration
-- **I18n translations** (English, Chinese, Japanese)
-- Package structure with `objectstack.config.ts`
-
-**Directory Structure:**
-```
-app-todo/
-├── objectstack.config.ts      # Main manifest (defineStack)
-├── src/
-│   ├── objects/                # Object & hook definitions
-│   │   ├── task.object.ts
-│   │   └── task.hook.ts
-│   ├── actions/                # Action definitions
-│   │   └── task.actions.ts
-│   ├── apps/                   # App navigation
-│   │   └── todo.app.ts
-│   ├── dashboards/             # Dashboard widgets
-│   │   └── task.dashboard.ts
-│   ├── reports/                # Report definitions
-│   │   └── task.report.ts
-│   ├── flows/                  # Automation flows
-│   │   └── task.flow.ts
-│   └── translations/           # I18n translations (en, zh-CN, ja-JP)
-│       └── todo.translation.ts
-└── test/
-    └── seed.test.ts
-```
-
-**Quick Start:**
-```bash
-cd examples/app-todo
-pnpm install
-pnpm typecheck
-```
-
----
-
-### App Showcase
-**Path:** [`examples/app-showcase/`](./app-showcase/)
-**Level:** 🟣 Reference
-**Protocols:** Data, UI, System, Automation, AI, Auth
-
-A **kitchen-sink** workspace built for demonstration, debugging, and
-coverage-driven verification. It pairs a realistic project-delivery domain
-with synthetic "gallery" objects that exhaust protocol variants, and ties them
-together with a coverage manifest that the test suite checks against the
-protocol's own Zod enums.
-
-**What's included:**
-- **All 49 field types** (`src/objects/field-zoo.object.ts`) + every relationship kind (lookup, master-detail, self-referencing tree, many-to-many junction)
-- **All 8 list-view types** on one object (grid, kanban, gallery, calendar, timeline, gantt, map, chart) + all 5 form types
-- **All 38 chart types** in one dashboard + all 4 report types (tabular/summary/matrix/joined)
-- The action **type × location** matrix and a component-gallery page
-- Capability chains: security (RBAC + FLS + RLS + sharing + policy), automation (flow → approval → webhook → job → email), and AI (agent + tool + skill)
-- A **coverage test** that introspects the spec enums and fails when a new variant is left uncovered
+For a guided walkthrough, boot the showcase and follow its per-domain tour:
 
 ```bash
 cd examples/app-showcase
-pnpm verify    # typecheck + coverage test
-pnpm dev       # → http://localhost:3000/_studio
+pnpm dev            # → http://localhost:3000 — landing = Capability Map
+pnpm verify         # validate + typecheck + coverage tests
 ```
 
----
-
-### App CRM (external)
-**Repo:** [github.com/objectstack-ai/hotcrm](https://github.com/objectstack-ai/hotcrm)
-**Level:** 🟡 Intermediate
-**Protocols:** Data, UI, Automation, AI
-
-**Full-featured CRM** demonstrating enterprise-grade patterns and all major field types. The CRM example has been extracted into its own repository (HotCRM) so it can evolve independently of the framework. Clone it side-by-side to follow along with the docs:
+## Getting started
 
 ```bash
-git clone https://github.com/objectstack-ai/hotcrm.git
-cd hotcrm
+# From the repo root
 pnpm install
-pnpm dev
+pnpm setup                      # first-time: install + build spec
+
+# Beginner path
+cd examples/app-todo && pnpm typecheck
+
+# Reference path
+cd examples/app-showcase && pnpm verify && pnpm dev
 ```
 
-**What's included:**
-- 12 interconnected objects (Account, Contact, Opportunity, Lead, Case, Task, Campaign, Contract, Product, Quote)
-- All 28 field types demonstrated
-- Multiple view types (Grid, Kanban, Calendar, Gantt)
-- Validation rules and workflows
-- 3 dashboards (Executive, Sales, Service) plus a unified CRM overview
-- 6 reports (by account, contact, lead, opportunity, case, task)
-- 5 automation flows (lead conversion, case escalation, opportunity approval, etc.)
-- AI agents and RAG pipelines
-- Sharing rules, profiles, and role hierarchy
-- **I18n translations** (English, Chinese, Japanese, Spanish)
-- Multi-driver E2E acceptance harness (sqlite / mongodb / postgres)
+### Learning path
 
----
+1. **App Todo** — structure, conventions, `objectstack.config.ts`.
+2. **App Showcase** — click through the Capability Map; read the Guided Tour
+   docs (one per protocol domain); grep the file the coverage manifest points
+   at whenever you wonder "how do I author X?".
+3. **App CRM / HotCRM** — realistic relational modeling and enterprise
+   patterns.
 
-**Note:** Each example app in the framework monorepo is intentionally minimal. Production-grade reference apps (HotCRM, …) live in dedicated repositories under the [objectstack-ai org](https://github.com/objectstack-ai).
+## Example standards
 
----
+- ✅ **Type-safe** — passes `typecheck`; Zod-first, types inferred.
+- ✅ **Named right** — `camelCase` config keys, `snake_case` machine names.
+- ✅ **Verified** — `pnpm --filter <pkg> verify` must pass after any metadata
+  edit (metadata errors fail silently at runtime; see [AGENTS.md](./AGENTS.md)).
+- ✅ **Honest** — never demo a capability the runtime doesn't deliver
+  (Prime Directive #10); waive it with an issue instead.
 
-### Plugin BI
-**Path:** [`examples/plugin-bi/`](./plugin-bi/)  
-**Level:** 🟢 Beginner  
-**Protocols:** Data, UI (Dashboards)  
+### File structure
 
-**BI Plugin stub** demonstrating how to create an ObjectStack plugin that provides analytics objects and dashboards. Currently a placeholder for adding business intelligence capabilities.
+Small examples use the flat by-type convention (`src/objects/`,
+`src/actions/`, …— see app-todo). The showcase, being domain-complete, groups
+the same per-type directories under the six protocol domains
+(`src/data/`, `src/ui/`, `src/automation/`, `src/system/`, `src/security/`) —
+see its README for the full tree and the two pinned exceptions
+(`src/coverage.ts`, flat `src/docs/`).
 
-**What you'll learn:**
-- Plugin manifest structure (`type: 'plugin'`)
-- Extending an app with analytics objects
-- Dashboard widget definitions
+## Contributing examples
 
-**Directory Structure:**
-```
-plugin-bi/
-├── objectstack.config.ts  # Plugin manifest (defineStack)
-└── package.json
-```
+1. Follow the standards above and fill a real gap.
+2. Add a README with purpose, quick start, and what it demonstrates.
+3. If you demonstrate a previously-waived capability, flip its entry in the
+   showcase coverage manifest.
+4. Submit a PR — see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Quick Start:**
-```bash
-cd examples/plugin-bi
-pnpm install
-pnpm typecheck
-```
+## Additional resources
 
----
+- **[Main Documentation](../content/docs/)** — complete protocol reference
+- **[examples/AGENTS.md](./AGENTS.md)** — agent rules for editing examples
 
-## 🗺️ Protocol Coverage Map
+## License
 
-### Data Protocol (ObjectQL)
-| Protocol | Example | Location |
-|----------|---------|----------|
-| Object Definition | ✅ Complete | [Todo Objects](./app-todo/src/objects/), [HotCRM Objects](https://github.com/objectstack-ai/hotcrm/tree/main/src/objects) |
-| Field Types (28 types) | ✅ Complete | [HotCRM Account](https://github.com/objectstack-ai/hotcrm/blob/main/src/objects/account.object.ts) |
-| Validation Rules | ✅ Complete | [Todo](./app-todo/src/objects/task.object.ts), [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| Relationships | ✅ Complete | [HotCRM Contact](https://github.com/objectstack-ai/hotcrm/blob/main/src/objects/contact.object.ts) |
-| Formulas | ✅ Complete | [HotCRM Account](https://github.com/objectstack-ai/hotcrm/blob/main/src/objects/account.object.ts) |
-| Hooks | ✅ Complete | [Todo Hooks](./app-todo/src/objects/task.hook.ts), [HotCRM Hooks](https://github.com/objectstack-ai/hotcrm/tree/main/src/objects) |
-| State Machines | ✅ Complete | [HotCRM Lead State](https://github.com/objectstack-ai/hotcrm/blob/main/src/objects/lead.state.ts) |
-| Query & Filters | ✅ Complete | [Todo](./app-todo/), [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| Document Storage | 🔴 Missing | _Planned_ |
-
-### UI Protocol (ObjectUI)
-| Protocol | Example | Location |
-|----------|---------|----------|
-| List Views | ✅ Complete | [HotCRM](https://github.com/objectstack-ai/hotcrm) - Grid, Kanban, Calendar, Gantt |
-| Form Views | ✅ Complete | [HotCRM](https://github.com/objectstack-ai/hotcrm) - Simple, Tabbed, Wizard |
-| Actions | ✅ Complete | [Todo Actions](./app-todo/src/actions/), [HotCRM Actions](https://github.com/objectstack-ai/hotcrm/tree/main/src/actions) |
-| Dashboards | ✅ Complete | [Todo Dashboard](./app-todo/src/dashboards/), [HotCRM Dashboards](https://github.com/objectstack-ai/hotcrm/tree/main/src/dashboards) |
-| Reports | ✅ Complete | [Todo Reports](./app-todo/src/reports/), [HotCRM Reports](https://github.com/objectstack-ai/hotcrm/tree/main/src/reports) |
-| Apps | ✅ Complete | [Todo App](./app-todo/src/apps/todo.app.ts), [HotCRM App](https://github.com/objectstack-ai/hotcrm/blob/main/src/apps/crm.app.ts) |
-| Charts | ✅ Complete | [HotCRM Dashboards](https://github.com/objectstack-ai/hotcrm/tree/main/src/dashboards) |
-| Widgets | ✅ Complete | [Todo Dashboard](./app-todo/src/dashboards/task.dashboard.ts) |
-| Components | 🔴 Missing | _Planned_ |
-
-### System Protocol (ObjectOS)
-| Protocol | Example | Location |
-|----------|---------|----------|
-| Manifest | ✅ Complete | All examples with `objectstack.config.ts` |
-| Plugin System | ✅ Complete | [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| Preview Mode | ✅ Complete | [HotCRM](https://github.com/objectstack-ai/hotcrm) — `OS_MODE=preview` |
-| Datasources | 🟡 Partial | [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| I18n / Translations | ✅ Complete | [Todo Translations](./app-todo/src/translations/), [HotCRM Translations](https://github.com/objectstack-ai/hotcrm/tree/main/src/translations) |
-| Job Scheduling | 🔴 Missing | _Planned_ |
-| Metrics | 🔴 Missing | _Planned_ |
-
-### AI Protocol
-| Protocol | Example | Location |
-|----------|---------|----------|
-| Agent | ✅ Complete | [HotCRM Agents](https://github.com/objectstack-ai/hotcrm/tree/main/src/agents) |
-| RAG Pipeline | ✅ Complete | [HotCRM RAG](https://github.com/objectstack-ai/hotcrm/tree/main/src/rag) |
-| Model Registry | ✅ Complete | _Spec Only_ |
-
-### Automation Protocol
-| Protocol | Example | Location |
-|----------|---------|----------|
-| Workflow Rules | ✅ Complete | [Todo](./app-todo/src/objects/task.object.ts), [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| Flow (Visual) | ✅ Complete | [Todo Flows](./app-todo/src/flows/), [HotCRM Flows](https://github.com/objectstack-ai/hotcrm/tree/main/src/flows) |
-| Approval Processes | ✅ Complete | [HotCRM Opportunity Approval](https://github.com/objectstack-ai/hotcrm/blob/main/src/flows/opportunity-approval.flow.ts) |
-| Triggers | ✅ Complete | [Todo](./app-todo/), [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-
-### Auth & Permissions
-| Protocol | Example | Location |
-|----------|---------|----------|
-| Profiles | ✅ Complete | [HotCRM Profiles](https://github.com/objectstack-ai/hotcrm/tree/main/src/profiles) |
-| Sharing Rules | ✅ Complete | [HotCRM Sharing](https://github.com/objectstack-ai/hotcrm/tree/main/src/sharing) |
-| RBAC | 🟡 Partial | [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-
-### API Protocol
-| Protocol | Example | Location |
-|----------|---------|----------|
-| REST Server | ✅ Complete | [HotCRM](https://github.com/objectstack-ai/hotcrm) |
-| Custom APIs | ✅ Complete | [HotCRM APIs](https://github.com/objectstack-ai/hotcrm/tree/main/src/apis) |
-| GraphQL | 🔴 Missing | _Planned_ |
-| WebSocket/Realtime | 🔴 Missing | _Planned_ |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-```bash
-# Ensure you have Node.js 18+ and pnpm installed
-node --version  # >= 18.0.0
-pnpm --version  # >= 8.0.0
-```
-
-### Quick Start
-```bash
-# 1. Clone and install
-git clone https://github.com/objectstack-ai/spec.git
-cd spec
-pnpm install
-
-# 2. Build the spec package
-pnpm --filter @objectstack/spec build
-
-# 3. Explore examples
-cd examples/app-todo
-pnpm typecheck
-
-# 4. Or explore the CRM (separate repository)
-git clone https://github.com/objectstack-ai/hotcrm.git
-cd hotcrm && pnpm install && pnpm build
-```
-
-### Learning Path
-
-#### Path 1: Quick Start (1-2 hours)
-1. Read [Todo Example](./app-todo/) - Understand basic structure and conventions
-2. Explore [Todo objectstack.config.ts](./app-todo/objectstack.config.ts) - See manifest patterns
-3. Browse [HotCRM](https://github.com/objectstack-ai/hotcrm) - Learn advanced features
-
-#### Path 2: Deep Dive (1-2 days)
-1. Complete Path 1
-2. Study [HotCRM Objects](https://github.com/objectstack-ai/hotcrm/tree/main/src/objects) - Master field types and relationships
-3. Review [HotCRM Flows](https://github.com/objectstack-ai/hotcrm/tree/main/src/flows) - Understand automation patterns
-
----
-
-## 📝 Example Standards
-
-All examples in this directory follow these standards:
-
-### Code Quality
-- ✅ **Type-safe**: All examples use TypeScript and pass `typecheck`
-- ✅ **Zod-first**: Schemas defined with Zod, types inferred
-- ✅ **Naming conventions**: `camelCase` for config, `snake_case` for data
-- ✅ **Documented**: Comprehensive inline comments
-- ✅ **Best practices**: Follow ObjectStack conventions
-
-### File Structure (By-Type Convention)
-```
-example-name/
-├── README.md              # Comprehensive documentation
-├── package.json           # Package definition
-├── tsconfig.json          # TypeScript config
-├── objectstack.config.ts  # Main manifest (defineStack)
-├── src/
-│   ├── objects/           # *.object.ts, *.hook.ts, *.state.ts
-│   ├── actions/           # *.actions.ts
-│   ├── apps/              # *.app.ts
-│   ├── dashboards/        # *.dashboard.ts
-│   ├── reports/           # *.report.ts
-│   ├── flows/             # *.flow.ts
-│   └── translations/      # *.translation.ts (i18n bundles)
-└── test/
-    └── seed.test.ts
-```
-
-### Documentation Requirements
-Each example MUST have:
-- Clear purpose statement
-- Prerequisites and dependencies
-- Quick start instructions
-- Protocol coverage explanation
-- Key concepts highlighted
-- Related examples linked
-
----
-
-## 🤝 Contributing Examples
-
-Want to add an example? Great! Please ensure:
-
-1. **Follow the standards** above
-2. **Fill a gap** in protocol coverage
-3. **Add documentation** (README.md)
-4. **Test thoroughly** (must compile and run)
-5. **Submit PR** with clear description
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
-
----
-
-## 📚 Additional Resources
-
-- **[Main Documentation](../content/docs/)** - Complete protocol reference
-- **[Architecture Guide](../ARCHITECTURE.md)** - System architecture
-- **[Quick Reference](../QUICK-REFERENCE.md)** - Fast lookup
-- **[Package Dependencies](../PACKAGE-DEPENDENCIES.md)** - Build order
-
----
-
-## 📄 License
-
-All examples are licensed under Apache 2.0. See [LICENSE](../LICENSE) for details.
-
----
-
-**Last Updated:** 2026-02-12
-**Protocol Version:** 3.0.0
-**Total Examples:** 2 in-repo (app-todo, plugin-bi) + 1 external ([HotCRM](https://github.com/objectstack-ai/hotcrm))
-**Directory Convention:** By-Type (Salesforce DX style)
+All examples are licensed under Apache 2.0. See [LICENSE](../LICENSE).

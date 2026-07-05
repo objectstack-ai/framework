@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ShowcaseExternalDatasource } from '../src/datasources/showcase-external.datasource.js';
-import { ExternalCustomer, ExternalOrder } from '../src/objects/external/index.js';
+import { ShowcaseExternalDatasource } from '../src/system/datasources/showcase-external.datasource.js';
+import { ExternalCustomer, ExternalOrder } from '../src/data/objects/external/index.js';
 
 describe('showcase external datasource (ADR-0015 federation)', () => {
   it('is an external, read-only datasource that degrades gracefully', () => {

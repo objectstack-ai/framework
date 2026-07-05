@@ -1,6 +1,6 @@
 ---
 title: Live Metadata Views in Docs
-description: Embed live, read-only views of state machines, flows, and permissions directly in the prose.
+description: How to embed live, read-only views of state machines, flows, and permissions directly in the prose.
 ---
 
 # Live Metadata Views in Docs
@@ -11,16 +11,33 @@ ever shows *their own slice* of the system. It never shows the whole shape of a
 process, the full set of legal state transitions, or who can do what across an
 object.
 
-This page embeds those **live, read-only views** straight into the prose with a
-` ```metadata ` fenced block. Each view is **resolved at read time** from the
-current metadata — change the underlying state machine and the diagram below
-changes with it. Nothing here is a screenshot (ADR-0051).
+A ` ```metadata ` fenced block embeds that **live, read-only view** straight
+into the prose. Each view is **resolved at read time** from the current
+metadata — change the underlying rule and the diagram changes with it. Nothing
+is a screenshot (ADR-0051).
 
-## A record lifecycle — state machine
+## The mechanism
 
-A Task moves across a board. Which moves are legal is governed by the
-`task_status_flow` state machine on the `showcase_task` object. Here it is,
-rendered live from that rule:
+A fence body is flat `key: value` data (not code):
+
+```md
+&#96;&#96;&#96;metadata
+type: state_machine     # one of: state_machine · flow · permission
+object: showcase_task   # state_machine only — the rule lives on an object
+name: task_status_flow  # the metadata name; linted for liveness at build
+detail: business        # flow only — fold technical nodes away
+&#96;&#96;&#96;
+```
+
+Two guarantees keep embeds honest:
+
+- **Build-time liveness lint** — a dead same-package reference (typo'd name,
+  deleted rule) fails `os build`, exactly like a broken doc link.
+- **Read-time resolution** — the rendered view is projected from the metadata
+  the server is running *now*, never a stale copy.
+
+Here is one live sample — the `task_status_flow` state machine on
+`showcase_task`, the rule that governs which board moves are legal:
 
 ```metadata
 type: state_machine
@@ -28,37 +45,15 @@ object: showcase_task
 name: task_status_flow
 ```
 
-Projects have their own lifecycle, including terminal (dead-end) states:
+## Where the embeds live now
 
-```metadata
-type: state_machine
-object: showcase_project
-name: project_status_flow
-```
+The guided tour embeds each view type **in the context that explains it**:
 
-## A process — flow
+- state machines (task and the project lifecycle with terminal states) — in
+  the [Data tour](./showcase_tour_data.md)
+- a flow at business altitude — in the
+  [Automation tour](./showcase_tour_automation.md)
+- a permission access-matrix — in the
+  [Security tour](./showcase_tour_security.md)
 
-The reassignment wizard, shown at the **business altitude** — purely technical
-steps (scripts, record I/O) are folded away so the reader sees the process, not
-the plumbing:
-
-```metadata
-type: flow
-name: showcase_reassign_wizard
-detail: business
-```
-
-## Who can do what — permission
-
-The `showcase_contributor` permission set, as an object-access matrix:
-
-```metadata
-type: permission
-name: showcase_contributor
-```
-
----
-
-> These four views are not authored prose — they are the live metadata,
-> projected read-only into the document. See
-> [the showcase overview](./showcase_index.md) for the rest of the workspace.
+Back to the [overview](./showcase_index.md).

@@ -6,7 +6,7 @@ const task = 'showcase_task';
 
 // ADR-0021 Phase 2: the former `TaskListReport` (showcase_task_list) — a flat
 // record list — was converted to the `tabular` ListView on showcase_task
-// (src/views/task.view.ts). A flat list is an object-bound row lens (ADR-0017),
+// (src/ui/views/task.view.ts). A flat list is an object-bound row lens (ADR-0017),
 // not analytics, so it is no longer a report.
 
 /** 2 ── Summary: grouped down by status with a sum. */

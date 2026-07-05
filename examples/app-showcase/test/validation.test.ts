@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateValidationRules, ValidationError } from '@objectstack/objectql';
 
-import { Account } from '../src/objects/account.object.js';
+import { Account } from '../src/data/objects/account.object.js';
 
 /**
  * Verifies the Account object's declared validation rules actually enforce on

@@ -11,6 +11,7 @@ import { BusinessUnit } from '../objects/business-unit.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
 import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
 import { Contact } from '../objects/contact.object.js';
+import { Inquiry } from '../objects/inquiry.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
 
 /**
@@ -233,6 +234,19 @@ const invoiceLines = defineSeed(InvoiceLine, {
   ],
 });
 
+// Inquiries so the staff triage list (inquiry views + Contact Form page)
+// renders on first boot — the "every view renders real data" principle. One
+// per status; the `closed` row doubles as live prey for InquiryPurgeFlow.
+const inquiries = defineSeed(Inquiry, {
+  mode: 'upsert',
+  externalId: 'email',
+  records: [
+    { name: 'Priya Raman', email: 'priya@meridian.example', company: 'Meridian Labs', message: 'Interested in the delivery workspace for a 40-person team.', status: 'new', source: 'website' },
+    { name: 'Tom Okafor', email: 'tom@brightline.example', company: 'Brightline Co', message: 'Following up on the demo — can we scope an invoicing pilot?', status: 'contacted', source: 'referral' },
+    { name: 'Lena Fischer', email: 'lena@oldrequest.example', company: 'Archived GmbH', message: 'Old request, already resolved by support.', status: 'closed', source: 'website' },
+  ],
+});
+
 const preferences = defineSeed(Preference, {
   mode: 'upsert',
   externalId: 'name',
@@ -241,4 +255,4 @@ const preferences = defineSeed(Preference, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, contacts, products, projects, tasks, categories, businessUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];
+export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];

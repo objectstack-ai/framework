@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { actionBodyRunnerFactory, QuickJSScriptRunner } from '@objectstack/runtime';
 
-import { allActions, MarkDoneAction } from '../src/actions/index.js';
+import { allActions, MarkDoneAction } from '../src/ui/actions/index.js';
 
 /**
  * Execution-path coverage for declared actions.

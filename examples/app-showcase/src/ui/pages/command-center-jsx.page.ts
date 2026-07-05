@@ -13,6 +13,12 @@ import { definePage } from '@objectstack/spec/ui';
  * `<grid columns>`), and any custom CSS is a JSON `style` object with
  * `hsl(var(--token))` theme colors (quoted keys/values — a JS-style object is
  * parsed as a deferred expression and won't apply).
+ *
+ * The KPI numbers are STATIC SAMPLE COPY, and the page says so on screen —
+ * hand-authored html JSX carries no data bindings. Its data-bound twin
+ * (command-center.page.ts, kind:'full' with `object-metric`/`object-chart`)
+ * shows the same board with live numbers; together they demo the tier
+ * trade-off honestly.
  */
 export const CommandCenterJsxPage = definePage({
   name: 'showcase_command_center_jsx',
@@ -25,7 +31,7 @@ export const CommandCenterJsxPage = definePage({
   <flex direction="col" gap={2}>
     <div style={{"fontSize":"12px","fontWeight":"600","letterSpacing":"0.12em","textTransform":"uppercase","color":"hsl(var(--primary))"}}>Operations · HTML-source page</div>
     <div style={{"fontSize":"36px","fontWeight":"700","letterSpacing":"-0.02em","color":"hsl(var(--foreground))"}}>Command Center</div>
-    <div style={{"maxWidth":"640px","fontSize":"15px","lineHeight":"1.6","color":"hsl(var(--muted-foreground))"}}>Authored as constrained JSX and compiled to the SDUI tree — parsed, never executed. Layout is structured component props; color is an inline style object with theme tokens. No Tailwind.</div>
+    <div style={{"maxWidth":"640px","fontSize":"15px","lineHeight":"1.6","color":"hsl(var(--muted-foreground))"}}>Authored as constrained JSX and compiled to the SDUI tree — parsed, never executed. Layout is structured component props; color is an inline style object with theme tokens. No Tailwind. The KPI numbers are static sample copy — for the live, data-bound version of this board see Command Center (大屏) in Analytics.</div>
   </flex>
 
   <grid columns={4} gap={5}>

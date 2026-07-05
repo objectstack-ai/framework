@@ -1,21 +1,33 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { existsSync } from 'node:fs';
+
 import { describe, it, expect } from 'vitest';
+import { FlowNodeAction } from '@objectstack/spec/automation';
 import { FieldType } from '@objectstack/spec/data';
+import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import * as ui from '@objectstack/spec/ui';
 
-import * as objects from '../src/objects/index.js';
-import { TaskViews, ProjectViews } from '../src/views/index.js';
-import { ChartGalleryDashboard } from '../src/dashboards/index.js';
-import { allReports } from '../src/reports/index.js';
-import { allActions } from '../src/actions/index.js';
+import * as objects from '../src/data/objects/index.js';
+import { allFlows } from '../src/automation/flows/index.js';
+import { TaskViews, ProjectViews } from '../src/ui/views/index.js';
+import { ChartGalleryDashboard } from '../src/ui/dashboards/index.js';
+import { allReports } from '../src/ui/reports/index.js';
+import { allActions } from '../src/ui/actions/index.js';
 import {
+  KIND_COVERAGE,
+  STACK_COLLECTION_COVERAGE,
+  FLOW_NODE_WAIVERS,
   LIST_VIEW_TYPES,
   FORM_VIEW_TYPES,
   collectFieldTypes,
+  collectFlowNodeTypes,
   collectListViewTypes,
   collectFormViewTypes,
 } from '../src/coverage.js';
+
+// vitest runs with cwd = the package root (pnpm --filter executes there).
+const PACKAGE_ROOT = process.cwd();
 
 /** Read the string members of a Zod enum (or a plain array constant). */
 function enumValues(schema: unknown): string[] {
@@ -66,7 +78,7 @@ describe('showcase coverage (introspected against the spec)', () => {
     // ADR-0021 single-form: `tabular` (a flat record list) is intentionally NOT
     // demonstrated as a report — a flat list is an object-bound ListView lens
     // (ADR-0017), not an analytics projection, so the former TaskListReport now
-    // lives on showcase_task as a `tabular` ListView (see src/reports/index.ts).
+    // lives on showcase_task as a `tabular` ListView (see src/ui/reports/index.ts).
     const expected = enumValues((ui as Record<string, unknown>).ReportType ?? (ui as Record<string, unknown>).ReportTypeSchema)
       .filter((t) => t !== 'tabular');
     const used = new Set<string>();
@@ -75,6 +87,54 @@ describe('showcase coverage (introspected against the spec)', () => {
       for (const b of (r as { blocks?: Array<{ type?: string }> }).blocks ?? []) if (b.type) used.add(b.type);
     }
     expectFullCoverage('ReportType', expected, used);
+  });
+
+  describe('metadata kinds (introspected against DEFAULT_METADATA_TYPE_REGISTRY)', () => {
+    const registryKinds = DEFAULT_METADATA_TYPE_REGISTRY.map((e) => e.type);
+    const manifests = { KIND_COVERAGE, STACK_COLLECTION_COVERAGE } as const;
+
+    it('accounts for every kind in the registry — demonstrated or waived', () => {
+      const missing = registryKinds.filter((k) => !(k in KIND_COVERAGE));
+      expect(missing, `new registry kinds not yet in KIND_COVERAGE → ${missing.join(', ')}`).toEqual([]);
+    });
+
+    it('carries no entry the registry no longer knows', () => {
+      const stale = Object.keys(KIND_COVERAGE).filter((k) => !registryKinds.includes(k as never));
+      expect(stale, `stale KIND_COVERAGE entries → ${stale.join(', ')}`).toEqual([]);
+    });
+
+    for (const [manifestName, manifest] of Object.entries(manifests)) {
+      it(`${manifestName}: demonstrated entries point at files that exist`, () => {
+        for (const [kind, entry] of Object.entries(manifest)) {
+          if (entry.status !== 'demonstrated') continue;
+          expect(entry.files.length, `${kind}: demonstrated but lists no files`).toBeGreaterThan(0);
+          for (const file of entry.files) {
+            expect(existsSync(`${PACKAGE_ROOT}/${file}`), `${kind}: missing proof file ${file}`).toBe(true);
+          }
+        }
+      });
+
+      it(`${manifestName}: waived entries carry a reason and a GitHub issue link`, () => {
+        for (const [kind, entry] of Object.entries(manifest)) {
+          if (entry.status !== 'waived') continue;
+          expect(entry.reason.length, `${kind}: waiver without a substantive reason`).toBeGreaterThan(20);
+          expect(entry.issue, `${kind}: waiver must link the tracking issue`).toMatch(
+            /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/\d+$/,
+          );
+        }
+      });
+    }
+  });
+
+  it('covers every built-in flow node type — or waives it with a reason', () => {
+    const all = enumValues(FlowNodeAction);
+    // Every waiver must name a real enum member and carry a substantive reason.
+    for (const [type, reason] of Object.entries(FLOW_NODE_WAIVERS)) {
+      expect(all, `FLOW_NODE_WAIVERS names unknown node type '${type}'`).toContain(type);
+      expect(reason.length, `flow-node waiver '${type}' needs a substantive reason`).toBeGreaterThan(20);
+    }
+    const expected = all.filter((t) => !(t in FLOW_NODE_WAIVERS));
+    expectFullCoverage('FlowNodeAction', expected, collectFlowNodeTypes(allFlows as never));
   });
 
   it('covers every action type and location', () => {

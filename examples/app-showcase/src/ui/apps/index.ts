@@ -5,7 +5,9 @@ import { App } from '@objectstack/spec/ui';
 /**
  * Showcase app — navigation organized to TEACH page authoring.
  *
- * "Start Here" is the default landing: it explains the two axes every page has —
+ * "Capability Map" is the default landing (first nav item): one card per
+ * protocol domain, indexing every demo. "Page Authoring" (Start Here) is the
+ * page-authoring teaching index: it explains the two axes every page has —
  * `type` (the surface role) and `kind` (the authoring model) — and links to the
  * canonical example of each kind. The first three groups (Workspace / Data Model
  * / Analytics) are the app *working* like a real product. The "Authoring · *"
@@ -23,7 +25,10 @@ export const ShowcaseApp = App.create({
   branding: { primaryColor: '#7C3AED' },
 
   navigation: [
-    { id: 'nav_start_here', type: 'page', pageName: 'showcase_start_here', label: 'Start Here', icon: 'compass' },
+    // First item = the app's landing surface (the delivered convention; the
+    // spec's homePageId has no console consumer yet).
+    { id: 'nav_capability_map', type: 'page', pageName: 'showcase_capability_map', label: 'Capability Map', icon: 'map' },
+    { id: 'nav_start_here', type: 'page', pageName: 'showcase_start_here', label: 'Page Authoring', icon: 'compass' },
     {
       id: 'grp_workspace',
       type: 'group',
@@ -118,8 +123,7 @@ export const ShowcaseApp = App.create({
       children: [
         { id: 'nav_crm_workbench', type: 'page', pageName: 'showcase_crm_workbench', label: 'CRM Workbench · master/detail', icon: 'layout-dashboard' },
         { id: 'nav_task_desk', type: 'page', pageName: 'showcase_task_desk', label: 'Task Desk · drawer & modal', icon: 'panel-right-open' },
-        { id: 'nav_account_cockpit', type: 'page', pageName: 'showcase_account_cockpit', label: 'Account Cockpit · live rollup', icon: 'satellite' },
-        { id: 'nav_renewals_pipeline', type: 'page', pageName: 'showcase_renewals_pipeline', label: 'Renewals Pipeline · record blocks', icon: 'refresh-cw' },
+        { id: 'nav_renewals_pipeline', type: 'page', pageName: 'showcase_renewals_pipeline', label: 'Renewals Pipeline · rollups & blocks', icon: 'refresh-cw' },
       ],
     },
   ],
