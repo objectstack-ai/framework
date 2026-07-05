@@ -280,6 +280,53 @@ describe('NavigationItemSchema (Recursive)', () => {
 
     expect(() => NavigationItemSchema.parse(navItem)).not.toThrow();
   });
+
+  it('accepts a filters-only object item (bare data surface slice)', () => {
+    const item = {
+      id: 'nav_my_open',
+      label: 'My Open',
+      type: 'object' as const,
+      objectName: 'ticket',
+      filters: { owner_id: '{current_user_id}', status: 'open' },
+    };
+    expect(() => NavigationItemSchema.parse(item)).not.toThrow();
+  });
+
+  it('rejects filters combined with viewName (ambiguous landing)', () => {
+    const item = {
+      id: 'nav_bad',
+      label: 'Bad',
+      type: 'object' as const,
+      objectName: 'ticket',
+      viewName: 'by_status',
+      filters: { status: 'open' },
+    };
+    expect(() => NavigationItemSchema.parse(item)).toThrow();
+  });
+
+  it('rejects filters combined with recordId (ambiguous landing)', () => {
+    const item = {
+      id: 'nav_bad2',
+      label: 'Bad',
+      type: 'object' as const,
+      objectName: 'ticket',
+      recordId: '{current_user_id}',
+      filters: { status: 'open' },
+    };
+    expect(() => NavigationItemSchema.parse(item)).toThrow();
+  });
+
+  it('tolerates the legacy recordId + viewName combination (documented: viewName ignored)', () => {
+    const item = {
+      id: 'nav_legacy',
+      label: 'Legacy',
+      type: 'object' as const,
+      objectName: 'sys_user',
+      recordId: '{current_user_id}',
+      viewName: 'all',
+    };
+    expect(() => NavigationItemSchema.parse(item)).not.toThrow();
+  });
 });
 
 describe('AppSchema', () => {

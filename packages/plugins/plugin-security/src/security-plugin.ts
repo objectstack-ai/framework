@@ -10,6 +10,7 @@ import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js'
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { matchesFilterCondition } from '@objectstack/formula';
 import { FieldMasker } from './field-masker.js';
+import { assertReadableQueryFields } from './predicate-guard.js';
 import { PermissionDeniedError } from './errors.js';
 import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 import {
@@ -679,6 +680,23 @@ export class SecurityPlugin implements Plugin {
               { operation: opCtx.operation, object: opCtx.object, roles, permissionSets: explicitPermissionSets },
             );
           }
+        }
+      }
+
+      // 2.9. Field-level predicate guard (anti filter-oracle, objectui#2251).
+      // FieldMasker (step 4) only strips hidden fields from RESULTS — a
+      // caller could still probe a hidden field's value by filtering /
+      // sorting / grouping on it (row presence is the oracle; the objectui
+      // /data surface makes URL-driven predicates first-class). Reject such
+      // queries outright — silent predicate dropping would change query
+      // semantics unpredictably. MUST run against the CALLER's AST, before
+      // the RLS injection below: RLS policies legitimately reference fields
+      // the caller cannot read (e.g. owner_id).
+      if (opCtx.ast) {
+        let guardPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, permissionSets);
+        guardPerms = this.foldFieldRequiredPermissions(guardPerms, secMeta.fieldRequiredPermissions, permissionSets);
+        if (Object.keys(guardPerms).length > 0) {
+          assertReadableQueryFields(opCtx.ast as unknown as Record<string, unknown>, guardPerms, opCtx.object);
         }
       }
 
