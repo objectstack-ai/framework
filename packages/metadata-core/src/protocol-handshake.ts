@@ -106,6 +106,11 @@ function leadingMajor(token: string): number | null {
 export function rangeAdmitsMajor(range: string, runtimeMajor: number): boolean | null {
   const r = range.trim();
   if (r === '' ) return null;
+  // A real SemVer range is short. Bounding the length here defuses any
+  // pathological input before it reaches a regex (a manifest's `engines`
+  // string is externally authored, so treat it as untrusted): an overlong
+  // string is simply unrecognized (admit-with-warning), never a slow scan.
+  if (r.length > 128) return null;
   if (r === '*' || r === 'x' || r === 'latest') return true;
 
   // Compound comparator range, e.g. ">=11.0.0 <13.0.0" (space- or comma-joined).
@@ -120,11 +125,13 @@ export function rangeAdmitsMajor(range: string, runtimeMajor: number): boolean |
     return ok;
   }
 
-  // Hyphen range: "11.0.0 - 12.0.0".
-  const hyphen = r.match(/^(.+?)\s+-\s+(.+)$/);
-  if (hyphen) {
-    const lo = leadingMajor(hyphen[1]!);
-    const hi = leadingMajor(hyphen[2]!);
+  // Hyphen range: "11.0.0 - 12.0.0". Split on the whitespace-delimited hyphen
+  // (a fixed anchor between the two `\s+` runs — linear, no `.`-vs-`\s`
+  // backtracking) rather than a lazy `(.+?)…(.+)` match.
+  const hyphenParts = r.split(/\s+-\s+/);
+  if (hyphenParts.length === 2) {
+    const lo = leadingMajor(hyphenParts[0]!);
+    const hi = leadingMajor(hyphenParts[1]!);
     if (lo === null || hi === null) return null;
     return runtimeMajor >= lo && runtimeMajor <= hi;
   }
@@ -157,10 +164,21 @@ export function rangeAdmitsMajor(range: string, runtimeMajor: number): boolean |
 }
 
 function comparatorAdmitsMajor(comparator: string, runtimeMajor: number): boolean | null {
-  const m = comparator.match(/^(<=|>=|<|>)\s*(.+)$/);
-  if (!m) return null;
-  const op = m[1]!;
-  const bound = m[2]!.trim().replace(/^v/i, '');
+  // Peel the operator off by fixed prefix rather than a `\s*(.+)` match, whose
+  // whitespace/any-char overlap is a polynomial-ReDoS shape on untrusted input.
+  let op: string;
+  let rest: string;
+  if (comparator.startsWith('>=') || comparator.startsWith('<=')) {
+    op = comparator.slice(0, 2);
+    rest = comparator.slice(2);
+  } else if (comparator.startsWith('>') || comparator.startsWith('<')) {
+    op = comparator.slice(0, 1);
+    rest = comparator.slice(1);
+  } else {
+    return null;
+  }
+  const bound = rest.trim().replace(/^v/i, '');
+  if (bound === '') return null;
   const parts = bound.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/);
   if (!parts) return null;
   const maj = Number.parseInt(parts[1]!, 10);

@@ -63,6 +63,18 @@ describe('rangeAdmitsMajor', () => {
     expect(rangeAdmitsMajor('garbage', 11)).toBeNull();
     expect(rangeAdmitsMajor('workspace:*', 11)).toBeNull();
   });
+
+  it('bounds pathological input (ReDoS-safe) without a slow scan', () => {
+    // The engines string is externally authored; the comparator/hyphen parsing
+    // must not degrade on adversarial input (CodeQL alerts 837/838).
+    const overlong = '<' + '\t'.repeat(100_000);
+    const hyphenBomb = 'a\t-\t' + '\t'.repeat(100_000);
+    const start = performance.now();
+    expect(rangeAdmitsMajor(overlong, 11)).toBeNull();
+    expect(rangeAdmitsMajor(hyphenBomb, 11)).toBeNull();
+    expect(rangeAdmitsMajor('>=11.0.0 ' + ' '.repeat(100_000) + '<13.0.0', 11)).toBeNull();
+    expect(performance.now() - start).toBeLessThan(50);
+  });
 });
 
 describe('checkProtocolCompat', () => {
