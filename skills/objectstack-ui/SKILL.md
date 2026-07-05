@@ -434,6 +434,10 @@ export const CrmApp = App.create({
         { id: 'nav_opportunity', type: 'object', objectName: 'opportunity', label: 'Opportunities', icon: 'target' },
         // Open a specific named view instead of the object default:
         { id: 'nav_pipeline',    type: 'object', objectName: 'opportunity', viewName: 'pipeline_kanban', label: 'Sales Pipeline', icon: 'columns-3' },
+        // One-off parameterized slice — lands on the bare data surface
+        // (`/:objectName/data`, objectui ADR-0055) with removable URL filter
+        // chips, NOT anchored to a saved view. Don't author a view for these:
+        { id: 'nav_my_open',     type: 'object', objectName: 'opportunity', filters: { owner_id: '{current_user_id}', status: 'open' }, label: 'My Open Deals', icon: 'user-check' },
         { id: 'nav_dash',        type: 'dashboard', dashboardName: 'sales_dashboard', label: 'Sales Dashboard', icon: 'chart-bar' },
         { id: 'nav_report',      type: 'report',    reportName: 'opportunities_by_stage', label: 'Opps by Stage', icon: 'bar-chart-3' },
       ],
@@ -455,7 +459,7 @@ export const CrmApp = App.create({
 | Type | Properties | Purpose |
 |:-----|:-----------|:--------|
 | `group`     | `label`, `icon`, `expanded`, `children[]`     | Collapsible group of items |
-| `object`    | `objectName`, `viewName?`, `label`, `icon`    | Link to an object list (optionally a specific view) |
+| `object`    | `objectName`, `viewName?`, `recordId?`, `filters?`, `label`, `icon` | Link to an object list, a named view, a record deep-link, or a `filters` slice on the bare data surface. Target precedence: `recordId` → `filters` → `viewName` |
 | `dashboard` | `dashboardName`, `label`, `icon`              | Link to a dashboard |
 | `report`    | `reportName`, `label`, `icon`                 | Link to a report |
 | `page`      | `pageName`, `label`, `icon`                   | Link to a custom Page (`type: 'home' | 'app_launcher' | ...`) |
@@ -572,28 +576,41 @@ export const PipelineCoverageReport = defineReport({
 
 ---
 
-## Two Run Modes: Object Nav vs Interface Pages (ADR-0047)
+## Three Run Modes: Object Nav vs Filters Slice vs Interface Pages (ADR-0047 / objectui ADR-0055)
 
-Object list UI has **two run modes**, selected by the navigation item type:
+Object list UI has **three run modes**, selected by the navigation item shape:
 
-| | Data mode (`type: 'object'`) | Interface mode (`type: 'page'`) |
-|:--|:--|:--|
-| What renders | ALL list views as switcher tabs | One curated page referencing ONE view |
-| User-created views | Allowed | Never |
-| Quick filters | Auto-derived (or view `userFilters`) | Only what the author enabled |
-| Visualization | Switchable (whitelist) | Locked unless whitelisted |
+| | Data mode (`type: 'object'`) | Bare slice (`type: 'object'` + `filters`) | Interface mode (`type: 'page'`) |
+|:--|:--|:--|:--|
+| What renders | ALL list views as switcher tabs | The URL-defined slice, no saved-view tabs | One curated page referencing ONE view |
+| Anchored to | Saved views | **The URL itself** (`/:objectName/data?filter[...]`) | Page config |
+| User-created views | Allowed | "Save as view" exit only | Never |
+| Quick filters | Auto-derived (or view `userFilters`) | Auto-derived + removable URL chips | Only what the author enabled |
+| Visualization | Switchable (whitelist) | Switchable (URL filter state survives) | Locked unless whitelisted |
 
 **Decision rule — default to data mode.** Generate ONLY objects + list views +
-navigation pointing at objects. Generate an interface page ONLY on explicit
-signals in the requirement:
+navigation pointing at objects. Escalate only on explicit signals:
 
-- persona split ("sales reps see…", customer portal, 给业务部门的简化界面);
-- capability narrowing ("users must not change views", "only filter by X");
-- curation language (workspace / 工作台 / "Airtable interface-like").
+- **`filters` slice** — the entry is a one-off / parameterized condition
+  (dashboard drill-through, "assigned to me" link, a shared URL). Don't
+  author a view for it; a slice graduates to a named view only when it is
+  curated and reused. Values support `{current_user_id}` / `{current_org_id}`.
+  Never treat it as security: the surface shows what row-level permissions
+  allow. (Canonical rules: objectui `skills/objectui/guides/app-composition.md`
+  + `docs/adr/0055-parameterized-bare-data-surface.md`.)
+- **Interface page** — persona split ("sales reps see…", customer portal,
+  给业务部门的简化界面); capability narrowing ("users must not change views",
+  "only filter by X"); curation language (workspace / 工作台 / "Airtable
+  interface-like").
 
-Ambiguity resolves to **no page** — data mode is a functional superset; a
-missing page costs polish, a superfluous page is a permanently-maintained
-duplicate asset.
+Ambiguity resolves to **no page and no view** — data mode is a functional
+superset; a missing page costs polish, a superfluous page (or a view authored
+for a one-off slice) is a permanently-maintained duplicate asset.
+
+> One-sentence rule: prefer the object's default view over a pinned
+> `viewName`; prefer URL `filters` over authoring a view for one-off slices;
+> prefer a named view over a page; use a page only for composition a single
+> object view cannot express. Every target appears exactly once.
 
 **The iron rule:** an interface page REFERENCES a view (`interfaceConfig.source`
 + `sourceView`) and adds presentation policy only (`userFilters`,

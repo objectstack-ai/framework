@@ -83,6 +83,28 @@ describe('ObjectNavItemSchema', () => {
     };
     expect(() => ObjectNavItemSchema.parse(navItem)).not.toThrow();
   });
+
+  it('should accept filters targeting the bare data surface (ADR-0055)', () => {
+    const navItem = {
+      id: 'nav_my_open',
+      label: 'My Open Tickets',
+      type: 'object' as const,
+      objectName: 'ticket',
+      filters: { owner_id: '{current_user_id}', status: 'open' },
+    };
+    expect(() => ObjectNavItemSchema.parse(navItem)).not.toThrow();
+  });
+
+  it('should reject non-string filter values', () => {
+    const navItem = {
+      id: 'nav_bad_filters',
+      label: 'Bad',
+      type: 'object' as const,
+      objectName: 'ticket',
+      filters: { status: 1 },
+    };
+    expect(() => ObjectNavItemSchema.parse(navItem)).toThrow();
+  });
 });
 
 describe('DashboardNavItemSchema', () => {

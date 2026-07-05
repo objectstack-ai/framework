@@ -104,6 +104,12 @@ const BaseNavItemSchema = z.object({
  * { id: 'nav_profile', type: 'object', label: 'My Profile',
  *   objectName: 'sys_user', recordId: '{current_user_id}' }
  * ```
+ *
+ * @example Parameterized slice on the bare data surface (objectui ADR-0055)
+ * ```ts
+ * { id: 'nav_my_open', type: 'object', label: 'My Open Tickets',
+ *   objectName: 'ticket', filters: { owner_id: '{current_user_id}', status: 'open' } }
+ * ```
  */
 export const ObjectNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('object'),
@@ -125,6 +131,19 @@ export const ObjectNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
    */
   recordMode: z.enum(['view', 'edit']).optional().describe(
     'Open the record in view (default) or edit mode. Only meaningful when `recordId` is set.',
+  ),
+  /**
+   * URL filter conditions — the entry targets the parameterized bare data
+   * surface (`/:objectName/data`, objectui ADR-0055) with each entry
+   * serialized as a `filter[<field>]=<value>` search param (equality
+   * semantics), instead of anchoring to a saved view. Use for one-off /
+   * parameterized slices (dashboard drill-throughs, "assigned to me"
+   * links); a slice worth curating and reusing belongs in a named view
+   * via `viewName`. Values support the same template variables as
+   * `recordId`. Precedence: `recordId` → `filters` → `viewName`.
+   */
+  filters: z.record(z.string(), z.string()).optional().describe(
+    'URL filter conditions — targets the /:objectName/data bare surface via filter[<field>]=<value> params instead of a saved view. Values support template vars {current_user_id}, {current_org_id}. Precedence: recordId → filters → viewName.',
   ),
 }));
 

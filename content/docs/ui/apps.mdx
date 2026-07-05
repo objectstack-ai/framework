@@ -66,6 +66,17 @@ Links to an object's list view:
 { id: 'nav_accounts', type: 'object', label: 'Accounts', objectName: 'account', icon: 'building', viewName: 'all_accounts' }
 ```
 
+Three optional target fields refine where the entry lands (precedence: `recordId` → `filters` → `viewName`):
+
+- `viewName` — anchor the entry to a named list view.
+- `recordId` — deep-link straight to one record ("My Profile"); supports `{current_user_id}` / `{current_org_id}` template variables.
+- `filters` — a one-off parameterized slice: the entry lands on the **bare data surface** (`/:objectName/data`) with each condition serialized as a removable `filter[<field>]=<value>` URL chip, not anchored to any saved view. Use it for drill-throughs and "assigned to me"-style links instead of authoring a view; values support the same template variables. The surface shows what row-level permissions allow — it is not a security feature.
+
+```typescript
+{ id: 'nav_my_open', type: 'object', label: 'My Open Deals', objectName: 'opportunity',
+  filters: { owner_id: '{current_user_id}', status: 'open' }, icon: 'user-check' }
+```
+
 ### Dashboard Navigation
 
 Links to a dashboard:
