@@ -895,6 +895,60 @@ describe('defineStack - Seed Data Cross-Reference Validation', () => {
   });
 });
 
+describe('defineStack - Mapping Cross-Reference Validation (#2611)', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+  const account = { name: 'account', fields: { name: { type: 'text' } } };
+
+  it('should detect a mapping targeting an undefined object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [account],
+      mappings: [{
+        name: 'lead_import',
+        targetObject: 'ghost_object',
+        fieldMapping: [{ source: 'Name', target: 'name' }],
+      }],
+    };
+    expect(() => defineStack(config)).toThrow('ghost_object');
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+  });
+
+  it('should reject a javascript transform at build time (no server-side sandbox)', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [account],
+      mappings: [{
+        name: 'lead_import',
+        targetObject: 'account',
+        fieldMapping: [{ source: 'Name', target: 'name', transform: 'javascript' as const }],
+      }],
+    };
+    expect(() => defineStack(config)).toThrow('javascript');
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+  });
+
+  it('should pass a well-formed mapping (rename + map transform)', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [account],
+      mappings: [{
+        name: 'lead_import',
+        targetObject: 'account',
+        fieldMapping: [
+          { source: 'Company', target: 'name' },
+          { source: 'Stage', target: 'name', transform: 'map' as const, params: { valueMap: { Hot: 'active' } } },
+        ],
+      }],
+    };
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});
+
 describe('defineStack - Navigation Cross-Reference Validation', () => {
   const baseManifest = {
     id: 'com.example.test',

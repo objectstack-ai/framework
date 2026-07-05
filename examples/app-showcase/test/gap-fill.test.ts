@@ -33,6 +33,33 @@ describe('showcase gap fill — analytics cube', () => {
   });
 });
 
+describe('showcase gap fill — named import mapping (#2611)', () => {
+  it('is wired into the stack definition', () => {
+    const mappings = (stack as { mappings?: Array<{ name: string }> }).mappings ?? [];
+    expect(mappings.map((m) => m.name)).toContain('showcase_inquiry_feed');
+  });
+
+  it('targets an existing object and its upsertKey fields exist on that object', () => {
+    const mappings = (stack as { mappings?: Array<{ targetObject: string; upsertKey?: string[]; fieldMapping: Array<{ target: string | string[] }> }> }).mappings ?? [];
+    const objects = ((stack as { objects?: Array<{ name: string; fields?: Record<string, unknown> }> }).objects ?? []);
+    for (const m of mappings) {
+      const target = objects.find((o) => o.name === m.targetObject);
+      expect(target, `mapping targets missing object '${m.targetObject}'`).toBeDefined();
+      const fieldNames = new Set(Object.keys(target?.fields ?? {}));
+      for (const key of m.upsertKey ?? []) {
+        expect(fieldNames.has(key), `upsertKey '${key}' not a field of '${m.targetObject}'`).toBe(true);
+      }
+      // Every mapped target lands on a real field — a typo'd target would
+      // silently import into nowhere.
+      for (const entry of m.fieldMapping) {
+        for (const t of Array.isArray(entry.target) ? entry.target : [entry.target]) {
+          expect(fieldNames.has(t), `mapped target '${t}' not a field of '${m.targetObject}'`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe('showcase gap fill — declarative api endpoints', () => {
   it('is wired into the stack definition', () => {
     const apis = (stack as { apis?: Array<{ name: string }> }).apis ?? [];

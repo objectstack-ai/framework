@@ -32,6 +32,7 @@ import { HookSchema } from '../data/hook.zod';
 import { ValidationRuleSchema } from '../data/validation.zod';
 import { DatasourceSchema } from '../data/datasource.zod';
 import { SeedSchema } from '../data/seed.zod';
+import { MappingSchema } from '../data/mapping.zod';
 
 import { ViewSchema } from '../ui/view.zod';
 import { PageSchema } from '../ui/page.zod';
@@ -72,6 +73,7 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   hook: HookSchema,
   validation: ValidationRuleSchema,
   seed: SeedSchema, // fixture/init data; runtime-draftable, applied on publish
+  mapping: MappingSchema as unknown as z.ZodType, // #2611: reusable import mapping; runtime-creatable so the wizard can save one
 
   // UI Protocol
   view: ViewSchema,

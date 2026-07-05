@@ -90,6 +90,13 @@ const BUILTIN_METADATA_CREATE_SEEDS: Partial<Record<MetadataType, unknown>> = {
     object: PLACEHOLDER_OBJECT,
     events: [],
   },
+  mapping: {
+    name: 'new_mapping',
+    label: 'New Import Mapping',
+    targetObject: PLACEHOLDER_OBJECT,
+    // At least one rename so the wizard's save produces a usable artifact.
+    fieldMapping: [{ source: 'Column A', target: 'field_a' }],
+  },
   dataset: {
     name: 'new_dataset',
     label: 'New Dataset',

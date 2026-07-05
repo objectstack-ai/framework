@@ -309,3 +309,110 @@ describe('import route — real engine + protocol integration', () => {
     expect(String(res._json.error)).toMatch(/xlsx/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Named mapping artifacts (#2611) — `mappingName` resolves a registered
+// `mapping` item and applies its fieldMapping pipeline before coercion.
+// ---------------------------------------------------------------------------
+describe('import route — named mapping artifact (#2611)', () => {
+  let route: any;
+  let engine: any;
+
+  const TASK_CSV_MAPPING = {
+    name: 'task_feed_import',
+    label: 'Task feed import',
+    sourceFormat: 'csv',
+    targetObject: 'task',
+    fieldMapping: [
+      { source: 'ID', target: 'id', transform: 'none' },
+      { source: 'Task Title', target: 'title', transform: 'none' },
+      // Source system codes → select LABELS; the built-in metaMap coercion
+      // then turns the label (高/低) into the storage code (high/low) —
+      // the artifact transform and the coercion pipeline COMPOSE.
+      { source: 'Prio', target: 'priority', transform: 'map', params: { valueMap: { P1: '高', P3: '低' } } },
+      { source: 'Assignee', target: 'owner', transform: 'lookup' },
+      { source: 'ignored_by_projection', target: 'score', transform: 'constant', params: { value: 5 } },
+    ],
+    mode: 'upsert',
+    upsertKey: ['id'],
+  };
+
+  beforeEach(async () => {
+    ({ route, engine } = await boot());
+    engine.registry.registerItem('mapping', TASK_CSV_MAPPING as any, 'name');
+    engine.registry.registerItem(
+      'mapping',
+      { ...TASK_CSV_MAPPING, name: 'user_only_mapping', targetObject: 'user' } as any,
+      'name',
+    );
+    engine.registry.registerItem(
+      'mapping',
+      {
+        name: 'task_js_mapping', targetObject: 'task', sourceFormat: 'csv',
+        fieldMapping: [{ source: 'x', target: 'title', transform: 'javascript' }],
+      } as any,
+      'name',
+    );
+    engine.registry.registerItem(
+      'mapping',
+      { ...TASK_CSV_MAPPING, name: 'task_json_mapping', sourceFormat: 'json' } as any,
+      'name',
+    );
+  });
+
+  it('applies rename + map + constant + lookup, strict projection, artifact upsert defaults', async () => {
+    const csv = [
+      'ID,Task Title,Prio,Assignee,Junk Column',
+      't1,迁移旧数据,P1,张三,DROP-ME',
+      't2,巡检,P3,李四,DROP-ME-TOO',
+    ].join('\n');
+    // No writeMode/matchFields in the request — the artifact's
+    // mode:'upsert' + upsertKey:['id'] apply as defaults.
+    const res = await call(route, { format: 'csv', csv, mappingName: 'task_feed_import' });
+    expect(res._json).toMatchObject({ total: 2, ok: 2 });
+
+    const one = await engine.findOne('task', { where: { id: 't1' } });
+    // map: P1→高, then coercion 高→high; lookup: 张三→u1 via metaMap;
+    // constant: score=5; strict projection: Junk Column never lands.
+    expect(one).toMatchObject({ title: '迁移旧数据', priority: 'high', owner: 'u1', score: 5 });
+    expect(one['Junk Column']).toBeUndefined();
+
+    // Re-import the same file → artifact upsert semantics update, not dupe.
+    const res2 = await call(route, { format: 'csv', csv, mappingName: 'task_feed_import' });
+    expect(res2._json.ok).toBe(2);
+    const all = await engine.find('task', { where: {} });
+    expect(all.filter((r: any) => r.id === 't1')).toHaveLength(1);
+  });
+
+  it('404s on an unknown mappingName', async () => {
+    const res = await call(route, { format: 'csv', csv: 'ID\nx', mappingName: 'nope' });
+    expect(res._status).toBe(404);
+    expect(res._json.code).toBe('MAPPING_NOT_FOUND');
+  });
+
+  it('400s when the mapping targets a different object', async () => {
+    const res = await call(route, { format: 'csv', csv: 'ID\nx', mappingName: 'user_only_mapping' });
+    expect(res._status).toBe(400);
+    expect(res._json.code).toBe('MAPPING_TARGET_MISMATCH');
+  });
+
+  it('400s when mappingName and an inline mapping are both provided', async () => {
+    const res = await call(route, {
+      format: 'csv', csv: 'ID\nx', mappingName: 'task_feed_import', mapping: { ID: 'id' },
+    });
+    expect(res._status).toBe(400);
+    expect(res._json.code).toBe('CONFLICTING_MAPPING');
+  });
+
+  it('400s on a javascript transform instead of silently skipping it', async () => {
+    const res = await call(route, { format: 'csv', csv: 'x\n1', mappingName: 'task_js_mapping' });
+    expect(res._status).toBe(400);
+    expect(res._json.code).toBe('UNSUPPORTED_TRANSFORM');
+  });
+
+  it('400s when the payload format contradicts the artifact sourceFormat', async () => {
+    const res = await call(route, { format: 'csv', csv: 'ID\nx', mappingName: 'task_json_mapping' });
+    expect(res._status).toBe(400);
+    expect(res._json.code).toBe('MAPPING_FORMAT_MISMATCH');
+  });
+});

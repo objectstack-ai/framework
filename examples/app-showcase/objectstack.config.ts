@@ -41,6 +41,7 @@ import { allPortals } from './src/ui/portals/index.js';
 import { ShowcaseSeedData } from './src/data/seed/index.js';
 import { allCubes } from './src/data/analytics/showcase.cube.js';
 import { allObjectExtensions } from './src/data/extensions/account.extension.js';
+import { allMappings } from './src/data/mappings/index.js';
 
 // Ambient `process` for the env-var overrides below — the showcase tsconfig
 // doesn't pull in `@types/node`, but the CLI provides the real `process` at
@@ -164,6 +165,9 @@ export default defineStack({
   // (`/api/v1/analytics/*`) — no `requires` token needed; the CLI always
   // loads it and registers these cubes (see src/data/analytics/).
   analyticsCubes: allCubes,
+  // Named import mappings (#2611) — resolved by the import endpoint via
+  // `mappingName` (see src/data/mappings/).
+  mappings: allMappings,
 
   // UI
   apps: [ShowcaseApp],

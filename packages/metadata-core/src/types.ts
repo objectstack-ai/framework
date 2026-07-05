@@ -21,6 +21,7 @@ export const MetadataTypeSchema = z.enum([
   'field',
   'validation',
   'hook',
+  'mapping',
   'view',
   'page',
   'dashboard',
