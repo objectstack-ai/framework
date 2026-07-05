@@ -393,7 +393,7 @@ export const manifest = defineStudioPlugin({
       key: 'automation',
       label: 'Automation',
       icon: 'workflow',
-      metadataTypes: ['flow', 'trigger', 'workflow'],
+      metadataTypes: ['flow', 'job'], // ADR-0020/0088: 'workflow' and 'trigger' are retired kinds
       order: 30,
     }],
 
