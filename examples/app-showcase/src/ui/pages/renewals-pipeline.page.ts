@@ -12,7 +12,9 @@ import { definePage } from '@objectstack/spec/ui';
  * (skills/objectstack-ui/references/react-blocks.md).
  *
  * Styling (ADR-0065): no Tailwind — inline `style={{}}` with `hsl(var(--token))`;
- * data blocks and the drawer bring their own compiled styling.
+ * data blocks and the drawer bring their own compiled styling. The drawer sets
+ * NO pixel width: per #2578 pixel widths are deprecated (the author can't know
+ * the client viewport) — omit and let the renderer derive the size.
  */
 export const RenewalsPipelinePage = definePage({
   name: 'showcase_renewals_pipeline',
@@ -81,7 +83,7 @@ function Page() {
 
             {editing ? (
               <ObjectForm objectName="showcase_account" mode="edit" recordId={sel}
-                formType="drawer" drawerSide="right" drawerWidth="480px" open title="Edit account"
+                formType="drawer" drawerSide="right" open title="Edit account"
                 onOpenChange={(o) => { if (!o) setEditing(false); }}
                 onSuccess={() => { setEditing(false); setReload((n) => n + 1); }}
                 onCancel={() => setEditing(false)} />

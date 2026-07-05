@@ -3,7 +3,9 @@
 import { definePage } from '@objectstack/spec/ui';
 
 /**
- * Start Here — the showcase's teaching index and default landing.
+ * Start Here — the page-authoring teaching index (nav label "Page Authoring").
+ * The app's default landing is the Capability Map (capability-map.page.ts,
+ * first nav item); this page is the deep-dive on ONE of its domains.
  *
  * A page has TWO orthogonal axes:
  *   • type  — the surface ROLE: home · record · list · app

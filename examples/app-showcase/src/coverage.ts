@@ -69,9 +69,14 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   },
   validation: {
     status: 'demonstrated',
-    files: ['src/data/objects/account.object.ts', 'src/data/objects/task.object.ts'],
+    files: [
+      'src/data/objects/account.object.ts',
+      'src/data/objects/task.object.ts',
+      'src/data/objects/project.object.ts',
+      'src/data/objects/invoice.object.ts',
+    ],
     notes:
-      'Authored inline via object `validations`. Only the runtime-enforced rule types (state_machine/script/cross_field) are demonstrated; the 6 unenforced types are tracked in https://github.com/objectstack-ai/framework/issues/1475 (Prime Directive #10).',
+      'Authored inline via object `validations`. Every declared rule type is now write-path enforced (rule-validator dispatches all of state_machine/script/cross_field/format/json_schema/conditional — ADR-0020 "no silent no-ops", closing the #1475 gap) and each is demonstrated: state_machine (task/project), script+cross_field (project), format/json_schema/conditional (account). Field-level requiredWhen/readonlyWhen are likewise enforced and demonstrated on invoice.',
   },
   hook: { status: 'demonstrated', files: ['src/data/hooks/index.ts'] },
   seed: { status: 'demonstrated', files: ['src/data/seed/index.ts'] },
