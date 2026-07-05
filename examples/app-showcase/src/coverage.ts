@@ -74,6 +74,12 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   },
   hook: { status: 'demonstrated', files: ['src/data/hooks/index.ts'] },
   seed: { status: 'demonstrated', files: ['src/data/seed/index.ts'] },
+  mapping: {
+    status: 'demonstrated',
+    files: ['src/data/mappings/index.ts'],
+    notes:
+      'Named import mapping resolved via mappingName at POST /data/:object/import (#2611); promoted to a registry kind per the ADR-0088 admission test.',
+  },
 
   // ── ui ──
   view: { status: 'demonstrated', files: ['src/ui/views/task.view.ts', 'src/ui/views/project.view.ts'] },
@@ -164,12 +170,6 @@ export const STACK_COLLECTION_COVERAGE: Record<string, KindCoverage> = {
     files: ['src/system/apis/index.ts'],
     notes:
       'Declarative ApiEndpoint metadata (object_operation + flow targets), executed by the runtime dispatcher (handleApiEndpoint). Complements the code-mounted endpoint in src/system/server/ (router kind stays waived: code-only).',
-  },
-  mappings: {
-    status: 'demonstrated',
-    files: ['src/data/mappings/index.ts'],
-    notes:
-      'Named import mappings resolved by POST /data/:object/import via mappingName (#2611): rename + map transform, artifact-default upsert on email. The former waiver ("registered but never consumed") flipped when the consumer landed.',
   },
   connectors: {
     status: 'waived',

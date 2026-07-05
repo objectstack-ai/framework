@@ -79,6 +79,7 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
   'validation',  // Validation rules (ValidationSchema)
   'hook',        // Data hooks (HookSchema)
   'seed',        // Seed/fixture data — runtime-draftable; publishing applies it (SeedSchema)
+  'mapping',     // Import/export field mappings (MappingSchema) — consumed by POST /data/:object/import via mappingName (#2611); promoted to a kind per the ADR-0088 admission test once the consumer landed
 
   // UI Protocol
   'view',        // List/form views (ViewSchema)
@@ -608,6 +609,12 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // last in the data domain so every referenced object/field already exists.
   // NOTE: distinct from the (analytics-bound) `dataset` name — see ADR.
   { type: 'seed', label: 'Seed Data', description: 'Fixture / initialization data applied on publish', filePatterns: ['**/*.seed.ts', '**/*.seed.yml', '**/*.seed.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 95, domain: 'data' },
+  // `mapping` (#2611, admitted per ADR-0088): reusable import/export field
+  // mappings, consumed by the import endpoint via `mappingName`.
+  // `allowRuntimeCreate: true` so the import wizard can SAVE a hand-built
+  // mapping as a named artifact; packaged mappings stay locked
+  // (`allowOrgOverride: false`) like every artifact-backed item.
+  { type: 'mapping', label: 'Import Mapping', description: 'Reusable import/export field mapping (rename + transforms), referenced by name at import', filePatterns: ['**/*.mapping.ts', '**/*.mapping.yml', '**/*.mapping.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 96, domain: 'data' },
 
   // UI Protocol
   // `view/page/dashboard/action/report`: UI artifacts benefit from version
