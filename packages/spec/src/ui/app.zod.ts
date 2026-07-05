@@ -141,11 +141,41 @@ export const ObjectNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
    * links); a slice worth curating and reusing belongs in a named view
    * via `viewName`. Values support the same template variables as
    * `recordId`. Precedence: `recordId` → `filters` → `viewName`.
+   *
+   * Mutually exclusive with `recordId` / `viewName` — enforced by
+   * {@link NavigationItemSchema} (see `objectNavTargetExclusivity`) so the
+   * ambiguous combination is unrepresentable rather than silently resolved
+   * by precedence.
    */
   filters: z.record(z.string(), z.string()).optional().describe(
-    'URL filter conditions — targets the /:objectName/data bare surface via filter[<field>]=<value> params instead of a saved view. Values support template vars {current_user_id}, {current_org_id}. Precedence: recordId → filters → viewName.',
+    'URL filter conditions — targets the /:objectName/data bare surface via filter[<field>]=<value> params instead of a saved view. Values support template vars {current_user_id}, {current_org_id}. Mutually exclusive with recordId/viewName.',
   ),
 }));
+
+/**
+ * Correct-by-construction guard (ADR-0053 philosophy): `filters` combined
+ * with `recordId` or `viewName` is an authoring ambiguity — runtime
+ * precedence would silently ignore one of them (a stale `recordId` hijacks
+ * a configured `filters` slice). Reject it at validation with the fix in
+ * the message. The legacy `recordId` + `viewName` combination stays
+ * tolerated: it predates this guard and is documented as "viewName is
+ * ignored when recordId is set".
+ */
+const objectNavTargetExclusivity = (
+  item: { filters?: unknown; recordId?: unknown; viewName?: unknown },
+  ctx: z.RefinementCtx,
+): void => {
+  if (item.filters && (item.recordId || item.viewName)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['filters'],
+      message:
+        '`filters` cannot be combined with `recordId` or `viewName` — pick ONE landing: '
+        + 'recordId (record deep-link), filters (/data slice), or viewName (named view). '
+        + 'Remove the extra field(s); runtime precedence would silently ignore them.',
+    });
+  }
+};
 
 /**
  * 2. Dashboard Navigation Item
@@ -241,7 +271,7 @@ export const NavigationItemSchema: z.ZodType<any> = z.lazy(() =>
   z.union([
     ObjectNavItemSchema.extend({
       children: z.array(NavigationItemSchema).optional().describe('Child navigation items (e.g. specific views)'),
-    }),
+    }).superRefine(objectNavTargetExclusivity),
     DashboardNavItemSchema,
     PageNavItemSchema,
     UrlNavItemSchema,
