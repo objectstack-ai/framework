@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { validateRecord, normalizeMultiValueFields } from './record-validator.js';
+import { validateRecord, normalizeMultiValueFields, ValidationError } from './record-validator.js';
 
 /**
  * Required-field validation, with the autonumber exemption (#1603).
@@ -55,14 +55,14 @@ describe('validateRecord — time field accepts time-of-day', () => {
 
   for (const v of ['25:00', '14:60', 'not-a-time', '14']) {
     it(`rejects ${v}`, () => {
-      expect(() => validateRecord(schema, { at: v }, 'insert')).toThrow(/invalid_time/i);
+      expect(() => validateRecord(schema, { at: v }, 'insert')).toThrow(/must be a valid time/i);
     });
   }
 
   it('does NOT regress date/datetime (still ISO-parsed)', () => {
     const ds = { fields: { d: { type: 'date' }, dt: { type: 'datetime' } } };
     expect(() => validateRecord(ds, { d: '2026-06-17', dt: '2026-06-17T10:00:00Z' }, 'insert')).not.toThrow();
-    expect(() => validateRecord(ds, { d: 'not-a-date' }, 'insert')).toThrow(/invalid_date/i);
+    expect(() => validateRecord(ds, { d: 'not-a-date' }, 'insert')).toThrow(/must be a valid date/i);
   });
 });
 
@@ -160,13 +160,13 @@ describe('validateRecord — multi-value fields must be arrays', () => {
       { watchers: 'user-1' },
       { attachments: 'file-key-1' },
     ]) {
-      expect(() => validateRecord(schema, payload, 'update')).toThrow(/invalid_type/i);
+      expect(() => validateRecord(schema, payload, 'update')).toThrow(/must be an array/i);
     }
   });
 
   it('rejects a plain-object shape with invalid_type', () => {
-    expect(() => validateRecord(schema, { labels: { nested: true } }, 'update')).toThrow(/invalid_type/i);
-    expect(() => validateRecord(schema, { team_members: { id: 'u1' } }, 'update')).toThrow(/invalid_type/i);
+    expect(() => validateRecord(schema, { labels: { nested: true } }, 'update')).toThrow(/must be an array/i);
+    expect(() => validateRecord(schema, { team_members: { id: 'u1' } }, 'update')).toThrow(/must be an array/i);
   });
 
   it('accepts arrays (including for select+multiple, previously mis-rejected)', () => {
@@ -180,12 +180,54 @@ describe('validateRecord — multi-value fields must be arrays', () => {
   });
 
   it('still validates array ELEMENTS against options', () => {
-    expect(() => validateRecord(schema, { labels: ['nope'] }, 'update')).toThrow(/invalid_option/i);
-    expect(() => validateRecord(schema, { channels: ['fax'] }, 'update')).toThrow(/invalid_option/i);
+    expect(() => validateRecord(schema, { labels: ['nope'] }, 'update')).toThrow(/is not one of/i);
+    expect(() => validateRecord(schema, { channels: ['fax'] }, 'update')).toThrow(/is not one of/i);
   });
 
   it('does NOT regress single select / radio', () => {
     expect(() => validateRecord(schema, { status: 'active' }, 'update')).not.toThrow();
-    expect(() => validateRecord(schema, { status: 'nope' }, 'update')).toThrow(/invalid_option/i);
+    expect(() => validateRecord(schema, { status: 'nope' }, 'update')).toThrow(/must be one of/i);
+  });
+});
+
+/**
+ * The top-level `ValidationError.message` is what generic UI surfaces (the
+ * console's save-error toast, CLI output) display verbatim — it must carry
+ * the HUMAN per-field messages, not a `field (code)` digest. Regression for
+ * the rule-violation case: an author-written localized rule `message`
+ * ("最小水深不能大于最大水深。") used to be buried in `fields[]` while the
+ * toast showed "Validation failed for 1 field(s): _record (rule_violation)".
+ */
+describe('ValidationError — top-level message is human-readable', () => {
+  it('uses each field error message verbatim', () => {
+    const err = new ValidationError([
+      { field: '_record', code: 'rule_violation', message: '最小水深不能大于最大水深。' },
+    ]);
+    expect(err.message).toBe('最小水深不能大于最大水深。');
+  });
+
+  it('joins multiple field messages', () => {
+    const err = new ValidationError([
+      { field: 'title', code: 'required', message: 'title is required' },
+      { field: '_record', code: 'rule_violation', message: '最小水深不能大于最大水深。' },
+    ]);
+    expect(err.message).toBe('title is required; 最小水深不能大于最大水深。');
+  });
+
+  it('falls back to `field (code)` when a message is blank', () => {
+    const err = new ValidationError([
+      { field: '_record', code: 'rule_violation', message: '' },
+    ]);
+    expect(err.message).toBe('_record (rule_violation)');
+  });
+
+  it('still exposes machine-readable fields[] for programmatic handling', () => {
+    const err = new ValidationError([
+      { field: '_record', code: 'rule_violation', message: 'boom' },
+    ]);
+    expect(err.code).toBe('VALIDATION_FAILED');
+    expect(err.fields).toEqual([
+      { field: '_record', code: 'rule_violation', message: 'boom' },
+    ]);
   });
 });
