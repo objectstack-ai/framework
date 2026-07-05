@@ -1368,8 +1368,10 @@ export class ObjectQLPlugin implements Plugin {
     ctx.logger.info('Syncing metadata from external service into ObjectQL registry...');
     
     // Metadata types to sync (ADR-0020: no `workflow` type — record state
-    // machines are a `state_machine` validation rule on the object)
-    const metadataTypes = ['object', 'view', 'app', 'flow', 'function', 'hook'];
+    // machines are a `state_machine` validation rule on the object;
+    // ADR-0088: no `function` kind — QL functions come from
+    // `defineStack({ functions })` / plugin contributions, never metadata rows)
+    const metadataTypes = ['object', 'view', 'app', 'flow', 'hook'];
     let totalLoaded = 0;
     
     for (const type of metadataTypes) {
@@ -1379,19 +1381,6 @@ export class ObjectQLPlugin implements Plugin {
                 const items = await metadataService.loadMany(type);
 
                 if (items && items.length > 0) {
-                    // Functions arrive as JSON-safe records ({name, handler})
-                    // where `handler` is a function reference or compiled code
-                    // already attached by the metadata pipeline. Register them
-                    // BEFORE binding hooks so string-named hook handlers can
-                    // resolve.
-                    if (type === 'function' && this.ql && typeof (this.ql as any).registerFunction === 'function') {
-                        for (const item of items) {
-                            if (item?.name && typeof item.handler === 'function') {
-                                (this.ql as any).registerFunction(item.name, item.handler, 'metadata-service');
-                            }
-                        }
-                    }
-
                     items.forEach((item: any) => {
                         // Determine key field (usually 'name' or 'id')
                         const keyField = item.id ? 'id' : 'name';

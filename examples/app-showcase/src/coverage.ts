@@ -61,12 +61,6 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
     notes:
       'FieldSchema is authored inline on objects (the stack DSL has no standalone `fields` collection); field-zoo exhausts every field type — see the variant-level test.',
   },
-  trigger: {
-    status: 'waived',
-    reason:
-      'No declarative authoring surface: no stack collection or defineTrigger helper. Record-change triggering is demonstrated behaviorally by the record-change flows (requires: ["triggers"]).',
-    issue: ISSUE.noAuthoringSurface,
-  },
   validation: {
     status: 'demonstrated',
     files: [
@@ -102,26 +96,10 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   external_catalog: {
     status: 'waived',
     reason:
-      'Runtime-created via Setup → Datasources → Sync (ADR-0062); no declarative artifact an app package can ship. The showcase demos the federation flow that produces one.',
+      'PERMANENT by design (ADR-0088): a runtime-created snapshot produced by Setup → Datasources → Sync (ADR-0062). A package shipping one would be stale on arrival; the showcase demos the federation flow that produces it.',
     issue: ISSUE.noAuthoringSurface,
   },
   translation: { status: 'demonstrated', files: ['src/system/translations/index.ts'] },
-  router: {
-    status: 'waived',
-    reason:
-      'Code-only (allowRuntimeCreate: false). The code-level equivalent is the imperative HTTP mount in src/system/server/recalc-endpoint.ts.',
-    issue: ISSUE.noAuthoringSurface,
-  },
-  function: {
-    status: 'waived',
-    reason: 'Code-only (allowRuntimeCreate: false); no declarative authoring surface.',
-    issue: ISSUE.noAuthoringSurface,
-  },
-  service: {
-    status: 'waived',
-    reason: 'Code-only (allowRuntimeCreate: false); no declarative authoring surface.',
-    issue: ISSUE.noAuthoringSurface,
-  },
   email_template: { status: 'demonstrated', files: ['src/system/emails/index.ts'] },
   doc: {
     status: 'demonstrated',

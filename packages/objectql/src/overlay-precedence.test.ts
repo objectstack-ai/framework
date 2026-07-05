@@ -163,12 +163,14 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     // After PR-10d.7 introduced `allowRuntimeCreate`, "denied" now splits
     // into two cohorts:
     //
-    //  1. Types with `allowRuntimeCreate: true` (hook/trigger/validation) —
+    //  1. Types with `allowRuntimeCreate: true` (hook/validation) —
     //     blocked only when overlaying an artifact-backed item. Brand-new
     //     (artifact-free) names succeed. Tested separately below.
     //
-    //  2. Types with `allowRuntimeCreate: false` (router/function/service) —
-    //     blocked for ANY write in project-kernel mode.
+    //  2. Types with `allowRuntimeCreate: false` — after ADR-0088 retired the
+    //     router/function/service placeholder kinds, `agent` (platform-owned,
+    //     ADR-0063) is the remaining member — blocked for ANY write in
+    //     project-kernel mode.
     //
     //     NOTE: `datasource` moved to cohort #1 with the ADR-0015 Addendum
     //     (runtime-UI-creatable datasources). Brand-new runtime datasources
@@ -181,19 +183,9 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     describe('denied — must throw 403 (not_overridable or not_creatable)', () => {
         const deniedTypeWide: Array<{ type: string; reason: string; item: any }> = [
             {
-                type: 'router',
-                reason: 'API routing must be deterministic; per-org divergence creates invisible conflicts',
-                item: { name: 'case_api', path: '/api/cases' },
-            },
-            {
-                type: 'function',
-                reason: 'serverless function definitions must be deployment-only, not per-org',
-                item: { name: 'process_payment', handler: 'index.ts' },
-            },
-            {
-                type: 'service',
-                reason: 'service definitions must be deployment-only, not per-org',
-                item: { name: 'notification_service' },
+                type: 'agent',
+                reason: 'agents are platform-owned (ADR-0063); per-org agent forks are withdrawn',
+                item: { name: 'my_agent', label: 'My Agent' },
             },
         ];
 
@@ -275,16 +267,17 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
 
     // ── single-kernel deployments: gate disengaged ──
     describe('single-kernel mode (no environmentId) — gate bypassed', () => {
-        it('allows function overlay when environmentId is undefined (gate bypassed)', async () => {
+        it('allows agent overlay when environmentId is undefined (gate bypassed)', async () => {
             // No environmentId => not project-kernel mode => legacy "anything goes"
             // path used by control-plane bootstrap. ADR-0005 §"Whitelist".
-            // `function` is a definitively-denied type in project-kernel mode,
-            // so this case best demonstrates the bypass semantics.
+            // `agent` is a definitively-denied type in project-kernel mode
+            // (allowRuntimeCreate: false, ADR-0063), so this case best
+            // demonstrates the bypass semantics.
             const { protocol: localProto } = makeProtocol({ environmentId: undefined });
             const result = await localProto.saveMetaItem({
-                type: 'function',
-                name: 'my_fn',
-                item: { name: 'my_fn', handler: 'index.ts' },
+                type: 'agent',
+                name: 'my_agent',
+                item: { name: 'my_agent', label: 'My Agent', role: 'assistant', instructions: 'Answer questions about test data.' },
             });
             expect(result.success).toBe(true);
         });
@@ -323,6 +316,8 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             expect(allowedFromRegistry.has('profile')).toBe(true);
             // Execution/wiring-layer types must NOT be in the set.
             // Accepting them as overlays would corrupt runtime semantics.
+            // (trigger/router/function/service were retired outright by
+            // ADR-0088 — the asserts double as reintroduction guards.)
             expect(allowedFromRegistry.has('trigger')).toBe(false);
             expect(allowedFromRegistry.has('validation')).toBe(false);
             expect(allowedFromRegistry.has('hook')).toBe(false);

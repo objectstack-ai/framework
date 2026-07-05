@@ -1255,13 +1255,15 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(validationResult.success).toBe(true);
         });
 
-        it('rejects brand-new function with not_creatable (allowRuntimeCreate:false)', async () => {
-            // `function` has BOTH flags false → no runtime authoring allowed.
+        it('rejects brand-new agent with not_creatable (allowRuntimeCreate:false)', async () => {
+            // `agent` has BOTH flags false (platform-owned, ADR-0063) → no
+            // runtime authoring allowed. (ADR-0088 retired the former
+            // `function` placeholder kind this test used to lean on.)
             await expect(
                 scoped.saveMetaItem({
-                    type: 'function',
-                    name: 'my_fn',
-                    item: { name: 'my_fn', handler: 'index.ts' },
+                    type: 'agent',
+                    name: 'my_agent',
+                    item: { name: 'my_agent', label: 'My Agent' },
                     organizationId: 'org_alpha',
                 }),
             ).rejects.toMatchObject({

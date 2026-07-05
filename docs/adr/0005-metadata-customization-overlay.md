@@ -53,10 +53,10 @@ derives its set from that flag — there is no parallel allowlist
 | Domain | Type | Per-org override? | Why |
 |:---|:---|:---:|:---|
 | data | `object`, `field` | ❌ | A per-org overlay would diverge the table schema; shared DB cannot honour that. |
-| data | `trigger`, `validation`, `hook` | ❌ | DB-side contracts. Per-org variants must ship as a separate package, not an overlay. |
+| data | `validation`, `hook` | ❌ | DB-side contracts. Per-org variants must ship as a separate package, not an overlay. (`trigger` retired as a kind — ADR-0088.) |
 | automation | `flow`, `workflow`, `approval` | ❌ | Carry execution side-effects (events, jobs, audit). Per-org variants are a deployment, not an overlay. |
 | security | `permission`, `profile`, `role` | ❌ | Authorization correctness; overlays would create silent privilege drift. |
-| system | `datasource`, `router`, `function`, `service` | ❌ | Wiring level; changes require code paths, not metadata. |
+| system | `datasource` | ❌ | Wiring level; changes require code paths, not metadata. (`router`/`function`/`service` retired as kinds — ADR-0088; they are code contributions.) |
 | ai | `agent`, `tool`, `skill` | ❌ | Behavioural contracts with model providers; treat like flows. |
 | **ui** | **`view`, `dashboard`, `report`** | ✅ | **Pure presentation. Safe per-org override.** |
 | ui | `page`, `app`, `action` | ❌ | Conservative default — these bind to routes and side-effects. Promote individually if a concrete need appears. |
@@ -534,7 +534,7 @@ entries derived from the prior baseline.
 
 The original ADR gates writes purely on `allowOrgOverride` (type-level).
 This proved too coarse for one category of types: those that ship
-executable code (`hook`, `trigger`, `validation`) declare
+executable code (`hook`, `validation`) declare
 `allowOrgOverride: false` AND `allowRuntimeCreate: true`. The intent —
 documented in `metadata-plugin.zod.ts` — is "users may author brand-new
 items of this type, but artifact-shipped items remain immutable".

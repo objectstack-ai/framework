@@ -236,7 +236,8 @@ List chart view configuration
 | **view** | `string` | optional | Name of the form view to use for details (e.g. "summary_view", "edit_form") |
 | **preventNavigation** | `boolean` | ✅ | Disable standard navigation entirely |
 | **openNewTab** | `boolean` | ✅ | Force open in new tab (applies to page mode) |
-| **width** | `string \| number` | optional | Width of the drawer/modal (e.g. "600px", "50%") |
+| **size** | `Enum<'auto' \| 'sm' \| 'md' \| 'lg' \| 'xl' \| 'full'>` | ✅ | [#2578] Overlay size bucket for drawer/modal detail: 'auto' (default — renderer derives from field count + viewport; AI writes nothing) or a coarse override sm/md/lg/xl/full. Prefer this over the pixel `width`; page mode ignores it. |
+| **width** | `string \| number` | optional | [DEPRECATED → size] Pixel/percent width of the drawer/modal (e.g. "600px"). A pixel width cannot be chosen at authoring time without knowing the client viewport — use the `size` bucket. |
 
 
 ---

@@ -30,13 +30,14 @@ describe('ObjectStackProtocolImplementation - getMetaTypes rich response', () =>
         registry.registerItem('object', { name: 'sys_user', label: 'User' }, 'name');
         registry.registerItem('view', { name: 'sys_user.grid', type: 'grid', object: 'sys_user' }, 'name');
         registry.registerItem('app', { name: 'crm', label: 'CRM' }, 'name');
-        // `function` is registry-default `allowOrgOverride: false` (system/wiring-layer)
-        // and is used by the "honours OS_METADATA_WRITABLE" test as a control type.
         registry.registerItem('flow', { name: 'crm.onboard', steps: [] }, 'name');
-        // Register wiring-layer types so getMetaTypes() includes them in `entries`
+        // Register control types so getMetaTypes() includes them in `entries`
         // (getMetaTypes only returns types present in getRegisteredTypes()).
-        registry.registerItem('function', { name: 'process_payment' }, 'name');
-        registry.registerItem('trigger', { name: 'on_insert' }, 'name');
+        // `hook`/`validation`/`external_catalog` are registry-default
+        // `allowOrgOverride: false` — used by the OS_METADATA_WRITABLE tests.
+        registry.registerItem('hook', { name: 'audit_stamp' }, 'name');
+        registry.registerItem('validation', { name: 'amount_positive' }, 'name');
+        registry.registerItem('external_catalog', { name: 'warehouse_snapshot' }, 'name');
 
         mockEngine = {
             registry,
@@ -91,22 +92,23 @@ describe('ObjectStackProtocolImplementation - getMetaTypes rich response', () =>
     });
 
     it('honours OS_METADATA_WRITABLE to elevate allowOrgOverride', async () => {
-        // Use `function` and `service` — both are registry-default
-        // `allowOrgOverride: false` (wiring-layer types that must stay code-only).
-        process.env.OS_METADATA_WRITABLE = 'function,service';
+        // Use `hook` and `validation` — both are registry-default
+        // `allowOrgOverride: false` (ADR-0088 retired the former code-only
+        // placeholder kinds this test used to lean on).
+        process.env.OS_METADATA_WRITABLE = 'hook,validation';
         ObjectStackProtocolImplementation.resetEnvWritableCache();
 
         const result: any = await protocol.getMetaTypes();
-        const functionEntry = result.entries.find((e: any) => e.type === 'function');
-        expect(functionEntry.allowOrgOverride).toBe(true);
-        expect(functionEntry.overrideSource).toBe('env');
+        const hookEntry = result.entries.find((e: any) => e.type === 'hook');
+        expect(hookEntry.allowOrgOverride).toBe(true);
+        expect(hookEntry.overrideSource).toBe('env');
 
         // Types not listed AND not writable in the registry default retain
-        // `allowOrgOverride: false`. `trigger` is one such type — it is
-        // execution-pinned and not org-overridable.
-        const triggerEntry = result.entries.find((e: any) => e.type === 'trigger');
-        expect(triggerEntry.allowOrgOverride).toBe(false);
-        expect(triggerEntry.overrideSource).toBe('registry');
+        // `allowOrgOverride: false`. `external_catalog` is one such type —
+        // runtime-created by the Sync wizard, never org-overridable.
+        const catalogEntry = result.entries.find((e: any) => e.type === 'external_catalog');
+        expect(catalogEntry.allowOrgOverride).toBe(false);
+        expect(catalogEntry.overrideSource).toBe('registry');
     });
 
     it('saveMetaItem honours the env-elevated allow list', async () => {
@@ -114,27 +116,27 @@ describe('ObjectStackProtocolImplementation - getMetaTypes rich response', () =>
         const scoped = new ObjectStackProtocolImplementation(mockEngine, undefined, undefined, 'env_alpha');
         mockEngine.findOne.mockResolvedValue(null);
 
-        // Without env var: `function` writes blocked. Since the test
-        // registry has no artifact at this name and `function` has
-        // `allowRuntimeCreate: false`, the protocol returns
-        // `not_creatable` (the precise reason); for artifact-backed names
-        // the code would be `not_overridable`. Both indicate the gate
+        // Without env var: `agent` writes blocked — the one remaining
+        // `allowRuntimeCreate: false` kind (platform-owned, ADR-0063). Since
+        // the test registry has no artifact at this name, the protocol
+        // returns `not_creatable` (the precise reason); for artifact-backed
+        // names the code would be `not_overridable`. Both indicate the gate
         // fired with the same 403 status.
         delete process.env.OS_METADATA_WRITABLE;
         ObjectStackProtocolImplementation.resetEnvWritableCache();
         resetEnvWritableMetadataTypes();
         await expect(
-            scoped.saveMetaItem({ type: 'function', name: 'my_fn', item: { name: 'my_fn' } })
+            scoped.saveMetaItem({ type: 'agent', name: 'my_agent', item: { name: 'my_agent' } })
         ).rejects.toThrow(/not_(overridable|creatable)/);
 
-        // With env var: `function` writes allowed.
-        process.env.OS_METADATA_WRITABLE = 'function';
+        // With env var: `agent` writes allowed.
+        process.env.OS_METADATA_WRITABLE = 'agent';
         ObjectStackProtocolImplementation.resetEnvWritableCache();
         resetEnvWritableMetadataTypes();
         // Should no longer throw "not_overridable" / "not_creatable". (May still hit
         // unrelated persistence errors from the mock engine — we only assert the gate.)
         try {
-            await scoped.saveMetaItem({ type: 'function', name: 'my_fn', item: { name: 'my_fn' } });
+            await scoped.saveMetaItem({ type: 'agent', name: 'my_agent', item: { name: 'my_agent' } });
         } catch (err: any) {
             expect(err.code).not.toBe('not_overridable');
             expect(err.code).not.toBe('not_creatable');

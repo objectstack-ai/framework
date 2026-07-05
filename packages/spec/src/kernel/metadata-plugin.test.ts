@@ -18,10 +18,11 @@ describe('MetadataPluginProtocol', () => {
   describe('MetadataTypeSchema', () => {
     it('should accept all built-in metadata types', () => {
       const types = [
-        'object', 'field', 'trigger', 'validation', 'hook', 'seed',
+        'object', 'field', 'validation', 'hook', 'seed',
         'view', 'page', 'dashboard', 'app', 'action', 'report',
         'flow', // ADR-0020: `workflow` retired as a metadata type
-        'datasource', 'translation', 'router', 'function', 'service',
+        // ADR-0088: `trigger`/`router`/`function`/`service` retired as kinds
+        'datasource', 'external_catalog', 'translation',
         'permission', 'profile', 'role',
         'agent', 'tool', 'skill',
       ];

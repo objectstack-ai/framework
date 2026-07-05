@@ -16,14 +16,16 @@ import { lazySchema } from '../shared/lazy-schema';
 const SNAKE_CASE_REGEX = /^[a-z][a-z0-9_]*$/;
 
 // REGEX: Standard File Suffixes
-const OPS_FILE_SUFFIX_REGEX = /\.(object|field|trigger|function|view|page|dashboard|flow|app|router|service)\.ts$/;
+// ADR-0088: trigger/function/router/service retired from the kind registry —
+// their file suffixes are no longer valid OPS metadata names.
+const OPS_FILE_SUFFIX_REGEX = /\.(object|field|view|page|dashboard|flow|app)\.ts$/;
 
 /**
  * Validates a single file path against OPS Naming Conventions.
  * 
  * @example Valid Paths
  * - "src/crm/lead.object.ts"
- * - "src/finance/invoice_payment.trigger.ts"
+ * - "src/finance/invoice_payment.flow.ts"
  * - "src/index.ts"
  * 
  * @example Invalid Paths

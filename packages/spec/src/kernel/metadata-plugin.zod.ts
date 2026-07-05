@@ -73,7 +73,9 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
   // Data Protocol
   'object',      // Business entity definition (ObjectSchema)
   'field',       // Standalone field definition (FieldSchema)
-  'trigger',     // Data-layer event triggers (TriggerSchema)
+  // ADR-0088: there is no `trigger` metadata type — sync data-layer logic is a
+  // `hook` (24 lifecycle events); async automation is a `record_change` flow.
+  // (The `triggers` capability token in `requires:` is a different namespace.)
   'validation',  // Validation rules (ValidationSchema)
   'hook',        // Data hooks (HookSchema)
   'seed',        // Seed/fixture data — runtime-draftable; publishing applies it (SeedSchema)
@@ -98,11 +100,12 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
 
   // System Protocol
   'datasource',  // Data connections (DatasourceSchema)
-  'external_catalog', // Cached remote schema snapshot for federated datasources (ADR-0015)
+  'external_catalog', // Cached remote schema snapshot for federated datasources (ADR-0015) — RUNTIME-CREATED by the Sync wizard (ADR-0062/0088); packages never ship one
   'translation', // i18n resources (TranslationSchema)
-  'router',      // API routes
-  'function',    // Serverless functions
-  'service',     // Service definitions
+  // ADR-0088: `router`/`function`/`service` are NOT metadata kinds — they are
+  // code contributions: plugin `contributes.routes` + declarative `apis:`
+  // (router), `defineStack({ functions })` + `contributes.functions`
+  // (function), and the plugin/service registry itself (service).
   'email_template', // Outbound email templates (EmailTemplateSchema)
   'doc',         // Package documentation — flat Markdown items (DocSchema, ADR-0046)
   'book',        // Documentation navigation spine (BookSchema, ADR-0046 §6)
@@ -595,7 +598,6 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // are not modifiable per-org beyond layout/label; custom objects are full).
   { type: 'object', label: 'Object', filePatterns: ['**/*.object.ts', '**/*.object.yml', '**/*.object.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 10, domain: 'data' },
   { type: 'field', label: 'Field', filePatterns: ['**/*.field.ts', '**/*.field.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 20, domain: 'data' },
-  { type: 'trigger', label: 'Trigger', filePatterns: ['**/*.trigger.ts', '**/*.trigger.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
   { type: 'validation', label: 'Validation Rule', filePatterns: ['**/*.validation.ts', '**/*.validation.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
   { type: 'hook', label: 'Hook', filePatterns: ['**/*.hook.ts', '**/*.hook.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
   // `seed`: fixture / initialization data (SeedSchema = object + records + mode +
@@ -655,11 +657,10 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
     // framework from advertising a button whose backend it doesn't ship:
     // the button is emitted iff the plugin that serves it is installed.
   },
+  // RUNTIME-CREATED (ADR-0062/0088): produced by the datasource Sync wizard —
+  // a derived snapshot; packages never ship one (it would be stale on arrival).
   { type: 'external_catalog', label: 'External Catalog', filePatterns: ['**/*.external-catalog.ts', '**/*.external-catalog.yml', '**/*.external-catalog.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 6, domain: 'system' },
   { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 90, domain: 'system' },
-  { type: 'router', label: 'Router', filePatterns: ['**/*.router.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },
-  { type: 'function', label: 'Function', filePatterns: ['**/*.function.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },
-  { type: 'service', label: 'Service', filePatterns: ['**/*.service.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },
   { type: 'email_template', label: 'Email Template', filePatterns: ['**/*.email-template.ts', '**/*.email-template.yml', '**/*.email-template.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 85, domain: 'system' },
   // ADR-0046: package documentation. Inert data — no runtime behavior, no
   // overlay (a manual is the publisher's voice; tenants don't patch it).

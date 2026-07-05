@@ -237,7 +237,7 @@ describe('MetadataRegisterRequestSchema', () => {
   });
 
   it('should accept all valid metadata types', () => {
-    const validTypes = ['object', 'field', 'trigger', 'view', 'page', 'dashboard', 'app', 'flow', 'agent'];
+    const validTypes = ['object', 'field', 'view', 'page', 'dashboard', 'app', 'flow', 'agent']; // ADR-0088: 'trigger' retired
     for (const type of validTypes) {
       const result = MetadataRegisterRequestSchema.parse({ type, name: 'test_item', data: {} });
       expect(result.type).toBe(type);
@@ -998,7 +998,7 @@ describe('Cross-Framework Metadata API Contracts', () => {
     it('returns all registered types', () => {
       const response = MetadataTypesResponseSchema.parse({
         success: true,
-        data: ['object', 'field', 'trigger', 'view', 'page', 'dashboard', 'app', 'flow', 'agent'],
+        data: ['object', 'field', 'view', 'page', 'dashboard', 'app', 'flow', 'agent'],
       });
       expect(response.data).toContain('object');
       expect(response.data).toContain('agent');

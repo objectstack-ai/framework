@@ -317,13 +317,15 @@ describe('SysMetadataRepository', () => {
         ).rejects.toMatchObject({ code: 'not_overridable', status: 403 });
     });
 
-    it('put refuses statically-registered type with allowRuntimeCreate:false (function)', async () => {
-        // `function` IS in the static registry with both flags false.
+    it('put refuses statically-registered type with allowRuntimeCreate:false (agent)', async () => {
+        // `agent` IS in the static registry with both flags false
+        // (platform-owned, ADR-0063; ADR-0088 retired the former `function`
+        // placeholder this test used to lean on).
         // The new "unknown type ⇒ permissive" branch must NOT relax it.
         await expect(
             repo.put(
-                { org: 'org_alpha', type: 'function', name: 'my_fn' },
-                { name: 'my_fn', handler: 'index.ts' },
+                { org: 'org_alpha', type: 'agent', name: 'my_agent' },
+                { name: 'my_agent', label: 'My Agent' },
                 { parentVersion: null, actor: 'studio', intent: 'runtime-only' },
             ),
         ).rejects.toMatchObject({ code: 'not_creatable', status: 403 });

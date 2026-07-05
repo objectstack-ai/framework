@@ -19,7 +19,6 @@ import { z } from 'zod';
 export const MetadataTypeSchema = z.enum([
   'object',
   'field',
-  'trigger',
   'validation',
   'hook',
   'view',
@@ -29,6 +28,8 @@ export const MetadataTypeSchema = z.enum([
   'action',
   'flow',
   'workflow',
+  // ADR-0088: trigger/router/function/service retired (kept in lockstep
+  // with the spec kernel enum; see metadata-plugin.zod.ts).
   // ADR-0019: `approval` is a flow node, not a metadata type.
   'job',
   'agent',
@@ -45,9 +46,6 @@ export const MetadataTypeSchema = z.enum([
   'datasource',
   'cube',
   'settings',
-  'router',
-  'function',
-  'service',
   'email_template',
 ]).describe('Canonical metadata type name');
 

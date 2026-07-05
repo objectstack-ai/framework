@@ -14,10 +14,9 @@
  *      writable metadata type now requires **zero** Studio-side code.
  *
  * The map intentionally only contains types that meaningfully round-trip
- * through the runtime metadata API. Code-only types whose entries cannot
- * be created via REST (`function`, `service`, `router`) are excluded —
- * `DEFAULT_METADATA_TYPE_REGISTRY` already marks them `allowRuntimeCreate:
- * false`, so the engine never tries to render a form for them.
+ * through the runtime metadata API. (The former code-only placeholder kinds
+ * `function`/`service`/`router` — and `trigger` — were retired from the
+ * registry entirely by ADR-0088.)
  *
  * Profile shares `PermissionSetSchema` (a profile is a permission set
  * with `isProfile: true`); `validation` exposes the discriminated union
@@ -73,8 +72,6 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   hook: HookSchema,
   validation: ValidationRuleSchema,
   seed: SeedSchema, // fixture/init data; runtime-draftable, applied on publish
-  // `trigger` — no standalone Zod schema yet; falls back to raw-JSON
-  // editor until the data-trigger spec lands.
 
   // UI Protocol
   view: ViewSchema,
@@ -99,7 +96,6 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   email_template: EmailTemplateDefinitionSchema,
   doc: DocSchema, // ADR-0046: flat Markdown package documentation
   book: BookSchema as unknown as z.ZodType, // ADR-0046 §6: documentation navigation spine
-  // `router` / `function` / `service` are code-only (allowRuntimeCreate: false).
 
   // Security Protocol
   permission: PermissionSetSchema,
@@ -119,8 +115,8 @@ const EXTRA_METADATA_TYPE_SCHEMAS = new Map<string, z.ZodType>();
  * Look up the canonical Zod schema for a metadata type.
  *
  * Returns the user-registered override if any, otherwise the built-in
- * schema. Returns `undefined` for types with no schema (e.g. `trigger`,
- * `function`, `service`, `router`).
+ * schema. Returns `undefined` for types with no schema (e.g. `external_catalog`,
+ * which is runtime-created by the datasource Sync wizard — ADR-0062/0088).
  */
 export function getMetadataTypeSchema(type: string): z.ZodType | undefined {
   return EXTRA_METADATA_TYPE_SCHEMAS.get(type) ?? BUILTIN_METADATA_TYPE_SCHEMAS[type as MetadataType];

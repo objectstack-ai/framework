@@ -346,7 +346,7 @@ Type: `string`
 | :--- | :--- | :--- | :--- |
 | **objectName** | `string` | ✅ | Related object name (e.g., "task", "opportunity") |
 | **relationshipField** | `string` | ✅ | Field on related object that points to this record (e.g., "account_id") |
-| **columns** | `string[]` | ✅ | Fields to display in the related list |
+| **columns** | `string[]` | optional | Fields to display in the related list. Optional: when omitted, columns derive from the related object's highlightFields / default list columns (a related list is just another surface that lists that object). Override chain: child highlightFields → field-level relatedListColumns → this inline list. |
 | **sort** | `string \| Object[]` | optional | Sort order for related records |
 | **limit** | `integer` | ✅ | Number of records to display initially |
 | **filter** | `Object[]` | optional | Additional filter criteria for related records |

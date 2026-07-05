@@ -120,8 +120,9 @@ The existing `allowOrgOverride` / `allowRuntimeCreate` flags on
 `MetadataTypeRegistryEntry` continue to express **type-wide** policy:
 
 - `allowOrgOverride: false` → no overlay write to any item of this type
-  is ever accepted from a tenant. (`datasource`, `router`, `function`,
-  `service` keep this stance because they encode deployment topology.)
+  is ever accepted from a tenant. (`datasource` keeps this stance because
+  it encodes deployment topology; the former `router`/`function`/`service`
+  kinds were retired outright — ADR-0088.)
 - `allowRuntimeCreate: false` → tenants cannot author brand-new items
   of this type at runtime.
 
