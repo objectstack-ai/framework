@@ -31,11 +31,13 @@ function Page() {
   const refreshStats = React.useCallback(async () => {
     if (!adapter) return;
     try {
-      // Canonical QueryOptionsV2 keys only (limit, not the legacy top alias
-      // removed in 11.0) — the KPI cards silently stuck at 0 whenever adapter.find
-      // rejected on the unrecognized param, and the empty catch hid the failure.
+      // useAdapter() is the console's ObjectStackAdapter — its find() resolves to
+      // a normalized QueryResult with a "data" array, NOT the REST envelope with
+      // a "records" array. Reading .records here always missed, so the KPI cards
+      // silently stuck at 0 even though the ListView beside them showed the same
+      // rows. Read .data first, with .records/array fallbacks for robustness.
       const all = await adapter.find('showcase_project', { limit: 200 });
-      const rows = Array.isArray(all) ? all : (all && all.records) || [];
+      const rows = Array.isArray(all) ? all : (all && (all.data || all.records)) || [];
       setStats({ total: rows.length, active: rows.filter((r) => r.status === 'active').length });
     } catch (e) { console.warn('[CRM Workbench] failed to refresh stats', e); }
   }, [adapter]);
