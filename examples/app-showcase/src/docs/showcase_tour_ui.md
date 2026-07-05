@@ -14,6 +14,23 @@ clicking through, grouped to teach: Workspace / Data Model / Analytics work
 like a real product; the **Authoring · \*** groups are the page-authoring
 gallery.
 
+## Data Slices — declarative `filters` on the bare data surface
+
+The **Data Slices (filters)** group demonstrates `ObjectNavItem.filters`
+(#2626): a nav item that targets an object's bare data surface
+(`/:objectName/data`) with pre-applied `filter[<field>]=<value>` conditions
+instead of a saved view. "In-Progress Tasks", "Urgent Tasks", and
+"In-Review Tasks" all point at the same `showcase_task` object as
+**Data Model → Tasks**, but each pins a different slice — the shell renders
+the conditions as removable chips.
+
+`filters` is mutually exclusive with `recordId` / `viewName`: mixing them is
+an authoring ambiguity (a stale `recordId` would silently hijack the slice),
+so the `app.zod` `superRefine` guard rejects the combination at build time
+(#2630, precedence `recordId` → `filters` → `viewName`). Values also support
+the `{current_user_id}` / `{current_org_id}` template variables for
+per-user slices.
+
 ## Views — every visualization, every form layout
 
 - **All Views** (navigation → Authoring · Visualizations → All Views) shows
