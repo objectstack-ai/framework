@@ -84,9 +84,16 @@ function kpi(id: string, object: string, label: string, colorVariant: string, ag
   };
 }
 
-/** A dataset-bound chart with the shared brand palette. */
-function chart(id: string, chartType: string, dataset: string, dimensions: string[], values: string[]): any {
-  return { id, type: 'object-chart', responsiveStyles: { large: { width: '100%', minWidth: '0' } }, properties: { dataset, dimensions, values, chartType, colors: PALETTE } };
+/**
+ * A dataset-bound chart with the shared brand palette. `integerYAxis` pins the
+ * tick step to 1 — without it, count aggregates (small integers like 0-5)
+ * render fractional gridlines (0.8, 2.3, …) on the default Recharts axis.
+ */
+function chart(id: string, chartType: string, dataset: string, dimensions: string[], values: string[], integerYAxis?: boolean): any {
+  return {
+    id, type: 'object-chart', responsiveStyles: { large: { width: '100%', minWidth: '0' } },
+    properties: { dataset, dimensions, values, chartType, colors: PALETTE, ...(integerYAxis ? { yAxis: [{ field: values[0], stepSize: 1 }] } : {}) },
+  };
 }
 
 const CHART_H = '376px';
@@ -148,14 +155,14 @@ export const CommandCenterPage = definePage({
 
               // ── Row A — three equal chart panels ─────────────────────────
               band('cc_rowA', 3, [
-                panel({ id: 'cc_status', title: '任务状态分布', accent: A.c1, minHeight: CHART_H, child: chart('cc_status_c', 'bar', 'showcase_task_metrics', ['status'], ['task_count']) }),
+                panel({ id: 'cc_status', title: '任务状态分布', accent: A.c1, minHeight: CHART_H, child: chart('cc_status_c', 'bar', 'showcase_task_metrics', ['status'], ['task_count'], true) }),
                 panel({ id: 'cc_health', title: '项目健康度', accent: A.c4, minHeight: CHART_H, child: chart('cc_health_c', 'donut', 'showcase_project_metrics', ['health'], ['project_count']) }),
-                panel({ id: 'cc_priority', title: '优先级分布', accent: A.c5, minHeight: CHART_H, child: chart('cc_pri_c', 'bar', 'showcase_task_metrics', ['priority'], ['task_count']) }),
+                panel({ id: 'cc_priority', title: '优先级分布', accent: A.c5, minHeight: CHART_H, child: chart('cc_pri_c', 'bar', 'showcase_task_metrics', ['priority'], ['task_count'], true) }),
               ]),
 
               // ── Row B — wide trend (span 2) + spend ──────────────────────
               band('cc_rowB', 3, [
-                panel({ id: 'cc_throughput', title: '任务吞吐趋势 (月)', accent: A.c2, span: 'span 2', minHeight: CHART_H, child: chart('cc_thr_c', 'area', 'showcase_task_metrics', ['created_at'], ['task_count']) }),
+                panel({ id: 'cc_throughput', title: '任务吞吐趋势 (月)', accent: A.c2, span: 'span 2', minHeight: CHART_H, child: chart('cc_thr_c', 'area', 'showcase_task_metrics', ['created_at'], ['task_count'], true) }),
                 panel({ id: 'cc_budget', title: '预算 vs 支出 (按客户)', accent: A.c4, minHeight: CHART_H, child: chart('cc_bud_c', 'bar', 'showcase_project_metrics', ['account'], ['budget_sum', 'spent_sum']) }),
               ]),
 

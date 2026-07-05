@@ -2203,6 +2203,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
         if (options.select !== undefined) delete options.select;
 
+        // fields: comma-separated string → array. Clients may pass `?fields=name`
+        // directly (not only via the `?select=` alias above) — a single-value
+        // querystring param arrives as a bare string, which drivers' `.map()`
+        // calls over `query.fields` would otherwise throw on.
+        if (typeof options.fields === 'string') {
+            options.fields = options.fields.split(',').map((s: string) => s.trim()).filter(Boolean);
+        } else if (options.fields !== undefined && !Array.isArray(options.fields)) {
+            delete options.fields;
+        }
+
         // Sort/orderBy → orderBy: string → SortNode[] array
         const sortValue = options.orderBy ?? options.sort;
         if (typeof sortValue === 'string') {

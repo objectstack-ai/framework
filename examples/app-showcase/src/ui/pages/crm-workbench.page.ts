@@ -31,10 +31,13 @@ function Page() {
   const refreshStats = React.useCallback(async () => {
     if (!adapter) return;
     try {
-      const all = await adapter.find('showcase_project', { top: 200 });
+      // Canonical QueryOptionsV2 keys only (limit, not the legacy top alias
+      // removed in 11.0) — the KPI cards silently stuck at 0 whenever adapter.find
+      // rejected on the unrecognized param, and the empty catch hid the failure.
+      const all = await adapter.find('showcase_project', { limit: 200 });
       const rows = Array.isArray(all) ? all : (all && all.records) || [];
       setStats({ total: rows.length, active: rows.filter((r) => r.status === 'active').length });
-    } catch (e) { /* ignore in demo */ }
+    } catch (e) { console.warn('[CRM Workbench] failed to refresh stats', e); }
   }, [adapter]);
   React.useEffect(() => { refreshStats(); }, [refreshStats, reloadKey]);
 
