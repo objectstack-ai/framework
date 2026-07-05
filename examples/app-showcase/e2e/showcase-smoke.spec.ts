@@ -10,6 +10,7 @@ const APP = process.env.SHOWCASE_APP || 'com.example.showcase';
 const base = (seg: string) => `/_console/apps/${APP}/${seg}`;
 
 const SURFACES: { name: string; path: string; chart?: boolean }[] = [
+  { name: 'Capability Map', path: base('page/showcase_capability_map') },
   { name: 'My Work', path: base('page/showcase_my_work') },
   { name: 'Approvals', path: base('page/showcase_review_queue') },
   { name: 'New Project Wizard', path: base('page/showcase_new_project_wizard') },

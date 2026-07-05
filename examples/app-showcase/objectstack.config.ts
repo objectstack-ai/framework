@@ -22,7 +22,7 @@ import { ChartGalleryDashboard, OpsDashboard } from './src/ui/dashboards/index.j
 import { ShowcaseTaskDataset, ShowcaseProjectDataset } from './src/ui/datasets/index.js';
 import { allReports } from './src/ui/reports/index.js';
 import { allActions } from './src/ui/actions/index.js';
-import { StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, AccountCockpitPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage } from './src/ui/pages/index.js';
+import { CapabilityMapPage, StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, AccountCockpitPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage } from './src/ui/pages/index.js';
 import { allFlows } from './src/automation/flows/index.js';
 import { allWebhooks } from './src/automation/webhooks/index.js';
 import { allHooks } from './src/data/hooks/index.js';
@@ -163,7 +163,7 @@ export default defineStack({
   apps: [ShowcaseApp],
   portals: allPortals,
   views: [TaskViews, ProjectViews, InquiryViews, BusinessUnitViews],
-  pages: [StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, AccountCockpitPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage],
+  pages: [CapabilityMapPage, StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, AccountCockpitPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage],
   dashboards: [ChartGalleryDashboard, OpsDashboard],
   books: allBooks,
   datasets: [ShowcaseTaskDataset, ShowcaseProjectDataset],

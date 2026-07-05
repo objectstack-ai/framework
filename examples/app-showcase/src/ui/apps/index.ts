@@ -5,7 +5,9 @@ import { App } from '@objectstack/spec/ui';
 /**
  * Showcase app — navigation organized to TEACH page authoring.
  *
- * "Start Here" is the default landing: it explains the two axes every page has —
+ * "Capability Map" is the default landing (first nav item): one card per
+ * protocol domain, indexing every demo. "Page Authoring" (Start Here) is the
+ * page-authoring teaching index: it explains the two axes every page has —
  * `type` (the surface role) and `kind` (the authoring model) — and links to the
  * canonical example of each kind. The first three groups (Workspace / Data Model
  * / Analytics) are the app *working* like a real product. The "Authoring · *"
@@ -23,7 +25,10 @@ export const ShowcaseApp = App.create({
   branding: { primaryColor: '#7C3AED' },
 
   navigation: [
-    { id: 'nav_start_here', type: 'page', pageName: 'showcase_start_here', label: 'Start Here', icon: 'compass' },
+    // First item = the app's landing surface (the delivered convention; the
+    // spec's homePageId has no console consumer yet).
+    { id: 'nav_capability_map', type: 'page', pageName: 'showcase_capability_map', label: 'Capability Map', icon: 'map' },
+    { id: 'nav_start_here', type: 'page', pageName: 'showcase_start_here', label: 'Page Authoring', icon: 'compass' },
     {
       id: 'grp_workspace',
       type: 'group',

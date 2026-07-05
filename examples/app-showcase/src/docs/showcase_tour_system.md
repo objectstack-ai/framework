@@ -1,0 +1,44 @@
+---
+title: "Tour · System"
+description: Guided tour of the system domain — datasources & federation, i18n, email templates, docs-as-metadata, and the custom endpoint.
+---
+
+# Guided tour — System
+
+Everything in this domain lives under `src/system/` (plus the pinned flat
+`src/docs/` directory this page is part of).
+
+## Datasources & federation
+
+`src/system/datasources/` declares a second, read-only SQLite file as an
+**external datasource** (ADR-0015 / ADR-0062). It auto-connects at boot with
+no driver wiring; its federated objects (External Customer / External
+Order) are queryable via REST and visible in **Setup → Datasources**. The
+`external_catalog` snapshot is produced at runtime by the Sync wizard —
+there is no declarative artifact, so the coverage manifest waives that kind
+with the tracking issue.
+
+## i18n & email
+
+- `src/system/translations/` — the `en` + `zh-CN` bundles; switch locale in
+  the console and the navigation follows.
+- `src/system/emails/` — outbound email templates used by the automation
+  chain.
+
+## Docs & books — this manual is metadata
+
+Every Markdown file in flat `src/docs/` compiles to a `doc` item
+(ADR-0046); `src/system/books/` curates them into the spine you are
+reading, exposed publicly through the library portal. The
+[documentation guide](./showcase_docs_guide.md) states the authoring rules
+this very page obeys.
+
+## Code-only surfaces
+
+`src/system/server/recalc-endpoint.ts` mounts a custom REST endpoint
+imperatively — the code-level counterpart of the `router` / `function` /
+`service` kinds, which have no declarative authoring surface today (waived
+in the coverage manifest with the tracking issue).
+
+Continue with the [Security tour](./showcase_tour_security.md), or go back
+to the [overview](./showcase_index.md).

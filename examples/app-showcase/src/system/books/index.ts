@@ -25,9 +25,22 @@ export const ShowcaseBook = defineBook({
       pages: ['showcase_index', '...'],
     },
     {
+      key: 'tour',
+      label: 'Guided Tour',
+      order: 2,
+      // Explicit list: fixes the domain order (include-globs sort by name).
+      pages: [
+        'showcase_tour_data',
+        'showcase_tour_ui',
+        'showcase_tour_automation',
+        'showcase_tour_system',
+        'showcase_tour_security',
+      ],
+    },
+    {
       key: 'guides',
       label: 'Guides',
-      order: 2,
+      order: 3,
       include: 'showcase_*_guide', // derived: every guide doc, present and future
     },
   ],

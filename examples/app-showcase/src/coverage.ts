@@ -118,8 +118,16 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
     issue: ISSUE.noAuthoringSurface,
   },
   email_template: { status: 'demonstrated', files: ['src/system/emails/index.ts'] },
-  doc: { status: 'demonstrated', files: ['src/docs/showcase_index.md'] },
-  book: { status: 'demonstrated', files: ['src/system/books/index.ts'] },
+  doc: {
+    status: 'demonstrated',
+    files: ['src/docs/showcase_index.md', 'src/docs/showcase_tour_data.md'],
+    notes: 'Includes the five per-domain guided-tour docs (showcase_tour_*) with live metadata embeds (ADR-0051).',
+  },
+  book: {
+    status: 'demonstrated',
+    files: ['src/system/books/index.ts'],
+    notes: 'ShowcaseBook curates a Guided Tour group in fixed domain order.',
+  },
 
   // ── security ──
   permission: { status: 'demonstrated', files: ['src/security/index.ts'] },

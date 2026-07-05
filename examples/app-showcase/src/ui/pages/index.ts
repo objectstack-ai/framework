@@ -3,6 +3,7 @@
 import { definePage } from '@objectstack/spec/ui';
 
 export { StartHerePage } from './start-here.page.js';
+export { CapabilityMapPage } from './capability-map.page.js';
 export { ProjectWorkspacePage } from './project-workspace.page.js';
 export { ProjectDetailPage } from './project-detail.page.js';
 export { TaskWorkbenchPage } from './task-workbench.page.js';

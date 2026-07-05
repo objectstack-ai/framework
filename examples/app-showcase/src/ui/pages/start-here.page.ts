@@ -20,7 +20,7 @@ export const StartHerePage = definePage({
   label: 'Start Here',
   type: 'home',
   kind: 'html',
-  isDefault: true,
+  isDefault: false,
   source: `
 <flex direction="col" gap={8} style={{"maxWidth":"1080px","margin":"0 auto","padding":"40px"}}>
 
