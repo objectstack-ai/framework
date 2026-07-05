@@ -56,12 +56,17 @@ const marketplaceUrl = resolveCloudUrl();
  * chains. It is built for three audiences at once:
  *
  *   • Demonstration — a coherent project-delivery domain with seeded data
- *     so every view renders something real.
+ *     so every view renders something real. The Capability Map landing page
+ *     indexes every demo by protocol domain, and five tour docs
+ *     (src/docs/showcase_tour_*.md) walk each domain with live metadata
+ *     embeds.
  *   • Debugging — open in Studio (`pnpm dev` → http://localhost:3000/_studio)
  *     and click through the gallery navigation.
  *   • Verification — `pnpm verify` runs typecheck + the coverage test, which
- *     introspects the protocol's own enums and fails if any field/chart/
- *     report type is left uncovered.
+ *     introspects the protocol's own contracts at two levels: every metadata
+ *     kind in DEFAULT_METADATA_TYPE_REGISTRY must be demonstrated or
+ *     explicitly waived (reason + issue), and every enum variant
+ *     (field/chart/report/action) must appear at least once.
  */
 export default defineStack({
   manifest: {
