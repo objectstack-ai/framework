@@ -181,6 +181,12 @@ export const STACK_COLLECTION_COVERAGE: Record<string, KindCoverage> = {
     files: ['src/data/extensions/account.extension.ts'],
     notes: 'Merged into showcase_account by the ObjectQL engine at registerApp (priority overlay).',
   },
+  apis: {
+    status: 'demonstrated',
+    files: ['src/system/apis/index.ts'],
+    notes:
+      'Declarative ApiEndpoint metadata (object_operation + flow targets), executed by the runtime dispatcher (handleApiEndpoint). Complements the code-mounted endpoint in src/system/server/ (router kind stays waived: code-only).',
+  },
   mappings: {
     status: 'waived',
     reason:

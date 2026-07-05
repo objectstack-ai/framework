@@ -33,6 +33,31 @@ describe('showcase gap fill — analytics cube', () => {
   });
 });
 
+describe('showcase gap fill — declarative api endpoints', () => {
+  it('is wired into the stack definition', () => {
+    const apis = (stack as { apis?: Array<{ name: string }> }).apis ?? [];
+    expect(apis.map((a) => a.name)).toEqual(
+      expect.arrayContaining(['showcase_task_feed', 'showcase_inquiry_purge_api']),
+    );
+  });
+
+  it('flow-typed endpoints target flows that actually exist (no 500 at dispatch)', () => {
+    const apis = (stack as { apis?: Array<{ type: string; target: string }> }).apis ?? [];
+    const flowNames = ((stack as { flows?: Array<{ name: string }> }).flows ?? []).map((f) => f.name);
+    for (const api of apis.filter((a) => a.type === 'flow')) {
+      expect(flowNames, `api endpoint targets missing flow '${api.target}'`).toContain(api.target);
+    }
+  });
+
+  it('object_operation endpoints target objects that exist', () => {
+    const apis = (stack as { apis?: Array<{ type: string; target: string }> }).apis ?? [];
+    const objectNames = ((stack as { objects?: Array<{ name: string }> }).objects ?? []).map((o) => o.name);
+    for (const api of apis.filter((a) => a.type === 'object_operation')) {
+      expect(objectNames, `api endpoint targets missing object '${api.target}'`).toContain(api.target);
+    }
+  });
+});
+
 describe('showcase gap fill — object extension (overlay merge)', () => {
   it('is wired into the stack definition', () => {
     const exts = (stack as { objectExtensions?: Array<{ extend: string }> }).objectExtensions ?? [];

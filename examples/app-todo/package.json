@@ -17,7 +17,7 @@
     "validate": "objectstack validate",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
-    "test:mcp": "tsx test/mcp-actions.test.ts"
+    "test:mcp": "tsx test/mcp-actions.e2e.ts"
   },
   "dependencies": {
     "@objectstack/client": "workspace:*",

@@ -5,7 +5,7 @@ plugins, no metadata-management protocol. This is the path for a thin host (e.g.
 a gateway, an edge worker, a CLI tool) that wants the query/CRUD engine and the
 *same* object definitions as a full ObjectStack backend, without the platform.
 
-## The point (ADR-0076)
+## The point (ADR-0076 core tiering — Proposed; the `/core` boundary itself has shipped)
 
 Import from the **lean entry**:
 

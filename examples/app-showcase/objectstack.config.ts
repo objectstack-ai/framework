@@ -29,6 +29,7 @@ import { allHooks } from './src/data/hooks/index.js';
 import { allJobs } from './src/automation/jobs/index.js';
 import { allEmails } from './src/system/emails/index.js';
 import { allBooks } from './src/system/books/index.js';
+import { allApis } from './src/system/apis/index.js';
 import {
   allRoles,
   allPermissionSets,
@@ -180,6 +181,9 @@ export default defineStack({
   flows: allFlows,
   jobs: allJobs,
   emailTemplates: allEmails,
+  // Declarative REST endpoints (object_operation + flow) — the metadata
+  // counterpart of the code-mounted recalc endpoint (see src/system/apis/).
+  apis: allApis,
   hooks: allHooks,
   webhooks: allWebhooks,
 

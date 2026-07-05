@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { Task } from '../objects/task.object';
 import { en } from './en';
 import { zhCN } from './zh-CN';
+import { jaJP } from './ja-JP';
 import type { TranslationData } from '@objectstack/spec/system';
 
 /**
@@ -25,6 +26,9 @@ const selectFields = Object.entries(Task.fields)
 describe.each([
   ['en', en],
   ['zh-CN', zhCN],
+  // ja-JP is the repo's only Japanese bundle — keep it held to the same
+  // completeness bar as the other declared locales.
+  ['ja-JP', jaJP],
 ] as [string, TranslationData][])('%s translation completeness', (locale, t) => {
 
   it('should have task object translation', () => {

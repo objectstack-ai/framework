@@ -5,11 +5,15 @@ A comprehensive Todo application demonstrating the ObjectStack Protocol with tas
 ## 🎯 Purpose
 
 This example serves as a **quick-start reference** for learning ObjectStack basics. It demonstrates:
-- Object definition with essential field types, validations, and workflows
+- Object definition with essential field types and validations (record
+  state lives in validation rules per ADR-0020 — there is no `workflow` type)
 - Actions for task management (complete, defer, clone, etc.)
-- Dashboard with key metrics and visualizations
-- Reports for status, priority, owner, and time tracking analysis
+- Dashboard with key metrics and visualizations, backed by the dataset
+  semantic layer (ADR-0021)
+- Reports for status, priority, owner, and time-tracking analysis
 - Automation flows for reminders, escalation, and recurring tasks
+- i18n bundles for **en / zh-CN / ja-JP** (the ja-JP bundle is unique
+  in-repo)
 - Full configuration using `objectstack.config.ts` with the standard **by-type** layout
 
 For a **comprehensive enterprise example** with advanced features (AI agents, security profiles, sharing rules), see the **[HotCRM reference app](https://github.com/objectstack-ai/hotcrm)** (separate repository).
@@ -22,20 +26,21 @@ Follows the **by-type** directory layout — the ObjectStack standard aligned wi
 examples/app-todo/
 ├── src/
 │   ├── objects/                     # 📦 Data Models
-│   │   ├── task.object.ts           #    Task object definition (fields, validations, workflows)
-│   │   └── task.hook.ts             #    Data hooks / triggers
-│   ├── actions/                     # ⚡ Buttons & Actions
-│   │   └── task.actions.ts          #    Complete, Start, Defer, Clone, Mass Complete, Export
-│   ├── apps/                        # 🚀 App Configuration
-│   │   └── todo.app.ts              #    Navigation, branding
-│   ├── dashboards/                  # 📊 BI Dashboards
-│   │   └── task.dashboard.ts        #    Metrics, charts, task lists
-│   ├── reports/                     # 📈 Analytics Reports
-│   │   └── task.report.ts           #    By status, priority, owner, overdue, time tracking
-│   └── flows/                       # 🔄 Automation Flows
-│       └── task.flow.ts             #    Reminder, escalation, completion, quick-add
+│   │   ├── task.object.ts           #    Task object (fields + validation rules)
+│   │   └── task.hook.ts             #    Data hooks
+│   ├── views/                       # 👓 List-view lenses (incl. Overdue — ADR-0017)
+│   ├── datasets/                    # 🧮 Semantic layer feeding dashboard/reports (ADR-0021)
+│   ├── actions/                     # ⚡ Complete, Start, Defer, Clone, Mass Complete, Export
+│   ├── apps/                        # 🚀 Navigation, branding
+│   ├── dashboards/                  # 📊 Metrics, charts, task lists
+│   ├── reports/                     # 📈 By status / priority / owner / completed / time tracking
+│   ├── flows/                       # 🔄 Reminder, escalation, completion, quick-add
+│   ├── translations/                # 🌍 en · zh-CN · ja-JP bundles (+ completeness spec)
+│   ├── data/                        # 🌱 Seed data
+│   └── docs/                        # 📚 Package docs (ADR-0046)
 ├── test/
-│   └── seed.test.ts                 # 🧪 Seed data verification
+│   ├── seed-check.ts                # 🧪 Seed/boot verification script (tsx)
+│   └── mcp-actions.e2e.ts           # 🤖 MCP business-action E2E (pnpm test:mcp)
 ├── objectstack.config.ts            # Application manifest
 └── README.md
 ```
@@ -69,10 +74,12 @@ examples/app-todo/
 - Charts (status pie, priority bar, weekly trend line, category donut)
 - Task tables (overdue, due today)
 
-### Reports (6)
+### Reports (5)
 - Tasks by Status / Priority / Owner
-- Overdue Tasks / Completed Tasks
+- Completed Tasks
 - Time Tracking (estimated vs actual hours matrix)
+- (Overdue Tasks is deliberately **not** a report — a flat record list is a
+  ListView lens, ADR-0021; see `src/views/task.view.ts`)
 
 ### Automation Flows (4)
 - **Task Reminder** — Daily scheduled reminder for tasks due tomorrow
@@ -80,11 +87,12 @@ examples/app-todo/
 - **Task Completion** — Auto-create next occurrence for recurring tasks
 - **Quick Add Task** — Screen flow for fast task creation
 
-### Validations & Workflows
-- Completed date required when status is "completed"
-- Recurrence type required for recurring tasks
-- Auto-set `is_completed`, `completed_date`, `progress_percent` on status change
-- Auto-detect overdue tasks and send urgent notifications
+### Validations & Automation
+- Completed date required when status is "completed" (validation rule)
+- Recurrence type required for recurring tasks (validation rule)
+- Auto-set `is_completed`, `completed_date`, `progress_percent` on status
+  change (data hook)
+- Auto-detect overdue tasks and send urgent notifications (flow)
 
 ## 💡 How to Run
 
@@ -108,43 +116,29 @@ pnpm --filter @objectstack/example-todo build
 ### Explore the Config
 Open `objectstack.config.ts` to see how all pieces connect via `defineStack()`.
 
-## 🤖 AI Demo (NEW in v5)
+## 🤖 MCP Demo — business actions over the open AI surface
 
-This example also showcases the v1 AI capabilities. Run the end-to-end demo:
-
-```bash
-pnpm --filter @objectstack/example-todo test:ai
-```
-
-What it does — **no API key required**:
-
-1. Boots the Todo stack with `@objectstack/service-ai` and the in-memory `MemoryLLMAdapter`
-2. Registers a `memory` model in the runtime `ModelRegistry` for cost attribution
-3. Calls the built-in `query_data` tool with a natural-language request (`"list my todo_task records"`)
-4. The tool:
-   - Retrieves the matching object schema (`SchemaRetriever`)
-   - Generates an ObjectQL plan via `ai.generateObject()` (heuristic in memory mode)
-   - Executes the plan against the data engine
-   - Returns the records
-5. Verifies the call was auto-recorded as a row in the `ai_traces` object with `operation='generate_object'`, latency, status, and model
-
-### Agent Demo (`pnpm test:agent`)
-
-A higher-level demo that exercises the **`data_chat` built-in agent** end-to-end:
+The open framework exposes AI via **`@objectstack/mcp`** (BYO-AI; the
+in-product chat lives in the cloud distribution — ADR-0063). This example
+ships a real end-to-end proof, **no API key required**:
 
 ```bash
-pnpm --filter @objectstack/example-todo test:agent
+pnpm --filter @objectstack/example-todo test:mcp
 ```
 
-1. Sends a natural-language user message to `AIService.chatWithTools()` (the same path the REST endpoint `POST /api/v1/ai/agents/data_chat/chat` uses)
-2. `MemoryLLMAdapter` returns a `query_data` tool call
-3. The tool registry executes it, feeds the result back
-4. The adapter summarises: `"[memory] Found 8 records for ..."`
-5. Verifies a `chat_with_tools` row was persisted in `ai_traces`
+What it does (`test/mcp-actions.e2e.ts`):
 
-This is the canonical "ask in English, get real data" loop. Swap in a real LLM adapter and the loop carries `data_chat` directly to production — no code changes.
+1. Boots a self-host composition of ONLY the open framework —
+   `@objectstack/runtime` + ObjectQL + a driver + this seeded app + `@objectstack/mcp`
+2. Drives the real `MCPServerRuntime` over JSON-RPC — the same code path an
+   external MCP client (e.g. Claude) hits
+3. Lists the app's business actions as MCP tools, then executes one via
+   `run_action` → `engine.executeAction` → the registered handler → the
+   real driver, **permission-enforced** end to end
 
-To switch to a real LLM, replace `MemoryLLMAdapter` with the auto-detected `VercelLLMAdapter` and set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` — everything else stays the same.
+Point any MCP client at the running server and the same tools are live —
+that is the community-edition "ask in natural language, act on real data"
+path.
 
 ## 📖 Learning Path
 
@@ -162,4 +156,4 @@ To switch to a real LLM, replace `MemoryLLMAdapter` with the auto-detected `Verc
 
 ## 📝 License
 
-MIT
+Apache-2.0

@@ -5,14 +5,12 @@ import type { Dashboard } from '@objectstack/spec/ui';
 /**
  * Task Overview dashboard.
  *
- * ADR-0021 Phase 2: every widget is bound to the `task_metrics` dataset
- * (`dataset` + `dimensions` + `values`, measures/dimensions referenced BY NAME)
- * so the numbers stay consistent with every other surface. The legacy inline
- * query (`object` + `categoryField` + `valueField` + `aggregate` + `filter`) is
- * retained side-by-side during the dual-form window — the reconciliation
- * harness asserts the two forms return identical numbers before the inline
- * form is removed (see scripts/analytics-reconcile). The widget `filter`
- * doubles as the dataset-bound `runtimeFilter` (presentation scope).
+ * ADR-0021 single-form: every widget is bound to the `task_metrics` dataset
+ * (`dataset` + `dimensions` + `values`, measures/dimensions referenced BY
+ * NAME) so the numbers stay consistent with every other surface. The
+ * dual-form migration window is over — no widget carries the legacy inline
+ * query form. The widget `filter` doubles as the dataset-bound
+ * `runtimeFilter` (presentation scope).
  */
 export const TaskDashboard: Dashboard = {
   name: 'task_dashboard',

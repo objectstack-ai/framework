@@ -2,12 +2,11 @@
 
 import { defineReport } from '@objectstack/spec/ui';
 
-// ADR-0021 Phase 2: each report below carries a `task_metrics` dataset binding
-// (`dataset` + `rows` + `values`, measures referenced BY NAME) alongside the
-// legacy inline query during the dual-form window. The reconciliation harness
-// asserts both forms return identical numbers (scripts/analytics-reconcile).
-// When the inline form is removed, the detail columns move to a click-through
-// drilldown (per the migration decision); `overdue_tasks` becomes a ListView.
+// ADR-0021 single-form: each report binds the `task_metrics` dataset
+// (`dataset` + `rows` + `values`, measures referenced BY NAME). The dual-form
+// migration window is over — the legacy inline query form is gone, and the
+// former `overdue_tasks` report now lives as a ListView lens on the task
+// object (src/views/task.view.ts).
 
 /** Tasks by Status Report */
 export const TasksByStatusReport = defineReport({

@@ -8,9 +8,13 @@ import { definePage } from '@objectstack/spec/ui';
  * sees what is waiting on them; this is that surface.
  *
  * An interface (list) page over tasks currently `in_review` — the work
- * awaiting a decision — with the source object's actions surfaced as toolbar
- * buttons (Mark done = approve & complete) and a drawer to inspect each item.
- * Tabs let the reviewer pivot to urgent or blocked work.
+ * awaiting a decision — with a drawer to inspect each item. "Mark Done" is
+ * deliberately NOT wired as a page-level `buttons:` toolbar entry: that
+ * surface has no bound record, so `MarkDoneAction`'s `visible: '!record.done'`
+ * expression has nothing to evaluate against and the button would render
+ * regardless of state. `MarkDoneAction.locations` already includes
+ * `list_item`, so it correctly appears per-row (with that row's record bound)
+ * instead. Tabs let the reviewer pivot to urgent or blocked work.
  */
 export const ReviewQueuePage = definePage({
   name: 'showcase_review_queue',
@@ -29,8 +33,9 @@ export const ReviewQueuePage = definePage({
     sort: [{ field: 'due_date', order: 'asc' }],
     appearance: { showDescription: true, allowedVisualizations: ['grid'] },
     userActions: { sort: true, search: true, filter: false, rowHeight: false, addRecordForm: false },
-    // Object actions as toolbar buttons — "approve & complete" the reviewed item.
-    buttons: ['showcase_mark_done'],
+    // No `buttons:` entry here — see file header comment: "Mark Done" is a
+    // record-scoped action and belongs per-row (`list_item`), not as an
+    // unbound page-toolbar button.
     // Click a row → drawer with the full record to review before deciding.
     recordAction: 'drawer',
     showRecordCount: true,
