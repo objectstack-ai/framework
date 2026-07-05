@@ -425,6 +425,36 @@ describe('SchemaRegistry', () => {
             expect(registry.getPackage('com.test')).toBeUndefined();
             expect(registry.getNamespaceOwner('test')).toBeUndefined();
         });
+
+        it('updatePackageManifest merges editable fields, preserving lifecycle state', () => {
+            registry.installPackage({ id: 'com.test', name: 'Old', version: '1.0.0' } as any);
+            registry.disablePackage('com.test'); // lifecycle state that must survive an edit
+
+            const updated = registry.updatePackageManifest('com.test', {
+                name: 'New Name',
+                description: 'now with a description',
+                version: '2.0.0',
+            });
+
+            expect(updated?.manifest.name).toBe('New Name');
+            expect((updated?.manifest as any).description).toBe('now with a description');
+            expect(updated?.manifest.version).toBe('2.0.0');
+            // Editing metadata must NOT re-enable a disabled package.
+            expect(updated?.enabled).toBe(false);
+            expect(updated?.status).toBe('disabled');
+        });
+
+        it('updatePackageManifest only overwrites the fields present in the patch', () => {
+            registry.installPackage({ id: 'com.test', name: 'Keep', version: '1.0.0' } as any);
+            const updated = registry.updatePackageManifest('com.test', { description: 'only this' });
+            expect(updated?.manifest.name).toBe('Keep');
+            expect(updated?.manifest.version).toBe('1.0.0');
+            expect((updated?.manifest as any).description).toBe('only this');
+        });
+
+        it('updatePackageManifest returns undefined for an unknown package', () => {
+            expect(registry.updatePackageManifest('nope', { name: 'x' })).toBeUndefined();
+        });
     });
 
     // ==========================================

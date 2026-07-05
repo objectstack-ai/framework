@@ -5957,4 +5957,48 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         return { package: pkg as any, message: `Installed package: ${manifest?.id}` };
     }
+
+    /**
+     * Edit an installed package's manifest (name / description / version) — the
+     * durable half of `PATCH /packages/:id`. Merges the patch into the registry
+     * (preserving lifecycle state — see {@link SchemaRegistry.updatePackageManifest})
+     * then re-persists the merged manifest to `sys_packages` via the `package`
+     * service so the edit survives a restart. Persistence is best-effort and
+     * non-fatal (matching `installPackage`): the registry write already
+     * succeeded, so a persist failure is logged, never thrown.
+     */
+    async updatePackage(request: {
+        packageId: string;
+        patch: { name?: string; description?: string; version?: string };
+    }): Promise<{ package: any; message: string }> {
+        const pkg = this.engine.registry.updatePackageManifest(request.packageId, request.patch);
+        if (!pkg) {
+            throw Object.assign(new Error(`Package '${request.packageId}' not found`), { statusCode: 404 });
+        }
+        try {
+            const services = this.getServicesRegistry?.();
+            const pkgSvc = services?.get('package') as
+                | { publish?: (data: { manifest: unknown; metadata: unknown }) => Promise<{ success?: boolean; error?: string } | unknown> }
+                | undefined;
+            if (pkgSvc?.publish) {
+                const out = (await pkgSvc.publish({ manifest: (pkg as any).manifest, metadata: {} })) as
+                    | { success?: boolean; error?: string }
+                    | undefined;
+                if (out && out.success === false) {
+                    console.warn(
+                        `[protocol.updatePackage] sys_packages persist FAILED for '${request.packageId}': ${out.error ?? 'unknown error'} — the edit will not survive a restart`,
+                    );
+                }
+            } else {
+                console.warn(
+                    `[protocol.updatePackage] no 'package' service — '${request.packageId}' edited in-memory only (will not survive a restart)`,
+                );
+            }
+        } catch (e) {
+            console.warn(
+                `[protocol.updatePackage] sys_packages persist skipped for '${request.packageId}': ${(e as Error)?.message}`,
+            );
+        }
+        return { package: pkg as any, message: `Updated package: ${request.packageId}` };
+    }
 }

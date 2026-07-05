@@ -991,6 +991,77 @@ describe('HttpDispatcher', () => {
             expect(result.response?.status).toBe(503);
         });
 
+        it('PATCH /packages/:id edits the manifest via protocol.updatePackage', async () => {
+            const updatePackage = vi.fn().mockResolvedValue({
+                package: { manifest: { id: 'com.acme.crm', name: 'Acme CRM v2', version: '1.2.0' } },
+                message: 'Updated package: com.acme.crm',
+            });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ updatePackage });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages(
+                '/com.acme.crm',
+                'PATCH',
+                { name: '  Acme CRM v2 ', version: '1.2.0' },
+                {},
+                { request: {} },
+            );
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            // name is trimmed; only sent fields are in the patch.
+            expect(updatePackage).toHaveBeenCalledWith({
+                packageId: 'com.acme.crm',
+                patch: { name: 'Acme CRM v2', version: '1.2.0' },
+            });
+            expect(result.response?.body?.data?.manifest?.name).toBe('Acme CRM v2');
+        });
+
+        it('PATCH /packages/:id accepts a { manifest } wrapper too', async () => {
+            const updatePackage = vi.fn().mockResolvedValue({ package: { manifest: { id: 'a.b' } } });
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve({ updatePackage });
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+
+            await dispatcher.handlePackages('/a.b', 'PATCH', { manifest: { description: 'hi' } }, {}, { request: {} });
+            expect(updatePackage).toHaveBeenCalledWith({ packageId: 'a.b', patch: { description: 'hi' } });
+        });
+
+        it('PATCH /packages/:id rejects an empty patch with 400', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+            const result = await dispatcher.handlePackages('/a.b', 'PATCH', {}, {}, { request: {} });
+            expect(result.response?.status).toBe(400);
+        });
+
+        it('PATCH /packages/:id rejects a non-semantic version with 400', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
+                return null;
+            });
+            const result = await dispatcher.handlePackages('/a.b', 'PATCH', { version: '1.2' }, {}, { request: {} });
+            expect(result.response?.status).toBe(400);
+        });
+
+        it('PATCH /packages/:id falls back to the registry and 404s an unknown package', async () => {
+            const updatePackageManifest = vi.fn().mockReturnValue(undefined);
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                // No protocol service → fallback path.
+                if (name === 'objectql')
+                    return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]), updatePackageManifest } });
+                return null;
+            });
+            const result = await dispatcher.handlePackages('/nope', 'PATCH', { name: 'x' }, {}, { request: {} });
+            expect(updatePackageManifest).toHaveBeenCalledWith('nope', { name: 'x' });
+            expect(result.response?.status).toBe(404);
+        });
+
         it('POST /packages/:id/publish-drafts routes to protocol.publishPackageDrafts', async () => {
             const publishPackageDrafts = vi.fn().mockResolvedValue({
                 success: true, publishedCount: 3, failedCount: 0, published: [], failed: [],

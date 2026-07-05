@@ -1262,6 +1262,31 @@ export class SchemaRegistry {
     return pkg;
   }
 
+  /**
+   * Merge editable manifest fields (name / description / version) into an
+   * installed package — the in-memory half of `PATCH /packages/:id`.
+   *
+   * Only the human-editable fields are touched: `id` is identity (never
+   * changes here), and lifecycle facets (`status` / `enabled` / `installedAt`)
+   * are preserved — this is a metadata edit, NOT a reinstall (which
+   * `installPackage` would be, resetting exactly those). Undefined patch
+   * fields are ignored so a partial PATCH only overwrites what it sends.
+   */
+  updatePackageManifest(
+    id: string,
+    patch: { name?: string; description?: string; version?: string },
+  ): InstalledPackage | undefined {
+    const pkg = this.getPackage(id);
+    if (!pkg) return undefined;
+    const manifest = pkg.manifest as Record<string, unknown>;
+    if (patch.name !== undefined) manifest.name = patch.name;
+    if (patch.description !== undefined) manifest.description = patch.description;
+    if (patch.version !== undefined) manifest.version = patch.version;
+    pkg.updatedAt = new Date().toISOString();
+    this.log(`[Registry] Updated package manifest: ${id}`);
+    return pkg;
+  }
+
   // ==========================================
   // App Helpers
   // ==========================================

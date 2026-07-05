@@ -2406,6 +2406,44 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(pkg) };
             }
 
+            // PATCH /packages/:id → edit the manifest (name / description /
+            // version). A partial patch: only the fields present are changed;
+            // lifecycle state (enabled / status / installedAt) is preserved.
+            // `id` / `scope` / `type` are identity/structure and are NOT editable
+            // here. Body accepts the fields flat or under a `manifest` wrapper.
+            if (parts.length === 1 && m === 'PATCH') {
+                const id = decodeURIComponent(parts[0]);
+                const src = (body?.manifest && typeof body.manifest === 'object' ? body.manifest : body) ?? {};
+                const patch: { name?: string; description?: string; version?: string } = {};
+                if (typeof src.name === 'string') patch.name = src.name.trim();
+                if (typeof src.description === 'string') patch.description = src.description;
+                if (typeof src.version === 'string') patch.version = src.version.trim();
+
+                if (patch.name !== undefined && patch.name === '') {
+                    return { handled: true, response: this.error('name must not be empty', 400) };
+                }
+                if (patch.version !== undefined && !/^\d+\.\d+\.\d+$/.test(patch.version)) {
+                    return { handled: true, response: this.error('version must be semantic (e.g. 1.0.0)', 400) };
+                }
+                if (patch.name === undefined && patch.description === undefined && patch.version === undefined) {
+                    return { handled: true, response: this.error('Body { name?, description?, version? } — nothing to update', 400) };
+                }
+
+                const protocol = await this.resolveService('protocol');
+                if (protocol && typeof (protocol as any).updatePackage === 'function') {
+                    try {
+                        const updated = await (protocol as any).updatePackage({ packageId: id, patch });
+                        return { handled: true, response: this.success((updated as any)?.package ?? updated) };
+                    } catch (e: any) {
+                        return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+                    }
+                }
+                // Fallback: no protocol service — in-memory registry only.
+                const pkg = registry.updatePackageManifest(id, patch);
+                if (!pkg) return { handled: true, response: this.error(`Package '${id}' not found`, 404) };
+                return { handled: true, response: this.success(pkg) };
+            }
+
             // DELETE /packages/:id → delete the package. Unregisters it from the
             // in-memory registry AND removes its persisted sys_metadata rows
             // (active + draft), tearing down each object's physical table by
