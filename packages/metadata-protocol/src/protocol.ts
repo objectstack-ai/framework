@@ -3843,9 +3843,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             ) {
                 const err = new Error(
                     `[writable_package_required] Cannot author ${singularTypeForRepo}/${request.name} into `
-                    + `'${request.packageId}': it is a read-only code/installed package, not a writable base. `
-                    + `Create or select a writable base (package) first, then retry. `
-                    + `See docs/adr/0070-package-first-authoring.md.`,
+                    + `'${request.packageId}': it is a read-only package. `
+                    + `Switch to or create a writable package, then retry.`,
                 );
                 (err as any).code = 'writable_package_required';
                 (err as any).status = 422;
