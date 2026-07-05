@@ -1,5 +1,25 @@
 # @objectstack/metadata-protocol
 
+## 12.4.0
+
+### Minor Changes
+
+- 1dd5dfd: feat(packages): edit a package manifest via `PATCH /packages/:id`
+
+  Adds an editable path for a package's `name` / `description` / `version` after
+  creation: `SchemaRegistry.updatePackageManifest` (merges in-memory, preserving
+  lifecycle state), `protocol.updatePackage` (re-persists to `sys_packages`), and
+  the `PATCH /packages/:id` route in the HTTP dispatcher. `id` / `scope` / `type`
+  remain immutable.
+
+### Patch Changes
+
+- @objectstack/spec@12.4.0
+- @objectstack/core@12.4.0
+- @objectstack/types@12.4.0
+- @objectstack/metadata-core@12.4.0
+- @objectstack/formula@12.4.0
+
 ## 12.3.0
 
 ### Patch Changes
