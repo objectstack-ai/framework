@@ -45,11 +45,17 @@ object: showcase_project
 name: project_status_flow
 ```
 
-## Hooks & seed data
+## Hooks, seed data & import mappings
 
 - `src/data/hooks/` — data-layer lifecycle hooks (before/after CRUD).
 - `src/data/seed/` — the seed dataset that makes every view render something
   real on first boot.
+- `src/data/mappings/` — a **named import mapping**: the marketing tool's
+  CSV columns (`Full Name`, `Channel`, …) map onto `showcase_inquiry` once,
+  as governed metadata; every import then just passes
+  `mappingName: "showcase_inquiry_feed"` to
+  `POST /api/v1/data/showcase_inquiry/import` — re-importing the same file
+  is idempotent (artifact-declared upsert on email).
 
 ## Extensions & analytics
 

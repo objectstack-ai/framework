@@ -166,10 +166,10 @@ export const STACK_COLLECTION_COVERAGE: Record<string, KindCoverage> = {
       'Declarative ApiEndpoint metadata (object_operation + flow targets), executed by the runtime dispatcher (handleApiEndpoint). Complements the code-mounted endpoint in src/system/server/ (router kind stays waived: code-only).',
   },
   mappings: {
-    status: 'waived',
-    reason:
-      'defineMapping artifacts are registered but never consumed — the REST import path only accepts an inline per-request mapping, so a stack-level mapping is inert.',
-    issue: 'https://github.com/objectstack-ai/framework/issues/2611',
+    status: 'demonstrated',
+    files: ['src/data/mappings/index.ts'],
+    notes:
+      'Named import mappings resolved by POST /data/:object/import via mappingName (#2611): rename + map transform, artifact-default upsert on email. The former waiver ("registered but never consumed") flipped when the consumer landed.',
   },
   connectors: {
     status: 'waived',
