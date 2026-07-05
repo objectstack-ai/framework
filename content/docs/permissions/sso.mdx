@@ -107,11 +107,14 @@ APPLE_CLIENT_SECRET=your-apple-private-key-jwt
 
 ---
 
-## Enterprise SSO (OIDC) Extension Example
+## Enterprise SSO (OIDC)
 
-Enterprise packages can pass `oidcProviders` into `@objectstack/plugin-auth`
-or contribute them through `auth:configure`. The open-source package does not
-ship a generic OIDC settings UI.
+Admin-managed **OIDC SSO ships in the open framework**: `@objectstack/plugin-auth`
+registers external IdPs through `@better-auth/sso`, and admins add them **without
+code** from **Setup → SSO Providers** (see the ADR-0069 note below). The
+`oidcProviders` config shown here is the in-process path for framework or product
+packages that prefer wiring providers in code, or contributing them through
+`auth:configure`.
 
 > **Admin-managed external IdP (ADR-0069).** Recent releases add a
 > per-environment external-IdP path built on `@better-auth/sso` and surface an

@@ -7,17 +7,45 @@ description: How agents query live data through the built-in data tools (query_r
 
 Part of the [AI module](/docs/ai) — how natural-language questions become ObjectQL queries at runtime.
 
-The data tools described here ship with `@objectstack/service-ai`, i.e. the
-**cloud / Enterprise** in-UI AI runtime (see the callout in the
-[AI Overview](/docs/ai)). On the open edition, point your own AI at the same
-objects and queries through `@objectstack/mcp` instead.
+Natural-language querying is **open**. Point your own AI — Claude, Cursor, any
+MCP client, or a local model — at your app through `@objectstack/mcp`, and it
+turns questions into ObjectQL against your objects, governed by the same
+row-level security as the REST API. The data tools and the ObjectQL engine that
+back this are part of the open framework — no `@objectstack/service-ai` and no
+cloud studio are required.
 
-Agents query your data through the built-in **data tools** —
-`query_records`, `get_record`, and `aggregate_data` — which the LLM calls with
+Your AI queries your data through the built-in **data tools** —
+`query_records`, `get_record`, and `aggregate_data` — which the model calls with
 structured arguments. These run as ordinary [ObjectQL](/docs/protocol/objectql) queries over
 your objects (ObjectStack uses ObjectQL, not SOQL), and they execute under the
 caller's `ExecutionContext`, so row-level security applies exactly as it does
 for the REST API.
+
+The open MCP server plugin exposes these tools automatically — it bridges the
+kernel's tool registry, metadata, and data engine to any connected MCP client:
+
+```typescript
+import { LiteKernel } from '@objectstack/core';
+import { MCPServerPlugin } from '@objectstack/mcp';
+
+const kernel = new LiteKernel();
+kernel.use(new MCPServerPlugin({ autoStart: true }));
+await kernel.bootstrap();
+```
+
+Point any MCP client at the server and ask questions in natural language: the
+model discovers `query_records` / `get_record` / `aggregate_data` and calls them
+under RLS as the authenticated caller.
+
+There is no separate natural-language-to-query metadata type to author — the
+model is prompted with the available objects and translates the user's question
+into `query_records` / `aggregate_data` calls at runtime.
+
+<Callout type="info">
+**Cloud / Enterprise — bundled in-product chat.** The cloud tier's in-UI AI
+runtime (`@objectstack/service-ai`, the `ask` data-query assistant, and the
+`/api/v1/ai/*` chat endpoints) registers these same data tools into its chat
+loop via `registerDataTools`:
 
 ```typescript
 import { registerDataTools } from '@objectstack/service-ai';
@@ -27,9 +55,10 @@ ctx.hook('ai:ready', async (ai) => {
 });
 ```
 
-There is no separate natural-language-to-query metadata type to author — the
-model is prompted with the available objects and translates the user's question
-into `query_records` / `aggregate_data` calls at runtime.
+This is the cloud runtime, not the open path. On the open edition, use
+`@objectstack/mcp` above to get the same natural-language querying with your
+own AI.
+</Callout>
 
 ---
 

@@ -7,7 +7,11 @@ description: The Knowledge Protocol — permission-aware RAG for agents via plug
 
 Part of the [AI module](/docs/ai) — how agents retrieve knowledge through the Knowledge Protocol and its adapter plugins.
 
-ObjectStack ships a Knowledge Protocol that lets agents call `search_knowledge(query, sourceIds?, topK?)` against pluggable backends (RAGFlow, LlamaIndex, Dify, custom pgvector, …). The framework defines the contract and runs permission-aware filtering; the adapter plugin does the actual retrieval. See [the protocol design](/docs/protocol/knowledge) for the rationale.
+ObjectStack ships a Knowledge Protocol that lets you retrieve from pluggable backends (RAGFlow, LlamaIndex, Dify, custom pgvector, …) with one call: `KnowledgeService.search(query, { sourceIds?, topK? })`. The framework defines the contract and runs permission-aware filtering; the adapter plugin does the actual retrieval. See [the protocol design](/docs/protocol/knowledge) for the rationale.
+
+<Callout type="info">
+**This whole stack is open.** The `@objectstack/service-knowledge` service, the adapter plugins (`@objectstack/knowledge-memory`, `@objectstack/knowledge-ragflow`), the `@objectstack/embedder-openai` embedder, and the permission-aware retrieval + event sync below all ship in the **open edition**. The workflow is: declare your knowledge sources, pick an adapter, and call `search` — retrieval respects the same row-level security as any ObjectQL query. Only the in-product chat *runtime* that consumes retrieval (`@objectstack/service-ai`) is cloud / Enterprise; see the callout under [Retrieving knowledge](#retrieving-knowledge).
+</Callout>
 
 ## Wiring
 
@@ -40,25 +44,39 @@ kernel.use(new KnowledgeMemoryPlugin());
 // kernel.use(new KnowledgeRagflowPlugin({ endpoint, apiKey }));
 ```
 
-Then register the AI tool so agents can call it. (This step uses
-`@objectstack/service-ai`, i.e. the **cloud / Enterprise** in-UI AI runtime —
-see the callout in the [AI Overview](/docs/ai). The Knowledge Protocol itself
-and the adapter plugins above ship in the open framework.)
+## Retrieving knowledge
+
+Retrieval is a plain service call — no AI runtime required. Resolve the `knowledge`
+service and call `search`. Hits are re-checked against the caller's
+`ExecutionContext` (RLS), sorted by score, and capped at `topK` before they come
+back.
 
 ```ts
-import { registerKnowledgeTools } from '@objectstack/service-ai';
+const knowledge = ctx.getService('knowledge');
 
-ctx.hook('ai:ready', async (ai) => {
-  const knowledge = ctx.getService('knowledge');
-  registerKnowledgeTools(ai.toolRegistry, { knowledgeService: knowledge });
+const hits = await knowledge.search('proposals about ACME', {
+  sourceIds: ['task_notes', 'product_docs'], // optional — defaults to every source the caller may see
+  topK: 5,
+  executionContext,  // the caller's context — retrieval drops any hit RLS would hide
 });
+// hits: KnowledgeHit[] — each { chunkId, documentId, sourceId, sourceRecordId?, score, snippet, title? }
 ```
+
+<Callout type="info">
+**In-product chat is cloud / Enterprise.** Exposing this retrieval to a chat UI as
+the `search_knowledge` tool — the `ask` / `build` personas, the `/api/v1/ai/*`
+endpoints, and `aiService.chatWithTools` — is provided by `@objectstack/service-ai`,
+which ships only in the **cloud / Enterprise** tier (cloud [ADR-0025](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md)). The
+open edition has no built-in in-product chat, but everything else here — the Knowledge
+Protocol, adapters, embedder, and `KnowledgeService.search` — is open, so you can call
+`search` directly from your own code, agent, or MCP tool.
+</Callout>
 
 ## What you get for free
 
 - **Permission-aware retrieval.** Every hit with a `sourceRecordId` is re-checked against the caller's `ExecutionContext` via `IDataEngine` — the same RLS that gates plain ObjectQL queries. A salesperson asking "find proposals about ACME" only sees the proposals they could already read directly. File / HTTP hits pass through (ACL is the adapter's problem).
 - **Inline event sync.** When records on indexed objects change, the kernel's `IRealtimeService` events drive `KnowledgeService.handleRecordUpsert/Delete` automatically. No cron, no queue (yet — Phase 2).
-- **Adapter swap, zero LLM changes.** Move from `memory` to `ragflow` to a custom adapter without touching the `search_knowledge` tool or any agent prompt.
+- **Adapter swap, zero caller changes.** Move from `memory` to `ragflow` to a custom adapter without touching your `search` calls, the `search_knowledge` tool, or any agent prompt.
 
 ## Why we did not build a vector DB
 

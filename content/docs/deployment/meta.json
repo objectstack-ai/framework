@@ -8,7 +8,6 @@
     "publish-and-preview",
     "environment-variables",
     "single-project-mode",
-    "cloud-artifact-api",
     "migration-from-objectql",
     "troubleshooting"
   ]
