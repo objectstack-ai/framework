@@ -18,16 +18,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/core": "^1.6.22",
-    "@better-auth/oauth-provider": "^1.6.22",
-    "@better-auth/scim": "^1.6.22",
-    "@better-auth/sso": "^1.6.22",
+    "@better-auth/core": "^1.6.23",
+    "@better-auth/oauth-provider": "^1.6.23",
+    "@better-auth/scim": "^1.6.23",
+    "@better-auth/sso": "^1.6.23",
     "@noble/hashes": "^2.2.0",
     "@objectstack/core": "workspace:*",
     "@objectstack/platform-objects": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
-    "better-auth": "^1.6.22"
+    "better-auth": "^1.6.23"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
