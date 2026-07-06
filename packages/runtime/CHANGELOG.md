@@ -1,5 +1,39 @@
 # @objectstack/runtime
 
+## 12.4.0
+
+### Minor Changes
+
+- 1dd5dfd: feat(packages): edit a package manifest via `PATCH /packages/:id`
+
+  Adds an editable path for a package's `name` / `description` / `version` after
+  creation: `SchemaRegistry.updatePackageManifest` (merges in-memory, preserving
+  lifecycle state), `protocol.updatePackage` (re-persists to `sys_packages`), and
+  the `PATCH /packages/:id` route in the HTTP dispatcher. `id` / `scope` / `type`
+  remain immutable.
+
+### Patch Changes
+
+- Updated dependencies [60dc3ba]
+- Updated dependencies [1dd5dfd]
+  - @objectstack/spec@12.4.0
+  - @objectstack/objectql@12.4.0
+  - @objectstack/core@12.4.0
+  - @objectstack/formula@12.4.0
+  - @objectstack/metadata@12.4.0
+  - @objectstack/observability@12.4.0
+  - @objectstack/driver-memory@12.4.0
+  - @objectstack/driver-sql@12.4.0
+  - @objectstack/driver-sqlite-wasm@12.4.0
+  - @objectstack/plugin-auth@12.4.0
+  - @objectstack/plugin-org-scoping@12.4.0
+  - @objectstack/plugin-security@12.4.0
+  - @objectstack/rest@12.4.0
+  - @objectstack/service-cluster@12.4.0
+  - @objectstack/service-datasource@12.4.0
+  - @objectstack/service-i18n@12.4.0
+  - @objectstack/types@12.4.0
+
 ## 12.3.0
 
 ### Patch Changes
