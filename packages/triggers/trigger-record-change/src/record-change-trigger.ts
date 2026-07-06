@@ -113,6 +113,16 @@ export class RecordChangeTrigger implements FlowTrigger {
 
         const handler = async (ctx: HookContext): Promise<void> => {
             try {
+                // Seed/bulk suppression: writes made with `context.skipTriggers`
+                // (notably package metadata SEED replay) must NOT fire
+                // record-change automation — seed rows are pre-existing end-state
+                // data, not user events. Firing "on create/update" flows for them
+                // is semantically wrong and was the vector for the 2026-07-06
+                // self-trigger loop that wedged first-boot. Lifecycle hooks still
+                // ran (they are separate); only the flow dispatch is skipped here.
+                if ((ctx.session as { skipTriggers?: boolean } | undefined)?.skipTriggers) {
+                    return;
+                }
                 const automationCtx = this.buildContext(binding, ctx);
                 await callback(automationCtx);
             } catch (err) {

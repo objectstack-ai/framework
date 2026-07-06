@@ -30,7 +30,7 @@ import { ExpressionEngine } from '@objectstack/formula';
 import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
-import { validateRecord, normalizeMultiValueFields } from './validation/record-validator.js';
+import { validateRecord, normalizeMultiValueFields, coerceBooleanFields } from './validation/record-validator.js';
 import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
@@ -690,6 +690,10 @@ export class ObjectQL implements IDataEngine {
       // Propagate system-elevated flag so hooks can distinguish engine
       // self-writes (e.g. approval status mirror) from genuine user writes.
       ...((execCtx as any).isSystem ? { isSystem: true } : {}),
+      // Propagate the automation-suppression flag so the record-change trigger
+      // can skip flow dispatch for seed/bulk writes (ADR: seed loads end-state
+      // data, not user events).
+      ...((execCtx as any).skipTriggers ? { skipTriggers: true } : {}),
     } as HookContext['session'];
   }
 
@@ -2189,7 +2193,13 @@ export class ObjectQL implements IDataEngine {
         }
 
         hookContext.event = 'afterInsert';
-        hookContext.result = result;
+        // Coerce `boolean` fields (SQLite/libsql return 0/1) to real booleans on
+        // the after-hook view so flow trigger conditions (`record.is_escalated
+        // != true`) and `{record.<bool>}` interpolation see JS booleans, not
+        // ints. A shallow copy — the value returned to the caller is untouched.
+        hookContext.result = Array.isArray(result)
+          ? result.map((r) => coerceBooleanFields(schemaForValidation as any, r as any))
+          : coerceBooleanFields(schemaForValidation as any, result as any);
         await this.triggerHooks('afterInsert', hookContext);
 
         // Roll-up: recompute parent summary fields that aggregate this object.
@@ -2328,8 +2338,14 @@ export class ObjectQL implements IDataEngine {
            }
 
            hookContext.event = 'afterUpdate';
-           hookContext.result = result;
-           if (priorRecord) hookContext.previous = priorRecord;
+           // Coerce boolean fields (SQLite 0/1 → JS bool) on the after-hook view
+           // of both the new row and the prior row, so flow conditions comparing
+           // `record.is_escalated`/`previous.status` against booleans behave.
+           // Shallow copies — the value returned to the caller is untouched.
+           hookContext.result = Array.isArray(result)
+             ? result.map((r) => coerceBooleanFields(updateSchema as any, r as any))
+             : coerceBooleanFields(updateSchema as any, result as any);
+           if (priorRecord) hookContext.previous = coerceBooleanFields(updateSchema as any, priorRecord as any);
            await this.triggerHooks('afterUpdate', hookContext);
 
            // Roll-up: recompute parent summaries; pass priorRecord too so a child

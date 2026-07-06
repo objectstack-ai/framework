@@ -120,7 +120,21 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
 
   /** Whether this is a system-level operation (bypasses permission checks) */
   isSystem: z.boolean().default(false),
-  
+
+  /**
+   * Suppress record-change AUTOMATION (autolaunched flow triggers:
+   * record-after-insert / -update / -delete) for writes made under this
+   * context. Lifecycle HOOKS still run (derived/default fields, validation).
+   *
+   * Set by bulk/reference loads — notably package metadata SEED replay — where
+   * the records are pre-existing END-STATE data, not user events: firing
+   * "on create/update" automation (notifications, escalations, assignments,
+   * approvals) for seed rows is semantically wrong AND dangerous. The
+   * 2026-07-06 incident was a seeded critical case whose escalation flow
+   * self-triggered into an infinite loop that wedged the whole kernel build.
+   */
+  skipTriggers: z.boolean().optional(),
+
   /** Raw access token (for external API call pass-through) */
   accessToken: z.string().optional(),
   
