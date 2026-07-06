@@ -291,3 +291,29 @@ describe('RecordChangeTriggerPlugin', () => {
         expect(registerTrigger).toHaveBeenCalledTimes(1);
     });
 });
+
+// ─── seed / bulk suppression (context.skipTriggers) ─────────────────
+
+describe('RecordChangeTrigger — skipTriggers suppression', () => {
+    it('does NOT dispatch the flow when the write session sets skipTriggers (seed replay)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let fired = 0;
+        trigger.start(binding(), async () => { fired += 1; });
+
+        // A seed/bulk write carries session.skipTriggers=true (from
+        // ExecutionContext.skipTriggers threaded via buildSession).
+        await hooks[0].handler(hookCtx({ session: { userId: 'u9', skipTriggers: true } as any }));
+        expect(fired).toBe(0);
+    });
+
+    it('DOES dispatch the flow for a normal user write (skipTriggers absent)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let fired = 0;
+        trigger.start(binding(), async () => { fired += 1; });
+
+        await hooks[0].handler(hookCtx());
+        expect(fired).toBe(1);
+    });
+});

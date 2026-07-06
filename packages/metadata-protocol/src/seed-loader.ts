@@ -606,8 +606,16 @@ export class SeedLoaderService implements ISeedLoaderService {
    * disables the SecurityPlugin's auto-injection of `organization_id` /
    * `owner_id` — seeds either declare those fields explicitly per
    * record, or are intentionally cross-tenant / global.
+   *
+   * `skipTriggers` suppresses record-change AUTOMATION (autolaunched flow
+   * triggers) for seed writes: a package's seed is pre-existing END-STATE
+   * reference/sample data, not a stream of user events, so firing
+   * on-create/on-update flows (notifications, escalations, assignments,
+   * approvals) for it is semantically wrong and dangerous — a self-triggering
+   * flow can loop and wedge the whole first-boot (2026-07-06 incident).
+   * Lifecycle HOOKS (derived/default fields, validation) still run.
    */
-  private static readonly SEED_OPTIONS = { context: { isSystem: true } } as const;
+  private static readonly SEED_OPTIONS = { context: { isSystem: true, skipTriggers: true } } as const;
 
   private async writeRecord(
     objectName: string,

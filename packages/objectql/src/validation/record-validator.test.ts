@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { validateRecord, normalizeMultiValueFields, ValidationError } from './record-validator.js';
+import { validateRecord, normalizeMultiValueFields, coerceBooleanFields, ValidationError } from './record-validator.js';
 
 /**
  * Required-field validation, with the autonumber exemption (#1603).
@@ -229,5 +229,62 @@ describe('ValidationError — top-level message is human-readable', () => {
     expect(err.fields).toEqual([
       { field: '_record', code: 'rule_violation', message: 'boom' },
     ]);
+  });
+});
+
+describe('coerceBooleanFields — SQLite 0/1 → real booleans', () => {
+  const schema = {
+    fields: {
+      is_escalated: { type: 'boolean' },
+      is_closed: { type: 'boolean' },
+      active: { type: 'boolean' },
+      name: { type: 'text' },
+      priority: { type: 'select', options: ['low', 'critical'] },
+      count: { type: 'number' },
+    },
+  };
+
+  it('coerces integer 0/1 on boolean fields, leaves others untouched', () => {
+    const row = { is_escalated: 1, is_closed: 0, name: 'Case', priority: 'critical', count: 5 };
+    const out = coerceBooleanFields(schema, row);
+    expect(out.is_escalated).toBe(true);
+    expect(out.is_closed).toBe(false);
+    expect(out.name).toBe('Case');
+    expect(out.priority).toBe('critical');
+    expect(out.count).toBe(5);
+  });
+
+  it('fixes the incident predicate: `is_escalated != true` after coercion', () => {
+    const raw = { is_escalated: 1 };
+    // Pre-coercion: an int 1 is NOT === true (the bug).
+    expect((raw.is_escalated as unknown) !== true).toBe(true);
+    const out = coerceBooleanFields(schema, raw);
+    // Post-coercion: the guard correctly suppresses re-fire.
+    expect(out.is_escalated !== true).toBe(false);
+  });
+
+  it('coerces string forms too', () => {
+    expect(coerceBooleanFields(schema, { active: '1' }).active).toBe(true);
+    expect(coerceBooleanFields(schema, { active: 'true' }).active).toBe(true);
+    expect(coerceBooleanFields(schema, { active: '0' }).active).toBe(false);
+    expect(coerceBooleanFields(schema, { active: 'false' }).active).toBe(false);
+  });
+
+  it('preserves null/undefined (nullable boolean stays null, not false)', () => {
+    const out = coerceBooleanFields(schema, { is_escalated: null, is_closed: undefined });
+    expect(out.is_escalated).toBe(null);
+    expect(out.is_closed).toBe(undefined);
+  });
+
+  it('leaves real booleans and unrecognised strings as-is; no copy when nothing changes', () => {
+    expect(coerceBooleanFields(schema, { active: true }).active).toBe(true);
+    expect(coerceBooleanFields(schema, { active: 'maybe' }).active).toBe('maybe');
+    const noBool = { name: 'x', count: 2 };
+    expect(coerceBooleanFields(schema, noBool)).toBe(noBool); // same ref — untouched
+  });
+
+  it('is null/empty-safe', () => {
+    expect(coerceBooleanFields(undefined, { a: 1 } as any)).toEqual({ a: 1 });
+    expect(coerceBooleanFields(schema, null as any)).toBe(null);
   });
 });

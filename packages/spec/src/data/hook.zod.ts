@@ -206,6 +206,7 @@ export const HookContextSchema = lazySchema(() => z.object({
     roles: z.array(z.string()).optional(),
     accessToken: z.string().optional(),
     isSystem: z.boolean().optional().describe('True when the call was made with an elevated system context (engine self-writes)'),
+    skipTriggers: z.boolean().optional().describe('True when record-change automation (flow triggers) must be suppressed for this write — e.g. package seed replay. Lifecycle hooks still run.'),
   }).optional().describe('Current session context'),
   
   /**
