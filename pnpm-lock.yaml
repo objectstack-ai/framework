@@ -444,9 +444,6 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec
-      '@objectstack/studio':
-        specifier: workspace:*
-        version: link:../apps/studio
       '@objectstack/trigger-api':
         specifier: workspace:*
         version: link:../triggers/trigger-api
@@ -1367,9 +1364,6 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../spec
-      '@objectstack/studio':
-        specifier: workspace:^
-        version: link:../../apps/studio
       '@objectstack/types':
         specifier: workspace:*
         version: link:../../types

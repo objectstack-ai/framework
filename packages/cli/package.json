@@ -79,7 +79,6 @@
     "@objectstack/service-storage": "workspace:*",
     "@objectstack/setup": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "@objectstack/studio": "workspace:*",
     "@objectstack/trigger-api": "workspace:*",
     "@objectstack/trigger-record-change": "workspace:*",
     "@objectstack/trigger-schedule": "workspace:*",
