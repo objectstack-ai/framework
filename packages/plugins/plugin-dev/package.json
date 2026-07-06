@@ -30,7 +30,6 @@
     "@objectstack/service-i18n": "workspace:^",
     "@objectstack/setup": "workspace:^",
     "@objectstack/spec": "workspace:*",
-    "@objectstack/studio": "workspace:^",
     "@objectstack/types": "workspace:*"
   },
   "devDependencies": {
