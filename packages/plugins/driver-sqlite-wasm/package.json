@@ -36,10 +36,10 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "@types/sql.js": "^1.4.11",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "author": "ObjectStack",
   "repository": {

@@ -46,7 +46,7 @@
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/service-datasource": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "objectstack",
