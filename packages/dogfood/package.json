@@ -9,16 +9,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@objectstack/verify": "workspace:*",
-    "@objectstack/objectql": "workspace:*",
-    "@objectstack/spec": "workspace:*",
-    "@objectstack/plugin-security": "workspace:*",
     "@objectstack/example-crm": "workspace:*",
-    "@objectstack/example-showcase": "workspace:*"
+    "@objectstack/example-showcase": "workspace:*",
+    "@objectstack/objectql": "workspace:*",
+    "@objectstack/plugin-security": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/verify": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   }
 }

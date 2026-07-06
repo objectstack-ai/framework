@@ -23,12 +23,12 @@
     "@objectstack/formula": "workspace:*",
     "@objectstack/sdui-parser": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "sucrase": "^3.35.0",
+    "sucrase": "^3.35.1",
     "typescript": "^6.0.3"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
-    "vitest": "^4.1.9"
+    "@types/node": "^26.1.0",
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "objectstack",

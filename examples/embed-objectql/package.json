@@ -10,13 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@objectstack/objectql": "workspace:*",
     "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/objectql": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   }
 }

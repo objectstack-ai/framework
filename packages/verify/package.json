@@ -20,23 +20,23 @@
   },
   "dependencies": {
     "@objectstack/core": "workspace:*",
-    "@objectstack/runtime": "workspace:*",
-    "@objectstack/objectql": "workspace:*",
-    "@objectstack/spec": "workspace:*",
     "@objectstack/driver-sqlite-wasm": "workspace:*",
-    "@objectstack/plugin-hono-server": "workspace:*",
-    "@objectstack/rest": "workspace:*",
+    "@objectstack/objectql": "workspace:*",
     "@objectstack/plugin-auth": "workspace:*",
+    "@objectstack/plugin-hono-server": "workspace:*",
+    "@objectstack/plugin-org-scoping": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/plugin-sharing": "workspace:*",
-    "@objectstack/plugin-org-scoping": "workspace:*",
-    "@objectstack/service-settings": "workspace:*",
+    "@objectstack/rest": "workspace:*",
+    "@objectstack/runtime": "workspace:*",
     "@objectstack/service-analytics": "workspace:*",
     "@objectstack/service-automation": "workspace:*",
-    "@objectstack/service-datasource": "workspace:*"
+    "@objectstack/service-datasource": "workspace:*",
+    "@objectstack/service-settings": "workspace:*",
+    "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   },
   "keywords": [

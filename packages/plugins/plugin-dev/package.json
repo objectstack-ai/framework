@@ -17,26 +17,26 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@objectstack/core": "workspace:*",
-    "@objectstack/spec": "workspace:*",
-    "@objectstack/types": "workspace:*",
     "@objectstack/account": "workspace:^",
+    "@objectstack/core": "workspace:*",
     "@objectstack/driver-memory": "workspace:^",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/plugin-auth": "workspace:^",
-    "@objectstack/setup": "workspace:^",
-    "@objectstack/studio": "workspace:^",
     "@objectstack/plugin-hono-server": "workspace:^",
     "@objectstack/plugin-org-scoping": "workspace:^",
     "@objectstack/plugin-security": "workspace:^",
     "@objectstack/rest": "workspace:^",
     "@objectstack/runtime": "workspace:^",
-    "@objectstack/service-i18n": "workspace:^"
+    "@objectstack/service-i18n": "workspace:^",
+    "@objectstack/setup": "workspace:^",
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/studio": "workspace:^",
+    "@objectstack/types": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "objectstack",
