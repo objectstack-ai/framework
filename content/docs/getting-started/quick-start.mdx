@@ -1,190 +1,186 @@
 ---
-title: Quick Start
-description: Learn to build enterprise applications with the ObjectStack Protocol
+title: Anatomy of an ObjectStack App
+description: A tour of the metadata an AI agent writes for you — objects, actions, views, apps — and how to read it so you can verify the result in the Console.
 ---
 
-# Quick Start
+# Anatomy of an ObjectStack App
 
-This guide teaches you how to **build real applications** using the ObjectStack Protocol. Each section is hands-on, with code examples derived from the [HotCRM reference app](https://github.com/objectstack-ai/hotcrm).
+An ObjectStack app *is* its metadata: a few hundred lines of typed definitions for
+objects, actions, views, apps, automation, and permissions. In the
+[AI-first workflow](/docs/getting-started/build-with-claude-code), **an agent
+writes these files for you** — you rarely type them by hand.
+
+But you do need to **read** them. In AI development the human's job shifts from
+writing code to *verifying* what the agent produced: is the object modelled right,
+is that predicate scoped correctly, does the app match what you asked for? This
+page is a tour of the pieces so you can review an agent's work with confidence —
+and catch the things the [validation gate](/docs/getting-started/validating-metadata)
+can't.
 
 <Callout type="tip">
-**New to ObjectStack?** Start with the [Example Apps](/docs/getting-started/examples) to see working code, or read the [Introduction](/docs/getting-started) for the architecture overview.
+Want to *build* something, not just read about the pieces? Follow
+[Build with Claude Code](/docs/getting-started/build-with-claude-code) — it runs
+the whole loop (describe → agent authors → validate → verify) on a live app. New
+here? The [Example Apps](/docs/getting-started/examples) are working code you can
+run today.
 </Callout>
 
-## Quick Start
+## What you build
 
-<Steps>
+Everything an agent writes falls into one of a few areas — the same way the work
+divides when you build an app. This is the map to hold in your head when you read
+a project:
 
-### Create a project
+| Area | The metadata you author (`src/…`) | What ObjectStack derives from it |
+| :--- | :--- | :--- |
+| **Data** | Objects, fields, relationships, validation (`src/objects`) | Database schema, CRUD APIs, type safety |
+| **Automation** | Flows, workflows, triggers, approvals (`src/flows`) | Event handlers, approval chains, scheduled jobs |
+| **Interface** | Views, apps, dashboards, actions (`src/views`, `src/apps`) | The Console UI, navigation, responsive layout |
+| **Access** | Roles, permissions, sharing, row-level security | Middleware, RLS policies, field masking |
+| **AI** | Agents, tools, RAG, MCP exposure (`src/agents`) | Chat, search indexes, an MCP server |
 
-```bash
-npx @objectstack/cli init my-app
-cd my-app
-```
+The through-line: **you author intent once as metadata, and the runtime derives the
+database, the API, the UI, and the AI tool surface from it.** That's why an agent
+can build across all of these in one coherent change — and why reading the
+metadata tells you everything about how the app behaves.
 
-The `os` commands below use the CLI that `init` installs into your project — if `os` isn't on your PATH, run them as `npx os …` (or `pnpm exec os …`).
+## Reading an object
 
-### Add AI skills to your editor
+The object is the heart of every app. Here's a representative one, in the same
+`ObjectSchema.create` + `Field.*` form the scaffolder and the agent use:
 
-Install the ObjectStack skill bundle so your AI assistant (Claude Code, Copilot, Cursor, …) knows the protocol's schemas and conventions:
+```typescript title="src/objects/ticket.object.ts"
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
-```bash
-npx skills add objectstack-ai/framework --all
-```
+export const Ticket = ObjectSchema.create({
+  name: 'support_desk_ticket',        // ← snake_case, namespace-prefixed
+  label: 'Ticket',
+  pluralLabel: 'Tickets',
+  icon: 'life-buoy',
+  description: 'A customer support request.',
 
-Re-run the same command any time to update — the bundle is versioned as one unit. See the [AI Skills Reference](/docs/ai/skills-reference) for the full catalog.
-
-<Callout type="info">
-Scaffolding with `npm create objectstack@latest` runs this step automatically.
-</Callout>
-
-### Define your first object
-
-The scaffolded project includes a sample object. Open `src/objects/my_app_item.ts`:
-
-```typescript
-import * as Data from '@objectstack/spec/data';
-
-const myAppItem: Data.Object = {
-  name: 'my_app_item',
-  label: 'My App Item',
   fields: {
-    name: {
-      type: 'text',
-      label: 'Name',
-      required: true,
-    },
-    description: {
-      type: 'textarea',
-      label: 'Description',
-    },
-    status: {
-      type: 'select',
-      label: 'Status',
-      options: [
-        { label: 'Draft', value: 'draft' },
-        { label: 'Active', value: 'active' },
-        { label: 'Archived', value: 'archived' },
-      ],
-      defaultValue: 'draft',
-    },
-  },
-};
+    subject: Field.text({ label: 'Subject', required: true, searchable: true, maxLength: 200 }),
+    description: Field.longText({ label: 'Description' }),
 
-export default myAppItem;
+    status: Field.select({
+      label: 'Status',
+      required: true,
+      options: [
+        { label: 'Open', value: 'open', color: '#3B82F6', default: true },
+        { label: 'Pending', value: 'pending', color: '#F59E0B' },
+        { label: 'Resolved', value: 'resolved', color: '#10B981' },
+        { label: 'Closed', value: 'closed', color: '#6B7280' },
+      ],
+    }),
+  },
+
+  enable: { apiEnabled: true, searchable: true },
+});
 ```
+
+**What to check when you read one:**
+
+- **Names** are `snake_case` and namespace-prefixed (`support_desk_ticket`) — the
+  scaffolder derives the prefix from your project name.
+- **Field types** are `Field.*` builders (`text`, `longText`, `select`, `date`,
+  `lookup`, …), not raw strings. A `select`'s `options` carry the exact labels,
+  values, and colors you'll see in the UI — verify these match your intent.
+- **`required`, `default`, `searchable`** encode behavior the UI and API inherit
+  automatically.
 
 <Callout type="info">
-This is the same metadata that powers the REST API, Studio editors, and the MCP tools exposed to AI agents — define it once, and ObjectStack derives the rest.
+This one definition powers the REST API, the Console UI, **and the MCP tools
+exposed to AI agents**. Define it once, and ObjectStack derives the rest — see
+[Data Modeling](/docs/data-modeling) for the full field catalog and relationships.
 </Callout>
 
-### Launch the Console
+## Reading the other pieces
 
-```bash
-os dev --ui
-```
+The remaining domains follow the same shape — a typed factory call per file. When
+reviewing an agent's work, these are the two things most worth a close read:
 
-Open [http://localhost:3000/_console/](http://localhost:3000/_console/) to browse your objects, test the REST API, and inspect metadata. The server automatically provides:
+- **Actions** (`defineAction`) — buttons and bulk operations. Their `visible` /
+  `disabled` **predicates are CEL, record-scoped**: `record.status`, never a bare
+  `status`. A bare reference silently hides the action on every record — the single
+  most common AI mistake, which is exactly why `os validate` rejects it. See it in
+  action in [Build with Claude Code → the gate](/docs/getting-started/build-with-claude-code#4-the-gate-os-validate-catches-ai-mistakes).
+- **Views & Apps** (`defineView`, `App.create`) — the list/form lenses and the
+  navigation. Reading these tells you what the user will actually see and click.
 
-- **ObjectQL Engine** &mdash; Query layer with CRUD operations
-- **InMemory Driver** &mdash; Zero-config data storage for development
-- **Hono HTTP Server** &mdash; REST API at `/api/v1/data/{object}`
-- **Console UI** &mdash; Admin interface at `/_console/`
+For the full authoring surface of each, load the matching
+[skill](/docs/ai/skills) or read [UI Metadata](/docs/ui) and
+[Automation](/docs/automation).
 
-### Add more metadata
+## Reading a project's layout
 
-```bash
-os g object customer       # Generate a new object
-os g action approve        # Generate an action
-os g flow onboarding       # Generate an automation flow
-```
-
-### Validate, build, and run
-
-```bash
-os validate        # Check schema correctness
-os compile         # Generate production artifact → dist/objectstack.json
-os start           # Boot from the compiled artifact (no config file needed)
-```
-
-The compiled `dist/objectstack.json` is a portable, self-describing deployment unit — see
-[CLI → Source vs Artifact](/docs/getting-started/cli#source-vs-artifact) for details.
-
-</Steps>
-
-## Learning Path
-
-Follow these guides in order for the best experience:
-
-<Cards>
-  <Card
-    title="1. Data Modeling"
-    href="/docs/data-modeling"
-    description="Design objects, fields, relationships, and validation rules. The foundation of every app."
-  />
-  <Card
-    title="2. Business Logic"
-    href="/docs/automation/hooks"
-    description="Implement workflows, approval flows, triggers, and formulas to automate business processes."
-  />
-  <Card
-    title="3. Security Model"
-    href="/docs/permissions"
-    description="Configure profiles, permissions, sharing rules, and row-level security for enterprise-grade access control."
-  />
-  <Card
-    title="4. AI Capabilities"
-    href="/docs/ai"
-    description="Add AI agents, RAG pipelines, natural language queries, and predictive analytics."
-  />
-  <Card
-    title="5. Development Standards"
-    href="/docs/concepts/design-principles"
-    description="Naming conventions, project structure, testing strategies, and best practices."
-  />
-</Cards>
-
-## Project Structure
-
-A typical ObjectStack application layout (`os init` scaffolds only the minimal core of this — see [Example Apps](/docs/getting-started/examples)):
+Metadata is grouped by domain under `src/`. This map lets you navigate any
+ObjectStack project — including one an agent just generated:
 
 ```
-my-app/
-├── objectstack.config.ts     # App manifest + metadata wiring
-├── package.json
-├── tsconfig.json
+support-desk/
+├── objectstack.config.ts     # defineStack() — the single entry point, wires it all
 ├── src/
 │   ├── objects/              # Data models (required)
-│   │   ├── index.ts          # Barrel export
-│   │   └── my_app_item.ts    # Object definition
-│   ├── actions/              # Buttons, batch operations
+│   ├── actions/              # Buttons, bulk operations
+│   ├── views/                # List / form / kanban lenses
+│   ├── apps/                 # Navigation shells
 │   ├── flows/                # Automation logic
-│   ├── apps/                 # Navigation definitions
-│   ├── dashboards/           # Analytics dashboards
-│   ├── agents/               # AI agents
-│   └── rag/                  # RAG pipelines
+│   ├── dashboards/           # Analytics
+│   └── agents/               # AI agents
 └── test/                     # Tests
 ```
 
-**File naming conventions** (recommended, not enforced — `os g <type> <name>` always emits `{name}.ts`, so rename as you prefer):
-- **Object files:** `{name}.object.ts` or `{name}.ts` (one object per file)
-- **Action files:** `{name}.actions.ts`
-- **Flow files:** `{name}.flow.ts`
-- **Barrel exports:** Each directory has an `index.ts` that re-exports everything. Metadata is wired into your app through these barrel imports in `objectstack.config.ts` — there is no filename-suffix discovery.
+Each folder has an `index.ts` barrel that re-exports its metadata; those barrels
+are imported into `objectstack.config.ts`. There is **no filename-suffix magic** —
+metadata is wired in through those explicit imports, so `objectstack.config.ts` is
+the one place that tells you what's actually in the app.
 
-## Key Concepts
+## How you verify
 
-| Concept | Protocol | You Define | ObjectStack Provides |
-| :--- | :--- | :--- | :--- |
-| Data Model | ObjectQL | Objects, Fields, Validation | CRUD APIs, database schema, type safety |
-| User Interface | ObjectUI | Views, Apps, Dashboards | React components, navigation, responsive layout |
-| Business Logic | Automation | Flows, Workflows, Triggers | Event handlers, approval chains, scheduled jobs |
-| Access Control | Security | Profiles, Permissions, Sharing | Middleware, RLS policies, field masking |
-| Intelligence | AI | Agents, RAG, Models | Chat interfaces, search indexes, predictions |
+Reading the metadata is half of verification; running the app is the other half.
+Two commands, both of which the agent runs for you but you can run yourself:
 
-## Next Steps
+```bash
+os validate     # the gate — schema + CEL predicates + widget bindings (no artifact)
+os dev --ui     # boot the app, then open http://localhost:3000/_console/
+```
 
-- [Example Apps](/docs/getting-started/examples) &mdash; Run the Todo, CRM, and BI examples
-- [Data Modeling Guide](/docs/data-modeling) &mdash; Deep dive into objects and fields
+`os validate` proves the metadata is *well-formed*; the **Console** at `/_console/`
+proves it does what you *meant* — create a record, watch an action show/hide,
+confirm the nav and filters. That visual check is the human's half of every build
+loop. See [Validating Metadata](/docs/getting-started/validating-metadata) for what
+the gate catches, and [Build with Claude Code](/docs/getting-started/build-with-claude-code)
+for the full describe → author → validate → verify cycle.
+
+## Go deeper
+
+<Cards>
+  <Card
+    title="Data Modeling"
+    href="/docs/data-modeling"
+    description="Objects, fields, relationships, and validation rules — the foundation of every app."
+  />
+  <Card
+    title="Business Logic"
+    href="/docs/automation/hooks"
+    description="Flows, workflows, triggers, and formulas that automate business processes."
+  />
+  <Card
+    title="Security Model"
+    href="/docs/permissions"
+    description="Profiles, permissions, sharing rules, and row-level security."
+  />
+  <Card
+    title="AI Capabilities"
+    href="/docs/ai"
+    description="Agents, RAG, natural-language queries, and the generated MCP tool surface."
+  />
+</Cards>
+
+## Next steps
+
+- [Build with Claude Code](/docs/getting-started/build-with-claude-code) &mdash; Build a real app end-to-end with an agent
+- [Example Apps](/docs/getting-started/examples) &mdash; Run the Todo, CRM, and showcase examples
 - [CLI Reference](/docs/getting-started/cli) &mdash; All available commands
 - [Protocol Reference](/docs/references) &mdash; Complete schema documentation

@@ -11,7 +11,10 @@ skills are **typed metadata**: you author them as source with `defineAgent` /
 external AI client (Claude, Cursor, a local model — any MCP client) reaches your
 objects, queries, and business **Actions** through `@objectstack/mcp` (BYO-AI),
 all governed by RLS. This page describes that metadata and the `AgentSchema` it
-validates against.
+validates against. Like the rest of your metadata, you don't hand-write agents —
+Claude Code authors them from the `objectstack-ai` [skill](/docs/ai/skills); you
+`os validate` and test the tools in the Console
+([the loop](/docs/getting-started/build-with-claude-code)).
 
 <Callout type="info">
 **Cloud / Enterprise — the in-product chat runtime.** The authoring format on

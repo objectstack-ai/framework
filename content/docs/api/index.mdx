@@ -23,6 +23,40 @@ ObjectStack exposes a fully typed REST API. All endpoints use JSON request/respo
 **Base URL**: Configurable, defaults to `/api/v1`. All paths below are relative to the base URL.
 </Callout>
 
+## Your app as an MCP server
+
+REST and GraphQL are how *code* consumes your app. **MCP is how *AI* consumes it.**
+Because every object and action is typed metadata, ObjectStack can expose the whole app
+as a [Model Context Protocol](https://modelcontextprotocol.io) server — so an AI client
+(Claude Code, Claude Desktop, Cursor, a local model) can inspect and *operate* the app
+you built, under the same permissions and RLS as the UI. Enable it with
+`OS_MCP_SERVER_ENABLED=true` (see [environment variables](/docs/deployment/environment-variables#mcp-server)).
+
+The generated tools mirror the surfaces you already defined:
+`list_objects` / `describe_object` (discover the schema), `query_records` / `get_record`
+(read), `create_record` / `update_record` / `delete_record` (write), and
+`list_actions` / `run_action` (invoke your business actions by name). Every call runs as
+the caller — RBAC, RLS, and field-level security all apply.
+
+```mermaid
+sequenceDiagram
+    participant AI as AI client (Claude / Cursor)
+    participant MCP as MCP server (@objectstack/mcp)
+    participant Eng as Action / ObjectQL engine
+    participant Sec as RBAC · RLS · FLS
+    participant DB as Data
+
+    AI->>MCP: run_action("resolve", { recordId })
+    MCP->>Eng: dispatch as the caller's principal
+    Eng->>Sec: check permissions on this record
+    Sec-->>Eng: allowed (or denied — fail-closed)
+    Eng->>DB: apply the change
+    DB-->>AI: result, same as the Console would return
+```
+
+See [Actions as Tools](/docs/ai/actions-as-tools) for the `run_action` bridge and the
+[MCP reference](/docs/references/ai/mcp) for binding external MCP servers into your agents.
+
 ## What's in this module
 
 - [Data API](/docs/api/data-api) — CRUD, batch operations, record cloning, and analytics queries

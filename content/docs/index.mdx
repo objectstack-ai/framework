@@ -5,14 +5,33 @@ description: Technical documentation for ObjectStack.
 
 # ObjectStack Documentation
 
-ObjectStack is an AI-native business backend protocol for structured, auditable business applications. You author your application — data model, logic, permissions, and UI — as typed metadata in TypeScript (`defineStack()`), compile it to a self-contained artifact (`objectstack.json`), and the runtime derives everything else: the database schema on interchangeable drivers, a generated REST + realtime API, permission-checked automation, and server-driven UI. AI agents act through the same typed, permission-aware surface — never through raw SQL or scraped UI. Every engine (SQL, React, MCP) is a consumer of the same source of truth.
+ObjectStack is an **AI-native business backend protocol** for structured, auditable
+business applications. The way you build it: **an AI agent (Claude Code) authors your
+application as typed metadata — data model, logic, permissions, UI — a validation gate
+rejects mistakes that would fail silently at runtime, and you verify the result in a
+visual Console.** From that one source of truth the runtime derives everything else — the
+database schema on interchangeable drivers, a generated REST + realtime API,
+permission-checked automation, server-driven UI, and an **MCP server**, so the app you
+build is itself AI-operable. Agents act through the same typed, permission-aware surface —
+never raw SQL or scraped UI.
+
+```mermaid
+flowchart LR
+    A["Describe<br/>in plain language"] --> B["Claude Code authors<br/>typed metadata"]
+    B --> G{"os validate<br/>the gate"}
+    G -->|fails| B
+    G -->|passes| V["You verify in<br/>the Console"]
+    V -->|iterate| A
+    V -->|ship| M["MCP — your app<br/>is AI-operable"]
+```
 
 ## Start here
 
+- [Build with Claude Code](/docs/getting-started/build-with-claude-code) — the main workflow: an agent builds the app, you verify it in the Console
+- [How AI Development Works](/docs/getting-started/how-ai-development-works) — why AI-builds / human-verifies is fast and safe
 - [What is ObjectStack?](/docs/getting-started) — the protocol model and runtime layers
-- [Quick Start](/docs/getting-started/quick-start) — create an app and run the Console locally
 - [Core Concepts](/docs/concepts) — the ideas behind metadata-driven development
-- [Architecture](/docs/concepts/architecture) — how ObjectQL, ObjectOS, and ObjectUI fit together
+- [Architecture](/docs/concepts/architecture) — how the runtime turns your metadata into a database, API, UI, and MCP surface
 
 ## Platform modules
 

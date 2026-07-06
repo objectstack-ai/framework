@@ -7,6 +7,41 @@ import { Database, Layout, Cog } from 'lucide-react';
 
 **ObjectStack** is not just a framework; it is an **AI-native business backend protocol** for building enterprise software. It decouples the *Business Intent* (defined as typed metadata) from the *Technical Execution* (handled by the Kernel), so APIs, UI metadata, workflows, and agent tools can all derive from the same source of truth.
 
+## How you'll build
+
+ObjectStack is designed around one workflow: **an AI agent authors the app; you
+verify it in a visual UI; guardrails keep the agent from shipping mistakes.**
+
+```
+   describe ─▶ Claude Code authors ─▶ os validate ─▶ you verify in ─▶ iterate ─▶ MCP
+   in plain    the typed metadata     (the gate)      the Console                (app is
+   language                                                                       AI-operable)
+```
+
+You say what you want; Claude Code (or Cursor, Copilot, …) writes the typed
+metadata, because the [skills bundle](/docs/ai/skills) and a scaffolded `AGENTS.md`
+taught it the protocol. A validation gate rejects the mistakes that fail silently
+at runtime, and you confirm the result by clicking through the real app. Then the
+app you built is itself AI-operable, because the same metadata generates an MCP
+server.
+
+<Cards>
+  <Card
+    title="Build with Claude Code"
+    href="/docs/getting-started/build-with-claude-code"
+    description="The main path — run the whole loop end-to-end on an app you build live."
+  />
+  <Card
+    title="How AI development works"
+    href="/docs/getting-started/how-ai-development-works"
+    description="Why AI-builds / human-verifies is fast and safe — the guardrails, in one place."
+  />
+</Cards>
+
+The rest of this page explains *why* an agent can build an enterprise app
+end-to-end safely: the protocol, and how everything derives from one source of
+truth.
+
 ## The Problem
 
 In traditional development, application logic is scattered:
@@ -21,23 +56,33 @@ When requirements change, you update code in multiple places. When AI agents nee
 
 ## The Solution
 
-We centralize the "Intent" into a single TypeScript-authored, Zod-validated protocol definition. The implementation layers (React, Node.js, SQL, MCP tools) act as **Runtime Engines** that interpret this protocol.
+We centralize the "Intent" into a single TypeScript-authored, Zod-validated definition. You (and the agent) work in the same areas an app naturally divides into — data, automation, interface, access, AI — and the implementation layers (SQL, React, MCP tools) act as **Runtime Engines** that interpret that metadata.
 
 <Cards>
   <Card
     icon={<Database />}
-    title="Data Protocol"
-    description="Define business objects, fields, queries, and constraints. Database-agnostic abstraction layer."
-  />
-  <Card
-    icon={<Layout />}
-    title="UI Protocol"
-    description="Presentation metadata for apps, views, dashboards, and actions."
+    title="Data"
+    description="Business objects, fields, relationships, validation — the source of truth."
   />
   <Card
     icon={<Cog />}
-    title="System Protocol"
-    description="Runtime kernel, plugins, security, automation, audit, and agent boundaries."
+    title="Automation"
+    description="Flows, workflows, triggers, and approvals — the process logic."
+  />
+  <Card
+    icon={<Layout />}
+    title="Interface"
+    description="Apps, views, dashboards, and actions — the server-driven UI."
+  />
+  <Card
+    icon={<Cog />}
+    title="Access"
+    description="Roles, permissions, sharing, and row-level security."
+  />
+  <Card
+    icon={<Database />}
+    title="AI"
+    description="Agents, tools, RAG, and the generated MCP surface."
   />
 </Cards>
 
@@ -147,4 +192,5 @@ For more troubleshooting, see the [Troubleshooting & FAQ](/docs/deployment/troub
 - [Core Concepts](/docs/concepts) — Metadata-driven development & design principles
 - [Architecture](/docs/concepts/architecture) — The three-layer protocol stack
 - [Glossary](/docs/getting-started/glossary) — Key terminology
-- [Quick Start](/docs/getting-started/quick-start) — Build your first app in 5 minutes
+- [Build with Claude Code](/docs/getting-started/build-with-claude-code) — Build your first app end-to-end with an agent
+- [Anatomy of an ObjectStack App](/docs/getting-started/quick-start) — Read the metadata an agent writes, so you can verify it

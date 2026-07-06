@@ -133,6 +133,14 @@ settings are the exception — they route through the settings env-override
 convention as `OS_MAIL_<KEY>` (e.g. `OS_MAIL_SMTP_HOST`, `OS_MAIL_SMTP_PORT`),
 not a raw `SMTP_*` name.
 
+<Callout type="tip">
+**Make the deployed app AI-operable:** set `OS_MCP_SERVER_ENABLED=true` to start an MCP
+server alongside any deployment mode, exposing your objects and actions to AI clients
+under the same permissions and RLS. See
+[MCP Server env vars](/docs/deployment/environment-variables#mcp-server) and
+[Your app as an MCP server](/docs/api#your-app-as-an-mcp-server).
+</Callout>
+
 <Callout type="warn">
 **Set `OS_SECRET_KEY` for any containerized or multi-node deployment.** The
 default `LocalCryptoProvider` encrypts every `sys_secret` value under one

@@ -215,11 +215,22 @@ Provider credentials keep their upstream names. ObjectStack does not rename
 
 ## MCP Server
 
+Enable this to make **the app you built AI-operable**: with the MCP server on, an
+MCP client — Claude Code, Claude Desktop, Cursor, or a local model — connects to your
+running app and gets a generated tool surface over your objects and actions
+(`query_records`, `run_action`, …), bound to the caller's principal and governed by the
+same RBAC / RLS as the Console. No custom tooling, no separate API. See
+[Actions as Tools](/docs/ai/actions-as-tools) for the tool set.
+
+```bash
+OS_MCP_SERVER_ENABLED=true os start     # boot with the MCP server (stdio by default)
+```
+
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_MCP_SERVER_ENABLED` | boolean | `false` | When `true`, start the Model Context Protocol server at boot. |
+| `OS_MCP_SERVER_ENABLED` | boolean | `false` | When `true`, start the Model Context Protocol server at boot — exposing your objects and actions to MCP clients. |
 | `OS_MCP_SERVER_NAME` | string | `objectstack` | Server name advertised to MCP clients. |
-| `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. |
+| `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. Use `http` (Streamable HTTP) for a remote client; `stdio` for a local one. |
 
 ---
 

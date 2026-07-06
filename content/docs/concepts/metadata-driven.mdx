@@ -9,6 +9,13 @@ import { Database, Code, Link, Laptop } from 'lucide-react';
 
 Metadata-driven development is a paradigm shift where **business intent is defined by declarative, analyzable metadata instead of scattered imperative code.**
 
+<Callout type="info">
+This is also what makes ObjectStack **AI-native**: because the whole app is a few hundred
+lines of typed, analyzable metadata — not tens of thousands of lines of glue — it fits in
+an agent's context window. Claude Code authors it, `os validate` catches mistakes, and you
+verify in the Console. See [How AI Development Works](/docs/getting-started/how-ai-development-works).
+</Callout>
+
 ## The Problem with Code-First
 
 In traditional development, the "Intent" (e.g., *"This field is a required email address"*) is scattered across multiple layers:

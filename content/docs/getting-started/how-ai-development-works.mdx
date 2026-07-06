@@ -1,0 +1,111 @@
+---
+title: How AI Development Works
+description: The division of labor behind ObjectStack — AI authors the typed metadata, you verify in the visual UI, and layered guardrails keep the AI from shipping mistakes.
+---
+
+# How AI Development Works
+
+ObjectStack is built for a specific way of working: **an AI agent writes the
+application; a human verifies it in a visual UI; and a stack of guardrails keeps
+the AI from shipping mistakes.** This page explains why that division of labor is
+both *fast* and *safe*. For the hands-on walkthrough, see
+[Build with Claude Code](/docs/getting-started/build-with-claude-code).
+
+## The division of labor
+
+| The AI does | You do |
+|:---|:---|
+| Author typed metadata — objects, fields, views, actions, flows, permissions | Say what you want, in plain language |
+| Run the validation gate and fix what it flags | **Verify the result in the Console** — click through the real app |
+| Apply your feedback and re-verify | Decide when it's right |
+
+The agent handles the mechanical, error-prone surface (field types, CEL scoping,
+barrel wiring, naming rules). You handle the part no schema can check: *did it
+build the thing I actually meant?*
+
+## Why it's fast
+
+A typical enterprise app is tens of thousands of lines of CRUD, forms, queries,
+permissions, and API glue spread across dozens of files. ObjectStack collapses the
+same surface into **a few hundred lines of typed metadata** — roughly two orders
+of magnitude less code to read, write, and maintain.
+
+The point isn't lines of code; it's **fit in an agent's context window.** When the
+entire business system is small, typed, and declarative, an agent can load it
+end-to-end, reason about every dependency, and safely refactor across data, API,
+UI, and permissions in a single change. That's what turns AI from an autocomplete
+tool into a real co-maintainer of production business software.
+
+## Why it's safe
+
+The AI's speed is only useful if its mistakes can't reach production. Five layers
+stand between "the agent wrote something" and "it shipped":
+
+### 1. Skills + `AGENTS.md` — the agent knows the rules up front
+
+Every scaffolded project installs the [ObjectStack skills bundle](/docs/ai/skills)
+and an `AGENTS.md`. The agent authors *to the protocol's schemas and conventions*
+— `snake_case` names, Zod-first shapes, `record.`-scoped predicates — instead of
+from generic "write me some TypeScript" priors. Most mistakes never happen.
+
+### 2. `os validate` / `os build` — the authoring gate
+
+Metadata is data, not code paths, so most mistakes **pass `tsc` and then fail
+silently at runtime** — a bare-field predicate hides an action on every record; a
+dangling widget binding renders an empty chart. `os validate` parses every CEL
+predicate, checks each `record.<field>` resolves, and verifies widget bindings —
+failing with a **located, corrective** message. It's the same gate `os build`
+runs. See [Validating Metadata](/docs/getting-started/validating-metadata).
+
+### 3. Contract-first — reject at the gate, never patch the runtime
+
+When metadata "doesn't work," the fix is to correct the **producer** and make the
+gate reject the bad input loudly — *not* to add a lenient fallback in the consumer
+that silently tolerates it. Loud rejection at authoring time is what keeps AI
+mistakes from accumulating into quiet, compounding drift.
+
+### 4. Draft-gating + human review
+
+AI-authored metadata changes can land as **drafts** rather than being published
+directly. In Studio, a change set surfaces as a reviewable diff ("Review N
+changes") that a human approves before it goes live — so an agent's write is a
+*proposal*, not an unattended commit.
+
+### 5. Worktree isolation
+
+Multiple agents can work the same repo in parallel without clobbering each other,
+because each works in its own git worktree and branch. Their changes converge
+through normal review, not by racing on a shared checkout.
+
+## The verification layer
+
+Guardrails 1–3 prove the metadata is *well-formed*. They can't prove it's *what
+you meant*. That's what the **Console** (and Studio) are for: run `os dev --ui`,
+open the real app, and drive it as a user or admin. Wrong default, confusing
+label, an action that shows when it shouldn't — you catch those by looking, and
+then feed the correction back to the agent. The visual UI is the human's half of
+every loop.
+
+## The output is AI-operable too
+
+Because the whole app is typed metadata, ObjectStack also generates an **MCP
+server** from it. The app you build isn't just AI-*built* — it's AI-*operable*:
+an MCP client can `query_records` and `run_action` against it, governed by the
+same RBAC, RLS, and audit as the UI. The guardrails that protect authoring also
+protect what agents do to real data at runtime. See
+[Actions as Tools](/docs/ai/actions-as-tools).
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Build with Claude Code"
+    href="/docs/getting-started/build-with-claude-code"
+    description="Run the whole loop end-to-end on a real app you build live."
+  />
+  <Card
+    title="Validating Metadata"
+    href="/docs/getting-started/validating-metadata"
+    description="Exactly what the authoring gate checks, and why typecheck isn't enough."
+  />
+</Cards>

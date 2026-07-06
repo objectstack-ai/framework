@@ -4,6 +4,8 @@
   "defaultOpen": true,
   "pages": [
     "index",
+    "how-ai-development-works",
+    "build-with-claude-code",
     "quick-start",
     "examples",
     "cli",

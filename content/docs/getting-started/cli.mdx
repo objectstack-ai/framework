@@ -54,6 +54,14 @@ os compile           # Build production artifact → dist/objectstack.json
 </Steps>
 
 <Callout type="tip">
+**These commands *are* the AI build loop.** In day-to-day work, Claude Code writes the
+metadata and runs two of them for you: `os validate` is **the gate** (it rejects
+predicate/schema/binding mistakes that fail silently at runtime), and `os dev --ui` is
+**the human verify surface** (the Console, where you confirm the app matches intent). See
+[Build with Claude Code](/docs/getting-started/build-with-claude-code) for the full loop.
+</Callout>
+
+<Callout type="tip">
 `os dev --ui` starts a dev server with the bundled Console UI, auto-loads ObjectQL, an in-memory driver when appropriate, and the Hono HTTP server.
 </Callout>
 

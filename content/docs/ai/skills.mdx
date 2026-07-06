@@ -7,7 +7,7 @@ import { Bot, Brain, Cpu, Database, Globe, Layout, Shield, Workflow, Wrench, Lan
 
 # AI Skills System
 
-ObjectStack introduces a **Skills System** — structured, domain-specific knowledge modules that enable AI assistants (GitHub Copilot, Claude Code, Cursor, etc.) to understand and generate protocol-compliant code.
+ObjectStack introduces a **Skills System** — structured, domain-specific knowledge modules that enable AI assistants (GitHub Copilot, Claude Code, Cursor, etc.) to understand and generate protocol-compliant code. Skills are what make [building with Claude Code](/docs/getting-started/build-with-claude-code) reliable: they teach the agent the protocol's rules up front, so it authors correct metadata instead of guessing.
 
 <Callout type="info">
 Skills are **not runtime code**. They are machine-readable knowledge definitions that teach AI assistants the ObjectStack protocol — its schemas, patterns, constraints, and best practices.
@@ -186,6 +186,10 @@ Read skills/objectstack-query/SKILL.md and help me build a query
 that filters opportunities by stage and aggregates revenue by quarter.
 ```
 
+For the end-to-end workflow — scaffold, let Claude Code author the metadata,
+validate, and verify in the Console — follow
+[Build with Claude Code](/docs/getting-started/build-with-claude-code).
+
 ### With Cursor
 
 Add the skill files to your Cursor rules or reference them in prompts:
@@ -224,4 +228,4 @@ The `evals/` directory in each skill is reserved for test cases that validate an
 - [AI Skills Reference](/docs/ai/skills-reference) — Detailed guide to each skill with usage examples
 - [AI Capabilities](/docs/ai) — AI agents, RAG pipelines, and intelligent automation
 - [Plugin Development](/docs/plugins/development) — Build custom plugins
-- [Quick Start](/docs/getting-started/quick-start) — Build your first ObjectStack app
+- [Build with Claude Code](/docs/getting-started/build-with-claude-code) — Build your first ObjectStack app with an agent

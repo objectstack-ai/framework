@@ -9,6 +9,15 @@ import { CheckSquare, Building2, BarChart3, Server } from 'lucide-react';
 
 The monorepo ships three ready-to-run examples in `examples/` that progressively demonstrate ObjectStack features — from a simple Todo app to a full CRM and a kitchen-sink reference. For a larger external enterprise reference, see the [HotCRM repository](https://github.com/objectstack-ai/hotcrm).
 
+<Callout type="tip">
+**Read these as reference, then build your own with an agent.** Each example is the same
+kind of typed metadata Claude Code authors for you — so they double as a catalog of
+patterns to point your agent at ("build me a CRM like `app-crm`, but for support
+tickets"). To *extend* one, describe the change in plain language, let the agent edit the
+metadata, run `os validate`, and verify in the Console — the loop in
+[Build with Claude Code](/docs/getting-started/build-with-claude-code).
+</Callout>
+
 <Cards>
   <Card
     icon={<CheckSquare />}

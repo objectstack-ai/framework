@@ -8,6 +8,12 @@ description: Complete guide to leveraging AI agents, RAG pipelines, and intellig
 AI in ObjectStack is a **cross-protocol capability layer**: agents, tools, and knowledge retrieval sit on top of the same objects, actions, permissions, and automation that power the rest of the platform. This module covers the architecture and each of its moving parts.
 
 <Callout type="info">
+**Two different "AI" stories — don't confuse them:**
+- **AI *builds* your app** (authoring) — Claude Code writes the typed metadata; you verify in the Console. That's the [Build with Claude Code](/docs/getting-started/build-with-claude-code) workflow, in *Get Started* — a different thing from this section.
+- **Your app *exposes/uses* AI** (runtime) — agents, tools, RAG, natural-language queries, and an MCP server that let an AI operate the app you built, under the same permissions. **This section covers that.**
+</Callout>
+
+<Callout type="info">
 **The open framework does AI bring-your-own-AI** — your keys, your models, zero platform AI cost. Everything on this page is part of the open edition unless a section is explicitly marked **cloud / Enterprise**:
 
 - **Data & actions → `@objectstack/mcp`** (BYO-AI). Point your own AI — Claude, Cursor, any MCP client, or a local model — at the app's objects, queries, and business **actions**, governed by the same RLS. With a local model, data *and* inference stay inside your boundary.
@@ -34,20 +40,11 @@ The **cloud / Enterprise** tier adds an in-product chat *runtime* on top of thes
 
 ObjectStack provides a comprehensive AI platform:
 
-```
-┌─────────────────────────────────────┐
-│        AI Agents                    │ ← Persona + skills/tools
-│        Skills & Tools               │ ← Actions/Flows exposed to the LLM
-├─────────────────────────────────────┤
-│        Knowledge Protocol           │ ← search_knowledge via adapters
-│  - memory / ragflow / custom        │
-│  - Permission-aware retrieval       │
-├─────────────────────────────────────┤
-│        Model Registry               │ ← LLM management
-│  - openai, azure_openai,            │
-│    anthropic, local                 │
-│  - Token accounting / cost          │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["<b>AI Agents</b> — persona + skills/tools"] --> T["<b>Skills &amp; Tools</b><br/>Actions / Flows exposed to the LLM"]
+    T --> K["<b>Knowledge Protocol</b> — search_knowledge via adapters<br/>memory / ragflow / custom · permission-aware retrieval"]
+    K --> R["<b>Model Registry</b> — LLM management<br/>openai · azure_openai · anthropic · local · token accounting / cost"]
 ```
 
 ---
