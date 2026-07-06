@@ -60,6 +60,24 @@ export const ShowcaseApp = App.create({
       ],
     },
     {
+      // ObjectNavItem.filters (#2626) — declarative slices on the bare data
+      // surface (`/:objectName/data`, objectui ADR-0055 / #2255). Each item
+      // targets the SAME object as `nav_tasks` above but pre-applies URL
+      // filter[<field>]=<value> conditions instead of a saved view; the shell
+      // renders them as removable chips. `filters` is mutually exclusive with
+      // `recordId`/`viewName` — the app.zod superRefine guard rejects mixing
+      // them at build time (#2630), so these three stay filter-only.
+      id: 'grp_slices',
+      type: 'group',
+      label: 'Data Slices (filters)',
+      icon: 'filter',
+      children: [
+        { id: 'nav_slice_in_progress', type: 'object', objectName: 'showcase_task', filters: { status: 'in_progress' }, label: 'In-Progress Tasks', icon: 'loader' },
+        { id: 'nav_slice_urgent', type: 'object', objectName: 'showcase_task', filters: { priority: 'urgent' }, label: 'Urgent Tasks', icon: 'flame' },
+        { id: 'nav_slice_review', type: 'object', objectName: 'showcase_task', filters: { status: 'in_review' }, label: 'In-Review Tasks', icon: 'eye' },
+      ],
+    },
+    {
       id: 'grp_analytics',
       type: 'group',
       label: 'Analytics',
