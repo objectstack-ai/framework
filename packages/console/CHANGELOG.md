@@ -1,5 +1,11 @@
 # @objectstack/console
 
+## 12.5.0
+
+### Minor Changes
+
+- 12e11b6: remove studio app
+
 ## 12.4.0
 
 ### Minor Changes

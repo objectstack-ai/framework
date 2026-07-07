@@ -1,5 +1,65 @@
 # @objectstack/cli
 
+## 12.5.0
+
+### Patch Changes
+
+- 3b9fd94: `os dev` / `os start` / `os serve` no longer default-load the `@objectstack/studio` app package.
+
+  The console ships a dedicated Studio surface at `/_console/studio/<package-id>/<pillar>`,
+  so Studio no longer needs to exist as a navigable app tile in the home "Your apps" list.
+  The `@objectstack/studio` package is unchanged and can still be registered explicitly;
+  Setup and Account remain default-loaded (ADR-0048 one-app-per-package mechanism).
+
+- f85635e: Drop the `@objectstack/studio` dependency from `cli` and `plugin-dev`. Since Studio is no longer default-loaded by `os dev` / `os start` / `os serve` (the console hosts it at `/_console/studio/...`), neither package imports it at runtime any more. The only remaining consumer was the ADR-0048 app-split test in `cli`, which now exercises the identical one-app-package code path via Setup + Account. The `@objectstack/studio` package itself is unchanged and still registerable explicitly.
+- Updated dependencies [8b3d363]
+- Updated dependencies [12e11b6]
+  - @objectstack/spec@12.5.0
+  - @objectstack/objectql@12.5.0
+  - @objectstack/trigger-record-change@12.5.0
+  - @objectstack/service-automation@12.5.0
+  - @objectstack/console@12.5.0
+  - @objectstack/account@12.5.0
+  - @objectstack/setup@12.5.0
+  - @objectstack/client@12.5.0
+  - @objectstack/cloud-connection@12.5.0
+  - @objectstack/core@12.5.0
+  - @objectstack/formula@12.5.0
+  - @objectstack/lint@12.5.0
+  - @objectstack/mcp@12.5.0
+  - @objectstack/observability@12.5.0
+  - @objectstack/platform-objects@12.5.0
+  - @objectstack/driver-memory@12.5.0
+  - @objectstack/driver-mongodb@12.5.0
+  - @objectstack/driver-sql@12.5.0
+  - @objectstack/driver-sqlite-wasm@12.5.0
+  - @objectstack/plugin-approvals@12.5.0
+  - @objectstack/plugin-audit@12.5.0
+  - @objectstack/plugin-auth@12.5.0
+  - @objectstack/plugin-email@12.5.0
+  - @objectstack/plugin-hono-server@12.5.0
+  - @objectstack/plugin-org-scoping@12.5.0
+  - @objectstack/plugin-reports@12.5.0
+  - @objectstack/plugin-security@12.5.0
+  - @objectstack/plugin-sharing@12.5.0
+  - @objectstack/plugin-webhooks@12.5.0
+  - @objectstack/rest@12.5.0
+  - @objectstack/runtime@12.5.0
+  - @objectstack/service-analytics@12.5.0
+  - @objectstack/service-cache@12.5.0
+  - @objectstack/service-datasource@12.5.0
+  - @objectstack/service-job@12.5.0
+  - @objectstack/service-messaging@12.5.0
+  - @objectstack/service-package@12.5.0
+  - @objectstack/service-queue@12.5.0
+  - @objectstack/service-realtime@12.5.0
+  - @objectstack/service-settings@12.5.0
+  - @objectstack/service-storage@12.5.0
+  - @objectstack/trigger-api@12.5.0
+  - @objectstack/trigger-schedule@12.5.0
+  - @objectstack/types@12.5.0
+  - @objectstack/verify@12.5.0
+
 ## 12.4.0
 
 ### Patch Changes
