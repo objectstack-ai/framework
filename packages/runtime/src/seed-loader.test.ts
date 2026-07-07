@@ -44,6 +44,13 @@ function createMockEngine(data: Record<string, any[]> = {}): IDataEngine {
     }),
     insert: vi.fn(async (objectName: string, data: any) => {
       if (!store[objectName]) store[objectName] = [];
+      // Mirror the real engine's array-form insert (bulk path): an array in
+      // → an array of created records out, same order — see framework#2678.
+      if (Array.isArray(data)) {
+        const records = data.map((d) => ({ id: `gen-${++idCounter}`, ...d }));
+        store[objectName].push(...records);
+        return records;
+      }
       const record = { id: `gen-${++idCounter}`, ...data };
       store[objectName].push(record);
       return record;
@@ -289,7 +296,15 @@ describe('SeedLoaderService', () => {
       expect(result.success).toBe(true);
       expect(result.summary.totalInserted).toBe(2);
       expect(result.summary.objectsProcessed).toBe(1);
-      expect(engine.insert).toHaveBeenCalledTimes(2);
+      // framework#2678: non-self-referencing insert-mode records are batched
+      // through the engine's array-form insert() — one round-trip, not one
+      // per record.
+      expect(engine.insert).toHaveBeenCalledTimes(1);
+      expect(engine.insert).toHaveBeenCalledWith(
+        'account',
+        [expect.objectContaining({ name: 'Acme Corp' }), expect.objectContaining({ name: 'Globex' })],
+        expect.anything(),
+      );
     });
 
     it('should return empty result for no datasets', async () => {

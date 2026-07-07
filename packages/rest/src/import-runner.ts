@@ -2,6 +2,7 @@
 
 import { coerceRow, type RefResolver, type RefMatch } from './import-coerce.js';
 import type { ExportFieldMeta } from './export-format.js';
+import { bulkWrite, withTransientRetry, type BulkWriteRowResult } from '@objectstack/core';
 
 /**
  * import-runner — the shared row-processing core for bulk import.
@@ -11,6 +12,13 @@ import type { ExportFieldMeta } from './export-format.js';
  * keeps the two paths byte-for-byte identical in coercion, upsert matching, and
  * per-row reporting — the async worker only adds progress persistence and
  * cancellation on top.
+ *
+ * Rows resolved to a CREATE are batched through `p.createManyData` (the
+ * engine's array-form `insert()` — one round-trip per batch, with transient
+ * retry and per-row degradation on a logical/validation failure) instead of
+ * one `p.createData` call per row — see framework#2678. A protocol that
+ * doesn't implement `createManyData` falls back to the original per-row
+ * `createData` path unchanged.
  */
 
 export type ImportAction = 'created' | 'updated' | 'skipped' | 'failed';
@@ -61,6 +69,13 @@ export interface ImportProtocolLike {
   findData(args: any): Promise<any>;
   createData(args: any): Promise<any>;
   updateData(args: any): Promise<any>;
+  /**
+   * Optional bulk-create primitive. When present, `runImport` batches
+   * CREATE-resolved rows through it instead of one `createData` call per
+   * row — see framework#2678. Must resolve to `{ records: any[] }` with one
+   * record per input row, in the same order.
+   */
+  createManyData?(args: { object: string; records: any[]; context?: any; environmentId?: string }): Promise<{ records: any[] }>;
 }
 
 export interface RunImportOptions {
@@ -88,7 +103,11 @@ export interface RunImportOptions {
    * DB write of progress completes before the next chunk.
    */
   onProgress?: (p: ImportProgress) => void | Promise<void>;
-  /** Rows between onProgress calls (default 200). */
+  /**
+   * Rows between onProgress calls (default 200). Also the flush boundary for
+   * buffered creates — a batch never grows past this before being written,
+   * so progress numbers stay accurate at every reported checkpoint.
+   */
   progressEvery?: number;
   /**
    * Cooperative cancellation. Checked at each progress boundary; when it returns
@@ -102,6 +121,21 @@ export interface RunImportOptions {
    */
   captureUndo?: boolean;
 }
+
+/** Extracts a created/updated record's id regardless of which response shape the protocol returned. */
+function extractRecordId(rec: any): string | undefined {
+  const id = rec?.id ?? rec?.record?.id;
+  return id != null ? String(id) : undefined;
+}
+
+function toFailedResult(rowNo: number, err: unknown): ImportRowResult {
+  const code = (err as any)?.code ?? 'IMPORT_ROW_FAILED';
+  const message = typeof (err as any)?.message === 'string' ? (err as any).message.slice(0, 300) : 'Row failed';
+  return { row: rowNo, ok: false, action: 'failed', error: message, code };
+}
+
+/** Upper bound on rows in one createManyData batch (framework#2678 suggests 100-500). */
+const MAX_CREATE_BATCH_SIZE = 200;
 
 export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
   const {
@@ -189,13 +223,58 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
 
   const writeCtx = { ...(context ?? {}), skipAutomations: !runAutomations };
 
-  const results: ImportRowResult[] = [];
+  // Sparse-indexed by row position `i` (not push-only): CREATE rows are
+  // resolved immediately but their write is deferred to a later batch flush,
+  // so their result would otherwise land out of order relative to
+  // immediately-written update/skip rows interleaved between them.
+  const results: ImportRowResult[] = new Array(rows.length);
   let okCount = 0, errCount = 0, created = 0, updated = 0, skipped = 0;
   let cancelled = false;
 
   const snapshot = (processed: number): ImportProgress => ({
     processed, total: rows.length, created, updated, skipped, errors: errCount,
   });
+
+  // CREATE rows are buffered here and flushed through `p.createManyData`
+  // (one round-trip per batch) when the protocol supports it. A protocol
+  // without `createManyData` never buffers — `canBulkCreate` is false and
+  // creates fall back to the original inline per-row `createData` call.
+  const canBulkCreate = typeof p.createManyData === 'function';
+  const pendingCreates: Array<{ index: number; rowNo: number; data: Record<string, any> }> = [];
+  const flushPendingCreates = async (): Promise<void> => {
+    if (pendingCreates.length === 0) return;
+    const batch = pendingCreates.splice(0, pendingCreates.length);
+    const writeResults: BulkWriteRowResult[] = await bulkWrite(
+      batch.map(b => b.data),
+      {
+        // Flush cadence follows progressEvery, but the write batch itself is
+        // capped independently — a caller-supplied progressEvery far above
+        // the issue's suggested 100-500 rows/batch must not translate into
+        // one oversized multi-row INSERT statement.
+        batchSize: Math.min(progressEvery, MAX_CREATE_BATCH_SIZE),
+        writeBatch: (chunk) => p.createManyData!({
+          object: objectName, records: chunk, context: writeCtx,
+          ...(environmentId ? { environmentId } : {}),
+        }).then(r => r.records),
+        writeOne: (row) => p.createData({
+          object: objectName, data: row, context: writeCtx,
+          ...(environmentId ? { environmentId } : {}),
+        }),
+      },
+    );
+    for (const res of writeResults) {
+      const { index, rowNo } = batch[res.index];
+      if (res.ok) {
+        const id = extractRecordId(res.record);
+        okCount++; created++;
+        if (collectUndo && id != null) undoLog.created.push(id);
+        results[index] = { row: rowNo, ok: true, action: 'created', id };
+      } else {
+        errCount++;
+        results[index] = toFailedResult(rowNo, res.error);
+      }
+    }
+  };
 
   return (async () => {
     for (let i = 0; i < rows.length; i++) {
@@ -208,7 +287,7 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
         if (errors.length > 0) {
           const first = errors[0];
           errCount++;
-          results.push({ row: rowNo, ok: false, action: 'failed', field: first.field, code: first.code, error: first.message });
+          results[i] = { row: rowNo, ok: false, action: 'failed', field: first.field, code: first.code, error: first.message };
         } else {
           // 2. Decide create vs update vs skip.
           let existing: Record<string, any> | 'blank' | 'none' | 'ambiguous' = 'none';
@@ -217,12 +296,12 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
             existing = await findExisting(data);
             if (existing === 'ambiguous') {
               errCount++;
-              results.push({ row: rowNo, ok: false, action: 'failed', code: 'AMBIGUOUS_MATCH', error: `matchFields matched more than one ${objectName} record` });
+              results[i] = { row: rowNo, ok: false, action: 'failed', code: 'AMBIGUOUS_MATCH', error: `matchFields matched more than one ${objectName} record` };
               handled = true;
             } else if (existing === 'blank' && (skipBlankMatchKey || writeMode === 'update')) {
               // Blank match key: skip when asked, else fall through to create.
               skipped++;
-              results.push({ row: rowNo, ok: true, action: 'skipped', code: 'BLANK_MATCH_KEY' });
+              results[i] = { row: rowNo, ok: true, action: 'skipped', code: 'BLANK_MATCH_KEY' };
               handled = true;
             }
           }
@@ -234,47 +313,55 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
             if (!willUpdate && !willCreate) {
               // update mode, no match → skip.
               skipped++;
-              results.push({ row: rowNo, ok: true, action: 'skipped', code: 'NO_MATCH' });
+              results[i] = { row: rowNo, ok: true, action: 'skipped', code: 'NO_MATCH' };
             } else if (dryRun) {
               okCount++;
-              if (willUpdate) { updated++; results.push({ row: rowNo, ok: true, action: 'updated', id: String((existing as any).id ?? '') || undefined }); }
-              else { created++; results.push({ row: rowNo, ok: true, action: 'created' }); }
+              if (willUpdate) { updated++; results[i] = { row: rowNo, ok: true, action: 'updated', id: String((existing as any).id ?? '') || undefined }; }
+              else { created++; results[i] = { row: rowNo, ok: true, action: 'created' }; }
             } else if (willUpdate) {
               const target = existing as Record<string, any>;
-              const res2 = await p.updateData({ object: objectName, id: target.id, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
-              const id = (res2 as any)?.id ?? (res2 as any)?.record?.id ?? target.id;
+              const res2 = await withTransientRetry(() => p.updateData({ object: objectName, id: target.id, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) }));
+              const id = extractRecordId(res2) ?? String(target.id);
               okCount++; updated++;
               if (collectUndo && target.id != null) {
                 undoLog.updated.push({ id: String(target.id), before: captureBefore(target, data) });
               }
-              results.push({ row: rowNo, ok: true, action: 'updated', id: id != null ? String(id) : undefined });
+              results[i] = { row: rowNo, ok: true, action: 'updated', id };
+            } else if (canBulkCreate) {
+              // Buffer — the actual write happens in a batched flush below.
+              pendingCreates.push({ index: i, rowNo, data });
             } else {
+              // No bulk-create primitive on this protocol: original inline path.
               const res2 = await p.createData({ object: objectName, data, context: writeCtx, ...(environmentId ? { environmentId } : {}) });
-              const id = (res2 as any)?.id ?? (res2 as any)?.record?.id;
+              const id = extractRecordId(res2);
               okCount++; created++;
-              if (collectUndo && id != null) undoLog.created.push(String(id));
-              results.push({ row: rowNo, ok: true, action: 'created', id: id != null ? String(id) : undefined });
+              if (collectUndo && id != null) undoLog.created.push(id);
+              results[i] = { row: rowNo, ok: true, action: 'created', id };
             }
           }
         }
       } catch (err: any) {
         errCount++;
-        const code = err?.code ?? 'IMPORT_ROW_FAILED';
-        const message = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Row failed';
-        results.push({ row: rowNo, ok: false, action: 'failed', error: message, code });
+        results[i] = toFailedResult(rowNo, err);
       }
 
       const processed = i + 1;
-      if (onProgress && (processed % progressEvery === 0 || processed === rows.length)) {
-        await onProgress(snapshot(processed));
+      if (processed % progressEvery === 0 || processed === rows.length) {
+        // Flush before reporting/cancelling so counts and `processed` reflect
+        // every row up to this checkpoint, not just decided-but-unwritten ones.
+        await flushPendingCreates();
+        if (onProgress) await onProgress(snapshot(processed));
       }
       if (shouldCancel && processed < rows.length && (processed % progressEvery === 0)) {
         if (await shouldCancel()) { cancelled = true; break; }
       }
     }
 
+    await flushPendingCreates();
+    const compacted = results.filter((r): r is ImportRowResult => r !== undefined);
+
     return {
-      ...snapshot(results.length), ok: okCount, results, cancelled,
+      ...snapshot(compacted.length), ok: okCount, results: compacted, cancelled,
       ...(collectUndo ? { undoLog } : {}),
     };
   })();

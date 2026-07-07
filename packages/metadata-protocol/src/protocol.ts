@@ -2918,8 +2918,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         } as BatchUpdateResponse;
     }
     
-    async createManyData(request: { object: string, records: any[] }): Promise<any> {
-        const records = await this.engine.insert(request.object, request.records);
+    async createManyData(request: { object: string, records: any[], context?: any }): Promise<any> {
+        const records = await this.engine.insert(
+            request.object,
+            request.records,
+            request.context !== undefined ? { context: request.context } as any : undefined,
+        );
         return {
             object: request.object,
             records,

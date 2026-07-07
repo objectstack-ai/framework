@@ -175,8 +175,16 @@ describe('protocol.applySeedBodies — real loader smoke test', () => {
     const inserted: Array<{ object: string; record: any }> = [];
     (protocol as any).engine = {
       find: async () => [],
-      insert: async (object: string, record: any) => {
-        inserted.push({ object, record });
+      insert: async (object: string, data: any) => {
+        // Mirror the real engine's array-form insert (bulk path): an array in
+        // → an array of created records out, same order — see framework#2678.
+        if (Array.isArray(data)) {
+          return data.map((record) => {
+            inserted.push({ object, record });
+            return { id: `${object}_${inserted.length}` };
+          });
+        }
+        inserted.push({ object, record: data });
         return { id: `${object}_${inserted.length}` };
       },
       update: async () => ({}),
