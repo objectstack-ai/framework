@@ -569,9 +569,41 @@ function installApiMethod(
   fn.dispose();
 }
 
+/**
+ * Serialise a host value for marshalling into the VM, tolerating shapes that
+ * plain `JSON.stringify` chokes on. Only JSON-safe leaves cross the sandbox
+ * boundary anyway, so anything unserialisable is dropped rather than fatal:
+ *
+ * - **Circular references** — a live `setTimeout`/`setInterval` handle (or any
+ *   node host object) reachable from `ctx` links back on itself
+ *   (`Timeout._idlePrev -> TimersList._idleNext -> …`). Naive `JSON.stringify`
+ *   throws `TypeError: Converting circular structure to JSON` and takes the
+ *   whole hook down (issue #2674). A `WeakSet` of ancestors on the current path
+ *   drops the back-edge instead.
+ * - **BigInt** — `JSON.stringify` throws outright; we coerce to a string.
+ *
+ * The replacer is deliberately conservative: it strips only what would crash
+ * the serialiser, leaving legitimate data intact.
+ */
+function safeJsonStringify(v: unknown): string {
+  const seen = new WeakSet<object>();
+  const json = JSON.stringify(v ?? null, function (this: unknown, _key, value) {
+    if (typeof value === 'bigint') return value.toString();
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return undefined; // drop circular back-edge
+      seen.add(value);
+    }
+    return value;
+  });
+  // `JSON.stringify` returns `undefined` when the top-level value is itself
+  // unserialisable (e.g. a bare function); normalise to a JSON literal so the
+  // downstream `vm.evalCode` never receives `(undefined)`.
+  return json ?? 'null';
+}
+
 /** Marshal a host JSON-serializable value into a QuickJS handle. */
 function jsonToHandle(vm: QuickJSAsyncContext, v: unknown): QuickJSHandle {
-  const json = JSON.stringify(v ?? null);
+  const json = safeJsonStringify(v);
   const r = vm.evalCode(`(${json})`);
   if (r.error) {
     const msg = vm.dump(r.error);
@@ -582,7 +614,7 @@ function jsonToHandle(vm: QuickJSAsyncContext, v: unknown): QuickJSHandle {
 }
 
 function setGlobalJson(vm: QuickJSAsyncContext, name: string, v: unknown): void {
-  const json = JSON.stringify(v ?? null);
+  const json = safeJsonStringify(v);
   const result = vm.evalCode(`(${json})`);
   if (result.error) {
     result.error.dispose();
@@ -593,7 +625,7 @@ function setGlobalJson(vm: QuickJSAsyncContext, name: string, v: unknown): void 
 }
 
 function setObjectJson(vm: QuickJSAsyncContext, parent: QuickJSHandle, key: string, v: unknown): void {
-  const json = JSON.stringify(v ?? null);
+  const json = safeJsonStringify(v);
   const result = vm.evalCode(`(${json})`);
   if (result.error) {
     result.error.dispose();

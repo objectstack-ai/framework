@@ -162,6 +162,41 @@ describe('QuickJSScriptRunner — L2 hook script', () => {
     expect(err!.message).toContain("action 'lead_apply_convert' threw:");
     expect(err!.innerMessage).toBe('线索信息不完整');
   });
+
+  it('marshals ctx.input containing a circular Timeout handle without crashing (#2674)', async () => {
+    // A live setInterval handle links back on itself
+    // (Timeout._idlePrev -> TimersList._idleNext -> …). Naive JSON.stringify
+    // over ctx would throw "Converting circular structure to JSON" and take the
+    // hook down. The runner must strip the back-edge and run the body.
+    const timer = setInterval(() => {}, 1_000);
+    try {
+      const r = await runner.runScript(
+        {
+          language: 'js',
+          source: 'return { ok: true, n: ctx.input.n };',
+          capabilities: [],
+        },
+        ctx({ input: { n: 5, timer } as unknown as Record<string, unknown> }),
+        hookOpts,
+      );
+      expect(r.value).toEqual({ ok: true, n: 5 });
+    } finally {
+      clearInterval(timer);
+    }
+  });
+
+  it('marshals a BigInt in ctx.input by coercing to string rather than throwing', async () => {
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: 'return { big: ctx.input.big };',
+        capabilities: [],
+      },
+      ctx({ input: { big: 42n } as unknown as Record<string, unknown> }),
+      hookOpts,
+    );
+    expect(r.value).toEqual({ big: '42' });
+  });
 });
 
 describe('QuickJSScriptRunner — L2 action script', () => {
