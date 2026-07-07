@@ -73,7 +73,9 @@ export async function checkReadCoercion(
     await driver.syncSchema(object, { name: object, fields: FIELDS });
     await driver.create(object, { ...INPUT });
 
-    const rows = await driver.find(object, { object });
+    // Read back only the row we just wrote (by id), so the check is robust even
+    // when the probe object already holds unrelated rows on a shared backend.
+    const rows = await driver.find(object, { object, where: { id: INPUT.id } });
     if (!Array.isArray(rows) || rows.length !== 1) {
       problems.push(`find returned ${Array.isArray(rows) ? `${rows.length} rows` : typeof rows}, expected exactly 1`);
       return problems;
