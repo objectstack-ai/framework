@@ -1807,6 +1807,9 @@ importers:
       '@objectstack/plugin-hono-server':
         specifier: workspace:*
         version: link:../../plugins/plugin-hono-server
+      '@objectstack/verify':
+        specifier: workspace:*
+        version: link:../../verify
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
