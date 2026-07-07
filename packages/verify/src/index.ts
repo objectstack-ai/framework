@@ -23,3 +23,9 @@ export type { RlsReport, RlsResult } from './rls.js';
 // runtime harness): classify every declarable property, fail closed on drift.
 export { checkLedger } from './conformance.js';
 export type { ConformanceRow, ConformanceState, CheckLedgerOptions } from './conformance.js';
+
+// Driver read-coercion conformance: a stored value must read back as its
+// declared type on every driver (the case_escalation `1 != true` invariant).
+// Driver-agnostic — any driver, including out-of-tree ones, runs the same check.
+export { checkReadCoercion } from './read-coercion.js';
+export type { CoercibleDriver, ReadCoercionOptions } from './read-coercion.js';

@@ -17,6 +17,8 @@
     "@objectstack/verify": "workspace:*"
   },
   "devDependencies": {
+    "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-sql": "workspace:*",
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"

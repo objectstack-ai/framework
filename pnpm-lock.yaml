@@ -748,6 +748,12 @@ importers:
         specifier: workspace:*
         version: link:../verify
     devDependencies:
+      '@objectstack/driver-memory':
+        specifier: workspace:*
+        version: link:../plugins/driver-memory
+      '@objectstack/driver-sql':
+        specifier: workspace:*
+        version: link:../plugins/driver-sql
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
