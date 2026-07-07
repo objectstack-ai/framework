@@ -117,6 +117,72 @@ describe('notify (baseline node)', () => {
             expect(result.output).toMatchObject({ 'notify.delivered': 2 });
         });
 
+        it('forwards a click-through target via sourceObject/sourceId, interpolating the id (#2675)', async () => {
+            engine.registerFlow('notify_flow', notifyFlow({
+                recipients: ['user_1'],
+                title: 'Quote {dealName} approved',
+                message: 'Fill in the line items',
+                channels: ['inbox'],
+                sourceObject: 'mtc_quotation',
+                sourceId: '{dealId}',
+            }));
+
+            const result = await engine.execute('notify_flow', {
+                params: { dealName: 'Acme', dealId: 'q_42' },
+            } as any);
+
+            expect(result.success).toBe(true);
+            expect(messaging.emitted[0]).toMatchObject({
+                source: { object: 'mtc_quotation', id: 'q_42' },
+            });
+        });
+
+        it('accepts the nested source:{object,id} form and forwards actorId', async () => {
+            engine.registerFlow('notify_flow', notifyFlow({
+                recipients: ['user_1'],
+                title: 'Assigned to you',
+                source: { object: 'opportunity', id: '{dealId}' },
+                actorId: '{dealName}',
+            }));
+
+            const result = await engine.execute('notify_flow', {
+                params: { dealName: 'user_boss', dealId: '99' },
+            } as any);
+
+            expect(result.success).toBe(true);
+            expect(messaging.emitted[0]).toMatchObject({
+                source: { object: 'opportunity', id: '99' },
+                actorId: 'user_boss',
+            });
+        });
+
+        it('drops a half-specified target (object without id) rather than emitting a dead link', async () => {
+            engine.registerFlow('notify_flow', notifyFlow({
+                recipients: ['user_1'],
+                title: 'Heads up',
+                sourceObject: 'opportunity',
+                // no sourceId
+            }));
+
+            const result = await engine.execute('notify_flow');
+            expect(result.success).toBe(true);
+            expect(messaging.emitted[0].source).toBeUndefined();
+        });
+
+        it('accepts `url` as an alias for actionUrl', async () => {
+            engine.registerFlow('notify_flow', notifyFlow({
+                recipients: ['user_1'],
+                title: 'Heads up',
+                url: '/opps/{dealId}',
+            }));
+
+            const result = await engine.execute('notify_flow', {
+                params: { dealId: '7' },
+            } as any);
+            expect(result.success).toBe(true);
+            expect(messaging.emitted[0].payload).toMatchObject({ url: '/opps/7' });
+        });
+
         it('accepts a single recipient string and the subject/to aliases', async () => {
             engine.registerFlow('notify_flow', notifyFlow({
                 to: 'user_9',
