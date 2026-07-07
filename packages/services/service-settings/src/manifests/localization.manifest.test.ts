@@ -21,7 +21,10 @@ describe('localizationSettingsManifest', () => {
     const byKey = (k: string) => specs.find((s) => s.key === k);
     expect(byKey('timezone').default).toBe('UTC');
     expect(byKey('locale').default).toBe('en-US');
-    expect(byKey('currency').default).toBe('USD');
+    // No platform default currency: a code-less currency field renders as a
+    // plain number unless the workspace explicitly sets one (avoids surfacing
+    // an unwanted "$"/"US$" on every amount that omits its own code).
+    expect(byKey('currency').default).toBeUndefined();
     expect(byKey('date_format').default).toBe('YYYY-MM-DD');
     expect(byKey('first_day_of_week').default).toBe('monday');
     expect(byKey('fiscal_year_start').default).toBe('january');

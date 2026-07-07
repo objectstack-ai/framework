@@ -111,8 +111,13 @@ export const localizationSettingsManifest: SettingsManifest = {
     // ── Finance ───────────────────────────────────────────────────────────
     { type: 'group', id: 'finance', label: 'Finance', required: false },
     {
-      type: 'select', key: 'currency', label: 'Default currency', required: false, default: 'USD',
-      description: 'ISO 4217 code applied when a currency field omits its own.',
+      type: 'select', key: 'currency', label: 'Default currency', required: false,
+      // No platform default: when a currency field omits its own code AND the
+      // workspace has not set a default here, amounts render as plain numbers
+      // rather than inheriting a guessed symbol (previously hard-defaulted to
+      // 'USD', which surfaced an unwanted "$"/"US$" on every code-less amount).
+      // A workspace can still pick a default to apply org-wide.
+      description: 'ISO 4217 code applied when a currency field omits its own. Leave unset to render code-less amounts as plain numbers.',
       options: [
         { value: 'USD', label: 'USD — US Dollar' },
         { value: 'EUR', label: 'EUR — Euro' },
