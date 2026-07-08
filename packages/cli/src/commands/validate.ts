@@ -13,6 +13,7 @@ import { validateListViewMode } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
 import { validateJsxPages, validateReactPages, validateReactPageProps, validatePageSourceStyling } from '@objectstack/lint';
+import { validateCapabilityReferences } from '@objectstack/lint';
 import {
   printHeader,
   printKV,
@@ -316,6 +317,21 @@ export default class Validate extends Command {
         }
       }
 
+      // 3f. Capability references (ADR-0066 ⑨): a requiredPermissions entry
+      //     naming a capability registered nowhere (no built-in, no permission
+      //     set grants it, no sys_capability seed) is almost certainly a typo —
+      //     it fails closed at runtime. Advisory: the capability may legitimately
+      //     be provided by another installed package.
+      if (!flags.json) printStep('Checking capability references (ADR-0066)...');
+      const capFindings = validateCapabilityReferences(result.data as Record<string, unknown>);
+      const capWarnings = capFindings.filter((f) => f.severity === 'warning');
+      if (!flags.json) {
+        for (const w of capWarnings.slice(0, 50)) {
+          console.log(chalk.yellow(`  ⚠ ${w.where}: ${w.message}`));
+          console.log(chalk.dim(`      ${w.hint}`));
+        }
+      }
+
       // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
@@ -324,7 +340,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings],
+          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings],
           duration: timer.elapsed(),
         }, null, 2));
         return;

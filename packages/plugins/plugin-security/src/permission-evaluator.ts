@@ -52,6 +52,31 @@ const MODIFY_ALL_WRITE_KEYS = new Set<keyof ObjectPermission>([
   ...[...DESTRUCTIVE_OPERATIONS].map((op) => OPERATION_TO_PERMISSION[op]),
 ]);
 
+/** CRUD operation class an object-level `requiredPermissions` map keys on. */
+export type CrudBucket = 'read' | 'create' | 'update' | 'delete';
+
+/**
+ * [ADR-0066 ⑤] Map a raw ObjectQL operation to the CRUD class a per-operation
+ * `requiredPermissions` map is keyed on, DERIVED from `OPERATION_TO_PERMISSION`
+ * so it stays in lockstep with the CRUD permission bits (and any future
+ * destructive op added there). `transfer`/`restore` fold into `update`,
+ * `purge` into `delete`. Returns `null` for an operation with no CRUD mapping
+ * (e.g. a custom read-side op) — such an op is never matched by a per-operation
+ * map, but the flat `string[]` form still gates it via its `all` bucket.
+ */
+export function crudBucketForOperation(operation: string): CrudBucket | null {
+  switch (OPERATION_TO_PERMISSION[operation]) {
+    case 'allowRead': return 'read';
+    case 'allowCreate': return 'create';
+    case 'allowEdit':
+    case 'allowTransfer':
+    case 'allowRestore': return 'update';
+    case 'allowDelete':
+    case 'allowPurge': return 'delete';
+    default: return null;
+  }
+}
+
 /**
  * [ADR-0066 D2] Resolve the object permission a permission set contributes for
  * `objectName`, honouring the secure-by-default posture:

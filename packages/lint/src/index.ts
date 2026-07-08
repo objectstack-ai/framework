@@ -68,3 +68,9 @@ export {
   FORM_COLSPAN_ABSOLUTE,
 } from './validate-form-layout.js';
 export type { FormLayoutFinding, FormLayoutSeverity } from './validate-form-layout.js';
+
+export {
+  validateCapabilityReferences,
+  CAPABILITY_REFERENCE_UNKNOWN,
+} from './validate-capability-references.js';
+export type { CapabilityRefFinding, CapabilityRefSeverity } from './validate-capability-references.js';

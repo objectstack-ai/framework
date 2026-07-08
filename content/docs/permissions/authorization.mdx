@@ -170,12 +170,17 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 - **Deny/muting layer** (ADR-0066 ⑦⑧) — union-only grants can't take access
   away; needed for large-org governance and packaged-set adjustment.
 - **Capability registry** (ADR-0066 D1) — **landed**: capabilities are seeded
-  as first-class `sys_capability` records
-  (`packages/plugins/plugin-security/src/bootstrap-system-capabilities.ts`);
-  the remaining gap is the authoring lint for unregistered `systemPermissions`
-  references (ADR-0066 ⑨).
-- **Per-operation `requiredPermissions`** (ADR-0066 ⑤) — read-open /
-  write-gated objects.
+  as first-class `sys_capability` records from the canonical list in
+  `@objectstack/spec` (`security/capabilities.ts` → `PLATFORM_CAPABILITIES`),
+  seeded by `packages/plugins/plugin-security/src/bootstrap-system-capabilities.ts`.
+  The authoring lint (ADR-0066 ⑨) is also **landed**: `validateCapabilityReferences`
+  (`@objectstack/lint`) warns at author time (`os validate` / `os lint`) when a
+  `requiredPermissions` names a capability registered nowhere — no built-in, no
+  permission set grants it via `systemPermissions`, no `sys_capability` seed.
+- **Per-operation `requiredPermissions`** (ADR-0066 ⑤) — **landed**: an
+  object's `requiredPermissions` may be a `string[]` (gates all CRUD) or a
+  `{ read, create, update, delete }` map (read-open / write-gated), enforced
+  per operation by plugin-security (`security-plugin.ts` capability AND-gate).
 - **Deny/muting subtract layer** (ADR-0005 overlay; ADR-0066 precedence step 4)
   — how an environment adjusts a *packaged* set without forking it; deferred
   until proven need (ADR-0086 P2).
