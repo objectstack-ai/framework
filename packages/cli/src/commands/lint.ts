@@ -8,7 +8,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '@objectstack/lint';
-import { validateRecordTitle, validateSemanticRoles } from '@objectstack/lint';
+import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences } from '@objectstack/lint';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
@@ -328,6 +328,21 @@ export function lintConfig(config: any): LintIssue[] {
   // time (the ADR-0078 completeness gate). All advisory — every consumer
   // degrades gracefully.
   for (const t of validateSemanticRoles(config)) {
+    issues.push({
+      severity: t.severity,
+      rule: t.rule,
+      message: `${t.where}: ${t.message}`,
+      path: t.path,
+      fix: t.hint,
+    });
+  }
+
+  // ── Capability references (ADR-0066 ⑨) ──
+  // requiredPermissions naming a capability that is registered nowhere
+  // (no built-in, no permission set grants it, no sys_capability seed) is
+  // almost certainly a typo. Advisory — the reference fails closed at runtime,
+  // and the capability may legitimately be provided by another installed package.
+  for (const t of validateCapabilityReferences(config)) {
     issues.push({
       severity: t.severity,
       rule: t.rule,
