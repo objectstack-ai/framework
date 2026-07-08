@@ -43,7 +43,11 @@ const SKIP_FIELDS = new Set<string>([
   'id', 'created_at', 'created_by', 'updated_at', 'updated_by',
 ]);
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Linear-time email check. Domain labels exclude '.', so the quantifiers on
+// either side of each '.' can't overlap — this avoids the polynomial
+// backtracking (ReDoS) of the naive `[^\s@]+\.[^\s@]+` shape while still
+// requiring a local part, an '@', and a dotted domain.
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 // Permissive URL pattern: accept any scheme:// + non-empty body so that
 // non-HTTP URIs used by drivers (libsql://, postgres://, mysql://, file://, s3://, …)
 // pass field-level validation. Stricter per-field checks can be enforced

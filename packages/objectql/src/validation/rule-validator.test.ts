@@ -303,6 +303,33 @@ describe('format enforcement', () => {
     ).not.toThrow();
   });
 
+  it('accepts multi-label domains and rejects malformed / empty-label emails', () => {
+    const emailSchema = schema({ field: 'email', format: 'email' });
+    const ok = (v: string) =>
+      expect(() => evaluateValidationRules(emailSchema, { email: v }, 'insert')).not.toThrow();
+    const bad = (v: string) =>
+      expect(() => evaluateValidationRules(emailSchema, { email: v }, 'insert')).toThrow(ValidationError);
+
+    ok('a@b.co.uk');
+    ok('x.y+z@sub.domain.io');
+    bad('a@b'); // no dot in domain
+    bad('a@b.'); // empty trailing label
+    bad('a@.com'); // empty leading label
+    bad('a@b..c'); // consecutive dots -> empty label
+    bad('a b@c.com'); // whitespace in local part
+  });
+
+  it('validates an email in linear time (no ReDoS on adversarial input)', () => {
+    // Overlapping-quantifier email regexes backtrack polynomially on a long
+    // run of domain-ish chars with no valid terminator. This must stay fast.
+    const attack = `a@${'a'.repeat(50_000)}${'.'.repeat(50_000)}!`;
+    const start = performance.now();
+    expect(() =>
+      evaluateValidationRules(schema({ field: 'email', format: 'email' }), { email: attack }, 'insert'),
+    ).toThrow(ValidationError);
+    expect(performance.now() - start).toBeLessThan(1_000);
+  });
+
   it('validates url / phone / json named formats', () => {
     expect(() => evaluateValidationRules(schema({ field: 'site', format: 'url' }), { site: 'nope' }, 'insert')).toThrow(ValidationError);
     expect(() => evaluateValidationRules(schema({ field: 'site', format: 'url' }), { site: 'https://x.io' }, 'insert')).not.toThrow();

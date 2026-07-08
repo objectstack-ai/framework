@@ -530,7 +530,11 @@ function checkPredicate(
   return null;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Linear-time email check. Domain labels exclude '.', so the quantifiers on
+// either side of each '.' can't overlap — this avoids the polynomial
+// backtracking (ReDoS) of the naive `[^\s@]+\.[^\s@]+` shape while still
+// requiring a local part, an '@', and a dotted domain.
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 // Lenient phone matcher: optional leading +, then 7–20 digits with spaces,
 // dashes, dots and parens allowed as separators. Intentionally permissive —
 // strict national formats belong in a `regex`.
