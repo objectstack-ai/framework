@@ -327,6 +327,27 @@ export const ActionSchema = lazySchema(() => z.object({
   /** Visual Style */
   variant: z.enum(['primary', 'secondary', 'danger', 'ghost', 'link']).optional().describe('Button visual variant for styling (primary = highlighted, danger = destructive, ghost = transparent)'),
 
+  /**
+   * Explicit sort order WITHIN a UI location group (lower = higher / more
+   * prominent). Controls where the action lands in each `locations` group
+   * instead of relying on cross-file `defineStack({ actions })` registration
+   * order — which is fragile and couples unrelated features.
+   *
+   * In `record_header` the first visible action becomes the primary button, so
+   * a low (or negative) `order` promotes an action into the primary slot and a
+   * high `order` demotes it toward the `⋯` overflow menu. This is the
+   * declarative lever a plugin (e.g. plugin-approvals) or app author uses to
+   * make a decision like Approve/Reject stably outrank app actions, rather than
+   * hiding the other actions to "make room".
+   *
+   * Honoured by a STABLE sort in `mergeActionsIntoObjects()` (see stack.zod):
+   * actions that leave `order` unset are treated as `0` and keep their original
+   * registration order, so setting `order` on nobody is a no-op — fully
+   * backward compatible. Renderers MAY additionally prefer a `variant:'primary'`
+   * action when two actions tie on `order` (see objectui record-header renderer).
+   */
+  order: z.number().optional().describe('Sort order within a location group (lower = higher). Promotes/demotes an action toward the record_header primary button; stable, so actions without `order` keep their registration order.'),
+
   /** UX Behavior */
   confirmText: I18nLabelSchema.optional().describe('Confirmation message before execution'),
   successMessage: I18nLabelSchema.optional().describe('Success message to show after execution'),
