@@ -1180,7 +1180,23 @@ export class SqlDriver implements IDataDriver {
 
   async bulkCreate(object: string, data: any[], options?: DriverOptions): Promise<any> {
     this.auditMissingTenant(object, 'bulkCreate', options);
-    for (const row of data) {
+    // Same client-side id assignment as create() (id/_id normalization,
+    // nanoid fallback when neither is supplied) — a row missing an id must
+    // not be silently inserted with a NULL primary key just because the
+    // engine batched it into an array. This path used to be rarely
+    // exercised; framework#2678 made it the common case for seed/import.
+    const rows = data.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const { _id, ...rest } = row;
+      const toInsert: Record<string, any> = { ...rest };
+      if (_id !== undefined && toInsert.id === undefined) {
+        toInsert.id = _id;
+      } else if (toInsert.id === undefined) {
+        toInsert.id = nanoid(DEFAULT_ID_LENGTH);
+      }
+      return toInsert;
+    });
+    for (const row of rows) {
       if (row && typeof row === 'object') {
         this.injectTenantOnInsert(object, row, options);
         // Reserve a persistent sequence value for each row's autonumber
@@ -1192,7 +1208,7 @@ export class SqlDriver implements IDataDriver {
       }
     }
     const builder = this.getBuilder(object, options);
-    return await builder.insert(data).returning('*');
+    return await builder.insert(rows).returning('*');
   }
 
   /**

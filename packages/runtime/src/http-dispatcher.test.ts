@@ -1227,7 +1227,11 @@ describe('HttpDispatcher', () => {
                 type: 'seed', name: 'project_seed', lock: null, editable: true,
                 item: { object: 'project', externalId: 'name', mode: 'upsert', records },
             });
-            const insert = vi.fn().mockImplementation(async (_obj: string, rec: any) => ({ id: `id_${rec.name}` }));
+            // Mirror the real engine's array-form insert (bulk path): an
+            // array in → an array of created records out — framework#2678.
+            const insert = vi.fn().mockImplementation(async (_obj: string, rec: any) => (
+                Array.isArray(rec) ? rec.map((r) => ({ id: `id_${r.name}` })) : { id: `id_${rec.name}` }
+            ));
             const find = vi.fn().mockResolvedValue([]); // no existing rows → all insert
             (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'protocol') return Promise.resolve({ publishPackageDrafts, getMetaItem });
@@ -1242,9 +1246,14 @@ describe('HttpDispatcher', () => {
             const seedApplied = (result.response as any)?.body?.data?.seedApplied;
             expect(seedApplied?.success).toBe(true);
             expect(seedApplied?.inserted).toBe(2);
-            // rows actually went to the engine
-            expect(insert).toHaveBeenCalledTimes(2);
-            expect(insert).toHaveBeenCalledWith('project', expect.objectContaining({ name: 'Apollo' }), expect.anything());
+            // rows actually went to the engine — batched into one bulk
+            // insert() call rather than one per record (framework#2678).
+            expect(insert).toHaveBeenCalledTimes(1);
+            expect(insert).toHaveBeenCalledWith(
+                'project',
+                [expect.objectContaining({ name: 'Apollo' }), expect.objectContaining({ name: 'Gemini' })],
+                expect.anything(),
+            );
         });
 
         // ADR-0045: "Publish" = live AND visible. A materialized (additive)

@@ -15,6 +15,7 @@ import type {
 } from '@objectstack/spec/data';
 import { SeedLoaderConfigSchema } from '@objectstack/spec/data';
 import { resolveSeedRecord } from '@objectstack/formula';
+import { bulkWrite, withTransientRetry, type BulkWriteRowResult } from '@objectstack/core';
 
 interface Logger {
   info(message: string, meta?: Record<string, any>): void;
@@ -220,6 +221,60 @@ export class SeedLoaderService implements ISeedLoaderService {
     // Get reference resolutions for this object
     const objectRefs = refMap.get(objectName) || [];
 
+    // Self-referencing objects (e.g. `employee.manager_id -> employee`) can
+    // have record i reference record j<i from the SAME dataset by natural
+    // key; that only resolves via `insertedRecords` once record j has
+    // actually been written (see the reference-resolution loop below). Batch
+    // writes defer the write past the point the record was resolved, which
+    // would break that same-batch ordering — so self-referencing datasets
+    // keep the historical strictly-sequential per-record write path
+    // (`writeRecord`, unchanged) and opt out of batching entirely. Every
+    // other dataset (the overwhelming majority — contact/lead/opportunity/…
+    // reference OTHER objects, already fully loaded via topological order)
+    // gets the batched path below. See framework#2678.
+    const hasSelfRef = objectRefs.some(ref => ref.targetObject === objectName);
+
+    // Records resolved as inserts (mode 'insert'/'replace', or an unmatched
+    // upsert/ignore) are buffered here and flushed in batches through the
+    // engine's array-form insert() — one round-trip per batch instead of one
+    // per record, with transient-error retry and per-row degradation on a
+    // logical/validation failure. See framework#2678.
+    const pendingInserts: Array<{ recordIndex: number; externalIdValue: string; record: Record<string, unknown> }> = [];
+    const opts = SeedLoaderService.SEED_OPTIONS as any;
+    const flushPendingInserts = async (): Promise<void> => {
+      if (pendingInserts.length === 0) return;
+      const batch = pendingInserts.splice(0, pendingInserts.length);
+      const writeResults: BulkWriteRowResult[] = await bulkWrite(
+        batch.map(b => b.record),
+        {
+          batchSize: SeedLoaderService.BULK_BATCH_SIZE,
+          // A lone row keeps the historical bare-record insert() call shape
+          // (no array wrapping) so single-record datasets are byte-for-byte
+          // unchanged; only a real batch (>1) uses the array/bulk form.
+          writeBatch: (rows) => rows.length === 1
+            ? this.engine.insert(objectName, rows[0], opts).then((r: any) => [r])
+            : this.engine.insert(objectName, rows, opts),
+          writeOne: (row) => this.engine.insert(objectName, row, opts),
+        },
+      );
+      for (const res of writeResults) {
+        const { recordIndex, externalIdValue, record } = batch[res.index];
+        if (res.ok) {
+          inserted++;
+          const internalId = this.extractId(res.record);
+          if (externalIdValue && internalId) {
+            insertedRecords.get(objectName)!.set(externalIdValue, internalId);
+          }
+        } else {
+          errored++;
+          const error = this.buildWriteError(objectName, record, externalId, recordIndex, res.error);
+          errors.push(error);
+          allErrors.push(error);
+          this.logger.warn(`[SeedLoader] ${error.message}`, { recordIndex });
+        }
+      }
+    };
+
     // Pin a single `now()` snapshot for the entire dataset so multi-pass
     // loads see one logical clock — the M9 determinism guarantee for seeds.
     const seedNow = new Date();
@@ -395,39 +450,61 @@ export class SeedLoaderService implements ISeedLoaderService {
 
       // Insert/upsert the record
       if (!config.dryRun) {
-        try {
-          const result = await this.writeRecord(
-            objectName, record, mode, externalId, existingRecords
-          );
+        if (hasSelfRef) {
+          // Self-referencing dataset: keep the historical sequential
+          // per-record write so a later record can resolve its self-ref
+          // against an earlier one via `insertedRecords` — see `hasSelfRef`.
+          try {
+            const result = await this.writeRecord(
+              objectName, record, mode, externalId, existingRecords
+            );
 
-          if (result.action === 'inserted') inserted++;
-          else if (result.action === 'updated') updated++;
-          else if (result.action === 'skipped') skipped++;
+            if (result.action === 'inserted') inserted++;
+            else if (result.action === 'updated') updated++;
+            else if (result.action === 'skipped') skipped++;
 
-          // Track the inserted/updated record's ID for reference resolution
-          const externalIdValue = String(record[externalId] ?? '');
-          const internalId = result.id;
-          if (externalIdValue && internalId) {
-            insertedRecords.get(objectName)!.set(externalIdValue, String(internalId));
+            const externalIdValue = String(record[externalId] ?? '');
+            const internalId = result.id;
+            if (externalIdValue && internalId) {
+              insertedRecords.get(objectName)!.set(externalIdValue, String(internalId));
+            }
+          } catch (err: any) {
+            errored++;
+            const error = this.buildWriteError(objectName, record, externalId, i, err);
+            errors.push(error);
+            allErrors.push(error);
+            this.logger.warn(`[SeedLoader] ${error.message}`, { recordIndex: i });
           }
-        } catch (err: any) {
-          // LOUD FAILURE: write errors were previously only counted +
-          // warn-logged, so dropped rows were invisible in result.errors and
-          // the boot summary. Surface them as actionable errors too, so the
-          // overall load is marked unsuccessful and the reason is reported.
-          errored++;
-          const error: ReferenceResolutionError = {
-            sourceObject: objectName,
-            field: '(write)',
-            targetObject: objectName,
-            targetField: externalId,
-            attemptedValue: record[externalId] ?? null,
-            recordIndex: i,
-            message: `Failed to write ${objectName} record #${i} (${externalId}=${String(record[externalId] ?? '')}): ${err.message}`,
-          };
-          errors.push(error);
-          allErrors.push(error);
-          this.logger.warn(`[SeedLoader] ${error.message}`, { recordIndex: i });
+        } else {
+          const decision = this.decideWriteAction(record, mode, externalId, existingRecords);
+          const externalIdValue = String(record[externalId] ?? '');
+
+          if (decision.action === 'skip') {
+            skipped++;
+            if (decision.id && externalIdValue) {
+              insertedRecords.get(objectName)!.set(externalIdValue, decision.id);
+            }
+          } else if (decision.action === 'update') {
+            try {
+              await withTransientRetry(() => this.engine.update(objectName, { ...record, id: decision.id }, opts));
+              updated++;
+              if (externalIdValue) {
+                insertedRecords.get(objectName)!.set(externalIdValue, decision.id);
+              }
+            } catch (err: any) {
+              errored++;
+              const error = this.buildWriteError(objectName, record, externalId, i, err);
+              errors.push(error);
+              allErrors.push(error);
+              this.logger.warn(`[SeedLoader] ${error.message}`, { recordIndex: i });
+            }
+          } else {
+            // Insert: buffer for the batched flush rather than writing now.
+            pendingInserts.push({ recordIndex: i, externalIdValue, record });
+            if (pendingInserts.length >= SeedLoaderService.BULK_BATCH_SIZE) {
+              await flushPendingInserts();
+            }
+          }
         }
       } else {
         // Dry-run: simulate insert tracking
@@ -437,6 +514,10 @@ export class SeedLoaderService implements ISeedLoaderService {
         }
         inserted++; // Count as "would be inserted"
       }
+    }
+
+    if (!config.dryRun) {
+      await flushPendingInserts();
     }
 
     return {
@@ -673,6 +754,58 @@ export class SeedLoaderService implements ISeedLoaderService {
         return { action: 'inserted', id: this.extractId(result) };
       }
     }
+  }
+
+  /** Rows per batch for the buffered-insert flush. See framework#2678. */
+  private static readonly BULK_BATCH_SIZE = 200;
+
+  /**
+   * Decide what {@link loadDataset}'s non-self-referencing (batched) path
+   * should do with a record — mirrors {@link writeRecord}'s mode/existing
+   * logic exactly, but WITHOUT performing the write, so insert decisions can
+   * be buffered and flushed as a batch instead of one call per record.
+   */
+  private decideWriteAction(
+    record: Record<string, unknown>,
+    mode: string,
+    externalId: string,
+    existingRecords?: Map<string, any>,
+  ): { action: 'insert' } | { action: 'update'; id: string } | { action: 'skip'; id?: string } {
+    const externalIdValue = record[externalId];
+    const existing = existingRecords?.get(String(externalIdValue ?? ''));
+
+    switch (mode) {
+      case 'update':
+        return existing ? { action: 'update', id: this.extractId(existing)! } : { action: 'skip' };
+      case 'upsert':
+        return existing ? { action: 'update', id: this.extractId(existing)! } : { action: 'insert' };
+      case 'ignore':
+        return existing ? { action: 'skip', id: this.extractId(existing) } : { action: 'insert' };
+      case 'insert':
+      case 'replace':
+      default:
+        return { action: 'insert' };
+    }
+  }
+
+  /** Builds the same `ReferenceResolutionError` shape a failed write has always reported. */
+  private buildWriteError(
+    objectName: string,
+    record: Record<string, unknown>,
+    externalId: string,
+    recordIndex: number,
+    err: unknown,
+  ): ReferenceResolutionError {
+    const message = (err as { message?: unknown } | null)?.message ?? String(err);
+    return {
+      sourceObject: objectName,
+      field: '(write)',
+      targetObject: objectName,
+      targetField: externalId,
+      attemptedValue: record[externalId] ?? null,
+      recordIndex,
+      message: `Failed to write ${objectName} record #${recordIndex} (${externalId}=${String(record[externalId] ?? '')}): ${message}`,
+    };
   }
 
   // ==========================================================================

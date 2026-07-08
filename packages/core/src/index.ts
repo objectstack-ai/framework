@@ -26,6 +26,9 @@ export * from './utils/env.js';
 // Export timezone-aware calendar utilities (ADR-0053 Phase 2)
 export * from './utils/datetime.js';
 
+// Export the shared batched-write helper (framework#2678)
+export * from './utils/bulk-write.js';
+
 // Export in-memory fallbacks for core-criticality services
 export * from './fallbacks/index.js';
 
