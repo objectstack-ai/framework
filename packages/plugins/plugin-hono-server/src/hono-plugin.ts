@@ -344,10 +344,35 @@ export class HonoServerPlugin implements Plugin {
         }
 
         // Catch-all: ensure unmatched requests always get a proper Response
-        // (prevents Hono "Context is not finalized" error)
+        // (prevents Hono "Context is not finalized" error).
+        //
+        // Hono routes a method mismatch to the SAME `notFound` sink as a
+        // genuinely missing path, so a `POST` to a `PUT`-only route (e.g. the
+        // metadata save endpoint, see #2684) used to return an opaque
+        // `{ error: 'Not found' }` 404 with no hint that the path exists under
+        // another verb. Here we re-match the request path against the set of
+        // registered route patterns: if it lines up with routes under other
+        // methods, answer `405 Method Not Allowed` with an accurate `Allow`
+        // header so callers can self-correct. A path that matches nothing
+        // stays a 404. This is framework-wide — every registered endpoint
+        // benefits, not just metadata.
         const rawAppForNotFound = this.server.getRawApp();
         if (typeof rawAppForNotFound.notFound === 'function') {
-            rawAppForNotFound.notFound((c: any) => c.json({ error: 'Not found' }, 404));
+            rawAppForNotFound.notFound((c: any) => {
+                const allowed = this.server.allowedMethodsForPath(c.req.path);
+                if (allowed.length > 0 && !allowed.includes(c.req.method)) {
+                    c.header('Allow', allowed.join(', '));
+                    return c.json({
+                        error: 'Method Not Allowed',
+                        code: 'METHOD_NOT_ALLOWED',
+                        message: `${c.req.method} is not supported for ${c.req.path}. Allowed: ${allowed.join(', ')}.`,
+                        method: c.req.method,
+                        path: c.req.path,
+                        allowed,
+                    }, 405);
+                }
+                return c.json({ error: 'Not found' }, 404);
+            });
         }
 
         // Register standard endpoints during kernel:ready so they're

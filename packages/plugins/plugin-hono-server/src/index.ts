@@ -3,4 +3,5 @@
 export * from './hono-plugin';
 export * from './adapter';
 export * from './pattern-matcher';
+export * from './route-pattern';
 

@@ -12,6 +12,7 @@ import { currentPerfTiming } from '@objectstack/observability';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { matchesRoutePattern } from './route-pattern';
 
 export interface HonoCorsOptions {
     enabled?: boolean;
@@ -44,6 +45,14 @@ export class HonoHttpServer implements IHttpServer {
     private app: Hono;
     private server: any;
     private listeningPort: number | undefined;
+    /**
+     * Every `(method, pattern)` pair registered through this server, kept so
+     * the `notFound` handler can answer "the path exists but the method is
+     * wrong" with a `405` + `Allow` instead of an opaque `404`. Populated by
+     * the verb methods below; static/SPA catch-alls registered straight on the
+     * raw Hono app are intentionally NOT tracked, so they never produce a 405.
+     */
+    private registeredRoutes: Array<{ method: string; pattern: string }> = [];
 
     constructor(
         private port: number = 3000,
@@ -210,19 +219,40 @@ export class HonoHttpServer implements IHttpServer {
     }
 
     get(path: string, handler: RouteHandler) {
+        this.registeredRoutes.push({ method: 'GET', pattern: path });
         this.app.get(path, this.wrap(handler));
     }
     post(path: string, handler: RouteHandler) {
+        this.registeredRoutes.push({ method: 'POST', pattern: path });
         this.app.post(path, this.wrap(handler));
     }
     put(path: string, handler: RouteHandler) {
+        this.registeredRoutes.push({ method: 'PUT', pattern: path });
         this.app.put(path, this.wrap(handler));
     }
     delete(path: string, handler: RouteHandler) {
+        this.registeredRoutes.push({ method: 'DELETE', pattern: path });
         this.app.delete(path, this.wrap(handler));
     }
     patch(path: string, handler: RouteHandler) {
+        this.registeredRoutes.push({ method: 'PATCH', pattern: path });
         this.app.patch(path, this.wrap(handler));
+    }
+
+    /**
+     * The HTTP methods registered for a concrete request `path`, ignoring the
+     * request's own method. Empty when no registered route matches the path at
+     * all (a genuine 404). Used by the `notFound` handler to build a `405`
+     * response with an accurate `Allow` header. `HEAD` is implied by `GET`
+     * (Hono answers HEAD from GET routes automatically).
+     */
+    allowedMethodsForPath(path: string): string[] {
+        const methods = new Set<string>();
+        for (const route of this.registeredRoutes) {
+            if (matchesRoutePattern(route.pattern, path)) methods.add(route.method);
+        }
+        if (methods.has('GET')) methods.add('HEAD');
+        return Array.from(methods).sort();
     }
 
     use(pathOrHandler: string | Middleware, handler?: Middleware) {
