@@ -21,6 +21,13 @@ export const SysJwks = ObjectSchema.create({
   icon: 'key',
   isSystem: true,
   managedBy: 'better-auth',
+  // [ADR-0066 D2/④] Secure-by-default: rows are the environment's JWT SIGNING
+  // KEYS (private key material). Not covered by the wildcard `'*'` grant — an
+  // ordinary member gets 403 from the generic data layer. Platform admins
+  // (viewAllRecords/modifyAllRecords) retain access via the posture-gated
+  // superuser bypass; better-auth itself reads via its adapter (system
+  // context), so token signing/verification is unaffected.
+  access: { default: 'private' },
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema,
   // but may add overlay row-level config. Use `no-overlay` if you need to
   // forbid sys_metadata overlays entirely.

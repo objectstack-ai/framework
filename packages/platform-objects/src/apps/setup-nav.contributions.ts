@@ -122,7 +122,11 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
     priority: BASE_PRIORITY,
     items: [
       { id: 'nav_oauth_apps', type: 'object', label: 'OAuth Applications', objectName: 'sys_oauth_application', icon: 'app-window' },
-      { id: 'nav_jwks', type: 'object', label: 'Signing Keys (JWKS)', objectName: 'sys_jwks', icon: 'key-round' },
+      // nav_jwks is capability-gated (like nav_api_keys): sys_jwks is
+      // `access.default:'private'` (ADR-0066 ④ — signing keys), so a
+      // non-admin's list request 403s server-side; gating the nav item keeps
+      // the menu honest instead of showing an entry that can only error.
+      { id: 'nav_jwks', type: 'object', label: 'Signing Keys (JWKS)', objectName: 'sys_jwks', icon: 'key-round', requiredPermissions: ['manage_platform_settings'] },
       // `sys_verification` (email/phone tokens) and `sys_device_code` (OAuth
       // device-grant codes) deliberately omit `list` from their `apiMethods`
       // (sensitive, ephemeral secrets — not browsable), so an object/list-view

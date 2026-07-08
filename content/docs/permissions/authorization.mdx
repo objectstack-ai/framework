@@ -181,6 +181,16 @@ The complete, prioritized gap map lives in issue **#2561** (the production
   object's `requiredPermissions` may be a `string[]` (gates all CRUD) or a
   `{ read, create, update, delete }` map (read-open / write-gated), enforced
   per operation by plugin-security (`security-plugin.ts` capability AND-gate).
+- **Secure-by-default rollout** (ADR-0066 ④) — **system-object slice landed**:
+  the raw secret/credential stores (`sys_secret`, `sys_jwks`,
+  `sys_verification`, `sys_oauth_access_token`, `sys_oauth_refresh_token`,
+  `sys_device_code`) declare `access: { default: 'private' }` — no wildcard
+  grant reaches them; platform admins retain access via the posture-gated
+  superuser bypass. `sys_scim_provider` is capability-gated like
+  `sys_sso_provider`. Member self-service objects (`sys_session`,
+  `sys_api_key`, `sys_oauth_application`, `sys_two_factor`) deliberately stay
+  public-posture (the Account app reads them as the member; row scoping is
+  their guard). Still open: Studio posture surfacing (objectui).
 - **Deny/muting subtract layer** (ADR-0005 overlay; ADR-0066 precedence step 4)
   — how an environment adjusts a *packaged* set without forking it; deferred
   until proven need (ADR-0086 P2).

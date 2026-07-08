@@ -75,6 +75,9 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     enforcement: 'plugin-security/rls-compiler.ts isSupportedRlsExpression + warn' },
   { id: 'system-permissions', summary: 'systemPermissions / tab-app gating', state: 'enforced',
     enforcement: 'rest/rest-server.ts filterAppForUser' },
+  { id: 'secure-by-default-posture', summary: 'ADR-0066 ④ — sensitive system objects opt out of the wildcard grant (access.default: private)', state: 'enforced',
+    enforcement: 'plugin-security/permission-evaluator.ts resolveObjectPermission (plain wildcard does not cover a private object) + posture-gated superuser bypass; declarations in platform-objects (sys_secret, sys_jwks, sys_verification, sys_oauth_access_token, sys_oauth_refresh_token, sys_device_code) + sys_scim_provider D3 capability gate',
+    note: 'Primitive enforcement unit-proven in plugin-security/security-plugin.test.ts (ADR-0066 posture suite); the per-object declarations are pinned by platform-objects.test.ts "secure-by-default posture" so dropping the flag from a secret store fails CI, not review. Member self-service objects (sys_session, sys_api_key, sys_oauth_application, sys_two_factor) deliberately stay public-posture — the Account app reads them with a member context; row scoping (owner/tenant RLS + _self carve-outs) is their guard.' },
 
   // ── Experimental — declared, NOT enforced (ADR-0049/0056 D8) ───────────
   { id: 'compliance-configs', summary: 'GDPR/HIPAA/PCI configs', state: 'experimental', note: 'no runtime consumer; marked [EXPERIMENTAL] (D8)' },

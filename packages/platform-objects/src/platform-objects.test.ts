@@ -4,10 +4,15 @@ import { describe, expect, it } from 'vitest';
 import {
   SysAccount,
   SysApiKey,
+  SysDeviceCode,
   SysInvitation,
+  SysJwks,
   SysMember,
+  SysOauthAccessToken,
   SysOauthApplication,
+  SysOauthRefreshToken,
   SysOrganization,
+  SysScimProvider,
   SysSession,
   SysTeam,
   SysTeamMember,
@@ -27,7 +32,7 @@ import {
   SysMetadata,
   SysMetadataHistoryObject,
 } from './metadata/index.js';
-import { SysSetting } from './system/index.js';
+import { SysSecret, SysSetting } from './system/index.js';
 import { ACCOUNT_APP, SETUP_APP, SETUP_NAV_CONTRIBUTIONS, STUDIO_APP } from './apps/index.js';
 import { AppSchema } from '@objectstack/spec/ui';
 
@@ -61,6 +66,44 @@ describe('@objectstack/platform-objects', () => {
   it.each(systemObjects)('%s does not use deprecated storage identity fields', (_exportName, object) => {
     expect((object as any).namespace).toBeUndefined();
     expect((object as any).tableName).toBeUndefined();
+  });
+
+  describe('secure-by-default posture (ADR-0066 ④)', () => {
+    // Raw secret / live-credential stores are opted OUT of the wildcard `'*'`
+    // grant: only an explicit per-object grant or the posture-gated superuser
+    // bypass (viewAllRecords/modifyAllRecords) reaches them. These assertions
+    // PIN the rollout — dropping the flag from any of these objects silently
+    // re-exposes signing keys / reset tokens / bearer credentials to every
+    // authenticated member, so a removal must fail here first (ADR-0078:
+    // no silent regression to the inert/exposed state).
+    const privateObjects = [
+      ['SysSecret', SysSecret],               // encrypted settings/datasource secrets
+      ['SysJwks', SysJwks],                   // JWT signing private keys
+      ['SysVerification', SysVerification],   // password-reset / verify tokens
+      ['SysOauthAccessToken', SysOauthAccessToken],   // live bearer tokens
+      ['SysOauthRefreshToken', SysOauthRefreshToken], // live refresh tokens
+      ['SysDeviceCode', SysDeviceCode],       // pending device-grant codes
+    ] as const;
+
+    it.each(privateObjects)('%s declares access.default = private', (_exportName, object) => {
+      expect((object as any).access?.default).toBe('private');
+    });
+
+    it('SysScimProvider is capability-gated like its sibling sys_sso_provider', () => {
+      // Admin config with an embedded live credential (scim_token) — the D3
+      // capability gate (not the private posture) is the sso/scim pattern.
+      expect((SysScimProvider as any).requiredPermissions).toEqual(['manage_platform_settings']);
+    });
+
+    it('member self-service objects deliberately stay on the public posture', () => {
+      // Account app ("My Sessions" / "My API Keys" / "My Apps") and the 2FA
+      // "My Enrollment" view read these via the generic data layer with a
+      // MEMBER context — flipping them private would break self-service.
+      // Row scoping (owner/tenant RLS + _self carve-outs) is their guard.
+      for (const object of [SysSession, SysApiKey, SysOauthApplication, SysTwoFactor]) {
+        expect((object as any).access?.default).not.toBe('private');
+      }
+    });
   });
 
   describe('sysadmin row actions', () => {

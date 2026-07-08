@@ -26,6 +26,12 @@ export const SysDeviceCode = ObjectSchema.create({
   icon: 'key-round',
   isSystem: true,
   managedBy: 'better-auth',
+  // [ADR-0066 D2/④] Secure-by-default: rows are LIVE pending device-grant
+  // codes — reading `user_code`/`device_code` lets an attacker hijack a
+  // pending CLI login. Not covered by the wildcard `'*'` grant; admins retain
+  // access via the superuser bypass; better-auth reads via its adapter
+  // (system context), so the device-grant flow is unaffected.
+  access: { default: 'private' },
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema,
   // but may add overlay row-level config. Use `no-overlay` if you need to
   // forbid sys_metadata overlays entirely.

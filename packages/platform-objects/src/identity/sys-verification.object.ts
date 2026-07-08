@@ -17,6 +17,12 @@ export const SysVerification = ObjectSchema.create({
   icon: 'shield-check',
   isSystem: true,
   managedBy: 'better-auth',
+  // [ADR-0066 D2/④] Secure-by-default: rows are LIVE one-time credentials
+  // (email/phone verification + password-reset tokens) — reading one is
+  // account takeover. Not covered by the wildcard `'*'` grant; admins retain
+  // access via the superuser bypass; better-auth reads via its adapter
+  // (system context), so verification flows are unaffected.
+  access: { default: 'private' },
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema,
   // but may add overlay row-level config. Use `no-overlay` if you need to
   // forbid sys_metadata overlays entirely.
