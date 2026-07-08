@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, Index, ObjectAccessConfig, ObjectCapabilities, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -133,6 +133,48 @@ External datasource binding (ADR-0015)
 
 * `own`
 * `extend`
+
+
+---
+
+## ObjectRequiredPermissions
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string[]`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **read** | `string[]` | optional | Capabilities required to read (find/findOne/count/aggregate). |
+| **create** | `string[]` | optional | Capabilities required to create (insert). |
+| **update** | `string[]` | optional | Capabilities required to update (update/transfer/restore). |
+| **delete** | `string[]` | optional | Capabilities required to delete (delete/purge). |
+
+---
+
+
+---
+
+## PerOperationRequiredPermissions
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **read** | `string[]` | optional | Capabilities required to read (find/findOne/count/aggregate). |
+| **create** | `string[]` | optional | Capabilities required to create (insert). |
+| **update** | `string[]` | optional | Capabilities required to update (update/transfer/restore). |
+| **delete** | `string[]` | optional | Capabilities required to delete (delete/purge). |
 
 
 ---
