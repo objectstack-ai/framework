@@ -162,6 +162,35 @@ export const ObjectAccessConfigSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * [ADR-0066 ⑤] Per-operation capability requirements for an object. Each key
+ * lists the capabilities a caller must hold for that operation CLASS; an absent
+ * key means that operation carries no capability gate. Lets an object be
+ * "read-open / write-gated" (Salesforce & Dataverse separate capability by
+ * operation) instead of the flat all-CRUD gate the `string[]` form applies.
+ * Operation→class mapping mirrors the CRUD permission bits: `transfer`/`restore`
+ * fold into `update`, `purge` into `delete`. `.strict()` so a mistyped key
+ * (e.g. `reads`) is rejected at author time rather than silently ignored.
+ */
+export const PerOperationRequiredPermissionsSchema = z.object({
+  read: z.array(z.string()).optional().describe('Capabilities required to read (find/findOne/count/aggregate).'),
+  create: z.array(z.string()).optional().describe('Capabilities required to create (insert).'),
+  update: z.array(z.string()).optional().describe('Capabilities required to update (update/transfer/restore).'),
+  delete: z.array(z.string()).optional().describe('Capabilities required to delete (delete/purge).'),
+}).strict();
+
+/**
+ * [ADR-0066 D3/⑤] Object capability contract — either capabilities required for
+ * ALL operations (`string[]`, the original shape) or a per-operation map
+ * (narrows the gate by operation). See the field doc on `Object.requiredPermissions`.
+ */
+export const ObjectRequiredPermissionsSchema = z.union([
+  z.array(z.string()),
+  PerOperationRequiredPermissionsSchema,
+]);
+export type PerOperationRequiredPermissions = z.infer<typeof PerOperationRequiredPermissionsSchema>;
+export type ObjectRequiredPermissions = z.infer<typeof ObjectRequiredPermissionsSchema>;
+
+/**
  * Soft Delete Configuration Schema
  * Implements recycle bin / trash functionality
  * 
@@ -522,14 +551,19 @@ const ObjectSchemaBase = z.object({
   access: ObjectAccessConfigSchema.optional().describe('[ADR-0066 D2] Object exposure posture (public-by-default vs private secure-by-default).'),
 
   /**
-   * [ADR-0066 D3] Capability contract — capability name(s) (permission-set
-   * `systemPermissions`; D1 records) a caller MUST hold to access this object at
-   * all. Mirrors `App.requiredPermissions`. Enforced by plugin-security as an
+   * [ADR-0066 D3/⑤] Capability contract — capability name(s) (permission-set
+   * `systemPermissions`; D1 records) a caller MUST hold to access this object.
+   * Mirrors `App.requiredPermissions`. Enforced by plugin-security as an
    * AND-gate: checked IN ADDITION to permission-set CRUD grants — a caller
-   * missing any listed capability is denied regardless of grants. Absent/empty
-   * ⇒ no capability gate.
+   * missing any required capability is denied regardless of grants.
+   *
+   * Two shapes:
+   *  - `string[]` — required for ALL operations (read/create/update/delete).
+   *  - `{ read?, create?, update?, delete? }` (⑤) — required only for the listed
+   *    operation class, so an object can be read-open but write-gated.
+   * Absent/empty ⇒ no capability gate.
    */
-  requiredPermissions: z.array(z.string()).optional().describe('[ADR-0066 D3] Capabilities required to access this object (AND-gate, checked alongside CRUD grants).'),
+  requiredPermissions: ObjectRequiredPermissionsSchema.optional().describe('[ADR-0066 D3/⑤] Capabilities required to access this object (AND-gate) — `string[]` gates all CRUD, or a `{read,create,update,delete}` map gates per operation.'),
   
   // Soft delete configuration
   softDelete: SoftDeleteConfigSchema.optional().describe('Soft delete (trash/recycle bin) configuration'),

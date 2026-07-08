@@ -174,8 +174,10 @@ The complete, prioritized gap map lives in issue **#2561** (the production
   (`packages/plugins/plugin-security/src/bootstrap-system-capabilities.ts`);
   the remaining gap is the authoring lint for unregistered `systemPermissions`
   references (ADR-0066 ⑨).
-- **Per-operation `requiredPermissions`** (ADR-0066 ⑤) — read-open /
-  write-gated objects.
+- **Per-operation `requiredPermissions`** (ADR-0066 ⑤) — **landed**: an
+  object's `requiredPermissions` may be a `string[]` (gates all CRUD) or a
+  `{ read, create, update, delete }` map (read-open / write-gated), enforced
+  per operation by plugin-security (`security-plugin.ts` capability AND-gate).
 - **Deny/muting subtract layer** (ADR-0005 overlay; ADR-0066 precedence step 4)
   — how an environment adjusts a *packaged* set without forking it; deferred
   until proven need (ADR-0086 P2).

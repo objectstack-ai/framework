@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { SecurityPlugin } from './security-plugin.js';
-import { PermissionEvaluator } from './permission-evaluator.js';
+import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
 import { FieldMasker } from './field-masker.js';
 import { RLSCompiler, RLS_DENY_FILTER, isSupportedRlsExpression } from './rls-compiler.js';
 import type { PermissionSet } from '@objectstack/spec/security';
@@ -560,6 +560,86 @@ describe('SecurityPlugin', () => {
       await harness.run(opCtx);
       // The member is still tenant-scoped — the managedBy bypass is admin-only.
       expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ADR-0066 ⑤ — per-operation requiredPermissions (read-open / write-gated)
+  // -------------------------------------------------------------------------
+  describe('ADR-0066 ⑤ per-operation requiredPermissions (middleware)', () => {
+    const memberSet: PermissionSet = {
+      name: 'member_default', label: 'Member', isProfile: true,
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+    } as any;
+    const memberWithCap: PermissionSet = {
+      name: 'member_default', label: 'Member', isProfile: true,
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+      systemPermissions: ['manage_x'],
+    } as any;
+
+    // Object is read-open (no `read` key) but create-gated on `manage_x`.
+    const createGated = { requiredPermissions: { create: ['manage_x'] } };
+
+    it('does NOT gate read — a caller without the capability can find', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberSet], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).resolves.toBeDefined();
+    });
+
+    it('DENIES the gated operation (create) for a caller missing the capability', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberSet], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).rejects.toMatchObject({
+        name: 'PermissionDeniedError',
+        message: expect.stringContaining("operation 'insert'"),
+      });
+    });
+
+    it('ALLOWS the gated operation once the caller holds the capability', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberWithCap], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).resolves.toBeDefined();
+      expect(opCtx.data.owner_id).toBe('u1'); // proves it flowed past the gate
+    });
+
+    it('array form still gates EVERY operation (backward compat)', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [memberSet],
+        schemaExtra: { requiredPermissions: ['manage_x'] },
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      // read is denied under the array form (unlike the per-op map above)…
+      const readCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await expect(harness.run(readCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+      // …and so is create.
+      const createCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      };
+      await expect(harness.run(createCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
   });
 
@@ -1336,6 +1416,33 @@ describe('PermissionEvaluator — ADR-0066 posture + capabilities', () => {
     const viewOnly = ps('vo', { '*': { allowRead: true, viewAllRecords: true } });
     expect(ev.hasSuperuserWriteBypass('sys_license', [superWildcard], { isPrivate: true })).toBe(true);
     expect(ev.hasSuperuserWriteBypass('sys_license', [viewOnly], { isPrivate: true })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-0066 ⑤ — crudBucketForOperation (operation → CRUD class mapping)
+// ---------------------------------------------------------------------------
+describe('crudBucketForOperation (ADR-0066 ⑤)', () => {
+  it('maps read operations to `read`', () => {
+    for (const op of ['find', 'findOne', 'count', 'aggregate']) {
+      expect(crudBucketForOperation(op)).toBe('read');
+    }
+  });
+  it('maps insert to `create`', () => {
+    expect(crudBucketForOperation('insert')).toBe('create');
+  });
+  it('folds update/transfer/restore into `update`', () => {
+    for (const op of ['update', 'transfer', 'restore']) {
+      expect(crudBucketForOperation(op)).toBe('update');
+    }
+  });
+  it('folds delete/purge into `delete`', () => {
+    for (const op of ['delete', 'purge']) {
+      expect(crudBucketForOperation(op)).toBe('delete');
+    }
+  });
+  it('returns null for an operation with no CRUD mapping', () => {
+    expect(crudBucketForOperation('customReadSideOp')).toBeNull();
   });
 });
 

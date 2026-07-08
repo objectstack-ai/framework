@@ -2,7 +2,7 @@
 
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
-import { PermissionEvaluator } from './permission-evaluator.js';
+import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
 import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-roles.js';
@@ -23,6 +23,67 @@ import {
   securityDefaultPermissionSets,
   securityPluginManifestHeader,
 } from './manifest.js';
+
+/**
+ * [ADR-0066 D3/⑤] Object `requiredPermissions` normalized into per-CRUD buckets.
+ * `all` holds capabilities required for EVERY operation (the `string[]` form);
+ * the per-op buckets hold capabilities from the `{read,create,update,delete}`
+ * map form. The effective requirement for an operation is `all ∪ <bucket>`.
+ */
+interface NormalizedRequiredPermissions {
+  all: string[];
+  read: string[];
+  create: string[];
+  update: string[];
+  delete: string[];
+}
+
+/** Per-object security posture resolved once and cached (see getObjectSecurityMeta). */
+interface ObjectSecurityMeta {
+  isPrivate: boolean;
+  tenancyDisabled: boolean;
+  isBetterAuthManaged: boolean;
+  requiredPermissions: NormalizedRequiredPermissions;
+  fieldRequiredPermissions: Record<string, string[]>;
+}
+
+const EMPTY_REQUIRED_PERMISSIONS: NormalizedRequiredPermissions = Object.freeze({
+  all: [], read: [], create: [], update: [], delete: [],
+}) as NormalizedRequiredPermissions;
+
+/** Normalize a raw object `requiredPermissions` (string[] | per-op map) into buckets. */
+function normalizeRequiredPermissions(raw: unknown): NormalizedRequiredPermissions {
+  if (Array.isArray(raw)) {
+    return { all: raw.map(String), read: [], create: [], update: [], delete: [] };
+  }
+  if (raw && typeof raw === 'object') {
+    const m = raw as Record<string, unknown>;
+    const bucket = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+    return {
+      all: [],
+      read: bucket(m.read),
+      create: bucket(m.create),
+      update: bucket(m.update),
+      delete: bucket(m.delete),
+    };
+  }
+  return { all: [], read: [], create: [], update: [], delete: [] };
+}
+
+/**
+ * [ADR-0066 ⑤] Capabilities required for `operation` = the `all` bucket UNION the
+ * operation's CRUD bucket. The array form (only `all` populated) thus gates EVERY
+ * operation exactly as before; the map form gates only the mapped CRUD classes and
+ * leaves an unmapped custom op ungated. De-duplicated for a clean error message.
+ */
+function requiredCapsForOperation(
+  spec: NormalizedRequiredPermissions,
+  operation: string,
+): string[] {
+  const bucket = crudBucketForOperation(operation);
+  const caps = bucket ? [...spec.all, ...spec[bucket]] : spec.all;
+  return caps.length > 0 ? [...new Set(caps)] : [];
+}
 
 export interface SecurityPluginOptions {
   /**
@@ -122,7 +183,7 @@ export class SecurityPlugin implements Plugin {
    * `requiredPermissions` capability contract. Populated lazily from the schema;
    * cleared on metadata change alongside the other schema-derived caches.
    */
-  private readonly objectSecurityMetaCache = new Map<string, { isPrivate: boolean; tenancyDisabled: boolean; isBetterAuthManaged: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }>();
+  private readonly objectSecurityMetaCache = new Map<string, ObjectSecurityMeta>();
   private dbLoader?: (names: string[]) => Promise<PermissionSet[]>;
   private logger: { info?: (...a: any[]) => void; warn?: (...a: any[]) => void; error?: (...a: any[]) => void } = {};
 
@@ -397,28 +458,32 @@ export class SecurityPlugin implements Plugin {
       const secMeta =
         permissionSets.length > 0
           ? await this.getObjectSecurityMeta(opCtx.object)
-          : { isPrivate: false, tenancyDisabled: false, isBetterAuthManaged: false, requiredPermissions: [] as string[], fieldRequiredPermissions: {} as Record<string, string[]> };
+          : { isPrivate: false, tenancyDisabled: false, isBetterAuthManaged: false, requiredPermissions: EMPTY_REQUIRED_PERMISSIONS, fieldRequiredPermissions: {} as Record<string, string[]> };
 
-      // 1.5. [ADR-0066 D3] requiredPermissions AND-gate — a capability
+      // 1.5. [ADR-0066 D3/⑤] requiredPermissions AND-gate — a capability
       //      prerequisite checked BEFORE the CRUD grant (ADR §Precedence): a
       //      caller missing any required capability is denied regardless of how
-      //      permissive their grants are.
-      if (permissionSets.length > 0 && secMeta.requiredPermissions.length > 0) {
-        const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
-        const missing = secMeta.requiredPermissions.filter((cap) => !held.has(cap));
-        if (missing.length > 0) {
-          throw new PermissionDeniedError(
-            `[Security] Access denied: '${opCtx.object}' requires capability ` +
-              `[${secMeta.requiredPermissions.join(', ')}] — caller is missing [${missing.join(', ')}]`,
-            {
-              operation: opCtx.operation,
-              object: opCtx.object,
-              roles,
-              permissionSets: explicitPermissionSets,
-              requiredPermissions: secMeta.requiredPermissions,
-              missingPermissions: missing,
-            },
-          );
+      //      permissive their grants are. Per-operation (⑤): only the caps for
+      //      THIS operation's CRUD class (plus any all-operations caps) apply.
+      if (permissionSets.length > 0) {
+        const required = requiredCapsForOperation(secMeta.requiredPermissions, opCtx.operation);
+        if (required.length > 0) {
+          const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
+          const missing = required.filter((cap) => !held.has(cap));
+          if (missing.length > 0) {
+            throw new PermissionDeniedError(
+              `[Security] Access denied: '${opCtx.object}' (operation '${opCtx.operation}') requires capability ` +
+                `[${required.join(', ')}] — caller is missing [${missing.join(', ')}]`,
+              {
+                operation: opCtx.operation,
+                object: opCtx.object,
+                roles,
+                permissionSets: explicitPermissionSets,
+                requiredPermissions: required,
+                missingPermissions: missing,
+              },
+            );
+          }
         }
       }
 
@@ -1420,7 +1485,7 @@ export class SecurityPlugin implements Plugin {
    */
   private async getObjectSecurityMeta(
     object: string,
-  ): Promise<{ isPrivate: boolean; tenancyDisabled: boolean; isBetterAuthManaged: boolean; requiredPermissions: string[]; fieldRequiredPermissions: Record<string, string[]> }> {
+  ): Promise<ObjectSecurityMeta> {
     const cached = this.objectSecurityMetaCache.get(object);
     if (cached) return cached;
     let obj: any = typeof this.ql?.getSchema === 'function' ? this.ql.getSchema(object) : null;
@@ -1458,9 +1523,7 @@ export class SecurityPlugin implements Plugin {
       // carve-outs / tenant_isolation still apply) and is NOT used for the
       // wildcard-policy drop below, so it can never leak rows to non-admins.
       isBetterAuthManaged: (obj as any)?.managedBy === 'better-auth',
-      requiredPermissions: Array.isArray((obj as any)?.requiredPermissions)
-        ? (obj as any).requiredPermissions.map(String)
-        : [],
+      requiredPermissions: normalizeRequiredPermissions((obj as any)?.requiredPermissions),
       fieldRequiredPermissions,
     };
     if (obj) this.objectSecurityMetaCache.set(object, meta);
