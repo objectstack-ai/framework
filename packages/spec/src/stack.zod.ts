@@ -769,25 +769,60 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
 }
 
 /**
- * Merge top-level actions into their target objects based on `objectName`.
- * 
- * Actions with `objectName` are appended to the corresponding object's `actions` array.
- * Actions without `objectName` (global actions) are left untouched.
- * The top-level `actions` array is preserved for global access (e.g., platform overview, search).
- * 
- * This aligns with Salesforce/ServiceNow patterns where object metadata includes its actions,
- * so API responses like `/api/v1/meta/objects/:name` include actions without downstream merge.
- * 
+ * Stable-sort an actions array by explicit `order` (lower = higher / earlier).
+ *
+ * - Actions that leave `order` unset are treated as `0`.
+ * - The sort is STABLE (`Array.prototype.sort` is stable since ES2019), so
+ *   actions that tie on `order` — including the overwhelmingly common case where
+ *   NOBODY sets `order` — keep their original registration order. This is what
+ *   lets `order` promote a `record_header` action into the primary-button slot
+ *   without disturbing everything else.
+ * - Returns the SAME array reference untouched when no action opts in, so callers
+ *   pay zero allocation on the common path and can cheaply detect "unchanged".
+ *
+ * @internal
+ */
+function sortActionsByOrder<T extends { order?: number }>(actions: T[]): T[] {
+  if (!actions.some((a) => a.order !== undefined)) return actions;
+  // Copy first so the stable sort never mutates the caller's array.
+  return actions.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+/**
+ * Merge top-level actions into their target objects based on `objectName`, then
+ * honour each action's explicit `order`.
+ *
+ * Actions with `objectName` are appended to the corresponding object's `actions`
+ * array. Actions without `objectName` (global actions) are left in place. The
+ * top-level `actions` array is preserved for global access (e.g., platform
+ * overview, search).
+ *
+ * After merging, every action group (each object's `actions` and the top-level
+ * `actions`) is stable-sorted by `order` via {@link sortActionsByOrder}. Because
+ * that sort is a no-op unless an author sets `order`, this is fully backward
+ * compatible — arrays with no `order` keep their exact registration order and
+ * reference. Renderers that pick a single primary action from `record_header`
+ * (objectui) therefore see approve/reject-style actions in their declared
+ * priority rather than in fragile cross-file registration order.
+ *
+ * This aligns with Salesforce/ServiceNow patterns where object metadata includes
+ * its actions, so API responses like `/api/v1/meta/objects/:name` include actions
+ * (already ordered) without downstream merge.
+ *
  * @internal
  */
 function mergeActionsIntoObjects(config: ObjectStackDefinition): ObjectStackDefinition {
-  if (!config.actions || !config.objects || config.objects.length === 0) {
-    return config;
+  // Honour `order` on the preserved top-level actions regardless of objects.
+  const sortedTop = config.actions ? sortActionsByOrder(config.actions) : config.actions;
+  const topChanged = sortedTop !== config.actions;
+
+  if (!config.objects || config.objects.length === 0) {
+    return topChanged ? { ...config, actions: sortedTop } : config;
   }
 
-  // Build map: objectName → actions[]
+  // Build map: objectName → actions[] (top-level actions targeting an object)
   const actionsByObject = new Map<string, NonNullable<ObjectStackDefinition['actions']>>();
-  for (const action of config.actions) {
+  for (const action of config.actions ?? []) {
     if (action.objectName) {
       const list = actionsByObject.get(action.objectName) ?? [];
       list.push(action);
@@ -795,20 +830,27 @@ function mergeActionsIntoObjects(config: ObjectStackDefinition): ObjectStackDefi
     }
   }
 
-  if (actionsByObject.size === 0) return config;
-
-  // Merge into objects (shallow copy — only the `actions` field is modified;
-  // other fields are shared references, consistent with mergeObjects() and Zod output)
+  // Merge into objects and sort each object's final actions by `order` (shallow
+  // copy — only the `actions` field is modified; other fields stay shared
+  // references, consistent with mergeObjects() and Zod output).
+  let objectsChanged = false;
   const newObjects = config.objects.map((obj) => {
     const objActions = actionsByObject.get(obj.name);
-    if (!objActions) return obj;
-    return {
-      ...obj,
-      actions: [...(obj.actions ?? []), ...objActions],
-    };
+    const base = obj.actions ?? [];
+    const merged = objActions ? [...base, ...objActions] : base;
+    const sorted = sortActionsByOrder(merged);
+    // Untouched: no top-level actions merged in AND the sort was a no-op.
+    if (!objActions && sorted === base) return obj;
+    objectsChanged = true;
+    return { ...obj, actions: sorted };
   });
 
-  return { ...config, objects: newObjects };
+  if (!objectsChanged && !topChanged) return config;
+  return {
+    ...config,
+    ...(objectsChanged ? { objects: newObjects } : {}),
+    ...(topChanged ? { actions: sortedTop } : {}),
+  };
 }
 
 /**

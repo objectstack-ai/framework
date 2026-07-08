@@ -821,6 +821,52 @@ describe('ActionSchema - variant', () => {
   });
 });
 
+describe('ActionSchema - order', () => {
+  it('should accept a numeric order (incl. negative and zero)', () => {
+    for (const order of [-100, -1, 0, 5, 999]) {
+      const result = ActionSchema.parse({
+        name: 'ordered_action',
+        label: 'Ordered',
+        target: 'noop',
+        order,
+      });
+      expect(result.order).toBe(order);
+    }
+  });
+
+  it('should accept action without order (optional)', () => {
+    const result = ActionSchema.parse({
+      name: 'no_order',
+      label: 'Action',
+      target: 'noop',
+    });
+    expect(result.order).toBeUndefined();
+  });
+
+  it('should reject a non-numeric order', () => {
+    expect(() => ActionSchema.parse({
+      name: 'bad_order',
+      label: 'Action',
+      target: 'noop',
+      order: 'first',
+    })).toThrow();
+  });
+
+  it('should combine order with variant and locations (record_header primary hint)', () => {
+    const result = ActionSchema.parse({
+      name: 'approve',
+      label: 'Approve',
+      target: 'approve_handler',
+      locations: ['record_header', 'record_more'],
+      variant: 'primary',
+      order: -10,
+    });
+    expect(result.order).toBe(-10);
+    expect(result.variant).toBe('primary');
+    expect(result.locations).toContain('record_header');
+  });
+});
+
 // ============================================================================
 // Protocol Improvement Tests: execute → target migration & target validation
 // ============================================================================

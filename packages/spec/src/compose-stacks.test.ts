@@ -502,3 +502,117 @@ describe('composeStacks + defineStack integration', () => {
     expect(combined.actions).toHaveLength(1);
   });
 });
+
+// ─── Action `order` sorting (mergeActionsIntoObjects) ───────────────
+// Regression coverage for #2670: the record-header primary button is the first
+// visible `record_header` action, so `order` must control which action lands
+// first — instead of fragile cross-file registration order.
+
+describe('Action order sorting', () => {
+  it("sorts an object's inline actions by `order` (lower = earlier / primary slot)", () => {
+    // Registration order puts the app action first; a negative `order` must
+    // float Approve up into the primary-button slot.
+    const stack = makeStack({
+      objects: [
+        {
+          name: 'deal',
+          fields: { title: { type: 'text' } },
+          actions: [
+            { name: 'close_deal', label: 'Close', locations: ['record_header'] },
+            { name: 'print', label: 'Print', locations: ['record_header'], order: 5 },
+            { name: 'approve', label: 'Approve', locations: ['record_header'], order: -10 },
+          ],
+        },
+      ],
+    });
+
+    const names = stack.objects![0].actions!.map((a) => a.name);
+    // approve (-10) → close_deal (unset = 0) → print (5)
+    expect(names).toEqual(['approve', 'close_deal', 'print']);
+    // What objectui renders as the primary button is now the approval decision.
+    expect(names[0]).toBe('approve');
+  });
+
+  it('is STABLE — actions that tie on `order` (incl. all-unset) keep registration order', () => {
+    const stack = makeStack({
+      objects: [
+        {
+          name: 'deal',
+          fields: { title: { type: 'text' } },
+          actions: [
+            { name: 'a', label: 'A' },
+            { name: 'b', label: 'B' },
+            { name: 'c', label: 'C' },
+          ],
+        },
+      ],
+    });
+    expect(stack.objects![0].actions!.map((a) => a.name)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('interleaves merged top-level actions with inline actions by `order`', () => {
+    const stack = makeStack({
+      objects: [
+        {
+          name: 'deal',
+          fields: { title: { type: 'text' } },
+          actions: [{ name: 'inline_mid', label: 'Mid', order: 0 }],
+        },
+      ],
+      actions: [
+        { name: 'top_first', label: 'First', objectName: 'deal', order: -5 },
+        { name: 'top_last', label: 'Last', objectName: 'deal', order: 5 },
+      ],
+    });
+    expect(stack.objects![0].actions!.map((a) => a.name)).toEqual([
+      'top_first',
+      'inline_mid',
+      'top_last',
+    ]);
+  });
+
+  it('is backward compatible — no `order` anywhere leaves the merged order untouched', () => {
+    const stack = makeStack({
+      objects: [
+        {
+          name: 'deal',
+          fields: { title: { type: 'text' } },
+          actions: [{ name: 'inline', label: 'Inline' }],
+        },
+      ],
+      actions: [{ name: 'merged', label: 'Merged', objectName: 'deal' }],
+    });
+    // Inline first (pre-existing behaviour), then the merged top-level action.
+    expect(stack.objects![0].actions!.map((a) => a.name)).toEqual(['inline', 'merged']);
+  });
+
+  it('sorts the top-level (global) actions array by `order` too', () => {
+    const stack = makeStack({
+      actions: [
+        { name: 'g_b', label: 'B', order: 2 },
+        { name: 'g_a', label: 'A', order: 1 },
+      ],
+    });
+    expect(stack.actions!.map((a) => a.name)).toEqual(['g_a', 'g_b']);
+  });
+
+  it('respects `order` when composing stacks (funnels through mergeActionsIntoObjects)', () => {
+    const base = makeStack({
+      objects: [
+        {
+          name: 'deal',
+          fields: { title: { type: 'text' } },
+          actions: [{ name: 'app_action', label: 'App', locations: ['record_header'] }],
+        },
+      ],
+    });
+    // A plugin (e.g. plugin-approvals) contributes a high-priority decision.
+    const approvals = makeStack({
+      actions: [
+        { name: 'approve', label: 'Approve', objectName: 'deal', locations: ['record_header'], order: -100 },
+      ],
+    });
+    const combined = composeStacks([base, approvals]);
+    expect(combined.objects![0].actions!.map((a) => a.name)).toEqual(['approve', 'app_action']);
+  });
+});

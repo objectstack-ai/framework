@@ -169,6 +169,7 @@ interface Action {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
   component?: 'action:button' | 'action:icon' | 'action:menu' | 'action:group';
   locations?: ActionLocation[]; // Where the action surfaces
+  order?: number;               // Sort order within a location group (lower = higher)
 
   // Behavior
   type?: 'script' | 'url' | 'modal' | 'flow' | 'api' | 'form'; // default 'script'
@@ -228,6 +229,30 @@ type: api
 target: /api/customers/export
 locations: [list_toolbar]
 ```
+
+### Ordering & the Primary Button
+
+Within each location group, actions render in **`order`** sequence — **lower comes first / more prominent**. In `record_header` the first visible action becomes the **primary button** and the rest fall into the `⋯` overflow menu, so `order` is how you decide which action holds the primary slot.
+
+```yaml
+# Approve holds the primary button even though the app action registered first.
+name: approve_request
+label: Approve
+locations: [record_header]
+variant: primary
+order: -10          # negative → floats ahead of app actions (order defaults to 0)
+```
+
+Semantics:
+
+- **`order` defaults to `0`.** An action with a **negative** `order` is promoted toward the primary slot; a **positive** `order` is demoted toward the overflow menu.
+- **The sort is stable.** Actions that leave `order` unset (or tie on the same value) keep their original registration order, so adding `order` to one action never reshuffles the others. Setting `order` on nobody is a no-op — existing screens are unaffected.
+- **No more fragile registration order.** Previously "who becomes the primary button" depended on the cross-file order in which `defineStack({ actions })` merged its arrays. `order` makes it declarative: a plugin such as [plugin-approvals](/docs/plugins/approvals) can inject an `Approve`/`Reject` decision with a low `order` so it stably outranks app actions, instead of the app having to *hide* its other actions to make room.
+- When two actions tie on `order`, the record-header renderer MAY additionally prefer the one with `variant: 'primary'` when choosing the primary button.
+
+<Callout type="info">
+`order` sorts actions **within the same location**; it does not move an action between locations. Use `locations` to choose *where* an action appears and `order` to choose *its position there*.
+</Callout>
 
 ### Visibility & Disabled Rules
 
