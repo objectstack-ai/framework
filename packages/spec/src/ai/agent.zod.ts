@@ -169,7 +169,14 @@ export const AgentSchema = lazySchema(() => z.object({
 
   /** Multi-tenancy & Visibility */
   tenantId: z.string().optional().describe('Tenant/Organization ID'),
-  visibility: z.enum(['global', 'organization', 'private']).default('organization'),
+  // ⚠️ EXPERIMENTAL — NOT ENFORCED (#1901, ADR-0049). The chat-access evaluator
+  // deliberately excludes `visibility` (agent-access.ts) and the agent list
+  // route does not filter by it — setting `private` does NOT hide the agent.
+  // Use `access` / `permissions` (both ENFORCED at the chat route, #1884) to
+  // actually restrict who can use an agent. Enforcement needs owner/org
+  // semantics on the listing surface first; tracked in #1901.
+  visibility: z.enum(['global', 'organization', 'private']).default('organization')
+    .describe('[EXPERIMENTAL — NOT ENFORCED, #1901] Intended listing scope. No runtime consumer yet; use access/permissions for real gating.'),
 
   /** Autonomous Reasoning */
   planning: z.object({

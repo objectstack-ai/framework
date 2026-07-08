@@ -80,10 +80,18 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     note: 'Primitive enforcement unit-proven in plugin-security/security-plugin.test.ts (ADR-0066 posture suite); the per-object declarations are pinned by platform-objects.test.ts "secure-by-default posture" so dropping the flag from a secret store fails CI, not review. Member self-service objects (sys_session, sys_api_key, sys_oauth_application, sys_two_factor) deliberately stay public-posture — the Account app reads them with a member context; row scoping (owner/tenant RLS + _self carve-outs) is their guard.' },
 
   // ── Experimental — declared, NOT enforced (ADR-0049/0056 D8) ───────────
-  { id: 'compliance-configs', summary: 'GDPR/HIPAA/PCI configs', state: 'experimental', note: 'no runtime consumer; marked [EXPERIMENTAL] (D8)' },
-  { id: 'field-encryption', summary: 'at-rest field encryption', state: 'experimental', note: 'no crypto provider reads the config; marked [EXPERIMENTAL] (D8)' },
-  { id: 'data-masking', summary: 'role-based data masking', state: 'experimental', note: 'FLS is the enforced field-visibility path; marked [EXPERIMENTAL] (D8)' },
-  { id: 'rls-config-global', summary: 'global RLSConfig / RLSAuditEvent', state: 'experimental', note: 'not read by the RLS path; marked [EXPERIMENTAL] (D8)' },
+  { id: 'field-encryption', summary: 'at-rest field encryption', state: 'experimental',
+    note: 'no crypto provider reads the config; marked [EXPERIMENTAL] (D8). Deliberately KEPT (2026-07 D8 disposition): at-rest encryption is a real enterprise roadmap item with a stable schema shape — removing and re-adding would cost more (ADR-0087) than carrying it marked.' },
+  { id: 'agent-visibility', summary: 'AI agent `visibility` listing scope (#1901)', state: 'experimental',
+    note: 'Intentionally NOT enforced — the chat-access evaluator excludes it (service-ai agent-access.ts) and the agent list route does not filter by it. Schema + authoring form carry EXPERIMENTAL banners (2026-07) so authors are told `private` does not hide the agent; `access`/`permissions` ARE enforced at the chat route (#1884). Enforce when the agent listing surface gains owner/org semantics — #1901.' },
+
+  // ── Removed — by ADR-0056 D8 "design+enforce or remove" (2026-07) ──────
+  { id: 'compliance-configs', summary: 'GDPR/HIPAA/PCI configs', state: 'removed',
+    note: 'REMOVED from spec (system/compliance.zod.ts deleted). Compliance-grade config must never merely look live: a parsed-but-dead `gdpr:` block is a liability in an audit. A real compliance subsystem will be designed top-down (data-subject rights engine, retention enforcer) when scheduled.' },
+  { id: 'data-masking', summary: 'role-based data masking', state: 'removed',
+    note: 'REMOVED from spec (system/masking.zod.ts deleted). FLS (plugin-security field-masker) is the enforced field-visibility path; a masking/deny layer would be redesigned with the ADR-0066 ⑦/⑧ muting work anyway, so the dead config was pure drift risk.' },
+  { id: 'rls-config-global', summary: 'global RLSConfig / RLSAuditEvent', state: 'removed',
+    note: 'REMOVED from spec (rls.zod.ts — RLSConfigSchema/RLSAuditEventSchema/RLSAuditConfigSchema deleted). The enforced RLS path (plugin-security computeRlsFilter) never read them; per-policy RowLevelSecurityPolicySchema is the live surface and is unchanged.' },
   { id: 'requireAuth-default-flip', summary: 'global requireAuth default is secure-by-default (deny anonymous)', state: 'enforced',
     enforcement: 'spec/api/rest-server.zod.ts requireAuth default(true) + rest/rest-server.ts normalizeConfig ?? true; explicit requireAuth:false opt-out warns at boot (rest-api-plugin)',
     proof: 'showcase-anonymous-deny.dogfood.test.ts',
