@@ -26,7 +26,10 @@ export interface EmailPersistence {
  * Naive RFC-5322 validator — good enough to catch obvious typos.
  * Defers full validation to the transport / receiving MTA.
  */
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Linear-time email check. Domain labels exclude '.', so the quantifiers on
+// either side of each '.' can't overlap — this avoids the polynomial
+// backtracking (ReDoS) of the naive `[^\s@]+\.[^\s@]+` shape.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
 /**
  * Format an EmailAddress (string or {name,address}) into the canonical
