@@ -209,9 +209,9 @@
   ],
   "author": "ObjectStack",
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "ai": "^7.0.15",
+    "ai": "^7.0.17",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
