@@ -489,6 +489,30 @@ launch shape (none of them changes P1's breaking surface):
   simulator UI, snapshot gate with the external-audience column. Proof: matrix snapshot diff drill
   on a seeded CRM stack, including an agent on-behalf-of case and an external-portal case.
 
+## Addendum (2026-07-09) — assignment-level BU anchor (D12 companion) and benchmark recalibration
+
+Two clarifications from review discussion, recorded here rather than as a new ADR:
+
+1. **Positions never bind to a business unit at the DEFINITION level** — that
+   recreates the position-per-department explosion (the SAP failure mode this
+   model deliberately factors away). The ASSIGNMENT row may: 
+   `sys_user_position.business_unit_id` (reserved by ADR-0057 D4) is adopted
+   with exactly three consumers — the depth anchor for that assignment's
+   `readScope`/`writeScope` (a 华东 sales manager gets manager depth in 华东
+   only, not in an unrelated project unit), the D12 delegated-administration
+   boundary check ("assignments you create must target your subtree"), and the
+   audit fact ("manager OF WHAT"). Capability bits are never BU-scoped.
+   Prior art: Dataverse assigns security roles per-BU at the assignment level;
+   NetSuite's subsidiary-restricted roles are the same shape. Semantics land
+   with the delegated-admin phase (P3); the column may be written earlier.
+2. **Scale benchmark recalibrated to the real deployment topology.** Group
+   deployments are multi-org (one org per legal entity; every record carries
+   `organization_id`, which prunes first). The P4 gate benchmark therefore
+   targets single-org populations (≈10k users × 1M rows per org), and the
+   "100k-user mega-unit" scenario moves from gate to non-goal; the closure-join
+   and per-object BU-stamping escape hatches remain documented alternatives in
+   the scale-hardening follow-up, not planned work.
+
 ## References
 
 - ADR-0049, ADR-0056, ADR-0057 (+ its 2026-06-25 addendum), ADR-0066, ADR-0086

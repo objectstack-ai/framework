@@ -33,6 +33,19 @@ The whole model in four sentences:
 | **OWD + sharing** | *whose records are visible by default, and what widens that* | per-object `sharingModel`; sharing rules, manual shares, teams as recipients | OWD: object author · sharing: environment |
 | **RLS** | *hard boundaries nothing widens* (dimension/compliance isolation) | CEL predicates on permission sets | expert escape hatch (~5% of cases) |
 
+**Position assignments may carry an optional business-unit anchor.** The
+POSITION DEFINITION never binds to a BU (that would recreate the
+position-per-department explosion); but an ASSIGNMENT row
+(`sys_user_position.business_unit_id`, reserved since ADR-0057 D4) may name
+the unit the person holds that position IN — "张三 is sales_manager **of
+华东**". When present it does exactly three things: anchors that
+assignment's depth grants (`readScope: unit*`) to that subtree, provides
+the delegated-administration boundary check (ADR-0090 D12), and makes the
+"manager of what" fact auditable instead of drifting with the user's BU
+membership. Capability bits (CRUD/FLS) are never BU-scoped — row filtering
+stays the job of OWD + depth. Semantics activate with the delegated-admin
+phase; simple orgs never touch the field.
+
 **Teams** are deliberately *not* a sixth concept: `sys_team` is a flat collaboration group that can
 **receive shared records and nothing else** — it never owns records and never carries permission
 sets (ADR-0090 D8). Positions distribute capability vertically; teams receive access horizontally.
@@ -68,6 +81,14 @@ both the admin "view-as" simulator and the publish-time access-matrix snapshot g
 
 *Who* is calling matters too — a human, an AI agent, an integration service, an anonymous
 visitor, or an external portal user each evaluate slightly differently. See §9.
+
+**Deployment note (multi-org groups).** Large groups on this platform run
+one organization per legal entity: every record carries `organization_id`
+and the tenant filter prunes FIRST, so the owner/BU `IN`-lists that follow
+are sized to a single org's population (hundreds–thousands), not the whole
+group. This is why records do not need a stamped BU column and why the
+`IN`-form stays comfortably within budget at group scale; cross-entity
+consolidation is a reporting concern, not a row-filter concern.
 
 ## 3. OWD (`sharingModel`) — the record baseline
 
