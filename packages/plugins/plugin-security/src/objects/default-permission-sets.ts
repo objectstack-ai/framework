@@ -304,17 +304,26 @@ export const defaultPermissionSets: PermissionSet[] = [
       // verified against the target row before the mutation). Objects that
       // model transferable ownership with a dedicated owner field should
       // override these with a per-object policy.
+      // [ADR-0090 P2] Applicability domain made EXPLICIT: with the baseline
+      // resolving additively for every authenticated principal (the
+      // `everyone` anchor — no more fallback cliff), these members-only
+      // write restrictions must say who they bind. `org_member` is the
+      // rank-and-file membership identity; org admins/owners and platform
+      // admins are outside the domain, matching the pre-anchor behavior
+      // where they simply never resolved this set.
       {
         name: 'owner_only_writes',
         object: '*',
         operation: 'update',
         using: 'created_by == current_user.id',
+        positions: ['org_member'],
       },
       {
         name: 'owner_only_deletes',
         object: '*',
         operation: 'delete',
         using: 'created_by == current_user.id',
+        positions: ['org_member'],
       },
       // ── better-auth system tables that lack `organization_id` and would
       //    otherwise be left unprotected by the wildcard rule above. ────

@@ -1359,7 +1359,7 @@ export class SecurityPlugin implements Plugin {
         : this.permissionEvaluator.hasSuperuserReadBypass(object, permissionSets, { isPrivate: meta.isPrivate });
       if (bypass) return null;
     }
-    const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation);
+    const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation, (context?.positions ?? []) as string[]);
     if (allRlsPolicies.length === 0) return null;
     // Field-existence safety: wildcard policies (`object: '*'`) target fields
     // like `organization_id` that may not exist on every object. Treat such a
@@ -1573,7 +1573,8 @@ export class SecurityPlugin implements Plugin {
   private collectRLSPolicies(
     permissionSets: PermissionSet[],
     objectName: string,
-    operation: string
+    operation: string,
+    heldPositions?: string[],
   ): RowLevelSecurityPolicy[] {
     const allPolicies: RowLevelSecurityPolicy[] = [];
 
@@ -1602,7 +1603,7 @@ export class SecurityPlugin implements Plugin {
       }
     }
 
-    return this.rlsCompiler.getApplicablePolicies(objectName, operation, allPolicies);
+    return this.rlsCompiler.getApplicablePolicies(objectName, operation, allPolicies, heldPositions);
   }
 
   /**
