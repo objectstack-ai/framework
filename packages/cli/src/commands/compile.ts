@@ -371,14 +371,20 @@ export default class Compile extends Command {
       {
         const matrixPath = path.join(path.dirname(absolutePath), 'access-matrix.json');
         const currentMatrix = buildAccessMatrix(result.data as Record<string, unknown>);
-        if (fs.existsSync(matrixPath)) {
-          if (flags['update-access-matrix']) {
-            fs.writeFileSync(matrixPath, JSON.stringify(currentMatrix, null, 2) + '\n');
-            if (!flags.json) printStep('Access matrix snapshot updated (ADR-0090 D6) — review the diff.');
-          } else {
+        if (flags['update-access-matrix']) {
+          // Unconditional write — creates or refreshes the snapshot.
+          fs.writeFileSync(matrixPath, JSON.stringify(currentMatrix, null, 2) + '\n');
+          if (!flags.json) printStep(`Access matrix snapshot written to ${path.relative(process.cwd(), matrixPath)} (ADR-0090 D6) — review the diff.`);
+        } else {
+          // Single read attempt (no exists-then-read TOCTOU): a missing file
+          // means the app has not opted into the gate; an unreadable/corrupt
+          // one is treated as empty so the drift report shows every entry.
+          let committedRaw: string | null = null;
+          try { committedRaw = fs.readFileSync(matrixPath, 'utf8'); } catch { committedRaw = null; }
+          if (committedRaw !== null) {
             if (!flags.json) printStep('Checking access-matrix snapshot (ADR-0090 D6)...');
             let committed: any = { version: 1, entries: [] };
-            try { committed = JSON.parse(fs.readFileSync(matrixPath, 'utf8')); } catch { /* unreadable = empty */ }
+            try { committed = JSON.parse(committedRaw); } catch { /* corrupt = empty */ }
             const drift = diffAccessMatrix(committed, currentMatrix);
             if (drift.length > 0) {
               if (flags.json) {
@@ -392,9 +398,6 @@ export default class Compile extends Command {
               this.exit(1);
             }
           }
-        } else if (flags['update-access-matrix']) {
-          fs.writeFileSync(matrixPath, JSON.stringify(currentMatrix, null, 2) + '\n');
-          if (!flags.json) printStep(`Access matrix snapshot created at ${path.relative(process.cwd(), matrixPath)} (ADR-0090 D6).`);
         }
       }
 
