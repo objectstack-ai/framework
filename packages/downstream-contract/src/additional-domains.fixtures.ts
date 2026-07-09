@@ -50,7 +50,7 @@ export const DcSharingRule: SharingRuleInput = {
   object: 'dc_account',
   condition: 'record.stage == "customer"',
   accessLevel: 'read',
-  sharedWith: { type: 'role', value: 'dc_manager' },
+  sharedWith: { type: 'position', value: 'dc_manager' },
   active: true,
 };
 

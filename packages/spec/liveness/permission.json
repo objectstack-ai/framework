@@ -139,10 +139,10 @@
           "status": "live",
           "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts"
         },
-        "roles": {
+        "positions": {
           "status": "live",
           "evidence": "packages/plugins/plugin-security/src/rls-compiler.ts",
-          "note": "flat match — no subordinate rollup."
+          "note": "flat match — no subordinate rollup (ADR-0090 D3 rename)."
         },
         "enabled": {
           "status": "live",
