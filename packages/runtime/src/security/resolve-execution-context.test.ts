@@ -127,7 +127,9 @@ describe('resolveExecutionContext — API key verify path', () => {
     const ctx = await resolveExecutionContext(makeOpts([], {}));
     expect(ctx.userId).toBeUndefined();
     expect(ctx.isSystem).toBe(false);
-    expect(ctx.positions).toEqual([]);
+    // ADR-0090 D9: a sessionless HTTP principal is a guest — it holds the
+    // built-in guest position implicitly (and exclusively).
+    expect(ctx.positions).toEqual(['guest']);
     expect(ctx.permissions).toEqual([]);
   });
 
@@ -331,3 +333,23 @@ describe('resolveExecutionContext — platform-scoped (null-org) grants (ADR-006
     expect(ctx.systemPermissions).not.toContain('should_not_appear');
   });
 });
+
+describe('principal taxonomy at the HTTP entry (ADR-0090 D9/D10)', () => {
+  it('a sessionless request resolves as a guest principal holding only the guest position', async () => {
+    const ctx = await resolveExecutionContext(makeOpts([], {}));
+    expect(ctx.principalKind).toBe('guest');
+    expect(ctx.positions).toEqual(['guest']);
+    expect(ctx.userId).toBeUndefined();
+    expect(ctx.isSystem).toBe(false);
+  });
+
+  it('an authenticated (API-key) request resolves as a human principal, never guest', async () => {
+    const raw = 'osk_p2_anchor_test';
+    const rows = [{ id: 'k1', key: hashApiKey(raw), revoked: false, user_id: 'u9', expires_at: FUTURE }];
+    const ctx = await resolveExecutionContext(makeOpts(rows, { 'x-api-key': raw }));
+    expect(ctx.principalKind).toBe('human');
+    expect(ctx.userId).toBe('u9');
+    expect(ctx.positions).not.toContain('guest');
+  });
+});
+

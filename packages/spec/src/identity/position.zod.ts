@@ -48,6 +48,18 @@ export const PositionSchema = lazySchema(() => z.object({
   description: z.string().optional(),
 }));
 
+/**
+ * [ADR-0090 D5/D9] Built-in AUDIENCE ANCHOR positions. `everyone` is held
+ * implicitly by every authenticated org member — sets bound to it are the
+ * tenant's default grants (resolved per-request; additive, no fallback
+ * cliff). `guest` is held implicitly (and exclusively) by unauthenticated
+ * principals; its bindings face the strictest lint tier. Packages SUGGEST
+ * bindings to these anchors at install time — never auto-bind.
+ */
+export const EVERYONE_POSITION = 'everyone';
+export const GUEST_POSITION = 'guest';
+export const AUDIENCE_ANCHOR_POSITIONS = [EVERYONE_POSITION, GUEST_POSITION] as const;
+
 export type Position = z.infer<typeof PositionSchema>;
 /** Authoring input for {@link Position} — defaulted fields are optional. */
 export type PositionInput = z.input<typeof PositionSchema>;

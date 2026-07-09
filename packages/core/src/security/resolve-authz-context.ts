@@ -204,6 +204,12 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   );
   let hasPlatformAdminGrant = false;
 
+  // 5b. [ADR-0090 D5] Audience anchor: every AUTHENTICATED member implicitly
+  //     holds the built-in `everyone` position, so sets bound to it resolve
+  //     below exactly like any other position-bound grant — ADDITIVE, with no
+  //     "only when the user has nothing else" cliff.
+  if (!ctx.positions.includes('everyone')) ctx.positions.push('everyone');
+
   // 6a. Position-bound permission sets (sys_position_permission_set): a position
   //     carries its permission sets.
   if (ctx.positions.length > 0) {

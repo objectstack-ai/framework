@@ -82,6 +82,18 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
     systemPermissions: authz.systemPermissions,
     isSystem: false,
   };
+  // [ADR-0090 D9/D10] Principal taxonomy at the HTTP entry: a session-backed
+  // request is a human principal; a sessionless one is a guest, holding the
+  // built-in `guest` position implicitly and exclusively. Internal engine
+  // calls that construct bare contexts are untouched (they never pass
+  // through this resolver), so the security plugin's empty-context skip
+  // path keeps its meaning.
+  if (authz.userId) {
+    ctx.principalKind = 'human';
+  } else {
+    ctx.principalKind = 'guest';
+    ctx.positions = ['guest'];
+  }
   if (authz.userId) ctx.userId = authz.userId;
   if (authz.tenantId) ctx.tenantId = authz.tenantId;
   if (authz.email) ctx.email = authz.email;
