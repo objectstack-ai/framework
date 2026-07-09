@@ -1,57 +1,72 @@
 ---
 title: "Sharing Rules"
-description: "Extend record access beyond the role hierarchy — organization-wide defaults, criteria- and owner-based sharing rules, recipient types, and RLS-safe analytics read scope."
+description: "Record-level access: the organization-wide default (OWD) baseline per object, the external sharing dial, criteria sharing rules and recipient types, and the RLS-safe analytics read scope."
 ---
 
-# Sharing Rules
+# Sharing & Organization-Wide Defaults
 
-Sharing rules extend access beyond the role hierarchy.
+Record-level access starts from each object's **organization-wide default
+(OWD)** and can only be **widened** from there — by scope-depth grants,
+manual record shares, criteria sharing rules, and team grants. Row-level
+security is the one layer that narrows.
 
 ## Organization-Wide Defaults (OWD)
 
-Set baseline access for all users:
-
-Each object's OWD is a single value from the `OWDModel` enum (`private`,
-`public_read`, `public_read_write`, `controlled_by_parent`):
+Each object declares its baseline with `sharingModel` — one of exactly four
+canonical values (ADR-0090 D4; the legacy aliases `read` / `read_write` /
+`full` were removed):
 
 ```typescript
-export const OrganizationDefaults = {
-  lead: 'private',                    // Users see only their own records
-  account: 'private',
-  contact: 'controlled_by_parent',   // Access controlled by parent (Account)
-  opportunity: 'private',
-  campaign: 'public_read',           // All users can read
-  product: 'public_read',
-};
+export const LeaveRequest = ObjectSchema.create({
+  name: 'leave_request',
+  sharingModel: 'private',   // owner + shares only
+  // …
+});
 ```
 
-## Access Levels
-
-| Level | Description |
+| Value | Description |
 |-------|-------------|
 | `private` | Owner only (+ scope-depth grants and record shares) |
-| `public_read` | All users can read |
+| `public_read` | All users can read; writes stay owner-scoped |
 | `public_read_write` | All users can read and edit |
-| `controlled_by_parent` | Controlled by parent object |
+| `controlled_by_parent` | Access follows the master record (master-detail children) |
 
-> **The default is open, not private.** An object that declares **no
-> `sharingModel`** — or that has no `owner_id` field for the owner-match to key
-> on — gets **no record-level OWD filter at all** (it behaves as public within
-> the tenant; only tenant-isolation RLS still applies). If records should be
-> owner-scoped, declare `sharingModel: 'private'` explicitly on the object.
-> See `effectiveSharingModel` in
-> `packages/plugins/plugin-sharing/src/sharing-service.ts`.
+> **The default is `private`, fail-closed (ADR-0090 D1).** A custom object
+> that declares **no `sharingModel`** — or that stores an unknown value — is
+> treated as `private` at runtime: without a C/R/U permission grant *plus* an
+> explicit baseline decision, records are owner-visible only. This inverts
+> the pre-v2 behavior (unset used to mean org-public), which caused the
+> leave_request incident: an object with CRUD grants but no OWD silently
+> exposed every employee's records org-wide. The **D7 publish linter**
+> additionally makes an unset OWD a *build error* (`security-owd-unset` in
+> `os compile`), so the baseline is always an authored decision.
+
+## The external dial — `externalSharingModel` (ADR-0090 D11)
+
+Portal/partner scenarios get a second, independent dial with the same enum:
+
+```typescript
+sharingModel: 'public_read',            // internal baseline
+externalSharingModel: 'private',        // external principals: own + shares only
+```
+
+- Defaults to `private`; **external must never be wider than internal**
+  (`private < public_read < public_read_write`) — the linter errors on a
+  wider external dial (`security-external-wider-than-internal`).
+- "External" is a property of the **principal** (`audience: 'external'`),
+  never of the object. The BU depth axis does not apply to externals; their
+  visibility = own records + explicit shares + the external OWD.
 
 ## Criteria-Based Sharing Rules
 
-Share records based on field criteria:
+Share records matching a predicate with a recipient:
 
 ```typescript
 import { defineSharingRule } from '@objectstack/spec/security';
 
 export const AccountTeamSharingRule = defineSharingRule({
   name: 'account_team_sharing',
-  label: 'Share Active Customers with Sales Team',
+  label: 'Share Active Customers with Sales Managers',
   type: 'criteria',
   object: 'account',
 
@@ -59,10 +74,7 @@ export const AccountTeamSharingRule = defineSharingRule({
   condition: P`record.type == "customer" && record.is_active == true`,
 
   // Who to share with (a single recipient — see the recipient types below)
-  sharedWith: {
-    type: 'role',
-    value: 'sales_manager',
-  },
+  sharedWith: { type: 'position', value: 'sales_manager' },
 
   // Access level granted: read | edit | full
   accessLevel: 'edit',
@@ -71,86 +83,44 @@ export const AccountTeamSharingRule = defineSharingRule({
 
 ### Recipient types
 
-`sharedWith` (and `ownedBy`) accept a `{ type, value }` recipient. The supported
-`type` values are:
+`sharedWith` (and `ownedBy`) accept a `{ type, value }` recipient:
 
 | `type` | Shares with |
 |:--|:--|
 | `user` | A single user |
-| `group` | All members of a public group — **declared but not enforced**: there is no runtime recipient mapping yet, so a rule with a `group` recipient is skipped at seed time with a warning (ADR-0049) |
-| `role` | Everyone assigned that role |
-| `role_and_subordinates` | Everyone in that role **and every role below it** in the hierarchy (ADR-0056 D6) — configurable per rule, so one rule can cascade down a branch of the org chart |
+| `group` | All members of a public group — **declared but not enforced**: skipped at seed time with a warning (ADR-0049) |
+| `position` | Everyone assigned that position (flat expansion — positions have no tree) |
+| `unit_and_subordinates` | Everyone in that **business unit and every unit beneath it** (the BU tree is the one hierarchy — ADR-0090 D3) |
+| `team` | Members of a `sys_team` — teams *receive* sharing; they never carry capability (ADR-0090 D8) |
 
-```typescript
-// Share with a sales manager AND everyone reporting up to them.
-sharedWith: { type: 'role_and_subordinates', value: 'sales_manager' },
-```
-
-The recipient set is expanded by `@objectstack/plugin-sharing` when the rule is
-evaluated (`afterInsert` / `afterUpdate`); `role_and_subordinates` walks the
-`sys_role.parent` graph (cycle-safe).
-
-A criteria `condition` must be compilable by the CEL → filter pushdown compiler.
-A condition the compiler cannot lower (functions, cross-object traversal) is
-**skipped and logged — never seeded as a permissive match-all** (ADR-0049), so a
-bad condition under-shares rather than over-shares.
+A criteria `condition` must be compilable by the CEL → filter pushdown
+compiler. A condition the compiler cannot lower is **skipped and logged —
+never seeded as a permissive match-all** (ADR-0049): a bad condition
+under-shares rather than over-shares.
 
 ## Owner-Based Sharing Rules
 
-> **[Experimental — not enforced.]** Owner-based (`type: 'owner'`) rules depend
-> on live role membership and have no static `criteria_json` equivalent, so the
-> seeder **skips them with a warning** — they materialize **no** record shares
-> today (see `packages/plugins/plugin-sharing/src/bootstrap-declared-sharing-rules.ts`
-> and the `SharingRuleSchema` notes in `packages/spec/src/security/sharing.zod.ts`).
-> Do not rely on an owner-based rule to deliver access; use a criteria rule or a
-> scope-depth grant until this ships.
-
-Share based on record owner characteristics:
-
-```typescript
-import { defineSharingRule } from '@objectstack/spec/security';
-
-export const OpportunityOwnerSharingRule = defineSharingRule({
-  name: 'opportunity_owner_sharing',
-  label: 'Share Sales Rep Opportunities with Managers',
-  type: 'owner',
-  object: 'opportunity',
-
-  // Share records owned by this group/role
-  ownedBy: {
-    type: 'role',
-    value: 'sales_rep',
-  },
-
-  // Share with this recipient
-  sharedWith: {
-    type: 'role',
-    value: 'sales_manager',
-  },
-
-  accessLevel: 'read',
-});
-```
+> **[Experimental — not enforced.]** Owner-based (`type: 'owner'`) rules
+> depend on live position membership and have no static `criteria_json`
+> equivalent, so the seeder **skips them with a warning** — they materialize
+> no record shares today. Use a criteria rule or a scope-depth grant.
 
 ## Analytics and Dataset Read Scope
 
-Dataset-bound dashboards and reports often execute through the analytics
-service, including the NativeSQL strategy. That path still has to honor the
-same row-level security rules as ObjectQL. `@objectstack/plugin-security`
-therefore registers a public `security` service with
-`getReadFilter(object, context)`, and `@objectstack/service-analytics`
-auto-bridges to it unless an explicit `getReadScope` option is supplied.
-
-The bridge is context-aware and may be async because permission-set and RLS
-resolution can hit the database. The analytics service applies the returned
-filter to the base object and to joined objects declared by a dataset. If read
-scope resolution fails or an unsupported predicate would have to be translated
-into SQL, the analytics query fails closed instead of dropping the filter.
+Dataset-bound dashboards execute through the analytics service (including
+NativeSQL) and must honor the same row security as ObjectQL.
+`@objectstack/plugin-security` registers the `security` service —
+`getReadFilter(object, context)` returns the caller's composed row filter and
+`@objectstack/service-analytics` auto-bridges to it for the base object and
+every join. Resolution failures fail **closed** (zero rows), never
+filter-less. The same service also exposes
+[`explain(request)`](/docs/permissions/authorization#explaining-a-decision-adr-0090-d6)
+— the per-layer answer to "why can this user see that row".
 
 ---
 
 ## See also
 
 - [Permissions & Identity overview](/docs/permissions)
-- [Role Hierarchy](/docs/permissions/roles)
+- [Positions](/docs/permissions/positions)
 - [Field-Level Security](/docs/permissions/field-level-security)

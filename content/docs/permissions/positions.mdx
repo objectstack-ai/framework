@@ -1,0 +1,119 @@
+---
+title: "Positions"
+description: "Positions (岗位) are flat capability-distribution groups — users hold positions, positions bind permission sets. The visibility hierarchy lives on business units, never here. Includes the built-in identity positions and the everyone/guest audience anchors."
+---
+
+# Positions
+
+A **position** (岗位) is a named, assignable distribution group: users hold
+positions (`sys_user_position` rows), positions bind permission sets
+(`sys_position_permission_set` rows), and a user's capability is the union of
+every set reached that way plus direct grants. Positions carry **no capability
+of their own** — they only decide *who gets which sets*.
+
+> **Formerly "roles".** ADR-0090 D3 renamed the concept in one step and
+> reserved the word *role* platform-wide (the D7 publish linter rejects it in
+> security identifiers and labels). The vocabulary is now unambiguous:
+> **permission set** = capability, **position** = distribution,
+> **business unit** = hierarchy. The single exception is better-auth's
+> internal `sys_member.role` (org-membership tier: owner/admin/member).
+
+```typescript
+import type { Position } from '@objectstack/spec/identity';
+
+export const positions: Position[] = [
+  { name: 'sales_manager', label: 'Sales Manager' },
+  { name: 'sales_rep', label: 'Sales Representative' },
+  { name: 'service_agent', label: 'Service Agent' },
+];
+```
+
+## Positions are flat — the hierarchy lives on business units
+
+Positions deliberately have **no `parent` link and form no tree** (ADR-0090
+D3, finalizing ADR-0057 D5). Re-adding a reporting tree here is the
+position-per-department explosion every mature RBAC deployment regrets.
+Visibility depth comes from two dedicated structures:
+
+- the **business-unit tree** (`sys_business_unit`) + membership
+  (`sys_business_unit_member`) — consumed by `readScope`/`writeScope` depth
+  grants (`unit`, `unit_and_below`) and by `unit_and_subordinates`
+  sharing-rule recipients;
+- the **manager chain** (`sys_user.manager_id`) — consumed by
+  `own_and_reports`.
+
+**There is no implicit "managers see subordinates' records" grant.** Upward
+visibility is always an explicit opt-in: a sharing rule targeting a position
+or BU subtree, or a scope-depth grant on the permission set. See
+[Sharing Rules](/docs/permissions/sharing-rules).
+
+## Assignments — and the business-unit anchor
+
+Assigning a position is a plain data row:
+
+```typescript
+await objectql.object('sys_user_position').insert({
+  user_id: 'user123',
+  position: 'sales_manager',          // machine name (sys_position.name)
+  business_unit_id: 'bu_east',        // ADR-0090 Addendum: the assignment anchor
+});
+```
+
+`business_unit_id` is the **assignment-level BU anchor** with exactly three
+consumers: it anchors *where* the assignment's `readScope`/`writeScope` depth
+applies (a 华东 sales manager gets manager depth in 华东 only), it is the
+delegated-administration boundary ("assignments you create must target your
+subtree" — see below), and it is the audit fact ("manager *of what*").
+Capability bits are never BU-scoped — positions never bind to a business unit
+at the definition level.
+
+Writes to `sys_user_position` are **governed** (ADR-0090 D12): tenant-level
+admins pass; a delegated admin needs an `adminScope` covering the assignment
+(subtree + allowlisted sets, `granted_by` auto-stamped); anyone else —
+including holders of plain CRUD on the table — is denied.
+
+## Built-in identity positions (ADR-0068)
+
+`current_user.positions` is a string array — the only canonical field (there
+is no singular `current_user.position` at runtime). Framework-seeded names:
+
+| Position | Meaning |
+|:---|:---|
+| `platform_admin` | Platform operator (SaaS admin) — not a tenant position |
+| `org_owner` | Organization owner (`sys_member.role = owner`) |
+| `org_admin` | Organization administrator (`sys_member.role = admin`) |
+| `org_member` | Organization member (`sys_member.role = member`) |
+
+Test membership in RLS/CEL with `'org_admin' in current_user.positions`.
+
+## Audience anchors: `everyone` and `guest` (ADR-0090 D5/D9)
+
+Two more built-in positions are **implicit** — they are never stored as
+assignment rows (the runtime rejects such rows) because whole principal
+classes hold them automatically:
+
+- **`everyone`** — every authenticated user. Binding a permission set to
+  `everyone` is how an admin authors *default grants* — additive, alongside
+  the configured baseline (`member_default`); receiving an explicit grant
+  never costs the baseline (the "fallback cliff" was abolished by D5).
+  Packages may *suggest* an everyone-binding via a set's `isDefault: true`;
+  the admin confirms each suggestion — nothing auto-binds.
+- **`guest`** — every unauthenticated principal, which holds this position
+  *and nothing else*. Guest bindings face the strictest tier: explicit
+  objects only, read-only by default (create is the case-by-case exception,
+  e.g. public form intake), no View/Modify All, no system permissions.
+
+Both anchors reject **high-privilege bindings at the data layer** — no View/
+Modify All Data, no delete/purge/transfer, no `'*'` wildcard, no system
+permissions — no matter who asks (even a platform admin). Grant powerful sets
+through ordinary positions instead. Anchor bindings are tenant-level only: no
+delegated admin scope can touch them.
+
+---
+
+## See also
+
+- [Permissions & Identity overview](/docs/permissions)
+- [Permission Sets](/docs/permissions/permission-sets)
+- [Sharing Rules](/docs/permissions/sharing-rules)
+- Design reference: `docs/design/permission-model.md` · Decision record: ADR-0090

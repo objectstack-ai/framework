@@ -9,15 +9,20 @@ This module covers authentication, authorization, and record- and field-level
 access control. It is a cross-protocol capability: enforced by the ObjectOS
 runtime, declared as ObjectQL security metadata.
 
-The model has five layers, each with schema **and** runtime support: **profiles**
-(one per user) and additive **permission sets** for object/field rights, a **role
-hierarchy** for reporting structure, **sharing rules + Organization-Wide Defaults**
-for record visibility, **row-level security** (compiled into every query), and
-**field-level security** (declared rules masked and enforced server-side; fields
+The model has **five concepts, one reading each** (ADR-0090): additive
+**permission sets** are the only capability container; flat **positions**
+(岗位) distribute sets to people; the **business-unit tree** (plus the manager
+chain) is the one hierarchy and decides how deep you see; each object's
+**Organization-Wide Default + sharing** set the record baseline (sharing only
+widens); **row-level security** is the expert escape hatch that narrows.
+**Field-level security** masks and enforces field rules server-side (fields
 without a declared rule stay visible by default — see the
 [FLS posture note](/docs/permissions/authorization#combination-semantics-the-fixed-order)).
-Object access scopes
-go from `own` through `own_and_reports`, `unit`, `unit_and_below`, to `org`.
+Object access scopes go from `own` through `own_and_reports`, `unit`,
+`unit_and_below`, to `org`. There is no Profile concept and the word "role"
+is reserved (D3) — if you knew the v1 model, start at
+[Profiles (removed)](/docs/permissions/profiles) and
+[Positions](/docs/permissions/positions).
 
 Access rules are metadata like everything else — this is a real sharing rule from
 the CRM example app:
@@ -31,7 +36,7 @@ export const HighValueOpportunitySharingRule = defineSharingRule({
   object: 'crm_opportunity',
   condition: 'record.amount > 100000',
   accessLevel: 'edit',
-  sharedWith: { type: 'role', value: 'sales_manager' },
+  sharedWith: { type: 'position', value: 'sales_manager' },
   active: true,
 });
 ```
@@ -39,16 +44,16 @@ export const HighValueOpportunitySharingRule = defineSharingRule({
 Because AI agents act through the same permission-aware surface, these rules bound
 agent access exactly as they bound users ([Actions as Tools](/docs/ai/actions-as-tools)).
 
-> **Implementation status — Phase-1 RBAC is live.** REST → ObjectQL now propagates a populated `ExecutionContext` (userId, tenantId, roles, permissions) into the SecurityPlugin middleware, so CRUD / FLS / RLS checks actually fire on every authenticated request. The default `member_default` permission set ships a wildcard RLS rule `organization_id == current_user.organization_id` plus explicit per-object overrides `sys_organization_self` (`id == current_user.organization_id`) and `sys_user_self` (`id == current_user.id`) for the two global tables that lack an `organization_id` column. RLS expressions, the physical column, and `RLSUserContext.organization_id` all use the same canonical name — there is no `tenantField` rewrite indirection (schemas with a different physical tenant column should fork the defaults). The legacy `objectql.registerTenantMiddleware` has been removed; SecurityPlugin is the sole authority for tenant isolation. Analytics also reuses the same read scope: `@objectstack/service-analytics` auto-bridges to `security.getReadFilter(object, context)` when the security service is registered, so dataset-bound dashboards/reports do not bypass RLS. End-to-end verified on `pnpm dev:crm` across `sys_organization`, `sys_member`, `sys_user`, `sys_user_permission_set`, `sys_role_permission_set`. **Anonymous traffic is denied by default** (the ADR-0056 D2 default-deny flip landed: `requireAuth` defaults to `true`); an explicit `requireAuth: false` opt-out logs a boot-time warning, and public forms self-authorize via a declaration-derived `publicFormGrant` (ADR-0056 Option A — see [Public Forms](/docs/ui/forms)). Organization-Wide Defaults (`private` / `public_read` / `public_read_write` / `controlled_by_parent`) and criteria Sharing Rules (with `role_and_subordinates` hierarchy widening) are live and dogfood-proven (ADR-0056); **owner-type sharing rules and `group`/`guest` recipients are declared but not enforced** — the seeder skips them with a warning ([Sharing Rules](/docs/permissions/sharing-rules#owner-based-sharing-rules)); the Studio RLS visual editor, per-user×org permission cache, and audit UI for denied access are queued. See `CHANGELOG.md` and [Implementation Status](/docs/releases/implementation-status) for the latest matrix.
+> **Implementation status — Permission Model v2 (ADR-0090) is live.** REST → ObjectQL propagates a populated `ExecutionContext` (userId, tenantId, positions, permissions, principalKind) into the SecurityPlugin middleware, so CRUD / FLS / RLS checks fire on every authenticated request; authenticated principals implicitly hold the `everyone` position and anonymous principals hold `guest` (D9). The `member_default` baseline is **additive** (D5 — no fallback cliff) and its owner-write policies are domained to `org_member` holders. The default `member_default` set ships the wildcard tenant-isolation RLS (`organization_id == current_user.organization_id`) with the same canonical-name contract as before; SecurityPlugin is the sole authority for tenant isolation, and analytics auto-bridges to `security.getReadFilter`. **Anonymous traffic is denied by default** (ADR-0056 D2), and public forms self-authorize via a declaration-derived `publicFormGrant`. **An unset OWD fails closed to `private`** (D1) and the D7 publish linter makes it a build error. Criteria sharing rules (with `position` / `unit_and_subordinates` recipients) are live and dogfood-proven; **owner-type rules and `group` recipients are declared but not enforced** — the seeder skips them with a warning ([Sharing Rules](/docs/permissions/sharing-rules#owner-based-sharing-rules)). RBAC-table writes are governed by the delegated-admin gate (D12), and the `security` service answers `explain(request)` per evaluation layer (D6). The Studio RLS visual editor, per-user×org permission cache, and audit UI for denied access are queued. See [Implementation Status](/docs/releases/implementation-status) for the latest matrix.
 
 ## What's in this module
 
 - [Authentication](/docs/permissions/authentication)
 - [Social & Enterprise SSO](/docs/permissions/sso)
 - [Authorization Architecture](/docs/permissions/authorization)
-- [Profiles](/docs/permissions/profiles)
+- [Profiles (removed)](/docs/permissions/profiles)
 - [Permission Sets](/docs/permissions/permission-sets)
-- [Role Hierarchy](/docs/permissions/roles)
+- [Positions](/docs/permissions/positions)
 - [Sharing Rules](/docs/permissions/sharing-rules)
 - [Field-Level Security](/docs/permissions/field-level-security)
 - [Permission Metadata](/docs/permissions/permission-metadata)
@@ -97,43 +102,40 @@ ObjectStack implements a multi-layered security model:
 
 ## Best Practices
 
-### 1. Profile Design
+### 1. Permission Sets
 
 ✅ **DO:**
-- Create minimal profiles (start restrictive, extend with permission sets)
-- Use descriptive names
-- Document the purpose of each profile
-- Assign one profile per user
+- Keep each set a coherent capability ("Advanced Reporting", "HR Self-Service")
+- Start restrictive — the model is additive, so grant by adding sets
+- Put org-wide defaults on the `everyone` anchor (low-privilege only)
+- Remove grants when no longer needed
 
 ❌ **DON'T:**
-- Create too many profiles
-- Give excessive permissions "just in case"
-- Mix unrelated permissions in one profile
+- Author "subtraction sets" — restriction is done by *not granting*
+- Grant `viewAllRecords`/`modifyAllRecords` "just in case"
+- Ship a `'*'` wildcard superuser in a package (the linter rejects it)
 
-### 2. Permission Sets
+### 2. Positions
 
 ✅ **DO:**
-- Use for temporary or special access
-- Group related permissions
-- Name clearly (e.g., "Advanced Reporting", "Bulk Data Access")
-- Remove when no longer needed
+- Model job functions (岗位), not departments — keep the list short and flat
+- Bind capability through sets; anchor assignments to a business unit
+- Use delegated `adminScope`s so subsidiaries manage their own assignments
 
 ❌ **DON'T:**
-- Use as a replacement for profiles
-- Grant system-wide permissions unnecessarily
+- Recreate a reporting tree on positions — the hierarchy lives on business units
+- Use positions as sharing groups — that is what teams are for
 
-### 3. Role Hierarchy
+### 3. Business Units & Depth
 
 ✅ **DO:**
-- Mirror your organizational structure
-- Keep hierarchies simple
-- Document reporting relationships
-- Review regularly
+- Mirror your organizational structure on the BU tree
+- Widen visibility with `readScope`/`writeScope` depth grants
+- Review the tree after reorgs
 
 ❌ **DON'T:**
 - Create overly deep hierarchies
-- Mix different org structures
-- Grant too much upward access
+- Grant `org` depth when `unit_and_below` suffices
 
 ### 4. Sharing Rules
 
@@ -168,11 +170,12 @@ ObjectStack implements a multi-layered security model:
 ### Initial Setup
 
 - [ ] Harden authentication (password policy, enforced MFA, lockout, session controls, IP allowlist) — see [Authentication Hardening](/docs/permissions/authentication#enterprise-authentication-hardening-adr-0069)
-- [ ] Define user roles and hierarchies
-- [ ] Create profiles for each role
-- [ ] Set organization-wide defaults
+- [ ] Model the business-unit tree and positions (岗位)
+- [ ] Author permission sets and bind them to positions
+- [ ] Set each object's organization-wide default (unset = private, and a build error)
 - [ ] Configure field-level security
 - [ ] Create sharing rules
+- [ ] Commit `access-matrix.json` so capability changes become reviewable diffs
 
 ### Ongoing Maintenance
 
@@ -204,19 +207,17 @@ const OrganizationDefaults = {
   contact: 'controlled_by_parent',
 };
 
-// 2. Role Hierarchy (flat roles linked by `parent`)
-const roles = [
-  { name: 'sales_vp', label: 'Sales VP' },
-  { name: 'sales_manager', label: 'Sales Manager', parent: 'sales_vp' },
-  { name: 'sales_rep', label: 'Sales Rep', parent: 'sales_manager' },
+// 2. Positions (flat — the hierarchy lives on business units)
+const positions = [
+  { name: 'sales_manager', label: 'Sales Manager' },
+  { name: 'sales_rep', label: 'Sales Rep' },
 ];
 
-// 3. Profile (a PermissionSet with isProfile: true)
-const SalesRepProfile = {
-  name: 'sales_rep',
-  isProfile: true,
+// 3. Permission set (bound to the sales_rep position at install/setup)
+const SalesRepAccess = {
+  name: 'sales_rep_access',
   objects: {
-    account: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
+    account: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false, readScope: 'unit' },
     opportunity: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
   },
   fields: {
@@ -231,7 +232,7 @@ const AccountSharingRule = {
   object: 'account',
   // Share high-value accounts with sales reps
   condition: P`record.annual_revenue >= 1000000`,
-  sharedWith: { type: 'role', value: 'sales_rep' },
+  sharedWith: { type: 'position', value: 'sales_rep' },
   accessLevel: 'read',
 };
 

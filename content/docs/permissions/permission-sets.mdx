@@ -1,132 +1,186 @@
 ---
 title: "Permission Sets"
-description: "Extend profile permissions without changing the profile — custom sets, the four built-in permission sets, auto-granting for org admins, and how grants are assigned as data rows."
+description: "The only capability container — object CRUD + FLS + scope depth + capabilities, union-merged across everything a user holds. Covers the built-in sets, assignment tables, access depth, the isDefault suggestion, and delegated-admin scopes."
 ---
 
 # Permission Sets
 
-Permission sets extend profile permissions without changing the profile.
+A **permission set** is the *only* capability container in the platform
+(ADR-0090): a named bundle of object CRUD grants, field-level security, scope
+depth, tab visibility, system capabilities, and (optionally) RLS policies.
+A user's effective permissions are the **union** of every set they reach —
+via their [positions](/docs/permissions/positions), via direct grants, via
+the `everyone` anchor, and via the additive baseline. Any set that allows,
+wins; restriction is done by *not granting*.
 
 ```typescript
 import { definePermissionSet } from '@objectstack/spec/security';
 
-export const AdvancedReportingPermissionSet = definePermissionSet({
-  name: 'advanced_reporting',
-  label: 'Advanced Reporting',
+export const SalesUser = definePermissionSet({
+  name: 'sales_user',
+  label: 'Sales User',
 
+  // Object-level permissions: <object> -> permissions
   objects: {
-    opportunity: {
-      viewAllRecords: true,  // Override profile restriction
-    },
     account: {
-      viewAllRecords: true,
+      allowCreate: true,
+      allowRead: true,
+      allowEdit: true,
+      allowDelete: false,
+      readScope: 'unit',       // see "Access depth" below
     },
+    opportunity: { allowCreate: true, allowRead: true, allowEdit: true },
   },
 
+  // Field-level security: <object>.<field> -> permissions
   fields: {
-    'opportunity.amount': { readable: true },
-    'opportunity.probability': { readable: true },
+    'account.annual_revenue': { readable: true, editable: false },
   },
 
-  // System permissions are a flat array of capability strings
-  systemPermissions: ['run_reports', 'export_reports', 'create_dashboards'],
-});
+  // Tab/app visibility
+  tabPermissions: { app_crm: 'default_on', app_admin: 'hidden' },
 
-export const BulkDataPermissionSet = definePermissionSet({
-  name: 'bulk_data_access',
-  label: 'Bulk Data Access',
-
-  objects: {},
-  systemPermissions: ['bulk_api', 'view_all_data'],
+  // System capabilities (flat strings, resolved against sys_capability)
+  systemPermissions: ['export_reports'],
 });
 ```
 
-## Built-in Permission Sets
+## Object permission bits
 
-The framework ships four canonical permission sets that are auto-seeded on
-boot by `plugin-security` (see
-`packages/plugins/plugin-security/src/objects/default-permission-sets.ts`). Use
-these as the baseline for any new org — tier custom sets on top rather
-than redefining the basics.
+| Permission | Description |
+|------------|-------------|
+| `allowCreate` / `allowRead` / `allowEdit` / `allowDelete` | CRUD on records the user can see |
+| `allowTransfer` / `allowRestore` / `allowPurge` | Lifecycle class (RBAC-gated ahead of the M2 operations) |
+| `viewAllRecords` | Read ALL records regardless of ownership (super-user read) |
+| `modifyAllRecords` | Edit ALL records regardless of ownership (super-user write) |
+
+## Access depth — `readScope` / `writeScope` (ADR-0057 D1)
+
+An owner-scoped grant can widen the owner-match declaratively — the "see my
+own / my reports / my unit / my unit and below / the whole org" axis:
+
+| Scope | Owner-match widens to |
+|------------|-------------|
+| `own` | the caller (baseline; unset = this) |
+| `own_and_reports` | the caller + their `sys_user.manager_id` report chain |
+| `unit` | owners in the caller's business unit |
+| `unit_and_below` | the caller's BU + all descendant BUs |
+| `org` | the whole tenant (≈ `viewAllRecords` / `modifyAllRecords`) |
+
+It resolves to an `owner_id IN (…)` set at request time (ADR-0055 — no
+subqueries, no recursion) and composes with the object's
+[OWD baseline](/docs/permissions/sharing-rules); sharing rules still widen on
+top. When a user's position assignments carry a
+[BU anchor](/docs/permissions/positions#assignments--and-the-business-unit-anchor),
+the anchor decides *which* unit `unit*` means.
+
+> **Open-core boundary (ADR-0016).** `own` and `org` are open-source. The
+> hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`)
+> require the enterprise hierarchy resolver; without it they **fail closed to
+> `own`** (never fail-open).
+
+## Capabilities & required permissions (ADR-0066)
+
+- **Capabilities** are first-class `sys_capability` records — named privileges
+  such as `manage_users`, `manage_metadata`, `setup.access`, `studio.access`.
+  Grant them via `systemPermissions`; declare them as prerequisites via an
+  object/field/app `requiredPermissions` (an **AND**-gate checked before any
+  CRUD grant).
+- The authoring lint `validateCapabilityReferences` warns when
+  `requiredPermissions` names a capability registered nowhere.
+
+## Built-in permission sets
+
+Auto-seeded on boot by `plugin-security`
+(`objects/default-permission-sets.ts`):
 
 | Name | Scope | What it unlocks | Notes |
 |:--|:--|:--|:--|
-| `admin_full_access` | Platform (no RLS) | All objects, all system permissions, Studio + Setup, cross-org reads | Reserved for platform operators. Auto-granted to the bootstrap admin (`bootstrapPlatformAdmin`) — the **first registered human**. The non-loginable seed-data identity `usr_system` (role `system`, provisioned before the first sign-up to own seeded rows) is deliberately skipped, so the real admin wins the promotion. |
-| `organization_admin` | Per-org (`tenant_isolation` RLS, only active when `@objectstack/plugin-org-scoping` is loaded) | Wildcard CRUD inside the org, `manage_org_users`, Setup app shell (only org-scoped entries visible), invite members, manage roles assignment | **Read-only** on `sys_role`, `sys_permission_set`, `sys_role_permission_set`, `sys_user_permission_set`, `sys_user_role` to prevent self-elevation. Does **not** see Studio. |
-| `member_default` | Per-org | Standard end-user CRUD on org records; **writes are owner-scoped** | Default profile for invited members. |
-| `viewer_readonly` | Per-org | Read access only | For auditors / read-only stakeholders. |
+| `admin_full_access` | Platform (no RLS) | All objects, all system permissions, Studio + Setup | The ADR-0066 superuser wildcard — the only legitimate `'*'` + View/Modify All combination (the D7 linter rejects it in authored packages) |
+| `organization_admin` | Per-org (tenant-isolation RLS) | Wildcard CRUD inside the org, `manage_org_users`, Setup shell | **Read-only** on the RBAC tables (anti-escalation); does not see Studio |
+| `member_default` | Per-org | Standard end-user CRUD; **writes owner-scoped** via `positions: ['org_member']`-domained RLS | The additive baseline — applies to every authenticated request *in addition to* explicit grants (ADR-0090 D5) |
+| `viewer_readonly` | Per-org | Read access only | Auditors / read-only stakeholders |
 
-> **Owner-scoped writes.** `member_default` grants read/create on org records but
-> restricts **edit and delete to the records the user created** — via the
-> `owner_only_writes` / `owner_only_deletes` RLS policies, keyed on `created_by`
-> (the ownership column the engine stamps on every row). These are enforced on
-> single-id `update`/`delete` by a **pre-image authorization check**: before the
-> mutation the middleware re-reads the target row through the write-operation RLS
-> filter, and a member attempting to modify another user's record gets `403`.
-> A permission set with `modifyAllRecords` (or no RLS, e.g. `admin_full_access`)
-> bypasses this. An object that opts out of audit fields (`systemFields.audit:
-> false`, no `created_by`) fails **closed** for member writes — grant
-> `modifyAllRecords` or a per-object policy, or model transferable ownership with
-> a dedicated owner field + custom policy.
+## Assigning permission sets
 
-> **Single-org vs. multi-org runtimes.** The wildcard `tenant_isolation`
-> RLS row above only takes effect when `@objectstack/plugin-org-scoping`
-> is registered (typically via `OS_MULTI_ORG_ENABLED=true`). In single-org
-> mode `plugin-security` detects the missing `org-scoping` service and
-> strips the wildcard policy so reads / writes aren't accidentally
-> filtered by an unset `current_user.organization_id`. See the
-> [Org-Scoping Plugin README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-org-scoping/README.md)
-> for boot order and per-org seed-replay details.
-
-### Auto-grant for organization admins
-
-Any user whose `sys_member.role` is `owner`, `admin`, or comma-set
-`"owner,admin"` automatically receives an org-scoped grant of
-`organization_admin` (one `sys_user_permission_set` row per `(user, org)`
-pair). The grant is reconciled by a lifecycle hook in `plugin-security`
-on every `sys_member` insert / update / delete, and a `kernel:ready`
-backfill sweep cleans up orphans on boot. Demoting a member to `member`
-revokes the grant in the same transaction; you do not manage these rows
-by hand.
-
-### Setup app gating
-
-Setup nav items and the corresponding global settings manifests
-(`ai`, `knowledge`, `mail`, `storage`) require the new
-`manage_platform_settings` system permission, which is granted **only** to
-`admin_full_access`. `organization_admin` sees the Setup shell —
-Apps, People & Organization, Roles (read-only) — but not platform-wide
-configuration. Tenant-scoped settings (`branding`, `feature_flags`)
-remain gated by `setup.access` so org admins can manage them.
-
-## Assigning Permission Sets
-
-Permission-set grants are plain data rows, not helper-function calls. Assign a
-set to a user by inserting a `sys_user_permission_set` row, or to a role by
-inserting a `sys_role_permission_set` row:
+Grants are plain data rows:
 
 ```typescript
-// Grant a permission set to a single user
+// Grant a set to a single user (direct grant)
 await objectql.object('sys_user_permission_set').insert({
   user_id: 'user123',
-  permission_set: 'advanced_reporting',
+  permission_set_id: psId,
 });
 
-// Grant a permission set to everyone in a role
-await objectql.object('sys_role_permission_set').insert({
-  role: 'data_analysts',
-  permission_set: 'bulk_data_access',
+// Bind a set to a position (everyone holding it gets the set)
+await objectql.object('sys_position_permission_set').insert({
+  position_id: positionId,
+  permission_set_id: psId,
 });
 ```
 
-Org-admin grants are reconciled automatically by a `plugin-security` lifecycle
-hook (see [Auto-grant for organization admins](#auto-grant-for-organization-admins))
-— you do not insert those rows by hand.
+These writes are **governed** (ADR-0090 D12): tenant-level admins pass
+through to the ordinary checks; a delegated admin needs a covering
+`adminScope`; plain CRUD on the tables grants nothing by itself. Bindings to
+the `everyone`/`guest` anchors additionally reject high-privilege sets at the
+data layer for *every* caller.
+
+Org-admin grants (`sys_member.role` owner/admin → `organization_admin`) are
+reconciled automatically by a lifecycle hook — you never insert those rows by
+hand.
+
+## Package suggestion — `isDefault` (ADR-0090 D5)
+
+A package may mark one of its sets `isDefault: true`: an **install-time
+suggestion** to bind it to the `everyone` anchor. The admin confirms each
+suggestion individually; nothing auto-binds, and the D7 linter rejects an
+`isDefault` set that carries anchor-forbidden bits (VAMA, destructive bits,
+wildcards, system permissions).
+
+## Delegated administration — `adminScope` (ADR-0090 D12)
+
+A permission set may carry an `adminScope`, making its holders **scoped
+administrators**:
+
+```typescript
+export const EastSubsidiaryAdmin = definePermissionSet({
+  name: 'east_subsidiary_admin',
+  label: '华东子公司管理员',
+  // The scope authorizes WHAT may be administered…
+  adminScope: {
+    businessUnit: 'east',                 // WHERE: this BU subtree
+    manageAssignments: true,              // user ↔ position rows
+    manageBindings: true,                 // position ↔ set rows
+    assignablePermissionSets: ['sales_user', 'support_user'],  // WHICH sets
+  },
+  // …and the CRUD bits let the requests through at all:
+  objects: {
+    sys_user_position: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
+    sys_position_permission_set: { allowRead: true, allowCreate: true, allowDelete: true },
+  },
+});
+```
+
+The runtime gate enforces: assignments anchored inside the subtree only,
+allowlisted sets only (**to others and to themselves** — no self-escalation),
+single-row writes, `granted_by` audit stamping, and **strict containment**
+when granting or authoring a set that itself carries an `adminScope` (handing
+out your own exact scope is refused). Anchors and security publishes stay
+tenant-level.
+
+## Provenance — package vs environment sets (ADR-0086)
+
+A package ships its own sets (`managedBy: 'package'` + `packageId`), seeded
+idempotently at boot and re-seeded on upgrade; environment-authored sets
+(`platform`/`user`) are never clobbered. The data layer refuses admin-door
+writes to package rows (two-doors separation), which is what makes package
+uninstall well-defined.
 
 ---
 
 ## See also
 
 - [Permissions & Identity overview](/docs/permissions)
-- [Profiles](/docs/permissions/profiles)
+- [Positions](/docs/permissions/positions)
 - [Security Permissions Matrix](/docs/permissions/permissions-matrix)
+- [Authorization Architecture](/docs/permissions/authorization)

@@ -13,7 +13,6 @@ A **Permission Set** defines what a user can do within the application. It contr
 const salesUserPermission = {
   name: 'sales_user',
   label: 'Sales User',
-  isProfile: false,
 
   objects: {
     account: {
@@ -61,7 +60,8 @@ const salesUserPermission = {
 | :--- | :--- | :--- | :--- |
 | `name` | `string` | ✅ | Machine name (`snake_case`) |
 | `label` | `string` | optional | Display label |
-| `isProfile` | `boolean` | optional | Is this a user profile (vs. permission set) |
+| `isDefault` | `boolean` | optional | [ADR-0090 D5] Install-time suggestion to bind this set to the `everyone` position (admin confirms; never auto-bound) |
+| `adminScope` | `AdminScope` | optional | [ADR-0090 D12] Delegated-administration scope (BU subtree + assignable-set allowlist) |
 | `objects` | `Record<string, ObjectPermission>` | ✅ | Object-level permissions |
 | `fields` | `Record<string, FieldPermission>` | optional | Field-level security, keyed by `'object.field'` |
 | `systemPermissions` | `string[]` | optional | System-level capabilities |
@@ -195,23 +195,24 @@ contextVariables: {
 ```
 
 The built-in context variables available in RLS `using`/`check` clauses include
-`current_user.id`, `current_user.organization_id`, and `current_user.roles`
+`current_user.id`, `current_user.organization_id`, and `current_user.positions`
 (ADR-0068). `roles` is a **string array** — the only canonical role field — so test
-membership with CEL: `'org_admin' in current_user.roles` or
-`current_user.roles.exists(r, r == 'sales_manager')`. The framework-seeded built-in
-role names are `platform_admin`, `org_owner`, `org_admin`, and `org_member`.
+membership with CEL: `'org_admin' in current_user.positions` or
+`current_user.positions.exists(p, p == 'sales_manager')`. The framework-seeded
+built-in position names are `platform_admin`, `org_owner`, `org_admin`, and
+`org_member`; `everyone`/`guest` are the implicit audience anchors (ADR-0090 D9).
 (`current_user.isPlatformAdmin` is a derived, deprecated alias of
-`'platform_admin' in current_user.roles`.)
+`'platform_admin' in current_user.positions`.)
 
-## Profile vs. Permission Set
+## Union semantics — no Profile tier (ADR-0090 D2)
 
-| Aspect | Profile (`isProfile: true`) | Permission Set (`isProfile: false`) |
-| :--- | :--- | :--- |
-| **Assignment** | One profile per user | Multiple permission sets per user |
-| **Purpose** | Baseline access level | Additional capabilities |
-| **Example** | `standard_user`, `admin` | `sales_analytics`, `export_data` |
-
-A user's effective permissions = **Profile permissions** ∪ **All assigned Permission Set permissions**.
+There is no Profile concept: permission sets are the only capability
+container and a user may hold any number of them. A user's effective
+permissions = the **union of every set reached** — via positions, direct
+grants, the `everyone` anchor's bindings, and the additive baseline
+(`member_default`). Baseline access is authored on the `everyone` anchor (or
+suggested by a package via `isDefault: true`); job functions are ordinary
+sets bound to [positions](/docs/permissions/positions).
 
 ## Complete Example
 
@@ -219,7 +220,6 @@ A user's effective permissions = **Profile permissions** ∪ **All assigned Perm
 const salesManagerPermission = {
   name: 'sales_manager',
   label: 'Sales Manager',
-  isProfile: false,
 
   objects: {
     account: {
