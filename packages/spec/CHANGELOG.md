@@ -1,5 +1,236 @@
 # @objectstack/spec
 
+## 13.0.0
+
+### Major Changes
+
+- 6d83431: ADR-0090 P1 breaking wave — permission model v2 concept convergence.
+
+  Pre-launch one-step renames and secure defaults (no compatibility aliases, per
+  ADR-0090 D3/D4 superseding ADR-0057 D5/D7's alias discipline):
+
+  - `sys_role` → `sys_position`, `sys_user_role` → `sys_user_position` (field
+    `role` → `position`), `sys_role_permission_set` → `sys_position_permission_set`
+    (field `role_id` → `position_id`); `RoleSchema`/`defineRole` →
+    `PositionSchema`/`definePosition` with **no `parent`** (positions are flat;
+    hierarchy lives on the business-unit tree).
+  - `ExecutionContext.roles[]` → `positions[]`; the EvalUser/CEL contract
+    `current_user.roles` → `current_user.positions` (formula validators updated);
+    stack property `roles:` → `positions:`; metadata kinds `role`/`profile` →
+    `position` (profile kind removed).
+  - `isProfile` removed from `PermissionSetSchema` (ADR-0090 D2); `isDefault`
+    narrows to an install-time suggestion; `appDefaultProfileName` →
+    `appDefaultPermissionSetName` (isDefault-only).
+  - OWD enum drops legacy aliases `read`/`read_write`/`full`; new optional
+    `externalSharingModel` (external dial, `private` default) lands as P1 spec
+    shape (ADR-0090 D11).
+  - **Secure default (D1)**: a custom object with an owner field and NO
+    `sharingModel` now resolves `private` (was: fully public). System objects
+    keep their explicit posture. Unrecognised stored values fail closed.
+  - ExecutionContext gains the P1 principal-taxonomy shape (D10):
+    `principalKind` / `audience` / `onBehalfOf` (optional, semantics phase in
+    later).
+  - Sharing recipients: `role` → `position` (expanded via `sys_user_position`
+    ∪ the better-auth membership transition source); `role_and_subordinates`
+    removed — `unit_and_subordinates` now expands the business-unit subtree
+    (finishes ADR-0057 D5's re-homing).
+
+### Minor Changes
+
+- 01917c2: ADR-0090 P2 — audience anchors: `everyone`/`guest` builtin positions.
+
+  - `EVERYONE_POSITION` / `GUEST_POSITION` constants in `@objectstack/spec`;
+    both anchors seeded (system-managed) alongside the builtin identity names.
+  - Every authenticated principal implicitly holds `everyone` in
+    `ctx.positions`, so sets bound to it resolve as ordinary position-bound
+    grants — ADDITIVE. The fallback CLIFF is abolished: the configured
+    baseline (`fallbackPermissionSet`, default `member_default`) now applies
+    in addition to explicit grants instead of only when the user had none,
+    and is also seeded as an `everyone` binding (same table/audit/explain
+    path as admin-authored defaults).
+  - Sessionless HTTP principals resolve as `principalKind: 'guest'` holding
+    exactly `['guest']`; internal bare contexts are untouched.
+  - Audience-anchor binding gate: `sys_position_permission_set` writes that
+    would bind a high-privilege set (VAMA, delete/purge/transfer, system
+    permissions, `'*'` wildcard) to `everyone`/`guest` are rejected at the
+    data layer, unconditionally (`describeHighPrivilegeBits` predicate is
+    exported and shared with the seed-time validation).
+
+- b271691: ADR-0090 P3 — security-domain publish linter (D7) and delegated administration (D12).
+
+  **D7 — `validateSecurityPosture` (@objectstack/lint), wired into `os compile` (errors gate the build) and `os lint`.** Rules, each with a failing fixture: `security-owd-unset` (custom object with no `sharingModel` — the objectui#2348 leave_request shape), `security-owd-alias` (retired D4 alias values, with fix-it), `security-external-wider-than-internal` (D11 `external ≤ internal`), `security-wildcard-vama` (`'*'` + View/Modify All outside the platform admin set, ADR-0066), `security-anchor-high-privilege` (an `isDefault`/everyone-suggested set carrying anchor-forbidden bits), `security-role-word` (D3 vocabulary freeze in security identifiers/labels; ARIA/page roles exempt), and advisory `security-private-no-readscope`.
+
+  **D12 — delegated administration (@objectstack/plugin-security `DelegatedAdminGate`).** `PermissionSetSchema.adminScope` (new in spec, persisted as `sys_permission_set.admin_scope`) declares WHERE (a `sys_business_unit` subtree), WHAT (`manageAssignments` / `manageBindings` / `authorEnvironmentSets`), and WHICH sets a delegate may hand out (`assignablePermissionSets` allowlist). Writes to `sys_user_position`, `sys_position_permission_set`, `sys_user_permission_set`, and `sys_permission_set` are now governed: tenant-level admins (ADR-0066 superuser wildcard) pass through; delegates need a covering scope — inside their subtree, allowlisted sets only (to others AND themselves), single-row writes, `granted_by` audit-stamped; everyone else (including holders of plain CRUD on RBAC tables) is denied. Granting or authoring a set that itself carries an `adminScope` requires a held scope that STRICTLY contains it. The `everyone`/`guest` anchors stay tenant-level only, and direct position assignments to an anchor are rejected for every caller.
+
+  **ADR-0090 Addendum — assignment-level BU anchor.** `sys_user_position.business_unit_id` lands with its three consumers scoped: D12 delegation boundary (enforced here), audit fact, and the depth-anchor contract for enterprise `hierarchy-scope-resolver` implementations (documented on `IHierarchyScopeResolver`).
+
+  **D9 tier tightening.** `describeHighPrivilegeBits` moved to `@objectstack/spec/security` (re-exported from plugin-security) alongside new `describeAnchorForbiddenBits`: `guest` bindings now additionally reject edit bits (read-only by default; create stays the case-by-case exception).
+
+  **BREAKING (@objectstack/plugin-security):** exports renamed to the ADR-0090 D3 vocabulary — `SysRole`→`SysPosition`, `SysUserRole`→`SysUserPosition`, `SysRolePermissionSet`→`SysPositionPermissionSet` (no aliases, pre-launch one-step rename). `sys_position` row actions/list views renamed (`activate_position`, …), labels relabeled Role→Position. Non-tenant-admin writes to the RBAC link tables without an `adminScope` are now denied (previously any CRUD grant on those tables sufficed).
+
+  **BREAKING (@objectstack/platform-objects):** `sys_business_unit_member.role_in_business_unit` → `function_in_business_unit` (D3 reserved-word sweep; values member/lead/deputy unchanged).
+
+- a5a1e41: ADR-0090 P4 — explain engine (D6), access-matrix snapshot gate, recalibrated benchmark.
+
+  **Explain contract (@objectstack/spec).** `ExplainRequestSchema` / `ExplainDecisionSchema` / `ExplainLayerSchema`: `explain(principal, object, operation)` reports the verdict of every evaluation-pipeline layer in order (principal → required_permissions → object_crud → fls → owd_baseline → depth → sharing → vama_bypass → rls), with per-layer contributor attribution (which permission set, reached via which position/baseline) and — for reads — the composed row filter as the machine artifact. Carries the D10 dual attribution (`principalKind`, `onBehalfOf`).
+
+  **Explain engine (@objectstack/plugin-security).** `explainAccess` is "explained by construction": it calls the SAME permission-set resolution, evaluator, FLS mask, and RLS composition the enforcement middleware calls (injected from `SecurityPlugin`), so the report cannot drift from enforcement. Exposed on the `security` kernel service as `explain(request, callerContext)`; explaining another user requires `manage_users` (the target's context is reconstructed from `sys_user_position` / `sys_user_permission_set` with everyone-anchor semantics via `buildContextForUser`).
+
+  **Access-matrix snapshot gate (@objectstack/lint + os compile).** `buildAccessMatrix(stack)` derives the (permission set × object) capability matrix purely from metadata; `diffAccessMatrix` renders semantic review lines ("'crm_admin' gains delete on 'crm_lead'", depth changes, OWD swings, entry add/remove). `os compile` gains an opt-in gate: with `access-matrix.json` committed next to the config, any drift fails the build with those lines until re-snapshotted via `--update-access-matrix` — every capability change becomes a reviewable diff. Seeded for `examples/app-crm`.
+
+  **Benchmark (ADR-0090 Addendum).** `scripts/bench/permission-bench.mts` — single-org 10k users × 1M rows per the recalibrated topology; asserts the O()-shape property (per-request cost independent of user population; unit-depth IN-set cost tracks unit size). Passing at 0.1µs/eval and 59ms/1M-row IN-set scan.
+
+- 466adf6: Author-time capability-reference lint (ADR-0066 ⑨) — `os validate` / `os lint`
+  now warn when a `requiredPermissions` names a capability that is registered
+  nowhere.
+
+  `requiredPermissions` (on objects, fields, apps, actions) is a free string, so a
+  typo like `mange_users` is schema-valid and fails closed at runtime (the caller
+  is denied) — safe, but silent. The new `validateCapabilityReferences` rule
+  (`@objectstack/lint`) resolves every reference against the author-time known set
+  and warns on the unresolved ones:
+
+  - built-in platform capabilities — now sourced from a single canonical list in
+    `@objectstack/spec` (`security/capabilities.ts`: `PLATFORM_CAPABILITIES` /
+    `PLATFORM_CAPABILITY_NAMES`), which `@objectstack/plugin-security`'s
+    `bootstrapSystemCapabilities` also seeds from (one source of truth, no drift),
+  - any capability a permission set in the stack grants via `systemPermissions`
+    (granting is what declares it — mirrors the runtime derived-defaults rule), and
+  - any `sys_capability` row shipped as seed data.
+
+  It is a **warning**, not an error: a single package can't see capabilities
+  declared by other installed packages, and the reference fails closed anyway.
+  `systemPermissions` itself is never flagged — it is the declaration side, and a
+  package legitimately introduces new capabilities there. The object case also
+  understands the per-operation `requiredPermissions` map form (ADR-0066 ⑤) and
+  points a finding at the exact operation slice.
+
+- 5be00c3: feat(mcp): spec-compliant OAuth 2.1 authorization for `/api/v1/mcp` (#2698)
+
+  Any OAuth-capable MCP client (claude.ai custom connectors, Claude Desktop,
+  Claude Code) can now connect to a deployment **self-serve**: no admin-minted
+  API key, no central registry — you sign in through the browser as yourself and
+  every tool call runs under your own permissions and row-level security.
+
+  **Each deployment is its own authorization server**, backed by the embedded
+  better-auth instance (`@better-auth/oauth-provider`). Rationale for the design
+  decisions lives in #2698; the moving parts:
+
+  - **Discovery**: `/.well-known/oauth-protected-resource` (RFC 9728, incl. the
+    path-inserted variant for `/api/v1/mcp`) and
+    `/.well-known/oauth-authorization-server` (RFC 8414, incl. the path-inserted
+    variant for the `/api/v1/auth` issuer) are served from the deployment origin.
+    401s from `/api/v1/mcp` advertise the resource metadata via
+    `WWW-Authenticate`, so clients bootstrap the flow automatically.
+  - **Dynamic Client Registration (RFC 7591)** is enabled (unauthenticated, as
+    the MCP spec requires) whenever the MCP surface is on — every deployment is a
+    distinct AS, so clients cannot ship pre-registered IDs. Force it either way
+    with `OS_OIDC_DCR_ENABLED` or the new `plugins.dynamicClientRegistration`
+    auth-config field. The embedded AS itself auto-enables whenever the MCP
+    surface is on — which is now the default (explicit
+    `OS_OIDC_PROVIDER_ENABLED=false` still wins).
+  - **Authorization-code + PKCE** flow with RFC 8707 resource binding: access
+    tokens are minted with `aud=<origin>/api/v1/mcp` and verified locally
+    (signature/issuer/audience/expiry) against the deployment's own JWKS —
+    fail-closed parity with API keys: unknown/expired/wrong-audience tokens,
+    sub-less M2M tokens, or a presented-but-invalid bearer never fall back to an
+    ambient session, they 401.
+  - **Token → ExecutionContext**: a valid access token resolves to the same
+    principal-bound `ExecutionContext` as every other credential, single-sourced
+    through `resolveAuthzContext` — OAuth adds a second _provenance_ for the
+    principal, not a second authz model. `ExecutionContext` gains an optional
+    `oauthScopes` field carrying the token's granted scopes.
+  - **Coarse scopes → tool families**, enforced at tool dispatch: `data:read`
+    (list/describe/query/get), `data:write` (create/update/delete),
+    `actions:execute` (list_actions/run_action). Constants live in
+    `@objectstack/spec/ai` (`MCP_OAUTH_SCOPES`). Tools outside the grant are not
+    registered — and therefore rejected — for that request. API-key and session
+    principals are unaffected (not scope-limited).
+  - **TLS required, localhost exempt** (OAuth 2.1): on a plain-HTTP non-loopback
+    origin the OAuth track stays dark (no metadata, no bearer acceptance) and the
+    endpoint remains API-key-only. Local clients reach intranet deployments;
+    claude.ai web connectors additionally need public HTTPS reachability.
+
+  **API keys are unchanged** (dual-track): `x-api-key` / `Authorization: ApiKey` /
+  `Authorization: Bearer osk_…` keep working exactly as before for CI and
+  headless agents — covered by new regression tests.
+
+- 466adf6: Per-operation object `requiredPermissions` (ADR-0066 ⑤) — an object can now be
+  read-open / write-gated instead of gating all of CRUD on one capability set.
+
+  `Object.requiredPermissions` accepts either the original `string[]` (capabilities
+  required for **all** operations) **or** a `{ read?, create?, update?, delete? }`
+  map that gates each operation class independently — mirroring how Salesforce and
+  Dataverse separate capability by operation. plugin-security enforces the caps for
+  the request's operation class as the same D3 AND-gate (checked before the CRUD
+  grant, fail-closed). The mapping folds `transfer`/`restore` into `update` and
+  `purge` into `delete`, derived from the existing CRUD permission bits so it stays
+  in lockstep with them.
+
+  Backward-compatible: the `string[]` form keeps its gate-every-operation semantics
+  (normalized into an `all` bucket that unions with the per-operation bucket), so
+  existing objects are unaffected. The per-operation map's keys are validated
+  `.strict()`, so a mistyped key (e.g. `reads`) is rejected at author time rather
+  than silently ignored.
+
+- 2bee609: BREAKING (pre-launch): remove the three declared-but-never-enforced compliance
+  subsystems per ADR-0056 D8 ("design + enforce, or remove"), and mark the AI
+  agent `visibility` property EXPERIMENTAL (#1901).
+
+  Removed — none of these were read by any runtime path, and compliance-grade
+  configuration must never merely look live:
+
+  - `ComplianceConfigSchema` / `GDPRConfigSchema` / `HIPAAConfigSchema` (and the
+    rest of `system/compliance.zod.ts`) — there is no data-subject-rights engine,
+    retention enforcer, or BAA gate. FROM `import { ComplianceConfigSchema } from
+'@objectstack/spec/system'` TO: delete the reference — a real compliance
+    subsystem will be designed top-down when scheduled.
+  - `MaskingConfigSchema` / `MaskingRuleSchema` (`system/masking.zod.ts`) — no
+    redaction layer applies them. FROM masking config TO: field-level security
+    (permission-set field rules, enforced by plugin-security's field masker); a
+    subtractive masking/deny layer arrives with ADR-0066 ⑦/⑧ if needed.
+  - `RLSConfigSchema` / `RLSAuditEventSchema` / `RLSAuditConfigSchema`
+    (`security/rls.zod.ts`) — the enforced RLS path never read the global config.
+    FROM global `RLSConfig` TO: per-policy `RowLevelSecurityPolicySchema` (the
+    live, enforced surface — unchanged).
+
+  Kept, still `[EXPERIMENTAL]`: `EncryptionConfigSchema` (at-rest field
+  encryption) — a real enterprise roadmap item with a stable shape; carrying it
+  marked costs less than remove-and-re-add (ADR-0087).
+
+  Marked `[EXPERIMENTAL — NOT ENFORCED]` (#1901): `AgentSchema.visibility` — the
+  chat-access evaluator deliberately excludes it and the agent list route does
+  not filter by it, so `private` does not hide an agent. The schema description
+  and the authoring form now say so; use `access` / `permissions` (both enforced
+  at the chat route since #1884) for real gating. The ADR-0056 D10 conformance
+  matrix tracks all dispositions (`agent-visibility` experimental;
+  `compliance-configs` / `data-masking` / `rls-config-global` removed).
+
+- fc7e7f7: Enforce the package namespace-prefix rule for Studio-authored packages.
+
+  The protocol requires every object name in a package to carry the package's
+  `manifest.namespace` prefix (`crm_account`); `defineStack()` enforces this at
+  compile time via `validateNamespacePrefix`. Studio/runtime-authored packages
+  never take that path, and they were created without a namespace at all — so the
+  rule was silently inert and objects published with bare, collision-prone names.
+
+  Two runtime changes close the gap:
+
+  - `protocol.installPackage` now derives a default namespace from the package id
+    (`com.example.leave` → `leave`) when the manifest declares none, and persists
+    it on the manifest (in-memory registry + `sys_packages`). An explicitly
+    declared namespace always wins (e.g. HotCRM's `crm`).
+  - `protocol.publishPackageDrafts` now rejects any object draft whose name lacks
+    the package namespace prefix, before promoting anything (atomic), with an
+    actionable message (`Rename it to 'leave_ticket'`). Packages that declare no
+    namespace are grandfathered — mirroring `defineStack`, the rule is not
+    invented at enforcement time.
+
+  The per-object prefix check and the id→namespace derivation are extracted into
+  `@objectstack/spec/kernel` (`validateObjectNamespacePrefix`,
+  `deriveNamespaceFromPackageId`) as the single source shared by `defineStack` and
+  the runtime publish path, so the two enforcement points cannot drift.
+
 ## 12.6.0
 
 ### Minor Changes

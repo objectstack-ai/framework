@@ -1,5 +1,33 @@
 # @objectstack/plugin-email
 
+## 13.0.0
+
+### Patch Changes
+
+- a1766fe: fix(validation): remove polynomial ReDoS in email validation regexes
+
+  The email validators used `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`, whose quantifiers
+  around `\.` overlap (the literal dot is also matched by `[^\s@]`) and backtrack
+  polynomially on adversarial input. The domain part is rewritten as
+  `[^\s@.]+(?:\.[^\s@.]+)+` so labels exclude `.` and matching is linear. Valid
+  addresses (including multi-label domains) are unaffected; addresses with an
+  empty label such as `a@b..c` are now correctly rejected.
+
+- Updated dependencies [6d83431]
+- Updated dependencies [01917c2]
+- Updated dependencies [b271691]
+- Updated dependencies [a5a1e41]
+- Updated dependencies [466adf6]
+- Updated dependencies [5be00c3]
+- Updated dependencies [466adf6]
+- Updated dependencies [2bee609]
+- Updated dependencies [9fa84f9]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@13.0.0
+  - @objectstack/core@13.0.0
+  - @objectstack/formula@13.0.0
+  - @objectstack/platform-objects@13.0.0
+
 ## 12.6.0
 
 ### Patch Changes
