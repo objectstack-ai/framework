@@ -114,7 +114,7 @@ export interface SecurityPluginOptions {
  * without permission checks (same as current behavior).
  *
  * **Multi-tenant Organization scoping is provided by the separate
- * `@objectstack/plugin-org-scoping` package** (auto-stamps
+ * `@objectstack/organizations` package** (auto-stamps
  * `organization_id` on insert, per-org seed replay, default-org
  * bootstrap). When that plugin is installed, SecurityPlugin detects
  * it via `getService('org-scoping')` and keeps the wildcard
@@ -696,7 +696,7 @@ export class SecurityPlugin implements Plugin {
       // the very user who just created it.
       //
       // `organization_id` auto-injection has moved to
-      // `@objectstack/plugin-org-scoping`. Install that plugin for
+      // `@objectstack/organizations`. Install that plugin for
       // multi-tenant deployments.
       if (
         opCtx.operation === 'insert' &&
@@ -1066,7 +1066,7 @@ export class SecurityPlugin implements Plugin {
     }
 
     // Per-organization seed data replay on `sys_organization` insert
-    // moved to `@objectstack/plugin-org-scoping` (along with
+    // moved to `@objectstack/organizations` (along with
     // `claimOrphanOrgRows` / `cloneOrgSeedData`). Install that
     // plugin for multi-tenant deployments.
   }
@@ -1589,7 +1589,7 @@ export class SecurityPlugin implements Plugin {
           // net. Either way it's pure overhead. Substring match is
           // sufficient: every wildcard tenant policy in the default
           // permission sets uses exactly this token. Install
-          // `@objectstack/plugin-org-scoping` to enable the
+          // `@objectstack/organizations` to enable the
           // multi-tenant behavior.
           if (
             !this.orgScopingEnabled &&

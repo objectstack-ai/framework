@@ -74,7 +74,7 @@ export interface BootOptions {
    */
   security?: SecurityPlugin;
   /**
-   * Boot multi-tenant: register `@objectstack/plugin-org-scoping` BEFORE the
+   * Boot multi-tenant: register enterprise `@objectstack/organizations` plugin BEFORE the
    * SecurityPlugin so the wildcard `organization_id` RLS policies that ship in
    * the default permission sets actually apply (SecurityPlugin probes the
    * `org-scoping` service once at start and otherwise STRIPS them — see
@@ -125,7 +125,18 @@ export async function bootStack(
   // Service plugins `objectstack dev` auto-loads for an app of this shape.
   await kernel.use(new SettingsServicePlugin());
   await kernel.use(new AnalyticsServicePlugin());
-  await kernel.use(new AuthPlugin({ secret: opts.authSecret ?? DEFAULT_AUTH_SECRET }));
+  // `autoDefaultOrganization: false` (ADR-0081 D1): the harness proves the two
+  // ENDS of the isolation spectrum — pure single-tenant (no org, no scoping)
+  // and, via `opts.multiTenant`, full multi-org (the enterprise plugin owns
+  // the org bootstrap). AuthPlugin's single-org default-org bootstrap is a
+  // product onboarding convenience for `objectstack dev`/`serve`; letting it
+  // run here would mint a Default Organization + bind the dev admin as owner,
+  // giving every "single-tenant" fixture an active org — which turns on
+  // org-scoped RLS and reparents seeded rows, silently breaking the pure
+  // single-tenant baseline these dogfood proofs assert (ADR-0057 identity
+  // create, ADR-0062 federation, ADR-0086 two-doors). The bootstrap itself is
+  // covered by plugin-auth unit tests + browser E2E.
+  await kernel.use(new AuthPlugin({ secret: opts.authSecret ?? DEFAULT_AUTH_SECRET, autoDefaultOrganization: false }));
 
   // ADR-0062 — datasource connection service (registers 'datasource-connection'),
   // mirroring `objectstack dev`/serve. Without it, AppPlugin's declared-datasource
@@ -147,13 +158,26 @@ export async function bootStack(
     }
   }
 
-  // Multi-tenant: org-scoping MUST register BEFORE SecurityPlugin — the latter
-  // probes the `org-scoping` service exactly once at start and caches it, then
-  // keeps (vs strips) the wildcard `organization_id` RLS policies accordingly.
-  // Mirrors the CLI's ordering for `OS_MULTI_ORG_ENABLED`.
+  // Multi-org: the enterprise OrganizationsPlugin (`@objectstack/organizations`,
+  // ADR-0081 D2) MUST register BEFORE SecurityPlugin — the latter probes the
+  // `org-scoping` service (the historical name the enterprise plugin keeps
+  // registering) exactly once at start and caches it, then keeps (vs strips)
+  // the wildcard `organization_id` RLS policies accordingly. Mirrors the CLI's
+  // ordering for `OS_MULTI_ORG_ENABLED`. `multiTenant` is an explicit opt-in,
+  // so a missing package is a hard, actionable error — not a silent
+  // single-org downgrade that would flip the fixture's RLS posture.
   if (opts.multiTenant) {
-    const { OrgScopingPlugin } = await import('@objectstack/plugin-org-scoping');
-    await kernel.use(new OrgScopingPlugin());
+    const organizationsPkg = '@objectstack/organizations';
+    let mod: any;
+    try {
+      mod = await import(/* webpackIgnore: true */ organizationsPkg);
+    } catch (e) {
+      throw new Error(
+        'verify: multiTenant=true requires the enterprise @objectstack/organizations package (migrated from plugin-org-scoping, ADR-0081 D2). ' +
+          `Install/link it in this workspace to run multi-org fixtures. (${(e as Error).message})`,
+      );
+    }
+    await kernel.use(new mod.OrganizationsPlugin());
   }
 
   // Automation service — opt-in. Registered before bootstrap so its start()

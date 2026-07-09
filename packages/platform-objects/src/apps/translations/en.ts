@@ -63,6 +63,7 @@ export const en: TranslationData = {
 
         // People & Organization
         nav_users: { label: 'Users' },
+        nav_organization: { label: 'Organization' },
         nav_business_units: { label: 'Business Units' },
         nav_teams: { label: 'Teams' },
         nav_organizations: { label: 'Organizations' },

@@ -41,7 +41,6 @@
       "@objectstack/plugin-email",
       "@objectstack/plugin-hono-server",
       "@objectstack/mcp",
-      "@objectstack/plugin-org-scoping",
       "@objectstack/plugin-reports",
       "@objectstack/plugin-security",
       "@objectstack/plugin-sharing",

@@ -318,6 +318,17 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
   appName?: string;
 
   /**
+   * ADR-0081 D1 — default active-org on session create. When enabled
+   * (default), a `session.create.before` hook stamps `activeOrganizationId`
+   * from the caller's `sys_member` row (owner-preferred) whenever the draft
+   * lacks one. A host-supplied `session.create.before` (see
+   * {@link databaseHooks}) chains FIRST and keeps precedence. Set `false`
+   * to restore the raw better-auth behaviour (sessions start org-less).
+   * @default true
+   */
+  autoActiveOrganization?: boolean;
+
+  /**
    * Pass-through to better-auth's `databaseHooks` option. better-auth fires
    * these around its own adapter writes (e.g. when `genericOAuth` creates
    * a JIT user during SSO login), which the kernel-level ObjectQL
@@ -2521,9 +2532,11 @@ export class AuthManager {
 
   /**
    * Compose the framework's identity-source stamp (`account.create.after`)
-   * with any host-supplied `databaseHooks`, preserving BOTH. The cloud passes
+   * and the default active-org stamp (`session.create.before`) with any
+   * host-supplied `databaseHooks`, preserving ALL. The cloud passes
    * `user.create.after` (personal-org provisioning) + `session.create.before`
-   * (active-org) — different model/op, so no collision — but if a host ever
+   * (active-org) — its session hook chains FIRST and this default only fills
+   * the field when still unset, so the host keeps precedence. If a host ever
    * adds its own `account.create.after` we chain it after the stamp rather
    * than silently dropping one.
    */
@@ -2538,6 +2551,64 @@ export class AuthManager {
           return hostAccountAfter(account, ctx);
         }
       : stamp;
+
+    // ADR-0081 D1 — default active-org on session create. Without it, a user
+    // with memberships logs in with `activeOrganizationId = null`: better-auth
+    // org endpoints can't resolve an active org (single-org invite dead-end)
+    // and `{current_org_id}` nav tokens fall back to list views. Resolve the
+    // caller's sys_member row (owner-preferred, else oldest) and stamp the
+    // draft. Host hook runs first and wins; errors are swallowed so login
+    // never fails on this bookkeeping. Opt out via `autoActiveOrganization:
+    // false`.
+    const hostSessionBefore = (host as any)?.session?.create?.before;
+    const defaultActiveOrg = async (session: any) => {
+      try {
+        if (!session || session.activeOrganizationId) return;
+        const userId = session.userId;
+        if (!userId) return;
+        const engine = this.config.dataEngine;
+        if (!engine) return;
+        // sys_member is org/user-scoped in host stacks — read with the system
+        // context so the pre-session lookup (no org on the caller yet) works.
+        const reader = withSystemReadContext(engine);
+        let row: any;
+        try {
+          row = await reader.findOne('sys_member', {
+            where: { user_id: userId, role: 'owner' },
+          });
+        } catch {
+          row = undefined;
+        }
+        if (!row?.organization_id) {
+          try {
+            row = await reader.findOne('sys_member', { where: { user_id: userId } });
+          } catch {
+            row = undefined;
+          }
+        }
+        const orgId = row?.organization_id;
+        if (!orgId) return;
+        return { data: { ...session, activeOrganizationId: orgId } };
+      } catch {
+        return; // never break session create
+      }
+    };
+    const sessionBefore =
+      this.config.autoActiveOrganization !== false
+        ? async (session: any, ctx: any) => {
+            let draft = session;
+            if (hostSessionBefore) {
+              const hostResult = await hostSessionBefore(session, ctx);
+              if (hostResult && typeof hostResult === 'object' && 'data' in hostResult) {
+                draft = (hostResult as any).data;
+              }
+              // The host hook fully handled it → keep its result shape.
+              if (draft?.activeOrganizationId) return { data: draft };
+            }
+            return (await defaultActiveOrg(draft)) ?? (draft === session ? undefined : { data: draft });
+          }
+        : hostSessionBefore;
+
     return {
       ...(host ?? {}),
       account: {
@@ -2547,6 +2618,17 @@ export class AuthManager {
           after,
         },
       },
+      ...(sessionBefore
+        ? {
+            session: {
+              ...((host as any)?.session ?? {}),
+              create: {
+                ...((host as any)?.session?.create ?? {}),
+                before: sessionBefore,
+              },
+            },
+          }
+        : {}),
     } as BetterAuthOptions['databaseHooks'];
   }
 

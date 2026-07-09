@@ -28,9 +28,15 @@ onlyBuiltDependencies:
 #     dropped requestTls in SOCKS5 ProxyAgent. Pulled 7.27.2 through
 #     @vscode/vsce > cheerio (declares undici ^7.19.0); force the patched
 #     7.28.0 line (stays in the 7.x major cheerio supports). CI audit gate.
+#   - @better-auth/scim: GHSA-j8v8-g9cx-5qf4 (high) — account/provider
+#     takeover. `plugin-auth` depends on ^1.6.23 (the `latest` dist-tag), but
+#     the advisory is patched only in >=1.7.0-beta.4 — there is NO stable
+#     patched release yet. Pin to the newest pre-release (1.7.0-rc.1) to clear
+#     the CI audit gate; revert to a stable `^1.7.x` line the moment one ships.
 overrides:
   esbuild: '>=0.28.1'
   'minimatch@<10.2.3': '10.2.3'
   'tar@>=2.0.0 <7.5.11': '^7.5.11'
   'form-data@<4.0.6': '>=4.0.6'
   'undici@>=7.23.0 <7.28.0': '^7.28.0'
+  '@better-auth/scim@<1.7.0-rc.1': '1.7.0-rc.1'

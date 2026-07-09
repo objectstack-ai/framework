@@ -1,44 +1,57 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * ensureDefaultOrganization — multi-tenant bootstrap helper.
+ * ensureDefaultOrganization — default-org bootstrap helper (ADR-0081 D1).
  *
- * In multi-tenant deployments the freshly-promoted platform admin
- * (`admin_full_access` granted with `organization_id IS NULL`) needs
- * at least one `sys_organization` to carry an `activeOrganizationId`
- * on their session. Without it, the default `tenant_isolation` RLS
- * policy filters everything to zero rows and the admin sees an empty
- * console even though they have full access.
+ * The platform admin (`admin_full_access` granted with `organization_id IS
+ * NULL`) needs at least one `sys_organization` so their sessions can carry an
+ * `activeOrganizationId`. Without it:
+ *   - multi-org: the default `tenant_isolation` RLS policy filters everything
+ *     to zero rows and the admin sees an empty console;
+ *   - single-org: better-auth `organization/invite-member` has no active org
+ *     to resolve, so there is NO way to add a user at all — the gap ADR-0081
+ *     closes.
+ *
+ * This helper HOME is plugin-auth (the open member-management basics). The
+ * enterprise organizations package reuses it for the multi-org bootstrap and
+ * injects its seed-ownership step via `claimSeedOwnership` (that machinery is
+ * part of the per-org seed pipeline, not of the basics).
  *
  * Strategy (idempotent, run on `kernel:ready` and after every
  * `sys_user_permission_set` insert):
  *
- *   1. Find the platform admin (oldest `sys_user_permission_set` row
- *      with `permission_set_id = admin_full_access` and
- *      `organization_id IS NULL`). If none, no-op.
- *   2. If that user already has any `sys_member` row, no-op (they
- *      either created their own org or were invited into one — we
- *      respect that and never auto-create a "Default Organization"
- *      behind their back).
- *   3. Re-use a pre-existing `slug='default'` org if present;
- *      otherwise create one. Stable slug keeps human-readable URLs
- *      predictable across cold-boots.
- *   4. Insert a `sys_member { role: 'owner' }` linking the admin to
- *      the default org.
- *
- * This is the ONLY framework-side auto-provisioning of an org.
- * Subsequent users must accept an invitation or explicitly create
- * their first organization — `claimOrphanOrgRows` / `cloneOrgSeedData`
- * handle the seed-data side for those flows.
+ *   1. Find the platform admin (oldest `sys_user_permission_set` row with
+ *      `permission_set_id = admin_full_access` and `organization_id IS
+ *      NULL`). If none, no-op.
+ *   2. If that user already has any `sys_member` row, no-op (they either
+ *      created their own org or were invited into one — we respect that and
+ *      never auto-create a "Default Organization" behind their back).
+ *   3. Re-use a pre-existing `slug='default'` org if present; otherwise
+ *      create one. Stable slug keeps human-readable URLs predictable across
+ *      cold-boots.
+ *   4. Insert a `sys_member { role: 'owner' }` linking the admin to the
+ *      default org.
+ *   5. (optional, injected) hand the org's seeded rows to the admin.
  */
 
-import { claimOrgSeedOwnership } from './claim-org-seed-ownership.js';
+interface BootstrapLogger {
+  info: (message: string, meta?: Record<string, any>) => void;
+  warn: (message: string, meta?: Record<string, any>) => void;
+}
 
-interface EnsureOptions {
-  logger?: {
-    info: (message: string, meta?: Record<string, any>) => void;
-    warn: (message: string, meta?: Record<string, any>) => void;
-  };
+export interface EnsureDefaultOrganizationOptions {
+  logger?: BootstrapLogger;
+  /**
+   * Optional seed-ownership handoff, run after the owner bind (best-effort).
+   * The enterprise organizations package injects `claimOrgSeedOwnership`
+   * here; the open single-org path has no per-org seed pipeline and omits it.
+   */
+  claimSeedOwnership?: (
+    ql: any,
+    organizationId: string,
+    userId: string,
+    options: { logger?: BootstrapLogger },
+  ) => Promise<Array<{ count: number }>>;
 }
 
 const SYSTEM_CTX = { isSystem: true };
@@ -86,7 +99,7 @@ export interface EnsureDefaultOrganizationResult {
  */
 export async function ensureDefaultOrganization(
   ql: any,
-  options: EnsureOptions = {},
+  options: EnsureDefaultOrganizationOptions = {},
 ): Promise<EnsureDefaultOrganizationResult> {
   const logger = options.logger;
   if (!ql || typeof ql.find !== 'function' || typeof ql.insert !== 'function') {
@@ -147,7 +160,7 @@ export async function ensureDefaultOrganization(
       metadata: null,
     });
     if (!orgRow) {
-      logger?.warn?.('[org-scoping] failed to create default organization for platform admin');
+      logger?.warn?.('[default-org] failed to create default organization for platform admin');
       return { defaultOrgCreated: false, memberCreated: false, reason: 'org_insert_failed' };
     }
     defaultOrgId = orgRow?.id ?? newOrgId;
@@ -162,7 +175,7 @@ export async function ensureDefaultOrganization(
     role: 'owner',
   });
   if (!memRow) {
-    logger?.warn?.('[org-scoping] failed to bind platform admin to default organization');
+    logger?.warn?.('[default-org] failed to bind platform admin to default organization');
     return {
       defaultOrgCreated,
       defaultOrgId,
@@ -171,20 +184,19 @@ export async function ensureDefaultOrganization(
     };
   }
   logger?.info?.(
-    `[org-scoping] bound platform admin to default organization (${defaultOrgId})`,
+    `[default-org] bound platform admin to default organization (${defaultOrgId})`,
     { userId: adminUserId, defaultOrgId },
   );
 
-  // 6. Hand the default org's seeded rows (owner_id NULL) to the admin so
-  //    owner-keyed UX works out of the box — the multi-tenant companion to the
-  //    single-tenant first-admin handoff. Best-effort; never undoes the bind.
+  // 6. Optional injected seed-ownership handoff (owner-keyed UX works out of
+  //    the box). Best-effort; never undoes the bind.
   let ownershipClaimed = 0;
-  if (defaultOrgId) {
+  if (defaultOrgId && options.claimSeedOwnership) {
     try {
-      const claims = await claimOrgSeedOwnership(ql, defaultOrgId, adminUserId, { logger });
+      const claims = await options.claimSeedOwnership(ql, defaultOrgId, adminUserId, { logger });
       ownershipClaimed = claims.reduce((s, c) => s + c.count, 0);
     } catch (e) {
-      logger?.warn?.('[org-scoping] default-org seed ownership handoff failed', {
+      logger?.warn?.('[default-org] seed ownership handoff failed', {
         error: (e as Error).message,
       });
     }
