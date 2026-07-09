@@ -25,7 +25,7 @@ describe('showcase stack', () => {
     // leaving 3 dataset-bound analytics reports.
     expect((stack.reports ?? []).length).toBe(3);
     expect((stack.flows ?? []).length).toBeGreaterThan(0);
-    expect((stack.roles ?? []).length).toBe(3);
+    expect((stack.positions ?? []).length).toBe(3);
     expect((stack.agents ?? []).length).toBe(0); // AI agents are an enterprise (service-ai) feature; the open showcase ships none
   });
 });

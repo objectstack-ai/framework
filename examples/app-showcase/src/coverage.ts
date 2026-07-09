@@ -119,13 +119,12 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   },
 
   // ── security ──
-  permission: { status: 'demonstrated', files: ['src/security/index.ts'] },
-  profile: {
+  permission: {
     status: 'demonstrated',
     files: ['src/security/index.ts'],
-    notes: 'MemberDefault — the isDefault permission set (ADR-0090 D5 suggestion flag).',
+    notes: 'Includes MemberDefault — the isDefault permission set (ADR-0090 D5 suggestion flag).',
   },
-  role: { status: 'demonstrated', files: ['src/security/index.ts'] },
+  position: { status: 'demonstrated', files: ['src/security/index.ts'] },
 
   // ── ai ──
   agent: {

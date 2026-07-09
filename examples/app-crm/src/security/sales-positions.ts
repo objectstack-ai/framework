@@ -16,7 +16,6 @@ export const SalesManagerPosition = definePosition({
   name: 'sales_manager',
   label: 'Sales Manager',
   description: 'Manages a team of sales reps.',
-  parent: 'sales_rep',
 });
 
 /** Referenced by the Discount Approval second step. */

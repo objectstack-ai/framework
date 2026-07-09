@@ -10,20 +10,20 @@
  */
 
 // ── Roles (hierarchy) ──────────────────────────────────────────────────────
-export const ContributorRole = {
+export const ContributorPosition = {
   name: 'contributor',
   label: 'Contributor',
   description: 'Works tasks on their own projects.',
 };
 
-export const ManagerRole = {
+export const ManagerPosition = {
   name: 'manager',
   label: 'Project Manager',
   description: 'Manages projects and the contributors on them.',
   parent: 'contributor',
 };
 
-export const ExecRole = {
+export const ExecPosition = {
   name: 'exec',
   label: 'Executive',
   description: 'Read-all visibility for reporting.',
@@ -171,6 +171,6 @@ export const ContributorTaskSharingRule = {
 };
 
 
-export const allRoles = [ContributorRole, ManagerRole, ExecRole];
+export const allPositions = [ContributorPosition, ManagerPosition, ExecPosition];
 export const allPermissionSets = [ContributorPermissionSet, MemberDefaultProfile];
 export const allSharingRules = [RedProjectSharingRule, HighValueRedProjectRule, ContributorTaskSharingRule];
