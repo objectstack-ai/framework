@@ -88,7 +88,7 @@ export { defineSkill } from './ai/skill.zod';
 export { defineDatasource } from './data/datasource.zod';
 export { defineConnector } from './integration/connector.zod';
 export { defineSharingRule } from './security/sharing.zod';
-export { definePosition } from './identity/position.zod';
+export { definePosition, EVERYONE_POSITION, GUEST_POSITION, AUDIENCE_ANCHOR_POSITIONS } from './identity/position.zod';
 export { definePermissionSet } from './security/permission.zod';
 export { defineEmailTemplateDefinition } from './system/email-template.zod';
 export { defineReport } from './ui/report.zod';

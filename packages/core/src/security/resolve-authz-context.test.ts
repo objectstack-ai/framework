@@ -169,3 +169,24 @@ describe('resolveLocalizationContext — batched fallback read (#2409)', () => {
     expect(loc.currency).toBeUndefined();
   });
 });
+
+describe('audience anchors in the resolver (ADR-0090 D5)', () => {
+  it('every authenticated principal implicitly holds `everyone` (additive, no cliff)', async () => {
+    const ql = makeQl({
+      sys_member: [{ user_id: 'u1', role: 'member', organization_id: 'o1' }],
+      sys_user_position: [{ user_id: 'u1', position: 'contributor', organization_id: null }],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1', { org: 'o1' }) });
+    // holding an explicit position must NOT cost the baseline anchor
+    expect(ctx.positions).toContain('contributor');
+    expect(ctx.positions).toContain('everyone');
+  });
+
+  it('anonymous resolution never gains `everyone`', async () => {
+    const ql = makeQl({});
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: async () => undefined });
+    expect(ctx.positions).not.toContain('everyone');
+    expect(ctx.userId).toBeUndefined();
+  });
+});
+
