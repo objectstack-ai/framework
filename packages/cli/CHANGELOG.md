@@ -1,5 +1,88 @@
 # @objectstack/cli
 
+## 12.7.0
+
+### Patch Changes
+
+- 466adf6: Author-time capability-reference lint (ADR-0066 ⑨) — `os validate` / `os lint`
+  now warn when a `requiredPermissions` names a capability that is registered
+  nowhere.
+
+  `requiredPermissions` (on objects, fields, apps, actions) is a free string, so a
+  typo like `mange_users` is schema-valid and fails closed at runtime (the caller
+  is denied) — safe, but silent. The new `validateCapabilityReferences` rule
+  (`@objectstack/lint`) resolves every reference against the author-time known set
+  and warns on the unresolved ones:
+
+  - built-in platform capabilities — now sourced from a single canonical list in
+    `@objectstack/spec` (`security/capabilities.ts`: `PLATFORM_CAPABILITIES` /
+    `PLATFORM_CAPABILITY_NAMES`), which `@objectstack/plugin-security`'s
+    `bootstrapSystemCapabilities` also seeds from (one source of truth, no drift),
+  - any capability a permission set in the stack grants via `systemPermissions`
+    (granting is what declares it — mirrors the runtime derived-defaults rule), and
+  - any `sys_capability` row shipped as seed data.
+
+  It is a **warning**, not an error: a single package can't see capabilities
+  declared by other installed packages, and the reference fails closed anyway.
+  `systemPermissions` itself is never flagged — it is the declaration side, and a
+  package legitimately introduces new capabilities there. The object case also
+  understands the per-operation `requiredPermissions` map form (ADR-0066 ⑤) and
+  points a finding at the exact operation slice.
+
+- Updated dependencies [466adf6]
+- Updated dependencies [799b285]
+- Updated dependencies [b1081b8]
+- Updated dependencies [466adf6]
+- Updated dependencies [a1766fe]
+- Updated dependencies [2bee609]
+- Updated dependencies [9fa84f9]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@12.7.0
+  - @objectstack/lint@12.7.0
+  - @objectstack/plugin-security@12.7.0
+  - @objectstack/plugin-hono-server@12.7.0
+  - @objectstack/objectql@12.7.0
+  - @objectstack/plugin-email@12.7.0
+  - @objectstack/platform-objects@12.7.0
+  - @objectstack/account@12.7.0
+  - @objectstack/setup@12.7.0
+  - @objectstack/client@12.7.0
+  - @objectstack/cloud-connection@12.7.0
+  - @objectstack/core@12.7.0
+  - @objectstack/formula@12.7.0
+  - @objectstack/mcp@12.7.0
+  - @objectstack/observability@12.7.0
+  - @objectstack/driver-memory@12.7.0
+  - @objectstack/driver-mongodb@12.7.0
+  - @objectstack/driver-sql@12.7.0
+  - @objectstack/driver-sqlite-wasm@12.7.0
+  - @objectstack/plugin-approvals@12.7.0
+  - @objectstack/plugin-audit@12.7.0
+  - @objectstack/plugin-auth@12.7.0
+  - @objectstack/plugin-org-scoping@12.7.0
+  - @objectstack/plugin-reports@12.7.0
+  - @objectstack/plugin-sharing@12.7.0
+  - @objectstack/plugin-webhooks@12.7.0
+  - @objectstack/rest@12.7.0
+  - @objectstack/runtime@12.7.0
+  - @objectstack/service-analytics@12.7.0
+  - @objectstack/service-automation@12.7.0
+  - @objectstack/service-cache@12.7.0
+  - @objectstack/service-datasource@12.7.0
+  - @objectstack/service-job@12.7.0
+  - @objectstack/service-messaging@12.7.0
+  - @objectstack/service-package@12.7.0
+  - @objectstack/service-queue@12.7.0
+  - @objectstack/service-realtime@12.7.0
+  - @objectstack/service-settings@12.7.0
+  - @objectstack/service-storage@12.7.0
+  - @objectstack/trigger-api@12.7.0
+  - @objectstack/trigger-record-change@12.7.0
+  - @objectstack/trigger-schedule@12.7.0
+  - @objectstack/types@12.7.0
+  - @objectstack/verify@12.7.0
+  - @objectstack/console@12.7.0
+
 ## 12.6.0
 
 ### Patch Changes

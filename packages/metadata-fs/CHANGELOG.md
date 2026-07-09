@@ -1,5 +1,11 @@
 # @objectstack/metadata-fs
 
+## 12.7.0
+
+### Patch Changes
+
+- @objectstack/metadata-core@12.7.0
+
 ## 12.6.0
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @objectstack/service-automation
 
+## 12.7.0
+
+### Patch Changes
+
+- Updated dependencies [466adf6]
+- Updated dependencies [466adf6]
+- Updated dependencies [2bee609]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@12.7.0
+  - @objectstack/core@12.7.0
+  - @objectstack/formula@12.7.0
+
 ## 12.6.0
 
 ### Minor Changes

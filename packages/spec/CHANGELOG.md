@@ -1,5 +1,110 @@
 # @objectstack/spec
 
+## 12.7.0
+
+### Minor Changes
+
+- 466adf6: Author-time capability-reference lint (ADR-0066 ⑨) — `os validate` / `os lint`
+  now warn when a `requiredPermissions` names a capability that is registered
+  nowhere.
+
+  `requiredPermissions` (on objects, fields, apps, actions) is a free string, so a
+  typo like `mange_users` is schema-valid and fails closed at runtime (the caller
+  is denied) — safe, but silent. The new `validateCapabilityReferences` rule
+  (`@objectstack/lint`) resolves every reference against the author-time known set
+  and warns on the unresolved ones:
+
+  - built-in platform capabilities — now sourced from a single canonical list in
+    `@objectstack/spec` (`security/capabilities.ts`: `PLATFORM_CAPABILITIES` /
+    `PLATFORM_CAPABILITY_NAMES`), which `@objectstack/plugin-security`'s
+    `bootstrapSystemCapabilities` also seeds from (one source of truth, no drift),
+  - any capability a permission set in the stack grants via `systemPermissions`
+    (granting is what declares it — mirrors the runtime derived-defaults rule), and
+  - any `sys_capability` row shipped as seed data.
+
+  It is a **warning**, not an error: a single package can't see capabilities
+  declared by other installed packages, and the reference fails closed anyway.
+  `systemPermissions` itself is never flagged — it is the declaration side, and a
+  package legitimately introduces new capabilities there. The object case also
+  understands the per-operation `requiredPermissions` map form (ADR-0066 ⑤) and
+  points a finding at the exact operation slice.
+
+- 466adf6: Per-operation object `requiredPermissions` (ADR-0066 ⑤) — an object can now be
+  read-open / write-gated instead of gating all of CRUD on one capability set.
+
+  `Object.requiredPermissions` accepts either the original `string[]` (capabilities
+  required for **all** operations) **or** a `{ read?, create?, update?, delete? }`
+  map that gates each operation class independently — mirroring how Salesforce and
+  Dataverse separate capability by operation. plugin-security enforces the caps for
+  the request's operation class as the same D3 AND-gate (checked before the CRUD
+  grant, fail-closed). The mapping folds `transfer`/`restore` into `update` and
+  `purge` into `delete`, derived from the existing CRUD permission bits so it stays
+  in lockstep with them.
+
+  Backward-compatible: the `string[]` form keeps its gate-every-operation semantics
+  (normalized into an `all` bucket that unions with the per-operation bucket), so
+  existing objects are unaffected. The per-operation map's keys are validated
+  `.strict()`, so a mistyped key (e.g. `reads`) is rejected at author time rather
+  than silently ignored.
+
+- 2bee609: BREAKING (pre-launch): remove the three declared-but-never-enforced compliance
+  subsystems per ADR-0056 D8 ("design + enforce, or remove"), and mark the AI
+  agent `visibility` property EXPERIMENTAL (#1901).
+
+  Removed — none of these were read by any runtime path, and compliance-grade
+  configuration must never merely look live:
+
+  - `ComplianceConfigSchema` / `GDPRConfigSchema` / `HIPAAConfigSchema` (and the
+    rest of `system/compliance.zod.ts`) — there is no data-subject-rights engine,
+    retention enforcer, or BAA gate. FROM `import { ComplianceConfigSchema } from
+'@objectstack/spec/system'` TO: delete the reference — a real compliance
+    subsystem will be designed top-down when scheduled.
+  - `MaskingConfigSchema` / `MaskingRuleSchema` (`system/masking.zod.ts`) — no
+    redaction layer applies them. FROM masking config TO: field-level security
+    (permission-set field rules, enforced by plugin-security's field masker); a
+    subtractive masking/deny layer arrives with ADR-0066 ⑦/⑧ if needed.
+  - `RLSConfigSchema` / `RLSAuditEventSchema` / `RLSAuditConfigSchema`
+    (`security/rls.zod.ts`) — the enforced RLS path never read the global config.
+    FROM global `RLSConfig` TO: per-policy `RowLevelSecurityPolicySchema` (the
+    live, enforced surface — unchanged).
+
+  Kept, still `[EXPERIMENTAL]`: `EncryptionConfigSchema` (at-rest field
+  encryption) — a real enterprise roadmap item with a stable shape; carrying it
+  marked costs less than remove-and-re-add (ADR-0087).
+
+  Marked `[EXPERIMENTAL — NOT ENFORCED]` (#1901): `AgentSchema.visibility` — the
+  chat-access evaluator deliberately excludes it and the agent list route does
+  not filter by it, so `private` does not hide an agent. The schema description
+  and the authoring form now say so; use `access` / `permissions` (both enforced
+  at the chat route since #1884) for real gating. The ADR-0056 D10 conformance
+  matrix tracks all dispositions (`agent-visibility` experimental;
+  `compliance-configs` / `data-masking` / `rls-config-global` removed).
+
+- fc7e7f7: Enforce the package namespace-prefix rule for Studio-authored packages.
+
+  The protocol requires every object name in a package to carry the package's
+  `manifest.namespace` prefix (`crm_account`); `defineStack()` enforces this at
+  compile time via `validateNamespacePrefix`. Studio/runtime-authored packages
+  never take that path, and they were created without a namespace at all — so the
+  rule was silently inert and objects published with bare, collision-prone names.
+
+  Two runtime changes close the gap:
+
+  - `protocol.installPackage` now derives a default namespace from the package id
+    (`com.example.leave` → `leave`) when the manifest declares none, and persists
+    it on the manifest (in-memory registry + `sys_packages`). An explicitly
+    declared namespace always wins (e.g. HotCRM's `crm`).
+  - `protocol.publishPackageDrafts` now rejects any object draft whose name lacks
+    the package namespace prefix, before promoting anything (atomic), with an
+    actionable message (`Rename it to 'leave_ticket'`). Packages that declare no
+    namespace are grandfathered — mirroring `defineStack`, the rule is not
+    invented at enforcement time.
+
+  The per-object prefix check and the id→namespace derivation are extracted into
+  `@objectstack/spec/kernel` (`validateObjectNamespacePrefix`,
+  `deriveNamespaceFromPackageId`) as the single source shared by `defineStack` and
+  the runtime publish path, so the two enforcement points cannot drift.
+
 ## 12.6.0
 
 ### Minor Changes
