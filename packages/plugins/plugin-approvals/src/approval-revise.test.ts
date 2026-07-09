@@ -19,8 +19,8 @@ import { ApprovalService } from './approval-service.js';
 import { registerApprovalNode } from './approval-node.js';
 import { bindApprovalLockHook, APPROVALS_HOOK_PACKAGE } from './lifecycle-hooks.js';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as any;
-const USER_CTX = { isSystem: false, roles: [], permissions: [] } as any;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as any;
+const USER_CTX = { isSystem: false, positions: [], permissions: [] } as any;
 
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {} };
 
@@ -288,7 +288,7 @@ describe('Send back for revision (ADR-0044)', () => {
     const editAttempt = () => hook!({
       object: 'fin_expense',
       input: { id: 'x1', data: { amount: 1200 } },
-      session: { isSystem: false, roles: [] },
+      session: { isSystem: false, positions: [] },
     });
 
     await expect(editAttempt()).rejects.toThrow(/RECORD_LOCKED/);          // pending → locked

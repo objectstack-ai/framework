@@ -56,8 +56,8 @@ export const SystemObjectName = {
   JWKS: 'sys_jwks',
   /** Authentication: user preferences (theme, locale, etc.) */
   USER_PREFERENCE: 'sys_user_preference',
-  /** Security: role definition for RBAC */
-  ROLE: 'sys_role',
+  /** Security: position definition (flat capability-distribution group, ADR-0090 D3) */
+  POSITION: 'sys_position',
   /** Security: permission set grouping */
   PERMISSION_SET: 'sys_permission_set',
   /** Audit: system audit log */

@@ -4,7 +4,7 @@ import { ExecutionContextSchema } from './execution-context.zod';
 describe('ExecutionContextSchema', () => {
   it('should accept empty context (all optional)', () => {
     const ctx = ExecutionContextSchema.parse({});
-    expect(ctx.roles).toEqual([]);
+    expect(ctx.positions).toEqual([]);
     expect(ctx.permissions).toEqual([]);
     expect(ctx.isSystem).toBe(false);
   });
@@ -13,7 +13,7 @@ describe('ExecutionContextSchema', () => {
     const ctx = ExecutionContextSchema.parse({
       userId: 'user_123',
       tenantId: 'org_456',
-      roles: ['admin', 'editor'],
+      positions: ['admin', 'editor'],
       permissions: ['read:account', 'write:account'],
       isSystem: false,
       accessToken: 'Bearer abc',
@@ -22,7 +22,7 @@ describe('ExecutionContextSchema', () => {
 
     expect(ctx.userId).toBe('user_123');
     expect(ctx.tenantId).toBe('org_456');
-    expect(ctx.roles).toEqual(['admin', 'editor']);
+    expect(ctx.positions).toEqual(['admin', 'editor']);
     expect(ctx.permissions).toEqual(['read:account', 'write:account']);
     expect(ctx.isSystem).toBe(false);
     expect(ctx.accessToken).toBe('Bearer abc');
@@ -31,7 +31,7 @@ describe('ExecutionContextSchema', () => {
 
   it('should default roles and permissions to empty arrays', () => {
     const ctx = ExecutionContextSchema.parse({ userId: 'u1' });
-    expect(ctx.roles).toEqual([]);
+    expect(ctx.positions).toEqual([]);
     expect(ctx.permissions).toEqual([]);
   });
 

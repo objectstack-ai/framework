@@ -25,7 +25,6 @@ import { PermissionSetSchema } from '@objectstack/spec/security';
 const demoSet = PermissionSetSchema.parse({
   name: 'showcase_cbp_demo',
   label: 'Showcase CBP Demo',
-  isProfile: true,
   objects: {
     showcase_account: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
     showcase_product: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },

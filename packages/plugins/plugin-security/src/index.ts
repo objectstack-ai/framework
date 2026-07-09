@@ -27,4 +27,4 @@ export {
 export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 export { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
-export { appDefaultProfileName } from './app-default-profile.js';
+export { appDefaultPermissionSetName } from './app-default-permission-set.js';

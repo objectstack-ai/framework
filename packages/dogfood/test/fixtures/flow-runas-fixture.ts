@@ -35,6 +35,9 @@ import { SecurityPlugin, securityDefaultPermissionSets } from '@objectstack/plug
 /** The one object under test: an owner-scoped note (isolated via `created_by`). */
 export const RunAsNote = ObjectSchema.create({
   name: 'runas_note',
+  // [ADR-0090 D1] grandfather stamp: this fixture's gate under test is
+  // permission-set RLS / flow scoping, not owner-sharing.
+  sharingModel: 'public_read_write',
   label: 'RunAs Note',
   pluralLabel: 'RunAs Notes',
   fields: {
@@ -136,7 +139,6 @@ const FIXTURE_MEMBER_SET = 'runas_fixture_member';
 export const runasMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RunAs Fixture Member — owner-scoped (all ops)',
-  isProfile: true,
   objects: {
     runas_note: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
   },

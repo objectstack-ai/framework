@@ -32,11 +32,11 @@ describe('default permission sets', () => {
   it('organization_admin is read-only on global RBAC tables to prevent privilege escalation', () => {
     const orgAdmin = defaultPermissionSets.find((p) => p.name === 'organization_admin')!;
     for (const obj of [
-      'sys_role',
+      'sys_position',
       'sys_permission_set',
-      'sys_role_permission_set',
+      'sys_position_permission_set',
       'sys_user_permission_set',
-      'sys_user_role',
+      'sys_user_position',
     ]) {
       const perms = (orgAdmin.objects as any)[obj];
       expect(perms, `${obj} explicit perms missing`).toBeDefined();
@@ -103,7 +103,7 @@ describe('default permission sets', () => {
 
 describe('RBAC object canonical names + row actions', () => {
   it('SysRole / SysPermissionSet use their canonical sys_ short names and are system objects', () => {
-    expect(SysRole.name).toBe('sys_role');
+    expect(SysRole.name).toBe('sys_position');
     expect(SysPermissionSet.name).toBe('sys_permission_set');
     expect(SysRole.isSystem).toBe(true);
     expect(SysPermissionSet.isSystem).toBe(true);

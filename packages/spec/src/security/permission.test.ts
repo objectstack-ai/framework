@@ -110,14 +110,14 @@ describe('PermissionSetSchema', () => {
     expect(() => PermissionSetSchema.parse(permSet)).not.toThrow();
   });
 
-  it('should default isProfile to false', () => {
+  it('should default isDefault to false', () => {
     const permSet = {
       name: 'export_reports',
       objects: {},
     };
 
     const result = PermissionSetSchema.parse(permSet);
-    expect(result.isProfile).toBe(false);
+    expect(result.isDefault).toBe(false);
   });
 
   it('should accept permission set with label', () => {
@@ -134,7 +134,6 @@ describe('PermissionSetSchema', () => {
     const profile: PermissionSet = {
       name: 'system_admin',
       label: 'System Administrator',
-      isProfile: true,
       objects: {},
     };
 
@@ -218,7 +217,6 @@ describe('PermissionSetSchema', () => {
       const sysAdmin: PermissionSet = {
         name: 'system_administrator',
         label: 'System Administrator',
-        isProfile: true,
         objects: {
           user: {
             allowCreate: true,
@@ -263,7 +261,6 @@ describe('PermissionSetSchema', () => {
       const salesUser: PermissionSet = {
         name: 'standard_sales_user',
         label: 'Standard Sales User',
-        isProfile: true,
         objects: {
           account: {
             allowCreate: true,
@@ -309,7 +306,6 @@ describe('PermissionSetSchema', () => {
       const marketingPermSet: PermissionSet = {
         name: 'marketing_user',
         label: 'Marketing User',
-        isProfile: false,
         objects: {
           campaign: {
             allowCreate: true,
@@ -338,7 +334,6 @@ describe('PermissionSetSchema', () => {
       const analyst: PermissionSet = {
         name: 'read_only_analyst',
         label: 'Read Only Analyst',
-        isProfile: true,
         objects: {
           account: {
             allowRead: true,
@@ -370,7 +365,6 @@ describe('PermissionSetSchema', () => {
       const serviceAgent: PermissionSet = {
         name: 'service_agent',
         label: 'Service Agent',
-        isProfile: true,
         objects: {
           case: {
             allowCreate: true,

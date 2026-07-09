@@ -3,7 +3,7 @@
 import type { SharingRuleService } from './sharing-rule-service.js';
 import type { SharingRuleRow } from '@objectstack/spec/contracts';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export const SHARING_RULE_HOOK_PACKAGE = 'plugin-sharing:rules';
 

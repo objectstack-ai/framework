@@ -3,7 +3,7 @@
 import type { JobEngineLike, JobLoggerLike } from './db-job-adapter.js';
 
 const RUN_TABLE = 'sys_job_run';
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
  * Default retention window for `sys_job_run` rows, in days. Every job execution

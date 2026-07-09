@@ -3,7 +3,7 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_role — System Role Object
+ * sys_position — System Role Object
  *
  * RBAC role definition for the ObjectStack platform.
  * Roles group permissions and are assigned to users or members.
@@ -11,7 +11,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * @namespace sys
  */
 export const SysRole = ObjectSchema.create({
-  name: 'sys_role',
+  name: 'sys_position',
   label: 'Role',
   pluralLabel: 'Roles',
   icon: 'shield',
@@ -51,7 +51,7 @@ export const SysRole = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       method: 'PATCH',
-      target: '/api/v1/data/sys_role/{id}',
+      target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { active: true },
       successMessage: 'Role activated',
       refreshAfter: true,
@@ -65,7 +65,7 @@ export const SysRole = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       method: 'PATCH',
-      target: '/api/v1/data/sys_role/{id}',
+      target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { active: false },
       confirmText: 'Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.',
       successMessage: 'Role deactivated',
@@ -80,14 +80,14 @@ export const SysRole = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       method: 'PATCH',
-      target: '/api/v1/data/sys_role/{id}',
+      target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { is_default: true },
       confirmText: 'Make this the default role for new users? Existing users are unaffected.',
       successMessage: 'Default role updated',
       refreshAfter: true,
     },
     {
-      // Clone — POST a new sys_role row pre-filled from the source. The
+      // Clone — POST a new sys_position row pre-filled from the source. The
       // dialog asks only for the new API name / label so the operator
       // can rename atomically; permissions JSON is copied wholesale via
       // defaultFromRow.
@@ -99,7 +99,7 @@ export const SysRole = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       method: 'POST',
-      target: '/api/v1/data/sys_role',
+      target: '/api/v1/data/sys_position',
       bodyExtra: { is_default: false, active: true },
       successMessage: 'Role cloned',
       refreshAfter: true,
@@ -117,7 +117,7 @@ export const SysRole = ObjectSchema.create({
       type: 'grid',
       name: 'active',
       label: 'Active',
-      data: { provider: 'object', object: 'sys_role' },
+      data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'is_default', 'updated_at'],
       filter: [{ field: 'active', operator: 'equals', value: true }],
       sort: [{ field: 'label', order: 'asc' }],
@@ -127,7 +127,7 @@ export const SysRole = ObjectSchema.create({
       type: 'grid',
       name: 'default_roles',
       label: 'Default',
-      data: { provider: 'object', object: 'sys_role' },
+      data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'description', 'active'],
       filter: [{ field: 'is_default', operator: 'equals', value: true }],
       sort: [{ field: 'label', order: 'asc' }],
@@ -137,7 +137,7 @@ export const SysRole = ObjectSchema.create({
       type: 'grid',
       name: 'custom',
       label: 'Custom',
-      data: { provider: 'object', object: 'sys_role' },
+      data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'active', 'updated_at'],
       filter: [{ field: 'is_default', operator: 'equals', value: false }],
       sort: [{ field: 'label', order: 'asc' }],
@@ -147,7 +147,7 @@ export const SysRole = ObjectSchema.create({
       type: 'grid',
       name: 'all_roles',
       label: 'All',
-      data: { provider: 'object', object: 'sys_role' },
+      data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'active', 'is_default', 'updated_at'],
       sort: [{ field: 'label', order: 'asc' }],
       pagination: { pageSize: 50 },

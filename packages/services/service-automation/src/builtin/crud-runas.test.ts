@@ -94,14 +94,14 @@ describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
     registerCrudNodes(engine, ctxWith(data));
     engine.registerFlow('usr', allOpsFlow('usr', 'user'));
 
-    const res = await engine.execute('usr', { userId: 'u1', roles: ['sales'], tenantId: 'org1' });
+    const res = await engine.execute('usr', { userId: 'u1', positions: ['sales'], tenantId: 'org1' });
     expect(res.success).toBe(true);
 
     for (const c of calls) {
       expect(c.ctx, `${c.op} got no context`).toBeTruthy();
       expect(c.ctx.isSystem, `${c.op} wrongly elevated`).toBe(false);
       expect(c.ctx.userId, `${c.op} lost the user identity`).toBe('u1');
-      expect(c.ctx.roles).toEqual(['sales']);
+      expect(c.ctx.positions).toEqual(['sales']);
       expect(c.ctx.tenantId).toBe('org1');
     }
   });
@@ -178,13 +178,13 @@ describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
 describe('resolveRunDataContext (#1888 unit)', () => {
   it("maps runAs:'system' to an elevated context", () => {
     expect(resolveRunDataContext({ runAs: 'system', userId: 'u1' })).toEqual({
-      isSystem: true, roles: [], permissions: [],
+      isSystem: true, positions: [], permissions: [],
     });
   });
 
   it("maps runAs:'user' to the triggering user's identity", () => {
-    expect(resolveRunDataContext({ runAs: 'user', userId: 'u1', roles: ['r'], tenantId: 't' })).toEqual({
-      isSystem: false, userId: 'u1', roles: ['r'], permissions: [], tenantId: 't',
+    expect(resolveRunDataContext({ runAs: 'user', userId: 'u1', positions: ['r'], tenantId: 't' })).toEqual({
+      isSystem: false, userId: 'u1', positions: ['r'], permissions: [], tenantId: 't',
     });
   });
 

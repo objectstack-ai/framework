@@ -44,7 +44,7 @@ export interface ReportEmail {
 /** Stamped only in tests / specialised callers to make `now` deterministic. */
 export interface ReportClock { now(): Date }
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 const DEFAULT_FORMAT: ReportFormat = 'csv';
 const DEFAULT_INTERVAL_MIN = 1440;
@@ -299,7 +299,7 @@ export class ReportService implements IReportService {
       context: {
         userId: context.userId,
         tenantId: context.tenantId,
-        roles: context.roles ?? [],
+        positions: context.positions ?? [],
         permissions: context.permissions ?? [],
         isSystem: context.isSystem ?? false,
       },

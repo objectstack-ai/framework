@@ -12,9 +12,9 @@ import * as actions from './src/actions/index.js';
 import { allHooks } from './src/hooks/index.js';
 import { allFlows } from './src/flows/index.js';
 import {
-  SalesRepRole,
-  SalesManagerRole,
-  FinanceApproverRole,
+  SalesRepPosition,
+  SalesManagerPosition,
+  FinanceApproverPosition,
   SalesUserPermissionSet,
   GuestPortalProfile,
   HighValueOpportunitySharingRule,
@@ -89,7 +89,7 @@ export default defineStack({
   flows: allFlows,
 
   // Security
-  roles: [SalesRepRole, SalesManagerRole, FinanceApproverRole],
+  positions: [SalesRepPosition, SalesManagerPosition, FinanceApproverPosition],
   permissions: [SalesUserPermissionSet, GuestPortalProfile],
   sharingRules: [
     HighValueOpportunitySharingRule,

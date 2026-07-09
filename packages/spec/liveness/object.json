@@ -248,6 +248,10 @@
     "searchableFields": {
       "status": "live",
       "note": "objectql `$search` executor (ADR-0061: expandSearchToFilter in engine.find) + objectui list/lookup/command-palette; canonical searchable-field source."
+    },
+    "externalSharingModel": {
+      "status": "authorable",
+      "note": "[ADR-0090 D11] P1 lands the SPEC SHAPE only (validated external<=internal at authoring). Runtime consumption (audience-aware evaluator branch) is scheduled with the principal-taxonomy semantics phase; tracked on the ADR-0090 tracking issue (#2696)."
     }
   }
 }

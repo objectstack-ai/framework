@@ -1312,10 +1312,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "显示名称",
         helpText: "面向管理员的显示标签"
       },
-      isProfile: {
-        label: "是否配置文件",
-        helpText: "勾选后作为完整配置文件（而非附加权限集）"
-      },
       systemPermissions: {
         label: "系统权限",
         helpText: "应用访问、API、管理操作"
@@ -1370,10 +1366,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       label: {
         label: "显示名称",
         helpText: "面向管理员显示的标签"
-      },
-      isProfile: {
-        label: "是否配置文件",
-        helpText: "配置文件 = 分配给用户的基础集合。权限集 = 附加授予。"
       },
       systemPermissions: {
         label: "系统权限",

@@ -23,7 +23,7 @@
  * membership is usable single-tenant too).
  */
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export const PRIMARY_BU_HOOK_PACKAGE = 'plugin-sharing:primary-bu';
 

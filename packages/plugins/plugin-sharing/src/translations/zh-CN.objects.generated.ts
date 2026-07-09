@@ -32,7 +32,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           user: "用户",
           group: "组",
           role: "角色",
-          role_and_subordinates: "角色及下级",
+          unit_and_subordinates: "角色及下级",
           guest: "访客"
         }
       },

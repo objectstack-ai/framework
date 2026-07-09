@@ -18,8 +18,7 @@
  * `function`/`service`/`router` — and `trigger` — were retired from the
  * registry entirely by ADR-0088.)
  *
- * Profile shares `PermissionSetSchema` (a profile is a permission set
- * with `isProfile: true`); `validation` exposes the discriminated union
+ * `validation` exposes the discriminated union
  * over all built-in rule variants. Custom plugin types can extend this
  * registry at runtime via `registerMetadataTypeSchema()`.
  */
@@ -52,7 +51,7 @@ import { DocSchema } from '../system/doc.zod';
 import { BookSchema } from '../system/book.zod';
 
 import { PermissionSetSchema } from '../security/permission.zod';
-import { RoleSchema } from '../identity/role.zod';
+import { PositionSchema } from '../identity/position.zod';
 
 import { AgentSchema } from '../ai/agent.zod';
 import { ToolSchema } from '../ai/tool.zod';
@@ -101,8 +100,7 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
 
   // Security Protocol
   permission: PermissionSetSchema,
-  profile: PermissionSetSchema, // profile = permission set with isProfile=true
-  role: RoleSchema,
+  position: PositionSchema, // flat capability-distribution group (ADR-0090 D3)
 
   // AI Protocol
   agent: AgentSchema,

@@ -30,7 +30,7 @@ import { FlowSchema } from './automation/flow.zod';
 import { JobSchema } from './system/job.zod';
 
 // Security Protocol
-import { RoleSchema } from './identity/role.zod';
+import { PositionSchema } from './identity/position.zod';
 import { PermissionSetSchema } from './security/permission.zod';
 import { SharingRuleSchema } from './security/sharing.zod';
 
@@ -232,8 +232,8 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
   /**
    * ObjectGuard: Security Layer
    */
-  roles: z.array(RoleSchema).optional().describe('User Roles hierarchy'),
-  permissions: z.array(PermissionSetSchema).optional().describe('Permission Sets and Profiles'),
+  positions: z.array(PositionSchema).optional().describe('Positions — flat capability-distribution groups (ADR-0090 D3)'),
+  permissions: z.array(PermissionSetSchema).optional().describe('Permission Sets'),
   sharingRules: z.array(SharingRuleSchema).optional().describe('Record Sharing Rules'),
 
   /**
@@ -1025,7 +1025,7 @@ const CONCAT_ARRAY_FIELDS = [
   'actions',
   'themes',
   'flows',
-  'roles',
+  'positions',
   'permissions',
   'sharingRules',
   'apis',

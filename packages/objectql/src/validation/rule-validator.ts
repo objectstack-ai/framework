@@ -277,7 +277,7 @@ function toExpression(cond: string | Expression): Expression {
  * UX, not a security boundary — a caller can still submit a hidden value — so on
  * write we re-evaluate the predicate for the *picked* value(s) and reject any
  * that resolve cleanly to FALSE. This enforces both role/context gating
- * (`'admin' in current_user.roles`) and cascade integrity (`record.country ==
+ * (`'admin' in current_user.positions`) and cascade integrity (`record.country ==
  * 'cn'`), server-side.
  *
  * Only WRITTEN fields are checked — an unchanged persisted value is left alone.

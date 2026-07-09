@@ -8,7 +8,7 @@
 import type { DatasourceInput, MappingInput, CubeInput, ObjectExtensionInput } from '@objectstack/spec/data';
 import type { ConnectorInput } from '@objectstack/spec/integration';
 import type { SharingRuleInput, PermissionSetInput } from '@objectstack/spec/security';
-import type { RoleInput } from '@objectstack/spec/identity';
+import type { PositionInput } from '@objectstack/spec/identity';
 import type { EmailTemplateDefinitionInput, TranslationBundleInput } from '@objectstack/spec/system';
 import type { WebhookInput } from '@objectstack/spec/automation';
 import type { ThemeInput } from '@objectstack/spec/ui';
@@ -50,11 +50,11 @@ export const DcSharingRule: SharingRuleInput = {
   object: 'dc_account',
   condition: 'record.stage == "customer"',
   accessLevel: 'read',
-  sharedWith: { type: 'role', value: 'dc_manager' },
+  sharedWith: { type: 'position', value: 'dc_manager' },
   active: true,
 };
 
-export const DcRole: RoleInput = {
+export const DcRole: PositionInput = {
   name: 'dc_manager',
   label: 'DC Manager',
   description: 'Manager role.',
@@ -63,7 +63,6 @@ export const DcRole: RoleInput = {
 export const DcPermissionSet: PermissionSetInput = {
   name: 'dc_user',
   label: 'DC User',
-  isProfile: false,
   objects: {
     dc_account: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
   },

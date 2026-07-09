@@ -720,7 +720,7 @@ export class HonoServerPlugin implements Plugin {
                         authenticated: true,
                         userId: execCtx.userId,
                         tenantId: execCtx.tenantId ?? null,
-                        roles: execCtx.roles ?? [],
+                        positions: execCtx.positions ?? [],
                         permissionSets: execCtx.permissions ?? [],
                         objects: {},
                         fields: {},
@@ -732,7 +732,7 @@ export class HonoServerPlugin implements Plugin {
                 // resolve to zero permission sets (matches the
                 // post-resolution fallback in security-plugin.ts).
                 const requested = [
-                    ...(execCtx.roles ?? []),
+                    ...(execCtx.positions ?? []),
                     ...(execCtx.permissions ?? []),
                 ];
                 let resolved: any[] = await evaluator
@@ -791,7 +791,7 @@ export class HonoServerPlugin implements Plugin {
                     authenticated: true,
                     userId: execCtx.userId,
                     tenantId: execCtx.tenantId ?? null,
-                    roles: execCtx.roles ?? [],
+                    positions: execCtx.positions ?? [],
                     permissionSets: resolved.map((p: any) => p?.name).filter(Boolean),
                     objects,
                     fields,

@@ -41,8 +41,8 @@ export const SharingLevel = z.enum([
 export const ShareRecipientType = z.enum([
   'user',
   'group',
-  'role',
-  'role_and_subordinates',
+  'position',
+  'unit_and_subordinates',
   'guest' // for public sharing
 ]);
 
@@ -99,7 +99,7 @@ export const OwnerSharingRuleSchema = lazySchema(() => BaseSharingRuleSchema.ext
  * `@objectstack/formula` compiler at seed / `defineRule` time, and ENFORCED:
  * records matching the criteria materialise `sys_record_share` grants for the
  * resolved recipients. Supported recipients: `user` / `team` / `business_unit` /
- * `role` / `role_and_subordinates` (→ `unit_and_subordinates`, ADR-0057 D5).
+ * `position` / `unit_and_subordinates` (ADR-0057 D5; renamed by ADR-0090 D3).
  *
  * Still `[experimental — not enforced]` (ADR-0049): `owner`-type rules
  * (`ownedBy` — depends on live role membership, with no static `criteria_json`

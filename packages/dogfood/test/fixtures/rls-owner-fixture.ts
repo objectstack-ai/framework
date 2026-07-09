@@ -35,6 +35,9 @@ import { SecurityPlugin, securityDefaultPermissionSets } from '@objectstack/plug
 /** The one object under test: a private note, owner-scoped via `created_by`. */
 export const RlsNote = ObjectSchema.create({
   name: 'rls_note',
+  // [ADR-0090 D1] grandfather stamp: this fixture's gate under test is
+  // permission-set RLS / flow scoping, not owner-sharing.
+  sharingModel: 'public_read_write',
   label: 'RLS Note',
   pluralLabel: 'RLS Notes',
   fields: {
@@ -78,7 +81,6 @@ const noteCrud = {
 export const ownerScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RLS Fixture Member — owner-scoped (all ops)',
-  isProfile: true,
   objects: noteCrud,
   rowLevelSecurity: [RLS.ownerPolicy('rls_note', 'created_by')],
 });
@@ -93,7 +95,6 @@ export const ownerScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
 export const readOnlyScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RLS Fixture Member — owner-scoped reads only (#1994 hole)',
-  isProfile: true,
   objects: noteCrud,
   rowLevelSecurity: [{ ...RLS.ownerPolicy('rls_note', 'created_by'), operation: 'select' }],
 });

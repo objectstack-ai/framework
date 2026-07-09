@@ -10,7 +10,7 @@ import { IntervalJobAdapter } from './interval-job-adapter.js';
 
 const JOB_TABLE = 'sys_job';
 const RUN_TABLE = 'sys_job_run';
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export interface JobEngineLike {
   find(object: string, options?: any): Promise<any[]>;

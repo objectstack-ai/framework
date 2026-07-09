@@ -189,7 +189,7 @@ export class RecordChangeTrigger implements FlowTrigger {
                   { ...(inputDoc ?? {}), ...after }
                 : inputDoc ?? (previous && typeof previous === 'object' ? previous : {});
 
-        const session = (ctx.session ?? {}) as { userId?: string; tenantId?: string; roles?: string[] };
+        const session = (ctx.session ?? {}) as { userId?: string; tenantId?: string; positions?: string[] };
 
         return {
             record,
@@ -200,7 +200,7 @@ export class RecordChangeTrigger implements FlowTrigger {
             // Forward the writer's roles/tenant so a `runAs:'user'` flow enforces
             // RLS exactly as the user who made the change, not a member fallback
             // (#1888). The engine elevates only for `runAs:'system'`.
-            ...(Array.isArray(session.roles) && session.roles.length ? { roles: session.roles } : {}),
+            ...(Array.isArray(session.positions) && session.positions.length ? { positions: session.positions } : {}),
             ...(session.tenantId ? { tenantId: session.tenantId } : {}),
             // Expose the record as params too, so flows with named `isInput`
             // variables matching record fields get them seeded.

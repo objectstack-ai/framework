@@ -12,6 +12,8 @@ import { cel, P } from '@objectstack/spec';
  */
 export const Product = ObjectSchema.create({
   name: 'showcase_product',
+  // [ADR-0090 D1] grandfather stamp: public demo catalog data.
+  sharingModel: 'public_read_write',
   label: 'Product',
   pluralLabel: 'Products',
   icon: 'package',
@@ -37,6 +39,8 @@ export const Product = ObjectSchema.create({
  */
 export const Invoice = ObjectSchema.create({
   name: 'showcase_invoice',
+  // [ADR-0090 D1] grandfather stamp: isolation is RLS-owned (owner == current_user.email); lines derive via controlled_by_parent.
+  sharingModel: 'public_read_write',
   label: 'Invoice',
   pluralLabel: 'Invoices',
   icon: 'receipt',

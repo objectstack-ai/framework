@@ -9,17 +9,17 @@
 import type { TranslationData } from '@objectstack/spec/system';
 
 export const enObjects: NonNullable<TranslationData['objects']> = {
-  sys_role: {
-    label: "Role",
-    pluralLabel: "Roles",
-    description: "Role definitions for RBAC access control",
+  sys_position: {
+    label: "Position",
+    pluralLabel: "Positions",
+    description: "Position definitions — flat capability-distribution groups (ADR-0090 D3)",
     fields: {
       label: {
         label: "Display Name"
       },
       name: {
         label: "API Name",
-        help: "Unique machine name for the role (e.g. admin, editor, viewer)"
+        help: "Unique machine name for the position (e.g. admin, editor, viewer)"
       },
       description: {
         label: "Description"
@@ -32,11 +32,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Active"
       },
       is_default: {
-        label: "Default Role",
+        label: "Default Position",
         help: "Automatically assigned to new users"
       },
       id: {
-        label: "Role ID"
+        label: "Position ID"
       },
       created_at: {
         label: "Created At"
@@ -49,34 +49,34 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       active: {
         label: "Active"
       },
-      default_roles: {
+      default_positions: {
         label: "Default"
       },
       custom: {
         label: "Custom"
       },
-      all_roles: {
+      all_positions: {
         label: "All"
       }
     },
     _actions: {
-      activate_role: {
-        label: "Activate Role",
-        successMessage: "Role activated"
+      activate_position: {
+        label: "Activate Position",
+        successMessage: "Position activated"
       },
-      deactivate_role: {
-        label: "Deactivate Role",
-        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
-        successMessage: "Role deactivated"
+      deactivate_position: {
+        label: "Deactivate Position",
+        confirmText: "Deactivate this position? Users with the position keep their assignment but the position stops granting permissions until re-activated.",
+        successMessage: "Position deactivated"
       },
-      set_default_role: {
+      set_default_position: {
         label: "Set as Default",
-        confirmText: "Make this the default role for new users? Existing users are unaffected.",
-        successMessage: "Default role updated"
+        confirmText: "Make this the default position for new users? Existing users are unaffected.",
+        successMessage: "Default position updated"
       },
-      clone_role: {
-        label: "Clone Role",
-        successMessage: "Role cloned"
+      clone_position: {
+        label: "Clone Position",
+        successMessage: "Position cloned"
       }
     }
   },
@@ -188,18 +188,18 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_role_permission_set: {
-    label: "Role Permission Set",
-    pluralLabel: "Role Permission Sets",
-    description: "Binds a permission set to a role.",
+  sys_position_permission_set: {
+    label: "Position Permission Set",
+    pluralLabel: "Position Permission Sets",
+    description: "Binds a permission set to a position.",
     fields: {
       id: {
         label: "Binding ID",
-        help: "UUID of the role-permission-set binding."
+        help: "UUID of the position-permission-set binding."
       },
-      role_id: {
-        label: "Role",
-        help: "Foreign key to sys_role."
+      position_id: {
+        label: "Position",
+        help: "Foreign key to sys_position."
       },
       permission_set_id: {
         label: "Permission Set",

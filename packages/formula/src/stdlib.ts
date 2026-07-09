@@ -269,29 +269,21 @@ export function registerNumericCoercions(env: Environment): Environment {
 
 /**
  * Normalize the loosely-typed EvalContext user into the canonical EvalUser
- * (ADR-0068). `roles` is preferred; a legacy singular `role` is folded in so
- * existing call sites keep working.
+ * (ADR-0068, renamed by ADR-0090 D3): `positions` is the one canonical
+ * membership array. One-step rename — no legacy `roles`/`role` aliases parse.
  */
 function toEvalUser(u: NonNullable<EvalContext['user']>): EvalUser {
-  const legacyRole = typeof u.role === 'string' && u.role ? [u.role] : [];
-  const roles = Array.isArray(u.roles) ? (u.roles as string[]) : [];
+  const positions = Array.isArray(u.positions) ? (u.positions as string[]) : [];
   const canonical = createEvalUser({
     id: u.id,
     name: typeof u.name === 'string' ? u.name : undefined,
     email: typeof u.email === 'string' ? u.email : undefined,
-    roles: [...roles, ...legacyRole],
+    positions,
     organizationId:
       typeof u.organizationId === 'string' || u.organizationId === null
         ? (u.organizationId as string | null)
         : undefined,
   });
-  // Back-compat: keep the DEPRECATED singular `role` readable so existing
-  // predicates (`os.user.role`, `current_user.role`) keep resolving during the
-  // ADR-0068 migration window. `roles[]` is the canonical surface; the footgun
-  // ADR-0068 removes is the server-side OVERWRITE of `role`, not read access.
-  if (typeof u.role === 'string' && u.role) {
-    (canonical as EvalUser & { role?: string }).role = u.role;
-  }
   return canonical;
 }
 

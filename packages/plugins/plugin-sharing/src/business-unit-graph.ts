@@ -4,7 +4,7 @@ import type { IBusinessUnitGraphService } from '@objectstack/spec/contracts';
 import type { SharingEngine } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 type DeptCache = {
   descendants?: Map<string, string[]>;

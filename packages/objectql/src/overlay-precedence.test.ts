@@ -312,8 +312,10 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             // exactly two platform agents; tenants extend via skills + tools.
             expect(allowedFromRegistry.has('agent')).toBe(false);
             expect(allowedFromRegistry.has('permission')).toBe(true);
-            expect(allowedFromRegistry.has('role')).toBe(true);
-            expect(allowedFromRegistry.has('profile')).toBe(true);
+            expect(allowedFromRegistry.has('position')).toBe(true);
+            // ADR-0090 D2/D3: role/profile kinds retired — reintroduction guards.
+            expect(allowedFromRegistry.has('role')).toBe(false);
+            expect(allowedFromRegistry.has('profile')).toBe(false);
             // Execution/wiring-layer types must NOT be in the set.
             // Accepting them as overlays would corrupt runtime semantics.
             // (trigger/router/function/service were retired outright by

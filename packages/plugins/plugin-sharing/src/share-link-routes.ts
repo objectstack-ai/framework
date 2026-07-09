@@ -26,7 +26,7 @@ import type { ShareLinkExecutionContext } from '@objectstack/spec/contracts';
 import type { ShareLinkService } from './share-link-service.js';
 import type { SharingEngine } from './sharing-service.js';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export interface ShareLinkRoutesOptions {
   basePath?: string;
@@ -246,7 +246,7 @@ export function registerShareLinkRoutes(
         sendError(res, 400, 'UNSUPPORTED', 'This share link does not expose messages');
         return;
       }
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
       const rows = await engine.find('ai_messages', {
         where: { conversation_id: resolved.link.record_id },
         sort: [{ field: 'created_at', order: 'asc' }],

@@ -27,7 +27,6 @@ function scopeProfile(scope: 'unit' | 'unit_and_below' | 'own_and_reports') {
   return PermissionSetSchema.parse({
     name: `scope_${scope}_profile`,
     label: `Scope ${scope}`,
-    isProfile: true,
     isDefault: true,
     objects: {
       showcase_private_note: {

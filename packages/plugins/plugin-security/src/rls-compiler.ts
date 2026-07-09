@@ -18,7 +18,7 @@ interface RLSUserContext {
    * `organization_id` — see better-auth's organization plugin).
    */
   organization_id?: string;
-  roles?: string[];
+  positions?: string[];
   /**
    * IDs of all users that share the active organization with the
    * current user (incl. self). Pre-resolved by the runtime so RLS can
@@ -155,7 +155,7 @@ export class RLSCompiler {
     const userCtx: RLSUserContext = {
       id: executionContext?.userId,
       organization_id: executionContext?.tenantId,
-      roles: executionContext?.roles,
+      positions: executionContext?.positions,
       org_user_ids: (executionContext as any)?.org_user_ids,
       // Unique identifier — safe for ownership predicates (see RLSUserContext).
       email: (executionContext as any)?.email,
@@ -277,7 +277,9 @@ export class RLSCompiler {
   getApplicablePolicies(
     objectName: string,
     operation: string,
-    allPolicies: RowLevelSecurityPolicy[]
+    allPolicies: RowLevelSecurityPolicy[],
+    /** [ADR-0090 P2] Caller's held positions — enforces the policy `positions` applicability domain (formerly an unenforced property; ADR-0049 enforce-or-remove). */
+    heldPositions?: string[],
   ): RowLevelSecurityPolicy[] {
     // Map engine operation to RLS operation type
     const rlsOp = this.mapOperationToRLS(operation);
@@ -285,6 +287,18 @@ export class RLSCompiler {
     return allPolicies.filter(policy => {
       // Check object match
       if (policy.object !== objectName && policy.object !== '*') return false;
+
+      // [ADR-0090 P2] Applicability domain: a policy that declares
+      // `positions` applies only to callers holding one of them. With the
+      // `everyone` anchor making the baseline set resolve for ALL
+      // authenticated principals, this domain is what keeps a
+      // members-only restriction (e.g. owner-scoped writes, #1985) from
+      // handcuffing admins who resolve the baseline additively.
+      const domain = (policy as { positions?: string[] }).positions;
+      if (Array.isArray(domain) && domain.length > 0) {
+        const held = heldPositions ?? [];
+        if (!domain.some((d) => held.includes(d))) return false;
+      }
 
       // Check operation match
       if (policy.operation === 'all') return true;

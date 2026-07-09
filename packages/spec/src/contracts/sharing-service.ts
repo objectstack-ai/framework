@@ -28,7 +28,7 @@ export type ShareRecipientType =
   | 'user'
   | 'group'
   | 'role'
-  | 'role_and_subordinates'
+  | 'unit_and_subordinates'
   | 'guest';
 
 /** Access level on a single record. */
@@ -69,7 +69,7 @@ export interface GrantShareInput {
 export interface SharingExecutionContext {
   userId?: string;
   tenantId?: string;
-  roles?: string[];
+  positions?: string[];
   permissions?: string[];
   isSystem?: boolean;
 }
@@ -133,7 +133,7 @@ export interface ISharingService {
  * - `role`       — tenant role on `sys_member.role`
  * - `queue`      — opaque queue identifier (resolution left to caller / app)
  */
-export type SharingRuleRecipientType = 'user' | 'team' | 'business_unit' | 'role' | 'role_and_subordinates' | 'queue';
+export type SharingRuleRecipientType = 'user' | 'team' | 'business_unit' | 'position' | 'unit_and_subordinates' | 'queue';
 
 /**
  * Stored shape of a sharing rule. Maps 1-to-1 to `sys_sharing_rule`

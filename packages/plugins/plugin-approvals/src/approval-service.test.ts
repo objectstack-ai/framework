@@ -110,8 +110,8 @@ function makeFakeEngine() {
   };
 }
 
-const CTX = { userId: 'u1', tenantId: 't1', roles: [], permissions: [] } as any;
-const SYS = { isSystem: true, roles: [], permissions: [] } as any;
+const CTX = { userId: 'u1', tenantId: 't1', positions: [], permissions: [] } as any;
+const SYS = { isSystem: true, positions: [], permissions: [] } as any;
 
 function nodeConfig(approvers: string[], extra: Record<string, any> = {}) {
   return {
@@ -219,7 +219,7 @@ describe('ApprovalService (node era)', () => {
   it('decideNode: blocks a non-approver in a non-system context', async () => {
     const req = await svc.openNodeRequest(openInput(['u9']), CTX);
     await expect(
-      svc.decideNode(req.id, { decision: 'approve', actorId: 'mallory' }, { isSystem: false, roles: [], permissions: [] } as any),
+      svc.decideNode(req.id, { decision: 'approve', actorId: 'mallory' }, { isSystem: false, positions: [], permissions: [] } as any),
     ).rejects.toThrow(/FORBIDDEN/);
   });
 
@@ -319,7 +319,7 @@ describe('ApprovalService (node era)', () => {
 
   it('recall: blocks a non-submitter in a non-system context', async () => {
     const req = await svc.openNodeRequest(openInput(['u9']), CTX);
-    await expect(svc.recall(req.id, { actorId: 'u9' }, { roles: [], permissions: [] } as any))
+    await expect(svc.recall(req.id, { actorId: 'u9' }, { positions: [], permissions: [] } as any))
       .rejects.toThrow(/FORBIDDEN/);
   });
 
@@ -483,7 +483,7 @@ describe('ApprovalService (node era)', () => {
 
   it('remind: only the submitter may nudge', async () => {
     const req = await svc.openNodeRequest(openInput(['u9']), CTX);
-    await expect(svc.remind(req.id, { actorId: 'u9' }, { roles: [], permissions: [] } as any))
+    await expect(svc.remind(req.id, { actorId: 'u9' }, { positions: [], permissions: [] } as any))
       .rejects.toThrow(/FORBIDDEN/);
   });
 
@@ -503,7 +503,7 @@ describe('ApprovalService (node era)', () => {
     const req = await svc.openNodeRequest(openInput(['u9']), CTX);
     await svc.comment(req.id, { actorId: 'u1', comment: 'Numbers attached.' }, CTX);
     await svc.comment(req.id, { actorId: 'u9', comment: 'Thanks, reviewing.' }, CTX);
-    await expect(svc.comment(req.id, { actorId: 'outsider', comment: 'hi' }, { roles: [], permissions: [] } as any))
+    await expect(svc.comment(req.id, { actorId: 'outsider', comment: 'hi' }, { positions: [], permissions: [] } as any))
       .rejects.toThrow(/FORBIDDEN/);
     const actions = await svc.listActions(req.id, SYS);
     expect(actions.filter(a => a.action === 'comment')).toHaveLength(2);
@@ -882,7 +882,7 @@ describe('record-lock hook (node era)', () => {
       engine.fire('beforeUpdate', {
         object: 'opportunity',
         input: { id: 'opp1', data: { amount: 200 } },
-        session: { isSystem: false, roles: [], userId: 'u1' },
+        session: { isSystem: false, positions: [], userId: 'u1' },
       }),
     ).rejects.toThrow(/RECORD_LOCKED/);
   });
@@ -892,7 +892,7 @@ describe('record-lock hook (node era)', () => {
       engine.fire('beforeUpdate', {
         object: 'opportunity',
         input: { id: 'opp1', data: { approval_status: 'approved' } },
-        session: { isSystem: false, roles: [] },
+        session: { isSystem: false, positions: [] },
       }),
     ).resolves.toBeUndefined();
   });
@@ -902,7 +902,7 @@ describe('record-lock hook (node era)', () => {
       engine.fire('beforeUpdate', {
         object: 'opportunity',
         input: { id: 'opp1', data: { amount: 200 } },
-        session: { isSystem: true, roles: [] },
+        session: { isSystem: true, positions: [] },
       }),
     ).resolves.toBeUndefined();
   });
@@ -922,7 +922,7 @@ describe('record-lock hook (node era)', () => {
       engine.fire('beforeUpdate', {
         object: 'opportunity',
         input: { id: 'other_record', data: { amount: 200 } },
-        session: { isSystem: false, roles: [] },
+        session: { isSystem: false, positions: [] },
       }),
     ).resolves.toBeUndefined();
   });

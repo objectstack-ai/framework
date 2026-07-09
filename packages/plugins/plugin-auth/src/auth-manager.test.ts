@@ -1475,7 +1475,7 @@ describe('AuthManager', () => {
     });
   });
 
-  describe('customSession – derived role and roles array', () => {
+  describe('customSession – derived identity and positions array', () => {
     // dataEngine stub: `adminLinks` controls whether the user resolves as a
     // platform admin (a sys_user_permission_set row pointing at the
     // admin_full_access permission set with no organization scope).
@@ -1515,17 +1515,17 @@ describe('AuthManager', () => {
       return plugin._fn as (input: { user: any; session: any }) => Promise<any>;
     };
 
-    it('returns roles=[] for a regular user with no stored role', async () => {
+    it('returns positions=[] for a regular user with no stored role', async () => {
       const callback = await getSessionCallback(makeDataEngine({ platformAdmin: false }));
       const result = await callback({
         user: { id: 'u-1', email: 'a@b.com' },
         session: {},
       });
       expect(result.user.role).toBeUndefined();
-      expect(result.user.roles).toEqual([]);
+      expect(result.user.positions).toEqual([]);
     });
 
-    it('splits a stored role string into roles for a non-admin user', async () => {
+    it('splits a stored role string into positions for a non-admin user', async () => {
       const callback = await getSessionCallback(makeDataEngine({ platformAdmin: false }));
       const result = await callback({
         user: { id: 'u-1', email: 'a@b.com', role: 'manager' },
@@ -1533,10 +1533,10 @@ describe('AuthManager', () => {
       });
       // No promotion: `role` keeps its stored value.
       expect(result.user.role).toBe('manager');
-      expect(result.user.roles).toEqual(['manager']);
+      expect(result.user.positions).toEqual(['manager']);
     });
 
-    it('appends platform_admin to roles[] without overwriting role when promoting a platform admin', async () => {
+    it('appends platform_admin to positions[] without overwriting role when promoting a platform admin', async () => {
       const callback = await getSessionCallback(makeDataEngine({ platformAdmin: true }));
       const result = await callback({
         user: { id: 'u-1', email: 'a@b.com', role: 'manager' },
@@ -1546,7 +1546,7 @@ describe('AuthManager', () => {
       // keeps its stored value; the canonical platform_admin identity is added
       // to roles[], and isPlatformAdmin is a derived alias.
       expect(result.user.role).toBe('manager');
-      expect(result.user.roles).toEqual(['manager', 'platform_admin']);
+      expect(result.user.positions).toEqual(['manager', 'platform_admin']);
       expect(result.user.isPlatformAdmin).toBe(true);
     });
 
@@ -1557,7 +1557,7 @@ describe('AuthManager', () => {
         session: {},
       });
       expect(result.user.role).toBe('admin,manager');
-      expect(result.user.roles).toEqual(['admin', 'manager', 'platform_admin']);
+      expect(result.user.positions).toEqual(['admin', 'manager', 'platform_admin']);
       expect(result.user.isPlatformAdmin).toBe(true);
     });
 
@@ -1566,7 +1566,7 @@ describe('AuthManager', () => {
       const user = { email: 'anon@b.com' };
       const result = await callback({ user, session: {} });
       expect(result.user).toBe(user);
-      expect(result.user.roles).toBeUndefined();
+      expect(result.user.positions).toBeUndefined();
     });
   });
 

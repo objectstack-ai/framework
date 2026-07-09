@@ -3,9 +3,9 @@
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
-import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
+import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
-import { bootstrapBuiltinRoles } from './bootstrap-builtin-roles.js';
+import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { matchesFilterCondition } from '@objectstack/formula';
@@ -127,6 +127,29 @@ export interface SecurityPluginOptions {
  * - objectql service (ObjectQL engine with middleware support)
  * - metadata service (MetadataFacade for reading permission sets and RLS policies)
  */
+/**
+ * [ADR-0090 D5/D9] Does a permission-set definition (authored shape OR
+ * sys_permission_set row shape with JSON-ish columns) carry bits too
+ * dangerous for an audience anchor? Returns a human-readable description of
+ * the first offending bit, or null when the set is anchor-safe.
+ */
+export function describeHighPrivilegeBits(def: any): string | null {
+  if (!def || typeof def !== 'object') return null;
+  const sys = def.systemPermissions ?? def.system_permissions;
+  if (Array.isArray(sys) && sys.length > 0) return 'system permissions';
+  let objects: any = def.objects;
+  if (typeof objects === 'string') { try { objects = JSON.parse(objects); } catch { objects = undefined; } }
+  if (objects && typeof objects === 'object') {
+    for (const [objName, rawPerm] of Object.entries(objects)) {
+      const p: any = rawPerm ?? {};
+      if (p.viewAllRecords || p.modifyAllRecords) return `View/Modify All Data on '${objName}'`;
+      if (p.allowDelete || p.allowPurge || p.allowTransfer) return `delete/purge/transfer on '${objName}'`;
+      if (objName === '*') return "a '*' wildcard grant";
+    }
+  }
+  return null;
+}
+
 export class SecurityPlugin implements Plugin {
   name = 'com.objectstack.security';
   type = 'standard';
@@ -231,7 +254,7 @@ export class SecurityPlugin implements Plugin {
           group: 'group_access_control',
           priority: 100,
           items: [
-            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
+            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_position', icon: 'shield-check' },
             { id: 'nav_capabilities', type: 'object', label: 'Capabilities', objectName: 'sys_capability', icon: 'badge-check' },
             { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
           ],
@@ -411,7 +434,15 @@ export class SecurityPlugin implements Plugin {
       // the publish materializer pass straight through.
       await this.assertPackageManagedWriteGate(opCtx);
 
-      const roles = opCtx.context?.roles ?? [];
+      // [ADR-0090 D5/D9] Audience-anchor binding guard — like the package
+      // gate above, an unconditional data-layer boundary: a permission set
+      // carrying high-privilege bits must never be bound to the `everyone`
+      // or `guest` positions, no matter who asks. (Boot/system writes carry
+      // `isSystem` and short-circuited above; the dev-mode default binding
+      // is validated at seed time by the same predicate.)
+      await this.assertAudienceAnchorBindingGate(opCtx);
+
+      const roles = opCtx.context?.positions ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
       // Skip security checks if no roles AND no explicit permission sets
@@ -826,10 +857,10 @@ export class SecurityPlugin implements Plugin {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
-        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_role so they
+        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_position so they
         // stop being decorative (role→permission-set resolution + recipients).
         try {
-          await bootstrapDeclaredRoles(ql, this.metadata, { logger: ctx.logger });
+          await bootstrapDeclaredPositions(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
         }
@@ -843,6 +874,45 @@ export class SecurityPlugin implements Plugin {
           await bootstrapDeclaredPermissions(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] declared-permission seeding failed', { error: (e as Error).message });
+        }
+
+        // [ADR-0090 D5] Bind the configured baseline set to the `everyone`
+        // audience anchor (idempotent). This makes the CLI/dev fallback
+        // (`fallbackPermissionSet` — the app's `isDefault` suggestion) visible
+        // as an ordinary position binding: same table, same audit path, same
+        // explain surface as any admin-authored default grant. The binding is
+        // validated with the SAME high-privilege predicate the write gate
+        // enforces — a dangerous baseline is refused loudly, never seeded.
+        try {
+          if (this.fallbackPermissionSet) {
+            const boot = this.bootstrapPermissionSets.find((p) => p.name === this.fallbackPermissionSet);
+            const offending = boot ? describeHighPrivilegeBits(boot) : null;
+            if (offending) {
+              ctx.logger.warn('[security] refusing to bind fallback set to everyone — high-privilege bits', {
+                set: this.fallbackPermissionSet, offending,
+              });
+            } else {
+              const everyoneRows = await ql.find('sys_position', { where: { name: 'everyone' }, limit: 1, context: { isSystem: true } });
+              const everyone: any = Array.isArray(everyoneRows) && everyoneRows[0] ? everyoneRows[0] : null;
+              const setRows = await ql.find('sys_permission_set', { where: { name: this.fallbackPermissionSet }, limit: 1, context: { isSystem: true } });
+              const set: any = Array.isArray(setRows) && setRows[0] ? setRows[0] : null;
+              if (everyone?.id && set?.id) {
+                const existing = await ql.find('sys_position_permission_set', {
+                  where: { position_id: everyone.id, permission_set_id: set.id }, limit: 1, context: { isSystem: true },
+                });
+                if (!(Array.isArray(existing) && existing[0])) {
+                  await ql.insert('sys_position_permission_set', {
+                    id: `pps_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+                    position_id: everyone.id,
+                    permission_set_id: set.id,
+                  }, { context: { isSystem: true } });
+                  ctx.logger.info('[security] baseline set bound to everyone anchor (ADR-0090 D5)', { set: this.fallbackPermissionSet });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          ctx.logger.warn('[security] everyone-anchor baseline binding failed (non-fatal)', { error: (e as Error).message });
         }
         // [ADR-0086 P2 — 块1] Register the publish-time materializer so a
         // permission set authored/edited through the PACKAGE door (saved as a
@@ -1032,7 +1102,7 @@ export class SecurityPlugin implements Plugin {
   ): Promise<Record<string, unknown> | null | undefined> {
     // System operations bypass scoping (mirrors the middleware's isSystem skip).
     if (context?.isSystem) return undefined;
-    const roles = context?.roles ?? [];
+    const roles = context?.positions ?? [];
     const explicit = context?.permissions ?? [];
     // Unauthenticated + role-less + permission-less → no scope (the auth layer,
     // not RLS, gates anonymous access; the analytics REST endpoint already 401s
@@ -1067,13 +1137,17 @@ export class SecurityPlugin implements Plugin {
   private async resolvePermissionSetsForContext(
     context: any,
   ): Promise<PermissionSet[]> {
-    const roles = context?.roles ?? [];
+    const positions = context?.positions ?? [];
     const explicitPermissionSets = context?.permissions ?? [];
-    const requested = [...roles, ...explicitPermissionSets];
-    // Implicit baseline: an authenticated request that named no roles/perms
-    // still gets the configured baseline (default `member_default`) so tenant +
-    // owner RLS apply before an admin assigns a profile.
-    if (requested.length === 0 && context?.userId && this.fallbackPermissionSet) {
+    const requested = [...positions, ...explicitPermissionSets];
+    // [ADR-0090 D5] Baseline is ADDITIVE, always: the configured baseline set
+    // (default `member_default`) applies to every authenticated request IN
+    // ADDITION to whatever else resolved. The former "only when the user has
+    // nothing else" conditional was the fallback CLIFF — receiving your first
+    // explicit grant silently cost you the entire baseline. The `everyone`
+    // audience anchor carries the same semantics for admin-authored defaults;
+    // this keeps the CLI-configured baseline coherent with it.
+    if (context?.userId && this.fallbackPermissionSet && !requested.includes(this.fallbackPermissionSet)) {
       requested.push(this.fallbackPermissionSet);
     }
     let permissionSets = await this.permissionEvaluator.resolvePermissionSets(
@@ -1084,7 +1158,7 @@ export class SecurityPlugin implements Plugin {
       { logger: this.logger },
     );
     // Post-resolution fallback — closes the fail-open hole where a populated
-    // `roles` array maps to no permission set yet (no sys_role binding), which
+    // `roles` array maps to no permission set yet (no sys_position binding), which
     // would otherwise skip RLS entirely and expose every tenant's data.
     if (
       permissionSets.length === 0 &&
@@ -1122,6 +1196,57 @@ export class SecurityPlugin implements Plugin {
    * here (the middleware short-circuits on `isSystem`), so the seeder and the
    * publish materializer are unaffected.
    */
+  /**
+   * [ADR-0090 D5/D9] Reject binding a HIGH-PRIVILEGE permission set to an
+   * audience anchor (`everyone` / `guest`). The anchors are implicit for
+   * whole principal classes, so a dangerous binding here is an instant
+   * tenant-wide (or anonymous-wide) grant — the one shape the model must
+   * make unrepresentable rather than merely discouraged.
+   */
+  private async assertAudienceAnchorBindingGate(opCtx: any): Promise<void> {
+    if (opCtx?.object !== 'sys_position_permission_set') return;
+    if (!['insert', 'update'].includes(opCtx.operation)) return;
+    const rows = Array.isArray(opCtx.data)
+      ? opCtx.data
+      : (opCtx.data && typeof opCtx.data === 'object' ? [opCtx.data] : []);
+    if (rows.length === 0) return;
+
+    const ql = this.ql;
+    for (const row of rows) {
+      const positionId = (row as any)?.position_id;
+      if (!positionId || !ql?.find) continue;
+      let positionName = '';
+      try {
+        const posRows = await ql.find('sys_position', { where: { id: positionId }, limit: 1, context: { isSystem: true } });
+        positionName = String((Array.isArray(posRows) && posRows[0] ? (posRows[0] as any).name : '') ?? '');
+      } catch { positionName = ''; }
+      if (positionName !== 'everyone' && positionName !== 'guest') continue;
+
+      // Resolve the target set definition (bootstrap sets by name, else the
+      // sys_permission_set row itself carries the authored definition).
+      const setId = (row as any)?.permission_set_id;
+      let setName = '';
+      let setDef: any = null;
+      try {
+        const setRows = await ql.find('sys_permission_set', { where: { id: setId }, limit: 1, context: { isSystem: true } });
+        const sr: any = Array.isArray(setRows) && setRows[0] ? setRows[0] : null;
+        if (sr) {
+          setName = String(sr.name ?? '');
+          setDef = sr;
+        }
+      } catch { /* fall through to bootstrap lookup below */ }
+      const boot = this.bootstrapPermissionSets.find((p) => p.name === setName);
+      const offending = describeHighPrivilegeBits(boot ?? setDef);
+      if (offending) {
+        throw new PermissionDeniedError(
+          `[Security] Access denied: permission set '${setName || setId}' cannot be bound to the '${positionName}' audience anchor — it carries ${offending} (ADR-0090 D5/D9). ` +
+            `Audience anchors accept low-privilege sets only; grant powerful sets through ordinary positions instead.`,
+          { operation: opCtx.operation, object: opCtx.object, position: positionName, permissionSet: setName || setId },
+        );
+      }
+    }
+  }
+
   private async assertPackageManagedWriteGate(opCtx: any): Promise<void> {
     if (opCtx?.object !== 'sys_permission_set') return;
     const op = opCtx.operation;
@@ -1234,7 +1359,7 @@ export class SecurityPlugin implements Plugin {
         : this.permissionEvaluator.hasSuperuserReadBypass(object, permissionSets, { isPrivate: meta.isPrivate });
       if (bypass) return null;
     }
-    const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation);
+    const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation, (context?.positions ?? []) as string[]);
     if (allRlsPolicies.length === 0) return null;
     // Field-existence safety: wildcard policies (`object: '*'`) target fields
     // like `organization_id` that may not exist on every object. Treat such a
@@ -1448,7 +1573,8 @@ export class SecurityPlugin implements Plugin {
   private collectRLSPolicies(
     permissionSets: PermissionSet[],
     objectName: string,
-    operation: string
+    operation: string,
+    heldPositions?: string[],
   ): RowLevelSecurityPolicy[] {
     const allPolicies: RowLevelSecurityPolicy[] = [];
 
@@ -1477,7 +1603,7 @@ export class SecurityPlugin implements Plugin {
       }
     }
 
-    return this.rlsCompiler.getApplicablePolicies(objectName, operation, allPolicies);
+    return this.rlsCompiler.getApplicablePolicies(objectName, operation, allPolicies, heldPositions);
   }
 
   /**

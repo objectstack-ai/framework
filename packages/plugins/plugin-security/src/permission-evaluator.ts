@@ -266,11 +266,11 @@ export class PermissionEvaluator {
    * Resolve permission sets for a list of identifier names from metadata.
    *
    * Identifiers are matched to `PermissionSet.name`. The names may be
-   * either role names (when `sys_role.name` is reused as a permission set
+   * either role names (when `sys_position.name` is reused as a permission set
    * name — common for default admin/member/viewer roles) or explicit
    * permission set names supplied through `ExecutionContext.permissions[]`
    * (resolved by `resolveExecutionContext` from `sys_user_permission_set`
-   * and `sys_role_permission_set`).
+   * and `sys_position_permission_set`).
    *
    * Async because the underlying metadata service exposes `list()` as a
    * Promise — synchronous iteration would silently yield zero results

@@ -373,8 +373,8 @@
   ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
   (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
   → `sys_business_unit` (no aliases — see BREAKING above), introduces the platform-owned
-  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
-  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  `sys_user_position` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_position`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
   delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
   owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
   fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
@@ -455,13 +455,13 @@
 
 ### Minor Changes
 
-- 2365d07: feat(sharing): configurable role-hierarchy widening — `role_and_subordinates` recipient (ADR-0056 D6)
+- 2365d07: feat(sharing): configurable role-hierarchy widening — `unit_and_subordinates` recipient (ADR-0056 D6)
 
   Role-hierarchy access widening ("a manager sees records shared with their team") is now
   **implemented and configurable per sharing rule**, not a hardcoded no-op. The
-  `role_and_subordinates` recipient (declarable on `sys_sharing_rule.recipient_type`) expands,
+  `unit_and_subordinates` recipient (declarable on `sys_sharing_rule.recipient_type`) expands,
   at evaluation time, to the named role **plus every subordinate role** by walking the
-  `sys_role.parent` hierarchy via a new `RoleGraphService` (mirroring the department/team
+  `sys_position.parent` hierarchy via a new `PositionGraphService` (mirroring the department/team
   graphs; cycle-safe). Previously `Role.parent` was declared but never consumed — a silent
   no-op flagged by the ADR-0056 audit. This is the Salesforce "grant access using hierarchies"
   model expressed declaratively: each rule chooses whether to roll up the hierarchy. Unit-proven
@@ -805,8 +805,8 @@
   into the two capability plugins that already register and operate them, split by
   concern (the two are orthogonal — sharing objects never reference RBAC objects):
 
-  - **`@objectstack/plugin-security`** (RBAC) gains `sys_role`,
-    `sys_permission_set`, `sys_user_permission_set`, `sys_role_permission_set`,
+  - **`@objectstack/plugin-security`** (RBAC) gains `sys_position`,
+    `sys_permission_set`, `sys_user_permission_set`, `sys_position_permission_set`,
     and the `defaultPermissionSets` seed (which its `bootstrap-platform-admin`
     already consumes). The RBAC + default-permission-set tests move with them.
   - **`@objectstack/plugin-sharing`** gains `sys_record_share`,
@@ -844,8 +844,8 @@
     `i18n.loadTranslations` (the i18n service is optional — load is best-effort).
     - `plugin-webhooks` ← `sys_webhook`, `sys_webhook_delivery`
     - `plugin-approvals` ← `sys_approval_request`, `sys_approval_action`
-    - `plugin-security` ← `sys_role`, `sys_permission_set`,
-      `sys_user_permission_set`, `sys_role_permission_set`
+    - `plugin-security` ← `sys_position`, `sys_permission_set`,
+      `sys_user_permission_set`, `sys_position_permission_set`
     - `plugin-sharing` ← `sys_record_share`, `sys_sharing_rule`, `sys_share_link`
   - `@objectstack/platform-objects` translation bundles are regenerated to drop
     those objects' keys (its extract config already excluded them); all other

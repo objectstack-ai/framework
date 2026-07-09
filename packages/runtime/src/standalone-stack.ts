@@ -100,15 +100,15 @@ export interface StandaloneStackResult {
      * App-declared RBAC metadata, surfaced so the CLI (`serve`/`dev`/`start`)
      * can wire it without a host `objectstack.config.ts`. In particular the
      * `serve` command reads `permissions[]` to honour an app-declared default
-     * profile (ADR-0056 D7 — `appDefaultProfileName` → SecurityPlugin
-     * `fallbackPermissionSet`) and reads both `roles[]` and `permissions[]` to
+     * profile (ADR-0056 D7 — `appDefaultPermissionSetName` → SecurityPlugin
+     * `fallbackPermissionSet`) and reads both `positions[]` and `permissions[]` to
      * register application org roles with Better-Auth. Without these the
      * artifact-serve path silently fell back to the built-in `member_default`
      * (owner-only), so an `isDefault` profile declared purely in app metadata
      * was ignored under `objectstack dev`.
      */
     permissions?: any[];
-    roles?: any[];
+    positions?: any[];
 }
 
 type ResolvedDriverKind = 'memory' | 'postgres' | 'mongodb' | 'sqlite' | 'sqlite-wasm';
@@ -290,12 +290,12 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         Array.isArray(artifactBundle?.objects) ? artifactBundle.objects : undefined;
     const manifest: any | undefined = artifactBundle?.manifest;
     // ADR-0056 D7 — surface app-declared RBAC so the CLI's artifact-serve
-    // path honours an `isDefault` profile (appDefaultProfileName) and
-    // registers application org roles, exactly like the config-load path.
+    // path honours an `isDefault` profile (appDefaultPermissionSetName) and
+    // registers application org names, exactly like the config-load path.
     const permissions: any[] | undefined =
         Array.isArray(artifactBundle?.permissions) ? artifactBundle.permissions : undefined;
-    const roles: any[] | undefined =
-        Array.isArray(artifactBundle?.roles) ? artifactBundle.roles : undefined;
+    const positions: any[] | undefined =
+        Array.isArray(artifactBundle?.positions) ? artifactBundle.positions : undefined;
 
     return {
         plugins,
@@ -307,6 +307,6 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         ...(objects ? { objects } : {}),
         ...(manifest ? { manifest } : {}),
         ...(permissions ? { permissions } : {}),
-        ...(roles ? { roles } : {}),
+        ...(positions ? { positions } : {}),
     };
 }

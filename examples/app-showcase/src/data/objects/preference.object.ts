@@ -9,6 +9,10 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  */
 export const Preference = ObjectSchema.create({
   name: 'showcase_preference',
+  // [ADR-0090 D1] Explicit grandfather stamp: record isolation for this demo
+  // object is RLS-owned / intentionally public; without this the new secure
+  // default (unset OWD => private) would owner-filter it.
+  sharingModel: 'public_read_write',
   label: 'Setting',
   pluralLabel: 'Settings',
   icon: 'settings',

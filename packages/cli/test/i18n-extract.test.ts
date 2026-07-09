@@ -10,7 +10,7 @@ import {
 const config: any = {
   objects: [
     {
-      name: 'sys_role',
+      name: 'sys_position',
       label: 'Role',
       pluralLabel: 'Roles',
       description: 'Role definitions for RBAC',
@@ -39,7 +39,7 @@ const config: any = {
     {
       name: 'merge',
       label: 'Merge',
-      objectName: 'sys_role',
+      objectName: 'sys_position',
       confirmText: 'Merge?',
       successMessage: 'Merged.',
     },
@@ -49,7 +49,7 @@ const config: any = {
     {
       en: {
         objects: {
-          sys_role: {
+          sys_position: {
             label: 'Role',
             // pluralLabel missing intentionally
             fields: { active: { label: 'Active' } },
@@ -65,19 +65,19 @@ describe('collectExpectedEntries', () => {
     const entries = collectExpectedEntries(config);
     const paths = entries.map((e) => e.path.join('.'));
 
-    expect(paths).toContain('objects.sys_role.label');
-    expect(paths).toContain('objects.sys_role.pluralLabel');
-    expect(paths).toContain('objects.sys_role.description');
-    expect(paths).toContain('objects.sys_role.fields.label.label');
-    expect(paths).toContain('objects.sys_role.fields.status.options.on');
-    expect(paths).toContain('objects.sys_role.fields.status.options.off');
-    expect(paths).toContain('objects.sys_role.fields.kind.options.internal');
-    expect(paths).toContain('objects.sys_role.fields.kind.options.external');
-    expect(paths).toContain('objects.sys_role._views.active.label');
-    expect(paths).toContain('objects.sys_role._views.all.label');
-    expect(paths).toContain('objects.sys_role._actions.merge.label');
-    expect(paths).toContain('objects.sys_role._actions.merge.confirmText');
-    expect(paths).toContain('objects.sys_role._actions.merge.successMessage');
+    expect(paths).toContain('objects.sys_position.label');
+    expect(paths).toContain('objects.sys_position.pluralLabel');
+    expect(paths).toContain('objects.sys_position.description');
+    expect(paths).toContain('objects.sys_position.fields.label.label');
+    expect(paths).toContain('objects.sys_position.fields.status.options.on');
+    expect(paths).toContain('objects.sys_position.fields.status.options.off');
+    expect(paths).toContain('objects.sys_position.fields.kind.options.internal');
+    expect(paths).toContain('objects.sys_position.fields.kind.options.external');
+    expect(paths).toContain('objects.sys_position._views.active.label');
+    expect(paths).toContain('objects.sys_position._views.all.label');
+    expect(paths).toContain('objects.sys_position._actions.merge.label');
+    expect(paths).toContain('objects.sys_position._actions.merge.confirmText');
+    expect(paths).toContain('objects.sys_position._actions.merge.successMessage');
     expect(paths).toContain('globalActions.export_csv.label');
     expect(paths).toContain('globalActions.export_csv.successMessage');
     expect(paths).toContain('metadataForms.flow.fields.name.label');
@@ -86,10 +86,10 @@ describe('collectExpectedEntries', () => {
   it('carries source values from the schema', () => {
     const entries = collectExpectedEntries(config);
     const byPath = Object.fromEntries(entries.map((e) => [e.path.join('.'), e.sourceValue]));
-    expect(byPath['objects.sys_role.label']).toBe('Role');
-    expect(byPath['objects.sys_role.fields.status.options.on']).toBe('On');
-    expect(byPath['objects.sys_role.fields.kind.options.internal']).toBe('Internal');
-    expect(byPath['objects.sys_role._actions.merge.label']).toBe('Merge');
+    expect(byPath['objects.sys_position.label']).toBe('Role');
+    expect(byPath['objects.sys_position.fields.status.options.on']).toBe('On');
+    expect(byPath['objects.sys_position.fields.kind.options.internal']).toBe('Internal');
+    expect(byPath['objects.sys_position._actions.merge.label']).toBe('Merge');
     expect(byPath['metadataForms.flow.fields.name.label']).toBe('Name');
   });
 });
@@ -104,9 +104,9 @@ describe('extractTranslations', () => {
     });
     expect(counts.en).toBeGreaterThan(0);
     expect(counts['zh-CN']).toBe(counts.en);
-    expect(bundles.en.objects?.sys_role?.label).toBe('Role');
-    expect(bundles['zh-CN'].objects?.sys_role?.label).toBe('');
-    expect(bundles['zh-CN'].objects?.sys_role?.fields?.status?.options?.on).toBe('');
+    expect(bundles.en.objects?.sys_position?.label).toBe('Role');
+    expect(bundles['zh-CN'].objects?.sys_position?.label).toBe('');
+    expect(bundles['zh-CN'].objects?.sys_position?.fields?.status?.options?.on).toBe('');
   });
 
   it('supports --fill=default (copy from source) and --fill=todo (prefix)', () => {
@@ -115,14 +115,14 @@ describe('extractTranslations', () => {
       locales: ['zh-CN'],
       fill: 'default',
     });
-    expect(bundles['zh-CN'].objects?.sys_role?.label).toBe('Role');
+    expect(bundles['zh-CN'].objects?.sys_position?.label).toBe('Role');
 
     const { bundles: todoBundles } = extractTranslations(config, {
       defaultLocale: 'en',
       locales: ['zh-CN'],
       fill: 'todo',
     });
-    expect(todoBundles['zh-CN'].objects?.sys_role?.label).toBe('[TODO] Role');
+    expect(todoBundles['zh-CN'].objects?.sys_position?.label).toBe('[TODO] Role');
   });
 
   it('mergeExisting carries through values already translated in the input bundle', () => {
@@ -133,17 +133,17 @@ describe('extractTranslations', () => {
     });
     // Existing translations are preserved verbatim so the generated file
     // is a complete, self-contained bundle (not just a delta).
-    expect(bundles.en.objects?.sys_role?.label).toBe('Role');
-    expect(bundles.en.objects?.sys_role?.fields?.active?.label).toBe('Active');
+    expect(bundles.en.objects?.sys_position?.label).toBe('Role');
+    expect(bundles.en.objects?.sys_position?.fields?.active?.label).toBe('Active');
     // Missing keys are still filled from schema defaults.
-    expect(bundles.en.objects?.sys_role?.pluralLabel).toBe('Roles');
-    expect(bundles.en.objects?.sys_role?.fields?.label?.label).toBe('Display Name');
+    expect(bundles.en.objects?.sys_position?.pluralLabel).toBe('Roles');
+    expect(bundles.en.objects?.sys_position?.fields?.label?.label).toBe('Display Name');
   });
 
   it('filters by object name regex', () => {
     const cfg = {
       objects: [
-        { name: 'sys_role', label: 'Role', fields: {} },
+        { name: 'sys_position', label: 'Role', fields: {} },
         { name: 'crm_account', label: 'Account', fields: {} },
       ],
     };
@@ -152,7 +152,7 @@ describe('extractTranslations', () => {
       filter: /^sys_/,
       mergeExisting: false,
     });
-    expect(bundles.en.objects?.sys_role).toBeDefined();
+    expect(bundles.en.objects?.sys_position).toBeDefined();
     expect(bundles.en.objects?.crm_account).toBeUndefined();
     expect(totalExpected).toBe(1);
   });
@@ -167,7 +167,7 @@ describe('renderTranslationModule', () => {
     const ts = renderTranslationModule(bundles.en, { locale: 'en' });
     expect(ts).toContain("import type { TranslationData } from '@objectstack/spec/system'");
     expect(ts).toContain('export const enObjects:');
-    expect(ts).toContain('sys_role:');
+    expect(ts).toContain('sys_position:');
     expect(ts).toContain('label: "Role"');
   });
 

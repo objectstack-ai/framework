@@ -1,8 +1,8 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
 // ADR-0057 D6 / #2077 — stack-declared `roles` + `sharingRules` are seeded into
-// sys_role / sys_sharing_rule at boot, so they stop being decorative. The issue
-// reported booting the showcase yielded sys_role count = 0 and sys_sharing_rule
+// sys_position / sys_sharing_rule at boot, so they stop being decorative. The issue
+// reported booting the showcase yielded sys_position count = 0 and sys_sharing_rule
 // count = 0. This proves the opposite, plus the spec→runtime translation.
 //
 // @proof: showcase-declarative-rbac-seeding
@@ -22,8 +22,8 @@ describe('showcase: declarative RBAC seeding (ADR-0057 D6 / #2077)', () => {
   }, 60_000);
   afterAll(async () => { await stack?.stop(); });
 
-  it('declared roles land in sys_role (was count = 0)', async () => {
-    const roles = await ql.find('sys_role', { where: {}, context: { isSystem: true } });
+  it('declared roles land in sys_position (was count = 0)', async () => {
+    const roles = await ql.find('sys_position', { where: {}, context: { isSystem: true } });
     const names = (roles ?? []).map((r: any) => r.name);
     expect(names, 'showcase declares contributor/manager/exec').toEqual(
       expect.arrayContaining(['contributor', 'manager', 'exec']),
@@ -35,7 +35,7 @@ describe('showcase: declarative RBAC seeding (ADR-0057 D6 / #2077)', () => {
     const red = (rules ?? []).find((r: any) => r.name === 'share_red_projects_with_execs');
     expect(red, 'criteria rule seeded (was count = 0)').toBeTruthy();
     expect(red.object_name).toBe('showcase_project');
-    expect(red.recipient_type).toBe('role');
+    expect(red.recipient_type).toBe('position');
     expect(red.recipient_id).toBe('exec');
     // condition "record.health == 'red'" → JSON FilterCondition { health: 'red' }
     const criteria = JSON.parse(red.criteria_json);
@@ -50,7 +50,7 @@ describe('showcase: declarative RBAC seeding (ADR-0057 D6 / #2077)', () => {
   });
 
   it('re-seed is idempotent (no duplicate rows on a second boot)', async () => {
-    const roles = await ql.find('sys_role', { where: { name: 'manager' }, context: { isSystem: true } });
+    const roles = await ql.find('sys_position', { where: { name: 'manager' }, context: { isSystem: true } });
     expect((roles ?? []).length, 'exactly one manager role').toBe(1);
   });
 });

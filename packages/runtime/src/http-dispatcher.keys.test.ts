@@ -42,7 +42,7 @@ function ctx(overrides: any = {}) {
     request: { headers: {} },
     response: {},
     environmentId: undefined,
-    executionContext: { userId: 'u1', isSystem: false, roles: [], permissions: [] },
+    executionContext: { userId: 'u1', isSystem: false, positions: [], permissions: [] },
     ...overrides,
   };
 }

@@ -23,7 +23,7 @@ describe('MetadataPluginProtocol', () => {
         'flow', // ADR-0020: `workflow` retired as a metadata type
         // ADR-0088: `trigger`/`router`/`function`/`service` retired as kinds
         'datasource', 'external_catalog', 'translation',
-        'permission', 'profile', 'role',
+        'permission', 'position',
         'agent', 'tool', 'skill',
       ];
 
