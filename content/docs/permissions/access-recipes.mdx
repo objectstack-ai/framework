@@ -37,7 +37,7 @@ definePermissionSet({
 });
 ```
 
-- **"My own"** vs **"my team's"** vs **"the org's"** is the RLS *depth* axis (`readScope` / `writeScope`: `own | own_and_reports | unit | unit_and_below | org`, ADR-0057). A manager set uses `unit`; a rep uses `own`. The hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`) need the enterprise hierarchy resolver and **fail closed to `own`** without it — see [Access depth](/docs/permissions/profiles#access-depth--readscope--writescope-adr-0057-d1).
+- **"My own"** vs **"my team's"** vs **"the org's"** is the RLS *depth* axis (`readScope` / `writeScope`: `own | own_and_reports | unit | unit_and_below | org`, ADR-0057). A manager set uses `unit`; a rep uses `own`. The hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`) need the enterprise hierarchy resolver and **fail closed to `own`** without it — see [Access depth](/docs/permissions/permission-sets#access-depth--readscope--writescope-adr-0057-d1).
 - Grants combine **most-permissively** across a user's sets; the tenant-isolation policy `AND`s on top; the superuser bypass (`viewAllRecords` / `modifyAllRecords`) short-circuits RLS where the object's posture allows it (ADR-0066).
 - For genuinely sensitive objects, set `access: { default: 'private' }` so they are **not** covered by blanket wildcard grants — access needs an explicit grant.
 
@@ -62,7 +62,7 @@ Keeping capability, assignment and requirement decoupled means resources stay st
 
 ## Runnable example
 
-- Built-in profiles: [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) (`member_default` shows owner-scoped RLS + tenant isolation).
+- Built-in permission sets: [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) (`member_default` shows owner-scoped RLS + tenant isolation).
 - Security objects: [`packages/plugins/plugin-security/src/objects`](https://github.com/objectstack-ai/framework/tree/main/packages/plugins/plugin-security/src/objects).
 
 ## Anti-patterns

@@ -1,198 +1,37 @@
 ---
-title: "Profiles"
-description: "Profiles define a user's baseline permissions — object CRUD grants, field-level security, tab visibility, access scopes, capabilities, and built-in identity roles."
+title: "Profiles (removed)"
+description: "The Profile concept was removed by ADR-0090 D2. Baseline access is now authored with the everyone audience anchor, package isDefault suggestions, and ordinary permission sets distributed via positions."
 ---
 
-# Profiles
+# Profiles — removed (ADR-0090 D2)
 
-Profiles define a user's baseline permissions.
+ObjectStack **no longer has a Profile concept**. It was removed pre-launch
+(ADR-0090 D2) because it duplicated permission sets while adding a second
+mental model: admins had to learn "the ONE primary set" vs "add-on sets",
+every user needed a profile picked, and packaged profiles could not compose
+across packages without an owner.
 
-## Profile Structure
+Everything a profile did is expressed with the remaining vocabulary:
 
-A profile is modelled as a `PermissionSet` with `isProfile: true` (see
-`packages/spec/src/security/permission.zod.ts`). There is no distinct
-`Profile` type — author it as a `*.profile.ts` metadata entry validated by
-`PermissionSetSchema`.
-
-```typescript
-import { definePermissionSet } from '@objectstack/spec/security';
-
-export const SalesRepProfile = definePermissionSet({
-  name: 'sales_rep',
-  label: 'Sales Representative',
-  isProfile: true,
-
-  // Object-level permissions: <object> -> permissions
-  objects: {
-    account: {
-      allowCreate: true,
-      allowRead: true,
-      allowEdit: true,
-      allowDelete: false,
-      viewAllRecords: false,   // See all records regardless of owner
-      modifyAllRecords: false, // Edit all records regardless of owner
-    },
-    opportunity: {
-      allowCreate: true,
-      allowRead: true,
-      allowEdit: true,
-      allowDelete: false,
-      viewAllRecords: false,
-      modifyAllRecords: false,
-    },
-  },
-
-  // Field-level security: <object>.<field> -> permissions
-  fields: {
-    'account.annual_revenue': { readable: true, editable: false },
-    'account.description': { readable: true, editable: true },
-  },
-
-  // Tab/app visibility: <app or tab name> -> visibility
-  tabPermissions: {
-    app_crm: 'default_on',  // Shown by default
-    app_admin: 'hidden',    // Not visible
-    app_sales: 'visible',   // Available
-  },
-});
-```
-
-## Object Permission Levels
-
-| Permission | Description |
-|------------|-------------|
-| `allowCreate` | Create new records |
-| `allowRead` | View records they own or have access to |
-| `allowEdit` | Edit records they own or have access to |
-| `allowDelete` | Delete records they own or have access to |
-| `allowTransfer` | Change record ownership |
-| `allowRestore` | Restore soft-deleted records from trash (undelete) |
-| `allowPurge` | Permanently delete records (hard delete / GDPR) |
-| `viewAllRecords` | View ALL records regardless of ownership |
-| `modifyAllRecords` | Edit ALL records regardless of ownership |
-
-## Access depth — `readScope` / `writeScope` (ADR-0057 D1)
-
-Beyond the boolean grants above, an owner-scoped object grant can carry a
-**`readScope` / `writeScope`** that widens the owner-match *declaratively* — the
-ERP "see my own / my reports / my unit / my unit and below / the whole org" axis,
-without hand-writing one RLS policy per object:
-
-| Scope | Owner-match widens to |
-|------------|-------------|
-| `own` | the caller (baseline; unset = this) |
-| `own_and_reports` | the caller + their `sys_user.manager_id` report chain |
-| `unit` | owners in the caller's business unit (`sys_business_unit`) |
-| `unit_and_below` | the caller's BU + all descendant BUs (BFS) |
-| `org` | the whole tenant (≈ `viewAllRecords` / `modifyAllRecords`) |
-
-```typescript
-objects: {
-  account: { allowRead: true, allowEdit: true, readScope: 'unit_and_below', writeScope: 'own' },
-}
-```
-
-It resolves to an `owner_id IN (…)` set at request time and AND-injects alongside
-RLS (no compiler change; ADR-0055). Sharing rules still widen on top.
-
-> **Open-core boundary (ADR-0016).** `own` and `org` are open-source. The
-> hierarchy-relative scopes (`own_and_reports` / `unit` / `unit_and_below`) require
-> the paid `@objectstack/security-enterprise` plugin (BU-subtree + manager-chain
-> resolver); without it they **fail closed to `own`** (never fail-open), and
-> `defineStack` errors if a grant uses one without `requires: ['hierarchy-security']`.
-
-## Capabilities & secure-by-default object access (ADR-0066)
-
-Beyond CRUD grants and scope depth, two newer gates compose with the model above:
-
-- **Capabilities** are first-class records in the `sys_capability` registry (ADR-0066 D1) — maintainable named privileges such as `manage_metadata`, `manage_users`, `manage_org_users`, `manage_platform_settings`, `setup.access`, and `studio.access`. Grant them through permission sets like any other privilege.
-- **Object access posture** — an object may declare `access: { default: 'public' | 'private' }` (ADR-0066 D2). `public` (the default) preserves allow-by-default exposure; `private` makes the object **secure-by-default** (no access unless explicitly granted).
-- **Object-level `requiredPermissions`** (ADR-0066 D3) — a string array of capabilities that gate the object as an **AND** alongside CRUD grants (mirrors `App.requiredPermissions`): a user must hold every listed capability *and* the relevant CRUD grant.
-
-## Built-in identity roles (ADR-0068)
-
-`current_user.roles` is a **string array** — the only canonical role field (there is no singular `current_user.role`). Four role names are framework-seeded into `sys_role`:
-
-| Role | Meaning |
+| You wanted a profile for… | Author it as… |
 |:---|:---|
-| `platform_admin` | Platform operator (SaaS admin) — not a tenant role |
-| `org_owner` | Organization owner (`sys_member.role = owner`) |
-| `org_admin` | Organization administrator (`sys_member.role = admin`) |
-| `org_member` | Organization member (`sys_member.role = member`) |
+| A user's baseline permissions | A permission set bound to the **`everyone`** audience anchor (default grants for all authenticated users), or the configured baseline set (`member_default`) — both **additive** (ADR-0090 D5) |
+| A package's default access posture | `isDefault: true` on the package's permission set — an install-time **suggestion** to bind it to `everyone`; the admin confirms, nothing auto-binds |
+| A job function's permissions ("Sales Rep") | An ordinary permission set bound to a **[position](/docs/permissions/positions)** (`sales_rep`) via `sys_position_permission_set` |
+| Tab/app visibility defaults | `tabPermissions` on any permission set (unchanged) |
 
-Test membership in RLS/CEL with `'org_admin' in current_user.roles` or `current_user.roles.exists(r, r == 'sales_manager')`. `current_user.isPlatformAdmin` is a derived, deprecated alias of `'platform_admin' in current_user.roles`.
+The former `isProfile` flag was deleted from `PermissionSetSchema`; the
+`profile` metadata kind and its plural alias were removed from the metadata
+registry. Restriction is done by **not granting** (the model is additive) —
+never by authoring "subtraction profiles".
 
-## Standard Profiles
-
-### Sales Representative
-
-```typescript
-import { definePermissionSet } from '@objectstack/spec/security';
-
-export const SalesRepProfile = definePermissionSet({
-  name: 'sales_rep',
-  isProfile: true,
-  objects: {
-    lead: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    account: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    contact: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    opportunity: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    quote: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    product: { allowCreate: false, allowRead: true, allowEdit: false, allowDelete: false },
-  },
-  fields: {
-    'account.annual_revenue': { readable: true, editable: false }, // Read-only
-  },
-});
-```
-
-### Sales Manager
-
-```typescript
-import { definePermissionSet } from '@objectstack/spec/security';
-
-export const SalesManagerProfile = definePermissionSet({
-  name: 'sales_manager',
-  isProfile: true,
-  objects: {
-    lead: {
-      allowCreate: true, allowRead: true, allowEdit: true, allowDelete: true,
-      viewAllRecords: true, modifyAllRecords: true
-    },
-    account: {
-      allowCreate: true, allowRead: true, allowEdit: true, allowDelete: true,
-      viewAllRecords: true, modifyAllRecords: true
-    },
-    // ... full access to sales objects
-  },
-});
-```
-
-### Service Agent
-
-```typescript
-import { definePermissionSet } from '@objectstack/spec/security';
-
-export const ServiceAgentProfile = definePermissionSet({
-  name: 'service_agent',
-  isProfile: true,
-  objects: {
-    case: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: false },
-    task: { allowCreate: true, allowRead: true, allowEdit: true, allowDelete: true },
-    account: { allowCreate: false, allowRead: true, allowEdit: false, allowDelete: false },
-    contact: { allowCreate: false, allowRead: true, allowEdit: true, allowDelete: false },
-  },
-  fields: {
-    'case.is_sla_violated': { readable: true, editable: false },
-    'case.resolution_time_hours': { readable: true, editable: false },
-  },
-});
-```
-
----
+> **Migrating v1 metadata.** Replace `isProfile: true` with either
+> `isDefault: true` (if the set was the app's default posture) or nothing (if
+> it was a job-function set — bind it to a position instead). The D7 publish
+> linter and the schema both reject the old shape.
 
 ## See also
 
-- [Permissions & Identity overview](/docs/permissions)
-- [Permission Sets](/docs/permissions/permission-sets)
-- [Role Hierarchy](/docs/permissions/roles)
+- [Permission Sets](/docs/permissions/permission-sets) — the only capability container
+- [Positions](/docs/permissions/positions) — distribution, built-ins, and the `everyone`/`guest` anchors
+- Decision record: ADR-0090 (D2, D5, D9) · Design reference: `docs/design/permission-model.md`

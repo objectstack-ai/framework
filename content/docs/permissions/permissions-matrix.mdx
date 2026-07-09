@@ -1,14 +1,14 @@
 ---
 title: Security Permissions Matrix
-description: Visual reference for ObjectStack's security model — permission types, object/profile matrix, field-level security, sharing rules, and role hierarchy
+description: Visual reference for ObjectStack's security model — permission types, the object × permission-set matrix, field-level security, sharing rules, business-unit depth, and the access-matrix snapshot gate
 ---
 
 # Security Permissions Matrix
 
-This page provides a comprehensive visual reference for ObjectStack's security model — from object-level permissions to field-level security, sharing rules, and role hierarchies.
+This page provides a comprehensive visual reference for ObjectStack's security model — from object-level permissions to field-level security, sharing rules, and business-unit depth.
 
 <Callout type="info">
-**Security Model:** ObjectStack uses a layered security model inspired by Salesforce. Permissions are evaluated in order: Object Permission → Organization-Wide Defaults → Record Ownership / Scope Depth → Sharing (rules + manual shares) → Row-Level Security → Field-Level Security. Unlike Salesforce, the role hierarchy is **not** an automatic layer — it widens access only where a sharing rule's `role_and_subordinates` recipient or a scope-depth grant explicitly invokes it.
+**Security Model:** ObjectStack uses a layered security model inspired by Salesforce. Permissions are evaluated in order: Object Permission → Organization-Wide Defaults → Record Ownership / Scope Depth → Sharing (rules + manual shares) → Row-Level Security → Field-Level Security. Unlike Salesforce, there is no automatic hierarchy layer — the business-unit tree widens access only where a sharing rule's `unit_and_subordinates` recipient or a scope-depth grant explicitly invokes it (positions are flat, ADR-0090 D3).
 </Callout>
 
 ---
@@ -41,7 +41,7 @@ ObjectStack's `ObjectPermission` schema defines these boolean flags for object a
 
 ## 2. Object × Permission-Set Matrix
 
-A profile (a `PermissionSet` with `isProfile: true`) is the primary functional definition of a user; add-on permission sets layer extra capabilities on top. This matrix shows which object permissions each set receives. Use it as a template for your own configuration.
+Permission sets are the only capability container (there is no Profile concept — ADR-0090 D2); a user's grants are the union of every set reached via positions, direct grants, the `everyone` anchor, and the additive baseline. This matrix shows which object permissions each set receives. Use it as a template for your own configuration.
 
 ### Example: CRM Application
 
@@ -63,9 +63,8 @@ import { defineStack } from '@objectstack/spec';
 export default defineStack({
   permissions: [
     {
-      name: 'sales_rep',
+      name: 'sales_rep_access',
       label: 'Sales Representative',
-      isProfile: true,
       objects: {
         account:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
         contact:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
@@ -74,9 +73,8 @@ export default defineStack({
       },
     },
     {
-      name: 'sales_manager',
+      name: 'sales_manager_access',
       label: 'Sales Manager',
-      isProfile: true,
       objects: {
         account:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true },
         contact:     { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true },
@@ -92,7 +90,7 @@ export default defineStack({
 
 ## 3. Field-Level Security (FLS)
 
-Field-level security controls visibility and editability of individual fields per profile.
+Field-level security controls visibility and editability of individual fields per permission set.
 
 | Field | System Admin | Sales Manager | Sales Rep | Marketing | Read Only |
 |:---|:---|:---|:---|:---|:---|
@@ -115,8 +113,7 @@ Field-level security controls visibility and editability of individual fields pe
 
 ```typescript
 {
-  name: 'sales_rep',
-  isProfile: true,
+  name: 'sales_rep_access',
   objects: { /* ... */ },
   // Field-level security — keys are `<object>.<field>`
   fields: {
@@ -131,11 +128,11 @@ Field-level security controls visibility and editability of individual fields pe
 
 ## 4. Sharing Rule Types
 
-Sharing rules extend access beyond ownership and role hierarchy. The declarative `SharingRule` schema is a discriminated union with two `type` values — `owner` and `criteria`. Manual and territory sharing are separate mechanisms (see notes below the table).
+Sharing rules extend access beyond ownership and the depth axis. The declarative `SharingRule` schema is a discriminated union with two `type` values — `owner` and `criteria`. Manual and territory sharing are separate mechanisms (see notes below the table).
 
 | Mechanism | `type` | Description | Example |
 |:---|:---|:---|:---|
-| **Owner-Based** | `owner` | Share records owned by a specific group/role with another recipient — **[experimental — not enforced]**: owner rules are skipped at seed time and materialize no shares yet | All accounts owned by "West Region" team are shared with "Sales Directors" |
+| **Owner-Based** | `owner` | Share records owned by a specific group/position with another recipient — **[experimental — not enforced]**: owner rules are skipped at seed time and materialize no shares yet | All accounts owned by "West Region" team are shared with "Sales Directors" |
 | **Criteria-Based** | `criteria` | Share records matching a CEL predicate over field values | All opportunities where `record.amount > 100000` are shared with "VP Sales" |
 
 <Callout type="warn">
@@ -143,7 +140,7 @@ Sharing rules extend access beyond ownership and role hierarchy. The declarative
 </Callout>
 
 <Callout type="info">
-**Beyond declarative rules:** Two other sharing mechanisms exist but are **not** `SharingRule` types. **Manual sharing** is a runtime grant — `sys_record_share` rows created with `source: 'manual'` (see `packages/plugins/plugin-sharing/src/sharing-service.ts`). **Territories** are a separate matrix model (`TerritorySchema` in `packages/spec/src/security/territory.zod.ts`) with their own account/opportunity/case access levels, parallel to the role hierarchy. Owner/criteria rules are re-evaluated on insert/update via internal sharing rule hooks.
+**Beyond declarative rules:** Two other sharing mechanisms exist but are **not** `SharingRule` types. **Manual sharing** is a runtime grant — `sys_record_share` rows created with `source: 'manual'` (see `packages/plugins/plugin-sharing/src/sharing-service.ts`). **Territories** are a separate matrix model (`TerritorySchema` in `packages/spec/src/security/territory.zod.ts`) with their own account/opportunity/case access levels, parallel to the business-unit model. Owner/criteria rules are re-evaluated on insert/update via internal sharing rule hooks.
 </Callout>
 
 ### Configuration Example
@@ -157,16 +154,16 @@ Sharing rules extend access beyond ownership and role hierarchy. The declarative
       type: 'criteria',
       // condition is a CEL predicate over the record
       condition: 'record.amount > 100000',
-      sharedWith: { type: 'role', value: 'vp_sales' },
+      sharedWith: { type: 'position', value: 'vp_sales' },
       accessLevel: 'read',
     },
     {
       name: 'west_accounts_to_directors',
       object: 'account',
       type: 'owner',
-      // records owned by this group/role are the source set
-      ownedBy: { type: 'role', value: 'west_region_rep' },
-      sharedWith: { type: 'role', value: 'sales_director' },
+      // records owned by this group/position are the source set
+      ownedBy: { type: 'position', value: 'west_region_rep' },
+      sharedWith: { type: 'position', value: 'sales_director' },
       accessLevel: 'edit',
     },
   ],
@@ -206,91 +203,67 @@ defineStack({
 ```
 
 <Callout type="info">
-**Opening Up Access:** OWD restricts the baseline. Sharing rules, role hierarchy, and manual sharing can only **open up** access — never restrict it further than the OWD.
+**Opening Up Access:** OWD restricts the baseline. Sharing rules, scope-depth grants, and manual sharing can only **open up** access — never restrict it further than the OWD.
 </Callout>
 
 ---
 
-## 6. Role Hierarchy
+## 6. Business-Unit Hierarchy & Positions
 
-The role hierarchy is a reporting structure that sharing rules can reference to
-widen record access. It grants **nothing automatically**: a user's position
-above another role does not by itself expose that role's records (ADR-0057 D5 —
-the visibility hierarchy does not live on roles).
+Positions (岗位) are **flat** distribution groups — they have no parent links
+and form no tree (ADR-0090 D3). The one hierarchy is the **business-unit
+tree**, and it grants **nothing automatically**: sitting above another unit
+does not by itself expose its records. Upward visibility is always an
+explicit, per-grant opt-in.
 
 ```mermaid
 graph TD
-    CEO[CEO]
-    VP_SALES[VP Sales]
-    VP_MKT[VP Marketing]
-    VP_ENG[VP Engineering]
-    DIR_EAST[Director - East]
-    DIR_WEST[Director - West]
-    MKT_MGR[Marketing Manager]
-    ENG_MGR[Engineering Manager]
-    REP_1[Sales Rep - East 1]
-    REP_2[Sales Rep - East 2]
-    REP_3[Sales Rep - West 1]
-    REP_4[Sales Rep - West 2]
-    MKT_SPEC[Marketing Specialist]
-    DEV_1[Developer 1]
-    DEV_2[Developer 2]
+    HQ[HQ]
+    EAST[BU - East]
+    WEST[BU - West]
+    MKT[BU - Marketing]
+    EAST_SALES[BU - East Sales]
+    EAST_SVC[BU - East Service]
 
-    CEO --> VP_SALES
-    CEO --> VP_MKT
-    CEO --> VP_ENG
+    HQ --> EAST
+    HQ --> WEST
+    HQ --> MKT
+    EAST --> EAST_SALES
+    EAST --> EAST_SVC
 
-    VP_SALES --> DIR_EAST
-    VP_SALES --> DIR_WEST
-
-    VP_MKT --> MKT_MGR
-    VP_ENG --> ENG_MGR
-
-    DIR_EAST --> REP_1
-    DIR_EAST --> REP_2
-    DIR_WEST --> REP_3
-    DIR_WEST --> REP_4
-
-    MKT_MGR --> MKT_SPEC
-    ENG_MGR --> DEV_1
-    ENG_MGR --> DEV_2
-
-    style CEO fill:#4f46e5,color:#fff
-    style VP_SALES fill:#7c3aed,color:#fff
-    style VP_MKT fill:#7c3aed,color:#fff
-    style VP_ENG fill:#7c3aed,color:#fff
-    style DIR_EAST fill:#0284c7,color:#fff
-    style DIR_WEST fill:#0284c7,color:#fff
-    style MKT_MGR fill:#0284c7,color:#fff
-    style ENG_MGR fill:#0284c7,color:#fff
+    style HQ fill:#4f46e5,color:#fff
+    style EAST fill:#7c3aed,color:#fff
+    style WEST fill:#7c3aed,color:#fff
+    style MKT fill:#7c3aed,color:#fff
 ```
 
-**How it is consumed:** the `parent` graph powers the `role_and_subordinates`
-sharing-rule recipient — one rule can grant access to a role *and every role
-beneath it* (see [Recipient types](/docs/permissions/sharing-rules#recipient-types)).
-Manager-over-subordinate record visibility is built explicitly, per grant:
+**How the tree is consumed** — three explicit mechanisms:
 
-- **VP Sales sees Directors' and Reps' records** — author a criteria sharing
-  rule with `sharedWith: { type: 'role', value: 'vp_sales' }`, or grant the VP's
-  permission set `readScope: 'unit_and_below'` (scope depth, ADR-0057).
-- **Cascade one rule down a branch** — share with
-  `{ type: 'role_and_subordinates', value: 'director_east' }` to reach the
-  director and everyone below that role.
-- **Sales Rep** sees only their own records (plus whatever sharing rules and
-  manual shares grant) — this part needs no configuration under a `private` OWD.
+- **Scope depth** — grant a permission set `readScope: 'unit'` /
+  `'unit_and_below'`; the owner-match widens to the caller's unit (or its
+  subtree). A position assignment's `business_unit_id` anchor decides *which*
+  unit that means for multi-unit users (ADR-0090 Addendum).
+- **Sharing-rule recipients** — share with
+  `{ type: 'unit_and_subordinates', value: 'east' }` to reach everyone in the
+  East subtree, or `{ type: 'position', value: 'sales_manager' }` to reach a
+  job function across units.
+- **Delegated administration** — an `adminScope` bounds a subsidiary admin to
+  a BU subtree (ADR-0090 D12).
+
+A Sales Rep sees only their own records (plus shares) under a `private` OWD —
+that part needs no configuration.
 
 ### Configuration Example
 
 ```typescript
 defineStack({
-  roles: [
-    { name: 'ceo', label: 'CEO' }, // root role: omit `parent`
-    { name: 'vp_sales', label: 'VP Sales', parent: 'ceo' },
-    { name: 'vp_marketing', label: 'VP Marketing', parent: 'ceo' },
-    { name: 'director_east', label: 'Director - East', parent: 'vp_sales' },
-    { name: 'director_west', label: 'Director - West', parent: 'vp_sales' },
-    { name: 'sales_rep', label: 'Sales Representative', parent: 'director_east' },
+  positions: [
+    // Flat job functions — no parent links.
+    { name: 'vp_sales', label: 'VP Sales' },
+    { name: 'sales_director', label: 'Sales Director' },
+    { name: 'sales_rep', label: 'Sales Representative' },
   ],
+  // The tree lives on business units (seeded as sys_business_unit rows).
 });
 ```
 
@@ -323,7 +296,7 @@ flowchart TD
 
 | Step | Layer | What It Checks |
 |:---|:---|:---|
-| 1 | **Object Permission** | Does the profile grant any access to this object? |
+| 1 | **Object Permission** | Does any resolved permission set grant this operation on the object? |
 | 2 | **OWD** | Is the object public? If so, grant access immediately |
 | 3 | **Record Ownership** | Does the user own this record? |
 | 4 | **Scope Depth** | Does a `readScope` / `writeScope` grant (`own_and_reports` / `unit` / `unit_and_below` / `org`) widen the owner-match to cover the record's owner? |
