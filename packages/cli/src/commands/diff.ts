@@ -213,7 +213,7 @@ export default class Diff extends Command {
         { key: 'actions', label: 'actions' },
         { key: 'workflows', label: 'workflows' },
         { key: 'apis', label: 'apis' },
-        { key: 'roles', label: 'roles' },
+        { key: 'positions', label: 'positions' },
       ];
 
       for (const cat of simpleCats) {

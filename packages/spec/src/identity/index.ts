@@ -2,8 +2,8 @@
 
 export * from './identity.zod';
 export * from './protocol';
-export * from './role.zod';
-export { roleForm } from './role.form';
+export * from './position.zod';
+export { positionForm } from './position.form';
 export * from './organization.zod';
 export * from './scim.zod';
 export * from './eval-user.zod';

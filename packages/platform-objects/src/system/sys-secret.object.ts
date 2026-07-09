@@ -36,6 +36,14 @@ export const SysSecret = ObjectSchema.create({
   icon: 'key',
   isSystem: true,
   managedBy: 'system',
+  // [ADR-0066 D2/④] Secure-by-default: the environment's encrypted-secrets
+  // store (settings/datasource credentials). Not covered by the wildcard `'*'`
+  // grant — ordinary members get 403 from the generic data layer. Platform
+  // admins retain access via the posture-gated superuser bypass. Internal
+  // readers are unaffected: `engine.resolveSecret` reads at DRIVER level,
+  // SettingsService / the datasource secret-binder read with no principal
+  // (middleware falls open for principal-less internal calls).
+  access: { default: 'private' },
   description: 'Cipher store referenced by sys_setting handles. Never holds plaintext.',
   highlightFields: ['namespace', 'key', 'kms_key_id', 'version', 'rotated_at'],
   listViews: {

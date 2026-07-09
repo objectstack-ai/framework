@@ -24,7 +24,7 @@ export interface JobLogger {
   error?(msg: string, meta?: unknown): void;
 }
 
-export const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+export const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export function uid(prefix: string): string {
   const g: any = globalThis as any;

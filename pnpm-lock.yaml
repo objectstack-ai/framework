@@ -10,6 +10,7 @@ overrides:
   tar@>=2.0.0 <7.5.11: ^7.5.11
   form-data@<4.0.6: '>=4.0.6'
   undici@>=7.23.0 <7.28.0: ^7.28.0
+  '@better-auth/scim@<1.7.0-rc.1': 1.7.0-rc.1
 
 importers:
 
@@ -1292,8 +1293,8 @@ importers:
         specifier: ^1.6.23
         version: 1.6.23(127fc2f6c00e1dc42ebbf1a0bd829040)
       '@better-auth/scim':
-        specifier: ^1.6.23
-        version: 1.6.23(93112be2b6a9196dc1ab66407acf9ed0)
+        specifier: 1.7.0-rc.1
+        version: 1.7.0-rc.1(93112be2b6a9196dc1ab66407acf9ed0)
       '@better-auth/sso':
         specifier: ^1.6.23
         version: 1.6.23(127fc2f6c00e1dc42ebbf1a0bd829040)
@@ -2446,12 +2447,12 @@ packages:
       prisma:
         optional: true
 
-  '@better-auth/scim@1.6.23':
-    resolution: {integrity: sha512-I8/m2x/eEcFufNEQMM6nZqwhZrp5OdSMxL9t8EalTVAIfD3hRPz9n1kzbAYy3ArzxXJBkSZ+Os5E+k/yaxoesg==}
+  '@better-auth/scim@1.7.0-rc.1':
+    resolution: {integrity: sha512-pcnliU2eewYq2SF4cRDn1XvQ2I7+WhufoDv5lx9yH7fmrfsU6mYQpZX3mu2Fj/AFCHauCI7Ld617pnz5+yTtOw==}
     peerDependencies:
-      '@better-auth/core': ^1.6.23
+      '@better-auth/core': ^1.7.0-rc.1
       '@better-auth/utils': 0.4.2
-      better-auth: ^1.6.23
+      better-auth: ^1.7.0-rc.1
       better-call: 1.3.7
 
   '@better-auth/sso@1.6.23':
@@ -9261,7 +9262,7 @@ snapshots:
       '@better-auth/core': 1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260520.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/scim@1.6.23(93112be2b6a9196dc1ab66407acf9ed0)':
+  '@better-auth/scim@1.7.0-rc.1(93112be2b6a9196dc1ab66407acf9ed0)':
     dependencies:
       '@better-auth/core': 1.6.23(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260520.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.3)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2

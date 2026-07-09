@@ -21,6 +21,11 @@ export const SysOauthRefreshToken = ObjectSchema.create({
   icon: 'refresh-cw',
   isSystem: true,
   managedBy: 'better-auth',
+  // [ADR-0066 D2/④] Secure-by-default: rows are LIVE long-lived credentials —
+  // a refresh token mints new access tokens. Not covered by the wildcard `'*'`
+  // grant; admins retain access via the superuser bypass; better-auth reads
+  // via its adapter (system context), so OAuth flows are unaffected.
+  access: { default: 'private' },
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema,
   // but may add overlay row-level config. Use `no-overlay` if you need to
   // forbid sys_metadata overlays entirely.

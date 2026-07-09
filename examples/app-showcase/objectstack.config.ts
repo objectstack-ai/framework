@@ -31,7 +31,7 @@ import { allEmails } from './src/system/emails/index.js';
 import { allBooks } from './src/system/books/index.js';
 import { allApis } from './src/system/apis/index.js';
 import {
-  allRoles,
+  allPositions,
   allPermissionSets,
   allSharingRules,
 } from './src/security/index.js';
@@ -192,7 +192,7 @@ export default defineStack({
   webhooks: allWebhooks,
 
   // Security
-  roles: allRoles,
+  positions: allPositions,
   permissions: allPermissionSets,
   sharingRules: allSharingRules,
 

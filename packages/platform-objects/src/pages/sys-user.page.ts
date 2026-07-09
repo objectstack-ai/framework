@@ -33,7 +33,7 @@ import type { Page } from '@objectstack/spec/ui';
  *    on a user profile (Sessions / Linked Accounts / Organizations /
  *    Personal OAuth Apps). Without this override, the synthesizer
  *    auto-generates a tab per object that has a FK to sys_user
- *    (sys_role.created_by, sys_email.updated_by, sys_user_preference,
+ *    (sys_position.created_by, sys_email.updated_by, sys_user_preference,
  *    sys_email_template.created_by, …) producing dozens of noisy
  *    "查看全部" cards on every profile.
  *  - `discussion: []` removes the Chatter feed — it has no business
@@ -112,7 +112,7 @@ export const SysUserDetailPage: Page = {
 
     // ── Tabs: curated related lists ───────────────────────────────
     // Only the 4 lists that are semantically about THIS user account.
-    // Everything else (sys_role created_by, sys_email_template
+    // Everything else (sys_position created_by, sys_email_template
     // updated_by, …) is incidental authorship metadata and would only
     // create noise.
     tabs: {

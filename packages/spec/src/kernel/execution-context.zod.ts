@@ -68,8 +68,40 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
    */
   currency: z.string().optional(),
 
-  /** User role names (resolved from Member + Role) */
-  roles: z.array(z.string()).default([]),
+  /**
+   * Position names held by the user (ADR-0090 D3; resolved from
+   * `sys_user_position` plus the built-in identity projection — the four
+   * ADR-0068 org-membership names like `org_admin` are included so gating
+   * predicates keep working). Formerly `roles`.
+   */
+  positions: z.array(z.string()).default([]),
+
+  /**
+   * [ADR-0090 D10 — P1 shape] Principal taxonomy. What KIND of caller this
+   * is. Evaluation semantics phase in later (agent intersection, guest
+   * position, service lints); the shape lands pre-launch so every API
+   * carries it from day one. Absent = 'human'.
+   */
+  principalKind: z.enum(['human', 'agent', 'service', 'guest', 'system']).optional(),
+
+  /**
+   * [ADR-0090 D10/D11 — P1 shape] Whether the principal is an internal org
+   * member or an external (portal/partner) identity. Externals evaluate
+   * against `externalSharingModel` and skip the BU depth axis. Absent =
+   * 'internal'.
+   */
+  audience: z.enum(['internal', 'external']).optional(),
+
+  /**
+   * [ADR-0090 D10 — P1 shape] Delegation link for agent/service principals
+   * acting on behalf of a user. Agent effective permission = the agent's own
+   * grants ∩ the delegator's grants (confused-deputy prevention; enforced
+   * when agent evaluation lands).
+   */
+  onBehalfOf: z.object({
+    userId: z.string(),
+    principalKind: z.enum(['human', 'agent', 'service', 'guest', 'system']).optional(),
+  }).optional(),
   
   /** Aggregated permission names (resolved from PermissionSet) */
   permissions: z.array(z.string()).default([]),

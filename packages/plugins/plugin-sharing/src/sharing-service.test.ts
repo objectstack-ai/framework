@@ -38,6 +38,7 @@ function makeFakeEngine(schemas: Record<string, any>) {
 
   return {
     _tables: tables,
+    schemas,
     getSchema(name: string) { return schemas[name]; },
     async find(object: string, options?: any) {
       const table = ensure(object);
@@ -90,13 +91,31 @@ const ACCOUNT_SCHEMA = {
 
 const LEAD_SCHEMA = {
   name: 'lead',
-  sharingModel: 'read',
+  sharingModel: 'public_read',
   fields: { id: {}, name: {}, owner_id: {} },
 };
 
-const PUBLIC_SCHEMA = {
+// [ADR-0090 D1] A CUSTOM object with NO sharingModel + an owner field —
+// the objectui#2348 leave_request incident shape. Under the secure default
+// this now resolves PRIVATE (owner-scoped), never silently public.
+const UNSET_OWD_SCHEMA = {
   name: 'task',
-  // no sharingModel — treated as public
+  // no sharingModel — custom object ⇒ defaults to private (ADR-0090 D1)
+  fields: { id: {}, name: {}, owner_id: {} },
+};
+
+// A SYSTEM object with no sharingModel keeps the public fall-through
+// (explicit ADR-0066 posture + bypass lists own the sys_* surface).
+// Explicitly-public custom object (post-ADR-0090 D1 the only way to be public).
+const EXPLICIT_PUBLIC_SCHEMA = {
+  name: 'task',
+  sharingModel: 'public_read_write',
+  fields: { id: {}, name: {}, owner_id: {} },
+};
+
+const SYS_UNSET_OWD_SCHEMA = {
+  name: 'sys_widget',
+  isSystem: true,
   fields: { id: {}, name: {}, owner_id: {} },
 };
 
@@ -128,7 +147,8 @@ describe('SharingService.buildReadFilter', () => {
     engine = makeFakeEngine({
       account: ACCOUNT_SCHEMA,
       lead: LEAD_SCHEMA,
-      task: PUBLIC_SCHEMA,
+      task: UNSET_OWD_SCHEMA,
+      sys_widget: SYS_UNSET_OWD_SCHEMA,
       note: ORPHAN_SCHEMA,
       kbarticle: CANON_PUBLIC_READ_SCHEMA,
       whiteboard: CANON_PUBLIC_RW_SCHEMA,
@@ -145,8 +165,21 @@ describe('SharingService.buildReadFilter', () => {
     expect(await svc.buildReadFilter('sys_user', { userId: 'u1' })).toBeNull();
   });
 
-  it('returns null for public objects', async () => {
-    expect(await svc.buildReadFilter('task', { userId: 'u1' })).toBeNull();
+  it('[ADR-0090 D1] custom object with UNSET sharingModel defaults to PRIVATE (the objectui#2348 incident regression)', async () => {
+    // 张三 (u1) must NOT read 李四's records on an OWD-less custom object:
+    // the read filter narrows to owner_id = u1 instead of passing null.
+    const f = await svc.buildReadFilter('task', { userId: 'u1' });
+    expect(f).toEqual({ owner_id: 'u1' });
+  });
+
+  it('[ADR-0090 D1] system object with unset sharingModel keeps the public fall-through', async () => {
+    expect(await svc.buildReadFilter('sys_widget', { userId: 'u1' })).toBeNull();
+  });
+
+  it('[ADR-0090 D4] an unrecognised stored sharingModel fails CLOSED to private', async () => {
+    engine.schemas.legacy = { name: 'legacy', sharingModel: 'read_write', fields: { id: {}, owner_id: {} } } as any;
+    const f = await svc.buildReadFilter('legacy', { userId: 'u1' });
+    expect(f).toEqual({ owner_id: 'u1' });
   });
 
   it('returns null for read-only-sharing objects (writes are gated, reads are not)', async () => {
@@ -192,7 +225,7 @@ describe('SharingService.canEdit', () => {
     engine = makeFakeEngine({
       account: ACCOUNT_SCHEMA,
       lead: LEAD_SCHEMA,
-      task: PUBLIC_SCHEMA,
+      task: EXPLICIT_PUBLIC_SCHEMA,
       kbarticle: CANON_PUBLIC_READ_SCHEMA,
       whiteboard: CANON_PUBLIC_RW_SCHEMA,
       sys_record_share: { name: 'sys_record_share' },
@@ -316,7 +349,7 @@ describe('buildSharingMiddleware (engine integration)', () => {
     engine = makeFakeEngine({
       account: ACCOUNT_SCHEMA,
       lead: LEAD_SCHEMA,
-      task: PUBLIC_SCHEMA,
+      task: EXPLICIT_PUBLIC_SCHEMA,
       sys_record_share: {},
     });
     svc = new SharingService({ engine });

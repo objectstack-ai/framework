@@ -3,7 +3,7 @@
 /**
  * bootstrapDeclaredPermissions — seed stack-declared `permissions` into
  * `sys_permission_set` (ADR-0086 D5; the exact sibling of
- * `bootstrapDeclaredRoles`).
+ * `bootstrapDeclaredPositions`).
  *
  * `stack.permissions` has always been declarable and runtime-ENFORCED (the
  * evaluator resolves declared sets through the metadata registry), but it was
@@ -26,7 +26,7 @@
  *
  * Runs on `kernel:ready` after `bootstrapPlatformAdmin` (so the platform
  * defaults keep their existing insert-once shape) and alongside
- * `bootstrapDeclaredRoles`.
+ * `bootstrapDeclaredPositions`.
  */
 
 const SYSTEM_CTX = { isSystem: true };

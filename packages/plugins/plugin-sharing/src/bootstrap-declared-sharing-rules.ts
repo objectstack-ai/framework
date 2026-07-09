@@ -27,7 +27,7 @@ import type { SharingRuleService } from './sharing-rule-service.js';
 import type { SharingRuleRecipientType, ShareAccessLevel } from '@objectstack/spec/contracts';
 import { compileCelToFilter } from '@objectstack/formula';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 type Logger = { info?: (m: string, meta?: any) => void; warn?: (m: string, meta?: any) => void };
 
@@ -35,8 +35,7 @@ type Logger = { info?: (m: string, meta?: any) => void; warn?: (m: string, meta?
 function mapRecipientType(t: unknown): SharingRuleRecipientType | null {
   switch (t) {
     case 'user': return 'user';
-    case 'role': return 'role';
-    case 'role_and_subordinates': return 'role_and_subordinates';
+    case 'position': return 'position';
     // ADR-0057 D5: business-unit subtree recipient.
     case 'business_unit': return 'business_unit' as SharingRuleRecipientType;
     case 'unit_and_subordinates': return 'unit_and_subordinates' as SharingRuleRecipientType;

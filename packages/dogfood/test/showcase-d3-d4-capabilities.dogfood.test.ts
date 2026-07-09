@@ -24,7 +24,6 @@ const SYS = { context: { isSystem: true } } as const;
 const memberSet = PermissionSetSchema.parse({
   name: 'showcase_d34_member',
   label: 'D3/D4 Member',
-  isProfile: true,
   objects: {
     showcase_project: { allowRead: true },
     showcase_invoice: { allowRead: true, allowCreate: true, allowEdit: true },

@@ -71,7 +71,7 @@ The plugin contributes these system objects to the kernel:
 
 | Object | Purpose |
 |:---|:---|
-| `sys_role` | User role definitions. |
+| `sys_position` | User role definitions. |
 | `sys_permission_set` | Bundles object and field permissions; can include RLS expressions. |
 
 Assignment tables (role ↔ user, role ↔ permission_set) are provided by [`@objectstack/plugin-auth`](../plugin-auth) when used together.

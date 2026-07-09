@@ -1,11 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   RowLevelSecurityPolicySchema,
-  RLSConfigSchema,
   RLSUserContextSchema,
   RLSEvaluationResultSchema,
-  RLSAuditEventSchema,
-  RLSAuditConfigSchema,
   RLSOperation,
   RLS,
   type RowLevelSecurityPolicy,
@@ -51,7 +48,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         operation: 'select',
         using: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)',
         check: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)',
-        roles: ['manager', 'director'],
+        positions: ['manager', 'director'],
         enabled: true,
         priority: 10,
         tags: ['team_access', 'hierarchy'],
@@ -151,11 +148,11 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'opportunity',
         operation: 'select',
         using: 'region = current_user.region',
-        roles: ['sales_rep', 'sales_manager'],
+        positions: ['sales_rep', 'sales_manager'],
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
-      expect(result.roles).toEqual(['sales_rep', 'sales_manager']);
+      expect(result.positions).toEqual(['sales_rep', 'sales_manager']);
     });
 
     it('should validate tags', () => {
@@ -169,68 +166,6 @@ describe('Row-Level Security (RLS) Protocol', () => {
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
       expect(result.tags).toEqual(['compliance', 'gdpr', 'privacy']);
-    });
-  });
-
-  describe('RLSConfigSchema', () => {
-    it('should validate minimal config', () => {
-      const config = {};
-      const result = RLSConfigSchema.parse(config);
-
-      expect(result.enabled).toBe(true);
-      expect(result.defaultPolicy).toBe('deny');
-      expect(result.allowSuperuserBypass).toBe(true);
-      expect(result.logEvaluations).toBe(false);
-      expect(result.cacheResults).toBe(true);
-      expect(result.cacheTtlSeconds).toBe(300);
-      expect(result.prefetchUserContext).toBe(true);
-    });
-
-    it('should validate complete config', () => {
-      const config = {
-        enabled: true,
-        defaultPolicy: 'deny' as const,
-        allowSuperuserBypass: true,
-        bypassRoles: ['system_admin', 'data_auditor'],
-        logEvaluations: true,
-        cacheResults: true,
-        cacheTtlSeconds: 600,
-        prefetchUserContext: true,
-      };
-
-      const result = RLSConfigSchema.parse(config);
-      expect(result).toEqual(config);
-    });
-
-    it('should validate defaultPolicy options', () => {
-      const denyConfig = { defaultPolicy: 'deny' as const };
-      expect(RLSConfigSchema.parse(denyConfig).defaultPolicy).toBe('deny');
-
-      const allowConfig = { defaultPolicy: 'allow' as const };
-      expect(RLSConfigSchema.parse(allowConfig).defaultPolicy).toBe('allow');
-
-      const invalidConfig = { defaultPolicy: 'reject' };
-      expect(() => RLSConfigSchema.parse(invalidConfig)).toThrow();
-    });
-
-    it('should validate bypass roles', () => {
-      const config = {
-        bypassRoles: ['admin', 'superuser', 'auditor'],
-      };
-
-      const result = RLSConfigSchema.parse(config);
-      expect(result.bypassRoles).toEqual(['admin', 'superuser', 'auditor']);
-    });
-
-    it('should validate cache TTL as positive integer', () => {
-      const validConfig = { cacheTtlSeconds: 600 };
-      expect(() => RLSConfigSchema.parse(validConfig)).not.toThrow();
-
-      const invalidConfig1 = { cacheTtlSeconds: -100 };
-      expect(() => RLSConfigSchema.parse(invalidConfig1)).toThrow();
-
-      const invalidConfig2 = { cacheTtlSeconds: 0 };
-      expect(() => RLSConfigSchema.parse(invalidConfig2)).toThrow();
     });
   });
 
@@ -391,9 +326,9 @@ describe('Row-Level Security (RLS) Protocol', () => {
       });
     });
 
-    describe('rolePolicy', () => {
+    describe('positionPolicy', () => {
       it('should create role-based policy', () => {
-        const policy = RLS.rolePolicy(
+        const policy = RLS.positionPolicy(
           'sensitive_data',
           ['manager', 'director'],
           'department = current_user.department'
@@ -403,7 +338,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.object).toBe('sensitive_data');
         expect(policy.operation).toBe('select');
         expect(policy.using).toBe('department = current_user.department');
-        expect(policy.roles).toEqual(['manager', 'director']);
+        expect(policy.positions).toEqual(['manager', 'director']);
         expect(policy.enabled).toBe(true);
       });
     });
@@ -416,7 +351,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.object).toBe('account');
         expect(policy.operation).toBe('all');
         expect(policy.using).toBe('1 == 1'); // Always true
-        expect(policy.roles).toEqual(['ceo', 'cfo']);
+        expect(policy.positions).toEqual(['ceo', 'cfo']);
         expect(policy.enabled).toBe(true);
       });
     });
@@ -453,7 +388,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
             WHERE manager_id = current_user.id
           )
         `,
-        roles: ['manager', 'director'],
+        positions: ['manager', 'director'],
         enabled: true,
       };
 
@@ -467,7 +402,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'account',
         operation: 'select',
         using: 'territory IN (SELECT territory FROM user_territories WHERE user_id = current_user.id)',
-        roles: ['sales_rep'],
+        positions: ['sales_rep'],
         enabled: true,
       };
 
@@ -530,7 +465,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'financial_data',
         operation: 'all',
         using: '1 == 1', // Always true - see everything
-        roles: ['ceo', 'cfo', 'cto'],
+        positions: ['ceo', 'cfo', 'cto'],
         enabled: true,
         priority: 100, // Highest priority
       };
@@ -567,159 +502,6 @@ describe('Row-Level Security (RLS) Protocol', () => {
       };
 
       expect(() => RowLevelSecurityPolicySchema.parse(policy)).not.toThrow();
-    });
-  });
-
-  // ==========================================
-  // RLS Audit Event & Config Tests
-  // ==========================================
-
-  describe('RLSAuditEventSchema', () => {
-    it('should accept minimal audit event', () => {
-      const event = RLSAuditEventSchema.parse({
-        timestamp: '2024-06-15T10:30:00Z',
-        userId: 'user_123',
-        operation: 'select',
-        object: 'account',
-        policyName: 'tenant_isolation',
-        granted: true,
-        evaluationDurationMs: 2.5,
-      });
-
-      expect(event.granted).toBe(true);
-      expect(event.evaluationDurationMs).toBe(2.5);
-    });
-
-    it('should accept full audit event', () => {
-      const event = RLSAuditEventSchema.parse({
-        timestamp: '2024-06-15T10:30:00Z',
-        userId: 'user_456',
-        operation: 'delete',
-        object: 'customer',
-        policyName: 'owner_access',
-        granted: false,
-        evaluationDurationMs: 15.3,
-        matchedCondition: 'owner_id == current_user.id',
-        rowCount: 0,
-        metadata: { source: 'api', requestId: 'req-789' },
-      });
-
-      expect(event.granted).toBe(false);
-      expect(event.matchedCondition).toBe('owner_id == current_user.id');
-      expect(event.rowCount).toBe(0);
-      expect(event.metadata?.source).toBe('api');
-    });
-
-    it('should accept all operation types', () => {
-      const ops = ['select', 'insert', 'update', 'delete'] as const;
-      ops.forEach(operation => {
-        expect(() => RLSAuditEventSchema.parse({
-          timestamp: '2024-01-01T00:00:00Z',
-          userId: 'u1',
-          operation,
-          object: 'test',
-          policyName: 'test_policy',
-          granted: true,
-          evaluationDurationMs: 1,
-        })).not.toThrow();
-      });
-    });
-  });
-
-  describe('RLSAuditConfigSchema', () => {
-    it('should accept full audit config', () => {
-      const config = RLSAuditConfigSchema.parse({
-        enabled: true,
-        logLevel: 'all',
-        destination: 'audit_trail',
-        sampleRate: 1.0,
-        retentionDays: 365,
-        includeRowData: false,
-        alertOnDenied: true,
-      });
-
-      expect(config.enabled).toBe(true);
-      expect(config.logLevel).toBe('all');
-      expect(config.destination).toBe('audit_trail');
-      expect(config.sampleRate).toBe(1.0);
-      expect(config.retentionDays).toBe(365);
-    });
-
-    it('should accept all log levels', () => {
-      const levels = ['all', 'denied_only', 'granted_only', 'none'] as const;
-      levels.forEach(logLevel => {
-        const config = RLSAuditConfigSchema.parse({
-          enabled: true,
-          logLevel,
-          destination: 'system_log',
-          sampleRate: 0.5,
-        });
-        expect(config.logLevel).toBe(logLevel);
-      });
-    });
-
-    it('should accept all destinations', () => {
-      const destinations = ['system_log', 'audit_trail', 'external'] as const;
-      destinations.forEach(destination => {
-        const config = RLSAuditConfigSchema.parse({
-          enabled: true,
-          logLevel: 'all',
-          destination,
-          sampleRate: 1,
-        });
-        expect(config.destination).toBe(destination);
-      });
-    });
-
-    it('should enforce sampleRate range', () => {
-      expect(() => RLSAuditConfigSchema.parse({
-        enabled: true,
-        logLevel: 'all',
-        destination: 'system_log',
-        sampleRate: -0.1,
-      })).toThrow();
-
-      expect(() => RLSAuditConfigSchema.parse({
-        enabled: true,
-        logLevel: 'all',
-        destination: 'system_log',
-        sampleRate: 1.1,
-      })).toThrow();
-    });
-
-    it('should apply defaults for includeRowData and alertOnDenied', () => {
-      const config = RLSAuditConfigSchema.parse({
-        enabled: true,
-        logLevel: 'denied_only',
-        destination: 'external',
-        sampleRate: 0.1,
-      });
-
-      expect(config.includeRowData).toBe(false);
-      expect(config.alertOnDenied).toBe(true);
-      expect(config.retentionDays).toBe(90);
-    });
-  });
-
-  describe('RLSConfigSchema with audit', () => {
-    it('should accept config with audit field', () => {
-      const config = RLSConfigSchema.parse({
-        enabled: true,
-        audit: {
-          enabled: true,
-          logLevel: 'denied_only',
-          destination: 'audit_trail',
-          sampleRate: 0.5,
-        },
-      });
-
-      expect(config.audit?.enabled).toBe(true);
-      expect(config.audit?.logLevel).toBe('denied_only');
-    });
-
-    it('should accept config without audit field', () => {
-      const config = RLSConfigSchema.parse({});
-      expect(config.audit).toBeUndefined();
     });
   });
 });

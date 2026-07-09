@@ -150,68 +150,12 @@ ObjectStack RLS:
 ## TypeScript Usage
 
 ```typescript
-import { RLSAuditConfig, RLSAuditEvent, RLSConfig, RLSEvaluationResult, RLSOperation, RLSUserContext, RowLevelSecurityPolicy } from '@objectstack/spec/security';
-import type { RLSAuditConfig, RLSAuditEvent, RLSConfig, RLSEvaluationResult, RLSOperation, RLSUserContext, RowLevelSecurityPolicy } from '@objectstack/spec/security';
+import { RLSEvaluationResult, RLSOperation, RLSUserContext, RowLevelSecurityPolicy } from '@objectstack/spec/security';
+import type { RLSEvaluationResult, RLSOperation, RLSUserContext, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 
 // Validate data
-const result = RLSAuditConfig.parse(data);
+const result = RLSEvaluationResult.parse(data);
 ```
-
----
-
-## RLSAuditConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **enabled** | `boolean` | ✅ | Enable RLS audit logging |
-| **logLevel** | `Enum<'all' \| 'denied_only' \| 'granted_only' \| 'none'>` | ✅ | Which evaluations to log |
-| **destination** | `Enum<'system_log' \| 'audit_trail' \| 'external'>` | ✅ | Audit log destination |
-| **sampleRate** | `number` | ✅ | Sampling rate (0-1) for high-traffic environments |
-| **retentionDays** | `integer` | ✅ | Audit log retention period in days |
-| **includeRowData** | `boolean` | ✅ | Include row data in audit logs (security-sensitive) |
-| **alertOnDenied** | `boolean` | ✅ | Send alerts when access is denied |
-
-
----
-
-## RLSAuditEvent
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **timestamp** | `string` | ✅ | ISO 8601 timestamp of the evaluation |
-| **userId** | `string` | ✅ | User ID whose access was evaluated |
-| **operation** | `Enum<'select' \| 'insert' \| 'update' \| 'delete'>` | ✅ | Database operation being performed |
-| **object** | `string` | ✅ | Target object name |
-| **policyName** | `string` | ✅ | Name of the RLS policy evaluated |
-| **granted** | `boolean` | ✅ | Whether access was granted |
-| **evaluationDurationMs** | `number` | ✅ | Policy evaluation duration in milliseconds |
-| **matchedCondition** | `string` | optional | Which USING/CHECK clause matched |
-| **rowCount** | `number` | optional | Number of rows affected |
-| **metadata** | `Record<string, any>` | optional | Additional audit event metadata |
-
-
----
-
-## RLSConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **enabled** | `boolean` | ✅ | Enable RLS enforcement globally |
-| **defaultPolicy** | `Enum<'deny' \| 'allow'>` | ✅ | Default action when no policies match |
-| **allowSuperuserBypass** | `boolean` | ✅ | Allow superusers to bypass RLS |
-| **bypassRoles** | `string[]` | optional | Roles that bypass RLS (see all data) |
-| **logEvaluations** | `boolean` | ✅ | Log RLS policy evaluations for debugging |
-| **cacheResults** | `boolean` | ✅ | Cache RLS evaluation results |
-| **cacheTtlSeconds** | `integer` | ✅ | Cache TTL in seconds |
-| **prefetchUserContext** | `boolean` | ✅ | Pre-fetch user context for performance |
-| **audit** | `Object` | optional | RLS audit logging configuration |
-
 
 ---
 

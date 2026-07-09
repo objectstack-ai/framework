@@ -29,7 +29,7 @@ const schema = {
       type: 'select',
       options: [
         { value: 'standard' },
-        { value: 'admin_only', visibleWhen: "'admin' in current_user.roles" },
+        { value: 'admin_only', visibleWhen: "'admin' in current_user.positions" },
       ],
     },
   },
@@ -77,26 +77,26 @@ describe('per-option visibleWhen — role gating', () => {
   it('rejects an admin-only value for a non-admin', () => {
     expect(() =>
       evaluateValidationRules(schema, { tier: 'admin_only' }, 'insert', {
-        currentUser: { id: 'u1', roles: ['sales'] },
+        currentUser: { id: 'u1', positions: ['sales'] },
       }),
     ).toThrow(ValidationError);
   });
   it('accepts an admin-only value for an admin', () => {
     expect(() =>
       evaluateValidationRules(schema, { tier: 'admin_only' }, 'insert', {
-        currentUser: { id: 'u1', roles: ['admin'] },
+        currentUser: { id: 'u1', positions: ['admin'] },
       }),
     ).not.toThrow();
   });
   it('accepts the ungated standard value for anyone', () => {
     expect(() =>
       evaluateValidationRules(schema, { tier: 'standard' }, 'insert', {
-        currentUser: { id: 'u1', roles: ['sales'] },
+        currentUser: { id: 'u1', positions: ['sales'] },
       }),
     ).not.toThrow();
   });
   it('fails open when current_user is unbound (system write) — predicate faults', () => {
-    // `'admin' in current_user.roles` faults with no bound user → allowed through.
+    // `'admin' in current_user.positions` faults with no bound user → allowed through.
     // Authorization gating therefore requires the engine to bind current_user.
     expect(() => evaluateValidationRules(schema, { tier: 'admin_only' }, 'insert')).not.toThrow();
   });

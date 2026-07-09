@@ -37,14 +37,15 @@ export interface AutomationContext {
     /** User who triggered the automation */
     userId?: string;
     /**
-     * Role names of the triggering identity. Forwarded by the trigger surface
-     * (REST route / record-change hook) so a `runAs:'user'` run enforces RLS
-     * exactly as that user — not a member fallback. ADR-0049 / #1888.
+     * Position names of the triggering identity (ADR-0090 D3; formerly
+     * `roles`). Forwarded by the trigger surface (REST route / record-change
+     * hook) so a `runAs:'user'` run enforces RLS exactly as that user — not a
+     * member fallback. ADR-0049 / #1888.
      */
-    roles?: string[];
+    positions?: string[];
     /**
      * Explicit permission-set names of the triggering identity (parity with a
-     * direct REST request). Forwarded alongside {@link roles}. ADR-0049 / #1888.
+     * direct REST request). Forwarded alongside {@link positions}. ADR-0049 / #1888.
      */
     permissions?: string[];
     /**

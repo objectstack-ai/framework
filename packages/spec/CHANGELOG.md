@@ -1069,8 +1069,8 @@ expected record`. Both are now `.optional().default(...)`; an empty full page
   ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
   (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
   → `sys_business_unit` (no aliases — see BREAKING above), introduces the platform-owned
-  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
-  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  `sys_user_position` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_position`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
   delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
   owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
   fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
@@ -1126,7 +1126,7 @@ allowOrgOverride:false` and the runtime catalog lists only platform agents
   (#2035).
 
   New factories: `defineDatasource`, `defineConnector`, `definePolicy`,
-  `defineSharingRule`, `defineRole`, `definePermissionSet`,
+  `defineSharingRule`, `definePosition`, `definePermissionSet`,
   `defineEmailTemplateDefinition`, `defineReport`, `defineWebhook`,
   `defineObjectExtension`, `defineCube`, `defineMapping`, `defineTheme`,
   `defineTranslationBundle`, `definePage`, `defineAction`. Each mirrors the 19
@@ -1194,13 +1194,13 @@ allowOrgOverride:false` and the runtime catalog lists only platform agents
   showcase announcement now declares the canonical `public_read`, exercised end-to-end by the
   public-read dogfood proof.
 
-- 2365d07: feat(sharing): configurable role-hierarchy widening — `role_and_subordinates` recipient (ADR-0056 D6)
+- 2365d07: feat(sharing): configurable role-hierarchy widening — `unit_and_subordinates` recipient (ADR-0056 D6)
 
   Role-hierarchy access widening ("a manager sees records shared with their team") is now
   **implemented and configurable per sharing rule**, not a hardcoded no-op. The
-  `role_and_subordinates` recipient (declarable on `sys_sharing_rule.recipient_type`) expands,
+  `unit_and_subordinates` recipient (declarable on `sys_sharing_rule.recipient_type`) expands,
   at evaluation time, to the named role **plus every subordinate role** by walking the
-  `sys_role.parent` hierarchy via a new `RoleGraphService` (mirroring the department/team
+  `sys_position.parent` hierarchy via a new `PositionGraphService` (mirroring the department/team
   graphs; cycle-safe). Previously `Role.parent` was declared but never consumed — a silent
   no-op flagged by the ADR-0056 audit. This is the Salesforce "grant access using hierarchies"
   model expressed declaratively: each rule chooses whether to roll up the hierarchy. Unit-proven
@@ -1346,7 +1346,7 @@ allowOrgOverride:false` and the runtime catalog lists only platform agents
 
   The strategy now coerces a temporal comparand to the column's on-disk storage form via a new optional `StrategyContext.coerceTemporalFilterValue` hook, wired to the driver's public `SqlDriver.temporalFilterValue` (the single source of truth for the storage convention). Coercion is dialect-correct: SQLite `Field.datetime` → epoch ms; `Field.date` text and native-timestamp dialects (Postgres/MySQL) are left unchanged, so Postgres is never handed an epoch integer. Applied to `gte`/`lte`/`gt`/`lt`/`equals`, `in`/`notIn`, and the `dateRange`/timeDimension `BETWEEN` path.
 
-- 641675d: Add `*Input` authoring-type aliases (`DatasourceInput`, `ConnectorInput`, `SharingRuleInput`, `JobInput`, `WebhookInput`, `EmailTemplateDefinitionInput`, `RoleInput`, `PermissionSetInput`, `ObjectExtensionInput`) alongside the existing `FieldInput`/`ActionInput`/`ReportInput`/`PortalInput` convention. These are `z.input<typeof XSchema>` aliases so authored literals keep `.default()` fields optional and accept CEL/Expression string shorthands — matching how `defineX()` helpers already accept input. No runtime change.
+- 641675d: Add `*Input` authoring-type aliases (`DatasourceInput`, `ConnectorInput`, `SharingRuleInput`, `JobInput`, `WebhookInput`, `EmailTemplateDefinitionInput`, `PositionInput`, `PermissionSetInput`, `ObjectExtensionInput`) alongside the existing `FieldInput`/`ActionInput`/`ReportInput`/`PortalInput` convention. These are `z.input<typeof XSchema>` aliases so authored literals keep `.default()` fields optional and accept CEL/Expression string shorthands — matching how `defineX()` helpers already accept input. No runtime change.
 - 94e9040: fix(spec): declare the extended Gantt config fields the renderer actually reads
 
   `GanttConfigSchema` only declared the 5 core timeline fields as a plain

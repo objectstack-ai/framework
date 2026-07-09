@@ -34,9 +34,13 @@ export * from './email-config.zod';
 export * from './email-template.zod';
 export * from './email-template.form';
 export * from './metadata-form-registry';
-export * from './compliance.zod';
+// compliance.zod (GDPR/HIPAA/PCI configs) and masking.zod (role-based data
+// masking) were REMOVED per ADR-0056 D8 "design+enforce or remove": both were
+// declared-but-never-enforced (no runtime consumer), and compliance-grade
+// configuration must never merely LOOK live. FLS (plugin-security) is the
+// enforced field-visibility mechanism; a masking/deny layer arrives with
+// ADR-0066 ⑦/⑧ if needed. encryption.zod stays (EXPERIMENTAL — roadmap).
 export * from './encryption.zod';
-export * from './masking.zod';
 export * from './security-context.zod';
 export * from './incident-response.zod';
 export * from './supplier-security.zod';

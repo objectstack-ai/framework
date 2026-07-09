@@ -1312,10 +1312,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "表示名",
         helpText: "管理者向け表示ラベル"
       },
-      isProfile: {
-        label: "プロファイルか",
-        helpText: "Profile = ユーザーに割り当てる基本セット。Permission Set = 追加権限。"
-      },
       systemPermissions: {
         label: "システム権限",
         helpText: "システム機能キーのリスト"
@@ -1370,10 +1366,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       label: {
         label: "表示名",
         helpText: "管理者向け表示ラベル"
-      },
-      isProfile: {
-        label: "プロファイルか",
-        helpText: "Profile = ユーザーに割り当てる基本セット。Permission Set = 追加権限。"
       },
       systemPermissions: {
         label: "システム権限",

@@ -7,7 +7,7 @@ import { defineForm } from '../ui/view.zod';
  *
  * Used for both `permission` (additive permission grant bundles) and
  * `profile` (the base permission set assigned to every user). The only
- * semantic difference is the `isProfile` flag; we expose it as a switch
+ * flags are minimal (ADR-0090 D2 removed the Profile concept)
  * so admins can see and toggle it explicitly.
  *
  * The object/field permission maps are intentionally kept as JSON for
@@ -26,7 +26,6 @@ export const permissionForm = defineForm({
       fields: [
         { field: 'name', required: true, colSpan: 1, helpText: 'Machine name (snake_case)' },
         { field: 'label', colSpan: 1, helpText: 'Display label for admins' },
-        { field: 'isProfile', type: 'toggle', colSpan: 2, helpText: 'Profile = base set assigned to users. Permission Set = additive grant.' },
       ],
     },
     {

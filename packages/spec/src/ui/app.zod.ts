@@ -46,7 +46,7 @@ const BaseNavItemSchema = z.object({
    * Formula expression returning boolean. 
    * e.g. "user.is_admin || user.department == 'sales'"
    */
-  visible: ExpressionInputSchema.optional().describe('Visibility predicate (CEL). e.g. P`\'org_admin\' in current_user.roles`'),
+  visible: ExpressionInputSchema.optional().describe('Visibility predicate (CEL). e.g. P`\'org_admin\' in current_user.positions`'),
 
   /** Permissions required to see/access this navigation item */
   requiredPermissions: z.array(z.string()).optional().describe('Permissions required to access this item'),

@@ -53,7 +53,7 @@ describe('metadata create seeds validate against their spec schemas', () => {
     const KNOWN_UNSEEDED = new Set([
       'report',        // canvas-create: dataset/measures picked interactively
       'app', 'field', 'seed', 'job', 'datasource', 'translation', 'doc', 'book',
-      'permission', 'profile', 'role', 'agent', 'tool', 'skill', 'email_template',
+      'permission', 'position', 'agent', 'tool', 'skill', 'email_template',
     ]);
     const seeded = new Set(listMetadataCreateSeedTypes());
     const missing = listMetadataTypeSchemaTypes().filter((t) => !seeded.has(t) && !KNOWN_UNSEEDED.has(t));

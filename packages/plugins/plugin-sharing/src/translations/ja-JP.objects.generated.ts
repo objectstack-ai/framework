@@ -32,7 +32,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           user: "ユーザー",
           group: "グループ",
           role: "ロール",
-          role_and_subordinates: "ロールと下位階層",
+          unit_and_subordinates: "ロールと下位階層",
           guest: "ゲスト"
         }
       },

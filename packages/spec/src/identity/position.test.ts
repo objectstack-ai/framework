@@ -1,64 +1,64 @@
 import { describe, it, expect } from 'vitest';
-import { RoleSchema, type Role } from './role.zod';
+import { PositionSchema, type Position } from './position.zod';
 
-describe('RoleSchema', () => {
+describe('PositionSchema', () => {
   describe('Basic Properties', () => {
     it('should accept minimal role', () => {
-      const role: Role = {
+      const role: Position = {
         name: 'ceo',
         label: 'CEO',
       };
 
-      expect(() => RoleSchema.parse(role)).not.toThrow();
+      expect(() => PositionSchema.parse(role)).not.toThrow();
     });
 
     it('should enforce snake_case for role name', () => {
       const validNames = ['ceo', 'vp_sales', 'sales_manager', 'account_exec'];
       validNames.forEach(name => {
-        expect(() => RoleSchema.parse({ name, label: 'Test' })).not.toThrow();
+        expect(() => PositionSchema.parse({ name, label: 'Test' })).not.toThrow();
       });
 
       const invalidNames = ['CEO', 'VP-Sales', 'salesManager', '123role', '_internal'];
       invalidNames.forEach(name => {
-        expect(() => RoleSchema.parse({ name, label: 'Test' })).toThrow();
+        expect(() => PositionSchema.parse({ name, label: 'Test' })).toThrow();
       });
     });
 
     it('should accept role with description', () => {
-      const role: Role = {
+      const role: Position = {
         name: 'sales_director',
         label: 'Sales Director',
         description: 'Oversees all sales operations',
       };
 
-      expect(() => RoleSchema.parse(role)).not.toThrow();
+      expect(() => PositionSchema.parse(role)).not.toThrow();
     });
   });
 
   describe('Hierarchy', () => {
     it('should accept role without parent (top level)', () => {
-      const role: Role = {
+      const role: Position = {
         name: 'ceo',
         label: 'Chief Executive Officer',
       };
 
-      expect(() => RoleSchema.parse(role)).not.toThrow();
+      expect(() => PositionSchema.parse(role)).not.toThrow();
     });
 
     it('should accept role with parent', () => {
-      const role: Role = {
+      const role: Position = {
         name: 'vp_sales',
         label: 'VP of Sales',
         parent: 'ceo',
       };
 
-      expect(() => RoleSchema.parse(role)).not.toThrow();
+      expect(() => PositionSchema.parse(role)).not.toThrow();
     });
   });
 
   describe('Real-World Role Hierarchy Examples', () => {
     it('should accept complete sales organization hierarchy', () => {
-      const roles: Role[] = [
+      const roles: Position[] = [
         {
           name: 'ceo',
           label: 'Chief Executive Officer',
@@ -97,12 +97,12 @@ describe('RoleSchema', () => {
       ];
 
       roles.forEach(role => {
-        expect(() => RoleSchema.parse(role)).not.toThrow();
+        expect(() => PositionSchema.parse(role)).not.toThrow();
       });
     });
 
     it('should accept service organization hierarchy', () => {
-      const roles: Role[] = [
+      const roles: Position[] = [
         {
           name: 'vp_customer_success',
           label: 'VP of Customer Success',
@@ -125,12 +125,12 @@ describe('RoleSchema', () => {
       ];
 
       roles.forEach(role => {
-        expect(() => RoleSchema.parse(role)).not.toThrow();
+        expect(() => PositionSchema.parse(role)).not.toThrow();
       });
     });
 
     it('should accept product organization hierarchy', () => {
-      const roles: Role[] = [
+      const roles: Position[] = [
         {
           name: 'cto',
           label: 'Chief Technology Officer',
@@ -164,12 +164,12 @@ describe('RoleSchema', () => {
       ];
 
       roles.forEach(role => {
-        expect(() => RoleSchema.parse(role)).not.toThrow();
+        expect(() => PositionSchema.parse(role)).not.toThrow();
       });
     });
 
     it('should accept matrix organization with multiple reporting lines', () => {
-      const roles: Role[] = [
+      const roles: Position[] = [
         {
           name: 'ceo',
           label: 'CEO',
@@ -202,12 +202,12 @@ describe('RoleSchema', () => {
       ];
 
       roles.forEach(role => {
-        expect(() => RoleSchema.parse(role)).not.toThrow();
+        expect(() => PositionSchema.parse(role)).not.toThrow();
       });
     });
 
     it('should accept flat organization', () => {
-      const roles: Role[] = [
+      const roles: Position[] = [
         {
           name: 'founder',
           label: 'Founder',
@@ -220,7 +220,7 @@ describe('RoleSchema', () => {
       ];
 
       roles.forEach(role => {
-        expect(() => RoleSchema.parse(role)).not.toThrow();
+        expect(() => PositionSchema.parse(role)).not.toThrow();
       });
     });
   });

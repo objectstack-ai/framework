@@ -654,8 +654,8 @@
   ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
   (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
   → `sys_business_unit` (no aliases — see BREAKING above), introduces the platform-owned
-  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
-  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  `sys_user_position` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_position`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
   delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
   owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
   fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads

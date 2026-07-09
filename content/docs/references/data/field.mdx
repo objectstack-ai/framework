@@ -14,8 +14,8 @@ Field Type Enum
 ## TypeScript Usage
 
 ```typescript
-import { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, FieldType, FileAttachmentConfig, LocationCoordinates, SelectOption, VectorConfig } from '@objectstack/spec/data';
-import type { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, FieldType, FileAttachmentConfig, LocationCoordinates, SelectOption, VectorConfig } from '@objectstack/spec/data';
+import { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, FieldType, FileAttachmentConfig, LocationCoordinates, VectorConfig } from '@objectstack/spec/data';
+import type { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, FieldType, FileAttachmentConfig, LocationCoordinates, VectorConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = Address.parse(data);
@@ -192,20 +192,6 @@ const result = Address.parse(data);
 | **longitude** | `number` | ✅ | Longitude coordinate |
 | **altitude** | `number` | optional | Altitude in meters |
 | **accuracy** | `number` | optional | Accuracy in meters |
-
-
----
-
-## SelectOption
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **label** | `string` | ✅ | Display label (human-readable, any case allowed) |
-| **value** | `string` | ✅ | Stored value (lowercase machine identifier) |
-| **color** | `string` | optional | Color code for badges/charts |
-| **default** | `boolean` | optional | Is default option |
 
 
 ---

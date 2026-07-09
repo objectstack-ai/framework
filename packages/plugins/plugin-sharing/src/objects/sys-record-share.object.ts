@@ -135,7 +135,7 @@ export const SysRecordShare = ObjectSchema.create({
 
     // ── Recipient (who receives access) ──────────────────────────
     recipient_type: Field.select(
-      ['user', 'group', 'role', 'role_and_subordinates', 'guest'],
+      ['user', 'group', 'role', 'unit_and_subordinates', 'guest'],
       {
         label: 'Recipient Type',
         required: true,

@@ -33,6 +33,14 @@ export const SysScimProvider = ObjectSchema.create({
   icon: 'users',
   isSystem: true,
   managedBy: 'better-auth',
+  // [ADR-0066 D3/④] Admin-only identity config carrying a live credential
+  // (`scim_token` — the bearer external IdPs authenticate provisioning calls
+  // with). Object-level capability gate, mirroring the sibling
+  // `sys_sso_provider`: ordinary members are denied entirely (without it, the
+  // `member_default` wildcard `'*': allowRead` would expose SCIM connections
+  // to every authenticated user). better-auth's own endpoints read via a
+  // system context, so SCIM provisioning is unaffected.
+  requiredPermissions: ['manage_platform_settings'],
   // ADR-0010 §3.7 — managed by better-auth; tenants may not edit schema.
   protection: {
     lock: 'full',

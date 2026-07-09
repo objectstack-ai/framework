@@ -101,7 +101,7 @@ function mcpRequest(body: unknown): Request {
   });
 
   // The acting user — an authenticated, non-system principal.
-  const user = { userId: 'user_1', roles: [], permissions: [], systemPermissions: [] };
+  const user = { userId: 'user_1', positions: [], permissions: [], systemPermissions: [] };
   const bridge = bridgeFor(user);
 
   // ── Step 1 — the MCP server advertises the action tools ───────────
@@ -151,7 +151,7 @@ function mcpRequest(body: unknown): Request {
       ? o
       : { ...o, actions: o.actions.map((a: any) => (a.name === 'clone_task' ? { ...a, requiredPermissions: ['todo_admin'] } : a)) },
   );
-  const denyBridge = bridgeFor({ userId: 'user_2', roles: [], permissions: [], systemPermissions: [] }, gatedObjects);
+  const denyBridge = bridgeFor({ userId: 'user_2', positions: [], permissions: [], systemPermissions: [] }, gatedObjects);
   const denied = await callMcp(denyBridge, toolsCall(5, 'run_action', { actionName: 'clone_task', recordId: taskId }));
   check(denied.result?.isError === true, 'run_action denied when the caller lacks the capability');
   check(/requires capability/i.test(denied.result?.content?.[0]?.text ?? ''), 'denial cites the missing capability');
@@ -159,7 +159,7 @@ function mcpRequest(body: unknown): Request {
   const denyList = JSON.parse((await callMcp(denyBridge, toolsCall(6, 'list_actions', {}))).result.content[0].text).actions as any[];
   check(!denyList.some((a) => a.name === 'clone_task'), 'list_actions hides the gated action from a non-holder');
 
-  const allowBridge = bridgeFor({ userId: 'admin_1', roles: [], permissions: [], systemPermissions: ['todo_admin'] }, gatedObjects);
+  const allowBridge = bridgeFor({ userId: 'admin_1', positions: [], permissions: [], systemPermissions: ['todo_admin'] }, gatedObjects);
   const allowed = await callMcp(allowBridge, toolsCall(7, 'run_action', { actionName: 'clone_task', recordId: taskId }));
   check(allowed.result?.isError !== true, 'run_action allowed for a holder of the capability');
   const allowList = JSON.parse((await callMcp(allowBridge, toolsCall(8, 'list_actions', {}))).result.content[0].text).actions as any[];

@@ -2,11 +2,11 @@
 
 /**
  * bootstrapBuiltinRoles — seed the framework's reserved built-in identity roles
- * (ADR-0068 D2) into `sys_role`.
+ * (ADR-0068 D2) into `sys_position`.
  *
  * The four built-in roles (`platform_admin`, `org_owner`, `org_admin`,
- * `org_member`) are a normalized PROJECTION surfaced in `current_user.roles`.
- * Seeding their `sys_role` rows makes the role catalog (consumed by role-bound
+ * `org_member`) are a normalized PROJECTION surfaced in `current_user.positions`.
+ * Seeding their `sys_position` rows makes the role catalog (consumed by role-bound
  * permission sets, sharing-rule recipients, and the ADR-0068 D4 role-catalog
  * validator) self-describing and AI-groundable. Their SOURCES OF TRUTH —
  * `sys_member.role` for the org_* roles and the unscoped `admin_full_access`
@@ -17,7 +17,26 @@
  * the platform-admin and declared-role bootstraps.
  */
 
-import { BUILTIN_ROLE_NAMES, BUILTIN_ROLE_METADATA } from '@objectstack/spec';
+import { BUILTIN_IDENTITY_NAMES, BUILTIN_IDENTITY_METADATA, EVERYONE_POSITION, GUEST_POSITION } from '@objectstack/spec';
+
+/**
+ * [ADR-0090 D5/D9] Audience anchors seeded alongside the identity names.
+ * `everyone` — implicit for every authenticated member; its bindings are the
+ * tenant's default grants. `guest` — implicit for unauthenticated principals.
+ * Both are system-managed and undeletable like the identity rows.
+ */
+const AUDIENCE_ANCHOR_METADATA: Record<string, { label: string; description: string }> = {
+  [EVERYONE_POSITION]: {
+    label: 'Everyone',
+    description:
+      'Built-in audience anchor: every authenticated member holds this position implicitly. Permission sets bound to it are the default grants for the tenant (ADR-0090 D5). High-privilege sets cannot be bound here.',
+  },
+  [GUEST_POSITION]: {
+    label: 'Guest',
+    description:
+      'Built-in audience anchor: unauthenticated principals hold this position implicitly and exclusively. Bindings face the strictest checks — named objects only, read-mostly, never a wildcard (ADR-0090 D9).',
+  },
+};
 
 const SYSTEM_CTX = { isSystem: true };
 
@@ -53,19 +72,22 @@ export async function bootstrapBuiltinRoles(
   }
   let seeded = 0;
   let updated = 0;
-  for (const name of BUILTIN_ROLE_NAMES) {
-    const meta = BUILTIN_ROLE_METADATA[name];
+  const rows: Array<[string, { label: string; description: string }]> = [
+    ...BUILTIN_IDENTITY_NAMES.map((n) => [n, BUILTIN_IDENTITY_METADATA[n]] as [string, { label: string; description: string }]),
+    ...Object.entries(AUDIENCE_ANCHOR_METADATA),
+  ];
+  for (const [name, meta] of rows) {
     const fields = { label: meta.label, description: meta.description, managed_by: 'system' };
-    const existing = await tryFind(ql, 'sys_role', { name }, 1);
+    const existing = await tryFind(ql, 'sys_position', { name }, 1);
     if (existing[0]?.id) {
-      if (await tryUpdate(ql, 'sys_role', { id: existing[0].id, ...fields })) updated += 1;
+      if (await tryUpdate(ql, 'sys_position', { id: existing[0].id, ...fields })) updated += 1;
     } else {
-      const created = await tryInsert(ql, 'sys_role', {
-        id: genId('role'), name, ...fields, active: true, is_default: false,
+      const created = await tryInsert(ql, 'sys_position', {
+        id: genId('position'), name, ...fields, active: true, is_default: false,
       });
       if (created) seeded += 1;
     }
   }
-  options.logger?.info?.('[security] built-in identity roles seeded into sys_role', { seeded, updated, total: BUILTIN_ROLE_NAMES.length });
+  options.logger?.info?.('[security] built-in identity names + audience anchors seeded into sys_position', { seeded, updated, total: rows.length });
   return { seeded, updated };
 }

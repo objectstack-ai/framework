@@ -162,6 +162,35 @@ export const ObjectAccessConfigSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * [ADR-0066 ⑤] Per-operation capability requirements for an object. Each key
+ * lists the capabilities a caller must hold for that operation CLASS; an absent
+ * key means that operation carries no capability gate. Lets an object be
+ * "read-open / write-gated" (Salesforce & Dataverse separate capability by
+ * operation) instead of the flat all-CRUD gate the `string[]` form applies.
+ * Operation→class mapping mirrors the CRUD permission bits: `transfer`/`restore`
+ * fold into `update`, `purge` into `delete`. `.strict()` so a mistyped key
+ * (e.g. `reads`) is rejected at author time rather than silently ignored.
+ */
+export const PerOperationRequiredPermissionsSchema = z.object({
+  read: z.array(z.string()).optional().describe('Capabilities required to read (find/findOne/count/aggregate).'),
+  create: z.array(z.string()).optional().describe('Capabilities required to create (insert).'),
+  update: z.array(z.string()).optional().describe('Capabilities required to update (update/transfer/restore).'),
+  delete: z.array(z.string()).optional().describe('Capabilities required to delete (delete/purge).'),
+}).strict();
+
+/**
+ * [ADR-0066 D3/⑤] Object capability contract — either capabilities required for
+ * ALL operations (`string[]`, the original shape) or a per-operation map
+ * (narrows the gate by operation). See the field doc on `Object.requiredPermissions`.
+ */
+export const ObjectRequiredPermissionsSchema = z.union([
+  z.array(z.string()),
+  PerOperationRequiredPermissionsSchema,
+]);
+export type PerOperationRequiredPermissions = z.infer<typeof PerOperationRequiredPermissionsSchema>;
+export type ObjectRequiredPermissions = z.infer<typeof ObjectRequiredPermissionsSchema>;
+
+/**
  * Soft Delete Configuration Schema
  * Implements recycle bin / trash functionality
  * 
@@ -372,7 +401,7 @@ const ObjectSchemaBase = z.object({
    *   CSV Import is suppressed (config rows have nested JSON envelopes
    *   that don't round-trip through a flat sheet; clients should offer a
    *   purpose-built "Import definition (JSON)" action instead). Example:
-   *   `sys_sharing_rule`, `sys_role`, `sys_permission_set`, `sys_view`,
+   *   `sys_sharing_rule`, `sys_position`, `sys_permission_set`, `sys_view`,
    *   `sys_app`.
    * - `system`       — Runtime rows whose lifecycle is owned by a
    *   platform service (the approval engine, the sharing engine, the
@@ -382,7 +411,7 @@ const ObjectSchemaBase = z.object({
    *   `sys_approval_request`; "Recall" on the request changes its
    *   state). Example: `sys_approval_request`, `sys_record_share`,
    *   `sys_notification`, `sys_invitation`,
-   *   `sys_user_permission_set` / `sys_role_permission_set`.
+   *   `sys_user_permission_set` / `sys_position_permission_set`.
    * - `append-only`  — Immutable audit log. No New / Import / Edit /
    *   Delete; only View and Export. Example: `sys_approval_action`,
    *   `sys_audit_log`, `sys_activity`, `sys_email`, `sys_presence`.
@@ -522,14 +551,19 @@ const ObjectSchemaBase = z.object({
   access: ObjectAccessConfigSchema.optional().describe('[ADR-0066 D2] Object exposure posture (public-by-default vs private secure-by-default).'),
 
   /**
-   * [ADR-0066 D3] Capability contract — capability name(s) (permission-set
-   * `systemPermissions`; D1 records) a caller MUST hold to access this object at
-   * all. Mirrors `App.requiredPermissions`. Enforced by plugin-security as an
+   * [ADR-0066 D3/⑤] Capability contract — capability name(s) (permission-set
+   * `systemPermissions`; D1 records) a caller MUST hold to access this object.
+   * Mirrors `App.requiredPermissions`. Enforced by plugin-security as an
    * AND-gate: checked IN ADDITION to permission-set CRUD grants — a caller
-   * missing any listed capability is denied regardless of grants. Absent/empty
-   * ⇒ no capability gate.
+   * missing any required capability is denied regardless of grants.
+   *
+   * Two shapes:
+   *  - `string[]` — required for ALL operations (read/create/update/delete).
+   *  - `{ read?, create?, update?, delete? }` (⑤) — required only for the listed
+   *    operation class, so an object can be read-open but write-gated.
+   * Absent/empty ⇒ no capability gate.
    */
-  requiredPermissions: z.array(z.string()).optional().describe('[ADR-0066 D3] Capabilities required to access this object (AND-gate, checked alongside CRUD grants).'),
+  requiredPermissions: ObjectRequiredPermissionsSchema.optional().describe('[ADR-0066 D3/⑤] Capabilities required to access this object (AND-gate) — `string[]` gates all CRUD, or a `{read,create,update,delete}` map gates per operation.'),
   
   // Soft delete configuration
   softDelete: SoftDeleteConfigSchema.optional().describe('Soft delete (trash/recycle bin) configuration'),
@@ -670,7 +704,17 @@ const ObjectSchemaBase = z.object({
    * ids)` on reads and requires master edit-access on by-id writes. No RLS policy
    * is authored — the inheritance is derived from the relationship.
    */
-  sharingModel: z.enum(['private', 'public_read', 'public_read_write', 'controlled_by_parent', 'read', 'read_write', 'full']).optional().describe('Org-Wide Default record visibility (OWD). Canonical: private (owner-only) | public_read (everyone reads, owner writes) | public_read_write (everyone reads+writes) | controlled_by_parent (derived from the master record). Legacy aliases: read=public_read, read_write/full=public_read_write. ADR-0056 D1.'),
+  sharingModel: z.enum(['private', 'public_read', 'public_read_write', 'controlled_by_parent']).optional().describe('Org-Wide Default record visibility (OWD) for INTERNAL users. Canonical four only (legacy aliases removed, ADR-0090 D4): private (owner-only) | public_read (everyone reads, owner writes) | public_read_write (everyone reads+writes) | controlled_by_parent (derived from the master record). A CUSTOM object that omits this resolves to private at runtime (ADR-0090 D1).'),
+
+  /**
+   * [ADR-0090 D11] Org-Wide Default for EXTERNAL principals
+   * (`principal.audience: 'external'` — portal / partner users). A second,
+   * stricter dial: defaults to `private` when omitted and may NEVER be wider
+   * than the internal `sharingModel` (validated at authoring). The BU depth
+   * axis does not apply to externals; their visibility = own records +
+   * explicit shares + this baseline.
+   */
+  externalSharingModel: z.enum(['private', 'public_read', 'public_read_write', 'controlled_by_parent']).optional().describe('[ADR-0090 D11] OWD for external (portal/partner) principals. Defaults to private; must be <= sharingModel in openness.'),
 
   /**
    * Public Share-Link Policy

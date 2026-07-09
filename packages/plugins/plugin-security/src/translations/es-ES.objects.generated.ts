@@ -9,17 +9,17 @@
 import type { TranslationData } from '@objectstack/spec/system';
 
 export const esESObjects: NonNullable<TranslationData['objects']> = {
-  sys_role: {
-    label: "Rol",
-    pluralLabel: "Roles",
-    description: "Definiciones de rol para el control de acceso RBAC",
+  sys_position: {
+    label: "Puesto",
+    pluralLabel: "Puestoes",
+    description: "Definiciones de puesto para el contpuesto de acceso RBAC",
     fields: {
       label: {
         label: "Nombre visible"
       },
       name: {
         label: "Nombre de API",
-        help: "Nombre técnico único del rol (p. ej. admin, editor, viewer)."
+        help: "Nombre técnico único del puesto (p. ej. admin, editor, viewer)."
       },
       description: {
         label: "Descripción"
@@ -32,7 +32,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Activo"
       },
       is_default: {
-        label: "Rol predeterminado",
+        label: "Puesto predeterminado",
         help: "Se asigna automáticamente a los nuevos usuarios."
       },
       id: {
@@ -49,34 +49,34 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       active: {
         label: "Activo"
       },
-      default_roles: {
+      default_positions: {
         label: "Predeterminado"
       },
       custom: {
         label: "Personalizado"
       },
-      all_roles: {
+      all_positions: {
         label: "Todos"
       }
     },
     _actions: {
-      activate_role: {
+      activate_position: {
         label: "Activar rol",
-        successMessage: "Rol activado"
+        successMessage: "Puesto activado"
       },
-      deactivate_role: {
+      deactivate_position: {
         label: "Desactivar rol",
-        confirmText: "¿Desactivar este rol? Los usuarios con el rol conservan su asignación, pero el rol deja de otorgar permisos hasta que se vuelva a activar.",
-        successMessage: "Rol desactivado"
+        confirmText: "¿Desactivar este rol? Los usuarios con el puesto conservan su asignación, pero el puesto deja de otorgar permisos hasta que se vuelva a activar.",
+        successMessage: "Puesto desactivado"
       },
-      set_default_role: {
+      set_default_position: {
         label: "Establecer como predeterminado",
-        confirmText: "¿Convertir este en el rol predeterminado para los nuevos usuarios? Los usuarios existentes no se ven afectados.",
-        successMessage: "Rol predeterminado actualizado"
+        confirmText: "¿Convertir este en el puesto predeterminado para los nuevos usuarios? Los usuarios existentes no se ven afectados.",
+        successMessage: "Puesto predeterminado actualizado"
       },
-      clone_role: {
+      clone_position: {
         label: "Clonar rol",
-        successMessage: "Rol clonado"
+        successMessage: "Puesto clonado"
       }
     }
   },
@@ -188,7 +188,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_role_permission_set: {
+  sys_position_permission_set: {
     label: "Conjunto de permisos de rol",
     pluralLabel: "Conjuntos de permisos de rol",
     description: "Vincula un conjunto de permisos a un rol.",
@@ -197,9 +197,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "ID de vinculación",
         help: "UUID de la vinculación rol-conjunto de permisos."
       },
-      role_id: {
-        label: "Rol",
-        help: "Clave foránea a sys_role."
+      position_id: {
+        label: "Puesto",
+        help: "Clave foránea a sys_position."
       },
       permission_set_id: {
         label: "Conjunto de permisos",

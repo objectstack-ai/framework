@@ -355,8 +355,8 @@
   ADR-0057 — ERP authorization core. Adds permission-grant access DEPTH
   (`own`/`own_and_reports`/`unit`/`unit_and_below`/`org`), renames `sys_department`
   → `sys_business_unit` (no aliases — see BREAKING above), introduces the platform-owned
-  `sys_user_role` assignment, and seeds stack-declared `roles`/`sharingRules` into
-  `sys_role`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
+  `sys_user_position` assignment, and seeds stack-declared `roles`/`sharingRules` into
+  `sys_position`/`sys_sharing_rule` at boot (closes #2077). Hierarchy-relative scopes are
   delegated to a pluggable `IHierarchyScopeResolver` (open edition fails closed to
   owner-only; `defineStack` errors without `requires: ['hierarchy-security']`). Also
   fixes a latent over-grant where `engine.find({ filter })` was ignored (driver reads
@@ -765,8 +765,8 @@
     `i18n.loadTranslations` (the i18n service is optional — load is best-effort).
     - `plugin-webhooks` ← `sys_webhook`, `sys_webhook_delivery`
     - `plugin-approvals` ← `sys_approval_request`, `sys_approval_action`
-    - `plugin-security` ← `sys_role`, `sys_permission_set`,
-      `sys_user_permission_set`, `sys_role_permission_set`
+    - `plugin-security` ← `sys_position`, `sys_permission_set`,
+      `sys_user_permission_set`, `sys_position_permission_set`
     - `plugin-sharing` ← `sys_record_share`, `sys_sharing_rule`, `sys_share_link`
   - `@objectstack/platform-objects` translation bundles are regenerated to drop
     those objects' keys (its extract config already excluded them); all other

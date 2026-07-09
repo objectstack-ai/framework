@@ -163,11 +163,11 @@ describe('SharingRuleSchema', () => {
       object: 'account',
       type: 'owner',
       ownedBy: {
-        type: 'role',
+        type: 'position',
         value: 'role_sales_rep',
       },
       sharedWith: {
-        type: 'role',
+        type: 'position',
         value: 'role_sales_manager',
       },
     });
@@ -199,12 +199,12 @@ describe('SharingRuleSchema', () => {
       object: 'account',
       type: 'owner',
       ownedBy: {
-        type: 'role',
+        type: 'position',
         value: 'role_sales_rep',
       },
       accessLevel: 'read',
       sharedWith: {
-        type: 'role',
+        type: 'position',
         value: 'role_sales_manager',
       },
     });

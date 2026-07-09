@@ -198,7 +198,7 @@ rowLevelSecurity:
     using: "status == 'active'"  # date-window/function predicates (NOW(), arithmetic) are NOT pushdown-able (ADR-0055) — enforce time windows in the app layer or a pre-resolved set
 ```
 
-> RLS conditions are compiled to parameterized queries. The default policy when no rule matches is **deny** (`RLSConfigSchema.defaultPolicy`).
+> RLS conditions are compiled to parameterized queries, and the enforcement path fails **closed**: an applicable policy that cannot be compiled denies (returns zero rows) rather than being dropped. (The old global `RLSConfigSchema` was removed in 2026-07 — it was never read by the enforced path; per-policy `RowLevelSecurityPolicySchema` is the live surface.)
 
 ---
 
@@ -251,71 +251,14 @@ fields:
 
 ## 4. Data Masking
 
-> **Status: schema exists, field wiring removed.** `MaskingRuleSchema`
-> (`packages/spec/src/system/masking.zod.ts`, strategies `redact`, `partial`,
-> `hash`, `tokenize`, `randomize`, `nullify`, `substitute`) remains in the
-> System namespace, but the per-field `maskingRule` property was **pruned from
-> the Field schema in 2026-06** as dead surface — it was never read by the
-> runtime (see `docs/audits/2026-06-dead-surface-disposition-plan.md`). To keep
-> a value out of reader hands today, use FLS (`readable: false`), `hidden`, or
-> a `type: 'secret'` field. The examples below show the *schema shapes* for
-> implementers, not a wired runtime capability.
-
-### Partial Masking
-
-```yaml
-# user.object.yml
-fields:
-  ssn:
-    type: text
-    label: SSN
-    maskingRule:
-      field: ssn
-      strategy: partial
-      pattern: '\d{5}$'        # regex selecting the visible portion
-      preserveFormat: true
-      preserveLength: true
-      exemptRoles: [hr_admin]  # roles that see the unmasked value
-```
-
-### Full Redaction
-
-```yaml
-fields:
-  credit_card:
-    type: text
-    label: Credit Card
-    maskingRule:
-      field: credit_card
-      strategy: redact
-```
-
-### Role-Scoped Masking
-
-`roles` lists the roles that see the *masked* value; `exemptRoles` lists those that see the original:
-
-```yaml
-fields:
-  salary:
-    type: currency
-    label: Salary
-    maskingRule:
-      field: salary
-      strategy: partial
-      exemptRoles: [hr_manager, hr_admin]
-```
-
-### Hash Masking
-
-```yaml
-fields:
-  email:
-    type: email
-    label: Email
-    maskingRule:
-      field: email
-      strategy: hash
-```
+> **Status: REMOVED (2026-07, ADR-0056 D8 "design + enforce, or remove").**
+> `MaskingRuleSchema` / `MaskingConfigSchema` were deleted from the spec: no
+> redaction layer ever applied them, and the per-field `maskingRule` property
+> had already been pruned in 2026-06. To keep a value out of reader hands, use
+> **FLS** (`readable: false` field permissions — enforced by plugin-security's
+> field masker), `hidden`, or a `type: 'secret'` field. A subtractive
+> masking/deny layer, if needed, arrives with the ADR-0066 ⑦/⑧ muting work.
+> Disposition tracked in the ADR-0056 D10 conformance matrix (`data-masking`).
 
 ---
 
@@ -421,7 +364,7 @@ Object- and field-level history is opt-in metadata, not a free-form `enable.audi
 
 - **Field history** — set `trackHistory: true` on the object (`ObjectCapabilities` in `object.zod.ts`) to record per-field changes.
 - **Per-field audit trail** — set `auditTrail: true` on an individual field to track every change with user and timestamp.
-- **RLS audit** — RLS policy evaluations can be logged via `RLSAuditConfigSchema` (`enabled`, `logLevel`, `destination`, `retentionDays`, …). The recorded event shape is `RLSAuditEventSchema` (timestamp, userId, operation, object, policyName, granted, evaluationDurationMs).
+- **RLS audit** — removed (2026-07, ADR-0056 D8): the `RLSAuditConfigSchema`/`RLSAuditEventSchema` shapes were never emitted or read by the runtime RLS path and were deleted from the spec. Enforcement decisions surface today through the security plugin's fail-closed warnings and the standard audit log (`plugin-audit`), not a dedicated RLS event stream.
 
 ```yaml
 # account.object.yml

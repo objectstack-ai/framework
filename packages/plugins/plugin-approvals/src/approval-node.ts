@@ -48,7 +48,7 @@ interface MinimalLogger {
   warn?: (msg: any, ...rest: any[]) => void;
 }
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
  * Register the `approval` node executor on the automation engine. Idempotent at

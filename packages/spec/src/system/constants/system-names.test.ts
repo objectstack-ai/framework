@@ -29,7 +29,7 @@ describe('SystemObjectName', () => {
     expect(SystemObjectName.DEVICE_CODE).toBe('sys_device_code');
     expect(SystemObjectName.JWKS).toBe('sys_jwks');
     expect(SystemObjectName.USER_PREFERENCE).toBe('sys_user_preference');
-    expect(SystemObjectName.ROLE).toBe('sys_role');
+    expect(SystemObjectName.POSITION).toBe('sys_position');
     expect(SystemObjectName.PERMISSION_SET).toBe('sys_permission_set');
     expect(SystemObjectName.AUDIT_LOG).toBe('sys_audit_log');
     expect(SystemObjectName.METADATA).toBe('sys_metadata');
@@ -43,7 +43,7 @@ describe('SystemObjectName', () => {
     expect(names).toContain('sys_organization');
     expect(names).toContain('sys_team');
     expect(names).toContain('sys_team_member');
-    expect(names).toContain('sys_role');
+    expect(names).toContain('sys_position');
     expect(names).toContain('sys_audit_log');
     expect(names).toContain('sys_presence');
   });
@@ -62,7 +62,7 @@ describe('SystemObjectName', () => {
     expect(keys).toContain('API_KEY');
     expect(keys).toContain('TWO_FACTOR');
     expect(keys).toContain('USER_PREFERENCE');
-    expect(keys).toContain('ROLE');
+    expect(keys).toContain('POSITION');
     expect(keys).toContain('PERMISSION_SET');
     expect(keys).toContain('AUDIT_LOG');
     expect(keys).toContain('METADATA');

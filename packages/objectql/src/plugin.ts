@@ -651,7 +651,7 @@ export class ObjectQLPlugin implements Plugin {
               const existing = await this.ql!.findOne(hookCtx.object, {
                 where: { id: hookCtx.input.id },
                 context: {
-                  roles: [],
+                  positions: [],
                   permissions: [],
                   isSystem: true,
                   ...(hookCtx.transaction ? { transaction: hookCtx.transaction } : {}),
@@ -676,7 +676,7 @@ export class ObjectQLPlugin implements Plugin {
               const existing = await this.ql!.findOne(hookCtx.object, {
                 where: { id: hookCtx.input.id },
                 context: {
-                  roles: [],
+                  positions: [],
                   permissions: [],
                   isSystem: true,
                   ...(hookCtx.transaction ? { transaction: hookCtx.transaction } : {}),

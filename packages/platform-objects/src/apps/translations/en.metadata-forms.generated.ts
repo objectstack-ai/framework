@@ -1312,10 +1312,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
         label: "Label",
         helpText: "Display label for admins"
       },
-      isProfile: {
-        label: "Is Profile",
-        helpText: "Profile = base set assigned to users. Permission Set = additive grant."
-      },
       systemPermissions: {
         label: "System Permissions",
         helpText: "List of system capability keys"
@@ -1370,10 +1366,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       label: {
         label: "Label",
         helpText: "Display label for admins"
-      },
-      isProfile: {
-        label: "Is Profile",
-        helpText: "Profile = base set assigned to users. Permission Set = additive grant."
       },
       systemPermissions: {
         label: "System Permissions",

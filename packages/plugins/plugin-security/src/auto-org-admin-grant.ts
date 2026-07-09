@@ -31,7 +31,7 @@
  * **Anti-escalation:** `organization_admin` itself (declared in
  * `platform-objects/src/security/default-permission-sets.ts`) is
  * deliberately read-only on the global RBAC tables
- * (`sys_permission_set`, `sys_user_permission_set`, `sys_role`, …),
+ * (`sys_permission_set`, `sys_user_permission_set`, `sys_position`, …),
  * so a freshly-granted org admin cannot rebind themselves to
  * `admin_full_access`.
  */

@@ -2972,7 +2972,7 @@ export class HttpDispatcher {
                     const ec = (context as any)?.executionContext;
                     const userIdFromAuth = (context as any)?.user?.id ?? (context as any)?.userId ?? ec?.userId;
                     if (userIdFromAuth) automationContext.userId = userIdFromAuth;
-                    if (Array.isArray(ec?.roles) && ec.roles.length) automationContext.roles = ec.roles;
+                    if (Array.isArray(ec?.positions) && ec.positions.length) automationContext.positions = ec.positions;
                     if (Array.isArray(ec?.permissions) && ec.permissions.length) automationContext.permissions = ec.permissions;
                     if (ec?.tenantId) automationContext.tenantId = ec.tenantId;
                     const result = await automationService.execute(name, automationContext);
@@ -3392,7 +3392,7 @@ export class HttpDispatcher {
                     id: ec.userId,
                     displayName: ec.userDisplayName ?? ec.userName ?? ec.userId,
                     email: ec.userEmail,
-                    roles: Array.isArray(ec.roles) ? ec.roles : [],
+                    roles: Array.isArray(ec.positions) ? ec.positions : [],
                     permissions: Array.isArray(ec.permissions) ? ec.permissions : [],
                     organizationId: ec.tenantId,
                 }
@@ -3474,7 +3474,7 @@ export class HttpDispatcher {
             return { handled: true, response: this.error('Sharing is not configured for this environment', 501) };
         }
 
-        const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+        const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
         const m = method.toUpperCase();
         const parts = subPath.replace(/^\/+/, '').split('/').filter(Boolean);
         const ec: any = context.executionContext;

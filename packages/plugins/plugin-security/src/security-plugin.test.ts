@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { SecurityPlugin } from './security-plugin.js';
-import { PermissionEvaluator } from './permission-evaluator.js';
+import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
 import { FieldMasker } from './field-masker.js';
 import { RLSCompiler, RLS_DENY_FILTER, isSupportedRlsExpression } from './rls-compiler.js';
 import type { PermissionSet } from '@objectstack/spec/security';
@@ -156,7 +156,6 @@ describe('SecurityPlugin', () => {
   const tenantPolicySet: PermissionSet = {
     name: 'member_default',
     label: 'Member',
-    isProfile: true,
     objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
     rowLevelSecurity: [
       { name: 'tenant_isolation', object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' },
@@ -173,7 +172,7 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'insert', data: { name: 'A' },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     // SecurityPlugin no longer touches organization_id — that's plugin-org-scoping's job.
@@ -188,7 +187,7 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'find', ast: { where: undefined },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     expect(opCtx.ast.where).toBeUndefined();
@@ -201,7 +200,7 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'find', ast: { where: undefined },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
@@ -228,7 +227,7 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'find', ast: { where: undefined },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     // No deny sentinel, no organization_id where clause: the read
@@ -243,14 +242,13 @@ describe('SecurityPlugin', () => {
     const ownerPolicySet: PermissionSet = {
       name: 'member_default',
       label: 'Member',
-      isProfile: true,
       objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
       rowLevelSecurity: [
         { name: 'owner_only_writes', object: '*', operation: 'update', using: 'created_by = current_user.id' },
         { name: 'owner_only_deletes', object: '*', operation: 'delete', using: 'created_by = current_user.id' },
       ],
     } as any;
-    const memberCtx = { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] };
+    const memberCtx = { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] };
     const ownerFields = ['id', 'created_by', 'name'];
 
     it('DENIES an update when the target row is not visible under the write filter (not the owner)', async () => {
@@ -299,7 +297,7 @@ describe('SecurityPlugin', () => {
       // otherwise a grant-holder could destroy out-of-scope rows by id. purge
       // maps onto the `delete` RLS class.
       const purgerSet: PermissionSet = {
-        name: 'purger', label: 'Purger', isProfile: true,
+        name: 'purger', label: 'Purger',
         objects: { '*': { allowRead: true, allowPurge: true } },
         rowLevelSecurity: [
           { name: 'owner_only_deletes', object: '*', operation: 'delete', using: 'created_by = current_user.id' },
@@ -324,7 +322,7 @@ describe('SecurityPlugin', () => {
 
     it('SKIPS the check when no RLS policy applies (e.g. modifyAllRecords / admin) — no extra read', async () => {
       const adminSet: PermissionSet = {
-        name: 'admin_full_access', label: 'Admin', isProfile: true,
+        name: 'admin_full_access', label: 'Admin',
         objects: { '*': { allowRead: true, allowEdit: true, allowDelete: true, modifyAllRecords: true, viewAllRecords: true } },
         // no rowLevelSecurity
       } as any;
@@ -370,7 +368,7 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'find', ast: { where: undefined },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     expect(opCtx.ast.where).toBeUndefined();
@@ -390,14 +388,14 @@ describe('SecurityPlugin', () => {
     await plugin.start(harness.ctx);
     const opCtx: any = {
       object: 'task', operation: 'find', ast: { where: undefined },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
     expect(opCtx.ast.where).toEqual(RLS_DENY_FILTER);
   });
 
   // Post-resolution fallback: roles is non-empty (e.g. better-auth
-  // sys_member.role = 'owner') but no sys_role binding maps that name to
+  // sys_member.role = 'owner') but no sys_position binding maps that name to
   // a permission set, so resolvePermissionSets returns []. Without the
   // post-resolution fallback both CRUD and RLS would be skipped → users
   // with org membership but no granted permission set could read every
@@ -424,13 +422,13 @@ describe('SecurityPlugin', () => {
   // -------------------------------------------------------------------------
   describe('ADR-0066 private posture + requiredPermissions (middleware)', () => {
     const memberSet: PermissionSet = {
-      name: 'member_default', label: 'Member', isProfile: true,
+      name: 'member_default', label: 'Member',
       objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
     } as any;
     // Platform super-admin: super-user wildcard + the capability + a tenant_isolation
     // RLS policy (to prove the posture-gated bypass actually short-circuits it).
     const adminSet: PermissionSet = {
-      name: 'admin_full_access', label: 'Admin', isProfile: true,
+      name: 'admin_full_access', label: 'Admin',
       objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, viewAllRecords: true, modifyAllRecords: true } },
       systemPermissions: ['manage_platform_settings'],
       rowLevelSecurity: [
@@ -450,7 +448,7 @@ describe('SecurityPlugin', () => {
       await plugin.start(harness.ctx);
       const opCtx: any = {
         object: 'task', operation: 'find', ast: { where: undefined },
-        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
       };
       await expect(harness.run(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
@@ -466,7 +464,7 @@ describe('SecurityPlugin', () => {
       await plugin.start(harness.ctx);
       const opCtx: any = {
         object: 'task', operation: 'find', ast: { where: undefined },
-        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
       };
       await expect(harness.run(opCtx)).rejects.toMatchObject({
         name: 'PermissionDeniedError',
@@ -538,7 +536,7 @@ describe('SecurityPlugin', () => {
 
     it('does NOT bypass for a non-admin on a better-auth-managed object (no leak)', async () => {
       const memberWithRls: PermissionSet = {
-        name: 'member_default', label: 'Member', isProfile: true,
+        name: 'member_default', label: 'Member',
         objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
         rowLevelSecurity: [
           { name: 'tenant_isolation', object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' },
@@ -555,11 +553,91 @@ describe('SecurityPlugin', () => {
       await plugin.start(harness.ctx);
       const opCtx: any = {
         object: 'task', operation: 'find', ast: { where: undefined },
-        context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
       };
       await harness.run(opCtx);
       // The member is still tenant-scoped — the managedBy bypass is admin-only.
       expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ADR-0066 ⑤ — per-operation requiredPermissions (read-open / write-gated)
+  // -------------------------------------------------------------------------
+  describe('ADR-0066 ⑤ per-operation requiredPermissions (middleware)', () => {
+    const memberSet: PermissionSet = {
+      name: 'member_default', label: 'Member',
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+    } as any;
+    const memberWithCap: PermissionSet = {
+      name: 'member_default', label: 'Member',
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+      systemPermissions: ['manage_x'],
+    } as any;
+
+    // Object is read-open (no `read` key) but create-gated on `manage_x`.
+    const createGated = { requiredPermissions: { create: ['manage_x'] } };
+
+    it('does NOT gate read — a caller without the capability can find', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberSet], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).resolves.toBeDefined();
+    });
+
+    it('DENIES the gated operation (create) for a caller missing the capability', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberSet], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).rejects.toMatchObject({
+        name: 'PermissionDeniedError',
+        message: expect.stringContaining("operation 'insert'"),
+      });
+    });
+
+    it('ALLOWS the gated operation once the caller holds the capability', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [memberWithCap], schemaExtra: createGated });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      };
+      await expect(harness.run(opCtx)).resolves.toBeDefined();
+      expect(opCtx.data.owner_id).toBe('u1'); // proves it flowed past the gate
+    });
+
+    it('array form still gates EVERY operation (backward compat)', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [memberSet],
+        schemaExtra: { requiredPermissions: ['manage_x'] },
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      // read is denied under the array form (unlike the per-op map above)…
+      const readCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      };
+      await expect(harness.run(readCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+      // …and so is create.
+      const createCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A' },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      };
+      await expect(harness.run(createCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
   });
 
@@ -586,7 +664,7 @@ describe('SecurityPlugin', () => {
       const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet], orgScoping: true });
       await plugin.init(harness.ctx);
       await plugin.start(harness.ctx);
-      const ctx = { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] };
+      const ctx = { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] };
       const filter = await plugin.getReadFilter('task', ctx);
       expect(filter).toEqual({ organization_id: 'org-1' });
     });
@@ -596,7 +674,7 @@ describe('SecurityPlugin', () => {
       const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
       await plugin.init(harness.ctx);
       await plugin.start(harness.ctx);
-      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] });
+      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] });
       expect(filter).toBeUndefined();
     });
 
@@ -609,7 +687,7 @@ describe('SecurityPlugin', () => {
       });
       await plugin.init(harness.ctx);
       await plugin.start(harness.ctx);
-      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] });
+      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] });
       expect(filter).toEqual(RLS_DENY_FILTER);
     });
 
@@ -623,7 +701,7 @@ describe('SecurityPlugin', () => {
       });
       await plugin.init(harness.ctx);
       await plugin.start(harness.ctx);
-      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] });
+      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] });
       expect(filter).toBeUndefined();
     });
 
@@ -641,7 +719,7 @@ describe('SecurityPlugin', () => {
       const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet], orgScoping: true });
       await plugin.init(harness.ctx);
       await plugin.start(harness.ctx);
-      const filter = await plugin.getReadFilter('task', { roles: [], permissions: [] });
+      const filter = await plugin.getReadFilter('task', { positions: [], permissions: [] });
       expect(filter).toBeUndefined();
     });
 
@@ -654,7 +732,7 @@ describe('SecurityPlugin', () => {
       (plugin as any).permissionEvaluator.resolvePermissionSets = async () => {
         throw new Error('metadata service unavailable');
       };
-      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] });
+      const filter = await plugin.getReadFilter('task', { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] });
       expect(filter).toEqual(RLS_DENY_FILTER);
     });
   });
@@ -667,7 +745,6 @@ describe('SecurityPlugin', () => {
   const flsPolicySet: PermissionSet = {
     name: 'member_default',
     label: 'Member',
-    isProfile: true,
     objects: {
       '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
     },
@@ -689,7 +766,7 @@ describe('SecurityPlugin', () => {
       object: 'task',
       operation: 'insert',
       data: { name: 'A', salary: 9999 },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).rejects.toThrow(/Field write denied/);
     await expect(harness.run(opCtx)).rejects.toMatchObject({
@@ -709,11 +786,57 @@ describe('SecurityPlugin', () => {
       object: 'task',
       operation: 'update',
       data: { ssn: 'leaked-123' },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).rejects.toMatchObject({
       details: { forbiddenFields: ['ssn'] },
     });
+  });
+
+  it('FLS write — the record echoed back by an update is masked (no read-leak of hidden fields)', async () => {
+    // Regression: a caller with edit-but-not-field-read must not be able to
+    // read a read-protected field back out of the mutation response. The write
+    // itself only touches an editable field; the engine echoes the full row.
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [flsPolicySet],
+      objectFields: ['id', 'owner_id', 'name', 'salary', 'ssn'],
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task',
+      operation: 'update',
+      data: { name: 'edited' }, // only editable field written → passes write gate
+      // Engine's echoed post-image (pre-set; harness `next` is a no-op).
+      result: { id: 't1', name: 'edited', salary: 9999, ssn: 'secret-leak' },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
+    };
+    await harness.run(opCtx);
+    // ssn (readable:false) stripped; salary (readable:true) retained.
+    expect(opCtx.result.ssn).toBeUndefined();
+    expect(opCtx.result.salary).toBe(9999);
+    expect(opCtx.result.name).toBe('edited');
+  });
+
+  it('FLS write — the record echoed back by an insert is masked', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [flsPolicySet],
+      objectFields: ['id', 'owner_id', 'name', 'salary', 'ssn'],
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task',
+      operation: 'insert',
+      data: { name: 'A' },
+      result: { id: 't2', name: 'A', salary: 100, ssn: 'server-generated' },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.result.ssn).toBeUndefined();
+    expect(opCtx.result.salary).toBe(100);
   });
 
   it('fails CLOSED when permission resolution throws — denies, never bypasses (P0-2)', async () => {
@@ -760,7 +883,7 @@ describe('SecurityPlugin', () => {
       object: 'task',
       operation: 'insert',
       data: { name: 'A', salary: 1, ssn: 'x' },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).rejects.toMatchObject({
       details: { forbiddenFields: ['salary', 'ssn'] },
@@ -779,7 +902,7 @@ describe('SecurityPlugin', () => {
       object: 'task',
       operation: 'insert',
       data: { name: 'A' },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).resolves.toBeTruthy();
     // owner_id was auto-injected (still in scope for tests)
@@ -801,7 +924,7 @@ describe('SecurityPlugin', () => {
         { name: 'a' },
         { name: 'b', salary: 9 },  // offender on row 2
       ],
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).rejects.toMatchObject({
       details: { forbiddenFields: ['salary'] },
@@ -838,7 +961,7 @@ describe('SecurityPlugin', () => {
       object: 'task',
       operation: 'insert',
       data: { name: 'A', description: 'foo' },
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     await expect(harness.run(opCtx)).resolves.toBeTruthy();
   });
@@ -856,7 +979,7 @@ describe('SecurityPlugin', () => {
       operation: 'find',
       ast: { where: undefined },
       result: undefined,
-      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
     };
     // emulate the engine populating result inside next()
     const orig = harness.run;
@@ -877,7 +1000,6 @@ describe('SecurityPlugin', () => {
     const checkPolicySet: PermissionSet = {
       name: 'member_default',
       label: 'Member',
-      isProfile: true,
       objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
       rowLevelSecurity: [
         { name: 'emea_insert_check', object: '*', operation: 'insert', check: "region == 'EMEA'" },
@@ -896,7 +1018,7 @@ describe('SecurityPlugin', () => {
       await plugin.start(harness.ctx);
       return harness;
     };
-    const ctx = () => ({ userId: 'u1', tenantId: 'org-1', roles: [], permissions: ['member_default'] });
+    const ctx = () => ({ userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] });
 
     it('INSERT whose post-image satisfies the check succeeds', async () => {
       const h = await started();
@@ -952,10 +1074,10 @@ describe('SecurityPlugin', () => {
     // Superuser set — proves the gate is NOT grant-gated (blocks even
     // modifyAllRecords) and carries no RLS so the pre-image check is a no-op.
     const adminSet: PermissionSet = {
-      name: 'admin_full_access', label: 'Admin', isProfile: true,
+      name: 'admin_full_access', label: 'Admin',
       objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true } },
     } as any;
-    const adminCtx = { userId: 'admin1', tenantId: 'org-1', roles: [], permissions: ['admin_full_access'] };
+    const adminCtx = { userId: 'admin1', tenantId: 'org-1', positions: [], permissions: ['admin_full_access'] };
 
     const runGate = async (opCtx: any, findOneImpl?: (q: any) => any) => {
       const plugin = new SecurityPlugin({ fallbackPermissionSet: 'admin_full_access' });
@@ -1340,6 +1462,33 @@ describe('PermissionEvaluator — ADR-0066 posture + capabilities', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ADR-0066 ⑤ — crudBucketForOperation (operation → CRUD class mapping)
+// ---------------------------------------------------------------------------
+describe('crudBucketForOperation (ADR-0066 ⑤)', () => {
+  it('maps read operations to `read`', () => {
+    for (const op of ['find', 'findOne', 'count', 'aggregate']) {
+      expect(crudBucketForOperation(op)).toBe('read');
+    }
+  });
+  it('maps insert to `create`', () => {
+    expect(crudBucketForOperation('insert')).toBe('create');
+  });
+  it('folds update/transfer/restore into `update`', () => {
+    for (const op of ['update', 'transfer', 'restore']) {
+      expect(crudBucketForOperation(op)).toBe('update');
+    }
+  });
+  it('folds delete/purge into `delete`', () => {
+    for (const op of ['delete', 'purge']) {
+      expect(crudBucketForOperation(op)).toBe('delete');
+    }
+  });
+  it('returns null for an operation with no CRUD mapping', () => {
+    expect(crudBucketForOperation('customReadSideOp')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FieldMasker
 // ---------------------------------------------------------------------------
 describe('FieldMasker', () => {
@@ -1496,7 +1645,7 @@ describe('RLSCompiler', () => {
   it('should compile equality expression with current_user property', () => {
     const compiler = new RLSCompiler();
     const policy: any = { object: 'task', operation: 'select', using: 'owner_id = current_user.id' };
-    const ctx: any = { userId: 'user-42', tenantId: 'tenant-1', roles: [] };
+    const ctx: any = { userId: 'user-42', tenantId: 'tenant-1', positions: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual({ owner_id: 'user-42' });
   });
@@ -1508,7 +1657,7 @@ describe('RLSCompiler', () => {
     // system find (the value is baked in, not a placeholder).
     const compiler = new RLSCompiler();
     const policy: any = { object: 'showcase_invoice', operation: 'select', using: 'owner = current_user.email' };
-    const ctx: any = { userId: 'u1', email: 'ada@example.com', roles: [] };
+    const ctx: any = { userId: 'u1', email: 'ada@example.com', positions: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual({ owner: 'ada@example.com' });
   });
@@ -1519,7 +1668,7 @@ describe('RLSCompiler', () => {
     // variable drops the (only) policy → deny sentinel.
     const compiler = new RLSCompiler();
     const policy: any = { object: 'showcase_invoice', operation: 'select', using: 'owner = current_user.name' };
-    const ctx: any = { userId: 'u1', email: 'ada@example.com', roles: [] };
+    const ctx: any = { userId: 'u1', email: 'ada@example.com', positions: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual(RLS_DENY_FILTER);
   });
@@ -1533,10 +1682,10 @@ describe('RLSCompiler', () => {
 
   it('should compile IN expression with array property', () => {
     const compiler = new RLSCompiler();
-    const policy: any = { object: 'project', operation: 'select', using: 'id IN (current_user.roles)' };
-    const ctx: any = { userId: 'u1', tenantId: 't1', roles: ['role-a', 'role-b'] };
+    const policy: any = { object: 'project', operation: 'select', using: 'id IN (current_user.positions)' };
+    const ctx: any = { userId: 'u1', tenantId: 't1', positions: ['pos-a', 'pos-b'] };
     const filter = compiler.compileFilter([policy], ctx);
-    expect(filter).toEqual({ id: { $in: ['role-a', 'role-b'] } });
+    expect(filter).toEqual({ id: { $in: ['pos-a', 'pos-b'] } });
   });
 
   it('should compile IN expression against pre-resolved org_user_ids', () => {
@@ -1553,7 +1702,7 @@ describe('RLSCompiler', () => {
     const ctx: any = {
       userId: 'u1',
       tenantId: 'org-1',
-      roles: [],
+      positions: [],
       org_user_ids: ['u1', 'u2', 'u3'],
     };
     const filter = compiler.compileFilter([policy], ctx);
@@ -1571,7 +1720,7 @@ describe('RLSCompiler', () => {
       operation: 'select',
       using: 'id IN (current_user.org_user_ids)',
     };
-    const ctx: any = { userId: 'u1', tenantId: null, roles: [], org_user_ids: [] };
+    const ctx: any = { userId: 'u1', tenantId: null, positions: [], org_user_ids: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual(RLS_DENY_FILTER);
   });
@@ -1580,7 +1729,7 @@ describe('RLSCompiler', () => {
     const compiler = new RLSCompiler();
     const p1: any = { object: 'task', operation: 'select', using: 'owner_id = current_user.id' };
     const p2: any = { object: 'task', operation: 'select', using: "status = 'public'" };
-    const ctx: any = { userId: 'u99', tenantId: 't1', roles: [] };
+    const ctx: any = { userId: 'u99', tenantId: 't1', positions: [] };
     const filter = compiler.compileFilter([p1, p2], ctx);
     expect(filter).toEqual({ $or: [{ owner_id: 'u99' }, { status: 'public' }] });
   });
@@ -1606,7 +1755,7 @@ describe('RLSCompiler', () => {
     // `sys_user_self`) still grant access — see the next test.
     const compiler = new RLSCompiler();
     const policy: any = { object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' };
-    const ctx: any = { userId: 'u1', tenantId: null, roles: [] };
+    const ctx: any = { userId: 'u1', tenantId: null, positions: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual(RLS_DENY_FILTER);
   });
@@ -1617,7 +1766,7 @@ describe('RLSCompiler', () => {
     const compiler = new RLSCompiler();
     const tenantPolicy: any = { object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' };
     const selfPolicy: any = { object: 'sys_user', operation: 'select', using: 'id = current_user.id' };
-    const ctx: any = { userId: 'u1', tenantId: null, roles: [] };
+    const ctx: any = { userId: 'u1', tenantId: null, positions: [] };
     const filter = compiler.compileFilter([tenantPolicy, selfPolicy], ctx);
     expect(filter).toEqual({ id: 'u1' });
   });
@@ -1626,7 +1775,7 @@ describe('RLSCompiler', () => {
     // Sanity check — the deny path is only triggered by *missing* values.
     const compiler = new RLSCompiler();
     const policy: any = { object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' };
-    const ctx: any = { userId: 'u1', tenantId: 'org-1', roles: [] };
+    const ctx: any = { userId: 'u1', tenantId: 'org-1', positions: [] };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual({ organization_id: 'org-1' });
   });
@@ -1679,25 +1828,25 @@ describe('RLSCompiler', () => {
       operation: 'select',
       using: 'assigned_to_id IN (current_user.team_member_ids)',
     };
-    const ctx: any = { userId: 'mgr-1', tenantId: 'org-1', roles: [], rlsMembership: { team_member_ids: [] } };
+    const ctx: any = { userId: 'mgr-1', tenantId: 'org-1', positions: [], rlsMembership: { team_member_ids: [] } };
     const filter = compiler.compileFilter([policy], ctx);
     expect(filter).toEqual(RLS_DENY_FILTER);
   });
 
   it('should not let a rlsMembership key clobber a named context field', () => {
-    // roles is a first-class field; a hostile/misconfigured membership bag
-    // must not override it. The named `roles` (['real-role']) wins; the
-    // policy compiles against it, not the injected ['spoofed'].
+    // positions is a first-class field; a hostile/misconfigured membership bag
+    // must not override it. The named `positions` (['real-position']) wins;
+    // the policy compiles against it, not the injected ['spoofed'].
     const compiler = new RLSCompiler();
-    const policy: any = { object: 'x', operation: 'select', using: 'role_id IN (current_user.roles)' };
+    const policy: any = { object: 'x', operation: 'select', using: 'position_id IN (current_user.positions)' };
     const ctx: any = {
       userId: 'u1',
       tenantId: 'org-1',
-      roles: ['real-role'],
-      rlsMembership: { roles: ['spoofed'] },
+      positions: ['real-position'],
+      rlsMembership: { positions: ['spoofed'] },
     };
     const filter = compiler.compileFilter([policy], ctx);
-    expect(filter).toEqual({ role_id: { $in: ['real-role'] } });
+    expect(filter).toEqual({ position_id: { $in: ['real-position'] } });
   });
 
   // Always-true literal — makes RLS.allowAllPolicy grant access instead of
@@ -1865,11 +2014,11 @@ describe('SecurityPlugin — ADR-0066 D3 field-level requiredPermissions', () =>
     },
   };
   const setNoCap: PermissionSet = {
-    name: 'fld_member', isProfile: true,
+    name: 'fld_member',
     objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
   } as any;
   const setWithCap: PermissionSet = {
-    name: 'fld_cap', isProfile: true,
+    name: 'fld_cap',
     objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
     systemPermissions: ['view_salary'],
   } as any;
@@ -1897,7 +2046,7 @@ describe('SecurityPlugin — ADR-0066 D3 field-level requiredPermissions', () =>
   it('masks a capability-gated field on read when the caller lacks the capability', async () => {
     const h = harnessFor([setNoCap], 'fld_member');
     await h.plugin.init(h.ctx); await h.plugin.start(h.ctx);
-    const opCtx: any = { object: 'task', operation: 'find', ast: { where: undefined }, result: [{ id: 'r1', name: 'A', salary: 100 }], context: { userId: 'u1', roles: [], permissions: [] } };
+    const opCtx: any = { object: 'task', operation: 'find', ast: { where: undefined }, result: [{ id: 'r1', name: 'A', salary: 100 }], context: { userId: 'u1', positions: [], permissions: [] } };
     await h.run(opCtx);
     expect(opCtx.result[0].name).toBe('A');
     expect(opCtx.result[0].salary).toBeUndefined();
@@ -1906,7 +2055,7 @@ describe('SecurityPlugin — ADR-0066 D3 field-level requiredPermissions', () =>
   it('does NOT mask when the caller holds the capability', async () => {
     const h = harnessFor([setWithCap], 'fld_cap');
     await h.plugin.init(h.ctx); await h.plugin.start(h.ctx);
-    const opCtx: any = { object: 'task', operation: 'find', ast: { where: undefined }, result: [{ id: 'r1', name: 'A', salary: 100 }], context: { userId: 'u1', roles: [], permissions: ['fld_cap'] } };
+    const opCtx: any = { object: 'task', operation: 'find', ast: { where: undefined }, result: [{ id: 'r1', name: 'A', salary: 100 }], context: { userId: 'u1', positions: [], permissions: ['fld_cap'] } };
     await h.run(opCtx);
     expect(opCtx.result[0].salary).toBe(100);
   });
@@ -1914,14 +2063,14 @@ describe('SecurityPlugin — ADR-0066 D3 field-level requiredPermissions', () =>
   it('denies a write to a capability-gated field when the caller lacks the capability', async () => {
     const h = harnessFor([setNoCap], 'fld_member');
     await h.plugin.init(h.ctx); await h.plugin.start(h.ctx);
-    const opCtx: any = { object: 'task', operation: 'insert', data: { name: 'A', salary: 200 }, context: { userId: 'u1', roles: [], permissions: [] } };
+    const opCtx: any = { object: 'task', operation: 'insert', data: { name: 'A', salary: 200 }, context: { userId: 'u1', positions: [], permissions: [] } };
     await expect(h.run(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
   });
 
   it('allows the write when the caller holds the capability', async () => {
     const h = harnessFor([setWithCap], 'fld_cap');
     await h.plugin.init(h.ctx); await h.plugin.start(h.ctx);
-    const opCtx: any = { object: 'task', operation: 'insert', data: { name: 'A', salary: 200 }, context: { userId: 'u1', roles: [], permissions: ['fld_cap'] } };
+    const opCtx: any = { object: 'task', operation: 'insert', data: { name: 'A', salary: 200 }, context: { userId: 'u1', positions: [], permissions: ['fld_cap'] } };
     await expect(h.run(opCtx)).resolves.toBeDefined();
   });
 });

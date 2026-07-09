@@ -10,6 +10,10 @@ import { cel, P } from '@objectstack/spec';
  */
 export const Project = ObjectSchema.create({
   name: 'showcase_project',
+  // [ADR-0090 D1] Explicit grandfather stamp: record isolation for this demo
+  // object is RLS-owned / intentionally public; without this the new secure
+  // default (unset OWD => private) would owner-filter it.
+  sharingModel: 'public_read_write',
   label: 'Project',
   pluralLabel: 'Projects',
   icon: 'folder-kanban',

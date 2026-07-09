@@ -10,20 +10,20 @@
  */
 
 // ── Roles (hierarchy) ──────────────────────────────────────────────────────
-export const ContributorRole = {
+export const ContributorPosition = {
   name: 'contributor',
   label: 'Contributor',
   description: 'Works tasks on their own projects.',
 };
 
-export const ManagerRole = {
+export const ManagerPosition = {
   name: 'manager',
   label: 'Project Manager',
   description: 'Manages projects and the contributors on them.',
   parent: 'contributor',
 };
 
-export const ExecRole = {
+export const ExecPosition = {
   name: 'exec',
   label: 'Executive',
   description: 'Read-all visibility for reporting.',
@@ -35,7 +35,6 @@ export const ContributorPermissionSet = {
   name: 'showcase_contributor',
   label: 'Showcase Contributor',
   description: 'Standard access for contributors, with budget fields hidden and row-level scoping to own records.',
-  isProfile: false,
   objects: {
     showcase_project: { allowRead: true, allowCreate: false, allowEdit: true, allowDelete: false },
     showcase_task: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
@@ -61,7 +60,7 @@ export const ContributorPermissionSet = {
       object: 'showcase_task',
       operation: 'select' as const,
       using: "assignee == current_user.email",
-      roles: ['contributor'],
+      positions: ['contributor'],
       enabled: true,
       priority: 10,
     },
@@ -76,7 +75,7 @@ export const ContributorPermissionSet = {
       object: 'showcase_invoice',
       operation: 'select' as const,
       using: "owner == current_user.email",
-      roles: ['contributor'],
+      positions: ['contributor'],
       enabled: true,
       priority: 10,
     },
@@ -92,7 +91,7 @@ export const ContributorPermissionSet = {
       object: 'showcase_invoice',
       operation: 'update' as const,
       check: "owner == current_user.email",
-      roles: ['contributor'],
+      positions: ['contributor'],
       enabled: true,
       priority: 10,
     },
@@ -114,7 +113,6 @@ export const MemberDefaultProfile = {
   name: 'showcase_member_default',
   label: 'Showcase Member (Default)',
   description: 'App-declared default profile for new sign-ups — read-mostly baseline (ADR-0056 D7).',
-  isProfile: true,
   isDefault: true,
   objects: {
     showcase_account: { allowRead: true },
@@ -136,7 +134,7 @@ export const RedProjectSharingRule = {
   object: 'showcase_project',
   condition: "record.health == 'red'",
   accessLevel: 'read' as const,
-  sharedWith: { type: 'role' as const, value: 'exec' },
+  sharedWith: { type: 'position' as const, value: 'exec' },
   active: true,
 };
 
@@ -155,7 +153,7 @@ export const HighValueRedProjectRule = {
   object: 'showcase_project',
   condition: "record.health == 'red' && record.budget > 100000",
   accessLevel: 'read' as const,
-  sharedWith: { type: 'role' as const, value: 'manager' },
+  sharedWith: { type: 'position' as const, value: 'manager' },
   active: true,
 };
 
@@ -166,13 +164,13 @@ export const ContributorTaskSharingRule = {
   label: "Contributor Tasks → Manager",
   description: "Share each contributor's tasks with managers for oversight.",
   object: 'showcase_task',
-  ownedBy: { type: 'role' as const, value: 'contributor' },
+  ownedBy: { type: 'position' as const, value: 'contributor' },
   accessLevel: 'read' as const,
-  sharedWith: { type: 'role' as const, value: 'manager' },
+  sharedWith: { type: 'position' as const, value: 'manager' },
   active: true,
 };
 
 
-export const allRoles = [ContributorRole, ManagerRole, ExecRole];
+export const allPositions = [ContributorPosition, ManagerPosition, ExecPosition];
 export const allPermissionSets = [ContributorPermissionSet, MemberDefaultProfile];
 export const allSharingRules = [RedProjectSharingRule, HighValueRedProjectRule, ContributorTaskSharingRule];

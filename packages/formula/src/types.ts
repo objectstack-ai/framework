@@ -35,18 +35,16 @@ export interface EvalContext {
    *
    * ADR-0068: the canonical user contract is {@link EvalUser} from
    * `@objectstack/spec`, surfaced to predicates as `current_user` (aliases
-   * `user`, `ctx.user`). `roles: string[]` is the only canonical role field;
-   * the singular `role` is deprecated (its "overwritten to 'admin' on
+   * `user`, `ctx.user`). `positions: string[]` is the only canonical membership field;
+   * (the legacy singular's "overwritten to 'admin' on
    * promotion" behavior is the footgun ADR-0068 eliminates).
    */
   user?: {
     id: string;
-    /** CANONICAL (ADR-0068). Scope-resolved role names assigned to the user. */
-    roles?: string[];
+    /** CANONICAL (ADR-0068, renamed ADR-0090 D3). Scope-resolved position names. */
+    positions?: string[];
     /** Active organization ID (null = platform / unscoped). */
     organizationId?: string | null;
-    /** @deprecated ADR-0068 — use {@link roles}. Retained for back-compat only. */
-    role?: string;
     email?: string;
     [key: string]: unknown;
   };

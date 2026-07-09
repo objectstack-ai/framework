@@ -393,7 +393,7 @@ export interface ToolExecutionContext {
     actor?: {
         id: string;
         name?: string;
-        roles?: string[];
+        positions?: string[];
         permissions?: string[];
     };
     /** Conversation id for trace/HITL correlation. */

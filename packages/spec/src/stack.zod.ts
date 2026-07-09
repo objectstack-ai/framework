@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import { ManifestSchema } from './kernel/manifest.zod';
+import { validateObjectNamespacePrefix } from './kernel/namespace-prefix';
 import { ClusterCapabilityConfigSchema } from './kernel/cluster.zod';
 import { DatasourceSchema } from './data/datasource.zod';
 import { TranslationBundleSchema, TranslationConfigSchema } from './system/translation.zod';
@@ -29,7 +30,7 @@ import { FlowSchema } from './automation/flow.zod';
 import { JobSchema } from './system/job.zod';
 
 // Security Protocol
-import { RoleSchema } from './identity/role.zod';
+import { PositionSchema } from './identity/position.zod';
 import { PermissionSetSchema } from './security/permission.zod';
 import { SharingRuleSchema } from './security/sharing.zod';
 
@@ -231,8 +232,8 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
   /**
    * ObjectGuard: Security Layer
    */
-  roles: z.array(RoleSchema).optional().describe('User Roles hierarchy'),
-  permissions: z.array(PermissionSetSchema).optional().describe('Permission Sets and Profiles'),
+  positions: z.array(PositionSchema).optional().describe('Positions — flat capability-distribution groups (ADR-0090 D3)'),
+  permissions: z.array(PermissionSetSchema).optional().describe('Permission Sets'),
   sharingRules: z.array(SharingRuleSchema).optional().describe('Record Sharing Rules'),
 
   /**
@@ -496,21 +497,11 @@ function validateNamespacePrefix(config: ObjectStackDefinition): string[] {
   const ns = config.manifest?.namespace;
   if (!ns || !config.objects) return errors;
 
-  const expectedPrefix = `${ns}_`;
+  // Single source of the per-object prefix rule — shared verbatim with the
+  // runtime publish enforcement in MetadataManager.publishPackage.
   for (const obj of config.objects) {
-    if (!obj.name) continue;
-    if (obj.name.startsWith('sys_')) continue;
-    if (obj.name.includes('__')) {
-      errors.push(
-        `Object '${obj.name}' uses the legacy FQN form '<ns>__<short>'. Rename it to '${expectedPrefix}${obj.name.slice(obj.name.indexOf('__') + 2)}'.`,
-      );
-      continue;
-    }
-    if (!obj.name.startsWith(expectedPrefix)) {
-      errors.push(
-        `Object '${obj.name}' is missing the package namespace prefix. Rename it to '${expectedPrefix}${obj.name}' (manifest.namespace = '${ns}').`,
-      );
-    }
+    const err = validateObjectNamespacePrefix(obj.name, ns);
+    if (err) errors.push(err);
   }
   return errors;
 }
@@ -1034,7 +1025,7 @@ const CONCAT_ARRAY_FIELDS = [
   'actions',
   'themes',
   'flows',
-  'roles',
+  'positions',
   'permissions',
   'sharingRules',
   'apis',

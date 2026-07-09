@@ -9,17 +9,17 @@
 import type { TranslationData } from '@objectstack/spec/system';
 
 export const zhCNObjects: NonNullable<TranslationData['objects']> = {
-  sys_role: {
-    label: "角色",
-    pluralLabel: "角色",
-    description: "用于 RBAC 访问控制的角色定义",
+  sys_position: {
+    label: "岗位",
+    pluralLabel: "岗位",
+    description: "用于 RBAC 访问控制的岗位定义",
     fields: {
       label: {
         label: "显示名称"
       },
       name: {
         label: "API 名称",
-        help: "角色的唯一机器名称（例如 admin、editor、viewer）"
+        help: "岗位的唯一机器名称（例如 admin、editor、viewer）"
       },
       description: {
         label: "描述"
@@ -32,11 +32,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "启用"
       },
       is_default: {
-        label: "默认角色",
+        label: "默认岗位",
         help: "自动分配给新用户"
       },
       id: {
-        label: "角色 ID"
+        label: "岗位 ID"
       },
       created_at: {
         label: "创建时间"
@@ -49,34 +49,34 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       active: {
         label: "启用"
       },
-      default_roles: {
+      default_positions: {
         label: "默认"
       },
       custom: {
         label: "自定义"
       },
-      all_roles: {
+      all_positions: {
         label: "全部"
       }
     },
     _actions: {
-      activate_role: {
-        label: "激活角色",
-        successMessage: "角色已激活"
+      activate_position: {
+        label: "激活岗位",
+        successMessage: "岗位已激活"
       },
-      deactivate_role: {
-        label: "停用角色",
-        confirmText: "确定要停用此角色吗？拥有该角色的用户仍保留其分配，但在重新激活之前该角色将不再授予权限。",
-        successMessage: "角色已停用"
+      deactivate_position: {
+        label: "停用岗位",
+        confirmText: "确定要停用此岗位吗？拥有该岗位的用户仍保留其分配，但在重新激活之前该岗位将不再授予权限。",
+        successMessage: "岗位已停用"
       },
-      set_default_role: {
+      set_default_position: {
         label: "设为默认",
-        confirmText: "将此角色设为新用户的默认角色吗？现有用户不受影响。",
-        successMessage: "已更新默认角色"
+        confirmText: "将此岗位设为新用户的默认岗位吗？现有用户不受影响。",
+        successMessage: "已更新默认岗位"
       },
-      clone_role: {
-        label: "克隆角色",
-        successMessage: "已克隆角色"
+      clone_position: {
+        label: "克隆岗位",
+        successMessage: "已克隆岗位"
       }
     }
   },
@@ -188,18 +188,18 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_role_permission_set: {
-    label: "角色权限集",
-    pluralLabel: "角色权限集",
-    description: "将权限集绑定到角色。",
+  sys_position_permission_set: {
+    label: "岗位权限集",
+    pluralLabel: "岗位权限集",
+    description: "将权限集绑定到岗位。",
     fields: {
       id: {
         label: "绑定 ID",
-        help: "角色-权限集绑定记录的 UUID。"
+        help: "岗位-权限集绑定记录的 UUID。"
       },
-      role_id: {
-        label: "角色",
-        help: "指向 sys_role 的外键。"
+      position_id: {
+        label: "岗位",
+        help: "指向 sys_position 的外键。"
       },
       permission_set_id: {
         label: "权限集",

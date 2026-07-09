@@ -96,7 +96,7 @@ export const SelectOptionSchema = lazySchema(() => z.object({
    * evaluates TRUE. Omit = always available. Evaluated against the SAME binding
    * environment as field-level `visibleWhen` (live `record` + `current_user`), so
    * it expresses BOTH cascading/dependent options (`record.country == 'cn'`) AND
-   * role/context gating (`'admin' in current_user.roles`). When it references
+   * role/context gating (`'admin' in current_user.positions`). When it references
    * sibling fields, declare those on the field's `dependsOn` so the form can gate
    * and re-evaluate the option list as the parent changes.
    *
@@ -105,7 +105,7 @@ export const SelectOptionSchema = lazySchema(() => z.object({
    * rule-validator evaluates the picked value's `visibleWhen`) — hiding it in the
    * dropdown alone is bypassable.
    */
-  visibleWhen: ExpressionInputSchema.optional().describe("Per-option visibility predicate (CEL) — option is offered only when TRUE (else omitted). Same env as field visibleWhen (record + current_user). e.g. P`record.country == 'cn'` or P`'admin' in current_user.roles`"),
+  visibleWhen: ExpressionInputSchema.optional().describe("Per-option visibility predicate (CEL) — option is offered only when TRUE (else omitted). Same env as field visibleWhen (record + current_user). e.g. P`record.country == 'cn'` or P`'admin' in current_user.positions`"),
 }));
 
 /**

@@ -20,6 +20,8 @@
  * security bootstraps.
  */
 
+import { PLATFORM_CAPABILITIES, type PlatformCapability } from '@objectstack/spec/security';
+
 const SYSTEM_CTX = { isSystem: true };
 
 function genId(prefix: string): string {
@@ -41,25 +43,15 @@ async function tryUpdate(ql: any, object: string, data: any): Promise<boolean> {
   try { await ql.update(object, data, { context: SYSTEM_CTX }); return true; } catch { return false; }
 }
 
-interface CapabilityDef {
-  name: string;
-  label: string;
-  description: string;
-  scope: 'platform' | 'org';
-}
+type CapabilityDef = PlatformCapability;
 
 /**
- * Well-known platform capabilities. Exported so tests + tooling can assert the
- * back-compat set. `managed_by` is always `'platform'` for these.
+ * Well-known platform capabilities. Re-exported from the canonical spec registry
+ * (`@objectstack/spec/security` `PLATFORM_CAPABILITIES`) so the seeder and the
+ * authoring lint (ADR-0066 ⑨) share ONE source of truth. `managed_by` is always
+ * `'platform'` for these. Kept as a named export for back-compat consumers/tests.
  */
-export const KNOWN_CAPABILITIES: readonly CapabilityDef[] = [
-  { name: 'manage_users', label: 'Manage Users', description: 'Create, edit, and deactivate users across the platform.', scope: 'platform' },
-  { name: 'manage_org_users', label: 'Manage Organization Users', description: 'Manage members within the caller’s organization.', scope: 'org' },
-  { name: 'manage_metadata', label: 'Manage Metadata', description: 'Author and publish object/view/flow and other metadata.', scope: 'platform' },
-  { name: 'manage_platform_settings', label: 'Manage Platform Settings', description: 'Configure global platform settings (mail, storage, AI, licensing, …) and platform-only Setup pages.', scope: 'platform' },
-  { name: 'setup.access', label: 'Setup Access', description: 'Enter the Setup app shell.', scope: 'platform' },
-  { name: 'studio.access', label: 'Studio Access', description: 'Enter the Studio metadata-design surfaces.', scope: 'platform' },
-];
+export const KNOWN_CAPABILITIES: readonly CapabilityDef[] = PLATFORM_CAPABILITIES;
 
 function humanize(name: string): string {
   return name

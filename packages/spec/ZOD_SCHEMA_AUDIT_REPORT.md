@@ -556,7 +556,7 @@ ObjectStack UI protocol provides three paths:
 | File | Exported Schemas | `z.any()` | Notes |
 |---|---|---|---|
 | `identity.zod.ts` | UserSchema, AccountSchema, SessionSchema, VerificationTokenSchema | 0 | ⚠️ Uses `z.date()` |
-| `role.zod.ts` | RoleSchema | 0 | ✅ Clean, uses SnakeCaseIdentifierSchema |
+| `role.zod.ts` | PositionSchema | 0 | ✅ Clean, uses SnakeCaseIdentifierSchema |
 | `organization.zod.ts` | OrganizationSchema, MemberSchema, InvitationSchema | 1 | ⚠️ Uses `z.date()` |
 | `scim.zod.ts` | ~20+ SCIM schemas | 0 | ✅ Uses `z.string().datetime()` correctly |
 

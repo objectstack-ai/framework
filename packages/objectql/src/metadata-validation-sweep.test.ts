@@ -206,8 +206,8 @@ const FIXTURES: Record<string, Fixture> = {
         invalidatedField: 'name',
     },
     profile: {
-        valid: { name: 'sweep_profile', label: 'Sweep', isProfile: true, objects: {} },
-        invalid: { label: 'No name', isProfile: true, objects: {} },
+        valid: { name: 'sweep_profile', label: 'Sweep', objects: {} },
+        invalid: { label: 'No name', objects: {} },
         invalidatedField: 'name',
     },
     role: {

@@ -1046,7 +1046,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                         id: userId,
                         displayName: sessionData?.user?.name ?? sessionData?.user?.email ?? userId,
                         email: sessionData?.user?.email,
-                        roles: [],
+                        positions: [],
                         permissions: [],
                         organizationId: sessionData?.session?.activeOrganizationId,
                     };

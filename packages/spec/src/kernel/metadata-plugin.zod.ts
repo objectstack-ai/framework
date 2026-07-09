@@ -113,8 +113,7 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
 
   // Security Protocol
   'permission',  // Permission sets (PermissionSetSchema)
-  'profile',     // User profiles (ProfileSchema)
-  'role',        // Security roles
+  'position',    // Positions — flat capability-distribution groups (ADR-0090 D3)
 
   // AI Protocol
   'agent',       // AI agent definitions (AgentSchema)
@@ -682,8 +681,7 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
 
   // Security Protocol
   { type: 'permission', label: 'Permission Set', filePatterns: ['**/*.permission.ts', '**/*.permission.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 15, domain: 'security' },
-  { type: 'profile', label: 'Profile', filePatterns: ['**/*.profile.ts', '**/*.profile.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 15, domain: 'security' },
-  { type: 'role', label: 'Role', filePatterns: ['**/*.role.ts', '**/*.role.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 15, domain: 'security' },
+  { type: 'position', label: 'Position', filePatterns: ['**/*.position.ts', '**/*.position.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 15, domain: 'security' },
 
   // AI Protocol
   // `agent`: executionPinned — long-running conversations must stick to the

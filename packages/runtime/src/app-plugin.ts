@@ -66,7 +66,7 @@ export class AppPlugin implements Plugin {
             const APP_CATEGORY_KEYS = [
                 'objects', 'views', 'apps', 'pages', 'dashboards', 'reports',
                 'flows', 'workflows', 'triggers', 'agents', 'tools', 'skills',
-                'actions', 'permissions', 'roles', 'profiles', 'translations',
+                'actions', 'permissions', 'positions', 'translations',
                 'sharingRules', 'ragPipelines', 'data', 'emailTemplates',
                 'docs', 'books',
             ];
@@ -399,10 +399,11 @@ export class AppPlugin implements Plugin {
             throw err;
         }
 
-        // [ADR-0057 / #2077] Surface stack-declared SECURITY metadata (roles,
-        // permission sets, sharing rules, policies) in the metadata registry so
-        // the boot seeders (plugin-security / plugin-sharing) and runtime
-        // resolvers can read them via `list('role'|'permission'|'sharing_rule')`.
+        // [ADR-0057 / #2077] Surface stack-declared SECURITY metadata
+        // (positions, permission sets, sharing rules, policies) in the
+        // metadata registry so the boot seeders (plugin-security /
+        // plugin-sharing) and runtime resolvers can read them via
+        // `list('position'|'permission'|'sharing_rule')`.
         // Without this, bootStack's metadata service holds only objects (the
         // artifact loader that registers these runs only in compiled serve.ts),
         // leaving the declarations decorative.
@@ -415,7 +416,7 @@ export class AppPlugin implements Plugin {
                     ? { ...this.bundle.manifest, ...this.bundle }
                     : this.bundle;
                 const SECURITY_FIELDS: Array<[string, string]> = [
-                    ['roles', 'role'],
+                    ['positions', 'position'],
                     ['permissions', 'permission'],
                     ['sharingRules', 'sharing_rule'],
                     ['policies', 'policy'],

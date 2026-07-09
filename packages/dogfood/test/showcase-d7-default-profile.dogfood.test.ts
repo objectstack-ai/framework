@@ -2,7 +2,7 @@
 //
 // SHOWCASE proof for ADR-0056 D7 — the app-declared default profile, wired the
 // way the CLI wires it. The showcase declares `showcase_member_default` with
-// `isDefault: true`; `appDefaultProfileName(stack.permissions)` (the helper the
+// `isDefault: true`; `appDefaultPermissionSetName(stack.permissions)` (the helper the
 // CLI calls) extracts its name, and passing it as the SecurityPlugin
 // `fallbackPermissionSet` makes a fresh sign-up governed by THAT profile instead
 // of the built-in `member_default` wildcard. Read-mostly default ⇒ the member
@@ -12,13 +12,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import showcaseStack from '@objectstack/example-showcase';
 import { bootStack, type VerifyStack } from '@objectstack/verify';
-import { SecurityPlugin, securityDefaultPermissionSets, appDefaultProfileName } from '@objectstack/plugin-security';
+import { SecurityPlugin, securityDefaultPermissionSets, appDefaultPermissionSetName } from '@objectstack/plugin-security';
 import { PermissionSetSchema, type PermissionSet } from '@objectstack/spec/security';
 
 // Mirror the CLI: pull the app-declared default profile (name + object) off the
 // stack metadata via the same helper the CLI uses.
 const stackPerms = ((showcaseStack as { permissions?: unknown[] }).permissions ?? []) as Array<{ name?: string }>;
-const appDefault = appDefaultProfileName(stackPerms);
+const appDefault = appDefaultPermissionSetName(stackPerms);
 const declaredDefault = stackPerms.find((p) => p?.name === appDefault) as unknown;
 
 describe('showcase: app-declared default profile, CLI-wired (ADR-0056 D7)', () => {
@@ -29,7 +29,7 @@ describe('showcase: app-declared default profile, CLI-wired (ADR-0056 D7)', () =
     // The full CLI boot loads stack permission sets into the metadata service, so
     // `fallbackPermissionSet: <name>` resolves there. The lightweight harness does
     // not seed permission metadata, so we hand the declared default to the plugin
-    // directly — then wire it by NAME exactly as the CLI's appDefaultProfileName
+    // directly — then wire it by NAME exactly as the CLI's appDefaultPermissionSetName
     // path does (constructor uses the explicit name, not its own isDefault scan).
     stack = await bootStack(showcaseStack, {
       security: new SecurityPlugin({
@@ -43,7 +43,7 @@ describe('showcase: app-declared default profile, CLI-wired (ADR-0056 D7)', () =
 
   afterAll(async () => { await stack?.stop(); });
 
-  it('appDefaultProfileName extracts the showcase default profile from stack metadata', () => {
+  it('appDefaultPermissionSetName extracts the showcase default profile from stack metadata', () => {
     expect(appDefault).toBe('showcase_member_default');
   });
 

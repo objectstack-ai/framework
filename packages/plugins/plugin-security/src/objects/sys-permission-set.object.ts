@@ -32,7 +32,7 @@ export const SysPermissionSet = ObjectSchema.create({
   highlightFields: ['label', 'name', 'active'],
 
   // Custom actions — permission sets are templates assigned to roles or
-  // users (via sys_role_permission_set / sys_user_permission_set). The
+  // users (via sys_position_permission_set / sys_user_permission_set). The
   // sysadmin operations that don't live on the parent-detail tabs are
   // lifecycle (activate/deactivate without losing assignments) and
   // clone (build a new permset by tweaking an existing one). Both hit

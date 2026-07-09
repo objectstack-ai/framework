@@ -24,7 +24,7 @@ const TABLE = 'sys_automation_run';
 /** Prefix for terminal run-history row ids, keeping them disjoint from live
  *  suspended runs (which use the raw `runId`). */
 const HISTORY_PREFIX = 'run_';
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
  * Default per-flow cap on terminal run-history rows (#2585 retention stop-gap

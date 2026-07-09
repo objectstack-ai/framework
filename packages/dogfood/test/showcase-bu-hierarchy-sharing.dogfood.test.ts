@@ -4,7 +4,7 @@
 // recipient is a BUSINESS UNIT widens access DOWN the hierarchy: the unit's
 // members AND every subordinate (descendant) unit's members gain access via the
 // `sys_business_unit` tree (BFS). This is the honest re-homing of the broken
-// `role_and_subordinates` (sys_role.parent never existed) onto the working
+// `unit_and_subordinates` (sys_position.parent never existed) onto the working
 // business-unit tree. Proven end-to-end: the rule materialises sys_record_share
 // rows; a non-owner in the unit subtree can then read a private record.
 //

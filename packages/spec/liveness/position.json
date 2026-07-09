@@ -1,0 +1,19 @@
+{
+  "type": "position",
+  "_note": "PositionSchema (ADR-0090 D3; formerly RoleSchema). Flat capability-distribution group.",
+  "props": {
+    "name": {
+      "status": "live",
+      "evidence": "packages/core/src/security/resolve-authz-context.ts:210",
+      "note": "sys_position.name keys position-bound permission-set resolution and ctx.positions."
+    },
+    "label": {
+      "status": "live",
+      "note": "display (admin nav/forms, security-plugin.ts)."
+    },
+    "description": {
+      "status": "live",
+      "note": "display."
+    }
+  }
+}

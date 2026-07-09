@@ -42,7 +42,7 @@ import {
     pageForm,
     reportForm,
 } from '../ui';
-import { roleForm } from '../identity';
+import { positionForm } from '../identity';
 import { permissionForm } from '../security';
 import { agentForm, toolForm, skillForm } from '../ai';
 import { flowForm } from '../automation';
@@ -72,7 +72,7 @@ export const METADATA_FORM_REGISTRY: Readonly<Record<string, FormView>> = Object
     view: viewForm,
     app: appForm,
     dashboard: dashboardForm,
-    role: roleForm,
+    role: positionForm,
     action: actionForm,
     page: pageForm,
     agent: agentForm,

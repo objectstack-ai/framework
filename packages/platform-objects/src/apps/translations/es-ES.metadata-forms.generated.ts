@@ -1312,10 +1312,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "Etiqueta",
         helpText: "Etiqueta mostrada para administradores"
       },
-      isProfile: {
-        label: "Es perfil",
-        helpText: "Profile = conjunto base asignado a usuarios. Permission Set = concesión adicional."
-      },
       systemPermissions: {
         label: "Permisos del sistema",
         helpText: "Lista de claves de capacidades del sistema"
@@ -1370,10 +1366,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       label: {
         label: "Etiqueta",
         helpText: "Etiqueta mostrada para administradores"
-      },
-      isProfile: {
-        label: "Es perfil",
-        helpText: "Profile = conjunto base asignado a usuarios. Permission Set = concesión adicional."
       },
       systemPermissions: {
         label: "Permisos del sistema",

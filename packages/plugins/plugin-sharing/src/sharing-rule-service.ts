@@ -12,10 +12,10 @@ import type {
 import type { SharingEngine } from './sharing-service.js';
 import type { SharingService } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
-import { RoleGraphService } from './role-graph.js';
+import { PositionGraphService } from './position-graph.js';
 import { BusinessUnitGraphService } from './business-unit-graph.js';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 function uid(prefix: string): string {
   const g: any = globalThis as any;
@@ -266,16 +266,28 @@ export class SharingRuleService implements ISharingRuleService {
       });
       return dept.expandUsers(rule.recipient_id);
     }
-    if (rule.recipient_type === 'role') return team.expandRoleUsers(rule.recipient_id, rule.organization_id ?? undefined);
-    if (rule.recipient_type === 'role_and_subordinates') {
-      // ADR-0056 D6 — declarative role-hierarchy widening: this role + every
-      // subordinate role's users (configured per sharing rule, not hardcoded).
-      const roleGraph = new RoleGraphService({
+    if (rule.recipient_type === 'position') {
+      // ADR-0090 D3 — positions are flat; expand holders via the platform
+      // assignment table (source of truth, ADR-0057 D4) ∪ the better-auth
+      // membership string (transition window).
+      const positionGraph = new PositionGraphService({
         engine: this.engine,
         organizationId: rule.organization_id ?? null,
         teamGraph: team,
       });
-      return roleGraph.expandRoleAndSubordinates(rule.recipient_id, rule.organization_id ?? undefined);
+      return positionGraph.expandPositionUsers(rule.recipient_id, rule.organization_id ?? undefined);
+    }
+    if (rule.recipient_type === 'unit_and_subordinates') {
+      // ADR-0057 D5 (finalized by ADR-0090 D3) — hierarchy widening is
+      // re-homed onto the BUSINESS-UNIT subtree: the unit named by
+      // `recipient_id` plus every descendant unit's members. The former
+      // position-tree walk queried a `parent` column that never existed.
+      const dept = new BusinessUnitGraphService({
+        engine: this.engine,
+        organizationId: rule.organization_id ?? null,
+        teamGraph: team,
+      });
+      return dept.expandUsers(rule.recipient_id);
     }
     // queue — v1 stores literal; treat as no-op until queue impl lands.
     return [];

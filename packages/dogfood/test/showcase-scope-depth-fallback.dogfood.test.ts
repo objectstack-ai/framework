@@ -1,18 +1,18 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
 // ADR-0056 D7 + ADR-0057 D1 — app-declared DEFAULT PROFILE honored via the CLI
-// wiring (`appDefaultProfileName` → SecurityPlugin `fallbackPermissionSet`),
+// wiring (`appDefaultPermissionSetName` → SecurityPlugin `fallbackPermissionSet`),
 // resolved BY NAME from metadata, carrying a hierarchy `readScope`.
 //
 // This is the companion to `showcase-scope-depth.dogfood.test.ts`. That test
 // injects the scope profile directly as a SecurityPlugin `defaultPermissionSet`
 // (an in-memory bootstrap set). THIS test exercises the path that
 // `objectstack dev`/`serve`/`start` actually take: the app declares the default
-// profile in METADATA, the CLI computes its name with `appDefaultProfileName`
+// profile in METADATA, the CLI computes its name with `appDefaultPermissionSetName`
 // and passes only that NAME as `fallbackPermissionSet`, and the SecurityPlugin
 // resolves the full set (incl. `readScope`) from `sys_permission_set` at request
 // time. The bug this guards: the artifact-serve path used to drop `permissions[]`
-// from the stack config, so `appDefaultProfileName` saw nothing, the fallback
+// from the stack config, so `appDefaultPermissionSetName` saw nothing, the fallback
 // silently degraded to the built-in owner-only `member_default`, and a grant-less
 // user never got the app's declared `readScope` widening.
 //
@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import showcaseStack from '@objectstack/example-showcase';
 import { bootStack, type VerifyStack } from '@objectstack/verify';
-import { SecurityPlugin, appDefaultProfileName } from '@objectstack/plugin-security';
+import { SecurityPlugin, appDefaultPermissionSetName } from '@objectstack/plugin-security';
 
 const OBJ = '/data/showcase_private_note';
 const WHO = ['alice', 'bob', 'carol', 'dave'] as const;
@@ -30,11 +30,10 @@ type Who = (typeof WHO)[number];
 const PROFILE_NAME = 'scope_fallback_unit_and_below';
 
 // The app-declared default profile, as it appears in stack `permissions[]`
-// metadata. `isDefault: true` is what `appDefaultProfileName` keys off.
+// metadata. `isDefault: true` is what `appDefaultPermissionSetName` keys off.
 const DEFAULT_PROFILE_METADATA = {
   name: PROFILE_NAME,
   label: 'Scope Fallback (unit_and_below)',
-  isProfile: true,
   isDefault: true,
   objects: {
     showcase_private_note: {
@@ -57,7 +56,7 @@ async function bootFallbackWorld(withResolver = true): Promise<World> {
     // declared `permissions[]`, handed to SecurityPlugin as the fallback. No
     // `defaultPermissionSets` carry the scope profile — it must resolve from DB.
     security: new SecurityPlugin({
-      fallbackPermissionSet: appDefaultProfileName([DEFAULT_PROFILE_METADATA]),
+      fallbackPermissionSet: appDefaultPermissionSetName([DEFAULT_PROFILE_METADATA]),
     }),
   });
   await stack.signIn();
@@ -134,11 +133,11 @@ async function titles(stack: VerifyStack, token: string): Promise<string[]> {
   return (b.records ?? b.data ?? b ?? []).map((x: any) => x.title).filter(Boolean);
 }
 
-describe('app-default-profile via fallbackPermissionSet (ADR-0056 D7 / ADR-0057 D1)', () => {
-  it('appDefaultProfileName picks the isDefault profile name (the CLI helper)', () => {
-    expect(appDefaultProfileName([DEFAULT_PROFILE_METADATA])).toBe(PROFILE_NAME);
-    // an add-on (isProfile:false) is never chosen as the default
-    expect(appDefaultProfileName([{ name: 'addon', isProfile: false, isDefault: true }])).toBeUndefined();
+describe('app-default-permission-set via fallbackPermissionSet (ADR-0056 D7 / ADR-0057 D1)', () => {
+  it('appDefaultPermissionSetName picks the isDefault profile name (the CLI helper)', () => {
+    expect(appDefaultPermissionSetName([DEFAULT_PROFILE_METADATA])).toBe(PROFILE_NAME);
+    // an add-on (isDefault absent) is never chosen as the default
+    expect(appDefaultPermissionSetName([{ name: 'addon', isDefault: true }])).toBe('addon');
   });
 });
 

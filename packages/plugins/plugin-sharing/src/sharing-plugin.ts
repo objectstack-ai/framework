@@ -45,7 +45,7 @@ export interface SharingPluginOptions {
  *   - `sharingModel: 'private'` → reads filtered to `(owner_id == me) OR
  *     (record explicitly shared with me)`. Writes require ownership or
  *     an `edit`/`full` share.
- *   - `sharingModel: 'read'` → reads unrestricted; writes gated as
+ *   - `sharingModel: 'public_read'` → reads unrestricted; writes gated as
  *     above (typical "everyone can see, only owner can edit").
  *   - any other value (or no value) → no enforcement. This keeps
  *     existing CRM behaviour identical until admins explicitly enable

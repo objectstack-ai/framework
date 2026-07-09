@@ -1,26 +1,25 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { defineRole } from '@objectstack/spec/identity';
+import { definePosition } from '@objectstack/spec/identity';
 import { definePermissionSet } from '@objectstack/spec/security';
 
 /**
  * Example roles — a small sales hierarchy.
  */
-export const SalesRepRole = defineRole({
+export const SalesRepPosition = definePosition({
   name: 'sales_rep',
   label: 'Sales Representative',
   description: 'Front-line sales representative.',
 });
 
-export const SalesManagerRole = defineRole({
+export const SalesManagerPosition = definePosition({
   name: 'sales_manager',
   label: 'Sales Manager',
   description: 'Manages a team of sales reps.',
-  parent: 'sales_rep',
 });
 
 /** Referenced by the Discount Approval second step. */
-export const FinanceApproverRole = defineRole({
+export const FinanceApproverPosition = definePosition({
   name: 'finance_approver',
   label: 'Finance Approver',
   description: 'Finance team member authorised to approve discounts above 30%.',
@@ -34,7 +33,6 @@ export const FinanceApproverRole = defineRole({
 export const SalesUserPermissionSet = definePermissionSet({
   name: 'crm_sales_user',
   label: 'CRM Sales User',
-  isProfile: false,
   objects: {
     crm_account:     { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
     crm_contact:     { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
@@ -55,7 +53,6 @@ export const SalesUserPermissionSet = definePermissionSet({
 export const GuestPortalProfile = definePermissionSet({
   name: 'guest_portal',
   label: 'Guest (Public Forms)',
-  isProfile: true,
   objects: {
     crm_lead: { allowRead: false, allowCreate: true, allowEdit: false, allowDelete: false },
   },

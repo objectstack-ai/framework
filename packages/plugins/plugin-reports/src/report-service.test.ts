@@ -68,7 +68,7 @@ function makeFakeEmail() {
   return email;
 }
 
-const CTX = { userId: 'u1', tenantId: 't1', roles: [], permissions: [] };
+const CTX = { userId: 'u1', tenantId: 't1', positions: [], permissions: [] };
 
 // ─── Rendering ─────────────────────────────────────────────────────
 

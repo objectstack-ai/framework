@@ -34,7 +34,7 @@ function makeShareId(): string {
 }
 
 /** System-elevated context for the plugin's own queries / mutations. */
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
  * Owner field convention. Hard-coded to `owner_id` for MVP — the
@@ -47,21 +47,34 @@ const OWNER_FIELD = 'owner_id';
 
 /**
  * Effective sharing model — collapses the authorable OWD vocabulary onto the
- * three behaviours this service enforces (ADR-0056 D1):
- *   - `private`                         → owner-only read + write
- *   - `public_read` / legacy `read`     → everyone reads, owner writes
- *   - everything else                   → public (no record-level filter)
+ * three behaviours this service enforces:
+ *   - `private`              → owner-only read + write
+ *   - `public_read`          → everyone reads, owner writes
+ *   - `public_read_write`    → public (no record-level filter)
+ *   - `controlled_by_parent` → public here (scoped separately by the
+ *                              security plugin's master-detail path, ADR-0055)
  *
- * "Everything else" covers the canonical `public_read_write`, the legacy
- * `read_write` / `full` aliases, `controlled_by_parent` (scoped separately by
- * the security plugin), and objects that declare no `sharingModel` at all — so
- * existing behaviour is preserved until an admin opts an object in.
+ * [ADR-0090 D1] Secure default: a CUSTOM object (not `sys_*`, not
+ * `isSystem`) that declares NO `sharingModel` resolves to **`private`** —
+ * the former fall-through-to-public default silently granted org-wide
+ * read/write to any C/R/U grant holder (the objectui#2348 incident).
+ * System/platform objects keep their explicit ADR-0066 posture and the
+ * bypass list; an unset model on them stays public as before.
+ *
+ * [ADR-0090 D4] The legacy aliases (`read`/`read_write`/`full`) no longer
+ * parse at authoring. A stored value this function does not recognise
+ * fails CLOSED to `private` (never silently public).
  */
 function effectiveSharingModel(schema: any): 'private' | 'read' | 'public' {
   const m = schema?.sharingModel ?? schema?.security?.sharingModel;
   if (m === 'private') return 'private';
-  if (m === 'read' || m === 'public_read') return 'read';
-  return 'public';
+  if (m === 'public_read') return 'read';
+  if (m === 'public_read_write' || m === 'controlled_by_parent') return 'public';
+  if (m == null) {
+    const isSystem = schema?.isSystem === true || String(schema?.name ?? '').startsWith('sys_');
+    return isSystem ? 'public' : 'private';
+  }
+  return 'private';
 }
 
 function hasOwnerField(schema: any): boolean {
@@ -100,10 +113,10 @@ export class SharingService implements ISharingService {
       'sys_user',
       'sys_organization',
       'sys_member',
-      'sys_role',
+      'sys_position',
       'sys_permission_set',
       'sys_user_permission_set',
-      'sys_role_permission_set',
+      'sys_position_permission_set',
       ...(options.bypassObjects ?? []),
     ]);
   }
