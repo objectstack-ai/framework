@@ -125,7 +125,18 @@ export async function bootStack(
   // Service plugins `objectstack dev` auto-loads for an app of this shape.
   await kernel.use(new SettingsServicePlugin());
   await kernel.use(new AnalyticsServicePlugin());
-  await kernel.use(new AuthPlugin({ secret: opts.authSecret ?? DEFAULT_AUTH_SECRET }));
+  // `autoDefaultOrganization: false` (ADR-0081 D1): the harness proves the two
+  // ENDS of the isolation spectrum — pure single-tenant (no org, no scoping)
+  // and, via `opts.multiTenant`, full multi-org (the enterprise plugin owns
+  // the org bootstrap). AuthPlugin's single-org default-org bootstrap is a
+  // product onboarding convenience for `objectstack dev`/`serve`; letting it
+  // run here would mint a Default Organization + bind the dev admin as owner,
+  // giving every "single-tenant" fixture an active org — which turns on
+  // org-scoped RLS and reparents seeded rows, silently breaking the pure
+  // single-tenant baseline these dogfood proofs assert (ADR-0057 identity
+  // create, ADR-0062 federation, ADR-0086 two-doors). The bootstrap itself is
+  // covered by plugin-auth unit tests + browser E2E.
+  await kernel.use(new AuthPlugin({ secret: opts.authSecret ?? DEFAULT_AUTH_SECRET, autoDefaultOrganization: false }));
 
   // ADR-0062 — datasource connection service (registers 'datasource-connection'),
   // mirroring `objectstack dev`/serve. Without it, AppPlugin's declared-datasource
