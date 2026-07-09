@@ -100,3 +100,34 @@ export type MCPTransport = z.infer<typeof MCPTransportSchema>;
 export type MCPServerRef = z.infer<typeof MCPServerRefSchema>;
 export type MCPApprovalPolicy = z.infer<typeof MCPApprovalPolicySchema>;
 export type MCPToolBinding = z.infer<typeof MCPToolBindingSchema>;
+
+/**
+ * OAuth 2.1 scopes for the platform's OWN MCP endpoint (`/api/v1/mcp`).
+ *
+ * These are the coarse, tool-family-level grants an OAuth access token can
+ * carry when a human-connected MCP client (claude.ai, Claude Desktop,
+ * Claude Code, …) authorizes against a deployment's embedded authorization
+ * server. Scopes bound the *tool surface* only — every call still executes
+ * under the resolved principal's permissions and row-level security, so a
+ * scope can never grant more than the logged-in user could do anyway.
+ *
+ * Deliberately minimal (see #2698): finer grades can be added later without
+ * breaking these. Constants live in the spec so the authorization server
+ * (`@objectstack/plugin-auth`), the resource server (`@objectstack/runtime`)
+ * and the tool layer (`@objectstack/mcp`) can never drift on the names.
+ */
+/** Read-family tools: `list_objects`, `describe_object`, `query_records`, `get_record`. */
+export const MCP_OAUTH_SCOPE_DATA_READ = 'data:read';
+/** Write-family tools: `create_record`, `update_record`, `delete_record`. */
+export const MCP_OAUTH_SCOPE_DATA_WRITE = 'data:write';
+/** Business-action tools: `list_actions`, `run_action`. */
+export const MCP_OAUTH_SCOPE_ACTIONS = 'actions:execute';
+
+/** All MCP tool-family scopes, in the order they are advertised. */
+export const MCP_OAUTH_SCOPES = [
+  MCP_OAUTH_SCOPE_DATA_READ,
+  MCP_OAUTH_SCOPE_DATA_WRITE,
+  MCP_OAUTH_SCOPE_ACTIONS,
+] as const;
+
+export type McpOauthScope = (typeof MCP_OAUTH_SCOPES)[number];

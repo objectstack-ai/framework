@@ -10,7 +10,12 @@ import {
   SystemOverviewDatasets,
 } from '@objectstack/platform-objects/apps';
 import { SysOrganizationDetailPage, SysUserDetailPage } from '@objectstack/platform-objects/pages';
-import { AuthManager, type AuthManagerOptions } from './auth-manager.js';
+import {
+  AuthManager,
+  resolveOidcProviderEnabled,
+  readMcpServerEnabledEnv,
+  type AuthManagerOptions,
+} from './auth-manager.js';
 import { runSetInitialPassword } from './set-initial-password.js';
 import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm, runRequestDomainVerification, runVerifyDomain } from './register-sso-provider.js';
 import {
@@ -1307,14 +1312,13 @@ export class AuthPlugin implements Plugin {
     // `oauthProviderOpenIdConfigMetadata`) which we mount here so external
     // OIDC clients can discover the IdP at the canonical paths.
     //
-    // Honour the same `OS_OIDC_PROVIDER_ENABLED` env-var override that
-    // `AuthManager.buildPlugins()` uses — without this check the
-    // discovery routes would NOT mount when an operator flipped the
-    // env var on without editing the config file, leaving external
-    // OIDC clients unable to discover the IdP.
-    const oidcEnv = (globalThis as any)?.process?.env?.OS_OIDC_PROVIDER_ENABLED;
-    const oidcFromEnv = oidcEnv != null ? String(oidcEnv).toLowerCase() === 'true' : undefined;
-    const oidcEnabled = oidcFromEnv ?? this.options.plugins?.oidcProvider ?? false;
+    // Shared decision point with `AuthManager.buildPluginList()`
+    // (`resolveOidcProviderEnabled`: env override → config → follows
+    // OS_MCP_SERVER_ENABLED) — without this the discovery routes would not
+    // mount when an operator flipped the env var on without editing the
+    // config file, leaving external OIDC/MCP clients unable to discover
+    // the authorization server.
+    const oidcEnabled = resolveOidcProviderEnabled(this.options.plugins);
     if (oidcEnabled) {
       void this.registerOidcDiscoveryRoutes(rawApp, ctx).catch((error) => {
         ctx.logger.error('Failed to register OIDC discovery routes', error as Error);
@@ -1356,6 +1360,47 @@ export class AuthPlugin implements Plugin {
 
     rawApp.get('/.well-known/oauth-authorization-server', (c: any) => withDiscoveryCache(authServerHandler, c.req.raw));
     rawApp.get('/.well-known/openid-configuration', (c: any) => withDiscoveryCache(openidConfigHandler, c.req.raw));
+
+    // RFC 8414 §3.1 path-insertion variant. Our issuer identifier carries a
+    // path component (`<origin>/api/v1/auth`), so spec-conforming clients
+    // (including every MCP client bootstrapping from protected-resource
+    // metadata) request `/.well-known/oauth-authorization-server/api/v1/auth`
+    // — alias it to the same document.
+    const basePath = (this.options.basePath ?? '/api/v1/auth').replace(/\/$/, '');
+    rawApp.get(`/.well-known/oauth-authorization-server${basePath}`, (c: any) =>
+      withDiscoveryCache(authServerHandler, c.req.raw),
+    );
+
+    // ── MCP protected-resource metadata (RFC 9728, #2698) ──────────────
+    // `/api/v1/mcp` is an OAuth 2.1 protected resource; its metadata points
+    // clients at THIS deployment's embedded authorization server. Mounted
+    // only when the MCP OAuth track is live (MCP surface on + AS on + TLS
+    // rule satisfied — loopback exempt): when it is off, nothing is
+    // advertised and the endpoint stays API-key-only, fail-closed.
+    const manager = this.authManager!;
+    if (readMcpServerEnabledEnv() && typeof manager.isMcpOAuthEnabled === 'function') {
+      if (manager.isMcpOAuthEnabled()) {
+        const prmHandler = () => {
+          const body = JSON.stringify(manager.getMcpProtectedResourceMetadata());
+          return new Response(body, {
+            status: 200,
+            headers: { 'content-type': 'application/json', 'cache-control': DISCOVERY_CACHE },
+          });
+        };
+        const mcpPath = new URL(manager.getMcpResourceUrl()).pathname; // e.g. /api/v1/mcp
+        rawApp.get('/.well-known/oauth-protected-resource', prmHandler);
+        // RFC 9728 §3.1 path-insertion variant for the resource's own path.
+        rawApp.get(`/.well-known/oauth-protected-resource${mcpPath}`, prmHandler);
+        ctx.logger.info(
+          `MCP protected-resource metadata mounted at /.well-known/oauth-protected-resource (resource: ${mcpPath})`,
+        );
+      } else {
+        ctx.logger.warn(
+          'MCP server is enabled but the OAuth track is NOT live (base URL fails the OAuth 2.1 TLS rule — ' +
+            'https required, loopback exempt). /api/v1/mcp stays API-key-only; no OAuth metadata is advertised.',
+        );
+      }
+    }
 
     ctx.logger.info(
       'OIDC discovery endpoints mounted at /.well-known/{oauth-authorization-server,openid-configuration}',

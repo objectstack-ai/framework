@@ -309,9 +309,29 @@ security apply to the agent exactly as they do to a person. The support desk you
 built in six steps is now a backend an agent can *run* — not just a database it
 can read.
 
-See [Actions as Tools](/docs/ai/actions-as-tools) for the `run_action` bridge and
-[the MCP reference](/docs/references/ai/mcp) for enabling the server and connecting
-a client.
+Connecting is self-serve. Start the app with the MCP surface on
+(`OS_MCP_SERVER_ENABLED=true`), then add it to your client — the deployment is
+its own OAuth 2.1 authorization server, so interactive clients just open a
+browser login (you connect as yourself, no admin-minted credentials):
+
+```bash
+claude mcp add --transport http support-desk https://your-deployment.example.com/api/v1/mcp
+# first tool use opens a browser login — you're connected as yourself
+```
+
+For headless callers (CI, scripts), mint an API key instead
+(`POST /api/v1/keys`, shown once) and pass it as a header:
+
+```bash
+claude mcp add --transport http support-desk https://your-deployment.example.com/api/v1/mcp \
+  --header "x-api-key: osk_..."
+```
+
+See [Connect your AI](/docs/ai/agents#connect-your-ai-byo-ai-over-mcp) for
+per-client instructions (claude.ai / Claude Desktop / Claude Code and the
+private-deployment reachability note), [Actions as Tools](/docs/ai/actions-as-tools)
+for the `run_action` bridge, and [the MCP reference](/docs/references/ai/mcp) for
+enabling the server.
 
 ## Recap — where each guardrail sat
 

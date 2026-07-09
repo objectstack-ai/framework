@@ -33,6 +33,33 @@ interface ResolveOptions {
   getQl: () => Promise<any> | any;
   /** The raw incoming HTTP request (Fetch Request, Node IncomingMessage, …). */
   request: any;
+  /**
+   * Opt-in (#2698): also accept an OAuth 2.1 ACCESS TOKEN as the Bearer
+   * credential, verified against this deployment's embedded authorization
+   * server (`authService.verifyMcpAccessToken`). ONLY the MCP dispatch path
+   * sets this — OAuth tokens carry coarse tool-family scopes that are
+   * enforced at MCP tool dispatch, so honouring them on other surfaces
+   * (REST/GraphQL) would bypass that scope model entirely.
+   *
+   * Fail-closed: when a JWT-shaped Bearer is presented and does NOT verify
+   * (unknown/expired/revoked/wrong audience), the request resolves as
+   * ANONYMOUS — it never falls back to a cookie session, so a dead token
+   * can't ride along on ambient browser state.
+   */
+  acceptOAuthAccessToken?: boolean;
+}
+
+/**
+ * A compact-JWS-shaped Bearer token (three dot-separated segments) that is
+ * not an ObjectStack API key. better-auth session bearers are opaque (no
+ * dots) and API keys carry the `osk_` prefix, so the shape alone routes the
+ * token to the right verifier without ambiguity.
+ */
+function extractJwtBearer(headers: Headers): string | undefined {
+  const auth = headers.get('authorization');
+  const bearer = auth?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (!bearer || bearer.startsWith('osk_')) return undefined;
+  return bearer.split('.').length === 3 ? bearer : undefined;
 }
 
 /**
@@ -60,6 +87,30 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   const headers = toHeaders(opts.request?.headers);
   const ql = await opts.getQl();
 
+  // ── OAuth 2.1 access-token provenance (MCP surface only, #2698) ──
+  // Verified BEFORE session resolution so the presented credential decides
+  // the outcome. Verification lives in the auth service (it owns the AS +
+  // JWKS); the *authorization* resolution below still flows through the
+  // single shared resolver — OAuth is a second provenance for the
+  // principal, never a second authz model.
+  let oauthPrincipal: { userId: string; scopes: string[]; clientId?: string } | undefined;
+  let oauthBearerPresented = false;
+  if (opts.acceptOAuthAccessToken) {
+    const jwtBearer = extractJwtBearer(headers);
+    if (jwtBearer) {
+      oauthBearerPresented = true;
+      try {
+        const authService: any = await opts.getService('auth');
+        const verified = await authService?.verifyMcpAccessToken?.(jwtBearer);
+        if (verified?.userId && Array.isArray(verified.scopes)) {
+          oauthPrincipal = verified;
+        }
+      } catch {
+        // verification error → fail closed (anonymous), handled below
+      }
+    }
+  }
+
   // The auth service surfaces better-auth either as `.api` (legacy direct mount)
   // or via `await getApi()` (lazy plugin). Build a session getter that tolerates
   // both, and degrades to anonymous when auth isn't wired up.
@@ -74,7 +125,19 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
     }
   };
 
-  const authz = await resolveAuthzContext({ ql, headers, getSession });
+  // Session getter by provenance:
+  //  - verified OAuth token → synthetic session for the token's principal
+  //    (roles/permissions/RLS still aggregate through resolveAuthzContext);
+  //  - JWT bearer presented but NOT verified → hard anonymous (no cookie
+  //    fallback — a dead token must yield 401, not ambient session access);
+  //  - otherwise → the regular better-auth session path.
+  const getSessionForProvenance = oauthPrincipal
+    ? async () => ({ user: { id: oauthPrincipal!.userId } })
+    : oauthBearerPresented
+      ? async () => undefined
+      : getSession;
+
+  const authz = await resolveAuthzContext({ ql, headers, getSession: getSessionForProvenance });
 
   const ctx: ExecutionContext = {
     roles: authz.roles,
@@ -88,6 +151,13 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   if (authz.accessToken) ctx.accessToken = authz.accessToken;
   if (authz.tabPermissions) ctx.tabPermissions = authz.tabPermissions;
   (ctx as any).org_user_ids = authz.org_user_ids;
+
+  // OAuth provenance: surface the token's granted scopes so the MCP
+  // dispatcher can narrow the exposed tool families (undefined for every
+  // other provenance = not scope-limited).
+  if (oauthPrincipal && ctx.userId === oauthPrincipal.userId) {
+    ctx.oauthScopes = oauthPrincipal.scopes;
+  }
 
   // Anonymous → skip localization (no scope to resolve against); keep the engine
   // default. Authenticated → resolve reference timezone/locale/currency.

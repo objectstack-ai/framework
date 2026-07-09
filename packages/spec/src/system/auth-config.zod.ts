@@ -44,6 +44,22 @@ export const AuthPluginConfigSchema = lazySchema(() => z.object({
     'Enable the OpenID Connect provider plugin (acts as an OIDC IdP)',
   ),
   /**
+   * Allow OAuth 2.0 Dynamic Client Registration (RFC 7591) against the
+   * embedded authorization server (`POST /oauth2/register`, unauthenticated).
+   *
+   * DCR is what lets a *generic* MCP client (claude.ai custom connectors,
+   * Claude Desktop, Claude Code) connect self-serve to ANY deployment: since
+   * every deployment is its own authorization server, clients cannot ship
+   * pre-registered client IDs — they must be able to register themselves.
+   *
+   * Tri-state on purpose: when left UNSET it follows the MCP server surface
+   * (`OS_MCP_SERVER_ENABLED`) — on when MCP is on, off otherwise. Set it (or
+   * the `OS_OIDC_DCR_ENABLED` env var, which wins) to force either way.
+   */
+  dynamicClientRegistration: z.boolean().optional().describe(
+    'Allow unauthenticated RFC 7591 Dynamic Client Registration (default: follows OS_MCP_SERVER_ENABLED)',
+  ),
+  /**
    * Enable better-auth's `device-authorization` plugin so that CLIs and
    * other input-constrained devices can sign in via the standard
    * RFC 8628 OAuth 2.0 Device Authorization Grant.

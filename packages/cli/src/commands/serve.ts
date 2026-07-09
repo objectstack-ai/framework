@@ -474,6 +474,14 @@ export default class Serve extends Command {
       if (requires.includes('auth') && !requires.includes('email')) {
         requires.push('email');
       }
+      // `OS_MCP_SERVER_ENABLED=true` says "serve MCP at /api/v1/mcp" — the
+      // dispatcher gates the route on the SAME env var, so honoring the flag
+      // without also loading the MCP plugin would 501 every request (#2698:
+      // flipping one switch must yield a connectable MCP endpoint). Explicit
+      // `requires: ['mcp']` in config works without the env var too.
+      if (process.env.OS_MCP_SERVER_ENABLED === 'true' && !requires.includes('mcp')) {
+        requires.push('mcp');
+      }
       // Default capability slate — every preset except `minimal` gets the
       // foundational services (queue + job + cache + settings + email +
       // storage). Opt out with `objectstack serve --preset minimal`.

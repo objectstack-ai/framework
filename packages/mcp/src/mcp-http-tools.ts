@@ -22,6 +22,11 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  MCP_OAUTH_SCOPE_DATA_READ,
+  MCP_OAUTH_SCOPE_DATA_WRITE,
+  MCP_OAUTH_SCOPE_ACTIONS,
+} from '@objectstack/spec/ai';
 
 export interface McpObjectSummary {
   name: string;
@@ -58,6 +63,17 @@ export interface RegisterObjectToolsOptions {
   allowSystemObjects?: boolean;
   /** Hard cap on `query_records` page size. Default 50. */
   maxQueryLimit?: number;
+  /**
+   * OAuth 2.1 scopes granted to the caller's access token (#2698).
+   * UNDEFINED = not scope-limited (API-key / session provenance) — the full
+   * principal-bound tool surface registers, today's behavior. An ARRAY
+   * narrows registration to the granted tool families, fail-closed:
+   * `data:read` → list/describe/query/get, `data:write` → create/update/
+   * delete, `actions:execute` → list_actions/run_action. An empty array
+   * registers nothing. Scopes only bound the tool surface — every call
+   * still runs under the principal's permissions and RLS.
+   */
+  grantedScopes?: readonly string[];
 }
 
 /** One declared input parameter of a business action, LLM-facing. */
@@ -126,6 +142,12 @@ export interface McpActionBridge {
 export interface RegisterActionToolsOptions {
   /** Expose actions on `sys_*` system objects too. Default false (fail-closed). */
   allowSystemObjects?: boolean;
+  /**
+   * OAuth 2.1 scopes granted to the caller's access token (#2698) — same
+   * contract as {@link RegisterObjectToolsOptions.grantedScopes}. The action
+   * tools require `actions:execute`; undefined = not scope-limited.
+   */
+  grantedScopes?: readonly string[];
 }
 
 const DEFAULT_MAX_LIMIT = 50;
@@ -163,6 +185,12 @@ export function registerObjectTools(
 ): void {
   const allowSystem = options.allowSystemObjects === true;
   const maxLimit = options.maxQueryLimit ?? DEFAULT_MAX_LIMIT;
+  // OAuth tool-family gating (#2698). undefined = not scope-limited.
+  // A tool outside the grant is NOT registered at all — the SDK then
+  // rejects it as unknown, which doubles as dispatch-time enforcement.
+  const scopes = options.grantedScopes;
+  const canRead = !scopes || scopes.includes(MCP_OAUTH_SCOPE_DATA_READ);
+  const canWrite = !scopes || scopes.includes(MCP_OAUTH_SCOPE_DATA_WRITE);
 
   /** Fail-closed object-name guard shared by every object-scoped tool. */
   const guard = (objectName: string): string | undefined => {
@@ -173,172 +201,176 @@ export function registerObjectTools(
     return undefined;
   };
 
-  server.registerTool(
-    'list_objects',
-    {
-      description:
-        'List the data objects (tables) available in this app. Returns each object\'s name, label and field count.',
-      inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async () => {
-      try {
-        const objects = await bridge.listObjects();
-        const visible = allowSystem ? objects : objects.filter((o) => !isSystemObject(o.name));
-        return textResult({ objects: visible, totalCount: visible.length });
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
-
-  server.registerTool(
-    'describe_object',
-    {
-      description:
-        'Get the schema of a data object: its fields (name, type, label, required) and enabled features.',
-      inputSchema: { objectName: z.string().describe('The object/table name, e.g. "task"') },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ objectName }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        const def = await bridge.describeObject(objectName);
-        if (!def) return errorResult(`Object "${objectName}" not found`);
-        return textResult(def);
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
-
-  server.registerTool(
-    'query_records',
-    {
-      description:
-        'Query records from an object with optional filter, field selection, sorting and pagination. ' +
-        'Runs under the caller\'s permissions and row-level security.',
-      inputSchema: {
-        objectName: z.string().describe('The object/table name'),
-        where: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe('Filter conditions, e.g. {"status":"open"}'),
-        fields: z.array(z.string()).optional().describe('Field names to return (defaults to all)'),
-        limit: z.number().int().positive().max(maxLimit).optional().describe(`Max rows (≤ ${maxLimit})`),
-        offset: z.number().int().nonnegative().optional().describe('Rows to skip'),
-        orderBy: z
-          .array(z.object({ field: z.string(), order: z.enum(['asc', 'desc']) }))
-          .optional()
-          .describe('Sort order'),
+  if (canRead) {
+    server.registerTool(
+      'list_objects',
+      {
+        description:
+          'List the data objects (tables) available in this app. Returns each object\'s name, label and field count.',
+        inputSchema: {},
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ objectName, where, fields, limit, offset, orderBy }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        const result = await bridge.query(objectName, {
-          where,
-          fields,
-          limit: Math.min(limit ?? maxLimit, maxLimit),
-          offset,
-          orderBy,
-        });
-        return textResult(result);
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
-
-  server.registerTool(
-    'get_record',
-    {
-      description: 'Fetch a single record by id.',
-      inputSchema: {
-        objectName: z.string().describe('The object/table name'),
-        recordId: z.string().describe('The record id'),
+      async () => {
+        try {
+          const objects = await bridge.listObjects();
+          const visible = allowSystem ? objects : objects.filter((o) => !isSystemObject(o.name));
+          return textResult({ objects: visible, totalCount: visible.length });
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ objectName, recordId }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        const record = await bridge.get(objectName, recordId);
-        if (record == null) return errorResult(`Record "${recordId}" not found in "${objectName}"`);
-        return textResult(record);
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
+    );
 
-  server.registerTool(
-    'create_record',
-    {
-      description: 'Create a new record. Runs under the caller\'s permissions and validations.',
-      inputSchema: {
-        objectName: z.string().describe('The object/table name'),
-        data: z.record(z.string(), z.unknown()).describe('Field values for the new record'),
+    server.registerTool(
+      'describe_object',
+      {
+        description:
+          'Get the schema of a data object: its fields (name, type, label, required) and enabled features.',
+        inputSchema: { objectName: z.string().describe('The object/table name, e.g. "task"') },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ objectName, data }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        return textResult(await bridge.create(objectName, data));
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
+      async ({ objectName }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          const def = await bridge.describeObject(objectName);
+          if (!def) return errorResult(`Object "${objectName}" not found`);
+          return textResult(def);
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
 
-  server.registerTool(
-    'update_record',
-    {
-      description: 'Update fields on an existing record by id.',
-      inputSchema: {
-        objectName: z.string().describe('The object/table name'),
-        recordId: z.string().describe('The record id'),
-        data: z.record(z.string(), z.unknown()).describe('Field values to change'),
+    server.registerTool(
+      'query_records',
+      {
+        description:
+          'Query records from an object with optional filter, field selection, sorting and pagination. ' +
+          'Runs under the caller\'s permissions and row-level security.',
+        inputSchema: {
+          objectName: z.string().describe('The object/table name'),
+          where: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe('Filter conditions, e.g. {"status":"open"}'),
+          fields: z.array(z.string()).optional().describe('Field names to return (defaults to all)'),
+          limit: z.number().int().positive().max(maxLimit).optional().describe(`Max rows (≤ ${maxLimit})`),
+          offset: z.number().int().nonnegative().optional().describe('Rows to skip'),
+          orderBy: z
+            .array(z.object({ field: z.string(), order: z.enum(['asc', 'desc']) }))
+            .optional()
+            .describe('Sort order'),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ objectName, recordId, data }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        return textResult(await bridge.update(objectName, recordId, data));
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
+      async ({ objectName, where, fields, limit, offset, orderBy }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          const result = await bridge.query(objectName, {
+            where,
+            fields,
+            limit: Math.min(limit ?? maxLimit, maxLimit),
+            offset,
+            orderBy,
+          });
+          return textResult(result);
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
 
-  server.registerTool(
-    'delete_record',
-    {
-      description: 'Delete a record by id. This is destructive.',
-      inputSchema: {
-        objectName: z.string().describe('The object/table name'),
-        recordId: z.string().describe('The record id'),
+    server.registerTool(
+      'get_record',
+      {
+        description: 'Fetch a single record by id.',
+        inputSchema: {
+          objectName: z.string().describe('The object/table name'),
+          recordId: z.string().describe('The record id'),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-    },
-    async ({ objectName, recordId }) => {
-      const bad = guard(objectName);
-      if (bad) return errorResult(bad);
-      try {
-        return textResult(await bridge.remove(objectName, recordId));
-      } catch (err) {
-        return errorResult(messageOf(err));
-      }
-    },
-  );
+      async ({ objectName, recordId }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          const record = await bridge.get(objectName, recordId);
+          if (record == null) return errorResult(`Record "${recordId}" not found in "${objectName}"`);
+          return textResult(record);
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
+  } // end canRead (data:read)
+
+  if (canWrite) {
+    server.registerTool(
+      'create_record',
+      {
+        description: 'Create a new record. Runs under the caller\'s permissions and validations.',
+        inputSchema: {
+          objectName: z.string().describe('The object/table name'),
+          data: z.record(z.string(), z.unknown()).describe('Field values for the new record'),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      },
+      async ({ objectName, data }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          return textResult(await bridge.create(objectName, data));
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
+
+    server.registerTool(
+      'update_record',
+      {
+        description: 'Update fields on an existing record by id.',
+        inputSchema: {
+          objectName: z.string().describe('The object/table name'),
+          recordId: z.string().describe('The record id'),
+          data: z.record(z.string(), z.unknown()).describe('Field values to change'),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      },
+      async ({ objectName, recordId, data }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          return textResult(await bridge.update(objectName, recordId, data));
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
+
+    server.registerTool(
+      'delete_record',
+      {
+        description: 'Delete a record by id. This is destructive.',
+        inputSchema: {
+          objectName: z.string().describe('The object/table name'),
+          recordId: z.string().describe('The record id'),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      },
+      async ({ objectName, recordId }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          return textResult(await bridge.remove(objectName, recordId));
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
+  } // end canWrite (data:write)
 }
 
 /**
@@ -359,6 +391,11 @@ export function registerActionTools(
   options: RegisterActionToolsOptions = {},
 ): void {
   const allowSystem = options.allowSystemObjects === true;
+  // OAuth tool-family gating (#2698): the whole action surface requires
+  // `actions:execute`. Not registered = unknown tool = fail-closed.
+  if (options.grantedScopes && !options.grantedScopes.includes(MCP_OAUTH_SCOPE_ACTIONS)) {
+    return;
+  }
 
   server.registerTool(
     'list_actions',

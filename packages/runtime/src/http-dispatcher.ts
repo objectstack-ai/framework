@@ -2,6 +2,7 @@
 
 import { ObjectKernel, getEnv, resolveLocale, evaluateAuthGate, isAuthGateAllowlisted } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
+import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import { setPackageDisabled } from './package-state-store.js';
@@ -431,7 +432,49 @@ export class HttpDispatcher {
 
         const ec = context.executionContext;
         if (!ec || (!ec.userId && !ec.isSystem)) {
-            return { handled: true, response: this.error('Unauthorized: a valid API key is required', 401) };
+            // Per the MCP authorization spec (RFC 9728 §5.1), a 401 from the
+            // protected resource advertises where its metadata lives so an
+            // OAuth-capable client can bootstrap discovery → DCR → PKCE.
+            // Only advertised when the OAuth track is actually live (AS on +
+            // TLS rule satisfied); API-key-only deployments return a plain 401.
+            const resourceMetadataUrl = await this.getMcpResourceMetadataUrl(context);
+            const response = this.error(
+                resourceMetadataUrl
+                    ? 'Unauthorized: a valid OAuth access token or API key is required'
+                    : 'Unauthorized: a valid API key is required',
+                401,
+            ) as { status: number; body: any; headers?: Record<string, string> };
+            if (resourceMetadataUrl) {
+                response.headers = {
+                    'WWW-Authenticate':
+                        `Bearer realm="ObjectStack MCP", resource_metadata="${resourceMetadataUrl}"`,
+                };
+            }
+            return { handled: true, response };
+        }
+
+        // ── OAuth scope → tool-family enforcement (fail-closed, #2698) ──
+        // `oauthScopes` is set ONLY for OAuth-token provenance. A token that
+        // grants none of the MCP tool families gets 403 insufficient_scope
+        // up front; a partial grant narrows the tool set at registration
+        // time inside the MCP runtime. API-key / session principals
+        // (`oauthScopes` undefined) keep the full principal-bound surface.
+        const grantedScopes = Array.isArray((ec as any).oauthScopes)
+            ? ((ec as any).oauthScopes as string[])
+            : undefined;
+        if (grantedScopes && !grantedScopes.some((s) => (MCP_OAUTH_SCOPES as readonly string[]).includes(s))) {
+            const resourceMetadataUrl = await this.getMcpResourceMetadataUrl(context);
+            const response = this.error(
+                `Forbidden: the access token grants none of the MCP scopes (${MCP_OAUTH_SCOPES.join(', ')})`,
+                403,
+            ) as { status: number; body: any; headers?: Record<string, string> };
+            response.headers = {
+                'WWW-Authenticate':
+                    'Bearer error="insufficient_scope"' +
+                    `, scope="${MCP_OAUTH_SCOPES.join(' ')}"` +
+                    (resourceMetadataUrl ? `, resource_metadata="${resourceMetadataUrl}"` : ''),
+            };
+            return { handled: true, response };
         }
 
         // The MCP transport needs a Web-standard Request. The runtime HTTP
@@ -445,7 +488,13 @@ export class HttpDispatcher {
         const bridge = this.buildMcpBridge(context);
         let webRes: Response;
         try {
-            webRes = await mcp.handleHttpRequest(webRequest, { bridge, parsedBody: body });
+            webRes = await mcp.handleHttpRequest(webRequest, {
+                bridge,
+                parsedBody: body,
+                // undefined = not scope-limited (API key / session); an array
+                // narrows the registered tool families inside the MCP runtime.
+                ...(grantedScopes ? { toolOptions: { grantedScopes } } : {}),
+            });
         } catch (err: any) {
             return { handled: true, response: this.error(err?.message ?? 'MCP request failed', 500) };
         }
@@ -470,6 +519,22 @@ export class HttpDispatcher {
     /** Whether the MCP HTTP surface is opted in for this single-env runtime. */
     private static isMcpEnabled(): boolean {
         return typeof process !== 'undefined' && process.env?.OS_MCP_SERVER_ENABLED === 'true';
+    }
+
+    /**
+     * Absolute URL of the RFC 9728 protected-resource metadata for the MCP
+     * endpoint, advertised via `WWW-Authenticate` (#2698). `null` when the
+     * OAuth track is off — the auth service owns the decision (AS enabled +
+     * OAuth 2.1 TLS rule), the dispatcher only relays it. Never throws.
+     */
+    private async getMcpResourceMetadataUrl(context: HttpProtocolContext): Promise<string | null> {
+        try {
+            const authService: any = await this.resolveService('auth', context.environmentId);
+            const url = authService?.getMcpResourceMetadataUrl?.();
+            return typeof url === 'string' && url ? url : null;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -3701,6 +3766,12 @@ export class HttpDispatcher {
                     return this.getObjectQLService(context.environmentId);
                 },
                 request: context.request,
+                // OAuth 2.1 access tokens are honoured ONLY on the MCP
+                // surface (#2698): their coarse tool-family scopes are
+                // enforced at MCP tool dispatch, which other routes don't do.
+                // Matches the plain and `/projects/:id`-scoped route forms
+                // (the scoped prefix is stripped only later, below).
+                acceptOAuthAccessToken: /^(?:\/projects\/[^/]+)?\/mcp(?:[/?]|$)/.test(cleanPath),
             });
         } catch {
             // anonymous request — leave executionContext undefined

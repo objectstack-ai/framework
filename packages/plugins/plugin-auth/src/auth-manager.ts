@@ -14,6 +14,7 @@ import type { IDataEngine } from '@objectstack/core';
 import type { IEmailService } from '@objectstack/spec/contracts';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit } from '@objectstack/types';
 import { mapMembershipRole, BUILTIN_ROLE_PLATFORM_ADMIN } from '@objectstack/spec';
+import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
 import {
   AUTH_USER_CONFIG,
@@ -157,6 +158,67 @@ function readDisableSignUpEnv(): boolean | undefined {
  */
 function readSsoOnlyEnv(): boolean | undefined {
   return readBooleanEnv('OS_AUTH_SSO_ONLY');
+}
+
+/** Whether this runtime serves the HTTP MCP surface (`/api/v1/mcp`). */
+export function readMcpServerEnabledEnv(): boolean {
+  return readBooleanEnv('OS_MCP_SERVER_ENABLED') ?? false;
+}
+
+/**
+ * SINGLE decision point for "is the embedded OAuth/OIDC authorization server
+ * on?" — shared by `buildPluginList()`, the `/auth/config` features block and
+ * the discovery-route mounting in `auth-plugin.ts`, so the wired plugin, the
+ * advertised feature flag and the `.well-known` documents can never disagree.
+ *
+ * Resolution order: `OS_OIDC_PROVIDER_ENABLED` env (operator override, wins)
+ * → config file → **on when the MCP server surface is enabled** (#2698: the
+ * MCP endpoint's human-client track is OAuth 2.1 and every deployment is its
+ * own authorization server, so enabling MCP without an AS would strand every
+ * OAuth-capable client on admin-minted API keys).
+ */
+export function resolveOidcProviderEnabled(pluginConfig?: Partial<AuthPluginConfig>): boolean {
+  return readBooleanEnv('OS_OIDC_PROVIDER_ENABLED') ?? pluginConfig?.oidcProvider ?? readMcpServerEnabledEnv();
+}
+
+/**
+ * Whether RFC 7591 Dynamic Client Registration is allowed on the embedded
+ * authorization server. `OS_OIDC_DCR_ENABLED` env wins, then the config
+ * field, then it FOLLOWS the MCP surface: DCR is what lets a generic MCP
+ * client self-register against any deployment (no central client registry
+ * exists), so it defaults on exactly when MCP is on.
+ */
+export function resolveDcrEnabled(pluginConfig?: Partial<AuthPluginConfig>): boolean {
+  return (
+    readBooleanEnv('OS_OIDC_DCR_ENABLED') ??
+    pluginConfig?.dynamicClientRegistration ??
+    readMcpServerEnabledEnv()
+  );
+}
+
+/**
+ * OAuth 2.1 §1.5 transport rule for the MCP OAuth track: authorization/token
+ * exchanges and bearer usage require TLS, with loopback exempt (dev). A
+ * plain-HTTP non-loopback deployment keeps the API-key track only — the
+ * OAuth surface (protected-resource metadata, bearer acceptance) stays dark,
+ * fail-closed, and is logged once at mount time.
+ */
+export function isOAuthEligibleBaseUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'https:') return true;
+    if (u.protocol !== 'http:') return false;
+    const host = u.hostname.toLowerCase();
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      host === '::1' ||
+      host.endsWith('.localhost')
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1136,7 +1198,6 @@ export class AuthManager {
     // platform-standard truthy set (`true`/`1`/`yes`/`on`, case-insensitive)
     // instead of only the literal string `'true'` — a repeated operator footgun
     // (`OS_SSO_ENABLED=1` silently parsed as disabled).
-    const oidcFromEnv = readBooleanEnv('OS_OIDC_PROVIDER_ENABLED');
     const ssoFromEnv = readBooleanEnv('OS_SSO_ENABLED');
     const scimFromEnv = readBooleanEnv('OS_SCIM_ENABLED');
     // Opt-in DNS domain-verification for external SSO providers (ADR-0024 ②).
@@ -1160,7 +1221,9 @@ export class AuthManager {
       passwordRejectBreached: hibpFromEnv ?? pluginConfig.passwordRejectBreached ?? false,
       passkeys: pluginConfig.passkeys ?? false,
       magicLink: pluginConfig.magicLink ?? false,
-      oidcProvider: oidcFromEnv ?? pluginConfig.oidcProvider ?? false,
+      // Shared decision point (env → config → follows OS_MCP_SERVER_ENABLED),
+      // see resolveOidcProviderEnabled — keep auth-plugin.ts / features in sync.
+      oidcProvider: resolveOidcProviderEnabled(pluginConfig),
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
       admin: pluginConfig.admin ?? scimEffective,
       sso: ssoFromEnv ?? (pluginConfig as any).sso ?? false,
@@ -1499,6 +1562,7 @@ export class AuthManager {
       const { oauthProvider } = await import('@better-auth/oauth-provider');
       const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
       const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
+      const dcr = resolveDcrEnabled(pluginConfig);
       plugins.push(oauthProvider({
         // Console SPA renders both pages (replaces the legacy Account SPA at
         // /_account). Override `uiBasePath` in AuthConfig if Console is
@@ -1506,6 +1570,25 @@ export class AuthManager {
         loginPage: `${baseUrl}${uiBase}/login`,
         consentPage: `${baseUrl}${uiBase}/oauth/consent`,
         schema: buildOauthProviderPluginSchema(),
+        // ── MCP OAuth track (#2698) ────────────────────────────────
+        // Coarse tool-family scopes for the platform's own MCP endpoint,
+        // advertised alongside the standard OIDC scopes. Names are
+        // single-sourced in @objectstack/spec so AS / resource server /
+        // tool layer cannot drift.
+        scopes: ['openid', 'profile', 'email', 'offline_access', ...MCP_OAUTH_SCOPES],
+        // MCP clients bind tokens to the resource via RFC 8707
+        // (`resource=<mcp url>`); the AS only mints audiences it knows.
+        // The auth base (better-auth's default audience) stays valid for
+        // plain OIDC SSO flows.
+        validAudiences: [this.getAuthIssuer(), this.getMcpResourceUrl()],
+        // RFC 7591 Dynamic Client Registration. `allowUnauthenticated…` is
+        // required: MCP clients register BEFORE any user is logged in (the
+        // whole point of the self-serve flow). Registration is rate-limited
+        // by the plugin, clients get only the scopes advertised above, and
+        // every token still requires an interactive PKCE login + consent —
+        // an anonymous registration mints no authority by itself.
+        allowDynamicClientRegistration: dcr,
+        allowUnauthenticatedClientRegistration: dcr,
       }));
     }
 
@@ -1951,6 +2034,143 @@ export class AuthManager {
   }
 
   // ---------------------------------------------------------------------------
+  // MCP OAuth 2.1 resource-server support (#2698)
+  //
+  // The embedded @better-auth/oauth-provider plugin is the AUTHORIZATION
+  // server; the runtime dispatcher's `/api/v1/mcp` endpoint is the RESOURCE
+  // server. These helpers are the resource-server half: canonical issuer /
+  // resource URLs (also used to build the RFC 9728 protected-resource
+  // metadata) and local verification of the JWT access tokens the provider
+  // mints (signed by the jwt plugin, validated against our own JWKS —
+  // in-process, no self-HTTP hop, no client credentials needed).
+  // ---------------------------------------------------------------------------
+
+  /** Cached JWKS for local access-token verification (5-minute TTL). */
+  private jwksCache?: { jwks: any; fetchedAtMs: number };
+  private static readonly JWKS_CACHE_TTL_MS = 5 * 60_000;
+
+  /** Canonical origin of this deployment (config `baseUrl`, auto-detected in dev). */
+  private getCanonicalOrigin(): string {
+    return (this.config.baseUrl || 'http://localhost:3000').replace(/\/$/, '');
+  }
+
+  /**
+   * The OAuth issuer identifier: better-auth's `baseURL` INCLUDING `basePath`
+   * (e.g. `https://acme.example.com/api/v1/auth`) — this is the `iss` claim
+   * the jwt plugin stamps on access tokens and what the AS metadata reports.
+   */
+  getAuthIssuer(): string {
+    const basePath = this.config.basePath || '/api/v1/auth';
+    return `${this.getCanonicalOrigin()}${basePath.startsWith('/') ? basePath : `/${basePath}`}`;
+  }
+
+  /**
+   * The MCP resource identifier (RFC 8707 `resource` / token `aud`):
+   * `<origin><apiPrefix>/mcp`. Derived from the auth basePath so the two can
+   * never disagree about the API prefix.
+   */
+  getMcpResourceUrl(): string {
+    const basePath = this.config.basePath || '/api/v1/auth';
+    const apiPrefix = basePath.replace(/\/auth\/?$/, '');
+    return `${this.getCanonicalOrigin()}${apiPrefix}/mcp`;
+  }
+
+  /**
+   * Whether the OAuth track for MCP is live on this deployment: the embedded
+   * AS must be enabled AND the canonical origin must satisfy the OAuth 2.1
+   * transport rule (TLS, loopback exempt). When this is false the MCP
+   * endpoint is API-key-only and no OAuth metadata is advertised.
+   */
+  isMcpOAuthEnabled(): boolean {
+    return (
+      resolveOidcProviderEnabled(this.config.plugins) &&
+      isOAuthEligibleBaseUrl(this.getCanonicalOrigin())
+    );
+  }
+
+  /**
+   * Absolute URL of the RFC 9728 protected-resource metadata document —
+   * advertised in `WWW-Authenticate` on 401s from `/api/v1/mcp` so clients
+   * can bootstrap the flow. `null` when the OAuth track is off (API keys
+   * remain; nothing is advertised, fail-closed).
+   */
+  getMcpResourceMetadataUrl(): string | null {
+    if (!this.isMcpOAuthEnabled()) return null;
+    return `${this.getCanonicalOrigin()}/.well-known/oauth-protected-resource`;
+  }
+
+  /**
+   * RFC 9728 protected-resource metadata for the MCP endpoint. Served at
+   * `/.well-known/oauth-protected-resource` (and its path-inserted variant)
+   * by the auth plugin's discovery routes.
+   */
+  getMcpProtectedResourceMetadata(): Record<string, unknown> {
+    return {
+      resource: this.getMcpResourceUrl(),
+      authorization_servers: [this.getAuthIssuer()],
+      // offline_access lets clients hold refresh tokens for long-lived
+      // connections; the tool-family scopes bound what the tools expose.
+      scopes_supported: [...MCP_OAUTH_SCOPES, 'offline_access'],
+      bearer_methods_supported: ['header'],
+      resource_name: `${this.getAppName()} MCP`,
+    };
+  }
+
+  /**
+   * Verify an OAuth 2.1 Bearer ACCESS TOKEN minted by THIS deployment's
+   * authorization server and resolve the principal it is bound to.
+   *
+   * Verification is local and fail-closed (`null` on ANY doubt): JWS
+   * signature against our own JWKS, `iss` must be this deployment's issuer,
+   * `aud` must be the MCP resource URL (tokens minted for other audiences —
+   * userinfo, plain OIDC SSO — do NOT unlock MCP), `exp`/`nbf` enforced by
+   * jose. Client-credentials (M2M) tokens carry no `sub` and are rejected:
+   * the MCP surface is principal-bound by design; headless callers use API
+   * keys. Revocation note: JWT access tokens are not server-tracked, so
+   * revocation takes effect at expiry (≤1h default); refresh tokens ARE
+   * revocable immediately via `/oauth2/revoke`.
+   *
+   * The caller (runtime dispatcher) maps the returned principal through
+   * `resolveAuthzContext` — the single shared authorization resolver — so
+   * OAuth is a second *provenance* for the principal, never a second authz
+   * model.
+   */
+  async verifyMcpAccessToken(
+    token: string,
+  ): Promise<{ userId: string; scopes: string[]; clientId?: string } | null> {
+    try {
+      if (!token || token.split('.').length !== 3) return null; // not a JWS compact token
+      if (!this.isMcpOAuthEnabled()) return null;
+
+      const { createLocalJWKSet, jwtVerify } = await import('jose');
+
+      const now = Date.now();
+      if (!this.jwksCache || now - this.jwksCache.fetchedAtMs > AuthManager.JWKS_CACHE_TTL_MS) {
+        const api = await this.getApi();
+        const jwks = await (api as any).getJwks?.();
+        if (!jwks || !Array.isArray(jwks.keys)) return null;
+        this.jwksCache = { jwks, fetchedAtMs: now };
+      }
+
+      const { payload } = await jwtVerify(token, createLocalJWKSet(this.jwksCache.jwks), {
+        issuer: this.getAuthIssuer(),
+        audience: this.getMcpResourceUrl(),
+      });
+
+      const userId = typeof payload.sub === 'string' && payload.sub ? payload.sub : undefined;
+      if (!userId) return null;
+      const scopes =
+        typeof payload.scope === 'string'
+          ? payload.scope.split(' ').filter(Boolean)
+          : [];
+      const clientId = typeof (payload as any).azp === 'string' ? (payload as any).azp : undefined;
+      return { userId, scopes, ...(clientId ? { clientId } : {}) };
+    } catch {
+      return null; // unknown/expired/wrong-audience/garbage → no principal
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Device Flow (CLI browser-based login)
   //
   // The device authorization flow (RFC 8628) is now handled entirely by
@@ -2055,11 +2275,6 @@ export class AuthManager {
     const termsUrl = resolveLegalUrl(rawTermsUrl, DEFAULT_TERMS_URL);
     const privacyUrl = resolveLegalUrl(rawPrivacyUrl, DEFAULT_PRIVACY_URL);
 
-    // OIDC Provider — same env-var override as in `buildPlugins()`. The
-    // /auth/config response MUST match what's actually wired, otherwise the
-    // frontend will render UI for endpoints that 404.
-    const oidcEnv = (globalThis as any)?.process?.env?.OS_OIDC_PROVIDER_ENABLED;
-    const oidcFromEnv = oidcEnv != null ? String(oidcEnv).toLowerCase() === 'true' : undefined;
     const twoFactorFromEnv = readBooleanEnv('OS_AUTH_TWO_FACTOR');
 
     const features = {
@@ -2068,7 +2283,10 @@ export class AuthManager {
       magicLink: pluginConfig.magicLink ?? false,
       organization: pluginConfig.organization ?? true,
       multiOrgEnabled,
-      oidcProvider: oidcFromEnv ?? pluginConfig.oidcProvider ?? false,
+      // Shared decision point with `buildPluginList()` — the /auth/config
+      // response MUST match what's actually wired, otherwise the frontend
+      // renders UI for endpoints that 404.
+      oidcProvider: resolveOidcProviderEnabled(pluginConfig),
       // Coarse "is the @better-auth/sso plugin wired" flag. The `/auth/config`
       // route refines this to "usable" (≥1 provider configured) via
       // `isSsoUsable()` so the login UI can hide the "Sign in with SSO" button

@@ -41,11 +41,14 @@ describe('renderSkillMarkdown', () => {
     expect(renderSkillMarkdown({ envName: 'Acme CRM' })).toContain('**Acme CRM**');
   });
 
-  it('documents auth via x-api-key (not Bearer, which is session auth)', () => {
+  it('documents BOTH auth tracks: OAuth (interactive) and x-api-key (headless)', () => {
     const md = renderSkillMarkdown();
+    // OAuth is the human-client track (#2698): self-serve, browser login.
+    expect(md).toContain('OAuth');
+    expect(md).toMatch(/authorization\s+server/);
+    // API key stays the headless track, unchanged.
     expect(md).toContain('x-api-key');
     expect(md).toContain('Authorization: ApiKey');
-    expect(md).not.toMatch(/Authorization:\s*Bearer/);
   });
 
   it('lists the object-CRUD tools and a discover-first instruction', () => {

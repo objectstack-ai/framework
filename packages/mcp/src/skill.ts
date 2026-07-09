@@ -79,15 +79,30 @@ This skill drives the MCP server at:
 ${url}
 \`\`\`
 
-Authenticate with an ObjectStack API key sent as a request header (the key is
-shown to you once when created; treat it like a password):
+Two authentication tracks are supported:
+
+**OAuth (recommended for interactive clients).** Add the URL as a remote MCP
+server with no credentials; the deployment is its own OAuth 2.1 authorization
+server, so an OAuth-capable client (claude.ai custom connectors, Claude
+Desktop, Claude Code) discovers it automatically, registers itself, and opens
+a browser login. You sign in as yourself and every tool call runs under your
+own permissions. Example (Claude Code):
+
+\`\`\`
+claude mcp add --transport http objectstack ${url}
+\`\`\`
+
+**API key (headless: CI, scripts, agents without a browser).** Send an
+ObjectStack API key as a request header (the key is shown to you once when
+created; treat it like a password):
 
 \`\`\`
 x-api-key: <YOUR_API_KEY>
 \`\`\`
 
-(The header \`Authorization: ApiKey <YOUR_API_KEY>\` is also accepted.) If your
-MCP client supports custom headers on a remote server, set the header there.
+(\`Authorization: ApiKey <YOUR_API_KEY>\` and \`Authorization: Bearer
+<YOUR_API_KEY>\` are also accepted.) If your MCP client supports custom
+headers on a remote server, set the header there.
 
 ## Discover before you act
 

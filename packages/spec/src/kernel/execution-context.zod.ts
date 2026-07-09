@@ -135,6 +135,17 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
    */
   skipTriggers: z.boolean().optional(),
 
+  /**
+   * OAuth 2.1 scopes granted to the access token that authenticated this
+   * request, when the principal was resolved from an OAuth bearer token
+   * (the MCP surface's human-client track, #2698). UNDEFINED for every
+   * other provenance (session cookie, API key) — consumers must treat
+   * "undefined" as "not scope-limited" and a present-but-empty array as
+   * "no scopes granted" (fail-closed). Scopes only narrow the exposed tool
+   * surface; permissions/RLS still bind every operation to the principal.
+   */
+  oauthScopes: z.array(z.string()).optional(),
+
   /** Raw access token (for external API call pass-through) */
   accessToken: z.string().optional(),
   

@@ -271,7 +271,58 @@ Please provide:
 
 ## Using with AI Clients
 
-### Claude Desktop
+### Connecting to a running deployment (remote HTTP)
+
+A running ObjectStack deployment (with `OS_MCP_SERVER_ENABLED=true`) serves
+MCP over Streamable HTTP at `/api/v1/mcp`. Two authentication tracks:
+
+**OAuth 2.1 — the human-client track (recommended).** Each deployment is its
+own spec-compliant authorization server (backed by the embedded better-auth
+instance): it serves `.well-known/oauth-protected-resource` and
+`.well-known/oauth-authorization-server` discovery metadata, supports Dynamic
+Client Registration (RFC 7591) and the authorization-code + PKCE flow. Any
+OAuth-capable MCP client connects self-serve — no admin-minted credentials,
+no central registry; you log in through the browser as yourself and every
+tool call runs under **your** permissions and row-level security.
+
+```bash
+# Claude Code
+claude mcp add --transport http objectstack https://your-deployment.example.com/api/v1/mcp
+# then approve the browser login on first use
+
+# claude.ai — Settings → Connectors → Add custom connector → paste the MCP URL
+# (requires the deployment to be reachable from the public internet over HTTPS)
+
+# Claude Desktop — Settings → Connectors → Add custom connector
+```
+
+TLS is required for OAuth (localhost is exempt, per OAuth 2.1). Local clients
+(Claude Code / Desktop) can reach intranet deployments; claude.ai web
+connectors additionally need the endpoint publicly reachable. Coarse scopes
+(`data:read`, `data:write`, `actions:execute`) narrow the exposed tool
+families at consent time; permissions/RLS still bind every call to the
+logged-in user.
+
+**API key — the headless track (CI, scripts, background agents).** Mint a key
+(`POST /api/v1/keys`, shown once) and send it as a header — no browser
+involved, unchanged from before:
+
+```json
+{
+  "mcpServers": {
+    "objectstack": {
+      "type": "http",
+      "url": "https://your-deployment.example.com/api/v1/mcp",
+      "headers": { "x-api-key": "osk_..." }
+    }
+  }
+}
+```
+
+(`Authorization: ApiKey <key>` and `Authorization: Bearer <osk_-prefixed key>`
+are also accepted.)
+
+### Claude Desktop (local stdio server)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
