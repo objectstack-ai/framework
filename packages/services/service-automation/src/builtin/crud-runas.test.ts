@@ -94,7 +94,7 @@ describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
     registerCrudNodes(engine, ctxWith(data));
     engine.registerFlow('usr', allOpsFlow('usr', 'user'));
 
-    const res = await engine.execute('usr', { userId: 'u1', roles: ['sales'], tenantId: 'org1' });
+    const res = await engine.execute('usr', { userId: 'u1', positions: ['sales'], tenantId: 'org1' });
     expect(res.success).toBe(true);
 
     for (const c of calls) {
@@ -183,8 +183,8 @@ describe('resolveRunDataContext (#1888 unit)', () => {
   });
 
   it("maps runAs:'user' to the triggering user's identity", () => {
-    expect(resolveRunDataContext({ runAs: 'user', userId: 'u1', roles: ['r'], tenantId: 't' })).toEqual({
-      isSystem: false, userId: 'u1', roles: ['r'], permissions: [], tenantId: 't',
+    expect(resolveRunDataContext({ runAs: 'user', userId: 'u1', positions: ['r'], tenantId: 't' })).toEqual({
+      isSystem: false, userId: 'u1', positions: ['r'], permissions: [], tenantId: 't',
     });
   });
 

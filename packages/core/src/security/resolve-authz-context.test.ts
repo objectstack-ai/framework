@@ -34,7 +34,7 @@ describe('resolveAuthzContext — single source of truth', () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1', email: 'ada@x.com' }],
       sys_member: [],
-      sys_user_position: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
+      sys_user_position: [{ user_id: 'u1', position: 'contributor', organization_id: null }],
       sys_user_permission_set: [],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
@@ -56,10 +56,10 @@ describe('resolveAuthzContext — single source of truth', () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1' }],
       sys_member: [],
-      sys_user_position: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
+      sys_user_position: [{ user_id: 'u1', position: 'contributor', organization_id: null }],
       sys_user_permission_set: [],
       sys_position: [{ id: 'r1', name: 'contributor' }],
-      sys_position_permission_set: [{ role_id: 'r1', permission_set_id: 'ps1' }],
+      sys_position_permission_set: [{ position_id: 'r1', permission_set_id: 'ps1' }],
       sys_permission_set: [{ id: 'ps1', name: 'contributor_ps', system_permissions: ['cap_x'] }],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
