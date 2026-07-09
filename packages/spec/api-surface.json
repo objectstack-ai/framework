@@ -1,6 +1,7 @@
 {
   ".": [
     "ADMIN_FULL_ACCESS (const)",
+    "AUDIENCE_ANCHOR_POSITIONS (const)",
     "Agent (type)",
     "BUILTIN_IDENTITY_METADATA (const)",
     "BUILTIN_IDENTITY_NAMES (const)",
@@ -17,6 +18,7 @@
     "DatasourceMappingRule (type)",
     "DatasourceMappingRuleSchema (const)",
     "DefineStackOptions (interface)",
+    "EVERYONE_POSITION (const)",
     "EvalUser (type)",
     "EvalUserInput (type)",
     "EvalUserSchema (const)",
@@ -30,6 +32,7 @@
     "ExpressionMetaSchema (const)",
     "ExpressionSchema (const)",
     "F (const)",
+    "GUEST_POSITION (const)",
     "MAP_SUPPORTED_FIELDS (const)",
     "METADATA_ALIASES (const)",
     "MapSupportedField (type)",
@@ -4165,6 +4168,7 @@
   ],
   "./identity": [
     "ADMIN_FULL_ACCESS (const)",
+    "AUDIENCE_ANCHOR_POSITIONS (const)",
     "AUTH_CONSTANTS (const)",
     "AUTH_ERROR_CODES (const)",
     "Account (type)",
@@ -4181,9 +4185,11 @@
     "BUILTIN_IDENTITY_ORG_OWNER (const)",
     "BUILTIN_IDENTITY_PLATFORM_ADMIN (const)",
     "BuiltinIdentityName (type)",
+    "EVERYONE_POSITION (const)",
     "EvalUser (type)",
     "EvalUserInput (type)",
     "EvalUserSchema (const)",
+    "GUEST_POSITION (const)",
     "Invitation (type)",
     "InvitationSchema (const)",
     "InvitationStatus (type)",
