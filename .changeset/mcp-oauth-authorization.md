@@ -26,9 +26,9 @@ decisions lives in #2698; the moving parts:
   the MCP spec requires) whenever the MCP surface is on — every deployment is a
   distinct AS, so clients cannot ship pre-registered IDs. Force it either way
   with `OS_OIDC_DCR_ENABLED` or the new `plugins.dynamicClientRegistration`
-  auth-config field. The embedded AS itself now auto-enables when
-  `OS_MCP_SERVER_ENABLED=true` (explicit `OS_OIDC_PROVIDER_ENABLED=false` still
-  wins).
+  auth-config field. The embedded AS itself auto-enables whenever the MCP
+  surface is on — which is now the default (explicit
+  `OS_OIDC_PROVIDER_ENABLED=false` still wins).
 - **Authorization-code + PKCE** flow with RFC 8707 resource binding: access
   tokens are minted with `aud=<origin>/api/v1/mcp` and verified locally
   (signature/issuer/audience/expiry) against the deployment's own JWKS —

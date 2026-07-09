@@ -223,12 +223,14 @@ same RBAC / RLS as the Console. No custom tooling, no separate API. See
 [Actions as Tools](/docs/ai/actions-as-tools) for the tool set.
 
 ```bash
-OS_MCP_SERVER_ENABLED=true os start     # boot with the MCP server (stdio by default)
+os start                                # MCP is served at /api/v1/mcp by default
+OS_MCP_SERVER_ENABLED=false os start    # opt out of the MCP surface
+OS_MCP_SERVER_ENABLED=true os start     # additionally auto-start the stdio transport
 ```
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_MCP_SERVER_ENABLED` | boolean | `false` | When `true`, start the Model Context Protocol server at boot — exposing your objects and actions to MCP clients. |
+| `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP HTTP surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it. An explicit `true` additionally auto-starts the long-lived stdio transport at boot. |
 | `OS_MCP_SERVER_NAME` | string | `objectstack` | Server name advertised to MCP clients. |
 | `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. Use `http` (Streamable HTTP) for a remote client; `stdio` for a local one. |
 

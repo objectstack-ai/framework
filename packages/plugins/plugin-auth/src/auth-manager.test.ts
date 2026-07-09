@@ -37,14 +37,22 @@ import { betterAuth } from 'better-auth';
 
 describe('AuthManager', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  const prevMcpEnv = process.env.OS_MCP_SERVER_ENABLED;
 
   beforeEach(() => {
     vi.clearAllMocks();
     consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // This suite exercises the config-driven plugin list / public config in
+    // isolation. The MCP surface is default-ON and would append jwt +
+    // oauth-provider everywhere; pin it off here — the default-on behaviour
+    // has its own coverage in auth-manager.mcp-oauth.test.ts.
+    process.env.OS_MCP_SERVER_ENABLED = 'false';
   });
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    if (prevMcpEnv === undefined) delete process.env.OS_MCP_SERVER_ENABLED;
+    else process.env.OS_MCP_SERVER_ENABLED = prevMcpEnv;
   });
 
   describe('handleRequest – error response logging', () => {

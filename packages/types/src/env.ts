@@ -104,6 +104,33 @@ export function resolveMultiOrgEnabled(): boolean {
 }
 
 /**
+ * SINGLE decision point for "is the MCP HTTP surface (`/api/v1/mcp`) on?".
+ *
+ * MCP is a core platform capability and defaults ON: an unset
+ * `OS_MCP_SERVER_ENABLED` means the surface is served. Operators opt OUT with
+ * an explicit falsy value (`false`/`0`/`off`/`no`, case-insensitive); any
+ * other value — including the historical `true` — keeps it on.
+ *
+ * Every consumer of the flag — the runtime dispatcher's `/mcp` route gate,
+ * the CLI's MCP plugin auto-load, the REST `/discovery` advertisement, and
+ * the auth service's OAuth/DCR follow-defaults — MUST call this instead of
+ * re-reading the env, so the served route, the advertised route, and the
+ * authorization track can never disagree.
+ *
+ * Note the asymmetry with the MCP plugin's *stdio* auto-start, which stays
+ * opt-in (explicit `true` / `autoStart`): attaching a long-lived stdio
+ * transport to every process is a side effect no default should impose,
+ * while the HTTP surface is served statelessly per-request.
+ */
+export function isMcpServerEnabled(): boolean {
+  const raw = readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', {
+    silent: true,
+  });
+  if (raw == null) return true;
+  return !['0', 'false', 'off', 'no'].includes(raw.trim().toLowerCase());
+}
+
+/**
  * Maximum number of organizations a single user may CREATE, from `OS_ORG_LIMIT`.
  * The auth plugin forwards this as better-auth's `organizationLimit` in function
  * form, counting only the caller's `role=owner` memberships — so it caps

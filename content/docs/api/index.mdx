@@ -29,8 +29,9 @@ REST and GraphQL are how *code* consumes your app. **MCP is how *AI* consumes it
 Because every object and action is typed metadata, ObjectStack can expose the whole app
 as a [Model Context Protocol](https://modelcontextprotocol.io) server — so an AI client
 (Claude Code, Claude Desktop, Cursor, a local model) can inspect and *operate* the app
-you built, under the same permissions and RLS as the UI. Enable it with
-`OS_MCP_SERVER_ENABLED=true` (see [environment variables](/docs/deployment/environment-variables#mcp-server)).
+you built, under the same permissions and RLS as the UI. It is served at `/api/v1/mcp`
+by default — set `OS_MCP_SERVER_ENABLED=false` to opt out
+(see [environment variables](/docs/deployment/environment-variables#mcp-server)).
 
 The generated tools mirror the surfaces you already defined:
 `list_objects` / `describe_object` (discover the schema), `query_records` / `get_record`

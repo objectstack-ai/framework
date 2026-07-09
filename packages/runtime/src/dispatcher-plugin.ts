@@ -453,7 +453,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                     }
                 }
                 // Discovery reflects MUTABLE runtime config (which routes/services
-                // are live — e.g. `mcp` only when OS_MCP_SERVER_ENABLED=true). It
+                // are live — e.g. `mcp` unless OS_MCP_SERVER_ENABLED=false). It
                 // must never be cached by an edge/CDN, or a config change (enable
                 // MCP) leaves clients reading a stale payload that still says the
                 // route is absent — the Integrations UI then shows "MCP not

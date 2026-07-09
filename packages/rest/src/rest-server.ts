@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { IHttpServer, resolveAuthzContext, resolveLocalizationContext, isAuthGateAllowlisted } from '@objectstack/core';
+import { isMcpServerEnabled } from '@objectstack/types';
 import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
 import { ObjectStackProtocol } from '@objectstack/spec/api';
@@ -1931,16 +1932,15 @@ export class RestServer {
                             discovery.routes.ui = `${realBase}/ui`;
                         }
 
-                        // MCP (Streamable HTTP) is opt-in per env — advertise it
-                        // only when OS_MCP_SERVER_ENABLED=true so the objectui
-                        // Integrations page surfaces the connect card. The /mcp
-                        // route is mounted bare (not project-scoped), so point at
-                        // the unscoped base. This `/discovery` (served by
-                        // @objectstack/rest) is separate from the dispatcher's
-                        // getDiscoveryInfo — both must advertise `mcp`.
-                        const mcpEnabled =
-                            (globalThis as any)?.process?.env?.OS_MCP_SERVER_ENABLED === 'true';
-                        if (mcpEnabled) {
+                        // MCP (Streamable HTTP) is a default-on core capability —
+                        // advertise it unless OS_MCP_SERVER_ENABLED=false opts the
+                        // env out, so the objectui Integrations page surfaces the
+                        // connect card. The /mcp route is mounted bare (not
+                        // project-scoped), so point at the unscoped base. This
+                        // `/discovery` (served by @objectstack/rest) is separate
+                        // from the dispatcher's getDiscoveryInfo — both must
+                        // advertise `mcp` (single source: isMcpServerEnabled).
+                        if (isMcpServerEnabled()) {
                             const unscopedBase = isScoped
                                 ? basePath.replace(/\/(environments|projects)\/:environmentId$/, '')
                                 : basePath;

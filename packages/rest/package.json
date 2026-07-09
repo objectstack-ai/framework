@@ -23,6 +23,7 @@
     "@objectstack/platform-objects": "workspace:*",
     "@objectstack/service-package": "workspace:*",
     "@objectstack/spec": "workspace:*",
+    "@objectstack/types": "workspace:*",
     "exceljs": "^4.4.0",
     "zod": "^4.4.3"
   },

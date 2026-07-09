@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectKernel, getEnv, resolveLocale, evaluateAuthGate, isAuthGateAllowlisted } from '@objectstack/core';
+import { isMcpServerEnabled } from '@objectstack/types';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
@@ -408,9 +409,10 @@ export class HttpDispatcher {
      * Handle an MCP request over the Streamable HTTP transport (`/mcp`).
      *
      * Gating + auth (fail-closed):
-     *  - **opt-in**: only served when `OS_MCP_SERVER_ENABLED=true` (single-env
-     *    runtime). Multi-tenant cloud overrides this gate per env. When off we
-     *    return 404 so the surface isn't advertised.
+     *  - **default-on**: served unless `OS_MCP_SERVER_ENABLED=false` (single-env
+     *    runtime; MCP is a core platform capability). Multi-tenant cloud
+     *    overrides this gate per env. When opted out we return 404 so the
+     *    surface isn't advertised.
      *  - **auth**: requires a principal already resolved by
      *    `resolveExecutionContext` (the `sys_api_key` Bearer/header path or a
      *    session). Anonymous → 401.
@@ -516,9 +518,13 @@ export class HttpDispatcher {
         return { handled: true, response: { status: webRes.status, headers, body: responseBody } };
     }
 
-    /** Whether the MCP HTTP surface is opted in for this single-env runtime. */
+    /**
+     * Whether the MCP HTTP surface is on for this single-env runtime.
+     * Default-on core capability; `OS_MCP_SERVER_ENABLED=false` opts out
+     * (single decision point: `isMcpServerEnabled` in `@objectstack/types`).
+     */
     private static isMcpEnabled(): boolean {
-        return typeof process !== 'undefined' && process.env?.OS_MCP_SERVER_ENABLED === 'true';
+        return isMcpServerEnabled();
     }
 
     /**
@@ -1309,9 +1315,9 @@ export class HttpDispatcher {
                 notifications: hasNotification ? `${prefix}/notifications` : undefined,
                 ai:            hasAi ? `${prefix}/ai` : undefined,
                 i18n:          hasI18n ? `${prefix}/i18n` : undefined,
-                // MCP (Streamable HTTP) is opt-in per env — only advertised
-                // when OS_MCP_SERVER_ENABLED=true so the surface isn't exposed
-                // by default. The objectui Integrations page reads this.
+                // MCP (Streamable HTTP) is a default-on core capability —
+                // advertised unless OS_MCP_SERVER_ENABLED=false opts the env
+                // out. The objectui Integrations page reads this.
                 mcp:           HttpDispatcher.isMcpEnabled() ? `${prefix}/mcp` : undefined,
         };
 

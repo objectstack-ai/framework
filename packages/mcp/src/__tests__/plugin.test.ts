@@ -151,7 +151,7 @@ describe('MCPServerPlugin', () => {
       await plugin.start(ctx as any);
 
       expect(ctx.logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[MCP] Server ready but not started'),
+        expect.stringContaining('[MCP] Transport not auto-started'),
       );
       expect(ctx.trigger).toHaveBeenCalledWith('mcp:ready', expect.any(Object));
     });
@@ -204,7 +204,7 @@ describe('MCPServerPlugin', () => {
       await plugin.start(ctx as any);
 
       expect(ctx.logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[MCP] Server ready but not started'),
+        expect.stringContaining('[MCP] Transport not auto-started'),
       );
     });
 

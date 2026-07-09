@@ -8,7 +8,7 @@ import { HttpDispatcher } from './http-dispatcher.js';
  * These tests drive `handleMcp` directly to verify the gate + auth + bridge
  * wiring without standing up a full kernel. The MCP transport itself is tested
  * in @objectstack/mcp; here we assert:
- *  - opt-in gate (OS_MCP_SERVER_ENABLED)
+ *  - default-on gate (OS_MCP_SERVER_ENABLED=false opts out)
  *  - fail-closed auth (anonymous → 401)
  *  - the injected bridge runs through callData bound to the request's
  *    ExecutionContext (RLS/permissions), proving principal binding.
@@ -74,12 +74,22 @@ describe('HttpDispatcher.handleMcp', () => {
     else process.env.OS_MCP_SERVER_ENABLED = prev;
   });
 
-  it('returns 404 when MCP is not enabled (opt-in gate)', async () => {
-    delete process.env.OS_MCP_SERVER_ENABLED;
+  it('returns 404 when MCP is explicitly disabled (opt-out gate)', async () => {
+    process.env.OS_MCP_SERVER_ENABLED = 'false';
     const { kernel } = makeKernel({ withMcp: true });
     const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
     const res = await d.handleMcp({}, makeContext());
     expect(res.response.status).toBe(404);
+  });
+
+  it('serves MCP by default — unset env means enabled (core capability)', async () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    // No `mcp` service registered: an open gate reaches the 501 branch,
+    // a closed gate would have short-circuited to 404 before the lookup.
+    const { kernel } = makeKernel({ withMcp: false });
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const res = await d.handleMcp({}, makeContext());
+    expect(res.response.status).toBe(501);
   });
 
   describe('when enabled', () => {

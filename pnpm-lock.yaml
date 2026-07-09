@@ -1552,6 +1552,9 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec
+      '@objectstack/types':
+        specifier: workspace:*
+        version: link:../types
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
