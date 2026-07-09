@@ -1682,10 +1682,10 @@ describe('RLSCompiler', () => {
 
   it('should compile IN expression with array property', () => {
     const compiler = new RLSCompiler();
-    const policy: any = { object: 'project', operation: 'select', using: 'id IN (current_user.roles)' };
-    const ctx: any = { userId: 'u1', tenantId: 't1', roles: ['role-a', 'role-b'] };
+    const policy: any = { object: 'project', operation: 'select', using: 'id IN (current_user.positions)' };
+    const ctx: any = { userId: 'u1', tenantId: 't1', positions: ['pos-a', 'pos-b'] };
     const filter = compiler.compileFilter([policy], ctx);
-    expect(filter).toEqual({ id: { $in: ['role-a', 'role-b'] } });
+    expect(filter).toEqual({ id: { $in: ['pos-a', 'pos-b'] } });
   });
 
   it('should compile IN expression against pre-resolved org_user_ids', () => {
@@ -1834,19 +1834,19 @@ describe('RLSCompiler', () => {
   });
 
   it('should not let a rlsMembership key clobber a named context field', () => {
-    // roles is a first-class field; a hostile/misconfigured membership bag
-    // must not override it. The named `roles` (['real-role']) wins; the
-    // policy compiles against it, not the injected ['spoofed'].
+    // positions is a first-class field; a hostile/misconfigured membership bag
+    // must not override it. The named `positions` (['real-position']) wins;
+    // the policy compiles against it, not the injected ['spoofed'].
     const compiler = new RLSCompiler();
-    const policy: any = { object: 'x', operation: 'select', using: 'role_id IN (current_user.roles)' };
+    const policy: any = { object: 'x', operation: 'select', using: 'position_id IN (current_user.positions)' };
     const ctx: any = {
       userId: 'u1',
       tenantId: 'org-1',
-      roles: ['real-role'],
-      rlsMembership: { roles: ['spoofed'] },
+      positions: ['real-position'],
+      rlsMembership: { positions: ['spoofed'] },
     };
     const filter = compiler.compileFilter([policy], ctx);
-    expect(filter).toEqual({ role_id: { $in: ['real-role'] } });
+    expect(filter).toEqual({ position_id: { $in: ['real-position'] } });
   });
 
   // Always-true literal — makes RLS.allowAllPolicy grant access instead of
