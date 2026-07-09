@@ -51,8 +51,10 @@ describe('runMetadataEval — live seam', () => {
   it('a generator that produces a clean stack passes', async () => {
     const goodGen = () => ({
       objects: [
-        { name: 'invoice', label: 'Invoice', fields: { name: { type: 'text', label: 'Name', required: true } } },
-        { name: 'invoice_line', label: 'Line', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', required: true, deleteBehavior: 'cascade', inlineEdit: true }, amount: { type: 'currency', label: 'Amount', required: true } } },
+        // A "clean" stack declares OWD — the D7 security linter (ADR-0090)
+        // errors on custom objects with an unset sharingModel.
+        { name: 'invoice', label: 'Invoice', sharingModel: 'private', fields: { name: { type: 'text', label: 'Name', required: true } } },
+        { name: 'invoice_line', label: 'Line', sharingModel: 'controlled_by_parent', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', required: true, deleteBehavior: 'cascade', inlineEdit: true }, amount: { type: 'currency', label: 'Amount', required: true } } },
       ],
     });
     const report = await runMetadataEval(oneCase, { generate: goodGen });

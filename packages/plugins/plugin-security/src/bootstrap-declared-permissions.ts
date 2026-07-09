@@ -82,6 +82,9 @@ function toRowFields(ps: any): Record<string, any> {
     system_permissions: JSON.stringify(ps.systemPermissions ?? []),
     row_level_security: JSON.stringify(ps.rowLevelSecurity ?? []),
     tab_permissions: JSON.stringify(ps.tabPermissions ?? {}),
+    // [ADR-0090 D12] Delegated-admin scope travels with the set row so the
+    // delegated-admin gate can resolve a DB-loaded delegate's authority.
+    admin_scope: ps.adminScope ? JSON.stringify(ps.adminScope) : null,
   };
 }
 

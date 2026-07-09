@@ -673,8 +673,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       user_id: {
         label: "ユーザー"
       },
-      role_in_business_unit: {
-        label: "ビジネスユニット内ロール",
+      function_in_business_unit: {
+        label: "ビジネスユニット内の職能",
         help: "`lead` は日常の責任者、`deputy` は承認ルーティングでリードの代理を務める場合があります。",
         options: {
           member: "メンバー",

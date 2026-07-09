@@ -6,7 +6,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * sys_permission_set — System Permission Set Object
  *
  * Named groupings of fine-grained permissions.
- * Permission sets can be assigned to roles or directly to users
+ * Permission sets can be bound to positions or granted directly to users
  * for granular access control.
  *
  * @namespace sys
@@ -31,7 +31,7 @@ export const SysPermissionSet = ObjectSchema.create({
   titleFormat: '{label}',
   highlightFields: ['label', 'name', 'active'],
 
-  // Custom actions — permission sets are templates assigned to roles or
+  // Custom actions — permission sets are templates bound to positions or
   // users (via sys_position_permission_set / sys_user_permission_set). The
   // sysadmin operations that don't live on the parent-detail tabs are
   // lifecycle (activate/deactivate without losing assignments) and
@@ -180,6 +180,17 @@ export const SysPermissionSet = ObjectSchema.create({
       label: 'Tab Permissions',
       required: false,
       description: 'JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)',
+      group: 'Permissions',
+    }),
+
+    admin_scope: Field.textarea({
+      label: 'Delegated Admin Scope',
+      required: false,
+      description:
+        '[ADR-0090 D12] JSON-serialized AdminScope: { businessUnit, includeSubtree, manageAssignments, ' +
+        'manageBindings, authorEnvironmentSets, assignablePermissionSets[] }. Holding this set makes the ' +
+        'user a SCOPED administrator within the declared business-unit subtree; enforced by the ' +
+        'delegated-admin write gate.',
       group: 'Permissions',
     }),
 

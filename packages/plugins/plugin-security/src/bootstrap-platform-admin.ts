@@ -106,6 +106,8 @@ export async function bootstrapPlatformAdmin(
       system_permissions: JSON.stringify(ps.systemPermissions ?? []),
       row_level_security: JSON.stringify(ps.rowLevelSecurity ?? []),
       tab_permissions: JSON.stringify(ps.tabPermissions ?? {}),
+      // [ADR-0090 D12] Delegated-admin scope travels with the set row.
+      admin_scope: (ps as any).adminScope ? JSON.stringify((ps as any).adminScope) : null,
       active: true,
     });
     if (created?.id) seeded[ps.name] = created.id;

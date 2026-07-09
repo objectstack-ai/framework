@@ -3,48 +3,51 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_position — System Role Object
+ * sys_position — Position definitions (ADR-0090 D3).
  *
- * RBAC role definition for the ObjectStack platform.
- * Roles group permissions and are assigned to users or members.
+ * A position (岗位) is the flat capability-DISTRIBUTION group: users hold
+ * positions (`sys_user_position`), positions bind permission sets
+ * (`sys_position_permission_set`). Positions carry no capability of their
+ * own and no hierarchy — the visibility tree lives on `sys_business_unit`.
  *
  * @namespace sys
  */
-export const SysRole = ObjectSchema.create({
+export const SysPosition = ObjectSchema.create({
   name: 'sys_position',
-  label: 'Role',
-  pluralLabel: 'Roles',
+  label: 'Position',
+  pluralLabel: 'Positions',
   icon: 'shield',
   isSystem: true,
   managedBy: 'config',
   // ADR-0010 §3.7 — RBAC primitive; tenants may add custom rows
   // (created via UI / API) but the schema itself is locked.
-  // ADR-0068 D3: role-DEFINITION authority follows the isolation boundary.
-  // Framework-reserved built-in roles (platform_admin / org_*) are seeded with
-  // `managed_by = 'system'` and MUST NOT be repurposed by a tenant; ad-hoc role
-  // definitions in a shared cross-tenant kernel namespace are forbidden.
+  // ADR-0068 D3: position-DEFINITION authority follows the isolation boundary.
+  // Framework-reserved built-in identities (platform_admin / org_*) and the
+  // ADR-0090 D9 audience anchors (everyone / guest) are seeded with
+  // `managed_by = 'system'` and MUST NOT be repurposed by a tenant; ad-hoc
+  // position definitions in a shared cross-tenant kernel namespace are forbidden.
   protection: {
     lock: 'no-overlay',
     reason: 'RBAC schema is platform-defined — see ADR-0010.',
     docsUrl: 'https://docs.objectstack.ai/adr/0010-metadata-protection',
   },
-  description: 'Role definitions for RBAC access control',
+  description: 'Position definitions for capability distribution (ADR-0090)',
   displayNameField: 'label',
   nameField: 'label', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)
   titleFormat: '{label}',
   highlightFields: ['label', 'name', 'active', 'is_default'],
 
-  // Custom actions — system roles drive RBAC and are edited rarely but
-  // require the four high-frequency sysadmin affordances every IdP
+  // Custom actions — positions drive capability distribution and are edited
+  // rarely but require the four high-frequency sysadmin affordances every IdP
   // (Salesforce, ServiceNow, Okta) ships: activate/deactivate (lifecycle
   // without losing assignments), mark default (auto-assign to new users),
-  // and clone (template for new roles). All operations hit the generic
+  // and clone (template for new positions). All operations hit the generic
   // data CRUD endpoint exposed by `apiEnabled` — no custom server route
   // required because `managedBy: 'config'` allows direct mutation.
   actions: [
     {
-      name: 'activate_role',
-      label: 'Activate Role',
+      name: 'activate_position',
+      label: 'Activate Position',
       icon: 'circle-check',
       variant: 'secondary',
       mode: 'custom',
@@ -53,12 +56,12 @@ export const SysRole = ObjectSchema.create({
       method: 'PATCH',
       target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { active: true },
-      successMessage: 'Role activated',
+      successMessage: 'Position activated',
       refreshAfter: true,
     },
     {
-      name: 'deactivate_role',
-      label: 'Deactivate Role',
+      name: 'deactivate_position',
+      label: 'Deactivate Position',
       icon: 'circle-off',
       variant: 'danger',
       mode: 'custom',
@@ -67,12 +70,12 @@ export const SysRole = ObjectSchema.create({
       method: 'PATCH',
       target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { active: false },
-      confirmText: 'Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.',
-      successMessage: 'Role deactivated',
+      confirmText: 'Deactivate this position? Users keep their assignment but the position stops granting permissions until re-activated.',
+      successMessage: 'Position deactivated',
       refreshAfter: true,
     },
     {
-      name: 'set_default_role',
+      name: 'set_default_position',
       label: 'Set as Default',
       icon: 'star',
       variant: 'secondary',
@@ -82,8 +85,8 @@ export const SysRole = ObjectSchema.create({
       method: 'PATCH',
       target: '/api/v1/data/sys_position/{id}',
       bodyExtra: { is_default: true },
-      confirmText: 'Make this the default role for new users? Existing users are unaffected.',
-      successMessage: 'Default role updated',
+      confirmText: 'Make this the default position for new users? Existing users are unaffected.',
+      successMessage: 'Default position updated',
       refreshAfter: true,
     },
     {
@@ -91,8 +94,8 @@ export const SysRole = ObjectSchema.create({
       // dialog asks only for the new API name / label so the operator
       // can rename atomically; permissions JSON is copied wholesale via
       // defaultFromRow.
-      name: 'clone_role',
-      label: 'Clone Role',
+      name: 'clone_position',
+      label: 'Clone Position',
       icon: 'copy',
       variant: 'secondary',
       mode: 'custom',
@@ -101,7 +104,7 @@ export const SysRole = ObjectSchema.create({
       method: 'POST',
       target: '/api/v1/data/sys_position',
       bodyExtra: { is_default: false, active: true },
-      successMessage: 'Role cloned',
+      successMessage: 'Position cloned',
       refreshAfter: true,
       params: [
         { name: 'label', label: 'New Display Name', type: 'text', required: true },
@@ -123,9 +126,9 @@ export const SysRole = ObjectSchema.create({
       sort: [{ field: 'label', order: 'asc' }],
       pagination: { pageSize: 50 },
     },
-    default_roles: {
+    default_positions: {
       type: 'grid',
-      name: 'default_roles',
+      name: 'default_positions',
       label: 'Default',
       data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'description', 'active'],
@@ -143,9 +146,9 @@ export const SysRole = ObjectSchema.create({
       sort: [{ field: 'label', order: 'asc' }],
       pagination: { pageSize: 50 },
     },
-    all_roles: {
+    all_positions: {
       type: 'grid',
-      name: 'all_roles',
+      name: 'all_positions',
       label: 'All',
       data: { provider: 'object', object: 'sys_position' },
       columns: ['label', 'name', 'active', 'is_default', 'updated_at'],
@@ -169,7 +172,7 @@ export const SysRole = ObjectSchema.create({
       required: true,
       searchable: true,
       maxLength: 100,
-      description: 'Unique machine name for the role (e.g. admin, editor, viewer)',
+      description: 'Unique machine name for the position (e.g. sales_manager, hr_specialist)',
       group: 'Identity',
     }),
 
@@ -195,7 +198,7 @@ export const SysRole = ObjectSchema.create({
     }),
 
     is_default: Field.boolean({
-      label: 'Default Role',
+      label: 'Default Position',
       defaultValue: false,
       description: 'Automatically assigned to new users',
       group: 'Status',
@@ -203,7 +206,7 @@ export const SysRole = ObjectSchema.create({
 
     // ── System ───────────────────────────────────────────────────
     // ADR-0068 D2/D3 — provenance of this row. `system` = a framework-reserved
-    // built-in identity role (seeded by bootstrapBuiltinRoles); `config` =
+    // built-in identity position (seeded by bootstrapBuiltinPositions); `config` =
     // stack-declared; null / `user` = tenant-created. Built-in rows are read-only.
     managed_by: Field.text({
       label: 'Managed By',
@@ -213,7 +216,7 @@ export const SysRole = ObjectSchema.create({
     }),
 
     id: Field.text({
-      label: 'Role ID',
+      label: 'Position ID',
       required: true,
       readonly: true,
       group: 'System',

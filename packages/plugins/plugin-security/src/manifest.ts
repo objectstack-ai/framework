@@ -10,11 +10,11 @@
 
 import {
   SysPermissionSet,
-  SysRole,
+  SysPosition,
   SysCapability,
   SysUserPermissionSet,
-  SysRolePermissionSet,
-  SysUserRole,
+  SysPositionPermissionSet,
+  SysUserPosition,
   defaultPermissionSets,
 } from './objects/index.js';
 
@@ -23,12 +23,12 @@ export const SECURITY_PLUGIN_VERSION = '1.0.0';
 
 /** Security objects owned by plugin-security. */
 export const securityObjects = [
-  SysRole,
+  SysPosition,
   SysCapability,
   SysPermissionSet,
   SysUserPermissionSet,
-  SysRolePermissionSet,
-  SysUserRole,
+  SysPositionPermissionSet,
+  SysUserPosition,
 ];
 
 /** Default platform permission sets (admin / member / viewer). */
@@ -43,5 +43,5 @@ export const securityPluginManifestHeader = {
   scope: 'system' as const,
   defaultDatasource: 'cloud',
   name: 'Security Plugin',
-  description: 'RBAC roles and permission sets for ObjectStack (Role, PermissionSet)',
+  description: 'RBAC positions and permission sets for ObjectStack (Position, PermissionSet)',
 };

@@ -16,6 +16,9 @@ import { cel } from '@objectstack/spec';
  */
 export const OpportunityLineItem = ObjectSchema.create({
   name: 'crm_opportunity_line_item',
+  // [ADR-0090 D1/D4] Master-detail child: record access follows the parent
+  // opportunity (the D7 publish linter requires the baseline to be declared).
+  sharingModel: 'controlled_by_parent',
   label: 'Line Item',
   pluralLabel: 'Line Items',
   icon: 'list',

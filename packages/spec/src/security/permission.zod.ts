@@ -76,6 +76,47 @@ export const ObjectPermissionSchema = lazySchema(() => z.object({
 }));
 
 /**
+ * [ADR-0090 D12] Delegated-administration scope.
+ *
+ * Attaches to a permission set (and is therefore distributed via positions,
+ * audited in the same tables, and explained by the same engine as every other
+ * grant). Declares WHERE a delegate may administer (a business-unit subtree),
+ * WHAT they may do there (manage user↔position assignments, position↔set
+ * bindings, author environment-owned sets), and WHICH permission sets they may
+ * hand out (the anti-self-escalation allowlist — a delegate can never assign,
+ * to others or themselves, a set outside it).
+ *
+ * Runtime enforcement lives in `@objectstack/plugin-security`'s delegated-admin
+ * write gate on `sys_user_position` / `sys_position_permission_set` /
+ * `sys_user_permission_set` / `sys_permission_set`. Tenant-level admins
+ * (ADR-0066 superuser wildcard) are exempt; the `everyone`/`guest` audience
+ * anchors stay tenant-level only — no delegated scope can touch them.
+ */
+export const AdminScopeSchema = lazySchema(() => z.object({
+  /** Root of the delegated subtree — `sys_business_unit.name` (machine name, portable across environments). */
+  businessUnit: z.string().describe('[ADR-0090 D12] Delegation boundary: sys_business_unit.name of the subtree root'),
+  /** Whether the scope covers the whole subtree under `businessUnit` (default) or that single unit only. */
+  includeSubtree: z.boolean().default(true).describe('Cover descendant business units too (default true)'),
+  /** May create/update/delete `sys_user_position` assignments (and direct `sys_user_permission_set` grants) within the boundary. */
+  manageAssignments: z.boolean().default(false).describe('Manage user↔position assignments within the subtree'),
+  /** May create/delete `sys_position_permission_set` bindings whose blast radius lies within the boundary. */
+  manageBindings: z.boolean().default(false).describe('Manage position↔permission-set bindings within the subtree'),
+  /** May author environment-owned permission sets (package-managed rows stay publish-only per ADR-0086). */
+  authorEnvironmentSets: z.boolean().default(false).describe('Author environment-owned permission sets'),
+  /**
+   * The anti-self-escalation core: permission-set NAMES the delegate may
+   * assign/bind. Every set reached by a delegated write must be in this list;
+   * granting a set that itself carries an adminScope additionally requires the
+   * grantor's scope to STRICTLY contain the granted one.
+   */
+  assignablePermissionSets: z.array(z.string()).default([]).describe('Allowlist of permission-set names the delegate may hand out'),
+}));
+
+export type AdminScope = z.infer<typeof AdminScopeSchema>;
+/** Authoring input for {@link AdminScope} — defaulted fields are optional. */
+export type AdminScopeInput = z.input<typeof AdminScopeSchema>;
+
+/**
  * Field Level Security (FLS)
  */
 export const FieldPermissionSchema = lazySchema(() => z.object({
@@ -205,7 +246,7 @@ export const PermissionSetSchema = lazySchema(() => z.object({
    * - `current_user.id` - Current user ID
    * - `current_user.organization_id` - Active organization id
    * - `current_user.department` - User's department
-   * - `current_user.role` - User's role
+   * - `current_user.positions` - Held positions (ADR-0090 D3)
    * - `current_user.region` - User's geographic region
    * 
    * @example Custom context
@@ -218,6 +259,16 @@ export const PermissionSetSchema = lazySchema(() => z.object({
    * ```
    */
   contextVariables: z.record(z.string(), z.unknown()).optional().describe('Context variables for RLS evaluation'),
+
+  /**
+   * [ADR-0090 D12] Delegated-administration scope carried by this set.
+   * Holding the set makes the user a SCOPED administrator: they may manage
+   * assignments/bindings (and optionally author environment sets) within the
+   * declared business-unit subtree, handing out ONLY the allowlisted sets.
+   * See {@link AdminScopeSchema} for the full contract.
+   */
+  adminScope: AdminScopeSchema.optional()
+    .describe('[ADR-0090 D12] Scoped delegated-administration grant (BU subtree + assignable-set allowlist)'),
 }));
 
 export type PermissionSet = z.infer<typeof PermissionSetSchema>;

@@ -3,13 +3,13 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_user_position — User ↔ Role assignment (ADR-0057 D4).
+ * sys_user_position — User ↔ Position assignment (ADR-0057 D4).
  *
  * The platform-owned source of truth for "who holds which position"
  * (ADR-0090 D3; formerly sys_user_role), decoupled from better-auth's
- * `sys_member.role` (org-administration: owner/admin/member). At request
- * time the runtime resolver (`resolveExecutionContext`) reads assignments
- * from this table (∪ `sys_member.role` during the transition window) into
+ * `sys_member.role` (org-administration tier). At request time the runtime
+ * resolver (`resolveExecutionContext`) reads assignments from this table
+ * (∪ `sys_member.role` during the transition window) into
  * `ExecutionContext.positions[]`.
  *
  * `position` stores the position's machine name (matches
@@ -17,18 +17,27 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * downstream. `organization_id = null` means a cross-tenant (global)
  * assignment.
  *
+ * `business_unit_id` is the ASSIGNMENT-LEVEL BU anchor (ADR-0090 Addendum;
+ * reserved by ADR-0057 D4). Positions never bind to a business unit at the
+ * definition level — that recreates the position-per-department explosion.
+ * The anchor has exactly three consumers: the depth anchor for this
+ * assignment's readScope/writeScope (enterprise hierarchy resolver), the
+ * ADR-0090 D12 delegated-administration boundary ("assignments you create
+ * must target your subtree" — enforced by the delegated-admin gate), and the
+ * audit fact ("manager OF WHAT"). Capability bits are never BU-scoped.
+ *
  * @namespace sys
  */
-export const SysUserRole = ObjectSchema.create({
+export const SysUserPosition = ObjectSchema.create({
   name: 'sys_user_position',
-  label: 'User Role',
-  pluralLabel: 'User Roles',
+  label: 'User Position',
+  pluralLabel: 'User Positions',
   icon: 'user-cog',
   isSystem: true,
   managedBy: 'system',
   description: 'Assigns a position (sys_position.name) to a user. Platform-owned (ADR-0057 D4, ADR-0090 D3).',
   titleFormat: '{user_id} → {position}',
-  highlightFields: ['user_id', 'position', 'organization_id'],
+  highlightFields: ['user_id', 'position', 'business_unit_id', 'organization_id'],
 
   fields: {
     id: Field.text({
@@ -45,10 +54,19 @@ export const SysUserRole = ObjectSchema.create({
     }),
 
     position: Field.text({
-      label: 'Role',
+      label: 'Position',
       required: true,
       maxLength: 100,
       description: 'Position machine name (references sys_position.name).',
+    }),
+
+    business_unit_id: Field.lookup('sys_business_unit', {
+      label: 'Business Unit',
+      required: false,
+      description:
+        '[ADR-0090 Addendum] Assignment-level BU anchor: where this position assignment applies. ' +
+        'Depth anchor for readScope/writeScope, delegated-admin boundary (D12), and audit fact. ' +
+        'Null = unanchored (legacy/tenant-wide); delegated admins MUST anchor assignments inside their subtree.',
     }),
 
     organization_id: Field.lookup('sys_organization', {
@@ -60,7 +78,7 @@ export const SysUserRole = ObjectSchema.create({
     granted_by: Field.lookup('sys_user', {
       label: 'Granted By',
       required: false,
-      description: 'User who granted this role assignment.',
+      description: 'User who granted this position assignment (stamped by the delegated-admin gate for delegate writes).',
     }),
 
     created_at: Field.datetime({
@@ -80,6 +98,7 @@ export const SysUserRole = ObjectSchema.create({
     { fields: ['user_id', 'position', 'organization_id'], unique: true },
     { fields: ['user_id'] },
     { fields: ['position'] },
+    { fields: ['business_unit_id'] },
     { fields: ['organization_id'] },
   ],
 

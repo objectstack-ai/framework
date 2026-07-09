@@ -3,10 +3,44 @@ import {
   PermissionSetSchema,
   ObjectPermissionSchema,
   FieldPermissionSchema,
+  AdminScopeSchema,
   type PermissionSet,
   type ObjectPermission,
   type FieldPermission,
 } from './permission.zod';
+
+describe('AdminScopeSchema (ADR-0090 D12)', () => {
+  it('parses a delegated-admin scope with defaults', () => {
+    const scope = AdminScopeSchema.parse({ businessUnit: 'east' });
+    expect(scope.businessUnit).toBe('east');
+    expect(scope.includeSubtree).toBe(true); // default: whole subtree
+    expect(scope.manageAssignments).toBe(false);
+    expect(scope.manageBindings).toBe(false);
+    expect(scope.authorEnvironmentSets).toBe(false);
+    expect(scope.assignablePermissionSets).toEqual([]);
+  });
+
+  it('rides on a permission set via adminScope', () => {
+    const ps = PermissionSetSchema.parse({
+      name: 'east_subsidiary_admin',
+      objects: {
+        sys_user_position: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
+      },
+      adminScope: {
+        businessUnit: 'east',
+        manageAssignments: true,
+        assignablePermissionSets: ['sales_user', 'support_user'],
+      },
+    });
+    expect(ps.adminScope?.businessUnit).toBe('east');
+    expect(ps.adminScope?.manageAssignments).toBe(true);
+    expect(ps.adminScope?.assignablePermissionSets).toEqual(['sales_user', 'support_user']);
+  });
+
+  it('requires the businessUnit boundary', () => {
+    expect(() => AdminScopeSchema.parse({ manageAssignments: true })).toThrow();
+  });
+});
 
 describe('ObjectPermissionSchema', () => {
   it('should apply default values to false', () => {

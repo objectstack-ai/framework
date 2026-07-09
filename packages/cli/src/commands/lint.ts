@@ -8,7 +8,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '@objectstack/lint';
-import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences } from '@objectstack/lint';
+import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture } from '@objectstack/lint';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
@@ -345,6 +345,23 @@ export function lintConfig(config: any): LintIssue[] {
   for (const t of validateCapabilityReferences(config)) {
     issues.push({
       severity: t.severity,
+      rule: t.rule,
+      message: `${t.where}: ${t.message}`,
+      path: t.path,
+      fix: t.hint,
+    });
+  }
+
+  // ── Security posture (ADR-0090 D7) ──
+  // The security-domain publish linter: unset/alias OWD, external dial wider
+  // than internal, wildcard VAMA, high-privilege everyone-suggested sets, the
+  // reserved word "role", and private-object read grants with no depth. Runs
+  // on the NORMALIZED (pre-zod) input here, so alias values that the schema
+  // gate would reject in `os compile` get a located fix-it instead of a Zod
+  // enum error. `error` findings gate `os compile`; `info` maps to suggestion.
+  for (const t of validateSecurityPosture(config)) {
+    issues.push({
+      severity: t.severity === 'info' ? 'suggestion' : t.severity,
       rule: t.rule,
       message: `${t.where}: ${t.message}`,
       path: t.path,

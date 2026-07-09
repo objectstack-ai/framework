@@ -3,6 +3,7 @@
 // high-privilege binding gate.
 
 import { describe, it, expect } from 'vitest';
+import { describeAnchorForbiddenBits } from '@objectstack/spec/security';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions';
 import { describeHighPrivilegeBits } from './security-plugin';
 
@@ -74,5 +75,28 @@ describe('describeHighPrivilegeBits (anchor-binding predicate)', () => {
     expect(describeHighPrivilegeBits({ objects: JSON.stringify({ a: { modifyAllRecords: true } }) })).toMatch(/View\/Modify All/);
     expect(describeHighPrivilegeBits({ system_permissions: ['setup.access'] })).toMatch(/system permissions/);
     expect(describeHighPrivilegeBits({ objects: JSON.stringify({ a: { allowRead: true } }) })).toBeNull();
+  });
+});
+
+describe('describeAnchorForbiddenBits (ADR-0090 D9 anchor tiers)', () => {
+  it('guest faces the strictest tier: edit bits are refused on top of the high-privilege set', () => {
+    const editSet = { objects: { helpdesk_ticket: { allowRead: true, allowEdit: true } } };
+    expect(describeAnchorForbiddenBits(editSet, 'everyone')).toBeNull(); // everyone: edit OK
+    expect(describeAnchorForbiddenBits(editSet, 'guest')).toMatch(/read-only/); // guest: refused
+  });
+
+  it('guest allows read + case-by-case create (public form intake shape)', () => {
+    expect(
+      describeAnchorForbiddenBits(
+        { objects: { form_submission: { allowRead: true, allowCreate: true } } },
+        'guest',
+      ),
+    ).toBeNull();
+  });
+
+  it('high-privilege bits stay refused for BOTH anchors', () => {
+    const vama = { objects: { a: { viewAllRecords: true } } };
+    expect(describeAnchorForbiddenBits(vama, 'everyone')).toMatch(/View\/Modify All/);
+    expect(describeAnchorForbiddenBits(vama, 'guest')).toMatch(/View\/Modify All/);
   });
 });

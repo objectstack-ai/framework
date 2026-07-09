@@ -115,7 +115,7 @@ export const ShowcaseTranslationBundle = {
       },
       showcase_project_membership: {
         label: 'Membership', pluralLabel: 'Memberships',
-        fields: { team: { label: 'Team' }, project: { label: 'Project' }, role: { label: 'Role' }, allocation_percent: { label: 'Allocation %' } },
+        fields: { team: { label: 'Team' }, project: { label: 'Project' }, engagement: { label: 'Engagement' }, allocation_percent: { label: 'Allocation %' } },
       },
       showcase_category: {
         label: 'Category', pluralLabel: 'Categories',
@@ -232,7 +232,7 @@ export const ShowcaseTranslationBundle = {
       },
       showcase_project_membership: {
         label: '成员', pluralLabel: '成员',
-        fields: { team: { label: '团队' }, project: { label: '项目' }, role: { label: '角色' }, allocation_percent: { label: '分配比例' } },
+        fields: { team: { label: '团队' }, project: { label: '项目' }, engagement: { label: '协作职能' }, allocation_percent: { label: '分配比例' } },
       },
       showcase_category: {
         label: '分类', pluralLabel: '分类',

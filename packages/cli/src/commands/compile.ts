@@ -11,6 +11,7 @@ import { lowerCallables } from '../utils/lower-callables.js';
 import { validateStackExpressions } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
+import { validateSecurityPosture } from '@objectstack/lint';
 import { lintFlowPatterns } from '../utils/lint-flow-patterns.js';
 import { lintAutonumberFormats } from '../utils/lint-autonumber-formats.js';
 import { lintLivenessProperties } from '../utils/lint-liveness-properties.js';
@@ -317,6 +318,39 @@ export default class Compile extends Command {
       if (viewRefWarnings.length > 0 && !flags.json) {
         console.log('');
         for (const f of viewRefWarnings) {
+          printWarning(`${f.where}: ${f.message}`);
+          console.log(chalk.dim(`    ${f.hint}`));
+          console.log(chalk.dim(`    rule: ${f.rule}`));
+        }
+      }
+
+      // 3e. [ADR-0090 D7] Security-domain publish linter. Every error rule
+      //     mirrors a runtime enforcement point (fail-closed OWD default,
+      //     canonical enum, anchor binding gate, vocabulary freeze) — the lint
+      //     moves the failure from a runtime deny to an author-time fix-it.
+      //     Errors GATE the build (per ADR-0049 this is not advisory
+      //     security); `info` findings are printed dimmed and never fatal.
+      if (!flags.json) printStep('Checking security posture (ADR-0090 D7)...');
+      const securityFindings = validateSecurityPosture(result.data as Record<string, unknown>);
+      const securityErrors = securityFindings.filter((f) => f.severity === 'error');
+      const securityAdvisories = securityFindings.filter((f) => f.severity !== 'error');
+      if (securityErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'security posture validation failed', issues: securityErrors }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Security posture check failed (${securityErrors.length} issue${securityErrors.length > 1 ? 's' : ''})`);
+        for (const f of securityErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+      if (securityAdvisories.length > 0 && !flags.json) {
+        console.log('');
+        for (const f of securityAdvisories) {
           printWarning(`${f.where}: ${f.message}`);
           console.log(chalk.dim(`    ${f.hint}`));
           console.log(chalk.dim(`    rule: ${f.rule}`));

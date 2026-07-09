@@ -208,8 +208,10 @@ being **structured data**:
 
 1. **A small, closed vocabulary** — 5 concepts, 4 OWD values, no aliases, banned words: the error
    space is shrunk before any checker runs. Strict authoring (rejects, never lenient-parses).
-2. **Publish linter** (security domain): unset OWD, everyone+high-privilege, non-admin superuser
-   wildcards, forbidden vocabulary — each rule traceable to an observed failure class.
+2. **Publish linter** (security domain, landed in P3 as `validateSecurityPosture` in
+   `@objectstack/lint`, gating `os compile`): unset OWD, retired OWD aliases, external dial wider
+   than internal, non-admin superuser wildcards, high-privilege everyone-suggested sets, forbidden
+   vocabulary — each rule traceable to an observed failure class and mirrored by a runtime gate.
 3. **Access-matrix snapshot**: publishes evaluate representative positions × objects and diff
    against the committed matrix; an unchanged matrix auto-passes, a changed one raises a human gate
    showing the *semantic* impact ("grants `sales_rep` (~1,200 users) org-wide read on
@@ -284,6 +286,26 @@ They can onboard their own staff and reshuffle their own positions, but they can
 anything outside the allowlist — **including to themselves** — and can never touch tenant-level
 things (the `everyone`/`guest` anchors, security publishes). Headquarters keeps one dashboard:
 the same explain engine answers "who *could have* granted this", not just "who did".
+
+**How it is authored (landed in P3).** An admin scope is a field on an ordinary permission set
+(`adminScope: { businessUnit, includeSubtree, manageAssignments, manageBindings,
+authorEnvironmentSets, assignablePermissionSets[] }`), so it is distributed via positions and
+audited like every other grant. The same set should also carry plain CRUD on the RBAC link
+tables (`sys_user_position`, `sys_position_permission_set`, `sys_user_permission_set`) — the
+scope authorizes *what* may be administered, the CRUD bits let the requests through at all.
+Runtime rules enforced by the `DelegatedAdminGate` (plugin-security):
+
+- assignments a delegate creates must be **anchored** (`sys_user_position.business_unit_id`)
+  inside their subtree, and are `granted_by`-stamped automatically;
+- every set reached by the write — bound to the assigned position, or granted directly — must be
+  in the allowlist; re-composing a position (bindings) requires every current holder to sit
+  inside the subtree;
+- granting or authoring a set that itself carries an `adminScope` requires a held scope that
+  **strictly contains** it (handing your own exact scope to a peer is refused — no lateral
+  propagation);
+- delegates write **single rows by id** only (a broad filter-write cannot be boundary-checked);
+- holders of plain CRUD on the RBAC tables with **no** scope are refused: administration is a
+  scoped capability now, not a side effect of table access.
 
 Planned next (tracked as follow-up ADRs, not yet in the model): **expiring grants** (contractor
 access that ends on a date, stand-in approvers during vacations, break-glass access that

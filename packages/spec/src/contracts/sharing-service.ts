@@ -270,6 +270,16 @@ export interface HierarchyScopeContext {
  * registers one under the `hierarchy-scope-resolver` kernel service. When
  * absent, the sharing layer fails CLOSED to owner-only (a hierarchy scope never
  * widens without the resolver).
+ *
+ * [ADR-0090 Addendum — assignment-level BU anchor] When resolving `unit` /
+ * `unit_and_below`, an implementation MUST prefer the caller's ANCHORED
+ * business units — the non-null `sys_user_position.business_unit_id` values on
+ * their position assignments — over their full `sys_business_unit_member`
+ * membership: a 华东 sales manager anchored to 华东 gets manager depth in 华东
+ * only, not in an unrelated project unit they also happen to belong to. Only
+ * when the caller has NO anchored assignment does the resolver fall back to
+ * membership-derived units. (Capability bits are never BU-scoped; the anchor
+ * narrows DEPTH, it never grants.)
  */
 export interface IHierarchyScopeResolver {
   /**

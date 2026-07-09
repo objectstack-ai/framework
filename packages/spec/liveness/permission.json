@@ -1,6 +1,6 @@
 {
   "type": "permission",
-  "_note": "PermissionSetSchema (also aliased as `profile`). Seeded from docs/audits/2026-06-security-identity-property-liveness.md. CRUD/FLS/RLS enforced via plugin-security. allowTransfer/Restore/Purge are RBAC-mapped in the evaluator (#1883) — deny unless granted; the ObjectQL operations themselves are pending M2.",
+  "_note": "PermissionSetSchema (the `profile` alias and isProfile flag were removed by ADR-0090 D2). Seeded from docs/audits/2026-06-security-identity-property-liveness.md. CRUD/FLS/RLS enforced via plugin-security. allowTransfer/Restore/Purge are RBAC-mapped in the evaluator (#1883) — deny unless granted; the ObjectQL operations themselves are pending M2.",
   "props": {
     "name": {
       "status": "live",
@@ -21,10 +21,10 @@
       "evidence": "packages/plugins/plugin-security/src/bootstrap-declared-permissions.ts (persisted per record as sys_permission_set.managed_by; 'package' rows re-seeded, platform/user rows never clobbered)",
       "note": "ADR-0086 D3 — per-record provenance on the metadata-persistence axis (package | platform | user)."
     },
-    "isProfile": {
+    "adminScope": {
       "status": "live",
-      "evidence": "objectui: packages/app-shell/src/views/metadata-admin/previews/PermissionPreview.tsx:92 (!!d.isProfile)",
-      "note": "LIVE via objectui metadata-admin authoring UI — the 2026-06 audit missed objectui; verified by reading the file."
+      "evidence": "packages/plugins/plugin-security/src/delegated-admin-gate.ts — non-tenant-admin writes to sys_user_position / sys_position_permission_set / sys_user_permission_set / sys_permission_set require a covering adminScope (BU-subtree boundary + assignable-set allowlist + strict-containment for scope grants).",
+      "note": "ADR-0090 D12 — delegated administration; proven by packages/plugins/plugin-security/src/delegated-admin-gate.test.ts."
     },
     "isDefault": {
       "status": "live",

@@ -28,3 +28,5 @@ export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 export { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
 export { appDefaultPermissionSetName } from './app-default-permission-set.js';
+export { DelegatedAdminGate } from './delegated-admin-gate.js';
+export type { DelegatedAdminGateDeps } from './delegated-admin-gate.js';

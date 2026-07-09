@@ -673,8 +673,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       user_id: {
         label: "Usuario"
       },
-      role_in_business_unit: {
-        label: "Rol en el departamento",
+      function_in_business_unit: {
+        label: "Función en la unidad de negocio",
         help: "`lead` es el responsable del día a día; `deputy` puede sustituir al responsable en el enrutamiento de aprobaciones.",
         options: {
           member: "Miembro",

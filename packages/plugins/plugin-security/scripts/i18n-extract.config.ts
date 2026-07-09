@@ -13,7 +13,7 @@
  */
 
 import { defineStack } from '@objectstack/spec';
-import { SysRole, SysPermissionSet, SysUserPermissionSet, SysRolePermissionSet } from '../src/objects/index.js';
+import { SysPosition, SysPermissionSet, SysUserPermissionSet, SysPositionPermissionSet } from '../src/objects/index.js';
 import { enObjects } from '../src/translations/en.objects.generated.js';
 import { zhCNObjects } from '../src/translations/zh-CN.objects.generated.js';
 import { jaJPObjects } from '../src/translations/ja-JP.objects.generated.js';
@@ -21,7 +21,7 @@ import { esESObjects } from '../src/translations/es-ES.objects.generated.js';
 
 export default defineStack({
   name: 'plugin-security-i18n-extract',
-  objects: [SysRole, SysPermissionSet, SysUserPermissionSet, SysRolePermissionSet] as any,
+  objects: [SysPosition, SysPermissionSet, SysUserPermissionSet, SysPositionPermissionSet] as any,
   translations: [
     { en: { objects: enObjects } },
     { 'zh-CN': { objects: zhCNObjects } },

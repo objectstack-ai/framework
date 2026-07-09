@@ -3,7 +3,7 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_position_permission_set — Role ↔ PermissionSet binding.
+ * sys_position_permission_set — Position ↔ PermissionSet binding.
  *
  * Allows administrators to compose a `sys_position` from one or more
  * `sys_permission_set` rows. At request time, the runtime resolver
@@ -11,12 +11,17 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * the user's positions via this table and injects their names into
  * `ExecutionContext.permissions[]` for downstream RBAC evaluation.
  *
+ * Writes are guarded twice (both gates unconditional, ADR-0090):
+ * the audience-anchor gate (D5/D9 — no high-privilege set on
+ * `everyone`/`guest`) and the delegated-admin gate (D12 — non-tenant-admin
+ * writers need an adminScope whose allowlist covers the bound set).
+ *
  * @namespace sys
  */
-export const SysRolePermissionSet = ObjectSchema.create({
+export const SysPositionPermissionSet = ObjectSchema.create({
   name: 'sys_position_permission_set',
-  label: 'Role Permission Set',
-  pluralLabel: 'Role Permission Sets',
+  label: 'Position Permission Set',
+  pluralLabel: 'Position Permission Sets',
   icon: 'shield-plus',
   isSystem: true,
   managedBy: 'system',
@@ -33,7 +38,7 @@ export const SysRolePermissionSet = ObjectSchema.create({
     }),
 
     position_id: Field.lookup('sys_position', {
-      label: 'Role',
+      label: 'Position',
       required: true,
       description: 'Foreign key to sys_position.',
     }),

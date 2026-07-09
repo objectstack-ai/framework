@@ -673,8 +673,8 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       user_id: {
         label: "User"
       },
-      role_in_business_unit: {
-        label: "Role in Business Unit",
+      function_in_business_unit: {
+        label: "Function in Business Unit",
         help: "`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.",
         options: {
           member: "member",

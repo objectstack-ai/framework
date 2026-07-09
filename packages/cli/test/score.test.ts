@@ -8,6 +8,7 @@ const GOOD_STACK = {
     {
       name: 'invoice',
       label: 'Invoice',
+      sharingModel: 'private', // exemplary: OWD is an authored decision (ADR-0090 D7)
       fields: {
         name: { type: 'text', label: 'Invoice Number', required: true },
         status: { type: 'select', label: 'Status', options: [{ label: 'Draft', value: 'draft' }, { label: 'Sent', value: 'sent' }] },
@@ -17,6 +18,7 @@ const GOOD_STACK = {
     {
       name: 'invoice_line',
       label: 'Invoice Line',
+      sharingModel: 'controlled_by_parent',
       fields: {
         invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', required: true, deleteBehavior: 'cascade', inlineEdit: true },
         product: { type: 'text', label: 'Product', required: true },
@@ -80,15 +82,15 @@ describe('scoreMetadata', () => {
     // Only suggestions: a master_detail without explicit deleteBehavior (suggestion).
     const onlySuggestions = scoreMetadata({
       objects: [
-        { name: 'invoice', label: 'Invoice', fields: { name: { type: 'text', label: 'Name', required: true } } },
-        { name: 'invoice_line', label: 'Line', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', required: true, inlineEdit: true } } },
+        { name: 'invoice', label: 'Invoice', sharingModel: 'private', fields: { name: { type: 'text', label: 'Name', required: true } } },
+        { name: 'invoice_line', label: 'Line', sharingModel: 'controlled_by_parent', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', required: true, inlineEdit: true } } },
       ],
     });
     // A warning: master_detail not required.
     const withWarning = scoreMetadata({
       objects: [
-        { name: 'invoice', label: 'Invoice', fields: { name: { type: 'text', label: 'Name', required: true } } },
-        { name: 'invoice_line', label: 'Line', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', deleteBehavior: 'cascade' } } },
+        { name: 'invoice', label: 'Invoice', sharingModel: 'private', fields: { name: { type: 'text', label: 'Name', required: true } } },
+        { name: 'invoice_line', label: 'Line', sharingModel: 'controlled_by_parent', fields: { invoice: { type: 'master_detail', label: 'Invoice', reference: 'invoice', deleteBehavior: 'cascade' } } },
       ],
     });
     expect(onlySuggestions.score).toBeGreaterThan(withWarning.score);

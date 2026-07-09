@@ -13,6 +13,7 @@
 export * from './permission.zod';
 export * from './permission.form';
 export * from './capabilities';
+export * from './high-privilege';
 export * from './sharing.zod';
 export * from './territory.zod';
 export * from './rls.zod';

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { SysRole, SysPermissionSet, SysCapability, defaultPermissionSets } from './index.js';
+import { SysPosition, SysPermissionSet, SysCapability, defaultPermissionSets } from './index.js';
 
 /**
  * RBAC object + default-permission-set assertions. Moved here with the objects
@@ -102,16 +102,16 @@ describe('default permission sets', () => {
 });
 
 describe('RBAC object canonical names + row actions', () => {
-  it('SysRole / SysPermissionSet use their canonical sys_ short names and are system objects', () => {
-    expect(SysRole.name).toBe('sys_position');
+  it('SysPosition / SysPermissionSet use their canonical sys_ short names and are system objects', () => {
+    expect(SysPosition.name).toBe('sys_position');
     expect(SysPermissionSet.name).toBe('sys_permission_set');
-    expect(SysRole.isSystem).toBe(true);
+    expect(SysPosition.isSystem).toBe(true);
     expect(SysPermissionSet.isSystem).toBe(true);
   });
 
-  it('SysRole exposes activate/deactivate/clone/set-default row actions', () => {
-    const names = (SysRole.actions ?? []).map((a) => a.name).sort();
-    expect(names).toEqual(['activate_role', 'clone_role', 'deactivate_role', 'set_default_role']);
+  it('SysPosition exposes activate/deactivate/clone/set-default row actions (ADR-0090 D3 vocabulary)', () => {
+    const names = (SysPosition.actions ?? []).map((a) => a.name).sort();
+    expect(names).toEqual(['activate_position', 'clone_position', 'deactivate_position', 'set_default_position']);
   });
 
   it('SysPermissionSet exposes activate/deactivate/clone row actions', () => {

@@ -28,6 +28,10 @@ export const Team = ObjectSchema.create({
 /** Junction row joining Team ↔ Project (many-to-many). */
 export const ProjectMembership = ObjectSchema.create({
   name: 'showcase_project_membership',
+  // [ADR-0090 D1] Explicit grandfather stamp: record isolation for this demo
+  // object is RLS-owned / intentionally public; without this the new secure
+  // default (unset OWD => private) would owner-filter it.
+  sharingModel: 'public_read_write',
   label: 'Project Membership',
   pluralLabel: 'Project Memberships',
   icon: 'link',
@@ -36,8 +40,10 @@ export const ProjectMembership = ObjectSchema.create({
   fields: {
     team: Field.masterDetail('showcase_team', { label: 'Team', required: true }),
     project: Field.masterDetail('showcase_project', { label: 'Project', required: true }),
-    role: Field.select({
-      label: 'Role',
+    // [ADR-0090 D3] Formerly `role` — reserved word; this is the team's
+    // engagement on the project, not a capability container.
+    engagement: Field.select({
+      label: 'Engagement',
       options: [
         { label: 'Owner', value: 'owner', default: true },
         { label: 'Contributor', value: 'contributor' },

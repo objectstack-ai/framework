@@ -155,9 +155,9 @@ const products = defineSeed(Product, {
 const memberships = defineSeed(ProjectMembership, {
   mode: 'insert',
   records: [
-    { team: 'Experience', project: 'Website Relaunch', role: 'owner', allocation_percent: 80 },
-    { team: 'Platform', project: 'Data Platform', role: 'owner', allocation_percent: 100 },
-    { team: 'Platform', project: 'Website Relaunch', role: 'contributor', allocation_percent: 20 },
+    { team: 'Experience', project: 'Website Relaunch', engagement: 'owner', allocation_percent: 80 },
+    { team: 'Platform', project: 'Data Platform', engagement: 'owner', allocation_percent: 100 },
+    { team: 'Platform', project: 'Website Relaunch', engagement: 'contributor', allocation_percent: 20 },
   ],
 });
 

@@ -37,6 +37,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'invoice',
           label: 'Invoice',
+          sharingModel: 'private',
           fields: {
             name: { type: 'text', label: 'Invoice Number', required: true },
             account: { type: 'lookup', label: 'Account', reference: 'account' },
@@ -59,6 +60,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'invoice_line',
           label: 'Invoice Line',
+          sharingModel: 'controlled_by_parent',
           fields: {
             invoice: {
               type: 'master_detail',
@@ -78,6 +80,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'account',
           label: 'Account',
+          sharingModel: 'private',
           fields: { name: { type: 'text', label: 'Account Name', required: true } },
         },
       ],
@@ -95,6 +98,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'project',
           label: 'Project',
+          sharingModel: 'private',
           fields: {
             name: { type: 'text', label: 'Project Name', required: true },
             status: {
@@ -121,6 +125,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'task',
           label: 'Task',
+          sharingModel: 'controlled_by_parent',
           fields: {
             title: { type: 'text', label: 'Title', required: true },
             project: {
@@ -158,6 +163,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'post',
           label: 'Post',
+          sharingModel: 'private',
           fields: {
             title: { type: 'text', label: 'Title', required: true },
             body: { type: 'textarea', label: 'Body' },
@@ -166,6 +172,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'post_comment',
           label: 'Comment',
+          sharingModel: 'controlled_by_parent',
           fields: {
             // Association: owned by the post (cascade) but NOT inlineEdit —
             // surfaced as a related list on the post's detail page.
@@ -195,6 +202,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'expense_report',
           label: 'Expense Report',
+          sharingModel: 'private',
           fields: {
             name: { type: 'text', label: 'Title', required: true },
             submitter: { type: 'text', label: 'Submitter', required: true },
@@ -208,6 +216,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'expense_line',
           label: 'Expense Line',
+          sharingModel: 'controlled_by_parent',
           fields: {
             expense_report: {
               type: 'master_detail',
@@ -246,6 +255,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'account',
           label: 'Account',
+          sharingModel: 'private',
           fields: {
             name: { type: 'text', label: 'Account Name', required: true },
             industry: {
@@ -261,6 +271,7 @@ export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [
         {
           name: 'contact',
           label: 'Contact',
+          sharingModel: 'private',
           fields: {
             full_name: { type: 'text', label: 'Full Name', required: true },
             email: { type: 'email', label: 'Email' },

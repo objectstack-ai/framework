@@ -74,3 +74,15 @@ export {
   CAPABILITY_REFERENCE_UNKNOWN,
 } from './validate-capability-references.js';
 export type { CapabilityRefFinding, CapabilityRefSeverity } from './validate-capability-references.js';
+
+export {
+  validateSecurityPosture,
+  SECURITY_OWD_UNSET,
+  SECURITY_OWD_ALIAS,
+  SECURITY_EXTERNAL_WIDER,
+  SECURITY_WILDCARD_VAMA,
+  SECURITY_ANCHOR_HIGH_PRIVILEGE,
+  SECURITY_ROLE_WORD,
+  SECURITY_PRIVATE_NO_READSCOPE,
+} from './validate-security-posture.js';
+export type { SecurityFinding, SecuritySeverity } from './validate-security-posture.js';

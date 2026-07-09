@@ -23,7 +23,7 @@ export const SysBusinessUnitMember = ObjectSchema.create({
   managedBy: 'platform',
   description: 'User assignment to a business unit (matrix-org friendly, effective-dated).',
   titleFormat: '{user_id} in {business_unit_id}',
-  highlightFields: ['user_id', 'business_unit_id', 'role_in_business_unit', 'is_primary'],
+  highlightFields: ['user_id', 'business_unit_id', 'function_in_business_unit', 'is_primary'],
 
   fields: {
     id: Field.text({
@@ -45,10 +45,10 @@ export const SysBusinessUnitMember = ObjectSchema.create({
       group: 'Assignment',
     }),
 
-    role_in_business_unit: Field.select(
+    function_in_business_unit: Field.select(
       ['member', 'lead', 'deputy'],
       {
-        label: 'Role in Business Unit',
+        label: 'Function in Business Unit',
         required: false,
         defaultValue: 'member',
         description: '`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.',

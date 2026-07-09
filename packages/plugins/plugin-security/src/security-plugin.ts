@@ -2,7 +2,9 @@
 
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
+import { describeHighPrivilegeBits, describeAnchorForbiddenBits } from '@objectstack/spec/security';
 import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
+import { DelegatedAdminGate } from './delegated-admin-gate.js';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
@@ -128,27 +130,11 @@ export interface SecurityPluginOptions {
  * - metadata service (MetadataFacade for reading permission sets and RLS policies)
  */
 /**
- * [ADR-0090 D5/D9] Does a permission-set definition (authored shape OR
- * sys_permission_set row shape with JSON-ish columns) carry bits too
- * dangerous for an audience anchor? Returns a human-readable description of
- * the first offending bit, or null when the set is anchor-safe.
+ * [ADR-0090 D5/D9] Anchor-safety predicates moved to `@objectstack/spec/security`
+ * (P3) so the authoring linter (`validateSecurityPosture`) and this runtime
+ * gate share ONE definition. Re-exported here for existing consumers.
  */
-export function describeHighPrivilegeBits(def: any): string | null {
-  if (!def || typeof def !== 'object') return null;
-  const sys = def.systemPermissions ?? def.system_permissions;
-  if (Array.isArray(sys) && sys.length > 0) return 'system permissions';
-  let objects: any = def.objects;
-  if (typeof objects === 'string') { try { objects = JSON.parse(objects); } catch { objects = undefined; } }
-  if (objects && typeof objects === 'object') {
-    for (const [objName, rawPerm] of Object.entries(objects)) {
-      const p: any = rawPerm ?? {};
-      if (p.viewAllRecords || p.modifyAllRecords) return `View/Modify All Data on '${objName}'`;
-      if (p.allowDelete || p.allowPurge || p.allowTransfer) return `delete/purge/transfer on '${objName}'`;
-      if (objName === '*') return "a '*' wildcard grant";
-    }
-  }
-  return null;
-}
+export { describeHighPrivilegeBits } from '@objectstack/spec/security';
 
 export class SecurityPlugin implements Plugin {
   name = 'com.objectstack.security';
@@ -196,6 +182,8 @@ export class SecurityPlugin implements Plugin {
    */
   private metadata: any = null;
   private ql: any = null;
+  /** [ADR-0090 D12] Delegated-admin write gate — wired in start() once `ql` exists. */
+  private delegatedAdminGate: DelegatedAdminGate | null = null;
   /** Unsubscribe handle for metadata-change cache invalidation (runtime metadata edits). */
   private metadataWatch: { unsubscribe: () => void } | null = null;
   /** ADR-0055: cache the resolved master-detail relation per controlled_by_parent object. */
@@ -361,19 +349,34 @@ export class SecurityPlugin implements Plugin {
             rows = [];
           }
           const list = Array.isArray(rows) ? rows : rows?.records ?? [];
+          const parseJson = (v: any, fallback: any) => {
+            if (typeof v !== 'string') return v ?? fallback;
+            try { return JSON.parse(v || JSON.stringify(fallback)); } catch { return fallback; }
+          };
           return list.map((r: any) => ({
             name: r.name,
             label: r.label,
-            objects: typeof r.object_permissions === 'string'
-              ? JSON.parse(r.object_permissions || '{}')
-              : r.object_permissions ?? {},
-            fields: typeof r.field_permissions === 'string'
-              ? JSON.parse(r.field_permissions || '{}')
-              : r.field_permissions ?? {},
+            objects: parseJson(r.object_permissions, {}),
+            fields: parseJson(r.field_permissions, {}),
+            systemPermissions: parseJson(r.system_permissions, []),
+            // [ADR-0090 D12] Hydrate the delegated-admin scope so the gate can
+            // resolve a DB-authored delegate's authority. Null column → absent.
+            ...(r.admin_scope ? { adminScope: parseJson(r.admin_scope, undefined) } : {}),
           }));
         }
       : undefined;
     this.dbLoader = dbLoader;
+
+    // [ADR-0090 D12] Delegated-admin gate shares the SAME permission-set
+    // resolution as the CRUD middleware, so a delegate's authority and their
+    // ordinary grants can never drift.
+    this.delegatedAdminGate = ql
+      ? new DelegatedAdminGate({
+          ql,
+          resolveSets: (context: any) => this.resolvePermissionSetsForContext(context),
+          logger: ctx.logger,
+        })
+      : null;
 
     // ADR-0021 D-C — expose the per-request READ scope as a reusable service.
     // The analytics raw-SQL path (which bypasses this engine middleware)
@@ -441,6 +444,18 @@ export class SecurityPlugin implements Plugin {
       // `isSystem` and short-circuited above; the dev-mode default binding
       // is validated at seed time by the same predicate.)
       await this.assertAudienceAnchorBindingGate(opCtx);
+
+      // [ADR-0090 D12] Delegated-administration gate. Writes to the RBAC
+      // link tables (assignments / bindings / direct grants / env-set
+      // authoring) are a GOVERNED operation: tenant-level admins pass
+      // through to the ordinary CRUD/RLS checks; delegates need a covering
+      // adminScope (BU subtree + allowlist + strict containment); everyone
+      // else — including holders of plain CRUD grants on these tables — is
+      // denied. Runs BEFORE the empty-principal fall-open below so RBAC
+      // tables fail CLOSED for principal-less non-system contexts.
+      if (this.delegatedAdminGate) {
+        await this.delegatedAdminGate.assert(opCtx);
+      }
 
       const roles = opCtx.context?.positions ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
@@ -1236,7 +1251,10 @@ export class SecurityPlugin implements Plugin {
         }
       } catch { /* fall through to bootstrap lookup below */ }
       const boot = this.bootstrapPermissionSets.find((p) => p.name === setName);
-      const offending = describeHighPrivilegeBits(boot ?? setDef);
+      // [ADR-0090 D9] Anchor-tier predicate: `guest` faces the strictest tier
+      // (additionally no edit bit — read-only by default, create is the single
+      // case-by-case write); `everyone` uses the high-privilege predicate.
+      const offending = describeAnchorForbiddenBits(boot ?? setDef, positionName as 'everyone' | 'guest');
       if (offending) {
         throw new PermissionDeniedError(
           `[Security] Access denied: permission set '${setName || setId}' cannot be bound to the '${positionName}' audience anchor — it carries ${offending} (ADR-0090 D5/D9). ` +

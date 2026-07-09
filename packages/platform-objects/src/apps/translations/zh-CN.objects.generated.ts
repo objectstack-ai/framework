@@ -673,8 +673,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       user_id: {
         label: "用户"
       },
-      role_in_business_unit: {
-        label: "业务单元内角色",
+      function_in_business_unit: {
+        label: "业务单元内职能",
         help: "`lead` 表示日常负责人；`deputy` 可在审批路由中代替负责人。",
         options: {
           member: "成员",

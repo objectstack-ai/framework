@@ -56,6 +56,10 @@ export const SemanticZoo = ObjectSchema.create({
 
 export const SemanticZooLegacy = ObjectSchema.create({
   name: 'showcase_semantic_zoo_legacy',
+  // [ADR-0090 D1] Explicit grandfather stamp: record isolation for this demo
+  // object is RLS-owned / intentionally public; without this the new secure
+  // default (unset OWD => private) would owner-filter it.
+  sharingModel: 'public_read_write',
   label: 'Semantic Zoo (Legacy)',
   pluralLabel: 'Semantic Zoo Legacies',
   icon: 'flask-round',
