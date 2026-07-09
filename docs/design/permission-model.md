@@ -66,6 +66,9 @@ Every step is structured data, so the pipeline is **explainable by construction*
 engine (ADR-0090 D6) reports *which* set/position/OWD/share/rule produced any decision, powering
 both the admin "view-as" simulator and the publish-time access-matrix snapshot gate.
 
+*Who* is calling matters too — a human, an AI agent, an integration service, an anonymous
+visitor, or an external portal user each evaluate slightly differently. See §9.
+
 ## 3. OWD (`sharingModel`) — the record baseline
 
 Four canonical values, no aliases (ADR-0090 D4):
@@ -80,6 +83,12 @@ Four canonical values, no aliases (ADR-0090 D4):
 **A custom object without a declared `sharingModel` is `private`** (ADR-0090 D1). Authoring a new
 custom object requires choosing explicitly; pre-existing OWD-less objects were stamped
 `public_read_write` once, with a warning, at migration time — the unset state no longer exists.
+
+**External users get a second, stricter dial.** For portal/partner scenarios an object may also
+declare `externalSharingModel` (same four values, ADR-0090 D11). It defaults to `private` and may
+**never be wider than the internal one** — e.g. accounts can be `public_read` for employees while
+staying `private` for dealer-portal users, who then see only records they own or were explicitly
+shared. If your object has no external audience, ignore this field entirely.
 
 ## 4. Worked example — a CRM package
 
@@ -161,6 +170,16 @@ New-hire onboarding thereafter is two assignments: a BU and a position.
 - Lint hard-blocks high-privilege bits (VAMA, delete/purge/transfer, system permissions) on any set
   bound to `everyone`.
 
+`everyone` has an anonymous sibling: the built-in **`guest`** position (ADR-0090 D9). Visitors who
+are not logged in hold `guest` and nothing else. Its bindings face the strictest checks — named
+objects only, read-only by default (create allowed case-by-case, e.g. a public ticket form), never
+a wildcard, never a sensitive field. Rule of thumb: **the guest position decides which *kinds* of
+things anonymous visitors may reach; share links decide which *individual records*.**
+
+There is deliberately **no "admin" anchor**: platform admins already reach every new package's
+objects through the superuser wildcard, and an app's admin capability (e.g. `crm_admin`) is an
+ordinary package set the customer binds to whichever position *they* decide runs that app.
+
 ## 6. AI-authoring safety
 
 All of this metadata may be AI-drafted. The defense is layered, and every layer depends on grants
@@ -182,7 +201,7 @@ being **structured data**:
 
 | You know | Map to ObjectStack |
 |---|---|
-| **Salesforce** | Permission Set ≈ permission set · Role hierarchy → **business units** · Profile → *(removed; `everyone` + positions)* · OWD/sharing rules ≈ same words, same semantics · PSG ≈ position |
+| **Salesforce** | Permission Set ≈ permission set · Role hierarchy → **business units** · Profile → *(removed; `everyone` + positions)* · OWD/sharing rules ≈ same words, same semantics (incl. internal/external defaults ≈ `sharingModel`/`externalSharingModel`) · PSG ≈ position · Delegated admin ≈ admin scope |
 | **Dataverse** | Security Role ≈ permission set · BU ≈ BU · access level/depth ≈ `readScope`/`writeScope` (object-level, deliberately coarser) · owner teams → **not replicated** (teams receive only) |
 | **ServiceNow** | Group → position · Role → permission set · ACL scripts → OWD/sharing declaratively, RLS for the rest |
 | **SAP** | Composite role ≈ position · Authorization object ≈ permission set entries · Org levels → BU depth + (future) dimension restrictions |
@@ -203,7 +222,55 @@ compiles to them. Hand-authored RBAC/RLS was rejected as the *authoring* surface
 RLS remains in the model precisely once, as the expert escape hatch for the ~5% of cases (dimension
 walls, compliance) the vocabulary does not cover — never as the primary authoring surface.
 
-## 9. Glossary & naming rules
+## 9. Who is calling — people, AI agents, services, guests, external users
+
+Every request carries a **principal** — who (or what) is asking. Five kinds, in plain terms:
+
+| Kind | Plain description | What they run on |
+|---|---|---|
+| **human** (internal) | an employee, logged in | their positions' sets, full pipeline |
+| **human** (external) | a partner/customer in a portal | own records + explicit shares + the object's **external** OWD dial; BU depth doesn't apply (they're not in your org tree) |
+| **agent** | an AI assistant acting *for* someone | the **overlap** of two badges — see below |
+| **service** | a system integration (API key) | its own small, fixed set of grants; can't log in interactively; audited separately. Exists so nobody wires an integration through a real admin account |
+| **guest** | an anonymous visitor | the `guest` position's bindings, nothing else |
+
+**The agent rule, in one sentence:** when 张三's AI assistant does something, it may only do what
+**both** the assistant is allowed to do **and** 张三 is allowed to do — the overlap, never the
+union. Why: if an assistant with big permissions simply obeyed whoever prompts it, any intern
+could ask it to fetch the CEO's records. The overlap rule makes that structurally impossible.
+
+Three more agent guardrails:
+
+1. **Ceiling** — sets held by agents may never contain super-user bits (View/Modify All, purge,
+   transfer, system permissions). Lint rejects the binding, not the request.
+2. **Human co-sign for destructive actions** — an agent may *start* a deletion or mass change,
+   but a human must confirm it, regardless of grants.
+3. **Double signature in the audit log** — every agent write records both "performed by:
+   assistant-X" and "on behalf of: 张三", plus the run that did it.
+
+## 10. Running a large organization
+
+**Delegated administration** (ADR-0090 D12). A group with fifty subsidiaries cannot manage every
+grant from headquarters — but handing each subsidiary a full admin is worse. So *administration
+itself is a scoped grant*. Example: the 华东 subsidiary's IT admin receives an **admin scope**
+that says:
+
+- *where*: the 华东 business-unit subtree only;
+- *what*: assign users to positions, bind sets to positions — inside that subtree;
+- *which*: an **allowlist** of sets they may hand out (say, the CRM and HR self-service sets).
+
+They can onboard their own staff and reshuffle their own positions, but they can never grant
+anything outside the allowlist — **including to themselves** — and can never touch tenant-level
+things (the `everyone`/`guest` anchors, security publishes). Headquarters keeps one dashboard:
+the same explain engine answers "who *could have* granted this", not just "who did".
+
+Planned next (tracked as follow-up ADRs, not yet in the model): **expiring grants** (contractor
+access that ends on a date, stand-in approvers during vacations, break-glass access that
+auto-revokes), **separation-of-duties rules** ("the person who creates vendors must not also
+approve payments"), and **environment promotion tooling** (compare/copy permission config across
+dev → test → prod).
+
+## 11. Glossary & naming rules
 
 - **permission set** — the only capability container. Never called a role.
 - **position** — flat distribution group (岗位). Machine names: `sys_position`,
@@ -211,8 +278,14 @@ walls, compliance) the vocabulary does not cover — never as the primary author
 - **business unit** — the one and only hierarchy. Depth vocabulary: `own`, `own_and_reports`,
   `unit`, `unit_and_below`, `org`.
 - **team** — flat, receives shares, carries nothing.
-- **everyone** — the built-in baseline position.
+- **everyone** — the built-in baseline position for authenticated members.
+- **guest** — the built-in position anonymous visitors hold; strictest lint tier.
+- **principal** — who is calling: `human | agent | service | guest | system`, with
+  `audience: internal | external` and an optional `onBehalfOf` delegation link.
+- **admin scope** — a delegated-administration grant: a BU subtree + the actions allowed there +
+  an allowlist of assignable sets; self-escalation is structurally impossible.
 - **OWD / `sharingModel`** — `private` · `public_read` · `public_read_write` ·
-  `controlled_by_parent`. Nothing else parses.
+  `controlled_by_parent`. Nothing else parses. Optional `externalSharingModel` is the stricter
+  dial for external (portal/partner) users; defaults to `private`, never wider than internal.
 - **role** — reserved-forbidden word (lint-enforced). Sole exception: better-auth's internal
   `sys_member.role`, projected as `org_membership_level`.

@@ -34,7 +34,7 @@ authoring-safety story. Three forcing facts:
    read your own") and the runtime's actual default ("no OWD = fully public") disagree — the most
    dangerous kind of security bug, because nothing looks broken.
 
-Eight decisions:
+Twelve decisions:
 
 - **D1** — Custom objects default to OWD `private`; an unset `sharingModel` no longer means "public".
 - **D2** — The Profile concept is removed (`isProfile` deleted, not deprecated).
@@ -52,6 +52,19 @@ Eight decisions:
   non-security metadata may auto-publish.
 - **D8** — **Teams receive sharing; they never carry capability.** No permission-set bindings, no
   record ownership on `sys_team`.
+- **D9** — **Audience anchors**: the built-in `everyone` position (D5) is joined by a built-in
+  **`guest`** position for anonymous access. Packages target audiences by *suggesting* bindings —
+  never by shipping shared builtin sets. Platform admin needs no anchor (the ADR-0066 superuser
+  wildcard already covers every new package's objects).
+- **D10** — A **principal taxonomy** (`kind: human | agent | service | guest | system`,
+  `audience: internal | external`, optional `onBehalfOf`) enters ExecutionContext. **AI agents run
+  on the intersection** of their own grants and their delegator's, under a lint-enforced ceiling,
+  with human co-sign required for destructive operations.
+- **D11** — OWD gains an **external dimension**: optional `externalSharingModel`, default
+  `private`, validated `external ≤ internal`. The spec shape lands in P1.
+- **D12** — **Delegated administration**: admin capability itself becomes scoped (BU subtree +
+  assignable-set allowlist + no self-escalation), so subsidiary admins run their own units without
+  holding tenant-wide power.
 
 The resulting admin-facing model is five words, each with exactly one industry-unambiguous reading:
 **permission set** (capability), **position** (distribution), **business unit** (visibility geometry),
@@ -275,6 +288,106 @@ receive shared records **horizontally** (fluid, deal/project-shaped). This is a 
 lint-checked at the spec level (no `team_id` on `sys_position_permission_set`-like tables), so the
 Dataverse owner-team auditability failure mode is unrepresentable rather than discouraged.
 
+### D9 — Audience anchors: `everyone` + `guest` positions; packages suggest, never own
+
+App developers legitimately need the universal audiences — admin, authenticated user, anonymous —
+to be configurable in every app. The wrong realization is builtin *permission sets* that packages
+write into: a shared set has no single `packageId`, so ADR-0086 provenance and uninstall semantics
+collapse, and a union-merged communal set becomes an unauditable grant sink that only ever grows.
+The correct realization keeps audiences as **positions** (distribution) and capability in
+package-owned sets:
+
+- **`everyone`** (D5) — authenticated members.
+- **`guest`** — NEW builtin, undeletable; unauthenticated principals hold it implicitly and
+  nothing else. Bindings face the strictest lint tier: explicit objects only (no `'*'`), read-only
+  by default (create allowed case-by-case — e.g. public form intake), no VAMA, no system
+  permissions. Division of labor with `publicSharing`: the guest position answers "which object
+  classes are anonymously reachable at all"; share links answer "which individual records".
+- **admin — deliberately NO anchor.** Platform admins already cover every new package's objects
+  via the ADR-0066 superuser wildcard; app-level admin (`crm_admin`) is an ordinary package set the
+  customer binds to a position of their own choosing. In a large organization "who runs CRM" and
+  "who runs the platform" are almost never the same people — the platform must not conflate them.
+- The D5 install-time suggestion generalizes: a package may suggest bindings to `everyone` **or**
+  `guest`; the admin confirms each individually.
+
+### D10 — Principal taxonomy; agents act on intersected authority
+
+ExecutionContext principals gain an explicit taxonomy:
+
+```
+principal.kind:      human | agent | service | guest | system
+principal.audience:  internal | external          (orthogonal, for human/agent/service)
+principal.onBehalfOf?: <principal>                (delegation chain for agent/service)
+```
+
+This formalizes what already exists implicitly (`SYSTEM_CTX`, share-link principals) and adds the
+two kinds the platform's own thesis ("business applications that AI agents can operate safely")
+depends on:
+
+- **`service`** — static machine identity for integrations: least-privilege sets via positions,
+  no interactive login, no seat, its own audit trail. Lint: no VAMA, no destructive bits without
+  explicit justification. Exists so customers stop wiring integrations through a human admin
+  account — the classic audit finding.
+- **`agent`** — an AI actor. Four defining rules:
+  1. **Intersection, never union**: acting for a user, effective permission =
+     *agent's own grants ∩ the delegator's grants* — the confused-deputy prevention that OAuth
+     on-behalf-of and Kerberos S4U converged on. An over-privileged agent prompted by an
+     under-privileged user must not leak what the user could never see.
+  2. **Lint-enforced ceiling**: agent-held sets may not carry VAMA, purge/transfer, system
+     permissions, or superuser wildcards; an agent principal never runs `isSystem`.
+  3. **Human co-sign for `DESTRUCTIVE_OPERATIONS`** regardless of grants — grants decide what an
+     agent may *initiate*, not what it may *complete alone*.
+  4. **Dual attribution**: every write records `performed_by` (agent) + `on_behalf_of` (user) +
+     run id; explain (D6) reports both sides of the intersection.
+  Task-scoped, time-boxed agent grants build on the grant-lifecycle follow-up ADR (see
+  *Named follow-ups*).
+- **`guest`** — resolves to the `guest` position (D9) and nothing else.
+
+The ctx **shape** (kind / audience / onBehalfOf) is a P1 deliverable: it must exist before launch
+even where evaluation semantics phase in later — retrofitting a principal model post-launch is an
+alias tax on every API.
+
+### D11 — OWD gains an external dimension (`externalSharingModel`)
+
+Portal and partner scenarios need the Salesforce insight: internal and external record baselines
+are **two different dials, and external must never be wider**. Decision:
+
+- `sharingModel` stays scalar and internal; an optional **`externalSharingModel`** is added with
+  the same canonical enum, **default `private`**.
+- Authoring validates `external ≤ internal` (ordering `private < public_read <
+  public_read_write`; `controlled_by_parent` inherits the master's pair).
+- "External" is a property of the **principal** (`audience: 'external'`, from a separate portal /
+  partner identity pool), never of the object.
+- The BU depth axis does not apply to externals (they live outside the tree): external visibility
+  = own records + explicit shares + external OWD, and the evaluator short-circuits accordingly.
+- Sharing rules targeting external recipients draw a hard linter warning (data crossing the
+  boundary); the D6 access matrix gains an external-audience column.
+
+Alternatives rejected: enum products (`private_internal_public_external`, …) — combinatorial;
+an audience-map OWD (`sharingModel: { internal, external, guest }`) — over-general, and guest is
+deliberately **not** an OWD audience (guest access flows through the guest position + share links
+only). The spec shape lands in P1; portal identity and licensing are a separate product track.
+
+### D12 — Delegated administration: scoped admin, no self-escalation
+
+A conglomerate cannot run fifty subsidiaries' grants centrally — and today whoever can manage
+permissions can manage **all** permissions. Decision: administration itself becomes a scoped
+capability. An **admin scope** attaches to a permission set (and is therefore distributed via
+positions, audited in the same tables, and explained by the same engine as everything else),
+declaring:
+
+- **where** — a BU subtree (the tree is the natural delegation boundary);
+- **what** — manage user↔position assignments and position↔set bindings within that subtree;
+  optionally author environment-owned sets there;
+- **which** — an **allowlist of permission sets the delegate may assign**. This is the
+  anti-self-escalation core: a delegate can never hand out — to others *or themselves* — a set
+  outside the allowlist; and granting an admin scope requires holding a scope that strictly
+  contains it.
+
+Security-domain publishes (D7) and the `everyone`/`guest` anchors stay tenant-level only — no
+delegated scope can touch them. Explain (D6) learns to answer "who *could have* granted this",
+not just "who did".
+
 ---
 
 ## Consequences
@@ -285,8 +398,13 @@ Dataverse owner-team auditability failure mode is unrepresentable rather than di
   *permissions are unions of permission sets; positions decide who gets which sets; the BU tree and
   manager chain decide how deep you see; each object's OWD sets the record baseline — sharing only
   widens, RLS only narrows.*
-- **Package developers** ship objects (with mandatory OWD) + functional permission sets (+ optional
-  suggested defaults). They never ship positions, BUs, teams, or assignments.
+- **The "who" column is now typed** without adding admin-facing vocabulary: guests and externals
+  are audiences, agents and services are principal kinds — none of them is a sixth concept. AI
+  agents are safe by construction (intersection + ceiling + co-sign), which is the platform thesis
+  made mechanical.
+- **Package developers** ship objects (with mandatory OWD, optionally an external dial) +
+  functional permission sets (+ suggested audience bindings). They never ship positions, BUs,
+  teams, or assignments.
 - **Admins** own the org tree, positions, bindings, and the `everyone` baseline. Restriction is done
   by *not granting* (additive model), never by authoring "subtraction sets".
 - **Breaking changes** are concentrated in one pre-launch wave (P1 below); after launch the
@@ -297,15 +415,31 @@ Dataverse owner-team auditability failure mode is unrepresentable rather than di
 - The companion reference (`docs/design/permission-model.md`) is the maintained source of truth for
   the model; `content/docs/permissions/*` is updated to match in P1–P2 as the implementation lands.
 
-## Non-goals
+## Non-goals and named follow-ups
+
+Deliberate non-goals:
 
 - **Per-privilege depth** (Dataverse `privilege × depth`). Object-level `readScope`/`writeScope`
   (ADR-0057 D1) is a deliberate simplification; Dataverse's granularity is its adoption tax.
-- **ERP dimension restrictions** (Frappe User-Permissions-style "only rows where `company_id` ∈
-  my companies") as a first-class declarative concept. Today this is expressible via RLS; promoting
-  it is a candidate follow-up ADR once demanded by a real deployment.
 - **Renaming `permission_set`** — see below.
-- Approval workflows, delegation, break-glass access: out of scope.
+
+Named follow-up ADRs — acknowledged, tracked on the ADR-0090 tracking issue, not blocking the
+launch shape (none of them changes P1's breaking surface):
+
+1. **Grant lifecycle & recertification** — time-boxed assignments (`valid_from`/`valid_until`),
+   delegation-of-duty during absence, break-glass elevation with automatic expiry, and periodic
+   access-review campaigns (SOX/等保). Also the substrate for task-scoped, time-boxed agent grants
+   (D10).
+2. **Segregation of Duties (SoD)** — declarative conflict rules between permission sets
+   ("vendor-create must not combine with payment-approve"), checked at assignment time, with an
+   audit report. Joins the D7 lint family.
+3. **Scale & reorg hardening** — membership-set materialization/caching, asynchronous share
+   recalculation, batched BU-subtree moves; a 100k-user × 10M-record benchmark gates P4.
+4. **ERP dimension restrictions** — declarative "rows where field ∈ my values"
+   (Frappe User-Permissions shape) as first-class metadata; today expressible via RLS.
+5. **ALM / environment promotion** — export/import + semantic diff of positions/bindings across
+   dev→test→prod, reusing the D6 matrix as the diff layer.
+6. **Portal identity & licensing** — the product track that activates D11 at scale.
 
 ## Alternatives considered
 
@@ -326,19 +460,34 @@ Dataverse owner-team auditability failure mode is unrepresentable rather than di
    vocabulary; `persona` is meaningless to enterprise admins and has no HR-term mapping.
 5. **Deprecated aliases for the renames** (ADR-0057 D7 discipline). Superseded by the launch-window
    argument: aliases now are debt with no debtor.
+6. **Builtin shared permission sets for user/admin/anonymous that packages write into.** Rejected:
+   a communal set has no single `packageId` (ADR-0086 provenance and uninstall semantics collapse),
+   and under union-merge it becomes an ever-growing, unauditable grant sink. Audiences are
+   *positions* (D9); capability stays in package-owned sets.
+7. **Agent effective permission = the agent's own grants** (no intersection). Rejected: the
+   confused-deputy hole — any over-privileged agent becomes an oracle for whatever an
+   under-privileged prompter asks. Intersection with the delegator is the industry-converged
+   answer (OAuth OBO, Kerberos S4U).
 
 ## Phasing (each independently shippable, proofs per ADR-0054)
 
 - **P1 — The breaking wave** (one coordinated PR, mechanical): D3 renames, D4 enum cleanup, D2
-  `isProfile` removal, D1 default flip + grandfather stamping. Regenerated translations; conformance
-  matrix rows updated. Proof: full test suite + a dogfood re-run of the objectui#2348 scenario
-  showing owner isolation with *no* explicit OWD authored.
-- **P2 — `everyone` position** (D5): builtin seeding, install-time suggestion prompt, cliff removal.
-  Proof: package install/uninstall grant-liveness e2e.
-- **P3 — Linter + tiered gates** (D7): publish-pipeline integration. Proof: each lint rule has a
-  fixture that fails without it.
-- **P4 — Explain + matrix gate** (D6): contract, engine, simulator UI, snapshot gate. Proof: matrix
-  snapshot diff drill on a seeded CRM stack.
+  `isProfile` removal, D1 default flip + grandfather stamping, **plus the two pre-launch spec
+  shapes**: the ctx principal taxonomy (D10 — `kind`/`audience`/`onBehalfOf` fields) and
+  `externalSharingModel` (D11) — shapes land now; later-phase semantics may follow. Regenerated
+  translations; conformance matrix rows updated. Proof: full test suite + a dogfood re-run of the
+  objectui#2348 scenario showing owner isolation with *no* explicit OWD authored.
+- **P2 — Audience anchors** (D5 + D9): `everyone` and `guest` builtin seeding, install-time
+  suggestion prompt for both anchors, fallback-cliff removal. Proof: package install/uninstall
+  grant-liveness e2e + an anonymous-principal e2e (a guest sees exactly the guest bindings and
+  nothing else).
+- **P3 — Linter + tiered gates + delegated admin** (D7 + D12 + the per-kind lint tiers of D9/D10):
+  publish-pipeline integration; admin scopes with allowlist / no-self-escalation checks. Proof:
+  each lint rule has a fixture that fails without it; a delegation e2e where a subsidiary admin
+  cannot exceed their allowlist or subtree.
+- **P4 — Explain + matrix gate** (D6, intersection- and audience-aware): contract, engine,
+  simulator UI, snapshot gate with the external-audience column. Proof: matrix snapshot diff drill
+  on a seeded CRM stack, including an agent on-behalf-of case and an external-portal case.
 
 ## References
 
