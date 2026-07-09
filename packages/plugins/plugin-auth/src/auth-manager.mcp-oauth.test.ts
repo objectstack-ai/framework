@@ -70,7 +70,13 @@ describe('isOAuthEligibleBaseUrl (OAuth 2.1 TLS rule, loopback exempt)', () => {
 });
 
 describe('enable-flag resolution (env → config → follows MCP surface)', () => {
-  it('defaults OFF when neither env nor config nor MCP is on', () => {
+  it('defaults ON — the MCP surface is a default-on core capability and AS/DCR follow it', () => {
+    expect(resolveOidcProviderEnabled({})).toBe(true);
+    expect(resolveDcrEnabled({})).toBe(true);
+  });
+
+  it('follows the MCP surface off when OS_MCP_SERVER_ENABLED=false', () => {
+    process.env.OS_MCP_SERVER_ENABLED = 'false';
     expect(resolveOidcProviderEnabled({})).toBe(false);
     expect(resolveDcrEnabled({})).toBe(false);
   });
@@ -123,6 +129,7 @@ describe('canonical issuer / resource URLs', () => {
   });
 
   it('resource metadata URL is null when the AS is off (nothing advertised, fail-closed)', () => {
+    process.env.OS_MCP_SERVER_ENABLED = 'false'; // opt out of the default-on surface
     expect(manager().getMcpResourceMetadataUrl()).toBeNull();
   });
 
@@ -240,7 +247,7 @@ describe('verifyMcpAccessToken (local JWKS verification, fail-closed)', () => {
   });
 
   it('rejects every token when the OAuth track is off (provider disabled)', async () => {
-    delete process.env.OS_MCP_SERVER_ENABLED;
+    process.env.OS_MCP_SERVER_ENABLED = 'false'; // opt out of the default-on surface
     const token = await signToken();
     expect(await manager().verifyMcpAccessToken(token)).toBeNull();
   });
@@ -282,8 +289,14 @@ describe('oauthProvider plugin wiring (DCR + scopes + audiences)', () => {
     expect(opts.allowUnauthenticatedClientRegistration).toBe(false);
   });
 
-  it('does not register the oauthProvider plugin at all when nothing enables it', async () => {
-    await capturePluginOpts({});
+  it('does not register the oauthProvider plugin when the MCP surface is opted out', async () => {
+    await capturePluginOpts({ OS_MCP_SERVER_ENABLED: 'false' });
     expect((oauthProvider as any).mock.calls.length).toBe(0);
+  });
+
+  it('registers the oauthProvider plugin by default (MCP surface default-on)', async () => {
+    const opts = await capturePluginOpts({});
+    expect(opts).toBeDefined();
+    expect(opts.allowDynamicClientRegistration).toBe(true);
   });
 });

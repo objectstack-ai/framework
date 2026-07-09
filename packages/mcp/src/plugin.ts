@@ -29,12 +29,16 @@ export interface MCPServerPluginOptions {
  * Lifecycle:
  * 1. **init** — Creates {@link MCPServerRuntime} and registers as `'mcp'` service.
  * 2. **start** — Bridges ToolRegistry, MetadataService, DataEngine, and Agents
- *    to the MCP server. Starts the transport if `autoStart` is enabled or
- *    the `OS_MCP_SERVER_ENABLED` environment variable is set.
+ *    to the MCP server. Starts the long-lived transport (stdio) only when
+ *    `autoStart` is enabled or `OS_MCP_SERVER_ENABLED` is explicitly `true` —
+ *    the HTTP surface needs no start: the runtime dispatcher serves it
+ *    per-request at `/api/v1/mcp` (default-on; `OS_MCP_SERVER_ENABLED=false`
+ *    opts out — see `isMcpServerEnabled` in `@objectstack/types`).
  * 3. **destroy** — Stops the MCP transport.
  *
  * Environment Variables:
- * - `OS_MCP_SERVER_ENABLED=true` — Enable MCP server at startup
+ * - `OS_MCP_SERVER_ENABLED` — HTTP surface default-on; `false` disables it,
+ *   explicit `true` additionally auto-starts the stdio transport
  * - `OS_MCP_SERVER_NAME` — Override server name
  * - `OS_MCP_SERVER_TRANSPORT` — Override transport ('stdio' | 'http')
  *   (legacy `MCP_SERVER_*` names still honoured with a deprecation warning)
@@ -118,13 +122,18 @@ export class MCPServerPlugin implements Plugin {
     }
 
     // ── Auto-start if configured ──
+    // Deliberately stricter than the HTTP-surface default (`isMcpServerEnabled`,
+    // default-on): start() attaches a long-lived transport — for stdio that
+    // means claiming the process's stdin/stdout — so it stays opt-in via
+    // explicit `true` or the `autoStart` option. The HTTP surface does not
+    // depend on this: the runtime dispatcher serves `/api/v1/mcp` per-request.
     const shouldStart = this.options.autoStart || readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', { silent: true }) === 'true';
     if (shouldStart) {
       await this.runtime.start();
       ctx.logger.info('[MCP] Server started automatically');
     } else {
       ctx.logger.info(
-        '[MCP] Server ready but not started. Set OS_MCP_SERVER_ENABLED=true or use autoStart option.',
+        '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_SERVER_ENABLED=true or autoStart for a long-lived (stdio) transport.',
       );
     }
 

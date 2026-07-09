@@ -44,8 +44,9 @@ instead — see the callout in the [AI Overview](/docs/ai).)
 
 ## Connect your AI (BYO-AI over MCP)
 
-Every deployment with `OS_MCP_SERVER_ENABLED=true` serves MCP at
-`/api/v1/mcp`, with two authentication tracks:
+Every deployment serves MCP at `/api/v1/mcp` by default (a core platform
+capability — set `OS_MCP_SERVER_ENABLED=false` to opt out), with two
+authentication tracks:
 
 - **OAuth 2.1 (interactive clients — recommended).** Each deployment is its
   own spec-compliant authorization server: the endpoint publishes

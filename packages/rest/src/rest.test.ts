@@ -2048,8 +2048,14 @@ describe('discovery — routes.mcp (ADR-0036, #152)', () => {
     expect(body.routes.mcp).toBe('/api/v1/mcp');
   });
 
-  it('omits routes.mcp when MCP is not enabled (opt-in)', async () => {
+  it('advertises routes.mcp by default — unset env means enabled (core capability)', async () => {
     delete process.env.OS_MCP_SERVER_ENABLED;
+    const body = await invoke(discoveryHandler());
+    expect(body.routes.mcp).toBe('/api/v1/mcp');
+  });
+
+  it('omits routes.mcp when MCP is explicitly disabled (opt-out)', async () => {
+    process.env.OS_MCP_SERVER_ENABLED = 'false';
     const body = await invoke(discoveryHandler());
     expect(body.routes.mcp).toBeUndefined();
   });

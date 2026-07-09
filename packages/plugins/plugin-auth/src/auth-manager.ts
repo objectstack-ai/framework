@@ -12,7 +12,7 @@ import type {
 } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
 import type { IEmailService } from '@objectstack/spec/contracts';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit, isMcpServerEnabled } from '@objectstack/types';
 import { mapMembershipRole, BUILTIN_IDENTITY_PLATFORM_ADMIN } from '@objectstack/spec';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
@@ -160,9 +160,14 @@ function readSsoOnlyEnv(): boolean | undefined {
   return readBooleanEnv('OS_AUTH_SSO_ONLY');
 }
 
-/** Whether this runtime serves the HTTP MCP surface (`/api/v1/mcp`). */
+/**
+ * Whether this runtime serves the HTTP MCP surface (`/api/v1/mcp`).
+ * Delegates to the platform-wide decision point (`isMcpServerEnabled` in
+ * `@objectstack/types`): default ON, explicit `false` opts out — so the
+ * OAuth/DCR follow-defaults below track the surface they exist to serve.
+ */
 export function readMcpServerEnabledEnv(): boolean {
-  return readBooleanEnv('OS_MCP_SERVER_ENABLED') ?? false;
+  return isMcpServerEnabled();
 }
 
 /**

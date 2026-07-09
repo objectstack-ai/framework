@@ -273,8 +273,9 @@ Please provide:
 
 ### Connecting to a running deployment (remote HTTP)
 
-A running ObjectStack deployment (with `OS_MCP_SERVER_ENABLED=true`) serves
-MCP over Streamable HTTP at `/api/v1/mcp`. Two authentication tracks:
+A running ObjectStack deployment serves MCP over Streamable HTTP at
+`/api/v1/mcp` by default (set `OS_MCP_SERVER_ENABLED=false` to opt out). Two
+authentication tracks:
 
 **OAuth 2.1 — the human-client track (recommended).** Each deployment is its
 own spec-compliant authorization server (backed by the embedded better-auth

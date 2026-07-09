@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, isMcpServerEnabled } from '@objectstack/types';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -474,12 +474,13 @@ export default class Serve extends Command {
       if (requires.includes('auth') && !requires.includes('email')) {
         requires.push('email');
       }
-      // `OS_MCP_SERVER_ENABLED=true` says "serve MCP at /api/v1/mcp" — the
-      // dispatcher gates the route on the SAME env var, so honoring the flag
-      // without also loading the MCP plugin would 501 every request (#2698:
-      // flipping one switch must yield a connectable MCP endpoint). Explicit
-      // `requires: ['mcp']` in config works without the env var too.
-      if (process.env.OS_MCP_SERVER_ENABLED === 'true' && !requires.includes('mcp')) {
+      // MCP is a default-on core capability: serve `/api/v1/mcp` unless
+      // `OS_MCP_SERVER_ENABLED=false` opts out. The dispatcher gates the route
+      // on the SAME decision point (`isMcpServerEnabled`), so serving the
+      // route without also loading the MCP plugin would 501 every request
+      // (#2698: the default must yield a connectable MCP endpoint). Explicit
+      // `requires: ['mcp']` in config works regardless of the env var.
+      if (isMcpServerEnabled() && !requires.includes('mcp')) {
         requires.push('mcp');
       }
       // Default capability slate — every preset except `minimal` gets the
