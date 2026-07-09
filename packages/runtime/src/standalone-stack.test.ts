@@ -26,7 +26,7 @@ const ARTIFACT = {
   manifest: { id: 'com.test.scope-app', name: 'Scope App', version: '1.0.0' },
   requires: ['auth'],
   objects: [{ name: 'note', label: 'Note', fields: { title: { type: 'text' } } }],
-  roles: [
+  positions: [
     { name: 'manager', label: 'Manager' },
     { name: 'contributor', label: 'Contributor' },
   ],
@@ -91,9 +91,9 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
     expect(def.objects.note.readScope).toBe('unit_and_below');
   });
 
-  it('surfaces roles[] at the top level', () => {
-    expect(Array.isArray(result.roles)).toBe(true);
-    expect(result.roles!.map((r: any) => r.name).sort()).toEqual(['contributor', 'manager']);
+  it('surfaces positions[] at the top level', () => {
+    expect(Array.isArray(result.positions)).toBe(true);
+    expect(result.positions!.map((r: any) => r.name).sort()).toEqual(['contributor', 'manager']);
   });
 
   it('still surfaces objects/requires/manifest (no regression)', () => {
@@ -116,7 +116,7 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
       databaseUrl: 'memory://standalone-rbac',
     });
     expect(appDefaultPermissionSetName(r.permissions)).toBe('app_member_default');
-    expect(r.roles!.map((x: any) => x.name).sort()).toEqual(['contributor', 'manager']);
+    expect(r.positions!.map((x: any) => x.name).sort()).toEqual(['contributor', 'manager']);
   }, BOOT_TIMEOUT);
 });
 
