@@ -10,6 +10,7 @@
 
 export * from './auth-plugin.js';
 export * from './auth-manager.js';
+export * from './ensure-default-organization.js';
 export * from './set-initial-password.js';
 export * from './register-sso-provider.js';
 export * from './objectql-adapter.js';

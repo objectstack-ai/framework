@@ -46,6 +46,7 @@ export const zhCN: TranslationData = {
         nav_system_overview: { label: '系统概览' },
 
         nav_users: { label: '用户' },
+        nav_organization: { label: '组织' },
         nav_business_units: { label: '业务单元' },
         nav_teams: { label: '团队' },
         nav_organizations: { label: '组织' },

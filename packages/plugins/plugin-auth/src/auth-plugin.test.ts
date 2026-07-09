@@ -1000,4 +1000,111 @@ describe('AuthPlugin', () => {
       expect(mockContext.registerService).toHaveBeenCalled();
     });
   });
+
+  // ADR-0081 D1 — single-org default-organization bootstrap.
+  describe('Single-org default-org bootstrap', () => {
+    const OLD_ENV = process.env.OS_MULTI_ORG_ENABLED;
+    let hookCapture: ReturnType<typeof createHookCapture>;
+    let middlewares: any[];
+    let ql: any;
+
+    const makeQl = () => {
+      const tables: Record<string, any[]> = {
+        sys_permission_set: [{ id: 'ps_admin', name: 'admin_full_access' }],
+        sys_user_permission_set: [
+          { id: 'ups1', user_id: 'u1', permission_set_id: 'ps_admin', organization_id: null },
+        ],
+        sys_member: [],
+        sys_organization: [],
+      };
+      const matches = (row: any, where: any) =>
+        Object.entries(where ?? {}).every(([k, v]) => (v === null ? row[k] == null : row[k] === v));
+      return {
+        tables,
+        registerMiddleware: (mw: any) => middlewares.push(mw),
+        find: vi.fn(async (object: string, q: any) =>
+          (tables[object] ?? []).filter((r) => matches(r, q?.where)).slice(0, q?.limit ?? 100),
+        ),
+        insert: vi.fn(async (object: string, data: any) => {
+          (tables[object] ??= []).push(data);
+          return data;
+        }),
+      };
+    };
+
+    beforeEach(() => {
+      delete process.env.OS_MULTI_ORG_ENABLED;
+      hookCapture = createHookCapture();
+      middlewares = [];
+      ql = makeQl();
+      mockContext.hook = hookCapture.hookFn;
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'manifest') return { register: vi.fn() };
+        if (name === 'objectql') return ql;
+        return undefined;
+      });
+    });
+
+    afterEach(() => {
+      if (OLD_ENV === undefined) delete process.env.OS_MULTI_ORG_ENABLED;
+      else process.env.OS_MULTI_ORG_ENABLED = OLD_ENV;
+    });
+
+    const boot = async (options: any = {}) => {
+      authPlugin = new AuthPlugin({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        ...options,
+      });
+      await authPlugin.init(mockContext);
+      await authPlugin.start(mockContext);
+    };
+
+    it('single-org: creates the default org + owner membership on kernel:ready', async () => {
+      await boot();
+      await hookCapture.trigger('kernel:ready');
+      expect(ql.tables.sys_organization[0]).toMatchObject({ slug: 'default' });
+      expect(ql.tables.sys_member[0]).toMatchObject({ user_id: 'u1', role: 'owner' });
+    });
+
+    it('single-org: re-runs after a sys_user_permission_set insert (first-signup promotion)', async () => {
+      await boot();
+      expect(middlewares.length).toBeGreaterThan(0);
+      const runAll = async (opCtx: any) => {
+        for (const mw of middlewares) await mw(opCtx, async () => {});
+      };
+      await runAll({ object: 'sys_user_permission_set', operation: 'insert' });
+      expect(ql.tables.sys_member).toHaveLength(1);
+      // Unrelated inserts do not re-trigger (membership already exists, but
+      // verify no new insert attempt is even made).
+      ql.insert.mockClear();
+      await runAll({ object: 'task', operation: 'insert' });
+      expect(ql.insert).not.toHaveBeenCalled();
+    });
+
+    it('single-org: idempotent — second kernel:ready pass is a no-op', async () => {
+      await boot();
+      await hookCapture.trigger('kernel:ready');
+      const orgCount = ql.tables.sys_organization.length;
+      const memberCount = ql.tables.sys_member.length;
+      await hookCapture.trigger('kernel:ready');
+      expect(ql.tables.sys_organization).toHaveLength(orgCount);
+      expect(ql.tables.sys_member).toHaveLength(memberCount);
+    });
+
+    it('multi-org: bootstrap is NOT wired (enterprise organizations package owns it)', async () => {
+      process.env.OS_MULTI_ORG_ENABLED = 'true';
+      await boot();
+      await hookCapture.trigger('kernel:ready');
+      expect(ql.tables.sys_organization).toHaveLength(0);
+      expect(ql.tables.sys_member).toHaveLength(0);
+    });
+
+    it('autoDefaultOrganization: false opts out', async () => {
+      await boot({ autoDefaultOrganization: false });
+      await hookCapture.trigger('kernel:ready');
+      expect(ql.tables.sys_organization).toHaveLength(0);
+      expect(ql.tables.sys_member).toHaveLength(0);
+    });
+  });
 });

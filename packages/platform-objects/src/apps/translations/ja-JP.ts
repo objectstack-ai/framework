@@ -45,6 +45,7 @@ export const jaJP: TranslationData = {
         nav_system_overview: { label: 'システム概要' },
 
         nav_users: { label: 'ユーザー' },
+        nav_organization: { label: '組織' },
         nav_business_units: { label: 'ビジネスユニット' },
         nav_teams: { label: 'チーム' },
         nav_organizations: { label: '組織' },

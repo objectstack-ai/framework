@@ -10,7 +10,9 @@ import {
   SystemOverviewDatasets,
 } from '@objectstack/platform-objects/apps';
 import { SysOrganizationDetailPage, SysUserDetailPage } from '@objectstack/platform-objects/pages';
+import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { AuthManager, type AuthManagerOptions } from './auth-manager.js';
+import { ensureDefaultOrganization } from './ensure-default-organization.js';
 import { runSetInitialPassword } from './set-initial-password.js';
 import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm, runRequestDomainVerification, runVerifyDomain } from './register-sso-provider.js';
 import {
@@ -53,6 +55,20 @@ export interface AuthPluginOptions extends Partial<AuthConfig> {
    * {@link AuthManagerOptions.additionalOrgRoles} for details.
    */
   additionalOrgRoles?: string[];
+
+  /**
+   * ADR-0081 D1 — single-org default-organization bootstrap. In single-org
+   * mode (`OS_MULTI_ORG_ENABLED` unset/false) nothing else ever creates an
+   * organization, so sessions carry no `activeOrganizationId` and better-auth
+   * `organization/invite-member` has no org to resolve — i.e. no way to add a
+   * user at all. When enabled (default), the plugin idempotently creates the
+   * `Default Organization` (slug `default`) and binds the first platform
+   * admin as `owner`, on `kernel:ready` and after every
+   * `sys_user_permission_set` insert. Inert in multi-org mode — the
+   * enterprise organizations package owns the bootstrap there.
+   * @default true
+   */
+  autoDefaultOrganization?: boolean;
 
   /**
    * Pass-through to better-auth's `databaseHooks` option. Used by
@@ -403,6 +419,49 @@ export class AuthPlugin implements Plugin {
     ctx.hook('kernel:ready', async () => {
       await this.maybeSeedDevAdmin(ctx);
     });
+
+    // ADR-0081 D1 — single-org default-organization bootstrap. Multi-org
+    // keeps its existing owner (the enterprise organizations package, which
+    // runs the same idempotent helper with the seed-ownership step injected);
+    // one crisp owner per mode.
+    if (this.options.autoDefaultOrganization !== false && !resolveMultiOrgEnabled()) {
+      const runEnsure = async () => {
+        try {
+          const ql: any = ctx.getService<any>('objectql');
+          if (!ql) return;
+          const res = await ensureDefaultOrganization(ql, { logger: ctx.logger });
+          if (res.defaultOrgCreated) {
+            ctx.logger.info(
+              `[auth] created Default Organization ${res.defaultOrgId} for the platform admin (single-org)`,
+            );
+          }
+        } catch (e) {
+          ctx.logger.warn?.('[auth] ensureDefaultOrganization failed', {
+            error: (e as Error).message,
+          });
+        }
+      };
+      ctx.hook('kernel:ready', runEnsure);
+      // Re-run after every admin grant — covers the "first sign-up promoted
+      // to platform admin" case where kernel:ready fired before any user
+      // existed (same wiring the multi-org bootstrap uses).
+      try {
+        const ql: any = ctx.getService<any>('objectql');
+        if (ql && typeof ql.registerMiddleware === 'function') {
+          ql.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
+            await next();
+            if (
+              opCtx?.object === 'sys_user_permission_set' &&
+              (opCtx?.operation === 'insert' || opCtx?.operation === 'create')
+            ) {
+              await runEnsure();
+            }
+          });
+        }
+      } catch {
+        /* objectql optional in mock mode — the kernel:ready pass still runs */
+      }
+    }
 
     // Identity-source provenance for accounts created OUTSIDE better-auth's
     // `databaseHooks` — @better-auth/scim creates `sys_account` at the adapter

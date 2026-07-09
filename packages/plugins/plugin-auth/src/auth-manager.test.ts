@@ -2266,4 +2266,107 @@ describe('AuthManager', () => {
       expect(m.isClientIpAllowed('')).toBe(true);
     });
   });
+
+  // ADR-0081 D1 — default active-org stamp on session create.
+  describe('composeDatabaseHooks – session.create.before active-org default', () => {
+    const OWNER_ROW = { id: 'm1', organization_id: 'org_owner', user_id: 'u1', role: 'owner' };
+    const MEMBER_ROW = { id: 'm2', organization_id: 'org_member', user_id: 'u1', role: 'member' };
+
+    function makeEngine(rows: any[]) {
+      return {
+        findOne: vi.fn(async (_model: string, q: any) => {
+          const where = q?.where ?? {};
+          return (
+            rows.find(
+              (r) =>
+                (!where.user_id || r.user_id === where.user_id) &&
+                (!where.role || r.role === where.role),
+            ) ?? null
+          );
+        }),
+      } as any;
+    }
+
+    function hooksFor(config: any) {
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        ...config,
+      });
+      return (manager as any).composeDatabaseHooks(config.databaseHooks) as any;
+    }
+
+    it('stamps activeOrganizationId from the owner membership (owner preferred)', async () => {
+      const hooks = hooksFor({ dataEngine: makeEngine([MEMBER_ROW, OWNER_ROW]) });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(result?.data?.activeOrganizationId).toBe('org_owner');
+    });
+
+    it('falls back to any membership when the user owns nothing', async () => {
+      const hooks = hooksFor({ dataEngine: makeEngine([MEMBER_ROW]) });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(result?.data?.activeOrganizationId).toBe('org_member');
+    });
+
+    it('leaves a pre-set activeOrganizationId alone', async () => {
+      const engine = makeEngine([OWNER_ROW]);
+      const hooks = hooksFor({ dataEngine: engine });
+      const result = await hooks.session.create.before({
+        userId: 'u1',
+        activeOrganizationId: 'org_explicit',
+      });
+      // Draft already carries an org — no stamp, no lookup needed.
+      expect(result?.data?.activeOrganizationId ?? 'org_explicit').toBe('org_explicit');
+      expect(engine.findOne).not.toHaveBeenCalled();
+    });
+
+    it('no-ops (org-less session) when the user has no memberships', async () => {
+      const hooks = hooksFor({ dataEngine: makeEngine([]) });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(result?.data?.activeOrganizationId).toBeUndefined();
+    });
+
+    it('chains the HOST session hook first and keeps its choice', async () => {
+      const hostHook = vi.fn(async (session: any) => ({
+        data: { ...session, activeOrganizationId: 'org_host' },
+      }));
+      const hooks = hooksFor({
+        dataEngine: makeEngine([OWNER_ROW]),
+        databaseHooks: { session: { create: { before: hostHook } } },
+      });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(hostHook).toHaveBeenCalledTimes(1);
+      expect(result?.data?.activeOrganizationId).toBe('org_host');
+    });
+
+    it('fills the field when the host hook declines (returns undefined)', async () => {
+      const hostHook = vi.fn(async () => undefined);
+      const hooks = hooksFor({
+        dataEngine: makeEngine([OWNER_ROW]),
+        databaseHooks: { session: { create: { before: hostHook } } },
+      });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(result?.data?.activeOrganizationId).toBe('org_owner');
+    });
+
+    it('autoActiveOrganization: false restores the raw host behaviour', async () => {
+      const hooks = hooksFor({
+        dataEngine: makeEngine([OWNER_ROW]),
+        autoActiveOrganization: false,
+      });
+      expect(hooks.session?.create?.before).toBeUndefined();
+    });
+
+    it('never breaks session create on engine errors', async () => {
+      const engine = { findOne: vi.fn(async () => { throw new Error('db down'); }) } as any;
+      const hooks = hooksFor({ dataEngine: engine });
+      const result = await hooks.session.create.before({ userId: 'u1' });
+      expect(result?.data?.activeOrganizationId).toBeUndefined();
+    });
+
+    it('keeps the account.create.after identity stamp intact', async () => {
+      const hooks = hooksFor({ dataEngine: makeEngine([]) });
+      expect(typeof hooks.account?.create?.after).toBe('function');
+    });
+  });
 });
