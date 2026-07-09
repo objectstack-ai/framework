@@ -853,13 +853,13 @@ describe('Integration Tests', () => {
       context: {
         userId: 'user_123',
         tenantId: 'org_456',
-        roles: ['admin'],
+        positions: ['admin'],
       },
     });
 
     expect(options.context?.userId).toBe('user_123');
     expect(options.context?.tenantId).toBe('org_456');
-    expect(options.context?.roles).toEqual(['admin']);
+    expect(options.context?.positions).toEqual(['admin']);
   });
 
   it('should support context in insert options', () => {
@@ -901,10 +901,10 @@ describe('Integration Tests', () => {
   it('should support context in aggregate options', () => {
     const options = DataEngineAggregateOptionsSchema.parse({
       groupBy: ['status'],
-      context: { userId: 'u1', roles: ['analyst'] },
+      context: { userId: 'u1', positions: ['analyst'] },
     });
 
-    expect(options.context?.roles).toEqual(['analyst']);
+    expect(options.context?.positions).toEqual(['analyst']);
   });
 
   it('should accept options without context (backward compatible)', () => {

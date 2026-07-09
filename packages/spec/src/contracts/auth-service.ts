@@ -23,8 +23,8 @@ export interface AuthUser {
     email: string;
     /** Display name */
     name: string;
-    /** Assigned role identifiers */
-    roles?: string[];
+    /** Assigned position identifiers */
+    positions?: string[];
     /** Current tenant identifier (multi-tenant) */
     tenantId?: string;
 }

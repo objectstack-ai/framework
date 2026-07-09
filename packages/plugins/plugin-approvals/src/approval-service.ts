@@ -97,7 +97,7 @@ export type ActionTokenOutcome =
   | { ok: true; action: 'approve' | 'reject'; request: ApprovalRequestRow; approverId: string }
   | { ok: false; reason: 'invalid' | 'expired' | 'consumed' | 'not_pending' | 'not_approver'; request?: ApprovalRequestRow };
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 function uid(prefix: string): string {
   const g: any = globalThis as any;

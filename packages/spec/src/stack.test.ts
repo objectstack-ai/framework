@@ -494,7 +494,6 @@ describe('defineStack', () => {
       permissions: [
         {
           name: 'guest_portal',
-          isProfile: true,
           // BUG: the object is `crm_lead`, not the short `lead` — the short name
           // exists nowhere, so this grant silently applies to nothing (and the
           // anonymous permission path denies the write). Must fail loudly.
@@ -514,7 +513,6 @@ describe('defineStack', () => {
       permissions: [
         {
           name: 'guest_portal',
-          isProfile: true,
           objects: { crm_lead: { allowCreate: true } },
         },
       ],
@@ -775,19 +773,19 @@ describe('defineStack - Map Format Support', () => {
     expect(result.dashboards![0].name).toBe('sales_overview');
   });
 
-  it('should support map format for roles', () => {
+  it('should support map format for positions', () => {
     const config: ObjectStackDefinitionInput = {
       manifest: baseManifest,
-      roles: {
+      positions: {
         admin: { label: 'Administrator' },
         user: { label: 'Standard User' },
       },
     };
 
     const result = defineStack(config);
-    expect(result.roles).toHaveLength(2);
-    expect(result.roles![0].name).toBe('admin');
-    expect(result.roles![1].name).toBe('user');
+    expect(result.positions).toHaveLength(2);
+    expect(result.positions![0].name).toBe('admin');
+    expect(result.positions![1].name).toBe('user');
   });
 
   it('should support map format for hooks', () => {

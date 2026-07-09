@@ -88,7 +88,7 @@ export { defineSkill } from './ai/skill.zod';
 export { defineDatasource } from './data/datasource.zod';
 export { defineConnector } from './integration/connector.zod';
 export { defineSharingRule } from './security/sharing.zod';
-export { defineRole } from './identity/role.zod';
+export { definePosition } from './identity/position.zod';
 export { definePermissionSet } from './security/permission.zod';
 export { defineEmailTemplateDefinition } from './system/email-template.zod';
 export { defineReport } from './ui/report.zod';
@@ -143,12 +143,12 @@ export {
   createEvalUser,
   mapMembershipRole,
   EvalUserSchema,
-  BUILTIN_ROLE_NAMES,
-  BUILTIN_ROLE_METADATA,
-  BUILTIN_ROLE_PLATFORM_ADMIN,
-  BUILTIN_ROLE_ORG_OWNER,
-  BUILTIN_ROLE_ORG_ADMIN,
-  BUILTIN_ROLE_ORG_MEMBER,
+  BUILTIN_IDENTITY_NAMES,
+  BUILTIN_IDENTITY_METADATA,
+  BUILTIN_IDENTITY_PLATFORM_ADMIN,
+  BUILTIN_IDENTITY_ORG_OWNER,
+  BUILTIN_IDENTITY_ORG_ADMIN,
+  BUILTIN_IDENTITY_ORG_MEMBER,
   ADMIN_FULL_ACCESS,
 } from './identity/eval-user.zod';
-export type { EvalUser, EvalUserInput, BuiltinRoleName } from './identity/eval-user.zod';
+export type { EvalUser, EvalUserInput, BuiltinIdentityName } from './identity/eval-user.zod';

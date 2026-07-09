@@ -56,7 +56,7 @@ export interface ExprSchemaHint {
   /**
    * ADR-0068 D4 — the closed catalog of valid role names (built-in + declared).
    * When supplied, a role-membership predicate testing a role NOT in this set
-   * (e.g. `'org_admni' in current_user.roles`) is flagged as an error. Closes
+   * (e.g. `'org_admni' in current_user.positions`) is flagged as an error. Closes
    * the AI-hallucination hole where a model invents a plausible-but-nonexistent
    * role that then silently never matches. Absent => role checks are skipped.
    */
@@ -154,18 +154,18 @@ function levenshtein(a: string, b: string): number {
   return dp[m];
 }
 
-// ADR-0068 D4 — role-membership predicate heads: a role NAME literal used in a
-// membership test against a user subject's `.roles` (or the deprecated singular
-// `.role`). Matched names are validated against the closed role catalog.
-const ROLE_IN_RE = /(['"])([a-z0-9_]+)\1\s+in\s+(?:current_user|user|ctx\.user)\.roles\b/g;
-const ROLE_CONTAINS_RE = /(?:current_user|user|ctx\.user)\.roles\s*\.\s*contains\(\s*(['"])([a-z0-9_]+)\1\s*\)/g;
+// ADR-0068 D4 — position-membership predicate heads: a position NAME literal
+// used in a membership test against a user subject's `.positions`
+// (ADR-0090 D3 rename). Matched names are validated against the closed catalog.
+const ROLE_IN_RE = /(['"])([a-z0-9_]+)\1\s+in\s+(?:current_user|user|ctx\.user)\.positions\b/g;
+const ROLE_CONTAINS_RE = /(?:current_user|user|ctx\.user)\.positions\s*\.\s*contains\(\s*(['"])([a-z0-9_]+)\1\s*\)/g;
 // Bounded quantifiers ({0,N}, not * / *?) keep this linear: a CEL `exists`
 // body is tiny in practice, and unbounded greedy/lazy scanners here backtrack
-// polynomially (O(n^2)) on adversarial input like repeated `user.roles.exists(`
+// polynomially (O(n^2)) on adversarial input like repeated `user.positions.exists(`
 // (ADR-0068 D4 ReDoS hardening). The pre-`==` class excludes `=` so the bounded
 // run stops cleanly before the operator without a lazy quantifier.
-const ROLE_EXISTS_RE = /(?:current_user|user|ctx\.user)\.roles\s*\.\s*exists\s*\([^,)]{0,64},[^)=]{0,128}==\s*(['"])([a-z0-9_]+)\1/g;
-const ROLE_EQ_RE = /(?:current_user|user|ctx\.user)\.role\s*==\s*(['"])([a-z0-9_]+)\1/g;
+const ROLE_EXISTS_RE = /(?:current_user|user|ctx\.user)\.positions\s*\.\s*exists\s*\([^,)]{0,64},[^)=]{0,128}==\s*(['"])([a-z0-9_]+)\1/g;
+const ROLE_EQ_RE = /(?:current_user|user|ctx\.user)\.position\s*==\s*(['"])([a-z0-9_]+)\1/g;
 
 /**
  * Flag role-membership predicates referencing a role outside the closed catalog

@@ -13,7 +13,7 @@ import type {
 import type { IDataEngine } from '@objectstack/core';
 import type { IEmailService } from '@objectstack/spec/contracts';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit } from '@objectstack/types';
-import { mapMembershipRole, BUILTIN_ROLE_PLATFORM_ADMIN } from '@objectstack/spec';
+import { mapMembershipRole, BUILTIN_IDENTITY_PLATFORM_ADMIN } from '@objectstack/spec';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
 import {
   AUTH_USER_CONFIG,
@@ -230,7 +230,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * admin capabilities.
    *
    * Typical source: the union of `permission` metadata names that have
-   * `isProfile: true`, collected from the loaded stack at CLI boot.
+   * declared names, collected from the loaded stack at CLI boot.
    *
    * @example ['sales_rep', 'sales_manager', 'service_agent']
    */
@@ -1582,13 +1582,13 @@ export class AuthManager {
     // split on commas, PLUS the active membership mapped to canonical
     // `org_owner`/`org_admin`/`org_member`, PLUS `platform_admin` when the user
     // holds the admin_full_access permission set. `user.isPlatformAdmin` is a
-    // derived alias of `'platform_admin' in roles`.
+    // derived alias of `'platform_admin' in positions`.
     //
     // IMPORTANT: `user.role` is NOT overwritten anymore — consumers must gate
-    // on `roles[]` / `isPlatformAdmin` (e.g. via objectui's useIsWorkspaceAdmin),
+    // on `positions[]` / `isPlatformAdmin` (e.g. via objectui's useIsWorkspaceAdmin),
     // never on `user.role === 'admin'`. Consumers that match individual role
     // names (e.g. the Console approvals inbox resolving `role:<name>` approvers)
-    // also read `roles` — business roles such as `manager` survive only there.
+    // also read `positions` — business names such as `manager` survive only there.
     // The raw membership role stays on the organization plugin's `member` payload.
     //
     // Better-auth's `sys_user` table doesn't carry a `role` column. We derive
@@ -1603,7 +1603,7 @@ export class AuthManager {
     //      metadata such as saved list views, dashboards, etc.
     //
     // ADR-0068 D2: rather than synthesizing `user.role = 'admin'`, both paths now
-    // contribute CANONICAL role names to `user.roles` (platform_admin / org_*),
+    // contribute CANONICAL names to `user.positions` (platform_admin / org_*),
     // and `user.isPlatformAdmin` is a derived alias. The raw membership role
     // remains available via the `organization` plugin's `member` payload.
     const dataEngine = this.config.dataEngine;
@@ -1659,16 +1659,17 @@ export class AuthManager {
           }
         };
 
-        // ADR-0068 D1/D2 — emit ONE canonical roles[] (identities-as-roles), with
-        // NO `role:'admin'` overwrite. isPlatformAdmin is a DERIVED alias of
-        // `'platform_admin' in roles`, retained for back-compat clients.
+        // ADR-0068 D1/D2 (renamed ADR-0090 D3) — emit ONE canonical
+        // positions[] (identity names + position names), with NO singular
+        // overwrite. isPlatformAdmin is a DERIVED alias of
+        // `'platform_admin' in positions`, retained for back-compat clients.
         const platformAdmin = await isPlatformAdmin();
         const orgRoles = await activeOrgRoles();
         const storedRole = typeof (user as any).role === 'string' ? (user as any).role : '';
-        const roles = Array.from(new Set([
+        const positions = Array.from(new Set([
           ...storedRole.split(',').map((s: string) => s.trim()).filter(Boolean),
           ...orgRoles,
-          ...(platformAdmin ? [BUILTIN_ROLE_PLATFORM_ADMIN] : []),
+          ...(platformAdmin ? [BUILTIN_IDENTITY_PLATFORM_ADMIN] : []),
         ]));
 
         // ADR-0069 — authentication-policy gate posture (password expiry,
@@ -1686,7 +1687,7 @@ export class AuthManager {
         );
 
         return {
-          user: { ...user, roles, isPlatformAdmin: platformAdmin, ...(authGate ? { authGate } : {}) },
+          user: { ...user, positions, isPlatformAdmin: platformAdmin, ...(authGate ? { authGate } : {}) },
           session,
         };
       }));
@@ -2364,7 +2365,7 @@ export class AuthManager {
       if (!userId || !providerId) return;
       const engine = this.getDataEngine();
       if (!engine) return;
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
 
       if (providerId === 'credential') {
         // Gained a local password → env-native. Only write if currently
@@ -2446,7 +2447,7 @@ export class AuthManager {
     this._orgMfaRefreshing = true;
     void (async () => {
       try {
-        const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+        const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
         const n = await engine.count('sys_organization', {
           where: { require_mfa: true }, context: SYSTEM_CTX,
         } as any);
@@ -2479,7 +2480,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine || !userId) return undefined;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const u = await engine.findOne('sys_user', {
         where: { id: userId },
         fields: ['password_changed_at', 'two_factor_enabled', 'mfa_required_at'],
@@ -2545,7 +2546,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine || !userId) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       await engine.update(
         'sys_user',
         { id: userId, password_changed_at: new Date() },
@@ -2625,7 +2626,7 @@ export class AuthManager {
     if (count <= 0 || typeof verify !== 'function') return undefined;
     const engine = this.getDataEngine();
     if (!engine) return undefined;
-    const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+    const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
     let account: any;
     try {
       account = await engine.findOne('sys_account', {
@@ -2663,7 +2664,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const account = await engine.findOne('sys_account', {
         where: { user_id: userId, provider_id: 'credential' },
         fields: ['id', 'previous_password_hashes'],
@@ -2695,7 +2696,7 @@ export class AuthManager {
     if (!engine) return;
     let locked = false;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const u = await engine.findOne('sys_user', {
         where: { email }, fields: ['id', 'locked_until'], context: SYSTEM_CTX,
       } as any);
@@ -2729,7 +2730,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const u = await engine.findOne('sys_user', {
         where: { email },
         fields: ['id', 'failed_login_count', 'locked_until'],
@@ -2768,7 +2769,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine || !userId) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const patch: Record<string, unknown> = { id: userId, last_login_at: new Date() };
       // Cap to the column width (IPv6 textual max 45) — a malformed/oversized
       // forwarded header must not blow up the write.
@@ -2787,7 +2788,7 @@ export class AuthManager {
   public async unlockUser(userId: string): Promise<boolean> {
     const engine = this.getDataEngine();
     if (!engine || !userId) return false;
-    const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+    const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
     const u = await engine.findOne('sys_user', {
       where: { id: userId }, fields: ['id'], context: SYSTEM_CTX,
     } as any);
@@ -2814,7 +2815,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine || !sessionId) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const srow = await engine.findOne('sys_session', {
         where: { id: sessionId },
         fields: ['id', 'created_at', 'last_activity_at', 'revoked_at'],
@@ -2861,7 +2862,7 @@ export class AuthManager {
     const engine = this.getDataEngine();
     if (!engine) return;
     try {
-      const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] };
+      const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const rows = await engine.find('sys_session', {
         where: { user_id: userId },
         fields: ['id', 'created_at', 'expires_at', 'revoked_at'],

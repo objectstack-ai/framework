@@ -154,7 +154,7 @@ export class KnowledgeService implements IKnowledgeService {
 
     const objSource = source.source as ObjectKnowledgeSource;
     // RLS-bypassing system context — this is a server-side admin op.
-    const adminCtx: ExecutionContext = { roles: [], permissions: [], systemPermissions: [], isSystem: true };
+    const adminCtx: ExecutionContext = { positions: [], permissions: [], systemPermissions: [], isSystem: true };
     const records = (await this.options.dataEngine.find(objSource.object, {
       where: objSource.where,
       limit: opts.limit,

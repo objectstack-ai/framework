@@ -2,18 +2,18 @@
 
 /**
  * resolveAuthzContext — the SINGLE source of truth for resolving an inbound
- * request's identity + authorization context (roles, permissions, RLS scoping).
+ * request's identity + authorization context (positions, permissions, RLS scoping).
  *
  * Every HTTP entry point (REST server, runtime dispatcher, MCP, any future
  * transport) MUST resolve authorization through this function — never by
- * re-reading `sys_member` / `sys_user_role` / `sys_*_permission_set` itself.
+ * re-reading `sys_member` / `sys_user_position` / `sys_*_permission_set` itself.
  *
  * Why this exists: authorization resolution used to be DUPLICATED across the
  * REST server (`@objectstack/rest`) and the runtime dispatcher
  * (`@objectstack/runtime`). On a security path, duplicated logic drifts and the
- * drift is silent: the REST copy had quietly omitted `sys_user_role` (so custom
+ * drift is silent: the REST copy had quietly omitted `sys_user_position` (so custom
  * roles granted via the ADR-0057 D4 platform-RBAC path didn't apply over REST),
- * `sys_role_permission_set`, `mapMembershipRole` normalization, the
+ * `sys_position_permission_set`, `mapMembershipRole` normalization, the
  * platform-admin derivation, and the `ai_seat` synthesis. The API-key half was
  * already shared here (`resolveApiKeyPrincipal`); this completes the extraction
  * by bringing session + role/permission aggregation home too. There is now ONE
@@ -21,13 +21,13 @@
  * `getSession` their own way and delegate here.
  *
  * Fail-closed: every read is defensive. Missing services / tables yield a
- * partial context (even `{ roles: [], permissions: [] }`) — enforcement is the
+ * partial context (even `{ positions: [], permissions: [] }`) — enforcement is the
  * SecurityPlugin's job, never this resolver's.
  */
 
 import {
   mapMembershipRole,
-  BUILTIN_ROLE_PLATFORM_ADMIN,
+  BUILTIN_IDENTITY_PLATFORM_ADMIN,
   ADMIN_FULL_ACCESS,
 } from '@objectstack/spec';
 
@@ -39,7 +39,7 @@ export interface ResolvedAuthzContext {
   tenantId?: string;
   email?: string;
   accessToken?: string;
-  roles: string[];
+  positions: string[];
   permissions: string[];
   systemPermissions: string[];
   tabPermissions?: Record<string, 'visible' | 'hidden' | 'default_on' | 'default_off'>;
@@ -79,12 +79,12 @@ async function tryFind(ql: any, object: string, where: any, limit = 100): Promis
 
 /**
  * Resolve the authorization context for an inbound request. Always resolves —
- * never throws. Anonymous requests yield `{ roles: [], permissions: [], ... }`.
+ * never throws. Anonymous requests yield `{ positions: [], permissions: [], ... }`.
  */
 export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<ResolvedAuthzContext> {
   const { ql, headers } = input;
   const ctx: ResolvedAuthzContext = {
-    roles: [],
+    positions: [],
     permissions: [],
     systemPermissions: [],
     org_user_ids: [],
@@ -153,20 +153,20 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
     if (m.role && typeof m.role === 'string') {
       for (const raw of m.role.split(',').map((s: string) => s.trim()).filter(Boolean)) {
         const r = mapMembershipRole(raw);
-        if (!ctx.roles.includes(r)) ctx.roles.push(r);
+        if (!ctx.positions.includes(r)) ctx.positions.push(r);
       }
     }
   }
 
-  // 4. [ADR-0057 D4] Platform-owned RBAC role assignments (sys_user_role) — the
+  // 4. [ADR-0057 D4] Platform-owned RBAC role assignments (sys_user_position) — the
   //    source of truth for custom roles, decoupled from sys_member.role.
   //    `organization_id = null` = global (cross-tenant); else match active org.
-  const userRoleRows = await tryFind(ql, 'sys_user_role', { user_id: userId }, 200);
-  for (const ur of userRoleRows) {
+  const userPositionRows = await tryFind(ql, 'sys_user_position', { user_id: userId }, 200);
+  for (const ur of userPositionRows) {
     const org = ur.organization_id ?? null;
     if (org && tenantId && org !== tenantId) continue;
-    const r = ur.role;
-    if (typeof r === 'string' && r && !ctx.roles.includes(r)) ctx.roles.push(r);
+    const r = ur.position;
+    if (typeof r === 'string' && r && !ctx.positions.includes(r)) ctx.positions.push(r);
   }
 
   // 5. Fellow-org user IDs so RLS can scope identity tables to collaborators.
@@ -204,13 +204,13 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   );
   let hasPlatformAdminGrant = false;
 
-  // 6a. Role-bound permission sets (sys_role_permission_set): a role carries its
-  //     permission sets.
-  if (ctx.roles.length > 0) {
-    const roleRows = await tryFind(ql, 'sys_role', { name: { $in: ctx.roles } }, 100);
-    const roleIds = roleRows.map((r) => r.id).filter(Boolean);
-    if (roleIds.length > 0) {
-      const rpsRows = await tryFind(ql, 'sys_role_permission_set', { role_id: { $in: roleIds } }, 500);
+  // 6a. Position-bound permission sets (sys_position_permission_set): a position
+  //     carries its permission sets.
+  if (ctx.positions.length > 0) {
+    const positionRows = await tryFind(ql, 'sys_position', { name: { $in: ctx.positions } }, 100);
+    const positionIds = positionRows.map((r) => r.id).filter(Boolean);
+    if (positionIds.length > 0) {
+      const rpsRows = await tryFind(ql, 'sys_position_permission_set', { position_id: { $in: positionIds } }, 500);
       for (const r of rpsRows) {
         const id = r.permission_set_id ?? r.permissionSetId;
         if (id) psIds.add(id);
@@ -252,8 +252,8 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   }
 
   // 6c. Project the derived platform_admin built-in role (leads the list).
-  if (hasPlatformAdminGrant && !ctx.roles.includes(BUILTIN_ROLE_PLATFORM_ADMIN)) {
-    ctx.roles.unshift(BUILTIN_ROLE_PLATFORM_ADMIN);
+  if (hasPlatformAdminGrant && !ctx.positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN)) {
+    ctx.positions.unshift(BUILTIN_IDENTITY_PLATFORM_ADMIN);
   }
 
   // 7. [ADR-0024] Env-side AI seat: synthesize the `ai_seat` capability from the

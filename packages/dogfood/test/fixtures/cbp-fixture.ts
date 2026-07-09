@@ -64,7 +64,6 @@ const FIXTURE_MEMBER_SET = 'cbp_fixture_member';
 export const cbpMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'CBP Fixture Member — owner-scoped account, controlled-by-parent notes',
-  isProfile: true,
   objects: {
     cbp_account: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
     cbp_note: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },

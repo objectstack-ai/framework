@@ -56,7 +56,7 @@ const denyWritesOnManagedObjects = (): Record<string, {
  * Default permission sets seeded by the platform.
  *
  * These are referenced by name (`admin_full_access`, `member_default`,
- * `viewer_readonly`) from `sys_role_permission_set` rows or assigned
+ * `viewer_readonly`) from `sys_position_permission_set` rows or assigned
  * directly to users via `sys_user_permission_set`.
  *
  * The runtime SecurityPlugin reads these via the metadata service when a
@@ -82,7 +82,6 @@ export const defaultPermissionSets: PermissionSet[] = [
   PermissionSetSchema.parse({
     name: 'admin_full_access',
     label: 'Administrator — Full Access',
-    isProfile: true,
     objects: {
       '*': {
         allowRead: true,
@@ -120,8 +119,8 @@ export const defaultPermissionSets: PermissionSet[] = [
   //     admins CAN configure their own org's branding.
   //
   // **Anti-escalation**: writes to the global RBAC tables
-  // (`sys_role`, `sys_permission_set`, `sys_role_permission_set`,
-  // `sys_user_permission_set`, `sys_user_role`) are denied. Allowing
+  // (`sys_position`, `sys_permission_set`, `sys_position_permission_set`,
+  // `sys_user_permission_set`, `sys_user_position`) are denied. Allowing
   // them would let an org admin bind `admin_full_access` (which has no
   // RLS) to themselves and break out of tenant isolation. Reads are
   // permitted so the Roles / Permission Sets nav entries still render.
@@ -131,7 +130,6 @@ export const defaultPermissionSets: PermissionSet[] = [
   PermissionSetSchema.parse({
     name: 'organization_admin',
     label: 'Organization Administrator',
-    isProfile: true,
     objects: {
       '*': {
         allowRead: true,
@@ -145,11 +143,11 @@ export const defaultPermissionSets: PermissionSet[] = [
       // accept, remove-member, transfer, …) rather than raw CRUD.
       ...denyWritesOnManagedObjects(),
       // RBAC tables — read-only to prevent privilege escalation.
-      sys_role: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_position: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
       sys_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
-      sys_role_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_position_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
       sys_user_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
-      sys_user_role: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_user_position: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
     },
     systemPermissions: ['manage_org_users', 'setup.access'],
     rowLevelSecurity: [
@@ -277,7 +275,6 @@ export const defaultPermissionSets: PermissionSet[] = [
   PermissionSetSchema.parse({
     name: 'member_default',
     label: 'Member — Standard Access',
-    isProfile: true,
     objects: {
       '*': {
         allowRead: true,
@@ -431,7 +428,6 @@ export const defaultPermissionSets: PermissionSet[] = [
   PermissionSetSchema.parse({
     name: 'viewer_readonly',
     label: 'Viewer — Read-Only',
-    isProfile: true,
     objects: {
       '*': {
         allowRead: true,

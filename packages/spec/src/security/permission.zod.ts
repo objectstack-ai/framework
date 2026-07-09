@@ -89,10 +89,11 @@ export const FieldPermissionSchema = lazySchema(() => z.object({
  * Permission Set Schema
  * Defines a collection of permissions that can be assigned to users.
  * 
- * DIFFERENTIATION:
- * - Profile: The ONE primary functional definition of a user (e.g. Standard User).
- * - Permission Set: Add-on capabilities assigned to users (e.g. Export Reports).
- * - Role: (Defined in src/system/role.zod.ts) Defines data visibility hierarchy.
+ * DIFFERENTIATION (ADR-0090):
+ * - Permission Set: the ONLY capability container — union-merged, additive.
+ * - Position (src/identity/position.zod.ts): flat distribution group that
+ *   binds sets to people. There is no Profile concept (ADR-0090 D2).
+ * - Business Unit: the visibility hierarchy (ADR-0057).
  * 
  * **NAMING CONVENTION:**
  * Permission set names MUST be lowercase snake_case to prevent security issues.
@@ -136,9 +137,13 @@ export const PermissionSetSchema = lazySchema(() => z.object({
   managedBy: z.enum(['package', 'platform', 'user']).optional()
     .describe('[ADR-0086 D3] Record provenance: package (upgrade-owned metadata) vs platform/user (env config)'),
 
-  /** Is this a Profile? (Base set for a user) */
-  isProfile: z.boolean().default(false).describe('Whether this is a user profile'),
-  isDefault: z.boolean().default(false).describe('[ADR-0056 D7] When true, this profile is the FALLBACK assigned to authenticated users who have no explicit grants — an app declares its default access posture here instead of relying on the built-in member_default. Foundation for SSO/JIT provisioning.'),
+  /**
+   * [ADR-0090 D5] Package SUGGESTION: on install the admin is prompted to bind
+   * this set to the built-in `everyone` position (default grants for
+   * authenticated users). Never auto-bound; carries no runtime semantics of
+   * its own. (The former `isProfile` flag was removed by ADR-0090 D2.)
+   */
+  isDefault: z.boolean().default(false).describe('[ADR-0090 D5] Install-time suggestion to bind this set to the everyone position (admin confirms; never auto-bound)'),
   
   /** Object Permissions Map: <entity_name> -> permissions */
   objects: z.record(z.string(), ObjectPermissionSchema).describe('Entity permissions'),
@@ -222,7 +227,7 @@ export type ObjectPermission = z.infer<typeof ObjectPermissionSchema>;
 export type FieldPermission = z.infer<typeof FieldPermissionSchema>;
 
 /**
- * Type-safe factory for a permission set / profile. Validates at authoring time via
+ * Type-safe factory for a permission set. Validates at authoring time via
  * `.parse()` and accepts input-shape config (optional defaults, CEL
  * shorthand) — preferred over a bare `: PermissionSet` literal.
  */

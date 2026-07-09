@@ -7,7 +7,7 @@ import { resolveAuthzContext, resolveLocalizationContext } from './resolve-authz
  * Contract test for the SINGLE authorization resolver. Every authorization
  * source MUST be honored here — this is the regression net that would have
  * caught the REST-vs-dispatcher drift (the REST copy had silently dropped
- * sys_user_role / sys_role_permission_set / platform_admin / ai_seat).
+ * sys_user_position / sys_position_permission_set / platform_admin / ai_seat).
  */
 
 // Minimal in-memory ObjectQL: find(object, { where }) with `===` + `$in` match.
@@ -30,36 +30,36 @@ const session = (userId: string, opts: { email?: string; org?: string } = {}) =>
 const H = () => new Headers();
 
 describe('resolveAuthzContext — single source of truth', () => {
-  it('resolves a custom role granted via sys_user_role (the REST-drift bug)', async () => {
+  it('resolves a custom role granted via sys_user_position (the REST-drift bug)', async () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1', email: 'ada@x.com' }],
       sys_member: [],
-      sys_user_role: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
+      sys_user_position: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
       sys_user_permission_set: [],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
-    expect(ctx.roles).toContain('contributor');
+    expect(ctx.positions).toContain('contributor');
   });
 
   it('normalizes sys_member org roles (owner -> org_owner)', async () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1' }],
       sys_member: [{ user_id: 'u1', role: 'owner', organization_id: 'o1' }],
-      sys_user_role: [],
+      sys_user_position: [],
       sys_user_permission_set: [],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1', { org: 'o1' }) });
-    expect(ctx.roles).toContain('org_owner');
+    expect(ctx.positions).toContain('org_owner');
   });
 
-  it('resolves role-bound permission sets (sys_role_permission_set)', async () => {
+  it('resolves role-bound permission sets (sys_position_permission_set)', async () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1' }],
       sys_member: [],
-      sys_user_role: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
+      sys_user_position: [{ user_id: 'u1', role: 'contributor', organization_id: null }],
       sys_user_permission_set: [],
-      sys_role: [{ id: 'r1', name: 'contributor' }],
-      sys_role_permission_set: [{ role_id: 'r1', permission_set_id: 'ps1' }],
+      sys_position: [{ id: 'r1', name: 'contributor' }],
+      sys_position_permission_set: [{ role_id: 'r1', permission_set_id: 'ps1' }],
       sys_permission_set: [{ id: 'ps1', name: 'contributor_ps', system_permissions: ['cap_x'] }],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
@@ -71,31 +71,31 @@ describe('resolveAuthzContext — single source of truth', () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1' }],
       sys_member: [],
-      sys_user_role: [],
+      sys_user_position: [],
       sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'psA', organization_id: null }],
       sys_permission_set: [{ id: 'psA', name: 'admin_full_access' }],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
-    expect(ctx.roles).toContain('platform_admin');
+    expect(ctx.positions).toContain('platform_admin');
   });
 
   it('does NOT derive platform_admin from an ORG-scoped admin_full_access grant', async () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1' }],
       sys_member: [],
-      sys_user_role: [],
+      sys_user_position: [],
       sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'psA', organization_id: 'o1' }],
       sys_permission_set: [{ id: 'psA', name: 'admin_full_access' }],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1', { org: 'o1' }) });
-    expect(ctx.roles).not.toContain('platform_admin');
+    expect(ctx.positions).not.toContain('platform_admin');
   });
 
   it('synthesizes ai_seat from sys_user.ai_access (sqlite integer 1)', async () => {
     const ql = makeQl({
       sys_user: [{ id: 'u1', ai_access: 1 }],
       sys_member: [],
-      sys_user_role: [],
+      sys_user_position: [],
       sys_user_permission_set: [],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });
@@ -105,7 +105,7 @@ describe('resolveAuthzContext — single source of truth', () => {
   it('anonymous (no session, no api key) → empty context', async () => {
     const ctx = await resolveAuthzContext({ ql: makeQl({}), headers: H(), getSession: async () => undefined });
     expect(ctx.userId).toBeUndefined();
-    expect(ctx.roles).toEqual([]);
+    expect(ctx.positions).toEqual([]);
     expect(ctx.permissions).toEqual([]);
   });
 });
@@ -137,7 +137,7 @@ describe('resolveAuthzContext — request-scoped read de-duplication (#2409)', (
     const ql = makeCountingQl({
       sys_user: [{ id: 'u1', email: 'ada@x.com', ai_access: 1 }],
       sys_member: [],
-      sys_user_role: [],
+      sys_user_position: [],
       sys_user_permission_set: [],
     });
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1') });

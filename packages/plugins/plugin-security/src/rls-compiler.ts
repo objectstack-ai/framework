@@ -18,7 +18,7 @@ interface RLSUserContext {
    * `organization_id` — see better-auth's organization plugin).
    */
   organization_id?: string;
-  roles?: string[];
+  positions?: string[];
   /**
    * IDs of all users that share the active organization with the
    * current user (incl. self). Pre-resolved by the runtime so RLS can
@@ -155,7 +155,7 @@ export class RLSCompiler {
     const userCtx: RLSUserContext = {
       id: executionContext?.userId,
       organization_id: executionContext?.tenantId,
-      roles: executionContext?.roles,
+      positions: executionContext?.positions,
       org_user_ids: (executionContext as any)?.org_user_ids,
       // Unique identifier — safe for ownership predicates (see RLSUserContext).
       email: (executionContext as any)?.email,

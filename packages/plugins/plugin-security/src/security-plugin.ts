@@ -3,9 +3,9 @@
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
-import { bootstrapDeclaredRoles } from './bootstrap-declared-roles.js';
+import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
-import { bootstrapBuiltinRoles } from './bootstrap-builtin-roles.js';
+import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { matchesFilterCondition } from '@objectstack/formula';
@@ -231,7 +231,7 @@ export class SecurityPlugin implements Plugin {
           group: 'group_access_control',
           priority: 100,
           items: [
-            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
+            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_position', icon: 'shield-check' },
             { id: 'nav_capabilities', type: 'object', label: 'Capabilities', objectName: 'sys_capability', icon: 'badge-check' },
             { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
           ],
@@ -411,7 +411,7 @@ export class SecurityPlugin implements Plugin {
       // the publish materializer pass straight through.
       await this.assertPackageManagedWriteGate(opCtx);
 
-      const roles = opCtx.context?.roles ?? [];
+      const roles = opCtx.context?.positions ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
       // Skip security checks if no roles AND no explicit permission sets
@@ -826,10 +826,10 @@ export class SecurityPlugin implements Plugin {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
-        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_role so they
+        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_position so they
         // stop being decorative (role→permission-set resolution + recipients).
         try {
-          await bootstrapDeclaredRoles(ql, this.metadata, { logger: ctx.logger });
+          await bootstrapDeclaredPositions(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
         }
@@ -1032,7 +1032,7 @@ export class SecurityPlugin implements Plugin {
   ): Promise<Record<string, unknown> | null | undefined> {
     // System operations bypass scoping (mirrors the middleware's isSystem skip).
     if (context?.isSystem) return undefined;
-    const roles = context?.roles ?? [];
+    const roles = context?.positions ?? [];
     const explicit = context?.permissions ?? [];
     // Unauthenticated + role-less + permission-less → no scope (the auth layer,
     // not RLS, gates anonymous access; the analytics REST endpoint already 401s
@@ -1067,7 +1067,7 @@ export class SecurityPlugin implements Plugin {
   private async resolvePermissionSetsForContext(
     context: any,
   ): Promise<PermissionSet[]> {
-    const roles = context?.roles ?? [];
+    const roles = context?.positions ?? [];
     const explicitPermissionSets = context?.permissions ?? [];
     const requested = [...roles, ...explicitPermissionSets];
     // Implicit baseline: an authenticated request that named no roles/perms
@@ -1084,7 +1084,7 @@ export class SecurityPlugin implements Plugin {
       { logger: this.logger },
     );
     // Post-resolution fallback — closes the fail-open hole where a populated
-    // `roles` array maps to no permission set yet (no sys_role binding), which
+    // `roles` array maps to no permission set yet (no sys_position binding), which
     // would otherwise skip RLS entirely and expose every tenant's data.
     if (
       permissionSets.length === 0 &&

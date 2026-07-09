@@ -32,7 +32,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           user: "user",
           group: "group",
           role: "role",
-          role_and_subordinates: "role_and_subordinates",
+          unit_and_subordinates: "unit_and_subordinates",
           guest: "guest"
         }
       },

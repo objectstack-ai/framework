@@ -123,7 +123,7 @@ export interface MetadataStats {
   workflows: number;
   agents: number;
   apis: number;
-  roles: number;
+  positions: number;
   permissions: number;
   themes: number;
   datasources: number;
@@ -163,7 +163,7 @@ export function collectMetadataStats(config: any): MetadataStats {
     workflows: count(config.workflows),
     agents: count(config.agents),
     apis: count(config.apis),
-    roles: count(config.roles),
+    positions: count(config.positions),
     permissions: count(config.permissions),
     themes: count(config.themes),
     datasources: count(config.datasources),
@@ -268,7 +268,7 @@ export function printMetadataStats(stats: MetadataStats) {
     {
       label: 'Security',
       items: [
-        ['Roles', stats.roles],
+        ['Positions', stats.positions],
         ['Permissions', stats.permissions],
       ],
     },

@@ -123,7 +123,7 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   profile: {
     status: 'demonstrated',
     files: ['src/security/index.ts'],
-    notes: 'MemberDefaultProfile — a permission set with isProfile: true (ADR-0056 D7).',
+    notes: 'MemberDefault — the isDefault permission set (ADR-0090 D5 suggestion flag).',
   },
   role: { status: 'demonstrated', files: ['src/security/index.ts'] },
 

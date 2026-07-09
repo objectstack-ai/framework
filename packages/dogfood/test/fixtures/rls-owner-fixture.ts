@@ -78,7 +78,6 @@ const noteCrud = {
 export const ownerScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RLS Fixture Member — owner-scoped (all ops)',
-  isProfile: true,
   objects: noteCrud,
   rowLevelSecurity: [RLS.ownerPolicy('rls_note', 'created_by')],
 });
@@ -93,7 +92,6 @@ export const ownerScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
 export const readOnlyScopedMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RLS Fixture Member — owner-scoped reads only (#1994 hole)',
-  isProfile: true,
   objects: noteCrud,
   rowLevelSecurity: [{ ...RLS.ownerPolicy('rls_note', 'created_by'), operation: 'select' }],
 });

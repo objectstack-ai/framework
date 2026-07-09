@@ -9,17 +9,17 @@
 import type { TranslationData } from '@objectstack/spec/system';
 
 export const jaJPObjects: NonNullable<TranslationData['objects']> = {
-  sys_role: {
-    label: "ロール",
-    pluralLabel: "ロール",
-    description: "RBAC アクセス制御のためのロール定義",
+  sys_position: {
+    label: "ポジション",
+    pluralLabel: "ポジション",
+    description: "RBAC アクセス制御のためのポジション定義",
     fields: {
       label: {
         label: "表示名"
       },
       name: {
         label: "API 名",
-        help: "ロールの一意の機械名（例: admin、editor、viewer）"
+        help: "ポジションの一意の機械名（例: admin、editor、viewer）"
       },
       description: {
         label: "説明"
@@ -32,11 +32,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "有効"
       },
       is_default: {
-        label: "デフォルトロール",
+        label: "デフォルトポジション",
         help: "新規ユーザーに自動的に割り当てられます"
       },
       id: {
-        label: "ロール ID"
+        label: "ポジション ID"
       },
       created_at: {
         label: "作成日時"
@@ -49,34 +49,34 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       active: {
         label: "有効"
       },
-      default_roles: {
+      default_positions: {
         label: "デフォルト"
       },
       custom: {
         label: "カスタム"
       },
-      all_roles: {
+      all_positions: {
         label: "すべて"
       }
     },
     _actions: {
-      activate_role: {
-        label: "ロールを有効化",
-        successMessage: "ロールが有効化されました"
+      activate_position: {
+        label: "ポジションを有効化",
+        successMessage: "ポジションが有効化されました"
       },
-      deactivate_role: {
-        label: "ロールを無効化",
-        confirmText: "このロールを無効化しますか？このロールを持つユーザーの割り当ては維持されますが、再度有効化するまで権限の付与は停止されます。",
-        successMessage: "ロールが無効化されました"
+      deactivate_position: {
+        label: "ポジションを無効化",
+        confirmText: "このポジションを無効化しますか？このポジションを持つユーザーの割り当ては維持されますが、再度有効化するまで権限の付与は停止されます。",
+        successMessage: "ポジションが無効化されました"
       },
-      set_default_role: {
+      set_default_position: {
         label: "デフォルトに設定",
-        confirmText: "このロールを新規ユーザーのデフォルトロールにしますか？既存のユーザーには影響しません。",
-        successMessage: "デフォルトロールを更新しました"
+        confirmText: "このポジションを新規ユーザーのデフォルトポジションにしますか？既存のユーザーには影響しません。",
+        successMessage: "デフォルトポジションを更新しました"
       },
-      clone_role: {
-        label: "ロールを複製",
-        successMessage: "ロールを複製しました"
+      clone_position: {
+        label: "ポジションを複製",
+        successMessage: "ポジションを複製しました"
       }
     }
   },
@@ -188,18 +188,18 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_role_permission_set: {
-    label: "ロール権限セット",
-    pluralLabel: "ロール権限セット",
-    description: "権限セットをロールにバインドします。",
+  sys_position_permission_set: {
+    label: "ポジション権限セット",
+    pluralLabel: "ポジション権限セット",
+    description: "権限セットをポジションにバインドします。",
     fields: {
       id: {
         label: "バインド ID",
-        help: "ロール権限セットバインドの UUID。"
+        help: "ポジション権限セットバインドの UUID。"
       },
-      role_id: {
-        label: "ロール",
-        help: "sys_role への外部キー。"
+      position_id: {
+        label: "ポジション",
+        help: "sys_position への外部キー。"
       },
       permission_set_id: {
         label: "権限セット",

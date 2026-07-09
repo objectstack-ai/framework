@@ -1192,13 +1192,12 @@ export default class Serve extends Command {
 
             // Collect application-defined org roles from the stack so
             // Better-Auth's organization plugin accepts invitations to
-            // those roles (otherwise it 400s with `ROLE_NOT_FOUND`).
-            // Sources:
-            //   - top-level `roles[]` (role hierarchy entries)
-            //   - `permissions[]` PermissionSets where `isProfile === true`
-            //     (these double as role identifiers; e.g. CRM Profiles)
-            // Real RBAC enforcement is still owned by SecurityPlugin, which
-            // matches these names against `permission` metadata entries.
+            // those names (otherwise it 400s with `ROLE_NOT_FOUND`).
+            // better-auth boundary: its API keeps the word "roles"
+            // (ADR-0090 D3 exception). Sources:
+            //   - top-level `positions[]` (flat distribution groups)
+            //   - `permissions[]` PermissionSet names
+            // Real RBAC enforcement is still owned by SecurityPlugin.
             const additionalOrgRoles = new Set<string>();
             try {
               const stackAny: any = config ?? {};
@@ -1209,10 +1208,10 @@ export default class Serve extends Command {
                   if (n && n !== 'owner' && n !== 'admin' && n !== 'member') additionalOrgRoles.add(n);
                 }
               };
-              collect(stackAny.roles);
+              collect(stackAny.positions);
               if (Array.isArray(stackAny.permissions)) {
                 for (const p of stackAny.permissions) {
-                  if (p && typeof p.name === 'string' && p.isProfile !== false) {
+                  if (p && typeof p.name === 'string') {
                     if (p.name !== 'owner' && p.name !== 'admin' && p.name !== 'member') additionalOrgRoles.add(p.name);
                   }
                 }
@@ -1301,13 +1300,13 @@ export default class Serve extends Command {
             // Pair: SecurityPlugin (RBAC) — optional
             try {
               const securityPkg = '@objectstack/plugin-security';
-              const { SecurityPlugin, appDefaultProfileName } = await import(/* webpackIgnore: true */ securityPkg);
+              const { SecurityPlugin, appDefaultPermissionSetName } = await import(/* webpackIgnore: true */ securityPkg);
               // ADR-0056 D7 — honor an app-declared default profile. A stack
-              // permission set marked `isProfile && isDefault` becomes the
+              // permission set marked `isDefault` becomes the
               // fallback for users with no explicit grants. The SecurityPlugin's
               // own scan only sees its built-in sets, so the CLI passes the
               // declared name through explicitly (undefined → built-in default).
-              const appDefaultProfile = appDefaultProfileName((config as any)?.permissions);
+              const appDefaultProfile = appDefaultPermissionSetName((config as any)?.permissions);
               await kernel.use(new SecurityPlugin(appDefaultProfile ? { fallbackPermissionSet: appDefaultProfile } : undefined));
               trackPlugin('Security');
             } catch {

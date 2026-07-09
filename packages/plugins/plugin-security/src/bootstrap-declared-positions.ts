@@ -1,20 +1,20 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * bootstrapDeclaredRoles — seed stack-declared `roles` into `sys_role`
+ * bootstrapDeclaredPositions — seed stack-declared `roles` into `sys_position`
  * (ADR-0057 D6, closes #2077).
  *
- * Reads the validated `role` metadata (registered from the stack's `roles: []`
- * via `metadataService.list('role')`) and idempotently upserts each into
- * `sys_role` by `name`, so the runtime role→permission-set resolution
- * (`resolveExecutionContext` → `sys_role` → `sys_role_permission_set`) and
+ * Reads the validated `role` metadata (registered from the stack's `positions: []`
+ * via `metadataService.list('position')`) and idempotently upserts each into
+ * `sys_position` by `name`, so the runtime role→permission-set resolution
+ * (`resolveExecutionContext` → `sys_position` → `sys_position_permission_set`) and
  * sharing-rule role recipients stop being decorative. Runs on `kernel:ready`
  * alongside the platform-admin bootstrap.
  *
  * Pre-launch posture (ADR-0057): upsert only — no prune. Role visibility
  * HIERARCHY is NOT seeded here: per ADR-0057 D5 the role is a capability
  * bundle, and "manager sees subordinates" lives on the `sys_business_unit`
- * tree, not `sys_role.parent`.
+ * tree, not `sys_position.parent`.
  */
 
 const SYSTEM_CTX = { isSystem: true };
@@ -58,7 +58,7 @@ function readDeclared(engine: any, type: string): any[] {
   return [];
 }
 
-export async function bootstrapDeclaredRoles(
+export async function bootstrapDeclaredPositions(
   ql: any,
   metadataService: any,
   options: SeedOptions = {},
@@ -66,30 +66,30 @@ export async function bootstrapDeclaredRoles(
   if (!ql || typeof ql.find !== 'function' || typeof ql.insert !== 'function') {
     return { seeded: 0, updated: 0 };
   }
-  let roles: any[] = readDeclared(ql, 'role');
-  if (roles.length === 0) {
+  let positions: any[] = readDeclared(ql, 'position');
+  if (positions.length === 0) {
     try {
-      const listed = metadataService?.list?.('role');
-      roles = typeof (listed as any)?.then === 'function' ? await listed : (listed ?? []);
-    } catch { roles = []; }
+      const listed = metadataService?.list?.('position');
+      positions = typeof (listed as any)?.then === 'function' ? await listed : (listed ?? []);
+    } catch { positions = []; }
   }
-  if (!Array.isArray(roles) || roles.length === 0) return { seeded: 0, updated: 0 };
+  if (!Array.isArray(positions) || positions.length === 0) return { seeded: 0, updated: 0 };
 
   let seeded = 0;
   let updated = 0;
-  for (const r of roles) {
+  for (const r of positions) {
     if (!r?.name) continue;
     const fields = { label: r.label ?? r.name, description: r.description ?? null };
-    const existing = await tryFind(ql, 'sys_role', { name: r.name }, 1);
+    const existing = await tryFind(ql, 'sys_position', { name: r.name }, 1);
     if (existing[0]?.id) {
-      if (await tryUpdate(ql, 'sys_role', { id: existing[0].id, ...fields })) updated += 1;
+      if (await tryUpdate(ql, 'sys_position', { id: existing[0].id, ...fields })) updated += 1;
     } else {
-      const created = await tryInsert(ql, 'sys_role', {
-        id: genId('role'), name: r.name, ...fields, active: true, is_default: false,
+      const created = await tryInsert(ql, 'sys_position', {
+        id: genId('position'), name: r.name, ...fields, active: true, is_default: false,
       });
       if (created) seeded += 1;
     }
   }
-  options.logger?.info?.('[security] declared roles seeded into sys_role', { seeded, updated, total: roles.length });
+  options.logger?.info?.('[security] declared positions seeded into sys_position', { seeded, updated, total: positions.length });
   return { seeded, updated };
 }

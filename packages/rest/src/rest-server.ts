@@ -1360,7 +1360,7 @@ export class RestServer {
             // shared resolver (`resolveAuthzContext`, @objectstack/core) — the same one
             // the runtime dispatcher uses, so the REST and dispatcher entry points can
             // never drift on authorization. (This path previously kept its own copy that
-            // silently omitted sys_user_role / sys_role_permission_set / platform_admin /
+            // silently omitted sys_user_position / sys_position_permission_set / platform_admin /
             // ai_seat — see the resolver's module doc.)
             const getSession = async (h: any) => {
                 try { return await api.getSession({ headers: h }); } catch { return undefined; }
@@ -1394,7 +1394,7 @@ export class RestServer {
                 userId: authz.userId,
                 tenantId: authz.tenantId,
                 email: authz.email,
-                roles: authz.roles,
+                positions: authz.positions,
                 permissions: authz.permissions,
                 systemPermissions: authz.systemPermissions,
                 ...(authz.tabPermissions ? { tabPermissions: authz.tabPermissions } : {}),

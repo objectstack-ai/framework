@@ -979,7 +979,7 @@ export class AuthPlugin implements Plugin {
         const u: any = session.user;
         const isAdmin =
           u?.isPlatformAdmin === true ||
-          (Array.isArray(u?.roles) && u.roles.includes('platform_admin')) ||
+          (Array.isArray(u?.positions) && u.positions.includes('platform_admin')) ||
           u?.role === 'admin';
         if (!isAdmin) {
           return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);
@@ -1084,7 +1084,7 @@ export class AuthPlugin implements Plugin {
         const u: any = session.user;
         const isAdmin =
           u?.isPlatformAdmin === true ||
-          (Array.isArray(u?.roles) && u.roles.includes('platform_admin')) ||
+          (Array.isArray(u?.positions) && u.positions.includes('platform_admin')) ||
           u?.role === 'admin';
         if (!isAdmin) {
           return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
 // ADR-0056 — `read` (public-read) OWD proof on the REAL showcase app.
-// `showcase_announcement` declares `sharingModel: 'read'` and nothing else: every
+// `showcase_announcement` declares `sharingModel: 'public_read'` and nothing else: every
 // member READS every announcement, but only the OWNER may edit/delete it — derived
 // from the OWD baseline + auto-stamped `owner_id`, no RLS authored. This is the
 // sibling of the `private` proof: same owner-write protection, but rows are

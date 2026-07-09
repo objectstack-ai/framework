@@ -13,7 +13,7 @@ import type {
 import type { SharingEngine } from './sharing-service.js';
 
 /** Service-elevated context for the plugin's own queries / mutations. */
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /** URL-safe alphabet (RFC 4648 base64url minus padding). 64 symbols. */
 const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';

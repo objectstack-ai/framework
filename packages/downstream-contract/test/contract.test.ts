@@ -5,7 +5,7 @@ import { ActionSchema, ReportSchema, PageSchema, ThemeSchema } from '@objectstac
 import { DatasourceSchema, MappingSchema, CubeSchema, ObjectExtensionSchema } from '@objectstack/spec/data';
 import { ConnectorSchema } from '@objectstack/spec/integration';
 import { SharingRuleSchema, PermissionSetSchema } from '@objectstack/spec/security';
-import { RoleSchema } from '@objectstack/spec/identity';
+import { PositionSchema } from '@objectstack/spec/identity';
 import { EmailTemplateDefinitionSchema, TranslationBundleSchema } from '@objectstack/spec/system';
 import { WebhookSchema } from '@objectstack/spec/automation';
 import { LogCallAction } from '../src/log-call.action.js';
@@ -36,7 +36,7 @@ describe('downstream consumer contract (#2035)', () => {
     ['Datasource', DatasourceSchema, more.DcDatasource],
     ['Connector', ConnectorSchema, more.DcConnector],
     ['SharingRule', SharingRuleSchema, more.DcSharingRule],
-    ['Role', RoleSchema, more.DcRole],
+    ['Role', PositionSchema, more.DcRole],
     ['PermissionSet', PermissionSetSchema, more.DcPermissionSet],
     ['EmailTemplateDefinition', EmailTemplateDefinitionSchema, more.DcEmail],
     ['Webhook', WebhookSchema, more.DcWebhook],

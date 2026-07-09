@@ -639,8 +639,8 @@ priority, items }`) and an optional `navigationContributions` field on the
     `i18n.loadTranslations` (the i18n service is optional — load is best-effort).
     - `plugin-webhooks` ← `sys_webhook`, `sys_webhook_delivery`
     - `plugin-approvals` ← `sys_approval_request`, `sys_approval_action`
-    - `plugin-security` ← `sys_role`, `sys_permission_set`,
-      `sys_user_permission_set`, `sys_role_permission_set`
+    - `plugin-security` ← `sys_position`, `sys_permission_set`,
+      `sys_user_permission_set`, `sys_position_permission_set`
     - `plugin-sharing` ← `sys_record_share`, `sys_sharing_rule`, `sys_share_link`
   - `@objectstack/platform-objects` translation bundles are regenerated to drop
     those objects' keys (its extract config already excluded them); all other

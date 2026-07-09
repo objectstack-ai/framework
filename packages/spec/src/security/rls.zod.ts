@@ -152,7 +152,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   // The runtime resolves the manager's reports into
  *   // ExecutionContext.rlsMembership.team_member_ids — no subquery needed.
  *   using: 'assigned_to_id in current_user.team_member_ids',
- *   roles: ['manager', 'director'],
+ *   positions: ['manager', 'director'],
  *   enabled: true
  * }
  * ```
@@ -179,7 +179,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   // The runtime stages the rep's territory accounts in
  *   // ExecutionContext.rlsMembership.territory_account_ids.
  *   using: 'id in current_user.territory_account_ids',
- *   roles: ['sales_rep'],
+ *   positions: ['sales_rep'],
  *   enabled: true
  * }
  * ```
@@ -204,7 +204,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  *   object: 'account',
  *   operation: 'all',
  *   using: '1 == 1', // Always true - see everything
- *   roles: ['ceo', 'cfo', 'cto'],
+ *   positions: ['ceo', 'cfo', 'cto'],
  *   enabled: true
  * }
  * ```
@@ -304,7 +304,7 @@ export const RowLevelSecurityPolicySchema = lazySchema(() => z.object({
    * execution context (camelCase fields map to snake_case placeholders):
    * - `current_user.id` → `ExecutionContext.userId`
    * - `current_user.organization_id` → `ExecutionContext.tenantId`
-   * - `current_user.roles` → `ExecutionContext.roles` (array)
+   * - `current_user.positions` → `ExecutionContext.positions` (array)
    * - `current_user.org_user_ids` → ids of fellow members of the active org
    * - any key the runtime stages in `ExecutionContext.rlsMembership`
    *
@@ -355,19 +355,19 @@ export const RowLevelSecurityPolicySchema = lazySchema(() => z.object({
     .describe('Validation condition for INSERT/UPDATE (defaults to USING clause if not specified - enforced at application level)'),
 
   /**
-   * Restrict this policy to specific roles.
-   * If specified, only users with these roles will have this policy applied.
-   * If omitted, policy applies to all users (except those with bypassRLS permission).
-   * 
-   * Role names must match defined roles in the system.
-   * 
+   * Restrict this policy to specific positions (ADR-0090 D3; formerly
+   * `roles`). If specified, only users holding one of these positions have
+   * this policy applied. If omitted, the policy applies to all users
+   * (except those with bypassRLS permission).
+   *
+   * Position names must match defined positions in the system.
+   *
    * @example ["sales_rep", "account_manager"]
    * @example ["employee"] - Apply to all employees
-   * @example ["guest"] - Special restrictions for guests
    */
-  roles: z.array(z.string())
+  positions: z.array(z.string())
     .optional()
-    .describe('Roles this policy applies to (omit for all roles)'),
+    .describe('Positions this policy applies to (omit for all)'),
 
   /**
    * Whether this policy is currently active.
@@ -573,27 +573,27 @@ export const RLS = {
   /**
    * Create a role-based policy
    */
-  rolePolicy: (object: string, roles: string[], condition: string): RowLevelSecurityPolicy => ({
-    name: `${object}_${roles.join('_')}_access`,
-    label: `${roles.join(', ')} Access for ${object}`,
+  positionPolicy: (object: string, positions: string[], condition: string): RowLevelSecurityPolicy => ({
+    name: `${object}_${positions.join('_')}_access`,
+    label: `${positions.join(', ')} Access for ${object}`,
     object,
     operation: 'select',
     using: condition,
-    roles,
+    positions,
     enabled: true,
     priority: 0,
   }),
 
   /**
-   * Create a permissive policy (allow all for specific roles)
+   * Create a permissive policy (allow all for specific positions)
    */
-  allowAllPolicy: (object: string, roles: string[]): RowLevelSecurityPolicy => ({
-    name: `${object}_${roles.join('_')}_full_access`,
-    label: `Full Access for ${roles.join(', ')}`,
+  allowAllPolicy: (object: string, positions: string[]): RowLevelSecurityPolicy => ({
+    name: `${object}_${positions.join('_')}_full_access`,
+    label: `Full Access for ${positions.join(', ')}`,
     object,
     operation: 'all',
     using: '1 == 1', // Always true
-    roles,
+    positions,
     enabled: true,
     priority: 0,
   }),

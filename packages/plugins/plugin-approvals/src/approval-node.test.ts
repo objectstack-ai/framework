@@ -5,7 +5,7 @@ import { AutomationEngine } from '@objectstack/service-automation';
 import { ApprovalService } from './approval-service.js';
 import { registerApprovalNode } from './approval-node.js';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as any;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as any;
 
 const noopLogger = {
   info() {}, warn() {}, error() {}, debug() {},
@@ -190,7 +190,7 @@ describe('Approval node bridge (ADR-0019)', () => {
     const request = (await fake.find('sys_approval_request', { where: { status: 'pending' } }))[0];
 
     await expect(
-      service.decideNode(request.id, { decision: 'approve', actorId: 'intruder' }, { isSystem: false, roles: [], permissions: [] } as any),
+      service.decideNode(request.id, { decision: 'approve', actorId: 'intruder' }, { isSystem: false, positions: [], permissions: [] } as any),
     ).rejects.toThrow(/FORBIDDEN/);
   });
 });

@@ -20,8 +20,8 @@ describe('celEngine', () => {
   });
 
   it('exposes os.* namespace from EvalContext', () => {
-    const r = celEngine.evaluate(cel('os.user.role == "manager"'), {
-      user: { id: 'u1', role: 'manager' },
+    const r = celEngine.evaluate(cel('"manager" in os.user.positions'), {
+      user: { id: 'u1', positions: ['manager'] },
     });
     expect(r).toEqual({ ok: true, value: true });
   });

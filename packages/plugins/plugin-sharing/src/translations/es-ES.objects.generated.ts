@@ -32,7 +32,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           user: "Usuario",
           group: "Grupo",
           role: "Rol",
-          role_and_subordinates: "Rol y subordinados",
+          unit_and_subordinates: "Rol y subordinados",
           guest: "Invitado"
         }
       },

@@ -19,7 +19,6 @@ import { PermissionSetSchema } from '@objectstack/spec/security';
 const demoDefault = PermissionSetSchema.parse({
   name: 'showcase_demo_default',
   label: 'Demo Default Profile',
-  isProfile: true,
   isDefault: true, // ← the D7 marker: this is the fallback for unprovisioned users
   objects: {
     showcase_announcement: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },

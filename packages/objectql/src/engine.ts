@@ -111,7 +111,7 @@ function applyFormulaPlan(
   if (!plan.length) return;
   const now = nowSnapshot ?? new Date();
   const timezone = execCtx?.timezone;
-  const user = execCtx?.userId ? { id: String(execCtx.userId), role: execCtx?.roles?.[0] } : undefined;
+  const user = execCtx?.userId ? { id: String(execCtx.userId), positions: execCtx?.positions ?? [] } : undefined;
   const org = execCtx?.tenantId ? { id: String(execCtx.tenantId) } : undefined;
   for (const rec of records) {
     if (rec == null) continue;
@@ -685,7 +685,7 @@ export class ObjectQL implements IDataEngine {
     return {
       userId: execCtx.userId,
       tenantId: execCtx.tenantId,
-      roles: execCtx.roles,
+      positions: execCtx.positions,
       accessToken: execCtx.accessToken,
       // Propagate system-elevated flag so hooks can distinguish engine
       // self-writes (e.g. approval status mirror) from genuine user writes.
@@ -701,15 +701,15 @@ export class ObjectQL implements IDataEngine {
    * Build the acting-user object (ADR-0068 EvalUser shape) surfaced to
    * validation-time predicates as `current_user` — notably per-option
    * `visibleWhen` authorization gating (objectui#2284). Returns undefined for
-   * system / unauthenticated writes, where role predicates then fail-open.
+   * system / unauthenticated writes, where membership predicates then fail-open.
    */
   private buildEvalUser(
     execCtx?: ExecutionContext,
-  ): { id: string; roles: string[]; organizationId: string | null } | undefined {
+  ): { id: string; positions: string[]; organizationId: string | null } | undefined {
     if (!execCtx || execCtx.userId == null) return undefined;
     return {
       id: String(execCtx.userId),
-      roles: execCtx.roles ?? [],
+      positions: execCtx.positions ?? [],
       organizationId: execCtx.tenantId != null ? String(execCtx.tenantId) : null,
     };
   }
@@ -806,7 +806,7 @@ export class ObjectQL implements IDataEngine {
         const result = ExpressionEngine.evaluate(dv as any, {
           now,
           timezone: execCtx?.timezone,
-          user: execCtx?.userId ? { id: String(execCtx.userId), role: execCtx?.roles?.[0] } : undefined,
+          user: execCtx?.userId ? { id: String(execCtx.userId), positions: execCtx?.positions ?? [] } : undefined,
           org: execCtx?.tenantId ? { id: String(execCtx.tenantId) } : undefined,
           record: out,
           extra: { object },
@@ -3169,7 +3169,7 @@ export class ObjectRepository {
         ...params,
         userId: this.context.userId,
         tenantId: this.context.tenantId,
-        roles: this.context.roles,
+        roles: this.context.positions,
       });
     }
     throw new Error(`Actions not supported by engine`);
@@ -3312,7 +3312,7 @@ export class ScopedContext {
   get tenantId() { return this.executionContext.tenantId; }
   /** Alias for tenantId — matches ObjectQLContext.spaceId convention */
   get spaceId() { return this.executionContext.tenantId; }
-  get roles() { return this.executionContext.roles; }
+  get roles() { return this.executionContext.positions; }
   get isSystem() { return this.executionContext.isSystem; }
 
   /** Internal: expose the transaction handle for driver-level access */

@@ -23,7 +23,7 @@ function makeContext(overrides: any = {}) {
     }),
     response: {},
     environmentId: undefined,
-    executionContext: { userId: 'u1', isSystem: false, roles: [], permissions: [] },
+    executionContext: { userId: 'u1', isSystem: false, positions: [], permissions: [] },
     ...overrides,
   };
 }

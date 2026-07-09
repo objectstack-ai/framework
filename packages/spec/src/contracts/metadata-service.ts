@@ -326,7 +326,7 @@ export interface IMetadataService {
     getEffective?(type: string, name: string, context?: {
         userId?: string;
         tenantId?: string;
-        roles?: string[];
+        positions?: string[];
         permissions?: string[];
     }): Promise<unknown | undefined>;
 

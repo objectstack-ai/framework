@@ -114,7 +114,7 @@ describe('KnowledgeService — permission-aware search', () => {
       { chunkId: 'c1', documentId: 'd1', sourceId: 's1', sourceRecordId: 'rec_1', score: 0.9, snippet: '' },
     ];
     const { svc, findSpy } = buildSetup(hits);
-    const out = await svc.search('q', { executionContext: { roles: [], permissions: [], isSystem: true } });
+    const out = await svc.search('q', { executionContext: { positions: [], permissions: [], isSystem: true } });
     expect(out).toHaveLength(1);
     expect(findSpy).not.toHaveBeenCalled();
   });
@@ -149,7 +149,7 @@ describe('KnowledgeService — permission-aware search', () => {
       source: { kind: 'http', urls: ['https://x.test'] } as KnowledgeSource['source'],
     });
     const out = await svc.search('q', {
-      executionContext: { userId: 'u1', roles: [], permissions: [], isSystem: false },
+      executionContext: { userId: 'u1', positions: [], permissions: [], isSystem: false },
     });
     expect(out).toHaveLength(1);
   });
@@ -169,7 +169,7 @@ describe('KnowledgeService — permission-aware search', () => {
       id: 'http', label: 'HTTP', adapter: 'memory',
       source: { kind: 'http', urls: ['https://x.test'] } as KnowledgeSource['source'],
     });
-    const out = await svc.search('q', { executionContext: { userId: 'u', roles: [], permissions: [], isSystem: false } });
+    const out = await svc.search('q', { executionContext: { userId: 'u', positions: [], permissions: [], isSystem: false } });
     expect(out.map((h) => h.documentId)).toEqual(['d2']);
   });
 

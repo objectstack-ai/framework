@@ -136,7 +136,6 @@ const FIXTURE_MEMBER_SET = 'runas_fixture_member';
 export const runasMemberSet: PermissionSet = PermissionSetSchema.parse({
   name: FIXTURE_MEMBER_SET,
   label: 'RunAs Fixture Member — owner-scoped (all ops)',
-  isProfile: true,
   objects: {
     runas_note: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
   },

@@ -127,7 +127,7 @@ describe('resolveExecutionContext — API key verify path', () => {
     const ctx = await resolveExecutionContext(makeOpts([], {}));
     expect(ctx.userId).toBeUndefined();
     expect(ctx.isSystem).toBe(false);
-    expect(ctx.roles).toEqual([]);
+    expect(ctx.positions).toEqual([]);
     expect(ctx.permissions).toEqual([]);
   });
 
@@ -293,9 +293,9 @@ describe('resolveExecutionContext — platform-scoped (null-org) grants (ADR-006
         { id: 'ps_admin', name: 'admin_full_access', system_permissions: '["manage_platform_settings","manage_users"]', object_permissions: '{}' },
         { id: 'ps_other', name: 'other_org_set', system_permissions: '["should_not_appear"]', object_permissions: '{}' },
       ],
-      sys_role: [],
-      sys_role_permission_set: [],
-      sys_user_role: [],
+      sys_position: [],
+      sys_position_permission_set: [],
+      sys_user_position: [],
     };
     return {
       async find(object, opts) {

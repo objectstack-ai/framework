@@ -101,7 +101,7 @@ describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
       expect(c.ctx, `${c.op} got no context`).toBeTruthy();
       expect(c.ctx.isSystem, `${c.op} wrongly elevated`).toBe(false);
       expect(c.ctx.userId, `${c.op} lost the user identity`).toBe('u1');
-      expect(c.ctx.roles).toEqual(['sales']);
+      expect(c.ctx.positions).toEqual(['sales']);
       expect(c.ctx.tenantId).toBe('org1');
     }
   });
@@ -178,7 +178,7 @@ describe('flow.runAs identity enforcement at the data layer (#1888)', () => {
 describe('resolveRunDataContext (#1888 unit)', () => {
   it("maps runAs:'system' to an elevated context", () => {
     expect(resolveRunDataContext({ runAs: 'system', userId: 'u1' })).toEqual({
-      isSystem: true, roles: [], permissions: [],
+      isSystem: true, positions: [], permissions: [],
     });
   });
 

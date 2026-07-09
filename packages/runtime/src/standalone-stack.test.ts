@@ -4,7 +4,7 @@
 // booting from `dist/objectstack.json`, no host `objectstack.config.ts`) must
 // surface the artifact's app-declared RBAC — `permissions[]` and `roles[]` — at
 // the top level of the returned stack config. The CLI reads `config.permissions`
-// to honour an app-declared default profile (ADR-0056 D7 — `appDefaultProfileName`
+// to honour an app-declared default profile (ADR-0056 D7 — `appDefaultPermissionSetName`
 // → SecurityPlugin `fallbackPermissionSet`) and reads `roles[]`/`permissions[]`
 // to register app org roles. Before this was fixed, `createStandaloneStack`
 // surfaced `objects`/`requires`/`manifest` but dropped `permissions`/`roles`, so
@@ -34,7 +34,6 @@ const ARTIFACT = {
     {
       name: 'app_member_default',
       label: 'App Member (Default)',
-      isProfile: true,
       isDefault: true,
       objects: {
         note: { allowRead: true, allowCreate: true, readScope: 'unit_and_below', writeScope: 'unit' },
@@ -43,21 +42,20 @@ const ARTIFACT = {
     {
       name: 'app_contributor',
       label: 'Contributor add-on',
-      isProfile: false,
       objects: { note: { allowEdit: true } },
     },
   ],
 };
 
-// Mirrors `appDefaultProfileName` from @objectstack/plugin-security (not a
+// Mirrors `appDefaultPermissionSetName` from @objectstack/plugin-security (not a
 // runtime dependency, so the resolution rule is reproduced here): the first
-// `isDefault && isProfile !== false` permission set's name.
-function appDefaultProfileName(permissions: unknown): string | undefined {
+// first `isDefault` permission set's name (ADR-0090 D5).
+function appDefaultPermissionSetName(permissions: unknown): string | undefined {
   if (!Array.isArray(permissions)) return undefined;
   for (const p of permissions) {
     if (p && typeof p === 'object') {
-      const ps = p as { name?: unknown; isProfile?: unknown; isDefault?: unknown };
-      if (ps.isDefault === true && ps.isProfile !== false && typeof ps.name === 'string' && ps.name.length > 0) {
+      const ps = p as { name?: unknown; isDefault?: unknown };
+      if (ps.isDefault === true && typeof ps.name === 'string' && ps.name.length > 0) {
         return ps.name;
       }
     }
@@ -104,11 +102,11 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
     expect(result.manifest?.id).toBe('com.test.scope-app');
   });
 
-  it('the surfaced config drives appDefaultProfileName → the app profile (the exact CLI wiring)', () => {
+  it('the surfaced config drives appDefaultPermissionSetName → the app profile (the exact CLI wiring)', () => {
     // Reproduce serve.ts: `config = { ...originalConfig, ...standaloneStack }`,
-    // then `appDefaultProfileName(config.permissions)` → SecurityPlugin fallback.
+    // then `appDefaultPermissionSetName(config.permissions)` → SecurityPlugin fallback.
     const config: any = { ...{}, ...result };
-    expect(appDefaultProfileName(config.permissions)).toBe('app_member_default');
+    expect(appDefaultPermissionSetName(config.permissions)).toBe('app_member_default');
   });
 
   it('createDefaultHostConfig (the actual serve artifact-fallback) surfaces the same', async () => {
@@ -117,7 +115,7 @@ describe('createStandaloneStack — surfaces app RBAC from the artifact (ADR-005
       artifactPath,
       databaseUrl: 'memory://standalone-rbac',
     });
-    expect(appDefaultProfileName(r.permissions)).toBe('app_member_default');
+    expect(appDefaultPermissionSetName(r.permissions)).toBe('app_member_default');
     expect(r.roles!.map((x: any) => x.name).sort()).toEqual(['contributor', 'manager']);
   }, BOOT_TIMEOUT);
 });

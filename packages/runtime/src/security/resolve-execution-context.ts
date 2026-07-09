@@ -7,16 +7,16 @@
  * (`resolveAuthzContext` in `@objectstack/core/security`). This function only
  * does the transport-specific plumbing — pull `ql` and the better-auth session
  * getter out of the active kernel/scope — then delegates ALL identity +
- * role/permission/RLS aggregation to the shared resolver, and layers the
+ * position/permission/RLS aggregation to the shared resolver, and layers the
  * reference localization (timezone/locale) on top.
  *
- * The actual table reads (`sys_member` / `sys_user_role` /
+ * The actual table reads (`sys_member` / `sys_user_position` /
  * `sys_*_permission_set`), the platform-admin derivation and the `ai_seat`
  * synthesis live in ONE place now (`@objectstack/core`), shared with the REST
  * server, so the two entry points can never drift on authorization again.
  *
  * Always resolves — never throws. Anonymous requests yield
- * `{ isSystem: false, roles: [], permissions: [] }`.
+ * `{ isSystem: false, positions: [], permissions: [] }`.
  */
 
 import type { ExecutionContext } from '@objectstack/spec/kernel';
@@ -77,7 +77,7 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   const authz = await resolveAuthzContext({ ql, headers, getSession });
 
   const ctx: ExecutionContext = {
-    roles: authz.roles,
+    positions: authz.positions,
     permissions: authz.permissions,
     systemPermissions: authz.systemPermissions,
     isSystem: false,

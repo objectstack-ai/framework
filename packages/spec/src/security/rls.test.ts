@@ -48,7 +48,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         operation: 'select',
         using: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)',
         check: 'assigned_to_id IN (SELECT id FROM users WHERE manager_id = current_user.id)',
-        roles: ['manager', 'director'],
+        positions: ['manager', 'director'],
         enabled: true,
         priority: 10,
         tags: ['team_access', 'hierarchy'],
@@ -148,11 +148,11 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'opportunity',
         operation: 'select',
         using: 'region = current_user.region',
-        roles: ['sales_rep', 'sales_manager'],
+        positions: ['sales_rep', 'sales_manager'],
       };
 
       const result = RowLevelSecurityPolicySchema.parse(policy);
-      expect(result.roles).toEqual(['sales_rep', 'sales_manager']);
+      expect(result.positions).toEqual(['sales_rep', 'sales_manager']);
     });
 
     it('should validate tags', () => {
@@ -326,9 +326,9 @@ describe('Row-Level Security (RLS) Protocol', () => {
       });
     });
 
-    describe('rolePolicy', () => {
+    describe('positionPolicy', () => {
       it('should create role-based policy', () => {
-        const policy = RLS.rolePolicy(
+        const policy = RLS.positionPolicy(
           'sensitive_data',
           ['manager', 'director'],
           'department = current_user.department'
@@ -338,7 +338,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.object).toBe('sensitive_data');
         expect(policy.operation).toBe('select');
         expect(policy.using).toBe('department = current_user.department');
-        expect(policy.roles).toEqual(['manager', 'director']);
+        expect(policy.positions).toEqual(['manager', 'director']);
         expect(policy.enabled).toBe(true);
       });
     });
@@ -351,7 +351,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         expect(policy.object).toBe('account');
         expect(policy.operation).toBe('all');
         expect(policy.using).toBe('1 == 1'); // Always true
-        expect(policy.roles).toEqual(['ceo', 'cfo']);
+        expect(policy.positions).toEqual(['ceo', 'cfo']);
         expect(policy.enabled).toBe(true);
       });
     });
@@ -388,7 +388,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
             WHERE manager_id = current_user.id
           )
         `,
-        roles: ['manager', 'director'],
+        positions: ['manager', 'director'],
         enabled: true,
       };
 
@@ -402,7 +402,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'account',
         operation: 'select',
         using: 'territory IN (SELECT territory FROM user_territories WHERE user_id = current_user.id)',
-        roles: ['sales_rep'],
+        positions: ['sales_rep'],
         enabled: true,
       };
 
@@ -465,7 +465,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         object: 'financial_data',
         operation: 'all',
         using: '1 == 1', // Always true - see everything
-        roles: ['ceo', 'cfo', 'cto'],
+        positions: ['ceo', 'cfo', 'cto'],
         enabled: true,
         priority: 100, // Highest priority
       };

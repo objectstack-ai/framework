@@ -12,7 +12,7 @@ import { makeTransport } from './transports/index.js';
 import { BUILTIN_AUTH_TEMPLATES } from './templates/auth-templates.js';
 import type { EmailTemplateDefinition as EmailTemplate } from '@objectstack/spec/system';
 
-const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
  * Plugin configuration.

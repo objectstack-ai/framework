@@ -15,7 +15,7 @@ export const HighValueOpportunitySharingRule = defineSharingRule({
   condition: 'record.amount > 100000',
   accessLevel: 'edit',
   sharedWith: {
-    type: 'role',
+    type: 'position',
     value: 'sales_manager',
   },
   active: true,
@@ -32,12 +32,12 @@ export const RepLeadSharingRule = defineSharingRule({
   description: "Share each rep's leads with the Sales Manager role for coaching visibility.",
   object: 'crm_lead',
   ownedBy: {
-    type: 'role',
+    type: 'position',
     value: 'sales_rep',
   },
   accessLevel: 'read',
   sharedWith: {
-    type: 'role',
+    type: 'position',
     value: 'sales_manager',
   },
   active: true,
@@ -56,7 +56,7 @@ export const WonDealActivitySharingRule = defineSharingRule({
   condition: "record.status == 'completed'",
   accessLevel: 'read',
   sharedWith: {
-    type: 'role',
+    type: 'position',
     value: 'sales_rep',
   },
   active: true,

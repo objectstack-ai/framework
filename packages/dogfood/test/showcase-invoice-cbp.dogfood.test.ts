@@ -25,7 +25,6 @@ const ADMIN_EMAIL = 'admin@objectos.ai';
 const memberSet = PermissionSetSchema.parse({
   name: 'showcase_cbp_member',
   label: 'Showcase CBP Member',
-  isProfile: true,
   objects: {
     showcase_account: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },
     showcase_product: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true },

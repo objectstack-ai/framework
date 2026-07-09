@@ -5,7 +5,7 @@ import type { AutomationContext } from '@objectstack/spec/contracts';
 /**
  * The identity envelope a flow's data nodes pass to ObjectQL as `options.context`.
  * A structural subset of the kernel `ExecutionContext` — it always carries the
- * three fields the security middleware keys on (`isSystem`, `roles`,
+ * three fields the security middleware keys on (`isSystem`, `positions`,
  * `permissions`) so it is directly assignable to the engine's `context` option,
  * plus the optional `userId`/`tenantId` of the acting user.
  */
@@ -15,7 +15,7 @@ export interface RunDataContext {
   /** Acting user id — drives owner/role RLS for `runAs:'user'` runs. */
   userId?: string;
   /** Acting user's role names (RLS parity with a direct REST request). */
-  roles: string[];
+  positions: string[];
   /** Acting user's explicit permission-set names. */
   permissions: string[];
   /** Acting user's tenant/org id. */
@@ -29,9 +29,9 @@ export interface RunDataContext {
  *  - `runAs:'system'` → `{ isSystem: true }` — the security middleware
  *    short-circuits, so the run reads/writes with full access, bypassing RLS.
  *  - `runAs:'user'` (default) → the triggering user's identity
- *    (`{ userId, roles, permissions, tenantId? }`), so the security middleware
+ *    (`{ userId, positions, permissions, tenantId? }`), so the security middleware
  *    enforces that user's row-level security. The run can never exceed the
- *    triggering user's grants. Empty `roles` falls back to the platform's
+ *    triggering user's grants. Empty `positions` falls back to the platform's
  *    baseline permission set, exactly like a fresh member's own REST request.
  *
  * Returns `undefined` when neither elevation nor a user identity applies (e.g. a
@@ -45,14 +45,14 @@ export interface RunDataContext {
  */
 export function resolveRunDataContext(context: AutomationContext | undefined): RunDataContext | undefined {
   if (context?.runAs === 'system') {
-    return { isSystem: true, roles: [], permissions: [] };
+    return { isSystem: true, positions: [], permissions: [] };
   }
   if (!context?.userId) return undefined;
   // `context` is now narrowed to a defined AutomationContext with a userId.
   const out: RunDataContext = {
     isSystem: false,
     userId: context.userId,
-    roles: Array.isArray(context.roles) ? context.roles : [],
+    positions: Array.isArray(context.positions) ? context.positions : [],
     permissions: Array.isArray(context.permissions) ? context.permissions : [],
   };
   if (context.tenantId) out.tenantId = context.tenantId;

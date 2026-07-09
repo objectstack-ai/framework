@@ -100,7 +100,7 @@ export interface StandaloneStackResult {
      * App-declared RBAC metadata, surfaced so the CLI (`serve`/`dev`/`start`)
      * can wire it without a host `objectstack.config.ts`. In particular the
      * `serve` command reads `permissions[]` to honour an app-declared default
-     * profile (ADR-0056 D7 — `appDefaultProfileName` → SecurityPlugin
+     * profile (ADR-0056 D7 — `appDefaultPermissionSetName` → SecurityPlugin
      * `fallbackPermissionSet`) and reads both `roles[]` and `permissions[]` to
      * register application org roles with Better-Auth. Without these the
      * artifact-serve path silently fell back to the built-in `member_default`
@@ -290,7 +290,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         Array.isArray(artifactBundle?.objects) ? artifactBundle.objects : undefined;
     const manifest: any | undefined = artifactBundle?.manifest;
     // ADR-0056 D7 — surface app-declared RBAC so the CLI's artifact-serve
-    // path honours an `isDefault` profile (appDefaultProfileName) and
+    // path honours an `isDefault` profile (appDefaultPermissionSetName) and
     // registers application org roles, exactly like the config-load path.
     const permissions: any[] | undefined =
         Array.isArray(artifactBundle?.permissions) ? artifactBundle.permissions : undefined;
