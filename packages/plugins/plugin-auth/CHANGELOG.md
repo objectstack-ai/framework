@@ -1,5 +1,131 @@
 # Changelog
 
+## 13.0.0
+
+### Major Changes
+
+- 6d83431: ADR-0090 P1 breaking wave — permission model v2 concept convergence.
+
+  Pre-launch one-step renames and secure defaults (no compatibility aliases, per
+  ADR-0090 D3/D4 superseding ADR-0057 D5/D7's alias discipline):
+
+  - `sys_role` → `sys_position`, `sys_user_role` → `sys_user_position` (field
+    `role` → `position`), `sys_role_permission_set` → `sys_position_permission_set`
+    (field `role_id` → `position_id`); `RoleSchema`/`defineRole` →
+    `PositionSchema`/`definePosition` with **no `parent`** (positions are flat;
+    hierarchy lives on the business-unit tree).
+  - `ExecutionContext.roles[]` → `positions[]`; the EvalUser/CEL contract
+    `current_user.roles` → `current_user.positions` (formula validators updated);
+    stack property `roles:` → `positions:`; metadata kinds `role`/`profile` →
+    `position` (profile kind removed).
+  - `isProfile` removed from `PermissionSetSchema` (ADR-0090 D2); `isDefault`
+    narrows to an install-time suggestion; `appDefaultProfileName` →
+    `appDefaultPermissionSetName` (isDefault-only).
+  - OWD enum drops legacy aliases `read`/`read_write`/`full`; new optional
+    `externalSharingModel` (external dial, `private` default) lands as P1 spec
+    shape (ADR-0090 D11).
+  - **Secure default (D1)**: a custom object with an owner field and NO
+    `sharingModel` now resolves `private` (was: fully public). System objects
+    keep their explicit posture. Unrecognised stored values fail closed.
+  - ExecutionContext gains the P1 principal-taxonomy shape (D10):
+    `principalKind` / `audience` / `onBehalfOf` (optional, semantics phase in
+    later).
+  - Sharing recipients: `role` → `position` (expanded via `sys_user_position`
+    ∪ the better-auth membership transition source); `role_and_subordinates`
+    removed — `unit_and_subordinates` now expands the business-unit subtree
+    (finishes ADR-0057 D5's re-homing).
+
+### Minor Changes
+
+- 57b89b4: feat(mcp): the MCP surface is now **default-on** — a core platform capability (#2698)
+
+  `/api/v1/mcp` is served (and advertised in `/discovery`) out of the box; the
+  OAuth 2.1 authorization track and Dynamic Client Registration follow it, so a
+  fresh deployment is connectable by any MCP client with zero configuration.
+  Operators opt OUT with `OS_MCP_SERVER_ENABLED=false`.
+
+  - New single decision point `isMcpServerEnabled()` in `@objectstack/types`
+    (default on; explicit `false`/`0`/`off`/`no` disables). The runtime
+    dispatcher's `/mcp` route gate, the CLI's MCP plugin auto-load, the REST
+    `/discovery` advertisement, and the auth service's OAuth/DCR follow-defaults
+    all delegate to it — the served route, the advertised route, and the
+    authorization track can never disagree.
+  - The env var is now effectively tri-state: unset → HTTP surface on;
+    explicit `true` → additionally auto-start the long-lived **stdio** transport
+    at boot (unchanged, still opt-in — a default must not claim the process's
+    stdin/stdout); explicit `false` → everything off, fail-closed (404, no
+    metadata, no DCR).
+  - The OAuth 2.1 TLS rule is unaffected: on a plain-HTTP non-loopback origin
+    the OAuth track stays dark and the default-on surface remains API-key-only.
+
+- 5be00c3: feat(mcp): spec-compliant OAuth 2.1 authorization for `/api/v1/mcp` (#2698)
+
+  Any OAuth-capable MCP client (claude.ai custom connectors, Claude Desktop,
+  Claude Code) can now connect to a deployment **self-serve**: no admin-minted
+  API key, no central registry — you sign in through the browser as yourself and
+  every tool call runs under your own permissions and row-level security.
+
+  **Each deployment is its own authorization server**, backed by the embedded
+  better-auth instance (`@better-auth/oauth-provider`). Rationale for the design
+  decisions lives in #2698; the moving parts:
+
+  - **Discovery**: `/.well-known/oauth-protected-resource` (RFC 9728, incl. the
+    path-inserted variant for `/api/v1/mcp`) and
+    `/.well-known/oauth-authorization-server` (RFC 8414, incl. the path-inserted
+    variant for the `/api/v1/auth` issuer) are served from the deployment origin.
+    401s from `/api/v1/mcp` advertise the resource metadata via
+    `WWW-Authenticate`, so clients bootstrap the flow automatically.
+  - **Dynamic Client Registration (RFC 7591)** is enabled (unauthenticated, as
+    the MCP spec requires) whenever the MCP surface is on — every deployment is a
+    distinct AS, so clients cannot ship pre-registered IDs. Force it either way
+    with `OS_OIDC_DCR_ENABLED` or the new `plugins.dynamicClientRegistration`
+    auth-config field. The embedded AS itself auto-enables whenever the MCP
+    surface is on — which is now the default (explicit
+    `OS_OIDC_PROVIDER_ENABLED=false` still wins).
+  - **Authorization-code + PKCE** flow with RFC 8707 resource binding: access
+    tokens are minted with `aud=<origin>/api/v1/mcp` and verified locally
+    (signature/issuer/audience/expiry) against the deployment's own JWKS —
+    fail-closed parity with API keys: unknown/expired/wrong-audience tokens,
+    sub-less M2M tokens, or a presented-but-invalid bearer never fall back to an
+    ambient session, they 401.
+  - **Token → ExecutionContext**: a valid access token resolves to the same
+    principal-bound `ExecutionContext` as every other credential, single-sourced
+    through `resolveAuthzContext` — OAuth adds a second _provenance_ for the
+    principal, not a second authz model. `ExecutionContext` gains an optional
+    `oauthScopes` field carrying the token's granted scopes.
+  - **Coarse scopes → tool families**, enforced at tool dispatch: `data:read`
+    (list/describe/query/get), `data:write` (create/update/delete),
+    `actions:execute` (list_actions/run_action). Constants live in
+    `@objectstack/spec/ai` (`MCP_OAUTH_SCOPES`). Tools outside the grant are not
+    registered — and therefore rejected — for that request. API-key and session
+    principals are unaffected (not scope-limited).
+  - **TLS required, localhost exempt** (OAuth 2.1): on a plain-HTTP non-loopback
+    origin the OAuth track stays dark (no metadata, no bearer acceptance) and the
+    endpoint remains API-key-only. Local clients reach intranet deployments;
+    claude.ai web connectors additionally need public HTTPS reachability.
+
+  **API keys are unchanged** (dual-track): `x-api-key` / `Authorization: ApiKey` /
+  `Authorization: Bearer osk_…` keep working exactly as before for CI and
+  headless agents — covered by new regression tests.
+
+### Patch Changes
+
+- Updated dependencies [6d83431]
+- Updated dependencies [01917c2]
+- Updated dependencies [b271691]
+- Updated dependencies [a5a1e41]
+- Updated dependencies [466adf6]
+- Updated dependencies [57b89b4]
+- Updated dependencies [5be00c3]
+- Updated dependencies [466adf6]
+- Updated dependencies [2bee609]
+- Updated dependencies [9fa84f9]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@13.0.0
+  - @objectstack/core@13.0.0
+  - @objectstack/platform-objects@13.0.0
+  - @objectstack/types@13.0.0
+
 ## 12.6.0
 
 ### Patch Changes

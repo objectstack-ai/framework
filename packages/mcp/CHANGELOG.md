@@ -1,5 +1,119 @@
 # @objectstack/plugin-mcp-server
 
+## 13.0.0
+
+### Minor Changes
+
+- 57b89b4: feat(mcp): the MCP surface is now **default-on** — a core platform capability (#2698)
+
+  `/api/v1/mcp` is served (and advertised in `/discovery`) out of the box; the
+  OAuth 2.1 authorization track and Dynamic Client Registration follow it, so a
+  fresh deployment is connectable by any MCP client with zero configuration.
+  Operators opt OUT with `OS_MCP_SERVER_ENABLED=false`.
+
+  - New single decision point `isMcpServerEnabled()` in `@objectstack/types`
+    (default on; explicit `false`/`0`/`off`/`no` disables). The runtime
+    dispatcher's `/mcp` route gate, the CLI's MCP plugin auto-load, the REST
+    `/discovery` advertisement, and the auth service's OAuth/DCR follow-defaults
+    all delegate to it — the served route, the advertised route, and the
+    authorization track can never disagree.
+  - The env var is now effectively tri-state: unset → HTTP surface on;
+    explicit `true` → additionally auto-start the long-lived **stdio** transport
+    at boot (unchanged, still opt-in — a default must not claim the process's
+    stdin/stdout); explicit `false` → everything off, fail-closed (404, no
+    metadata, no DCR).
+  - The OAuth 2.1 TLS rule is unaffected: on a plain-HTTP non-loopback origin
+    the OAuth track stays dark and the default-on surface remains API-key-only.
+
+- 5be00c3: feat(mcp): spec-compliant OAuth 2.1 authorization for `/api/v1/mcp` (#2698)
+
+  Any OAuth-capable MCP client (claude.ai custom connectors, Claude Desktop,
+  Claude Code) can now connect to a deployment **self-serve**: no admin-minted
+  API key, no central registry — you sign in through the browser as yourself and
+  every tool call runs under your own permissions and row-level security.
+
+  **Each deployment is its own authorization server**, backed by the embedded
+  better-auth instance (`@better-auth/oauth-provider`). Rationale for the design
+  decisions lives in #2698; the moving parts:
+
+  - **Discovery**: `/.well-known/oauth-protected-resource` (RFC 9728, incl. the
+    path-inserted variant for `/api/v1/mcp`) and
+    `/.well-known/oauth-authorization-server` (RFC 8414, incl. the path-inserted
+    variant for the `/api/v1/auth` issuer) are served from the deployment origin.
+    401s from `/api/v1/mcp` advertise the resource metadata via
+    `WWW-Authenticate`, so clients bootstrap the flow automatically.
+  - **Dynamic Client Registration (RFC 7591)** is enabled (unauthenticated, as
+    the MCP spec requires) whenever the MCP surface is on — every deployment is a
+    distinct AS, so clients cannot ship pre-registered IDs. Force it either way
+    with `OS_OIDC_DCR_ENABLED` or the new `plugins.dynamicClientRegistration`
+    auth-config field. The embedded AS itself auto-enables whenever the MCP
+    surface is on — which is now the default (explicit
+    `OS_OIDC_PROVIDER_ENABLED=false` still wins).
+  - **Authorization-code + PKCE** flow with RFC 8707 resource binding: access
+    tokens are minted with `aud=<origin>/api/v1/mcp` and verified locally
+    (signature/issuer/audience/expiry) against the deployment's own JWKS —
+    fail-closed parity with API keys: unknown/expired/wrong-audience tokens,
+    sub-less M2M tokens, or a presented-but-invalid bearer never fall back to an
+    ambient session, they 401.
+  - **Token → ExecutionContext**: a valid access token resolves to the same
+    principal-bound `ExecutionContext` as every other credential, single-sourced
+    through `resolveAuthzContext` — OAuth adds a second _provenance_ for the
+    principal, not a second authz model. `ExecutionContext` gains an optional
+    `oauthScopes` field carrying the token's granted scopes.
+  - **Coarse scopes → tool families**, enforced at tool dispatch: `data:read`
+    (list/describe/query/get), `data:write` (create/update/delete),
+    `actions:execute` (list_actions/run_action). Constants live in
+    `@objectstack/spec/ai` (`MCP_OAUTH_SCOPES`). Tools outside the grant are not
+    registered — and therefore rejected — for that request. API-key and session
+    principals are unaffected (not scope-limited).
+  - **TLS required, localhost exempt** (OAuth 2.1): on a plain-HTTP non-loopback
+    origin the OAuth track stays dark (no metadata, no bearer acceptance) and the
+    endpoint remains API-key-only. Local clients reach intranet deployments;
+    claude.ai web connectors additionally need public HTTPS reachability.
+
+  **API keys are unchanged** (dual-track): `x-api-key` / `Authorization: ApiKey` /
+  `Authorization: Bearer osk_…` keep working exactly as before for CI and
+  headless agents — covered by new regression tests.
+
+### Patch Changes
+
+- e097576: fix(mcp): the generated SKILL.md now documents the business-action tools
+
+  `renderSkillMarkdown()` listed only the 7 object-CRUD tools; the MCP surface
+  exposes 9 — `list_actions` / `run_action` (business actions) were missing, so
+  agents installing the skill never learned they can run approvals, conversions,
+  or flow triggers directly. The skill now covers the full native tool surface
+  and teaches action preference: when `list_actions` offers a matching action,
+  call it instead of hand-editing the records it would have touched (actions
+  carry the app's validation and side effects), confirming destructive or
+  confirmation-flagged actions with the user first.
+
+  Prerequisite for the distribution shells (#2714 Phase 0): every shell repo
+  copies this rendered content, so the gap had to close before fan-out.
+
+- 148beb4: test(mcp): drift guard — SKILL.md must document every registered native tool
+
+  The registered surface is obtained by driving the real registration path (a
+  `tools/list` round-trip against `MCPServerRuntime` with a full data+action
+  bridge), not a hand-maintained list, so adding a tool to `mcp-http-tools.ts`
+  without teaching `skill.ts` fails the suite. Guards against a recurrence of
+  the 7-of-9 gap fixed in #2715; red-proven by temporarily removing
+  `run_action` from the skill.
+
+- Updated dependencies [6d83431]
+- Updated dependencies [01917c2]
+- Updated dependencies [b271691]
+- Updated dependencies [a5a1e41]
+- Updated dependencies [466adf6]
+- Updated dependencies [57b89b4]
+- Updated dependencies [5be00c3]
+- Updated dependencies [466adf6]
+- Updated dependencies [2bee609]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@13.0.0
+  - @objectstack/core@13.0.0
+  - @objectstack/types@13.0.0
+
 ## 12.6.0
 
 ### Patch Changes

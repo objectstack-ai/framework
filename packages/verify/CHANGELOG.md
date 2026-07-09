@@ -1,5 +1,37 @@
 # @objectstack/verify
 
+## 13.0.0
+
+### Patch Changes
+
+- Updated dependencies [6d83431]
+- Updated dependencies [01917c2]
+- Updated dependencies [b271691]
+- Updated dependencies [a5a1e41]
+- Updated dependencies [466adf6]
+- Updated dependencies [799b285]
+- Updated dependencies [b1081b8]
+- Updated dependencies [57b89b4]
+- Updated dependencies [5be00c3]
+- Updated dependencies [466adf6]
+- Updated dependencies [a1766fe]
+- Updated dependencies [2bee609]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@13.0.0
+  - @objectstack/core@13.0.0
+  - @objectstack/runtime@13.0.0
+  - @objectstack/objectql@13.0.0
+  - @objectstack/rest@13.0.0
+  - @objectstack/plugin-security@13.0.0
+  - @objectstack/plugin-sharing@13.0.0
+  - @objectstack/plugin-auth@13.0.0
+  - @objectstack/service-automation@13.0.0
+  - @objectstack/plugin-hono-server@13.0.0
+  - @objectstack/driver-sqlite-wasm@13.0.0
+  - @objectstack/service-analytics@13.0.0
+  - @objectstack/service-datasource@13.0.0
+  - @objectstack/service-settings@13.0.0
+
 ## 12.6.0
 
 ### Minor Changes

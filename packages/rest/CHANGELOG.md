@@ -1,5 +1,82 @@
 # @objectstack/rest
 
+## 13.0.0
+
+### Major Changes
+
+- 6d83431: ADR-0090 P1 breaking wave — permission model v2 concept convergence.
+
+  Pre-launch one-step renames and secure defaults (no compatibility aliases, per
+  ADR-0090 D3/D4 superseding ADR-0057 D5/D7's alias discipline):
+
+  - `sys_role` → `sys_position`, `sys_user_role` → `sys_user_position` (field
+    `role` → `position`), `sys_role_permission_set` → `sys_position_permission_set`
+    (field `role_id` → `position_id`); `RoleSchema`/`defineRole` →
+    `PositionSchema`/`definePosition` with **no `parent`** (positions are flat;
+    hierarchy lives on the business-unit tree).
+  - `ExecutionContext.roles[]` → `positions[]`; the EvalUser/CEL contract
+    `current_user.roles` → `current_user.positions` (formula validators updated);
+    stack property `roles:` → `positions:`; metadata kinds `role`/`profile` →
+    `position` (profile kind removed).
+  - `isProfile` removed from `PermissionSetSchema` (ADR-0090 D2); `isDefault`
+    narrows to an install-time suggestion; `appDefaultProfileName` →
+    `appDefaultPermissionSetName` (isDefault-only).
+  - OWD enum drops legacy aliases `read`/`read_write`/`full`; new optional
+    `externalSharingModel` (external dial, `private` default) lands as P1 spec
+    shape (ADR-0090 D11).
+  - **Secure default (D1)**: a custom object with an owner field and NO
+    `sharingModel` now resolves `private` (was: fully public). System objects
+    keep their explicit posture. Unrecognised stored values fail closed.
+  - ExecutionContext gains the P1 principal-taxonomy shape (D10):
+    `principalKind` / `audience` / `onBehalfOf` (optional, semantics phase in
+    later).
+  - Sharing recipients: `role` → `position` (expanded via `sys_user_position`
+    ∪ the better-auth membership transition source); `role_and_subordinates`
+    removed — `unit_and_subordinates` now expands the business-unit subtree
+    (finishes ADR-0057 D5's re-homing).
+
+### Minor Changes
+
+- 57b89b4: feat(mcp): the MCP surface is now **default-on** — a core platform capability (#2698)
+
+  `/api/v1/mcp` is served (and advertised in `/discovery`) out of the box; the
+  OAuth 2.1 authorization track and Dynamic Client Registration follow it, so a
+  fresh deployment is connectable by any MCP client with zero configuration.
+  Operators opt OUT with `OS_MCP_SERVER_ENABLED=false`.
+
+  - New single decision point `isMcpServerEnabled()` in `@objectstack/types`
+    (default on; explicit `false`/`0`/`off`/`no` disables). The runtime
+    dispatcher's `/mcp` route gate, the CLI's MCP plugin auto-load, the REST
+    `/discovery` advertisement, and the auth service's OAuth/DCR follow-defaults
+    all delegate to it — the served route, the advertised route, and the
+    authorization track can never disagree.
+  - The env var is now effectively tri-state: unset → HTTP surface on;
+    explicit `true` → additionally auto-start the long-lived **stdio** transport
+    at boot (unchanged, still opt-in — a default must not claim the process's
+    stdin/stdout); explicit `false` → everything off, fail-closed (404, no
+    metadata, no DCR).
+  - The OAuth 2.1 TLS rule is unaffected: on a plain-HTTP non-loopback origin
+    the OAuth track stays dark and the default-on surface remains API-key-only.
+
+### Patch Changes
+
+- Updated dependencies [6d83431]
+- Updated dependencies [01917c2]
+- Updated dependencies [b271691]
+- Updated dependencies [a5a1e41]
+- Updated dependencies [466adf6]
+- Updated dependencies [57b89b4]
+- Updated dependencies [5be00c3]
+- Updated dependencies [466adf6]
+- Updated dependencies [2bee609]
+- Updated dependencies [9fa84f9]
+- Updated dependencies [fc7e7f7]
+  - @objectstack/spec@13.0.0
+  - @objectstack/core@13.0.0
+  - @objectstack/platform-objects@13.0.0
+  - @objectstack/types@13.0.0
+  - @objectstack/service-package@13.0.0
+
 ## 12.6.0
 
 ### Minor Changes
