@@ -72,7 +72,7 @@ describe('registerDatasourceAdminRoutes (real HonoHttpServer)', () => {
 
     const ok = await app.fetch(json('/api/v1/datasources/demo_ext/object-draft', { method: 'POST', body: JSON.stringify({ table: 'customers' }) }));
     expect(ok.status).toBe(200);
-    expect((await ok.json()).draft.name).toBe('customers');
+    expect(((await ok.json()) as any).draft.name).toBe('customers');
     expect(generateObjectDraft).toHaveBeenCalledWith('demo_ext', 'customers', {});
   });
 
@@ -85,7 +85,7 @@ describe('registerDatasourceAdminRoutes (real HonoHttpServer)', () => {
     const app = mount({ getDatasource });
     const ok = await app.fetch(json('/api/v1/datasources/demo_ext'));
     expect(ok.status).toBe(200);
-    expect((await ok.json()).datasource.config.filename).toBe('/tmp/x.db');
+    expect(((await ok.json()) as any).datasource.config.filename).toBe('/tmp/x.db');
     const missing = await app.fetch(json('/api/v1/datasources/nope'));
     expect(missing.status).toBe(404);
     expect(getDatasource).toHaveBeenCalledWith('demo_ext');

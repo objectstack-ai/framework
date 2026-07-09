@@ -35,7 +35,7 @@ describe('showcase: declarative RBAC seeding (ADR-0057 D6 / #2077)', () => {
     const red = (rules ?? []).find((r: any) => r.name === 'share_red_projects_with_execs');
     expect(red, 'criteria rule seeded (was count = 0)').toBeTruthy();
     expect(red.object_name).toBe('showcase_project');
-    expect(red.recipient_type).toBe('role');
+    expect(red.recipient_type).toBe('position');
     expect(red.recipient_id).toBe('exec');
     // condition "record.health == 'red'" → JSON FilterCondition { health: 'red' }
     const criteria = JSON.parse(red.criteria_json);

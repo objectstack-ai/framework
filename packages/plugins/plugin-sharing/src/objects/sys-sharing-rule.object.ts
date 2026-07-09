@@ -132,7 +132,7 @@ export const SysSharingRule = ObjectSchema.create({
     }),
 
     recipient_type: Field.select(
-      ['user', 'team', 'business_unit', 'role', 'unit_and_subordinates', 'queue'],
+      ['user', 'team', 'business_unit', 'position', 'unit_and_subordinates', 'queue'],
       {
         label: 'Recipient Type',
         required: true,
@@ -146,7 +146,7 @@ export const SysSharingRule = ObjectSchema.create({
       label: 'Recipient',
       required: true,
       maxLength: 200,
-      description: 'department id / team id / role name / queue name / user id depending on recipient_type',
+      description: 'business-unit id / team id / position name / queue name / user id depending on recipient_type',
       group: 'Recipient',
     }),
 

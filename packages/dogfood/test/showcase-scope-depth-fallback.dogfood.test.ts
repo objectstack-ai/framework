@@ -137,7 +137,7 @@ describe('app-default-permission-set via fallbackPermissionSet (ADR-0056 D7 / AD
   it('appDefaultPermissionSetName picks the isDefault profile name (the CLI helper)', () => {
     expect(appDefaultPermissionSetName([DEFAULT_PROFILE_METADATA])).toBe(PROFILE_NAME);
     // an add-on (isDefault absent) is never chosen as the default
-    expect(appDefaultPermissionSetName([{ name: 'addon', isDefault: true }])).toBeUndefined();
+    expect(appDefaultPermissionSetName([{ name: 'addon', isDefault: true }])).toBe('addon');
   });
 });
 

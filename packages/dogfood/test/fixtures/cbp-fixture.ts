@@ -21,6 +21,8 @@ import { SecurityPlugin, securityDefaultPermissionSets } from '@objectstack/plug
 /** MASTER — owner-scoped account. */
 export const CbpAccount = ObjectSchema.create({
   name: 'cbp_account',
+  // [ADR-0090 D1] grandfather stamp: master isolation under test is RLS-owned; the detail derives via controlled_by_parent.
+  sharingModel: 'public_read_write',
   label: 'CBP Account',
   pluralLabel: 'CBP Accounts',
   fields: {
