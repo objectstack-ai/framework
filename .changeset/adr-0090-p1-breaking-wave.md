@@ -1,18 +1,18 @@
 ---
-'@objectstack/spec': minor
-'@objectstack/core': minor
-'@objectstack/runtime': minor
-'@objectstack/objectql': minor
-'@objectstack/formula': minor
-'@objectstack/rest': minor
-'@objectstack/cli': minor
-'@objectstack/plugin-security': minor
-'@objectstack/plugin-sharing': minor
-'@objectstack/plugin-auth': minor
-'@objectstack/service-automation': minor
-'@objectstack/trigger-record-change': minor
-'@objectstack/platform-objects': minor
-'@objectstack/metadata': minor
+'@objectstack/spec': major
+'@objectstack/core': major
+'@objectstack/runtime': major
+'@objectstack/objectql': major
+'@objectstack/formula': major
+'@objectstack/rest': major
+'@objectstack/cli': major
+'@objectstack/plugin-security': major
+'@objectstack/plugin-sharing': major
+'@objectstack/plugin-auth': major
+'@objectstack/service-automation': major
+'@objectstack/trigger-record-change': major
+'@objectstack/platform-objects': major
+'@objectstack/metadata': major
 ---
 
 ADR-0090 P1 breaking wave — permission model v2 concept convergence.
