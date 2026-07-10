@@ -425,6 +425,112 @@ describe('LifecycleService.sweep — space reclaim', () => {
   });
 });
 
+describe('LifecycleService.sweep — governance (P4)', () => {
+  const TELEMETRY_OBJ: LifecycleObjectLike = {
+    name: 'sys_job_run',
+    lifecycle: { class: 'telemetry', retention: { maxAge: '30d' } } as any,
+  };
+
+  /** Fake settings service backed by a value map, with per-tenant values. */
+  function fakeSettings(values: Record<string, unknown>, tenantValues: Record<string, Record<string, unknown>> = {}) {
+    return {
+      async get(_ns: string, key: string, ctx?: Record<string, unknown>) {
+        const tenantId = ctx?.tenantId as string | undefined;
+        if (tenantId && tenantValues[tenantId] && key in tenantValues[tenantId]) {
+          return { value: tenantValues[tenantId][key], source: 'tenant' };
+        }
+        if (key in values) return { value: values[key], source: 'global' };
+        return { value: undefined, source: 'default' };
+      },
+    };
+  }
+
+  it('a global retention override beats the declared window', async () => {
+    const { engine, deletes } = captureEngine([TELEMETRY_OBJ]);
+    const settings = fakeSettings({ retention_overrides: { sys_job_run: { maxAge: '90d' } } });
+
+    await service(engine, { getSettings: () => settings }).sweep();
+
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].where).toEqual({ created_at: { $lt: isoCutoff('90d') } });
+  });
+
+  it('an invalid override keeps the declared window (never fails open)', async () => {
+    const { engine, deletes } = captureEngine([TELEMETRY_OBJ]);
+    const settings = fakeSettings({ retention_overrides: { sys_job_run: { maxAge: 'forever' } } });
+
+    await service(engine, { getSettings: () => settings }).sweep();
+
+    expect(deletes[0].where).toEqual({ created_at: { $lt: isoCutoff('30d') } });
+  });
+
+  it('settings enabled=false disables the sweep at runtime', async () => {
+    const { engine, deletes } = captureEngine([TELEMETRY_OBJ]);
+    const settings = fakeSettings({ enabled: false });
+
+    const report = await service(engine, { getSettings: () => settings }).sweep();
+
+    expect(deletes).toHaveLength(0);
+    expect(report.swept).toEqual([]);
+  });
+
+  it('tenant-scoped overrides sweep each tenant on its own window and everyone else globally', async () => {
+    const { engine, deletes } = captureEngine([TELEMETRY_OBJ]);
+    (engine as any).find = async (object: string) =>
+      object === 'sys_organization' ? [{ id: 'org_reg' }, { id: 'org_plain' }] : [];
+    const settings = fakeSettings(
+      {},
+      { org_reg: { retention_overrides: { sys_job_run: { maxAge: '2y' } } } },
+    );
+
+    await service(engine, { getSettings: () => settings }).sweep();
+
+    // One tenant-scoped delete on the regulated tenant's 2y window…
+    expect(deletes[0].where).toEqual({
+      created_at: { $lt: isoCutoff('2y') },
+      organization_id: 'org_reg',
+    });
+    // …then the global 30d pass excluding it but INCLUDING NULL-org rows.
+    expect(deletes[1].where).toEqual({
+      created_at: { $lt: isoCutoff('30d') },
+      $or: [{ organization_id: { $nin: ['org_reg'] } }, { organization_id: null }],
+    });
+    expect(deletes).toHaveLength(2);
+  });
+
+  it('raises quota and growth alerts (observe-only — no extra deletes)', async () => {
+    const onAlert = vi.fn();
+    const count = vi.fn(async () => 1_500);
+    const driver = { name: 'default', count };
+    const { engine, deletes } = captureEngine([TELEMETRY_OBJ], { driver });
+    const settings = fakeSettings({ quotas: { sys_job_run: 1_000 }, growth_alert_rows: 100 });
+    const svc = service(engine, { getSettings: () => settings, onAlert });
+
+    const first = await svc.sweep();
+    expect(first.alerts).toEqual([{ type: 'quota-exceeded', object: 'sys_job_run', rowCount: 1_500, quota: 1_000 }]);
+
+    // Second sweep: +500 rows since the baseline → growth alert too.
+    count.mockResolvedValue(2_000);
+    const second = await svc.sweep();
+    expect(second.alerts).toContainEqual({ type: 'quota-exceeded', object: 'sys_job_run', rowCount: 2_000, quota: 1_000 });
+    expect(second.alerts).toContainEqual({ type: 'growth', object: 'sys_job_run', rowCount: 2_000, delta: 500 });
+    expect(onAlert).toHaveBeenCalledTimes(3);
+
+    // Governance only ever ALERTS — the reap count is untouched (one per sweep).
+    expect(deletes).toHaveLength(2);
+  });
+
+  it('quota defaults by class apply when no per-object quota is set', async () => {
+    const driver = { name: 'default', count: async () => 50 };
+    const { engine } = captureEngine([TELEMETRY_OBJ], { driver });
+    const settings = fakeSettings({ quota_defaults: { telemetry: 10 } });
+
+    const report = await service(engine, { getSettings: () => settings }).sweep();
+
+    expect(report.alerts).toEqual([{ type: 'quota-exceeded', object: 'sys_job_run', rowCount: 50, quota: 10 }]);
+  });
+});
+
 describe('LifecycleService timers', () => {
   it('start() sweeps after the initial delay and then on the interval; stop() disarms', async () => {
     vi.useFakeTimers();

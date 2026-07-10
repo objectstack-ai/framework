@@ -61,8 +61,11 @@ export type {
   LifecycleSweepEntry,
   LifecycleEngineLike,
   LifecycleObjectLike,
+  LifecycleSettingsLike,
+  LifecycleGovernanceAlert,
 } from './lifecycle/lifecycle-service.js';
 export { parseLifecycleDuration } from './lifecycle/duration.js';
+export { lifecycleSettingsManifest } from './lifecycle/lifecycle-settings.js';
 
 // Export MetadataFacade
 export { MetadataFacade } from './metadata-facade.js';

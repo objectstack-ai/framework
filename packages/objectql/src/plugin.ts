@@ -5,6 +5,7 @@ import { ObjectStackProtocolImplementation } from '@objectstack/metadata-protoco
 import { Plugin, PluginContext } from '@objectstack/core';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { LifecycleService } from './lifecycle/lifecycle-service.js';
+import { lifecycleSettingsManifest } from './lifecycle/lifecycle-settings.js';
 import {
   SysMetadataObject,
   SysMetadataHistoryObject,
@@ -321,6 +322,16 @@ export class ObjectQLPlugin implements Plugin {
     this.lifecycleService = new LifecycleService({
       getEngine: () => this.ql,
       logger: ctx.logger,
+      // P4 governance: overrides/quotas resolve from the 'lifecycle'
+      // settings namespace when a SettingsService is present. Lazy per
+      // sweep — plugin registration order doesn't matter.
+      getSettings: () => {
+        try {
+          return ctx.getService('settings') as never;
+        } catch {
+          return undefined;
+        }
+      },
       ...this.lifecycleOptions,
     });
     ctx.registerService('lifecycle', this.lifecycleService);
@@ -364,6 +375,14 @@ export class ObjectQLPlugin implements Plugin {
     ctx.hook('kernel:ready', async () => {
         await this.resyncAuthoredHooks(ctx);
         await this.resyncAuthoredActions(ctx);
+        // ADR-0057 P4: surface the lifecycle governance namespace in Settings
+        // (overrides / quotas / growth alerts) when a SettingsService exists.
+        try {
+            const settings = ctx.getService('settings') as { registerManifest?: (m: unknown) => void };
+            settings?.registerManifest?.(lifecycleSettingsManifest);
+        } catch {
+            // No settings service — governance stays at declared defaults.
+        }
     });
     ctx.hook('metadata:reloaded', async () => {
         await this.resyncAuthoredHooks(ctx);

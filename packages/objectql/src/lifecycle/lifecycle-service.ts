@@ -66,6 +66,8 @@ export interface LifecycleEngineLike {
   getDriverForObject(objectName: string): unknown;
   /** Datasource lookup by name; throws/absent when not registered. */
   datasource?(name: string): unknown;
+  /** Row reads for governance (tenant enumeration); optional. */
+  find?(object: string, options: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
 }
 
 export interface LifecycleObjectLike {
@@ -80,6 +82,25 @@ export interface LifecycleLoggerLike {
   debug?(msg: string, meta?: unknown): void;
 }
 
+/** Duck-typed SettingsService surface (avoids a package dependency). */
+export interface LifecycleSettingsLike {
+  get(
+    namespace: string,
+    key: string,
+    ctx?: Record<string, unknown>,
+  ): Promise<{ value: unknown; source?: string }>;
+}
+
+/** Governance alert (ADR-0057 P4) — quotas/growth never delete data beyond
+ * the declared policy; they alert so an operator decides. */
+export interface LifecycleGovernanceAlert {
+  type: 'quota-exceeded' | 'growth';
+  object: string;
+  rowCount: number;
+  quota?: number;
+  delta?: number;
+}
+
 export interface LifecycleServiceOptions {
   /** Resolve the data engine; `undefined` ⇒ sweep is a no-op. */
   getEngine(): LifecycleEngineLike | undefined;
@@ -92,7 +113,37 @@ export interface LifecycleServiceOptions {
   initialDelayMs?: number;
   /** Clock injection for deterministic tests. Defaults to `Date.now()`. */
   now?(): number;
+  /** Resolve the settings service for governance (P4); absent ⇒ declared
+   * policies apply unmodified and quotas/alerts are off. */
+  getSettings?(): LifecycleSettingsLike | undefined;
+  /** Governance alert sink. Defaults to a logger warning. */
+  onAlert?(alert: LifecycleGovernanceAlert): void;
 }
+
+/** Per-sweep governance snapshot resolved from the `lifecycle` namespace. */
+interface GovernanceSnapshot {
+  enabled: boolean;
+  /** Global-resolved per-object window overrides. */
+  overrides: Record<string, { maxAge?: string; expireAfter?: string }>;
+  /** object → tenant-specific windows (only tenants whose override is
+   * genuinely tenant-scoped, not inherited). */
+  tenantOverrides: Map<string, Array<{ tenantId: string; maxAge?: string; expireAfter?: string }>>;
+  quotas: Record<string, number>;
+  quotaDefaults: Record<string, number>;
+  growthAlertRows: number;
+}
+
+const DEFAULT_GOVERNANCE: GovernanceSnapshot = {
+  enabled: true,
+  overrides: {},
+  tenantOverrides: new Map(),
+  quotas: {},
+  quotaDefaults: {},
+  growthAlertRows: 0,
+};
+
+/** Cap on tenants scanned for per-tenant overrides each sweep. */
+const TENANT_SCAN_LIMIT = 200;
 
 export interface LifecycleSweepEntry {
   object: string;
@@ -117,6 +168,8 @@ export interface LifecycleSweepReport {
   errors: Array<{ object: string; error: string }>;
   /** Datasources whose driver reclaimed space after this sweep. */
   reclaimed: string[];
+  /** Governance alerts raised this sweep (quota breaches, growth spikes). */
+  alerts: LifecycleGovernanceAlert[];
 }
 
 interface ReclaimCapableDriver {
@@ -152,6 +205,10 @@ export class LifecycleService {
   private timer: ReturnType<typeof setInterval> | undefined;
   private initialTimer: ReturnType<typeof setTimeout> | undefined;
   private sweeping = false;
+  /** Row counts from the previous sweep — baseline for growth alerts. */
+  private lastCounts = new Map<string, number>();
+  /** Governance snapshot for the sweep in flight. */
+  private governance: GovernanceSnapshot = DEFAULT_GOVERNANCE;
 
   constructor(private readonly opts: LifecycleServiceOptions) {
     this.now = opts.now ?? (() => Date.now());
@@ -196,6 +253,7 @@ export class LifecycleService {
       skipped: [],
       errors: [],
       reclaimed: [],
+      alerts: [],
     };
     if (this.sweeping || !this.enabled) return report;
     const engine = this.opts.getEngine();
@@ -209,6 +267,13 @@ export class LifecycleService {
       const declared = engine.registry
         .getAllObjects()
         .filter((o) => o?.lifecycle && o.lifecycle.class !== 'record');
+
+      // Governance snapshot (P4): settings-driven overrides / quotas.
+      this.governance = await this.loadGovernance(engine, declared);
+      if (!this.governance.enabled) {
+        this.opts.logger.debug?.('[lifecycle] disabled via settings; sweep skipped');
+        return report;
+      }
 
       // Drivers that should reclaim space after this sweep (deduped by
       // instance — several objects usually share one datasource).
@@ -241,18 +306,134 @@ export class LifecycleService {
         }
       }
 
-      if (report.swept.length > 0 || report.errors.length > 0) {
+      // Governance (P4): quotas + growth alerts — observe-and-alert only,
+      // never a delete beyond the declared policy.
+      await this.checkGovernance(engine, declared, report);
+
+      if (report.swept.length > 0 || report.errors.length > 0 || report.alerts.length > 0) {
         // ADR-0057 §3.3: cleanup must not re-feed the tables it drains — one
         // aggregate log line per sweep is the entire trace it leaves.
         const total = report.swept.reduce((sum, e) => sum + (e.deleted ?? 0), 0);
         this.opts.logger.info(
           `[lifecycle] sweep: ${report.swept.length} policy(ies) applied, ~${total} rows reaped, ` +
-            `${report.reclaimed.length} datasource(s) reclaimed, ${report.errors.length} error(s)`,
+            `${report.reclaimed.length} datasource(s) reclaimed, ${report.errors.length} error(s), ` +
+            `${report.alerts.length} alert(s)`,
         );
       }
       return report;
     } finally {
       this.sweeping = false;
+    }
+  }
+
+  /** Resolve the `lifecycle` settings namespace into a per-sweep snapshot.
+   * Every read is best-effort: no settings service / unregistered namespace
+   * ⇒ declared policies apply unmodified. */
+  private async loadGovernance(
+    engine: LifecycleEngineLike,
+    declared: LifecycleObjectLike[],
+  ): Promise<GovernanceSnapshot> {
+    const settings = this.opts.getSettings?.();
+    if (!settings || typeof settings.get !== 'function') return DEFAULT_GOVERNANCE;
+
+    const read = async <T>(key: string, fallback: T, ctx?: Record<string, unknown>): Promise<{ value: T; source?: string }> => {
+      try {
+        const r = await settings.get('lifecycle', key, ctx);
+        return { value: (r?.value ?? fallback) as T, source: r?.source };
+      } catch {
+        return { value: fallback };
+      }
+    };
+
+    const snapshot: GovernanceSnapshot = {
+      enabled: (await read<boolean>('enabled', true)).value !== false,
+      overrides: (await read<Record<string, { maxAge?: string; expireAfter?: string }>>('retention_overrides', {})).value ?? {},
+      tenantOverrides: new Map(),
+      quotas: (await read<Record<string, number>>('quotas', {})).value ?? {},
+      quotaDefaults: (await read<Record<string, number>>('quota_defaults', {})).value ?? {},
+      growthAlertRows: Number((await read<number>('growth_alert_rows', 0)).value) || 0,
+    };
+
+    // Tenant-level windows (ADR-0057 §3.2): only overrides genuinely stored
+    // at TENANT scope count — inherited global values would otherwise turn
+    // every tenant into a "tenant override" and break the global pass.
+    if (typeof engine.find === 'function' && declared.length > 0) {
+      try {
+        const orgs = await engine.find('sys_organization', {
+          limit: TENANT_SCAN_LIMIT,
+          context: { ...SYSTEM_CTX },
+        });
+        for (const org of orgs ?? []) {
+          const tenantId = org?.id as string | undefined;
+          if (!tenantId) continue;
+          const r = await read<Record<string, { maxAge?: string; expireAfter?: string }>>(
+            'retention_overrides',
+            {},
+            { tenantId },
+          );
+          if (r.source !== 'tenant') continue;
+          for (const [objectName, windows] of Object.entries(r.value ?? {})) {
+            if (!windows || typeof windows !== 'object') continue;
+            const list = snapshot.tenantOverrides.get(objectName) ?? [];
+            list.push({ tenantId, maxAge: windows.maxAge, expireAfter: windows.expireAfter });
+            snapshot.tenantOverrides.set(objectName, list);
+          }
+        }
+      } catch {
+        // No sys_organization (single-tenant kernel) — tenant overrides n/a.
+      }
+    }
+
+    return snapshot;
+  }
+
+  /** Quota + growth checks (P4). Alerts only — an operator decides. */
+  private async checkGovernance(
+    engine: LifecycleEngineLike,
+    declared: LifecycleObjectLike[],
+    report: LifecycleSweepReport,
+  ): Promise<void> {
+    const gov = this.governance;
+    const nextCounts = new Map<string, number>();
+    for (const obj of declared) {
+      const driver = engine.getDriverForObject(obj.name) as
+        | { count?(object: string, query?: Record<string, unknown>): Promise<number> }
+        | undefined;
+      if (!driver || typeof driver.count !== 'function') continue;
+      let rowCount: number;
+      try {
+        rowCount = await driver.count(obj.name, { object: obj.name });
+      } catch {
+        continue;
+      }
+      nextCounts.set(obj.name, rowCount);
+
+      const quota = gov.quotas[obj.name] ?? gov.quotaDefaults[obj.lifecycle!.class];
+      if (typeof quota === 'number' && quota > 0 && rowCount > quota) {
+        this.alert(report, { type: 'quota-exceeded', object: obj.name, rowCount, quota });
+      }
+
+      const last = this.lastCounts.get(obj.name);
+      if (gov.growthAlertRows > 0 && last !== undefined && rowCount - last > gov.growthAlertRows) {
+        this.alert(report, { type: 'growth', object: obj.name, rowCount, delta: rowCount - last });
+      }
+    }
+    this.lastCounts = nextCounts;
+  }
+
+  private alert(report: LifecycleSweepReport, alert: LifecycleGovernanceAlert): void {
+    report.alerts.push(alert);
+    if (this.opts.onAlert) {
+      try {
+        this.opts.onAlert(alert);
+      } catch {
+        /* alert sinks must never break the sweep */
+      }
+    } else {
+      this.opts.logger.warn(
+        `[lifecycle] governance alert: ${alert.type} on ${alert.object} ` +
+          `(rows=${alert.rowCount}${alert.quota != null ? `, quota=${alert.quota}` : ''}${alert.delta != null ? `, delta=+${alert.delta}` : ''})`,
+      );
     }
   }
 
@@ -277,10 +458,12 @@ export class LifecycleService {
     }
 
     const outcomes: Array<number | undefined> = [];
+    // Governance overrides (P4): a configured window beats the declared one.
+    const ov = this.governance.overrides[object] ?? {};
 
     if (lc.ttl) {
-      const cutoff = new Date(this.now() - parseLifecycleDuration(lc.ttl.expireAfter)).toISOString();
-      outcomes.push(await this.reap(engine, object, lc, 'ttl', lc.ttl.field, cutoff, report));
+      const windowMs = this.effectiveWindowMs(ov.expireAfter, parseLifecycleDuration(lc.ttl.expireAfter), object);
+      outcomes.push(await this.reap(engine, object, lc, 'ttl', lc.ttl.field, windowMs, report));
     }
 
     // Rotation (P2): physical time-sharding when the driver supports it —
@@ -311,17 +494,30 @@ export class LifecycleService {
       // granularity, an explicit retention.maxAge trims to the day inside the
       // live shards — and immediately bounds a legacy table the Rotator just
       // adopted whole into its first shard.
-      const cutoff = new Date(this.now() - parseLifecycleDuration(lc.retention.maxAge)).toISOString();
-      outcomes.push(await this.reap(engine, object, lc, 'retention', 'created_at', cutoff, report));
+      const windowMs = this.effectiveWindowMs(ov.maxAge, parseLifecycleDuration(lc.retention.maxAge), object);
+      outcomes.push(await this.reap(engine, object, lc, 'retention', 'created_at', windowMs, report));
     } else if (lc.storage?.strategy === 'rotation' && !rotated && !lc.ttl) {
       // Rotation declared but the driver can't shard physically: the shard
       // window IS the bound — enforce the same window with an age-based reap
       // so the declaration is never inert.
-      const cutoff = new Date(this.now() - lc.storage.shards * SHARD_UNIT_MS[lc.storage.unit]).toISOString();
-      outcomes.push(await this.reap(engine, object, lc, 'rotation-fallback', 'created_at', cutoff, report));
+      const windowMs = this.effectiveWindowMs(ov.maxAge, lc.storage.shards * SHARD_UNIT_MS[lc.storage.unit], object);
+      outcomes.push(await this.reap(engine, object, lc, 'rotation-fallback', 'created_at', windowMs, report));
     }
 
     return outcomes;
+  }
+
+  /** A governance override window beats the declared one — unless it fails to
+   * parse, in which case the declared window stands (never fail open into
+   * "no bound at all"). */
+  private effectiveWindowMs(override: string | undefined, declaredMs: number, object: string): number {
+    if (!override) return declaredMs;
+    try {
+      return parseLifecycleDuration(override);
+    } catch {
+      this.opts.logger.warn(`[lifecycle] invalid override window '${override}' for ${object}; keeping the declared window`);
+      return declaredMs;
+    }
   }
 
   /**
@@ -393,17 +589,63 @@ export class LifecycleService {
     lc: Lifecycle,
     policy: LifecycleSweepEntry['policy'],
     field: string,
-    cutoff: string,
+    windowMs: number,
     report: LifecycleSweepReport,
   ): Promise<number | undefined> {
-    const res = await engine.delete(object, {
-      where: { [field]: { $lt: cutoff } },
-      multi: true,
-      context: { ...SYSTEM_CTX },
-    });
-    const deleted = countDeleted(res);
-    report.swept.push({ object, class: lc.class, policy, cutoff, deleted });
-    return deleted;
+    const cutoff = new Date(this.now() - windowMs).toISOString();
+    const overrideKey = policy === 'ttl' ? 'expireAfter' : 'maxAge';
+    const tenantWindows = (this.governance.tenantOverrides.get(object) ?? []).filter(
+      (t) => typeof t[overrideKey] === 'string',
+    );
+
+    let total: number | undefined = 0;
+    const accumulate = (res: unknown) => {
+      const n = countDeleted(res);
+      if (n === undefined) total = undefined;
+      else if (total !== undefined) total += n;
+    };
+
+    if (tenantWindows.length === 0) {
+      accumulate(
+        await engine.delete(object, {
+          where: { [field]: { $lt: cutoff } },
+          multi: true,
+          context: { ...SYSTEM_CTX },
+        }),
+      );
+    } else {
+      // Tenant-level windows (P4): each overriding tenant gets its own
+      // cutoff on its own rows…
+      for (const t of tenantWindows) {
+        const tMs = this.effectiveWindowMs(t[overrideKey], windowMs, `${object} (tenant ${t.tenantId})`);
+        const tCutoff = new Date(this.now() - tMs).toISOString();
+        accumulate(
+          await engine.delete(object, {
+            where: { [field]: { $lt: tCutoff }, organization_id: t.tenantId },
+            multi: true,
+            context: { ...SYSTEM_CTX },
+          }),
+        );
+      }
+      // …and the global pass covers everyone else, INCLUDING rows with no
+      // organization (a bare `$nin` would silently skip NULL-org rows).
+      accumulate(
+        await engine.delete(object, {
+          where: {
+            [field]: { $lt: cutoff },
+            $or: [
+              { organization_id: { $nin: tenantWindows.map((t) => t.tenantId) } },
+              { organization_id: null },
+            ],
+          },
+          multi: true,
+          context: { ...SYSTEM_CTX },
+        }),
+      );
+    }
+
+    report.swept.push({ object, class: lc.class, policy, cutoff, deleted: total });
+    return total;
   }
 }
 
