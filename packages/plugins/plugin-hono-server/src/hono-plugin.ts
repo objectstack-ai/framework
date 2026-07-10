@@ -708,6 +708,15 @@ export class HonoServerPlugin implements Plugin {
                             fields: typeof r.field_permissions === 'string'
                                 ? JSON.parse(r.field_permissions || '{}')
                                 : r.field_permissions ?? {},
+                            // #2752 follow-through: DB-loaded sets used to drop
+                            // their capability + tab columns, so a direct grant
+                            // of e.g. `setup.access` never surfaced here.
+                            systemPermissions: typeof r.system_permissions === 'string'
+                                ? JSON.parse(r.system_permissions || '[]')
+                                : r.system_permissions ?? [],
+                            tabPermissions: typeof r.tab_permissions === 'string'
+                                ? JSON.parse(r.tab_permissions || '{}')
+                                : r.tab_permissions ?? {},
                         }));
                     }
                     : undefined;
@@ -824,7 +833,13 @@ export class HonoServerPlugin implements Plugin {
         });
 
         // GET /me/apps — list apps the current user is allowed to enter.
-        // Filters `metadata.list('app')` by:
+        // Apps live in the ENGINE REGISTRY (runtime AppPlugin registerApp()),
+        // not the metadata service — reading `metadata.list('app')` returned
+        // [] for every principal (#2752), leaving tabPermissions and
+        // AppSchema.requiredPermissions with no enforced consumer. Source
+        // from `registry.getAllApps()` (the same authority the meta routes
+        // use, nav contributions merged), with the metadata service kept as
+        // an additive fallback for runtime-draft-published apps. Filters:
         //   1. AppSchema.requiredPermissions ⊆ ctx.systemPermissions
         //   2. ctx.tabPermissions[app.name] !== 'hidden'
         // Anonymous users get an empty array. When SecurityPlugin is absent
@@ -833,14 +848,91 @@ export class HonoServerPlugin implements Plugin {
             const execCtx = await resolveCtx(c);
             if (!execCtx?.userId) return c.json({ apps: [] });
             try {
-                const metadata: any = ctx.getService('metadata');
-                if (!metadata?.list) return c.json({ apps: [] });
-                const all: any[] = (await metadata.list('app')) ?? [];
+                const byName = new Map<string, any>();
+                try {
+                    const registry: any = (ctx.getService('objectql') as any)?._registry;
+                    for (const app of registry?.getAllApps?.() ?? []) {
+                        if (app?.name) byName.set(String(app.name), app);
+                    }
+                } catch { /* registry unavailable — fall through to metadata */ }
+                try {
+                    const metadata: any = ctx.getService('metadata');
+                    for (const app of ((await metadata?.list?.('app')) ?? []) as any[]) {
+                        if (app?.name && !byName.has(String(app.name))) byName.set(String(app.name), app);
+                    }
+                } catch { /* metadata service optional */ }
+                // Resolve the caller's effective capability/tab surface the
+                // same way /auth/me/permissions does — resolveCtx() carries
+                // neither systemPermissions nor tabPermissions, so filtering
+                // on execCtx fields silently gated EVERY requiredPermissions
+                // app away from everyone, including the platform admin.
                 const sysPerms = new Set<string>(execCtx.systemPermissions ?? []);
-                const tabs = (execCtx as any).tabPermissions ?? {};
-                const failOpen = !ctx.getService('security.permissions');
-                const apps = all.filter((app: any) => {
-                    if (!app?.name) return false;
+                const tabs: Record<string, string> = { ...((execCtx as any).tabPermissions ?? {}) };
+                let failOpen = true;
+                try {
+                    const evaluator: any = ctx.getService('security.permissions');
+                    failOpen = !evaluator;
+                    if (evaluator) {
+                        const metadata: any = ctx.getService('metadata');
+                        const bootstrap: any[] = (() => {
+                            try { return ctx.getService<any[]>('security.bootstrapPermissionSets') ?? []; }
+                            catch { return []; }
+                        })();
+                        const fallbackName: string | null = (() => {
+                            try { return ctx.getService<string | null>('security.fallbackPermissionSet') ?? 'member_default'; }
+                            catch { return 'member_default'; }
+                        })();
+                        const requested = [
+                            ...((execCtx as any).positions ?? []),
+                            ...((execCtx as any).permissions ?? []),
+                        ];
+                        const qlSvc: any = (() => { try { return ctx.getService('objectql'); } catch { return null; } })();
+                        const dbLoader = qlSvc
+                            ? async (names: string[]) => {
+                                let rows: any;
+                                try {
+                                    rows = await qlSvc.find(
+                                        'sys_permission_set',
+                                        { where: { name: { $in: names } }, limit: names.length },
+                                        { context: { isSystem: true } },
+                                    );
+                                } catch { rows = []; }
+                                const list = Array.isArray(rows) ? rows : rows?.records ?? [];
+                                return list.map((r: any) => ({
+                                    name: r.name,
+                                    systemPermissions: typeof r.system_permissions === 'string'
+                                        ? JSON.parse(r.system_permissions || '[]')
+                                        : r.system_permissions ?? [],
+                                    tabPermissions: typeof r.tab_permissions === 'string'
+                                        ? JSON.parse(r.tab_permissions || '{}')
+                                        : r.tab_permissions ?? {},
+                                }));
+                            }
+                            : undefined;
+                        let resolved: any[] = await evaluator
+                            .resolvePermissionSets(requested, metadata, bootstrap, dbLoader)
+                            .catch(() => []);
+                        if (resolved.length === 0 && fallbackName) {
+                            resolved = await evaluator
+                                .resolvePermissionSets([fallbackName], metadata, bootstrap, dbLoader)
+                                .catch(() => []);
+                        }
+                        const tabRank: Record<string, number> = { hidden: 0, default_off: 1, default_on: 2, visible: 3 };
+                        for (const ps of resolved) {
+                            for (const sp of (Array.isArray(ps?.systemPermissions) ? ps.systemPermissions : [])) {
+                                if (typeof sp === 'string') sysPerms.add(sp);
+                            }
+                            if (ps?.tabPermissions && typeof ps.tabPermissions === 'object') {
+                                for (const [app, val] of Object.entries(ps.tabPermissions as Record<string, unknown>)) {
+                                    if (typeof val !== 'string' || !(val in tabRank)) continue;
+                                    const cur = tabs[app];
+                                    if (!cur || tabRank[val] > (tabRank[cur] ?? -1)) tabs[app] = val;
+                                }
+                            }
+                        }
+                    }
+                } catch { failOpen = true; }
+                const apps = [...byName.values()].filter((app: any) => {
                     if (tabs[app.name] === 'hidden') return false;
                     if (failOpen) return true;
                     const req: string[] = Array.isArray(app.requiredPermissions) ? app.requiredPermissions : [];
