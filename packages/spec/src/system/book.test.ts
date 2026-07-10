@@ -6,6 +6,10 @@ import {
   resolveBookTree,
   deriveImplicitPackageBook,
   isPublicAudience,
+  audienceAllows,
+  resolveBookClaimedDocs,
+  resolveDocAudiences,
+  docAudienceAllows,
   type Book,
   type ResolverDoc,
 } from './book.zod';
@@ -156,5 +160,90 @@ describe('deriveImplicitPackageBook + audience', () => {
     expect(isPublicAudience('org')).toBe(false);
     expect(isPublicAudience({ permissionSet: 'crm_admin' })).toBe(false);
     expect(isPublicAudience(undefined)).toBe(false);
+  });
+});
+
+describe('audienceAllows (ADR-0046 §6.7, ADR-0090 vocabulary)', () => {
+  const anon = { authenticated: false };
+  const member = { authenticated: true, permissionSets: ['member_default'] };
+  const admin = { authenticated: true, permissionSets: ['member_default', 'crm_admin'] };
+  const unresolved = { authenticated: true }; // security resolution unavailable
+
+  it('public allows everyone, including anonymous', () => {
+    for (const caller of [anon, member, admin, unresolved]) {
+      expect(audienceAllows('public', caller)).toBe(true);
+    }
+  });
+  it('org (and unset) allows any authenticated principal, never anonymous', () => {
+    for (const audience of ['org', undefined] as const) {
+      expect(audienceAllows(audience, anon)).toBe(false);
+      expect(audienceAllows(audience, member)).toBe(true);
+      expect(audienceAllows(audience, unresolved)).toBe(true);
+    }
+  });
+  it('permission-set gate requires holding the named set', () => {
+    const gated = { permissionSet: 'crm_admin' };
+    expect(audienceAllows(gated, admin)).toBe(true);
+    expect(audienceAllows(gated, member)).toBe(false);
+    expect(audienceAllows(gated, anon)).toBe(false);
+  });
+  it('permission-set gate FAILS CLOSED when holdings are unknown (ADR-0049)', () => {
+    expect(audienceAllows({ permissionSet: 'crm_admin' }, unresolved)).toBe(false);
+  });
+});
+
+describe('resolveDocAudiences — union over claiming books (§6.7)', () => {
+  const corpus: ResolverDoc[] = [
+    { name: 'crm_guide_intro', packageId: 'crm' },
+    { name: 'crm_guide_flows', packageId: 'crm' },
+    { name: 'crm_admin_setup', packageId: 'crm' },
+    { name: 'crm_unclaimed', packageId: 'crm' },
+  ];
+  const publicBook: Book & { packageId?: string } = {
+    name: 'crm_guide',
+    audience: 'public',
+    groups: [{ key: 'g', label: 'Guide', include: 'crm_guide_*' }],
+    packageId: 'crm',
+  };
+  const adminBook: Book & { packageId?: string } = {
+    name: 'crm_admin_guide',
+    audience: { permissionSet: 'crm_admin' },
+    groups: [{ key: 'a', label: 'Admin', include: 'crm_admin_*' }],
+    packageId: 'crm',
+  };
+
+  it('claimed docs union the audiences of every claiming book', () => {
+    const audiences = resolveDocAudiences([publicBook, adminBook], corpus);
+    expect(audiences.get('crm_guide_intro')).toEqual(['public']);
+    expect(audiences.get('crm_admin_setup')).toEqual([{ permissionSet: 'crm_admin' }]);
+  });
+  it('a doc claimed by no book defaults to org — orphans do NOT ride along with public books', () => {
+    const audiences = resolveDocAudiences([publicBook, adminBook], corpus);
+    expect(audiences.get('crm_unclaimed')).toEqual(['org']);
+    // The tree view still renders the orphan (nothing is dropped)…
+    const tree = resolveBookTree(publicBook, corpus, 'crm');
+    expect(tree.groups.at(-1)!.entries.some((e) => e.doc === 'crm_unclaimed')).toBe(true);
+    // …but the CLAIM set excludes it, so it never inherits `public`.
+    expect(resolveBookClaimedDocs(publicBook, corpus, 'crm').has('crm_unclaimed')).toBe(false);
+  });
+  it('docAudienceAllows applies the union: any allowing book grants access', () => {
+    const both: Book & { packageId?: string } = {
+      ...adminBook,
+      name: 'crm_all',
+      audience: 'org',
+      groups: [{ key: 'all', label: 'All', include: 'crm_admin_*' }],
+    };
+    const audiences = resolveDocAudiences([adminBook, both], corpus);
+    const member = { authenticated: true, permissionSets: ['member_default'] };
+    // Reachable via the org book even without crm_admin.
+    expect(docAudienceAllows(audiences.get('crm_admin_setup'), member)).toBe(true);
+    // Gated-only doc stays gated.
+    const gatedOnly = resolveDocAudiences([adminBook], corpus);
+    expect(docAudienceAllows(gatedOnly.get('crm_admin_setup'), member)).toBe(false);
+    expect(docAudienceAllows(gatedOnly.get('crm_admin_setup'), { authenticated: false })).toBe(false);
+  });
+  it('an unknown doc (absent from the corpus map) gets the org default', () => {
+    expect(docAudienceAllows(undefined, { authenticated: true })).toBe(true);
+    expect(docAudienceAllows(undefined, { authenticated: false })).toBe(false);
   });
 });

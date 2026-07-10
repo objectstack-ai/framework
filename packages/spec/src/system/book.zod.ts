@@ -321,3 +321,98 @@ export function deriveImplicitPackageBook(packageId: string, label?: string): Bo
 export function isPublicAudience(audience?: BookAudience): boolean {
   return audience === 'public';
 }
+
+// ---------------------------------------------------------------------------
+// Audience evaluation (ADR-0046 §6.7, vocabulary per ADR-0090) — pure helpers
+// shared by the REST read layer so `/meta/book` and `/meta/doc` gate on ONE
+// canonical semantics and can never drift from each other.
+// ---------------------------------------------------------------------------
+
+/** What the read layer knows about the caller when evaluating an audience. */
+export interface AudienceCaller {
+  /** True when the request carries an authenticated principal. */
+  authenticated: boolean;
+  /**
+   * Names of the permission sets the caller effectively holds (positions
+   * expanded, baseline included — the security plugin's resolution).
+   * Absent/undefined means "unknown" and permission-set-gated audiences
+   * DENY (fail closed, ADR-0049) — pass an empty array only when resolution
+   * genuinely returned nothing.
+   */
+  permissionSets?: readonly string[];
+}
+
+/**
+ * Whether a caller may read content published under `audience`:
+ * `'public'` → always; `'org'` (or unset — §3.6 default) → any authenticated
+ * principal; `{ permissionSet }` → an authenticated principal that holds the
+ * named set. Unknown/unresolvable set holdings deny (fail closed).
+ */
+export function audienceAllows(audience: BookAudience | undefined, caller: AudienceCaller): boolean {
+  if (isPublicAudience(audience)) return true;
+  if (!caller.authenticated) return false;
+  if (audience === undefined || audience === 'org') return true;
+  if (typeof audience === 'object' && typeof audience.permissionSet === 'string') {
+    return Array.isArray(caller.permissionSets) && caller.permissionSets.includes(audience.permissionSet);
+  }
+  return false; // unknown future shape → fail closed
+}
+
+/**
+ * Doc names a book CLAIMS — members placed by a group rule (`include`),
+ * an explicit `doc.group`, or a pinned `pages` override. Deliberately
+ * EXCLUDES the synthetic *Uncategorized* orphan group: orphans are a
+ * rendering convenience ("nothing is ever dropped" in the tree view), not
+ * an authored membership claim, and letting them ride along would leak
+ * every unclaimed doc of a package through any `public` book it ships.
+ */
+export function resolveBookClaimedDocs(book: Book, docs: ResolverDoc[], bookPackage?: string): Set<string> {
+  const claimed = new Set<string>();
+  for (const group of resolveBookTree(book, docs, bookPackage).groups) {
+    if (group.key === UNCATEGORIZED_KEY) continue;
+    for (const entry of group.entries) {
+      if (entry.doc) claimed.add(entry.doc);
+    }
+  }
+  return claimed;
+}
+
+/** A book plus the provenance the audience resolver needs. */
+export interface AudienceBook extends Book {
+  /** Owning package id (stamped `_packageId` by the metadata layer). */
+  packageId?: string;
+}
+
+/**
+ * Effective audience of every doc = the union over the books that claim it
+ * (ADR-0046 §6.7). A doc claimed by no authored book falls back to `'org'` —
+ * the §3.6 package-grant default (equivalently: the implicit per-package
+ * book, §6.4, whose audience is `'org'`). Exposure is therefore always an
+ * authored decision: nothing becomes `public` or permission-set-gated except
+ * through a book that explicitly claims it.
+ */
+export function resolveDocAudiences(
+  books: readonly AudienceBook[],
+  docs: ResolverDoc[],
+): Map<string, BookAudience[]> {
+  const audiences = new Map<string, BookAudience[]>();
+  for (const doc of docs) audiences.set(doc.name, []);
+  for (const book of books) {
+    const audience: BookAudience = book.audience ?? 'org';
+    for (const name of resolveBookClaimedDocs(book, docs, book.packageId)) {
+      audiences.get(name)?.push(audience);
+    }
+  }
+  for (const [name, list] of audiences) {
+    if (list.length === 0) audiences.set(name, ['org']);
+  }
+  return audiences;
+}
+
+/** Whether a caller may read a doc given its effective audiences (§6.7 union). */
+export function docAudienceAllows(audiences: readonly BookAudience[] | undefined, caller: AudienceCaller): boolean {
+  // A doc with no computed entry (not in the corpus handed to the resolver)
+  // gets the same 'org' default as an unclaimed doc.
+  if (!audiences || audiences.length === 0) return audienceAllows('org', caller);
+  return audiences.some((a) => audienceAllows(a, caller));
+}

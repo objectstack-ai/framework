@@ -37,7 +37,7 @@ const SUBPATH_RULE_MESSAGE =
 // `.parse()` time and is a *value* import that fails loudly on a broken import
 // instead of silently degrading to `any` (the #2023 failure mode).
 const DOMAIN_TYPES = [
-  'Datasource', 'Connector', 'Policy', 'SharingRule', 'Role', 'PermissionSet',
+  'Datasource', 'Connector', 'Policy', 'SharingRule', 'Position', 'PermissionSet',
   'EmailTemplateDefinition', 'Report', 'Webhook', 'ObjectExtension', 'Cube',
   'Mapping', 'Theme', 'TranslationBundle', 'Page', 'Action',
 ].flatMap((t) => [t, t + 'Input']).join('|');

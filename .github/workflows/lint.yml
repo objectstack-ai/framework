@@ -58,6 +58,13 @@ jobs:
       - name: Doc/skill authoring guard
         run: pnpm check:doc-authoring
 
+      # ADR-0090 D3 vocabulary ratchet: "role" is reserved-forbidden in docs
+      # and skills. Existing occurrences are frozen in the baseline (better-auth
+      # boundary, ARIA samples, educational mentions); NEW occurrences fail.
+      # Improvements ratchet the baseline down via --update.
+      - name: Reserved-word ("role") docs ratchet
+        run: pnpm check:role-word
+
       # Authorization resolution must stay single-sourced (resolveAuthzContext,
       # @objectstack/core). Guards against a duplicate resolver copy drifting on a
       # security path (the REST-vs-dispatcher sys_user_role drift) and against an

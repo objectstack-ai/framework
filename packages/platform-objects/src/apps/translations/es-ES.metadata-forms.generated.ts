@@ -1338,67 +1338,12 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       }
     }
   },
-  profile: {
-    label: "Perfil",
+  position: {
+    label: "Posición",
     sections: {
-      identity: {
-        label: "Identidad",
-        description: "Los conjuntos de permisos se apilan sobre un perfil para conceder acceso adicional. Los perfiles son el conjunto base asignado 1:1 a cada usuario."
-      },
-      system_permissions: {
-        label: "Permisos del sistema",
-        description: "Capacidades de alto nivel no vinculadas a un objeto específico — p. ej. manage_users, view_audit_logs."
-      },
-      object_and_field_permissions: {
-        label: "Permisos de objeto y campo",
-        description: "CRUD por objeto + FLS por campo. Edita mediante el editor matricial o pega JSON aquí."
-      },
-      tab_and_row_level_security: {
-        label: "Pestaña y seguridad a nivel de fila",
-        description: "Visibilidad de pestañas, políticas RLS y variables de contexto personalizadas para evaluar predicados."
-      }
-    },
-    fields: {
-      name: {
-        label: "Nombre",
-        helpText: "Nombre de máquina (snake_case)"
-      },
-      label: {
-        label: "Etiqueta",
-        helpText: "Etiqueta mostrada para administradores"
-      },
-      systemPermissions: {
-        label: "Permisos del sistema",
-        helpText: "Lista de claves de capacidades del sistema"
-      },
-      objects: {
-        label: "Permisos de objeto",
-        helpText: "Ejemplo: { \"account\": { allowRead: true, allowEdit: true, ... } }"
-      },
-      fields: {
-        label: "Campos",
-        helpText: "Ejemplo: { \"account.amount\": { readable: true, editable: false } }"
-      },
-      tabPermissions: {
-        label: "Permisos de pestaña",
-        helpText: "Ejemplo: { \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
-      },
-      rowLevelSecurity: {
-        label: "Seguridad a nivel de fila",
-        helpText: "Array de políticas RLS (ver rls.zod.ts)"
-      },
-      contextVariables: {
-        label: "Variables de contexto",
-        helpText: "Variables personalizadas referenciadas en predicados RLS"
-      }
-    }
-  },
-  role: {
-    label: "Rol",
-    sections: {
-      role: {
-        label: "Rol",
-        description: "Los roles componen una jerarquía usada para compartir registros (sales VP → sales mgr → sales rep). Los permisos en sí residen en Permission Sets y Profiles."
+      position: {
+        label: "Posición",
+        description: "Una posición es un conjunto plano y asignable de permission sets (p. ej. sales_rep, sales_manager). La capacidad reside en los permission sets; la profundidad de visibilidad en el árbol de unidades de negocio."
       }
     },
     fields: {
@@ -1408,10 +1353,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       label: {
         label: "Etiqueta"
-      },
-      parent: {
-        label: "Padre",
-        helpText: "Nombre de máquina del rol padre (Reports To)"
       },
       description: {
         label: "Descripción"

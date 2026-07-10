@@ -664,6 +664,154 @@ describe('RestServer', () => {
     });
   });
 
+  describe('meta book/doc audience gating (ADR-0046 §6.7 / ADR-0090)', () => {
+    function getMetaRoute(rest: any, method: string, path: string) {
+      return rest.getRoutes().find((r: any) => r.method === method && r.path === path);
+    }
+    const mockRes = () => ({
+      json: vi.fn(),
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn(),
+      send: vi.fn(),
+    });
+    const BOOKS = [
+      { name: 'pub_book', audience: 'public', groups: [{ key: 'g', label: 'G', include: 'pub_*' }], _packageId: 'pkg' },
+      { name: 'org_book', groups: [{ key: 'g', label: 'G', include: 'org_*' }], _packageId: 'pkg' },
+      { name: 'gated_book', audience: { permissionSet: 'crm_admin' }, groups: [{ key: 'g', label: 'G', include: 'gated_*' }], _packageId: 'pkg' },
+    ];
+    const DOCS = [
+      { name: 'pub_intro', _packageId: 'pkg' },
+      { name: 'org_intro', _packageId: 'pkg' },
+      { name: 'gated_setup', _packageId: 'pkg' },
+    ];
+    const metaByType = (books: any[] = BOOKS, docs: any[] = DOCS) =>
+      vi.fn().mockImplementation(async ({ type }: any) =>
+        type === 'book' ? books : type === 'doc' ? docs : []);
+
+    it('tree: anonymous caller is 401ed off a non-public book', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/book/:name/tree');
+      const res = mockRes();
+      await route!.handler({ params: { name: 'org_book' }, query: {}, headers: {} }, res);
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+
+    it('tree: anonymous caller gets a public book, with non-public docs filtered OUT of the tree', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/book/:name/tree');
+      const res = mockRes();
+      await route!.handler({ params: { name: 'pub_book' }, query: {}, headers: {} }, res);
+      expect(res.status).not.toHaveBeenCalledWith(401);
+      const tree = res.json.mock.calls.at(-1)![0];
+      const docsInTree = tree.groups.flatMap((g: any) => g.entries.map((e: any) => e.doc));
+      expect(docsInTree).toContain('pub_intro');
+      // org_intro / gated_setup are claimed by other books; the orphan pass
+      // would render them, but the audience filter must drop them for anon.
+      expect(docsInTree).not.toContain('org_intro');
+      expect(docsInTree).not.toContain('gated_setup');
+    });
+
+    it('tree: authenticated non-holder is 403ed off a permission-set-gated book (fail closed without security service)', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      (rest as any).resolveExecCtx = vi.fn().mockResolvedValue({ userId: 'u1' });
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/book/:name/tree');
+      const res = mockRes();
+      await route!.handler({ params: { name: 'gated_book' }, query: {}, headers: {} }, res);
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('tree: a holder resolved through the security service opens the gated book', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      (rest as any).resolveExecCtx = vi.fn().mockResolvedValue({ userId: 'u1' });
+      (rest as any).securityServiceProvider = async () => ({
+        resolvePermissionSetNames: async () => ['member_default', 'crm_admin'],
+      });
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/book/:name/tree');
+      const res = mockRes();
+      await route!.handler({ params: { name: 'gated_book' }, query: {}, headers: {} }, res);
+      expect(res.status).not.toHaveBeenCalledWith(401);
+      expect(res.status).not.toHaveBeenCalledWith(403);
+      const tree = res.json.mock.calls.at(-1)![0];
+      const docsInTree = tree.groups.flatMap((g: any) => g.entries.map((e: any) => e.doc));
+      expect(docsInTree).toContain('gated_setup');
+    });
+
+    it('list: anonymous /meta/book returns only public books', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type');
+      const res = mockRes();
+      await route!.handler({ params: { type: 'book' }, query: {}, headers: {} }, res);
+      const body = res.json.mock.calls.at(-1)![0];
+      expect(body.map((b: any) => b.name)).toEqual(['pub_book']);
+    });
+
+    it('list: anonymous /meta/doc returns only docs whose effective audience is public', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type');
+      const res = mockRes();
+      await route!.handler({ params: { type: 'doc' }, query: {}, headers: {} }, res);
+      const body = res.json.mock.calls.at(-1)![0];
+      expect(body.map((d: any) => d.name)).toEqual(['pub_intro']);
+    });
+
+    it('list: authenticated member sees org + public docs but not gated-only docs', async () => {
+      protocol.getMetaItems = metaByType();
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      (rest as any).resolveExecCtx = vi.fn().mockResolvedValue({ userId: 'u1' });
+      (rest as any).securityServiceProvider = async () => ({
+        resolvePermissionSetNames: async () => ['member_default'],
+      });
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type');
+      const res = mockRes();
+      await route!.handler({ params: { type: 'doc' }, query: {}, headers: {} }, res);
+      const body = res.json.mock.calls.at(-1)![0];
+      expect(body.map((d: any) => d.name).sort()).toEqual(['org_intro', 'pub_intro']);
+    });
+
+    it('item: anonymous GET of an org-only doc is 401; of a public-claimed doc succeeds', async () => {
+      protocol.getMetaItems = metaByType();
+      protocol.getMetaItem = vi.fn().mockImplementation(async ({ name }: any) =>
+        DOCS.find((d) => d.name === name));
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type/:name');
+      const resDenied = mockRes();
+      await route!.handler({ params: { type: 'doc', name: 'org_intro' }, query: {}, headers: {} }, resDenied);
+      expect(resDenied.status).toHaveBeenCalledWith(401);
+      const resOk = mockRes();
+      await route!.handler({ params: { type: 'doc', name: 'pub_intro' }, query: {}, headers: {} }, resOk);
+      expect(resOk.status).not.toHaveBeenCalledWith(401);
+      expect(resOk.json.mock.calls.at(-1)![0]).toMatchObject({ name: 'pub_intro' });
+    });
+
+    it('item: gated book GET bypasses the shared cache and 403s a non-holder', async () => {
+      protocol.getMetaItemCached = vi.fn();
+      protocol.getMetaItems = metaByType();
+      protocol.getMetaItem = vi.fn().mockResolvedValue(BOOKS[2]);
+      const rest = new RestServer(server as any, protocol as any, ANON_API as any);
+      (rest as any).resolveExecCtx = vi.fn().mockResolvedValue({ userId: 'u1' });
+      rest.registerRoutes();
+      const route = getMetaRoute(rest, 'GET', '/api/v1/meta/:type/:name');
+      const res = mockRes();
+      await route!.handler({ params: { type: 'book', name: 'gated_book' }, query: {}, headers: {} }, res);
+      expect(protocol.getMetaItemCached).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+  });
+
   describe('meta single-item Cache-Control header (cached path)', () => {
     function getMetaItemRoute(rest: any) {
       return rest

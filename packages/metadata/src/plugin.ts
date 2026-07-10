@@ -69,7 +69,10 @@ const ARTIFACT_FIELD_TO_TYPE: Record<string, string> = {
     themes: 'theme',
     workflows: 'workflow',
     flows: 'flow',
-    roles: 'role',
+    // ADR-0090 D3: stacks declare `positions` (stack.zod.ts); the retired
+    // `roles: 'role'` mapping matched nothing and silently dropped compiled
+    // positions from artifact ingestion.
+    positions: 'position',
     permissions: 'permission',
     sharingRules: 'sharing_rule',
     policies: 'policy',

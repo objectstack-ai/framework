@@ -105,13 +105,13 @@ package (metadata); subject bindings and env-specific values stay as config.**
   seeds `stack.permissions` at boot — idempotent, re-seeded on upgrade, and it
   **never clobbers** env-authored (`platform`/`user`/legacy) rows. A package
   never writes into a foreign record.
-- The environment admin **assigns** sets to roles/users; the runtime unions
+- The environment admin **assigns** sets to positions/users; the runtime unions
   them. One shared set with hand-picked cross-package grants remains an
   env-admin-only construct.
 - This is what makes package **uninstall** well-defined (drop the package's
   own sets) and the objectui Access matrix scopable to `{ packageId }`.
-- Declared roles and sharing rules seed the same way
-  (`bootstrapDeclaredRoles`, ADR-0057 D6) — a declarable-but-never-seeded
+- Declared positions and sharing rules seed the same way
+  (`bootstrapDeclaredPositions`, ADR-0057 D6) — a declarable-but-never-seeded
   array is exactly the inert-metadata smell ADR-0078 prohibits.
 
 ### Two doors, one metadata (ADR-0086 D6/D7)
@@ -147,7 +147,7 @@ one of two doors, each writing only what it owns:
 
 | Stage | What holds today | Owned by |
 |---|---|---|
-| 1 · Package development | Zod-validated authoring; roles / sharingRules / permissions seeded at boot with provenance | ADR-0057 D6, ADR-0086 D5, ADR-0049/0078 gates |
+| 1 · Package development | Zod-validated authoring; positions / sharingRules / permissions seeded at boot with provenance | ADR-0057 D6, ADR-0086 D5, ADR-0049/0078 gates |
 | 2 · Distribution / install / upgrade / uninstall | Install-consent scopes (ADR-0025 — consent ≠ RBAC grants); namespaced, collision-free composition; provenance axis makes uninstall well-defined | ADR-0025/0028/0048/0086 |
 | 3 · Environment composition / assignment | Platform-owned assignment records (`sys_user_position` etc.); anti-escalation; union semantics | ADR-0057 D4 |
 | 4 · Runtime enforcement | The six-gate chain above; ~18 primitives enforced and CI-guarded | ADR-0056 D10 matrix |
@@ -261,7 +261,7 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 | [0056](/adr/0056-permission-model-landing-verification) | Permission-model landing: OWD, anonymous deny default, D10 matrix |
 | [0057](/adr/0057-erp-authorization-core-business-units-and-scope-depth) | Business units, scope depth, declarative RBAC seeding, platform-owned assignment |
 | [0066](/adr/0066-unified-authorization-model) | Unified model: capability registry, posture, precedence, future refinements |
-| [0068](/adr/0068-identity-roles) | Built-in identity roles, `EvalUser` |
+| [0068](/adr/0068-identity-roles) | Built-in identity positions (formerly "identity roles"), `EvalUser` |
 | [0069](/adr/0069-enterprise-authentication-hardening) | Enterprise authentication hardening (phased) |
 | [0078](/adr/0078-no-inert-declarable-metadata) | No inert declarable metadata |
 | [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |

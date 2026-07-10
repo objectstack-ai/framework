@@ -1338,67 +1338,12 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       }
     }
   },
-  profile: {
-    label: "配置文件",
+  position: {
+    label: "岗位",
     sections: {
-      identity: {
-        label: "标识",
-        description: "权限集叠加在配置文件之上以授予额外的访问权限。配置文件是按 1:1 分配给每个用户的基础集合。"
-      },
-      system_permissions: {
-        label: "系统权限",
-        description: "与特定对象无关的高级能力——例如 manage_users、view_audit_logs。"
-      },
-      object_and_field_permissions: {
-        label: "对象与字段权限",
-        description: "按对象的增删改查 + 按字段的字段级安全（FLS）。可通过矩阵编辑器编辑，或在此处粘贴 JSON。"
-      },
-      tab_and_row_level_security: {
-        label: "标签页与行级安全",
-        description: "标签页可见性、RLS 策略，以及用于谓词求值的自定义上下文变量。"
-      }
-    },
-    fields: {
-      name: {
-        label: "名称",
-        helpText: "机器名（snake_case）"
-      },
-      label: {
-        label: "显示名称",
-        helpText: "面向管理员显示的标签"
-      },
-      systemPermissions: {
-        label: "系统权限",
-        helpText: "系统能力键列表"
-      },
-      objects: {
-        label: "对象权限",
-        helpText: "示例：{ \"account\": { allowRead: true, allowEdit: true, ... } }"
-      },
-      fields: {
-        label: "字段",
-        helpText: "示例：{ \"account.amount\": { readable: true, editable: false } }"
-      },
-      tabPermissions: {
-        label: "标签页权限",
-        helpText: "示例：{ \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
-      },
-      rowLevelSecurity: {
-        label: "行级安全",
-        helpText: "RLS 策略数组（参见 rls.zod.ts）"
-      },
-      contextVariables: {
-        label: "上下文变量",
-        helpText: "RLS 谓词中引用的自定义变量"
-      }
-    }
-  },
-  role: {
-    label: "角色",
-    sections: {
-      role: {
-        label: "角色定义",
-        description: "角色名称与继承关系"
+      position: {
+        label: "岗位",
+        description: "岗位是扁平的、可分配的权限集组合(如 sales_rep、sales_manager)。能力在权限集上;可见范围深度在业务单元树上。"
       }
     },
     fields: {
@@ -1408,10 +1353,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       label: {
         label: "显示名称"
-      },
-      parent: {
-        label: "父级",
-        helpText: "继承父角色的权限"
       },
       description: {
         label: "描述"

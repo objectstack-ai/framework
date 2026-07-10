@@ -1294,6 +1294,63 @@ export class RestServer {
         return pending;
     }
 
+    /**
+     * [ADR-0046 §6.7] The audience-evaluation view of the caller for book/doc
+     * gating. `permissionSets` resolves through the security service's
+     * `resolvePermissionSetNames` — the SAME resolution as data-plane
+     * enforcement (positions expanded, additive baseline), so the docs gate
+     * can never drift from it. `permissionSets` stays undefined when the
+     * service is absent or resolution fails; `audienceAllows` then DENIES
+     * permission-set-gated audiences (fail closed, ADR-0049). Resolution is
+     * skipped unless `needPermissionSets` — callers pass true only when a
+     * `{ permissionSet }` audience is actually in play.
+     */
+    private async resolveAudienceCaller(
+        environmentId: string | undefined,
+        req: any,
+        opts: { needPermissionSets: boolean },
+    ): Promise<{ authenticated: boolean; permissionSets?: string[] }> {
+        const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+        const authenticated = !!ctx?.userId;
+        if (!authenticated || !opts.needPermissionSets || !this.securityServiceProvider) {
+            return { authenticated };
+        }
+        try {
+            const svc = await this.securityServiceProvider(environmentId);
+            if (!svc || typeof svc.resolvePermissionSetNames !== 'function') return { authenticated };
+            const names = await svc.resolvePermissionSetNames(ctx);
+            return { authenticated, permissionSets: Array.isArray(names) ? names : [] };
+        } catch {
+            return { authenticated }; // unresolved holdings → gated audiences deny
+        }
+    }
+
+    /** Whether any of these books carries a `{ permissionSet }` audience. */
+    private static anyPermissionSetAudience(books: readonly any[]): boolean {
+        return books.some(
+            (b) => b && typeof b === 'object' && b.audience && typeof b.audience === 'object'
+                && typeof b.audience.permissionSet === 'string',
+        );
+    }
+
+    /** Coerce a getMetaItems result (array | {items}) into an array. */
+    private static metaItemsArray(raw: unknown): any[] {
+        if (Array.isArray(raw)) return raw;
+        if (raw && typeof raw === 'object' && Array.isArray((raw as any).items)) return (raw as any).items;
+        return [];
+    }
+
+    /** Fetch every book of the environment, shaped for the audience resolver. */
+    private async fetchAudienceBooks(p: any, environmentId: string | undefined): Promise<any[]> {
+        const raw = await p.getMetaItems({
+            type: 'book',
+            ...(environmentId ? { environmentId } : {}),
+        } as any).catch(() => []);
+        return RestServer.metaItemsArray(raw).map((b: any) =>
+            b && typeof b === 'object' ? { ...b, packageId: b._packageId } : b,
+        );
+    }
+
     /** Heavy path behind `resolveExecCtx` — resolve identity + RBAC/RLS + localization. */
     private async computeExecCtx(environmentId: string | undefined, req: any): Promise<any | undefined> {
         try {
@@ -2425,6 +2482,67 @@ export class RestServer {
                             }
                         }
 
+                        // ADR-0046 §6.7 — book list is audience-filtered: anonymous
+                        // callers see only `public` books; `{ permissionSet }`-gated
+                        // books require the caller to hold the named set (resolved
+                        // through the security service; unresolvable → fail closed).
+                        if (req.params.type === 'book') {
+                            const raw = visible as unknown;
+                            const list = RestServer.metaItemsArray(raw);
+                            if (list.length > 0) {
+                                const { audienceAllows } = await import('@objectstack/spec/system');
+                                const caller = await this.resolveAudienceCaller(environmentId, req, {
+                                    needPermissionSets: RestServer.anyPermissionSetAudience(list),
+                                });
+                                const filtered = list.filter((b: any) =>
+                                    b && typeof b === 'object' && audienceAllows((b as any).audience, caller));
+                                visible = Array.isArray(raw) ? filtered : { ...(raw as any), items: filtered };
+                            }
+                        }
+
+                        // ADR-0046 §6.7 — doc list is audience-filtered by each
+                        // doc's EFFECTIVE audience (union over the books that
+                        // claim it; unclaimed docs default to `org`). Runs on the
+                        // raw items (before locale collapse) so `_packageId`
+                        // provenance is still present for membership scoping.
+                        if (req.params.type === 'doc') {
+                            const raw = visible as unknown;
+                            const list = RestServer.metaItemsArray(raw);
+                            if (list.length > 0) {
+                                const { audienceAllows, docAudienceAllows, resolveDocAudiences } =
+                                    await import('@objectstack/spec/system');
+                                const books = await this.fetchAudienceBooks(p, environmentId);
+                                const caller = await this.resolveAudienceCaller(environmentId, req, {
+                                    needPermissionSets: RestServer.anyPermissionSetAudience(books),
+                                });
+                                let filtered: any[];
+                                if (caller.authenticated && !RestServer.anyPermissionSetAudience(books)) {
+                                    // Fast path: with no gated book anywhere, every
+                                    // effective audience admits an authenticated caller.
+                                    filtered = list;
+                                } else {
+                                    const corpus = list
+                                        .filter((d: any) => d && typeof d === 'object')
+                                        .map((d: any) => ({
+                                            name: d.name,
+                                            group: d.group,
+                                            tags: d.tags,
+                                            order: d.order,
+                                            packageId: d._packageId,
+                                        }));
+                                    const audiences = resolveDocAudiences(books as any, corpus);
+                                    filtered = list.filter((d: any) => {
+                                        if (!d || typeof d !== 'object') return false;
+                                        const eff = audiences.get(d.name);
+                                        return eff
+                                            ? docAudienceAllows(eff, caller)
+                                            : audienceAllows('org', caller);
+                                    });
+                                }
+                                visible = Array.isArray(raw) ? filtered : { ...(raw as any), items: filtered };
+                            }
+                        }
+
                         // ADR-0046 i18n: collapse each doc to the request
                         // locale (localized label/description, `translations`
                         // map dropped) before the content-strip step below.
@@ -2530,7 +2648,7 @@ export class RestServer {
                         const prot = await this.resolveProtocol(environmentId, req);
                         const locale = this.extractLocale(req);
                         const packageId = req.query?.package || undefined;
-                        const { resolveBookTree, deriveImplicitPackageBook, isPublicAudience, resolveDocLocale } =
+                        const { resolveBookTree, deriveImplicitPackageBook, audienceAllows, resolveDocAudiences, docAudienceAllows, resolveDocLocale } =
                             await import('@objectstack/spec/system');
 
                         const norm = (raw: any): any[] =>
@@ -2547,10 +2665,21 @@ export class RestServer {
                             book = deriveImplicitPackageBook(req.params.name, req.params.name);
                         }
 
-                        // §6.7 — anonymous callers only get `public` books.
-                        const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
-                        if (!ctx?.userId && !isPublicAudience((book as any).audience)) {
-                            sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                        // §6.7 — the book's audience gates the whole tree:
+                        // anonymous → `public` only; `{ permissionSet }` →
+                        // the caller must hold the named set (fail closed
+                        // when holdings cannot be resolved, ADR-0049).
+                        const audienceBooks = books.map((b: any) =>
+                            b && typeof b === 'object' ? { ...b, packageId: b._packageId } : b);
+                        const caller = await this.resolveAudienceCaller(environmentId, req, {
+                            needPermissionSets: RestServer.anyPermissionSetAudience([book, ...audienceBooks]),
+                        });
+                        if (!audienceAllows((book as any).audience, caller)) {
+                            if (!caller.authenticated) {
+                                sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                            } else {
+                                sendError(res, { code: 'PERMISSION_DENIED', message: 'This documentation is limited to holders of a permission set you do not have', status: 403 });
+                            }
                             return;
                         }
 
@@ -2571,6 +2700,26 @@ export class RestServer {
                             }));
 
                         const tree = resolveBookTree(book as any, docs, (book as any)._packageId);
+
+                        // §6.7 — the tree's ENTRIES are additionally filtered by
+                        // each doc's effective audience (union over claiming
+                        // books, unclaimed → org), so an anonymous reader of a
+                        // public book never sees nav entries that would 401 on
+                        // fetch, and gated-only docs stay out of non-holders'
+                        // trees. The book gate above passed, so this only ever
+                        // narrows further for anonymous / non-holder callers.
+                        const gatedTreePossible = !caller.authenticated
+                            || RestServer.anyPermissionSetAudience(audienceBooks);
+                        if (gatedTreePossible) {
+                            const audiences = resolveDocAudiences(audienceBooks as any, docs);
+                            tree.groups = tree.groups
+                                .map((g: any) => ({
+                                    ...g,
+                                    entries: g.entries.filter((e: any) =>
+                                        !e.doc || docAudienceAllows(audiences.get(e.doc), caller)),
+                                }))
+                                .filter((g: any) => g.entries.some((e: any) => e.doc || e.href));
+                        }
                         res.json(tree);
                     } catch (error: any) {
                         logError("[REST] Unhandled error:", error);
@@ -2638,7 +2787,10 @@ export class RestServer {
                         // `getMetaItem(type, name, packageId)` path runs.
                         const packageScoped = typeof req.query?.package === 'string'
                             && req.query.package.length > 0;
-                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped && req.params.type !== 'doc') {
+                        // `doc` and `book` bypass the shared cache: their §6.7
+                        // audience gate is per-caller, and a shared ETag would
+                        // leak gated content across viewers.
+                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped && req.params.type !== 'doc' && req.params.type !== 'book') {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
@@ -2737,6 +2889,57 @@ export class RestServer {
                                 const registered = await this.resolveRegisteredServices((ctx as any)?.__kernel, [visible]);
                                 const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
                                 if (serviceGate) visible = this.filterDashboardForUser(visible, serviceGate);
+                            }
+
+                            // ADR-0046 §6.7 — audience gate on single-item reads.
+                            // A `book` is gated by its own audience; a `doc` by its
+                            // EFFECTIVE audience (union over the books that claim
+                            // it, unclaimed → org). 401 for anonymous, 403 for an
+                            // authenticated non-holder; fail closed when holdings
+                            // cannot be resolved (ADR-0049).
+                            if ((req.params.type === 'book' || req.params.type === 'doc') && visible) {
+                                const { audienceAllows, docAudienceAllows, resolveDocAudiences } =
+                                    await import('@objectstack/spec/system');
+                                const target = isMetaEnvelope(visible) ? (visible as any).item : visible;
+                                let caller: { authenticated: boolean; permissionSets?: string[] };
+                                let allowed: boolean;
+                                if (req.params.type === 'book') {
+                                    caller = await this.resolveAudienceCaller(environmentId, req, {
+                                        needPermissionSets: RestServer.anyPermissionSetAudience([target]),
+                                    });
+                                    allowed = audienceAllows(target?.audience, caller);
+                                } else {
+                                    const books = await this.fetchAudienceBooks(p, environmentId);
+                                    caller = await this.resolveAudienceCaller(environmentId, req, {
+                                        needPermissionSets: RestServer.anyPermissionSetAudience(books),
+                                    });
+                                    if (caller.authenticated && !RestServer.anyPermissionSetAudience(books)) {
+                                        allowed = true; // no gated book anywhere → org suffices
+                                    } else {
+                                        const corpus = RestServer.metaItemsArray(await p.getMetaItems({
+                                            type: 'doc',
+                                            ...(environmentId ? { environmentId } : {}),
+                                        } as any).catch(() => []))
+                                            .filter((d: any) => d && typeof d === 'object')
+                                            .map((d: any) => ({
+                                                name: d.name,
+                                                group: d.group,
+                                                tags: d.tags,
+                                                order: d.order,
+                                                packageId: d._packageId,
+                                            }));
+                                        const audiences = resolveDocAudiences(books as any, corpus);
+                                        allowed = docAudienceAllows(audiences.get(target?.name), caller);
+                                    }
+                                }
+                                if (!allowed) {
+                                    if (!caller.authenticated) {
+                                        sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                                    } else {
+                                        sendError(res, { code: 'PERMISSION_DENIED', message: 'This documentation is limited to holders of a permission set you do not have', status: 403 });
+                                    }
+                                    return;
+                                }
                             }
 
                             // ADR-0046 i18n: collapse the doc to the request

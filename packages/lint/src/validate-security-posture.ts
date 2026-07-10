@@ -14,6 +14,7 @@
  * | security-wildcard-vama        (error)   | ADR-0066 superuser wildcard     |
  * | security-anchor-high-privilege(error)   | ADR-0090 D5/D9 anchors          |
  * | security-role-word            (error)   | ADR-0090 D3 vocabulary freeze   |
+ * | security-book-audience-unknown-set(warn)| ADR-0046 §6.7 { permissionSet } |
  * | security-private-no-readscope (info)    | admin-intent mismatch class     |
  * | security-master-detail-ungranted(warn)  | framework#2700 os-tianshun-mtc#43|
  *
@@ -38,6 +39,7 @@ export const SECURITY_EXTERNAL_WIDER = 'security-external-wider-than-internal';
 export const SECURITY_WILDCARD_VAMA = 'security-wildcard-vama';
 export const SECURITY_ANCHOR_HIGH_PRIVILEGE = 'security-anchor-high-privilege';
 export const SECURITY_ROLE_WORD = 'security-role-word';
+export const SECURITY_BOOK_AUDIENCE_UNKNOWN_SET = 'security-book-audience-unknown-set';
 export const SECURITY_PRIVATE_NO_READSCOPE = 'security-private-no-readscope';
 export const SECURITY_MASTER_DETAIL_UNGRANTED = 'security-master-detail-ungranted';
 
@@ -334,6 +336,46 @@ export function validateSecurityPosture(stack: AnyRec): SecurityFinding[] {
   }
   for (const [i, app] of asArray(stack.apps).entries()) {
     flagRole('app', app.name, app.label, `app "${String(app.name ?? i)}"`, `apps[${i}].name`);
+  }
+  for (const [i, book] of asArray(stack.books).entries()) {
+    // Books entered the security-relevant set when `book.audience` became a
+    // permission-model reference (ADR-0046 §6.7 / ADR-0090): their names and
+    // labels are access-adjacent UI copy.
+    flagRole('book', book.name, book.label, `book "${String(book.name ?? i)}"`, `books[${i}].name`);
+  }
+
+  // ── Book audience → permission-set reference must resolve ────────────
+  // A `{ permissionSet }` book audience names a set the reader must hold
+  // (ADR-0046 §6.7). The runtime fails CLOSED on an unknown name (nobody
+  // holds it → nobody reads the book), so a typo is not a leak — but it IS
+  // the "why can nobody see the Admin Guide" support class, and packages
+  // should gate their books on their own sets (ADR-0090 D9 / ADR-0086
+  // provenance). Advisory: an environment-authored book may legitimately
+  // reference an installed package's set that is not in THIS stack.
+  const stackSetNames = new Set(
+    permissionSets
+      .map((ps) => (typeof ps.name === 'string' ? ps.name : undefined))
+      .filter((n): n is string => !!n),
+  );
+  for (const [i, book] of asArray(stack.books).entries()) {
+    const audience = (book as AnyRec).audience;
+    if (!audience || typeof audience !== 'object') continue;
+    const setName = (audience as AnyRec).permissionSet;
+    if (typeof setName !== 'string' || setName.length === 0) continue;
+    if (!stackSetNames.has(setName)) {
+      findings.push({
+        severity: 'warning',
+        rule: SECURITY_BOOK_AUDIENCE_UNKNOWN_SET,
+        where: `book "${String(book.name ?? i)}"`,
+        path: `books[${i}].audience.permissionSet`,
+        message:
+          `book audience references permission set "${setName}", which this stack does not declare. ` +
+          `The runtime fails closed — no holder means NO reader can open the book.`,
+        hint:
+          `Gate the book on one of this package's own permission sets (ADR-0090 D9, e.g. its admin set), ` +
+          `or fix the typo. Ignore if the set is intentionally provided by another installed package.`,
+      });
+    }
   }
 
   // ── Admin-intent mismatch: private object, plain read, no depth ──────

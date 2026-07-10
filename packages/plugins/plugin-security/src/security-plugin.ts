@@ -107,7 +107,7 @@ export interface SecurityPluginOptions {
   defaultPermissionSets?: PermissionSet[];
   /**
    * Permission set name applied as an implicit baseline whenever an
-   * authenticated request has no resolved permission sets (and no roles
+   * authenticated request has no resolved permission sets (and no positions
    * that map to one). This guarantees baseline tenant/owner RLS for
    * every logged-in user even before an admin assigns explicit
    * profiles. Set to `null` to disable.
@@ -406,6 +406,16 @@ export class SecurityPlugin implements Plugin {
       };
       ctx.registerService('security', {
         getReadFilter: (object: string, context?: any) => this.getReadFilter(object, context),
+        // [ADR-0046 §6.7] Effective permission-set NAMES for a caller — the
+        // primitive the REST read layer needs to evaluate a permission-set-
+        // gated book/doc audience ({ permissionSet: '…' }). Same resolution
+        // as the middleware (positions expanded, additive baseline), so the
+        // docs gate can never drift from data-plane enforcement. Throws on
+        // resolution failure — callers must fail CLOSED (ADR-0049).
+        resolvePermissionSetNames: async (context?: any): Promise<string[]> => {
+          const sets = await this.resolvePermissionSetsForContext(context);
+          return sets.map((s) => s.name);
+        },
         // [ADR-0090 D6] First-class access explanation. Same code paths as
         // the middleware (resolution/evaluator/RLS compiler) — explained by
         // construction. Explaining ANOTHER user requires `manage_users`.
@@ -490,14 +500,14 @@ export class SecurityPlugin implements Plugin {
         await this.delegatedAdminGate.assert(opCtx);
       }
 
-      const roles = opCtx.context?.positions ?? [];
+      const positions = opCtx.context?.positions ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
-      // Skip security checks if no roles AND no explicit permission sets
+      // Skip security checks if no positions AND no explicit permission sets
       // AND no userId (anonymous/unauthenticated). The auth middleware
       // should handle authentication separately.
       if (
-        roles.length === 0 &&
+        positions.length === 0 &&
         explicitPermissionSets.length === 0 &&
         !opCtx.context?.userId
       ) {
@@ -556,7 +566,7 @@ export class SecurityPlugin implements Plugin {
               {
                 operation: opCtx.operation,
                 object: opCtx.object,
-                roles,
+                positions,
                 permissionSets: explicitPermissionSets,
                 requiredPermissions: required,
                 missingPermissions: missing,
@@ -578,8 +588,8 @@ export class SecurityPlugin implements Plugin {
         if (!allowed) {
           throw new PermissionDeniedError(
             `[Security] Access denied: operation '${opCtx.operation}' on object '${opCtx.object}' ` +
-              `is not permitted for roles [${roles.join(', ')}]`,
-            { operation: opCtx.operation, object: opCtx.object, roles, permissionSets: explicitPermissionSets },
+              `is not permitted for positions [${positions.join(', ')}]`,
+            { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
           );
         }
       }
@@ -659,7 +669,7 @@ export class SecurityPlugin implements Plugin {
                 {
                   operation: opCtx.operation,
                   object: opCtx.object,
-                  roles,
+                  positions,
                   permissionSets: explicitPermissionSets,
                   recordId: targetId,
                 },
@@ -729,7 +739,7 @@ export class SecurityPlugin implements Plugin {
               {
                 operation: opCtx.operation,
                 object: opCtx.object,
-                roles,
+                positions,
                 permissionSets: explicitPermissionSets,
                 forbiddenFields: forbidden,
               },
@@ -821,7 +831,7 @@ export class SecurityPlugin implements Plugin {
             );
             throw new PermissionDeniedError(
               `[Security] Access denied: the ${opCtx.operation} would violate a row-level CHECK on '${opCtx.object}'`,
-              { operation: opCtx.operation, object: opCtx.object, roles, permissionSets: explicitPermissionSets },
+              { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
             );
           }
         }
@@ -905,12 +915,12 @@ export class SecurityPlugin implements Plugin {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
-        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_position so they
-        // stop being decorative (role→permission-set resolution + recipients).
+        // [ADR-0057 D6 / #2077] Seed stack-declared positions into sys_position so they
+        // stop being decorative (position→permission-set resolution + recipients).
         try {
           await bootstrapDeclaredPositions(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
-          ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
+          ctx.logger.warn('[security] declared-position seeding failed', { error: (e as Error).message });
         }
         // [ADR-0086 D5] Seed stack-declared permission sets into
         // sys_permission_set with package provenance (managed_by:'package' +
@@ -1024,7 +1034,7 @@ export class SecurityPlugin implements Plugin {
         } catch (e) {
           ctx.logger.warn('[security] permission publish-materializer registration failed', { error: (e as Error).message });
         }
-        // [ADR-0068 D2] Seed the framework's reserved built-in identity roles
+        // [ADR-0068 D2] Seed the framework's reserved built-in identity positions
         // (platform_admin / org_*) so the role catalog is self-describing.
         try {
           await bootstrapBuiltinRoles(ql, { logger: ctx.logger });
@@ -1166,7 +1176,7 @@ export class SecurityPlugin implements Plugin {
    *
    * Returns:
    *   - `undefined` → no scope applies (system context, or an unauthenticated
-   *     request with no userId/roles/permissions — authn is gated elsewhere).
+   *     request with no userId/positions/permissions — authn is gated elsewhere).
    *   - a `FilterCondition` → AND it into the object's scan (the join's `ON`/
    *     `WHERE` for analytics; the where clause for a plain find).
    *   - the `RLS_DENY_FILTER` sentinel → policies applied but none compiled, or
@@ -1246,12 +1256,12 @@ export class SecurityPlugin implements Plugin {
   ): Promise<Record<string, unknown> | null | undefined> {
     // System operations bypass scoping (mirrors the middleware's isSystem skip).
     if (context?.isSystem) return undefined;
-    const roles = context?.positions ?? [];
+    const positions = context?.positions ?? [];
     const explicit = context?.permissions ?? [];
-    // Unauthenticated + role-less + permission-less → no scope (the auth layer,
-    // not RLS, gates anonymous access; the analytics REST endpoint already 401s
-    // without a token). Mirrors the middleware's early `return next()`.
-    if (roles.length === 0 && explicit.length === 0 && !context?.userId) {
+    // Unauthenticated + position-less + permission-less → no scope (the auth
+    // layer, not RLS, gates anonymous access; the analytics REST endpoint
+    // already 401s without a token). Mirrors the middleware's early `return next()`.
+    if (positions.length === 0 && explicit.length === 0 && !context?.userId) {
       return undefined;
     }
     try {
@@ -1271,7 +1281,7 @@ export class SecurityPlugin implements Plugin {
   }
 
   /**
-   * Resolve the effective permission sets for an execution context — roles +
+   * Resolve the effective permission sets for an execution context — positions +
    * explicit permission sets, with the configured baseline applied both as an
    * implicit request (when none were named) and as a post-resolution fallback
    * (when named ones resolved to nothing). Shared by the engine middleware and
@@ -1302,7 +1312,7 @@ export class SecurityPlugin implements Plugin {
       { logger: this.logger },
     );
     // Post-resolution fallback — closes the fail-open hole where a populated
-    // `roles` array maps to no permission set yet (no sys_position binding), which
+    // `positions` array maps to no permission set yet (no sys_position binding), which
     // would otherwise skip RLS entirely and expose every tenant's data.
     if (
       permissionSets.length === 0 &&

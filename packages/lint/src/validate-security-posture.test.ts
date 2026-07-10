@@ -15,6 +15,7 @@ import {
   SECURITY_WILDCARD_VAMA,
   SECURITY_ANCHOR_HIGH_PRIVILEGE,
   SECURITY_ROLE_WORD,
+  SECURITY_BOOK_AUDIENCE_UNKNOWN_SET,
   SECURITY_PRIVATE_NO_READSCOPE,
   SECURITY_MASTER_DETAIL_UNGRANTED,
 } from './validate-security-posture.js';
@@ -313,5 +314,47 @@ describe('validateSecurityPosture · master-detail detail ungranted (framework#2
     });
     expect(md).toHaveLength(1);
     expect(md[0].where).toBe('object "work_order_item"');
+  });
+});
+
+describe('validateSecurityPosture · book audience (ADR-0046 §6.7 / ADR-0090)', () => {
+  it('flags the reserved word in book names and labels', () => {
+    const findings = validateSecurityPosture({
+      books: [
+        { name: 'crm_role_guide', label: 'CRM Guide', groups: [] },
+        { name: 'crm_admin_guide', label: 'Admin Roles Handbook', groups: [] },
+      ],
+    });
+    const bookRole = findings.filter((f) => f.rule === SECURITY_ROLE_WORD);
+    expect(bookRole).toHaveLength(2);
+    expect(bookRole.map((f) => f.where)).toEqual(['book "crm_role_guide"', 'book "crm_admin_guide"']);
+  });
+
+  it('warns when a { permissionSet } audience references a set the stack does not declare', () => {
+    const findings = validateSecurityPosture({
+      permissions: [{ name: 'crm_admin' }],
+      books: [
+        { name: 'crm_admin_guide', audience: { permissionSet: 'crm_admn' }, groups: [] }, // typo
+      ],
+    });
+    const dangling = findings.filter((f) => f.rule === SECURITY_BOOK_AUDIENCE_UNKNOWN_SET);
+    expect(dangling).toHaveLength(1);
+    expect(dangling[0].severity).toBe('warning');
+    expect(dangling[0].path).toBe('books[0].audience.permissionSet');
+    expect(dangling[0].message).toContain('crm_admn');
+  });
+
+  it('accepts a gated book whose set the stack declares — and scalar audiences', () => {
+    expect(
+      rulesOf({
+        permissions: [{ name: 'crm_admin' }],
+        books: [
+          { name: 'crm_admin_guide', audience: { permissionSet: 'crm_admin' }, groups: [] },
+          { name: 'crm_guide', audience: 'public', groups: [] },
+          { name: 'crm_internal', audience: 'org', groups: [] },
+          { name: 'crm_default', groups: [] },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

@@ -26,7 +26,7 @@ ADR-0048 (one app per package), `/apps/setup` — resolvable as
 
 ## Where it lives
 
-| File | Role |
+| File | Purpose |
 |:---|:---|
 | `packages/platform-objects/src/apps/setup.app.ts` | The `App` definition — the navigation **shell** (group anchors), branding, required permissions |
 | `packages/platform-objects/src/apps/setup-nav.contributions.ts` | `SETUP_NAV_CONTRIBUTIONS` — the nav entries owned by `@objectstack/platform-objects`, merged into the shell at runtime |
@@ -51,7 +51,7 @@ anchors are:
 | **Overview** (`group_overview`) | System Overview dashboard — `platform-objects` |
 | **Apps** (`group_apps`) | Capability plugins only (e.g. marketplace via cloud-connection); empty otherwise |
 | **People & Organization** (`group_people_org`) | Users · Departments · Teams · Organizations · Invitations — `platform-objects` |
-| **Access Control** (`group_access_control`) | Roles / Permission Sets — `plugin-security`; Sharing Rules / Record Shares — `plugin-sharing`; API Keys — `platform-objects` |
+| **Access Control** (`group_access_control`) | Positions / Permission Sets — `plugin-security`; Sharing Rules / Record Shares — `plugin-sharing`; API Keys — `platform-objects` |
 | **Approvals** (`group_approvals`) | `plugin-approvals` |
 | **Configuration** (`group_configuration`) | All Settings · Branding · Authentication · Email · File Storage · AI & Embedder · Knowledge · Feature Flags — `platform-objects` |
 | **Diagnostics** (`group_diagnostics`) | Sessions · Notification Events — `platform-objects`; Audit Logs — `plugin-audit` |
