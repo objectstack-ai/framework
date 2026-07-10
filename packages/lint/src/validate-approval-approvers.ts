@@ -14,10 +14,11 @@
  *
  * Rules:
  *
- * | Rule                                | Severity | Origin                     |
- * |-------------------------------------|----------|----------------------------|
- * | approval-role-not-membership-tier   | warning  | ADR-0090 D3 (hotcrm class) |
- * | approval-approver-type-unknown      | warning  | contract-first (PD #12)    |
+ * | Rule                                       | Severity | Origin                     |
+ * |--------------------------------------------|----------|----------------------------|
+ * | approval-role-not-membership-tier          | warning  | ADR-0090 D3 (hotcrm class) |
+ * | approval-approver-type-unknown             | warning  | contract-first (PD #12)    |
+ * | approval-escalation-reassign-no-target     | warning  | silent notify degradation  |
  *
  * Warnings (not errors): a custom better-auth membership tier is legal, and
  * the runtime keeps its literal fallback — but both shapes are near-certainly
@@ -30,6 +31,7 @@ import { ApproverType, APPROVAL_NODE_TYPE } from '@objectstack/spec/automation';
 
 export const APPROVAL_ROLE_NOT_MEMBERSHIP_TIER = 'approval-role-not-membership-tier';
 export const APPROVAL_APPROVER_TYPE_UNKNOWN = 'approval-approver-type-unknown';
+export const APPROVAL_ESCALATION_REASSIGN_NO_TARGET = 'approval-escalation-reassign-no-target';
 
 export type ApprovalApproverSeverity = 'error' | 'warning' | 'info';
 
@@ -133,6 +135,28 @@ export function validateApprovalApprovers(stack: AnyRec): ApprovalApproverFindin
               `If '${value}' is an org position, author { type: 'position', value: '${value}' } ` +
               `(resolved via sys_user_position, ADR-0090 D3). Keep type 'role' only for ` +
               `membership tiers (owner/admin/member).`,
+          });
+        }
+      }
+
+      // escalation.action 'reassign' with no escalateTo silently degrades to a
+      // plain SLA-breach notification at runtime — the hand-off the author
+      // asked for never happens.
+      const escalation = (cfg.escalation ?? null) as AnyRec | null;
+      if (escalation && typeof escalation === 'object' && escalation.action === 'reassign') {
+        const target = typeof escalation.escalateTo === 'string' ? escalation.escalateTo.trim() : '';
+        if (!target) {
+          findings.push({
+            severity: 'warning',
+            rule: APPROVAL_ESCALATION_REASSIGN_NO_TARGET,
+            where,
+            path: `flows[${fi}].nodes[${ni}].config.escalation.escalateTo`,
+            message:
+              `escalation.action is 'reassign' but escalateTo is empty — at runtime the ` +
+              `escalation degrades to a notify and the request stays with the original approvers.`,
+            hint:
+              `Set escalateTo to a position machine name (expanded via sys_user_position, ` +
+              `ADR-0090 D3) or a specific user id, or change action to 'notify'.`,
           });
         }
       }

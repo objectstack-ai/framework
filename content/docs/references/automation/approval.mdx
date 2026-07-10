@@ -42,7 +42,7 @@ const result = ApprovalDecision.parse(data);
 | **enabled** | `boolean` | ✅ | Enable SLA-based escalation for this node |
 | **timeoutHours** | `number` | ✅ | Hours before escalation triggers |
 | **action** | `Enum<'reassign' \| 'auto_approve' \| 'auto_reject' \| 'notify'>` | ✅ | Action on escalation timeout |
-| **escalateTo** | `string` | optional | User id, role, or manager level to escalate to |
+| **escalateTo** | `string` | optional | User id or position machine name to escalate to |
 | **notifySubmitter** | `boolean` | ✅ | Notify the original submitter on escalation |
 
 

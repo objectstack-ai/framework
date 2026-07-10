@@ -1381,6 +1381,18 @@ export class ApprovalService implements IApprovalService {
     const now = this.clock.now().toISOString();
     const pending = csvSplit(raw.pending_approvers);
 
+    // `escalateTo` is a position machine name or a user id (same contract as
+    // the `position` ApproverType, ADR-0090 D3). Position holders win; an
+    // empty expansion falls back to the literal, so a config naming a
+    // specific user id keeps working unchanged.
+    let escalatees: string[] = [];
+    if (escalateTo) {
+      try {
+        escalatees = await this.expandPositionUsers(escalateTo, raw.organization_id ?? null);
+      } catch { escalatees = []; }
+      if (!escalatees.length) escalatees = [escalateTo];
+    }
+
     // Audit first — this row IS the idempotency marker (ADR-0042 §1).
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'), request_id: raw.id, organization_id: raw.organization_id ?? null,
@@ -1390,14 +1402,14 @@ export class ApprovalService implements IApprovalService {
       created_at: now,
     }, { context: SYSTEM_CTX });
 
-    if (action === 'reassign' && escalateTo) {
+    if (action === 'reassign' && escalatees.length) {
       await this.engine.update('sys_approval_request', {
-        id: raw.id, pending_approvers: escalateTo, updated_at: now,
+        id: raw.id, pending_approvers: escalatees.join(','), updated_at: now,
       }, { context: SYSTEM_CTX });
-      await this.syncApproverIndex(raw.id, [escalateTo], raw.organization_id ?? null, now);
+      await this.syncApproverIndex(raw.id, escalatees, raw.organization_id ?? null, now);
       await this.notify({
         topic: 'approval.escalated',
-        audience: [escalateTo],
+        audience: escalatees,
         actorId: SLA_ACTOR_ID,
         source: { object: 'sys_approval_request', id: raw.id },
         payload: {
@@ -1416,7 +1428,7 @@ export class ApprovalService implements IApprovalService {
       // 'notify' (and the reassign-without-target fallback)
       await this.notify({
         topic: 'approval.sla_breached',
-        audience: [...pending, ...(escalateTo ? [escalateTo] : [])],
+        audience: [...pending, ...escalatees],
         actorId: SLA_ACTOR_ID,
         source: { object: 'sys_approval_request', id: raw.id },
         payload: {
