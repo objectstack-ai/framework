@@ -119,12 +119,15 @@ export const ApprovalEscalationSchema = lazySchema(() => z.object({
   timeoutHours: z.number().min(1).describe('Hours before escalation triggers'),
   action: z.enum(['reassign', 'auto_approve', 'auto_reject', 'notify']).default('notify')
     .describe('Action on escalation timeout'),
-  // Escalation hands the request to a role (the common case — e.g. a manager
-  // role or an approvals queue owner); the Studio designer renders a role
-  // picker, but free text is still accepted for a specific user id.
+  // Escalation hands the request to a position (the common case — e.g. an
+  // approvals supervisor); the Studio designer renders a position picker, but
+  // free text is still accepted for a specific user id. The engine expands a
+  // position machine name to its holders via `sys_user_position` (ADR-0090
+  // D3) and falls back to treating the value as a user id when nobody holds
+  // it. NOT a better-auth membership tier — same contract as ApproverType.
   escalateTo: z.string().optional().meta({
-    description: 'User id, role, or manager level to escalate to',
-    xRef: { kind: 'role' },
+    description: 'User id or position machine name to escalate to',
+    xRef: { kind: 'position' },
   }),
   notifySubmitter: z.boolean().default(true).describe('Notify the original submitter on escalation'),
 }));

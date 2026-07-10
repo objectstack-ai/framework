@@ -863,6 +863,40 @@ describe('ApprovalService (node era)', () => {
     expect(fresh?.pending_approvers).toEqual(['boss']);
   });
 
+  it('runEscalations: reassign expands a position escalateTo to its holders (ADR-0090 D3)', async () => {
+    engine._tables['sys_user_position'] = [
+      { id: 'up1', user_id: 'u5', position: 'approvals_supervisor', organization_id: 't1' },
+      { id: 'up2', user_id: 'u6', position: 'approvals_supervisor', organization_id: 't1' },
+      { id: 'up3', user_id: 'u7', position: 'approvals_supervisor', organization_id: 't2' }, // other tenant
+    ];
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 1, action: 'reassign', escalateTo: 'approvals_supervisor', notifySubmitter: false } }), CTX,
+    );
+    makeOverdue(req.id);
+    await svc.runEscalations();
+    const fresh = await svc.getRequest(req.id, SYS);
+    expect(fresh?.status).toBe('pending');
+    expect(fresh?.pending_approvers?.slice().sort()).toEqual(['u5', 'u6']);
+    // The audit trail keeps the AUTHORED target, not the expansion.
+    const actions = await svc.listActions(req.id, SYS);
+    expect(actions.find(a => a.action === 'escalate')?.comment).toBe('reassign → approvals_supervisor');
+  });
+
+  it('runEscalations: notify expands a position escalateTo into the audience', async () => {
+    engine._tables['sys_user_position'] = [
+      { id: 'up1', user_id: 'u5', position: 'approvals_supervisor', organization_id: 't1' },
+    ];
+    const emitted: any[] = [];
+    svc.attachMessaging({ async emit(input) { emitted.push(input); } });
+    const req = await svc.openNodeRequest(
+      openInput(['u9'], {}, { escalation: { timeoutHours: 2, action: 'notify', escalateTo: 'approvals_supervisor', notifySubmitter: false } }), CTX,
+    );
+    makeOverdue(req.id);
+    await svc.runEscalations();
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].audience).toEqual(['u9', 'u5']);
+  });
+
   it('runEscalations: skips requests that are not yet due or have no SLA', async () => {
     await svc.openNodeRequest(
       openInput(['u9'], {}, { escalation: { timeoutHours: 1000, action: 'auto_approve' } }), CTX,

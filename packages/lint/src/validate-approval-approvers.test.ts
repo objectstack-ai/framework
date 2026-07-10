@@ -5,6 +5,7 @@ import {
   validateApprovalApprovers,
   APPROVAL_ROLE_NOT_MEMBERSHIP_TIER,
   APPROVAL_APPROVER_TYPE_UNKNOWN,
+  APPROVAL_ESCALATION_REASSIGN_NO_TARGET,
 } from './validate-approval-approvers.js';
 
 function stackWithApprovers(approvers: unknown[]): Record<string, unknown> {
@@ -70,6 +71,26 @@ describe('validateApprovalApprovers', () => {
     expect(findings[0].rule).toBe(APPROVAL_APPROVER_TYPE_UNKNOWN);
     expect(findings[0].hint).toContain("type: 'department'");
     expect(findings[1].rule).toBe(APPROVAL_APPROVER_TYPE_UNKNOWN);
+  });
+
+  it("flags escalation.action 'reassign' with no escalateTo (silent notify degradation)", () => {
+    const stack = stackWithApprovers([{ type: 'user', value: 'u1' }]);
+    const node = (stack.flows as any)[0].nodes[1];
+    node.config.escalation = { enabled: true, timeoutHours: 24, action: 'reassign' };
+    const findings = validateApprovalApprovers(stack);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(APPROVAL_ESCALATION_REASSIGN_NO_TARGET);
+    expect(findings[0].path).toBe('flows[0].nodes[1].config.escalation.escalateTo');
+    expect(findings[0].hint).toContain('position');
+  });
+
+  it('accepts reassign escalation with a target, and non-reassign actions without one', () => {
+    const stack = stackWithApprovers([{ type: 'user', value: 'u1' }]);
+    const node = (stack.flows as any)[0].nodes[1];
+    node.config.escalation = { enabled: true, timeoutHours: 24, action: 'reassign', escalateTo: 'approvals_supervisor' };
+    expect(validateApprovalApprovers(stack)).toEqual([]);
+    node.config.escalation = { enabled: true, timeoutHours: 24, action: 'notify' };
+    expect(validateApprovalApprovers(stack)).toEqual([]);
   });
 
   it('only scans approval nodes and tolerates malformed shapes', () => {

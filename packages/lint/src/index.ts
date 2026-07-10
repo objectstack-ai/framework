@@ -79,6 +79,7 @@ export {
   validateApprovalApprovers,
   APPROVAL_ROLE_NOT_MEMBERSHIP_TIER,
   APPROVAL_APPROVER_TYPE_UNKNOWN,
+  APPROVAL_ESCALATION_REASSIGN_NO_TARGET,
 } from './validate-approval-approvers.js';
 export type { ApprovalApproverFinding, ApprovalApproverSeverity } from './validate-approval-approvers.js';
 
