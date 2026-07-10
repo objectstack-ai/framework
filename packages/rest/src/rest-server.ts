@@ -104,18 +104,19 @@ export function mapDataError(error: any, object?: string): { status: number; bod
             },
         };
     }
-    // Capability gate (#2707): the target object opted out of comments
-    // (`enable.feeds: false`) — plugin-audit's engine hook rejects the
-    // sys_comment insert fail-closed. 403 like CLONE_DISABLED; surfaced by
-    // `code` because the generic data routes map through here (they never
-    // reach sendError's `.status` passthrough). `error.object` names the
-    // gated TARGET object (not sys_comment), so prefer it.
-    if (error?.code === 'FEEDS_DISABLED') {
+    // Capability gates (#2707 feeds / #2727 files): plugin-audit's engine
+    // hooks reject sys_comment / sys_attachment inserts fail-closed when the
+    // TARGET object's capability flag disallows them. 403 like
+    // CLONE_DISABLED; surfaced by `code` because the generic data routes map
+    // through here (they never reach sendError's `.status` passthrough).
+    // `error.object` names the gated TARGET object (not the join table), so
+    // prefer it.
+    if (error?.code === 'FEEDS_DISABLED' || error?.code === 'FILES_DISABLED') {
         return {
             status: 403,
             body: {
-                error: error?.message ?? 'Comments are disabled for this object',
-                code: 'FEEDS_DISABLED',
+                error: error?.message ?? 'This capability is disabled for the target object',
+                code: error.code,
                 ...(error?.object || object ? { object: error?.object ?? object } : {}),
             },
         };
@@ -969,6 +970,9 @@ export class RestServer {
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    /** [ADR-0090] `security` service resolver — used by the
+     *  /security/suggested-bindings (D5/D9) and /security/explain (D6)
+     *  routes (plugin-security). */
     private securityServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     /** Sync probe: is a kernel service registered? Single-env path for nav
      *  capability gates (ADR-0057 D10) — resolveExecCtx sets no kernel in
@@ -1884,6 +1888,7 @@ export class RestServer {
             this.registerApprovalsEndpoints(bp);
             this.registerAnalyticsEndpoints(bp);
             this.registerSecurityEndpoints(bp);
+            this.registerSecurityExplainEndpoints(bp);
             // Data-action routes (e.g. GET /data/:object/export, POST
             // /data/:object/import) use static-literal action segments that
             // MUST be registered BEFORE the greedy GET /data/:object/:id
@@ -4879,7 +4884,7 @@ export class RestServer {
      * business) and returns 501 when no security service exposing `explain`
      * is mounted (a deployment without `@objectstack/plugin-security`).
      */
-    private registerSecurityEndpoints(basePath: string): void {
+    private registerSecurityExplainEndpoints(basePath: string): void {
         const isScoped = basePath.includes('/environments/:environmentId');
         // Resolve the ENVIRONMENT's security service first (its resolver /
         // evaluator / RLS compiler are bound to the env kernel's own data
@@ -5215,6 +5220,106 @@ export class RestServer {
                 } catch (err: any) { handleError(err, res, 'RULE_EVALUATE_FAILED'); }
             },
             metadata: { summary: 'Re-evaluate a sharing rule and reconcile grants', tags: ['sharing'] },
+        });
+    }
+
+    /**
+     * Register the security admin endpoints (ADR-0090 D5/D9) — suggested
+     * audience bindings. A package permission set declaring `isDefault: true`
+     * is an install-time SUGGESTION to bind it to the `everyone` position;
+     * these routes surface pending suggestions and let a tenant admin resolve
+     * them. The `security` service (plugin-security) does the real gating:
+     * tenant-admin pre-check on all three, and confirm writes the binding
+     * with the caller's execution context so the audience-anchor and
+     * delegated-admin gates enforce it — never auto-bound, never system.
+     *
+     *   GET  {basePath}/security/suggested-bindings?status=&packageId=
+     *   POST {basePath}/security/suggested-bindings/:id/confirm
+     *   POST {basePath}/security/suggested-bindings/:id/dismiss
+     *
+     * Routes return 501 when the `security` service is not registered
+     * (deployment without plugin-security). Typed service errors carry their
+     * HTTP status (403 permission / 404 not found / 409 state).
+     */
+    private registerSecurityEndpoints(basePath: string): void {
+        const dataPath = basePath;
+        const isScoped = basePath.includes('/environments/:environmentId');
+
+        const resolveService = async (environmentId?: string) => {
+            if (!this.securityServiceProvider) return undefined;
+            try {
+                const svc = await this.securityServiceProvider(environmentId);
+                return svc && typeof svc.listAudienceBindingSuggestions === 'function' ? svc : undefined;
+            } catch { return undefined; }
+        };
+        const respond501 = (res: any) => res.status(501).json({
+            code: 'NOT_IMPLEMENTED',
+            message: 'Security service is not configured on this deployment',
+        });
+        const handleError = (err: any, res: any, defaultCode: string) => {
+            const status = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+            if (status !== 500) {
+                return res.status(status).json({ code: err?.code ?? defaultCode, error: String(err?.message ?? err) });
+            }
+            logError(`[REST] suggested-bindings ${defaultCode}:`, err);
+            return res.status(500).json({ code: defaultCode, error: String(err?.message ?? err).slice(0, 500) });
+        };
+
+        // LIST (reconciles against installed packages / declared sets first)
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/security/suggested-bindings`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.listAudienceBindingSuggestions(context ?? {}, {
+                        status: req.query?.status ? String(req.query.status) : undefined,
+                        packageId: req.query?.packageId ? String(req.query.packageId) : undefined,
+                    });
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_LIST_FAILED'); }
+            },
+            metadata: { summary: 'List suggested audience bindings (ADR-0090 D5/D9)', tags: ['security'] },
+        });
+
+        // CONFIRM — creates the anchor binding as the caller (gated write)
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/security/suggested-bindings/:id/confirm`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.confirmAudienceBindingSuggestion(context ?? {}, String(req.params.id));
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_CONFIRM_FAILED'); }
+            },
+            metadata: { summary: 'Confirm a suggested audience binding (creates the everyone/guest binding)', tags: ['security'] },
+        });
+
+        // DISMISS — records the admin's decline; nothing is bound
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/security/suggested-bindings/:id/dismiss`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.dismissAudienceBindingSuggestion(context ?? {}, String(req.params.id));
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_DISMISS_FAILED'); }
+            },
+            metadata: { summary: 'Dismiss a suggested audience binding', tags: ['security'] },
         });
     }
 

@@ -181,15 +181,6 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 } catch { return undefined; }
             };
 
-            // Security service resolver — used by /security/explain (ADR-0090
-            // D6 access explanation). Returns undefined when plugin-security
-            // is not mounted so the route fails cleanly (501).
-            const securityServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
-                try {
-                    return ctx.getService<any>('security');
-                } catch { return undefined; }
-            };
-
             // Settings service resolver — used by resolveExecCtx to resolve the
             // reference timezone/locale (localization manifest) through the 4-tier
             // cascade incl. the `OS_LOCALIZATION_TIMEZONE` env override. Returns
@@ -197,6 +188,16 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             const settingsServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('settings');
+                } catch { return undefined; }
+            };
+
+            // Security service resolver — used by the ADR-0090 D5/D9
+            // /security/suggested-bindings routes and the D6 /security/explain
+            // route (plugin-security). Returns undefined when plugin-security
+            // is not mounted so the routes fail cleanly (501).
+            const securityServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
+                try {
+                    return ctx.getService<any>('security');
                 } catch { return undefined; }
             };
 

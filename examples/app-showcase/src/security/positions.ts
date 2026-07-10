@@ -64,6 +64,19 @@ export const FieldOpsDelegatePosition = definePosition({
   description: 'Scoped administration of the Field Operations business-unit subtree.',
 });
 
+/**
+ * External client audience — the position the Client Portal admits
+ * (src/ui/portals/, `positions: ['client_portal_user']`). External portal
+ * principals evaluate against each object's `externalSharingModel` dial
+ * (ADR-0090 D11); this position is how the admin marks a user as belonging
+ * to that audience.
+ */
+export const ClientPortalUserPosition = definePosition({
+  name: 'client_portal_user',
+  label: 'Client Portal User',
+  description: 'External client admitted to the Client Portal.',
+});
+
 export const allPositions = [
   ContributorPosition,
   ManagerPosition,
@@ -71,4 +84,5 @@ export const allPositions = [
   AuditorPosition,
   OpsPosition,
   FieldOpsDelegatePosition,
+  ClientPortalUserPosition,
 ];

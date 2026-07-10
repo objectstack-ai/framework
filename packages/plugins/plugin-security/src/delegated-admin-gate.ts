@@ -77,7 +77,7 @@ function parseMaybeJson(v: unknown): any {
 }
 
 /** ADR-0066 tenant-level admin: a resolved set whose '*' entry carries modifyAllRecords. */
-function isTenantAdmin(sets: PermissionSet[]): boolean {
+export function isTenantAdmin(sets: PermissionSet[]): boolean {
   for (const ps of sets) {
     const objects: any = parseMaybeJson((ps as any).objects) ?? {};
     const wildcard = objects?.['*'];

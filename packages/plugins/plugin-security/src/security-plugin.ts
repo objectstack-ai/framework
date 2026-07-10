@@ -9,6 +9,14 @@ import { explainAccess, buildContextForUser } from './explain-engine.js';
 import type { ExplainDecision, ExplainOperation } from '@objectstack/spec/security';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
+import {
+  syncAudienceBindingSuggestions,
+  listAudienceBindingSuggestions,
+  confirmAudienceBindingSuggestion,
+  dismissAudienceBindingSuggestion,
+  type SuggestionDeps,
+  type SuggestionListFilter,
+} from './suggested-audience-bindings.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
@@ -386,6 +394,15 @@ export class SecurityPlugin implements Plugin {
     // service only once the metadata/ql/dbLoader handles are wired (above), so
     // a degraded start never exposes a half-initialised resolver.
     try {
+      // [ADR-0090 D5/D9] Suggested audience bindings — shared deps for the
+      // list/confirm/dismiss surface (same set resolution as the middleware
+      // and the delegated-admin gate, so admin-ness can never drift).
+      const suggestionDeps: SuggestionDeps = {
+        ql,
+        metadata,
+        resolveSets: (context: any) => this.resolvePermissionSetsForContext(context),
+        logger: ctx.logger,
+      };
       ctx.registerService('security', {
         getReadFilter: (object: string, context?: any) => this.getReadFilter(object, context),
         // [ADR-0090 D6] First-class access explanation. Same code paths as
@@ -393,8 +410,17 @@ export class SecurityPlugin implements Plugin {
         // construction. Explaining ANOTHER user requires `manage_users`.
         explain: (request: { object: string; operation: string; userId?: string }, callerContext?: any) =>
           this.explainAccessForCaller(request, callerContext),
+        // [ADR-0090 D5/D9] Install-time suggestion surface: packages suggest
+        // audience-anchor bindings; a tenant admin confirms (the binding is
+        // written under the anchor + delegated-admin gates) or dismisses.
+        listAudienceBindingSuggestions: (callerContext?: any, filter?: SuggestionListFilter) =>
+          listAudienceBindingSuggestions(suggestionDeps, callerContext, filter),
+        confirmAudienceBindingSuggestion: (callerContext: any, id: string) =>
+          confirmAudienceBindingSuggestion(suggestionDeps, callerContext, id),
+        dismissAudienceBindingSuggestion: (callerContext: any, id: string) =>
+          dismissAudienceBindingSuggestion(suggestionDeps, callerContext, id),
       });
-      ctx.logger.info('[security] registered "security" service (getReadFilter, explain) — ADR-0021 D-C / ADR-0090 D6');
+      ctx.logger.info('[security] registered "security" service (getReadFilter, explain, audience-binding suggestions) — ADR-0021 D-C / ADR-0090 D5/D6/D9');
     } catch (e) {
       ctx.logger.warn?.('[security] failed to register "security" service', {
         error: (e as Error).message,
@@ -951,6 +977,12 @@ export class SecurityPlugin implements Plugin {
               async (args: { body: unknown; packageId: string | null }) => {
                 const r = await upsertPackagePermissionSet(ql, args.body, args.packageId, ctx.logger);
                 const applied = r.seeded + r.updated;
+                // [ADR-0090 D5] A published set carrying the install-time
+                // suggestion flag surfaces (or retires) its pending
+                // suggestion row right away — same convergent sync as boot.
+                if (applied > 0 && (args.body as { isDefault?: boolean } | null)?.isDefault !== undefined) {
+                  try { await syncAudienceBindingSuggestions(ql, this.metadata, ctx.logger); } catch { /* non-fatal */ }
+                }
                 // A publish that materialized nothing did NOT go live — report it
                 // as a failure with the reason so the package-door UI never shows
                 // a clean publish over a set the admin surface can't see (ADR-0049
@@ -980,6 +1012,17 @@ export class SecurityPlugin implements Plugin {
           await bootstrapBuiltinRoles(ql, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] built-in role seeding failed', { error: (e as Error).message });
+        }
+        // [ADR-0090 D5/D9] Reconcile the suggested-audience-binding surface:
+        // every declared `isDefault: true` set that is not already bound to
+        // its anchor becomes a PENDING suggestion row awaiting admin
+        // confirmation — never auto-bound. Runs after the anchors are seeded
+        // and after the baseline binding above, so the app's own fallback set
+        // (already bound) never nags.
+        try {
+          await syncAudienceBindingSuggestions(ql, this.metadata, ctx.logger);
+        } catch (e) {
+          ctx.logger.warn('[security] audience-binding suggestion sync failed (non-fatal)', { error: (e as Error).message });
         }
         // [ADR-0066 D1] Back-compat seed the capability registry (sys_capability)
         // from the curated platform set + the default grants' systemPermissions.

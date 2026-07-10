@@ -454,14 +454,12 @@ export const RLSUserContextSchema = lazySchema(() => z.object({
     .describe('Tenant/Organization ID'),
 
   /**
-   * User role(s)
+   * Positions held by the user (ADR-0090 D3 — formerly `role`; matches the
+   * runtime shape the RLS compiler resolves as `current_user.positions`).
    */
-  role: z.union([
-    z.string(),
-    z.array(z.string()),
-  ])
+  positions: z.array(z.string())
     .optional()
-    .describe('User role(s)'),
+    .describe('Positions held by the user'),
 
   /**
    * User department

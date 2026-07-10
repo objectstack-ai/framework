@@ -31,7 +31,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "Usuario",
           group: "Grupo",
-          role: "Rol",
+          position: "posición",
           unit_and_subordinates: "Rol y subordinados",
           guest: "Invitado"
         }
@@ -135,8 +135,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "Usuario",
           team: "Equipo",
-          department: "Departamento",
-          role: "Rol",
+          business_unit: "business_unit",
+          position: "posición",
+          unit_and_subordinates: "unit_and_subordinates",
           queue: "Cola"
         }
       },

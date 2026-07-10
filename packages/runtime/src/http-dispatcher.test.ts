@@ -485,6 +485,74 @@ describe('HttpDispatcher', () => {
             });
         });
 
+        // ADR-0090 D5/D9: the /api/v1/security/suggested-bindings surface,
+        // dispatched to the `security` service registered by plugin-security.
+        describe('handleSecurity (ADR-0090 D5/D9 suggested audience bindings)', () => {
+            const secKernel = (service: any) =>
+                ({ context: { getService: (name: string) => (name === 'security' ? service : null) } } as any);
+            const ctx = (userId?: string) =>
+                ({ request: {}, executionContext: userId ? { userId } : undefined } as any);
+            const makeService = () => ({
+                listAudienceBindingSuggestions: vi.fn().mockResolvedValue({ suggestions: [{ id: 's1', status: 'pending' }], synced: { created: 1 } }),
+                confirmAudienceBindingSuggestion: vi.fn().mockResolvedValue({ suggestion: { id: 's1', status: 'confirmed' }, bindingCreated: true }),
+                dismissAudienceBindingSuggestion: vi.fn().mockResolvedValue({ suggestion: { id: 's1', status: 'dismissed' } }),
+            });
+
+            it('GET /suggested-bindings lists via the service with status/packageId filters', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, { status: 'pending', packageId: 'com.example.crm' }, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body?.data?.suggestions).toHaveLength(1);
+                expect(service.listAudienceBindingSuggestions).toHaveBeenCalledWith({ userId: 'u1' }, { status: 'pending', packageId: 'com.example.crm' });
+            });
+
+            it('POST /suggested-bindings/:id/confirm passes the caller execution context', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/confirm', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.bindingCreated).toBe(true);
+                expect(service.confirmAudienceBindingSuggestion).toHaveBeenCalledWith({ userId: 'u1' }, 's1');
+            });
+
+            it('POST /suggested-bindings/:id/dismiss dismisses via the service', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/dismiss', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.suggestion?.status).toBe('dismissed');
+            });
+
+            it('maps typed service errors onto their HTTP status (403/404/409)', async () => {
+                const service = makeService();
+                service.confirmAudienceBindingSuggestion = vi.fn().mockRejectedValue(
+                    Object.assign(new Error('[Security] Access denied: tenant admin required'), { statusCode: 403 }),
+                );
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/confirm', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(403);
+            });
+
+            it('401s an anonymous request without touching the service', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, {}, ctx());
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(401);
+                expect(service.listAudienceBindingSuggestions).not.toHaveBeenCalled();
+            });
+
+            it('503s when the security service is missing (plugin-security not loaded)', async () => {
+                const d = new HttpDispatcher(secKernel(null));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(503);
+            });
+        });
+
         describe('handleAuth with async service', () => {
             it('should resolve auth service from Promise', async () => {
                 const mockAuth = {

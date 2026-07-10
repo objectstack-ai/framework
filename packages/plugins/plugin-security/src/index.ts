@@ -28,7 +28,16 @@ export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 export { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
 export { appDefaultPermissionSetName } from './app-default-permission-set.js';
-export { DelegatedAdminGate } from './delegated-admin-gate.js';
+export { DelegatedAdminGate, isTenantAdmin } from './delegated-admin-gate.js';
 export { explainAccess, buildContextForUser } from './explain-engine.js';
 export type { ExplainEngineDeps, ExplainInput } from './explain-engine.js';
 export type { DelegatedAdminGateDeps } from './delegated-admin-gate.js';
+export {
+  syncAudienceBindingSuggestions,
+  listAudienceBindingSuggestions,
+  confirmAudienceBindingSuggestion,
+  dismissAudienceBindingSuggestion,
+  SuggestionNotFoundError,
+  SuggestionStateError,
+} from './suggested-audience-bindings.js';
+export type { SuggestionDeps, SuggestionListFilter, SuggestionSyncOutcome } from './suggested-audience-bindings.js';

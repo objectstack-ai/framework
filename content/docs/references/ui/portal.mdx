@@ -13,9 +13,9 @@ A Portal is **not** a new application or permission model. It is a
 
 declarative projection of the existing app / view / action surface,
 
-scoped to a route prefix, a set of profiles, and an optional anonymous
+scoped to a route prefix, a set of admitted positions, and an optional
 
-entry surface.
+anonymous entry surface.
 
 Five invariants this schema preserves:
 
@@ -29,11 +29,13 @@ flows, or permissions. Data API (`/api/v1/data/...`) is unaware of
 
 portals.
 
-3. Portal ≠ permission boundary. The Profile is. Portals only narrow
+3. Portal ≠ permission boundary. The permission model is (permission
 
-the UI projection; hiding a view in `navigation` is UX, not security.
+sets distributed via positions, ADR-0090). Portals only narrow the
 
-4. Stackable — the same user/profile can be admitted by multiple
+UI projection; hiding a view in `navigation` is UX, not security.
+
+4. Stackable — the same user/position can be admitted by multiple
 
 portals. Routing or a picker decides which one is rendered.
 
@@ -47,9 +49,9 @@ Architectural reach (consumer guidance, not part of the schema):
 
 `/<routePrefix>/*` route families with a per-portal auth scope.
 
-- Auth middleware: admit the request if `profile ∈ portal.profiles`,
+- Auth middleware: admit the request if one of the caller's positions
 
-or it matches `anonymousEntry.routes[*]`.
+∈ `portal.positions`, or it matches `anonymousEntry.routes[*]`.
 
 - objectui LayoutDispatcher: select shell from `layout`.
 
@@ -98,7 +100,8 @@ const result = Portal.parse(data);
 | **locale** | `string \| string` | ✅ | Locale resolution strategy. |
 | **seo** | `Object` | optional |  |
 | **authMode** | `string \| string \| string \| string` | ✅ | Authentication mode for the portal. |
-| **profiles** | `string[]` | ✅ | Profiles admitted to the portal. |
+| **positions** | `string[]` | ✅ | Positions admitted to the portal. |
+| **profiles** | `any` | optional |  |
 | **anonymousEntry** | `Object` | optional |  |
 | **navigation** | `Object \| Object \| Object \| Object[]` | ✅ | Flat list of portal entry points (references to existing metadata). |
 | **defaultRoute** | `Object` | optional | Landing surface when the user hits the portal root. |

@@ -31,8 +31,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "ユーザー",
           group: "グループ",
-          role: "ロール",
-          unit_and_subordinates: "ロールと下位階層",
+          position: "ポジション",
+          unit_and_subordinates: "ビジネスユニットと下位階層",
           guest: "ゲスト"
         }
       },
@@ -135,8 +135,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "ユーザー",
           team: "チーム",
-          department: "部門",
-          role: "ロール",
+          business_unit: "business_unit",
+          position: "ポジション",
+          unit_and_subordinates: "unit_and_subordinates",
           queue: "キュー"
         }
       },

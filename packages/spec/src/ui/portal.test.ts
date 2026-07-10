@@ -10,7 +10,7 @@ describe('PortalSchema', () => {
       id: 'helpdesk_customer',
       label: 'Help Center',
       routePrefix: '/portal/helpdesk',
-      profiles: ['helpdesk_customer_portal'],
+      positions: ['helpdesk_customer_portal'],
       navigation: [
         {
           id: 'nav_my_tickets',
@@ -33,7 +33,7 @@ describe('PortalSchema', () => {
       label: 'Help Center',
       routePrefix: '/portal/helpdesk',
       authMode: 'magic-link',
-      profiles: ['helpdesk_customer_portal'],
+      positions: ['helpdesk_customer_portal'],
       navigation: [
         { id: 'nav_my', type: 'view', label: 'My', viewRef: 'helpdesk_ticket.list.my_tickets' },
       ],
@@ -65,23 +65,36 @@ describe('PortalSchema', () => {
         id: 'bad',
         label: 'bad',
         routePrefix: 'no-leading-slash',
-        profiles: ['x'],
+        positions: ['x'],
         navigation: [{ id: 'a', type: 'view', label: 'A', viewRef: 'x.y' }],
       }),
     ).toThrow();
   });
 
-  it('rejects an empty profiles array', () => {
+  it('rejects an empty positions array', () => {
     expect(() =>
       definePortal({
         kind: 'portal',
         id: 'bad',
         label: 'bad',
         routePrefix: '/x',
-        profiles: [],
+        positions: [],
         navigation: [{ id: 'a', type: 'view', label: 'A', viewRef: 'x.y' }],
       }),
     ).toThrow();
+  });
+
+  it('rejects the removed `profiles` key with the FROM → TO prescription (ADR-0090 D2)', () => {
+    expect(() =>
+      definePortal({
+        kind: 'portal',
+        id: 'bad',
+        label: 'bad',
+        routePrefix: '/x',
+        profiles: ['client_portal_user'],
+        navigation: [{ id: 'a', type: 'view', label: 'A', viewRef: 'x.y' }],
+      } as never),
+    ).toThrow(/profiles.*removed.*ADR-0090 D2[\s\S]*positions/);
   });
 
   it('accepts SSO and custom plugin layouts', () => {
@@ -92,7 +105,7 @@ describe('PortalSchema', () => {
       routePrefix: '/portal/enterprise',
       authMode: 'sso:azure-ad',
       layout: 'custom:my-plugin/dashboard',
-      profiles: ['enterprise_user'],
+      positions: ['enterprise_user'],
       navigation: [
         { id: 'home', type: 'dashboard', label: 'Home', dashboardName: 'enterprise_home' },
       ],
@@ -109,7 +122,7 @@ describe('PortalSchema', () => {
         label: 'x',
         routePrefix: '/x',
         authMode: 'sso:',
-        profiles: ['x'],
+        positions: ['x'],
         navigation: [{ id: 'a', type: 'view', label: 'A', viewRef: 'x.y' }],
       }),
     ).toThrow();

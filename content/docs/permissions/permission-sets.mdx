@@ -137,6 +137,25 @@ suggestion individually; nothing auto-binds, and the D7 linter rejects an
 `isDefault` set that carries anchor-forbidden bits (VAMA, destructive bits,
 wildcards, system permissions).
 
+Pending suggestions are materialized as `sys_audience_binding_suggestion`
+rows (one per package × set × anchor, read-only over the data API) and
+resolved through the security surface — both installing a package at runtime
+and declaring the set in the stack produce them:
+
+```http
+GET  /api/v1/security/suggested-bindings?status=pending   # list (reconciles first)
+POST /api/v1/security/suggested-bindings/:id/confirm      # create the everyone binding
+POST /api/v1/security/suggested-bindings/:id/dismiss      # decline the prompt
+```
+
+All three require a tenant-level administrator (the anchors are tenant-level
+only — D12). Confirm writes the `sys_position_permission_set` row **as the
+caller**, so the audience-anchor gate re-checks the forbidden-bits predicate
+at the data layer; a suggestion whose binding was created out-of-band (boot
+baseline, manual bind) is marked `confirmed` automatically, and uninstalling
+the package prunes its pending suggestions. Studio surfaces pending
+suggestions after marketplace installs and in the Access pillar.
+
 ## Delegated administration — `adminScope` (ADR-0090 D12)
 
 A permission set may carry an `adminScope`, making its holders **scoped

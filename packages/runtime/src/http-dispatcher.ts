@@ -2091,6 +2091,69 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handle the security admin surface (`/security/...`) — ADR-0090 D5/D9
+     * suggested audience bindings. A package's `isDefault: true` permission
+     * set is an install-time SUGGESTION to bind it to the `everyone` position;
+     * these routes let an admin see and resolve those suggestions. The
+     * `security` service does the real gating (tenant-admin pre-check, and the
+     * confirm write runs under the audience-anchor + delegated-admin gates
+     * with the caller's execution context — never auto-bound, never system).
+     *
+     * Routes:
+     *   GET  /security/suggested-bindings?status=&packageId=   → list (reconciles first)
+     *   POST /security/suggested-bindings/:id/confirm          → create the anchor binding
+     *   POST /security/suggested-bindings/:id/dismiss          → decline the suggestion
+     */
+    async handleSecurity(path: string, method: string, _body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        const service = await this.resolveService('security', context.environmentId) as any;
+        if (!service || typeof service.listAudienceBindingSuggestions !== 'function') {
+            return { handled: true, response: this.error('Security service not available', 503) };
+        }
+
+        const ec = context.executionContext;
+        if (!ec?.userId && !ec?.isSystem) {
+            return { handled: true, response: this.error('Authentication required', 401) };
+        }
+
+        const m = method.toUpperCase();
+        // split+filter drops leading/trailing/duplicate slashes without a
+        // regex over request-controlled input (CodeQL js/polynomial-redos).
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] !== 'suggested-bindings') return { handled: false };
+
+        try {
+            // GET /security/suggested-bindings
+            if (parts.length === 1 && m === 'GET') {
+                const status = query?.status ? String(query.status) : undefined;
+                const packageId = query?.packageId ? String(query.packageId) : undefined;
+                const result = await service.listAudienceBindingSuggestions(ec, { status, packageId });
+                return { handled: true, response: this.success(result) };
+            }
+
+            // POST /security/suggested-bindings/:id/confirm|dismiss
+            if (parts.length === 3 && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                if (parts[2] === 'confirm') {
+                    const result = await service.confirmAudienceBindingSuggestion(ec, id);
+                    return { handled: true, response: this.success(result) };
+                }
+                if (parts[2] === 'dismiss') {
+                    const result = await service.dismissAudienceBindingSuggestion(ec, id);
+                    return { handled: true, response: this.success(result) };
+                }
+            }
+
+            return { handled: false };
+        } catch (err: any) {
+            // The service throws typed errors carrying their HTTP status:
+            // PermissionDeniedError → 403, SuggestionNotFoundError → 404,
+            // SuggestionStateError → 409.
+            const status = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+            return { handled: true, response: this.error(err?.message ?? 'Security operation failed', status) };
+        }
+    }
+
+    /**
      * Handles i18n requests
      * path: sub-path after /i18n/
      *
@@ -3988,6 +4051,12 @@ export class HttpDispatcher {
         // backed by the messaging service registered under the `notification` slot.
         if (cleanPath.startsWith('/notifications')) {
              return this.handleNotification(cleanPath.substring(14), method, body, query, context);
+        }
+
+        // Security admin surface (ADR-0090 D5/D9) — suggested audience
+        // bindings, dispatched to the `security` service (plugin-security).
+        if (cleanPath === '/security' || cleanPath.startsWith('/security/')) {
+             return this.handleSecurity(cleanPath.substring(9), method, body, query, context);
         }
 
         if (cleanPath.startsWith('/packages')) {
