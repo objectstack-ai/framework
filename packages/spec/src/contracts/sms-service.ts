@@ -4,7 +4,7 @@
  * ISmsService — Outbound SMS Service Contract (#2780)
  *
  * Sends short text messages through a pluggable transport (Aliyun SMS,
- * Twilio, etc.). Concrete implementations live in `@objectstack/plugin-sms`;
+ * Twilio, etc.). Concrete implementations live in `@objectstack/service-sms`;
  * provider integrations plug in as an `ISmsTransport`.
  *
  * Mirrors the shape of `IEmailService`/`IEmailTransport` (email-service.ts)
@@ -71,7 +71,7 @@ export interface SmsTransportSendResult {
 }
 
 /**
- * Pluggable SMS transport. plugin-sms ships a `LogSmsTransport` for
+ * Pluggable SMS transport. service-sms ships a `LogSmsTransport` for
  * development; production deployments configure a concrete provider
  * (Aliyun / Twilio) or inject their own implementation of this shape.
  *

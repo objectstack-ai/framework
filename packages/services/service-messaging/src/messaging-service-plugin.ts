@@ -214,7 +214,7 @@ export class MessagingServicePlugin implements Plugin {
             });
 
             // SMS channel (#2780): same pattern as email — register when an
-            // `sms` service (plugin-sms) is present at kernel:ready; absent
+            // `sms` service (service-sms) is present at kernel:ready; absent
             // sms ⇒ no channel, so a notify(channels:['sms']) reports "not
             // registered" rather than silently no-opping.
             const getSms = () => {

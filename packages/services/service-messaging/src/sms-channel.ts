@@ -16,7 +16,7 @@ import {
 import { USER_OBJECT } from './email-channel.js';
 
 /**
- * Structural view of the SMS service (`@objectstack/plugin-sms`'s
+ * Structural view of the SMS service (`@objectstack/service-sms`'s
  * `SmsService`), declared locally so service-messaging takes no runtime
  * dependency on it — the channel resolves whatever is registered under the
  * `sms` service and sends through this shape (mirrors `EmailSenderSurface`

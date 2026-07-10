@@ -327,7 +327,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    *
    * Resolved lazily through {@link AuthManager.getSmsService}; safe to set
    * after construction. AuthPlugin wires this from the kernel service
-   * registry (`sms`, see `@objectstack/plugin-sms`) on `kernel:ready`.
+   * registry (`sms`, see `@objectstack/service-sms`) on `kernel:ready`.
    */
   smsService?: ISmsService;
 
@@ -2057,7 +2057,7 @@ export class AuthManager {
    * OTP callbacks and the SMS invite path (#2780). Mirrors
    * {@link setEmailService}: resolved lazily per send, so it is safe to set
    * after construction — AuthPlugin wires it on `kernel:ready` once
-   * `ctx.getService('sms')` (plugin-sms) resolves.
+   * `ctx.getService('sms')` (service-sms) resolves.
    */
   setSmsService(sms: ISmsService | undefined): void {
     this.config.smsService = sms;

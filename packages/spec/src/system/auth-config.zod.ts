@@ -107,7 +107,7 @@ export const AuthPluginConfigSchema = lazySchema(() => z.object({
    * (`/phone-number/send-otp` + `/verify` for sign-in/verification,
    * `/phone-number/request-password-reset` + `/reset-password` for
    * self-service reset) additionally require a configured SMS delivery
-   * service (`@objectstack/plugin-sms`, #2780) and stay loudly NOT_SUPPORTED
+   * service (`@objectstack/service-sms`, #2780) and stay loudly NOT_SUPPORTED
    * without one. Employees without an email address are created with a
    * generated placeholder address (never a real recipient — see
    * placeholder-email.ts) and sign in with phone + password or phone OTP.

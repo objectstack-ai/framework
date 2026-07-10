@@ -15,8 +15,8 @@ ObjectStack is organized into **71 package manifests** across multiple categorie
 | **Client / DX** | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | **Framework adapters** | 1 | `hono` (other frameworks: build a thin adapter on `HttpDispatcher` — see below) |
 | **Drivers** | 4 | `driver-memory`, `driver-sql`, `driver-sqlite-wasm`, `driver-mongodb` |
-| **Plugins** | 19 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-sms`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
-| **Platform services** | 15 | `service-analytics`, `service-automation`, `service-cache`, `service-cluster`, `service-cluster-redis`, `service-datasource`, `service-i18n`, `service-job`, `service-knowledge`, `service-messaging`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-storage` |
+| **Plugins** | 18 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
+| **Platform services** | 16 | `service-analytics`, `service-automation`, `service-cache`, `service-cluster`, `service-cluster-redis`, `service-datasource`, `service-i18n`, `service-job`, `service-knowledge`, `service-messaging`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-sms`, `service-storage` |
 
 
 ## Core Packages
@@ -226,6 +226,13 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **Features**: `MessagingChannel` registry, `emit()` fan-out, always-on inbox channel; email/webhook/push/IM channels plug in
 - **When to use**: Notifying users across channels from flows, hooks, and plugins
 
+### @objectstack/service-sms
+
+**SMS Service** — Outbound SMS delivery (`sms` service).
+
+- **Features**: Provider adapters (Aliyun SMS, Twilio), `sms` settings namespace with live rebind, backs phone-number OTP sign-in/reset and the messaging `sms` channel
+- **When to use**: Phone OTP first-login / self-service reset, SMS notifications
+
 ### @objectstack/service-i18n
 
 **I18n Service** — Internationalization with file-based locales.
@@ -362,13 +369,6 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Provider adapters, MJML templates, delivery tracking
 - **When to use**: Transactional and workflow-driven email
-
-### @objectstack/plugin-sms
-
-**SMS Plugin** — Outbound SMS delivery (`sms` service).
-
-- **Features**: Provider adapters (Aliyun SMS, Twilio), `sms` settings namespace with live rebind, backs phone-number OTP sign-in/reset and the messaging `sms` channel
-- **When to use**: Phone OTP first-login / self-service reset, SMS notifications
 
 ### @objectstack/plugin-webhooks
 

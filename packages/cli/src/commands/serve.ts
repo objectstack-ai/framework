@@ -1666,9 +1666,9 @@ export default class Serve extends Command {
           // the messaging `sms` channel. Provider config lives in the `sms`
           // settings namespace (OS_SMS_* env keys win at the resolver);
           // unconfigured ⇒ dev LogSmsTransport (no real send).
-          pkg: '@objectstack/plugin-sms',
+          pkg: '@objectstack/service-sms',
           export: 'SmsServicePlugin',
-          nameMatch: ['plugin-sms', 'SmsServicePlugin'],
+          nameMatch: ['service-sms', 'SmsServicePlugin'],
         },
         sharing: {
           pkg: '@objectstack/plugin-sharing',

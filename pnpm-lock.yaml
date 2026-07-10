@@ -394,9 +394,6 @@ importers:
       '@objectstack/plugin-sharing':
         specifier: workspace:*
         version: link:../plugins/plugin-sharing
-      '@objectstack/plugin-sms':
-        specifier: workspace:*
-        version: link:../plugins/plugin-sms
       '@objectstack/plugin-webhooks':
         specifier: workspace:*
         version: link:../plugins/plugin-webhooks
@@ -436,6 +433,9 @@ importers:
       '@objectstack/service-settings':
         specifier: workspace:*
         version: link:../services/service-settings
+      '@objectstack/service-sms':
+        specifier: workspace:*
+        version: link:../services/service-sms
       '@objectstack/service-storage':
         specifier: workspace:*
         version: link:../services/service-storage
@@ -1522,25 +1522,6 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.0)(@vitest/coverage-v8@4.1.10)(happy-dom@20.10.2)(msw@2.14.6(@types/node@26.1.0)(typescript@6.0.3))(vite@8.0.16(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
 
-  packages/plugins/plugin-sms:
-    dependencies:
-      '@objectstack/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@objectstack/spec':
-        specifier: workspace:*
-        version: link:../../spec
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.0
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.10
-        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.0)(@vitest/coverage-v8@4.1.10)(happy-dom@20.10.2)(msw@2.14.6(@types/node@26.1.0)(typescript@6.0.3))(vite@8.0.16(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
-
   packages/plugins/plugin-webhooks:
     dependencies:
       '@objectstack/core':
@@ -1989,6 +1970,25 @@ importers:
       '@objectstack/types':
         specifier: workspace:*
         version: link:../../types
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.0)(@vitest/coverage-v8@4.1.10)(happy-dom@20.10.2)(msw@2.14.6(@types/node@26.1.0)(typescript@6.0.3))(vite@8.0.16(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
+
+  packages/services/service-sms:
+    dependencies:
+      '@objectstack/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../../spec
     devDependencies:
       '@types/node':
         specifier: ^26.1.0

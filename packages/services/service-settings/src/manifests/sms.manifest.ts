@@ -81,6 +81,6 @@ export const smsTestActionHandler: SettingsActionHandler = async ({ values }) =>
   return {
     ok: true,
     severity: 'info',
-    message: `Configuration looks valid (provider=${provider}). Wire @objectstack/plugin-sms for actual delivery.`,
+    message: `Configuration looks valid (provider=${provider}). Wire @objectstack/service-sms for actual delivery.`,
   };
 };

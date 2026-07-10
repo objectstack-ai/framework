@@ -1,4 +1,4 @@
-# @objectstack/plugin-sms
+# @objectstack/service-sms
 
 ## 14.3.0
 
@@ -9,7 +9,7 @@
   #2766 shipped phone+password sign-in but no OTP — the platform had no SMS
   delivery capability. This adds the missing infrastructure end to end:
 
-  - **New `@objectstack/plugin-sms`** — `ISmsService`/`ISmsTransport` contracts
+  - **New `@objectstack/service-sms`** — `ISmsService`/`ISmsTransport` contracts
     (spec) with Aliyun SMS (ACS3-HMAC-SHA256, template-based) and Twilio
     transports plus a dev log fallback. Configured through the new `sms`
     settings namespace (live provider rebind, encrypted secrets, send-test
