@@ -20,6 +20,7 @@ import {
 import { ensureDefaultOrganization } from './ensure-default-organization.js';
 import { runSetInitialPassword } from './set-initial-password.js';
 import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm, runRequestDomainVerification, runVerifyDomain } from './register-sso-provider.js';
+import { runResendVerificationEmail } from './send-verification-email.js';
 import {
   authIdentityObjects,
   authPluginManifestHeader,
@@ -1448,6 +1449,34 @@ export class AuthPlugin implements Plugin {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         ctx.logger.error('[AuthPlugin] sys-oauth-application/register failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // Self-service resend of the email-verification link. SHADOWS better-auth's
+    // native `/send-verification-email` (registered before the catch-all below).
+    //
+    // The stock route REQUIRES `{ email }` in the body, but the `sys_user`
+    // `resend_verification_email` action — the record-header button, the
+    // "email unverified" record alert, and the record-section quick action —
+    // fires with an EMPTY body (no dialog, and the alert `action` reference
+    // can't carry params). That bounced with `[body.email] ... received
+    // undefined`, breaking every resend affordance. This wrapper defaults the
+    // address to the caller's own session email when the body omits it, then
+    // re-dispatches through the real route (via handleRequest, which bypasses
+    // this wrapper — no recursion). An explicit `email` passes through
+    // untouched, so the admin / verify-screen path is unchanged.
+    rawApp.post(`${basePath}/send-verification-email`, async (c: any) => {
+      try {
+        const { status, body } = await runResendVerificationEmail(
+          (req) => this.authManager!.handleRequest(req),
+          c.req.raw,
+        );
+        return c.json(body, status);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] send-verification-email failed', err);
         return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
       }
     });
