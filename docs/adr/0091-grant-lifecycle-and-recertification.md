@@ -1,8 +1,8 @@
 # ADR-0091: Grant lifecycle — effective-dated assignments, delegation, break-glass, recertification substrate
 
-- **Status:** Proposed
-- **Date:** 2026-07-09
-- **Deciders:** (pending review)
+- **Status:** Accepted
+- **Date:** 2026-07-09 (proposed) · 2026-07-10 (accepted)
+- **Deciders:** jack@objectstack.ai
 - **Relates to:** ADR-0090 (Permission Model v2 — named follow-up #1), ADR-0057 (assignment tables), ADR-0049 (no unenforced security properties), ADR-0016 (open-core boundary)
 
 ## TL;DR
@@ -106,8 +106,12 @@ A user may delegate a position they hold **without being an admin**, iff:
    checked by the same gate that owns assignment writes (D12 gate grows a
    self-service branch: delegator ≠ admin, but the write is scoped to
    positions they hold + delegatable + time-boxed);
-4. chains are cut: a row with `delegated_from` set is **not itself
-   delegatable** (no re-delegation);
+4. chains are cut TWO ways: a row with `delegated_from` set is **not itself
+   delegatable** (no re-delegation), and it is **not self-renewable** — the
+   delegate cannot extend `valid_until`; continuing past expiry requires the
+   delegator (or an admin) to issue a NEW delegation, leaving a fresh audit
+   record. A "temporary" grant that can be quietly rolled forever is a
+   permanent grant with extra steps;
 5. dual audit: the row carries both `granted_by` (writer) and
    `delegated_from` (authority source); explain reports "via delegation from
    张三, until …".
