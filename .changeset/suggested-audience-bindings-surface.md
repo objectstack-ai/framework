@@ -1,6 +1,7 @@
 ---
 "@objectstack/plugin-security": minor
 "@objectstack/runtime": minor
+"@objectstack/rest": minor
 ---
 
 ADR-0090 D5/D9 — suggested audience bindings become a queryable, confirmable surface.
@@ -28,9 +29,11 @@ binding; a set not yet materialized (installed this session) is first
 seeded through the same provenance-checked upsert as the boot seeder
 (ADR-0086 D4).
 
-**`@objectstack/runtime`**: new HTTP surface dispatched to that service —
+**`@objectstack/rest`** and **`@objectstack/runtime`**: the HTTP surface,
+registered on both API layers (the RestServer that `objectstack dev`/hono
+serves, and the runtime HttpDispatcher used by the adapters) —
 `GET /api/v1/security/suggested-bindings?status=&packageId=`,
 `POST /api/v1/security/suggested-bindings/:id/confirm`,
 `POST /api/v1/security/suggested-bindings/:id/dismiss` (401 unauthenticated,
-403/404/409 mapped from the service's typed errors, 503 without
+403/404/409 mapped from the service's typed errors, 501/503 without
 plugin-security).
