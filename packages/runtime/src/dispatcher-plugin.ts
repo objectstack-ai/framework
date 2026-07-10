@@ -591,6 +591,18 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             mountMcp('GET');
             mountMcp('DELETE');
 
+            // Public SKILL.md download (env-customized portable Agent Skill).
+            // Separate registration: `/mcp` above is an exact-path mount, so
+            // the sub-path needs its own route to be reachable over HTTP.
+            server.get(`${prefix}/mcp/skill`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('GET', '/mcp/skill', req.body, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             server.post(`${prefix}/keys`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.dispatch('POST', '/keys', req.body, req.query, { request: req });
