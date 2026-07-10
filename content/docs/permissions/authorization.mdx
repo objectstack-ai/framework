@@ -170,8 +170,17 @@ Each layer carries a verdict (`grants` / `denies` / `narrows` / `widens` /
 `neutral` / `not_applicable`), a human explanation, and **contributor
 attribution** — which permission set granted, reached via which position /
 additive baseline / direct grant. For reads, the decision includes the
-composed row filter as the machine artifact. Explaining another user requires
-the `manage_users` capability.
+composed row filter as the machine artifact.
+
+The same report is reachable over REST as `GET/POST /api/v1/security/explain`
+(`object`, `operation`, optional `userId`; validated against
+`ExplainRequestSchema`). The endpoint is authenticated-only and delegates to
+the service, so both surfaces share one authorization rule: explaining
+**another** user requires the `manage_users` capability **or** a delegated
+`adminScope` whose business-unit subtree covers that user (ADR-0090 D12) —
+an administrator who can rewire a user's grants may read why they resolve as
+they do. Studio's Access pillar ships a "why can this user access?" panel on
+top of this endpoint.
 
 ## Governance: how "declared = enforced" is kept true
 

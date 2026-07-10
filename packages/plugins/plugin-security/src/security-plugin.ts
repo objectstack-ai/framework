@@ -1162,9 +1162,12 @@ export class SecurityPlugin implements Plugin {
    */
   /**
    * [ADR-0090 D6] Explain access for a caller. `request.userId` (explaining
-   * someone else) requires the caller to hold `manage_users` or be system —
-   * an access report is itself sensitive data. The evaluation delegates to
-   * {@link explainAccess} with the SAME internals the middleware uses.
+   * someone else) requires the caller to hold `manage_users`, be system, or —
+   * [D12] — hold a delegated `adminScope` whose BU subtree covers the target
+   * user (an access report is itself sensitive data, but an admin who can
+   * already rewire a user's grants may read why they resolve as they do).
+   * The evaluation delegates to {@link explainAccess} with the SAME internals
+   * the middleware uses.
    */
   async explainAccessForCaller(
     request: { object: string; operation: string; userId?: string },
@@ -1181,10 +1184,20 @@ export class SecurityPlugin implements Plugin {
         const callerSets = await this.resolvePermissionSetsForContext(callerContext).catch(() => []);
         const held = this.permissionEvaluator.getSystemPermissions(callerSets);
         if (!held.has('manage_users')) {
-          throw new PermissionDeniedError(
-            `[Security] Access denied: explaining another user's access requires the 'manage_users' capability (ADR-0090 D6).`,
-            { object, operation, targetUserId: request.userId },
-          );
+          // [ADR-0090 D12] Delegated administrators may explain principals
+          // inside their delegation boundary (fail-closed on any error).
+          const delegated = this.delegatedAdminGate
+            ? await this.delegatedAdminGate
+                .scopesCoverUser(callerSets, request.userId)
+                .catch(() => false)
+            : false;
+          if (!delegated) {
+            throw new PermissionDeniedError(
+              `[Security] Access denied: explaining another user's access requires the 'manage_users' ` +
+                `capability or a delegated adminScope covering that user (ADR-0090 D6/D12).`,
+              { object, operation, targetUserId: request.userId },
+            );
+          }
         }
       }
       targetContext = await buildContextForUser(this.ql, request.userId);

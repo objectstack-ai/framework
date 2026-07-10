@@ -2074,3 +2074,122 @@ describe('SecurityPlugin — ADR-0066 D3 field-level requiredPermissions', () =>
     await expect(h.run(opCtx)).resolves.toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-0090 D6 × D12 — explainAccessForCaller authorization: manage_users OR a
+// delegated adminScope whose BU subtree covers the target user.
+// ---------------------------------------------------------------------------
+describe('explainAccessForCaller (ADR-0090 D6/D12)', () => {
+  const EAST_SCOPE = {
+    businessUnit: 'east',
+    includeSubtree: true,
+    manageAssignments: true,
+    assignablePermissionSets: ['sales_user'],
+  };
+
+  const memberDefault: PermissionSet = {
+    name: 'member_default', label: 'Member',
+    objects: { task: { allowRead: true } },
+  } as any;
+  const subAdmin: PermissionSet = {
+    name: 'sub_admin', label: 'East delegate',
+    objects: {}, adminScope: EAST_SCOPE,
+  } as any;
+  const hrAdmin: PermissionSet = {
+    name: 'hr_admin', label: 'HR admin',
+    objects: {}, systemPermissions: ['manage_users'],
+  } as any;
+
+  /** Middleware harness + in-memory tables for BU subtree / membership reads. */
+  const makeExplainHarness = () => {
+    const tables: Record<string, any[]> = {
+      sys_business_unit: [
+        { id: 'bu_hq', name: 'hq', parent_business_unit_id: null },
+        { id: 'bu_east', name: 'east', parent_business_unit_id: 'bu_hq' },
+        { id: 'bu_west', name: 'west', parent_business_unit_id: 'bu_hq' },
+      ],
+      sys_business_unit_member: [
+        { id: 'm1', business_unit_id: 'bu_east', user_id: 'u_east_1' },
+        { id: 'm2', business_unit_id: 'bu_west', user_id: 'u_west_1' },
+      ],
+      sys_user: [{ id: 'u_delegate' }, { id: 'u_east_1' }, { id: 'u_west_1' }, { id: 'u_hr' }],
+      sys_user_position: [],
+      sys_user_permission_set: [],
+      sys_permission_set: [],
+      sys_position: [],
+    };
+    const matches = (row: any, where: any): boolean =>
+      Object.entries(where ?? {}).every(([k, v]) => {
+        if (v && typeof v === 'object' && Array.isArray((v as any).$in)) return (v as any).$in.includes(row[k]);
+        return row[k] === v;
+      });
+    const baseSchema: any = { name: 'task', fields: { id: { name: 'id' }, owner_id: { name: 'owner_id' }, name: { name: 'name' } } };
+    const ql = {
+      registerMiddleware: vi.fn(),
+      getSchema: () => baseSchema,
+      async find(object: string, opts: any) {
+        const rows = (tables[object] ?? []).filter((r) => matches(r, opts?.where));
+        return typeof opts?.limit === 'number' ? rows.slice(0, opts.limit) : rows;
+      },
+      async findOne(object: string, opts: any) {
+        const rows = (tables[object] ?? []).filter((r) => matches(r, opts?.where));
+        return rows[0] ?? null;
+      },
+    };
+    const services: Record<string, any> = {
+      manifest: { register: vi.fn() },
+      objectql: ql,
+      metadata: { get: async () => baseSchema, list: async () => [memberDefault, subAdmin, hrAdmin] },
+    };
+    const ctx: any = {
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      registerService: vi.fn(),
+      getService: (name: string) => {
+        if (!(name in services)) throw new Error(`service not registered: ${name}`);
+        return services[name];
+      },
+    };
+    return { ctx, tables };
+  };
+
+  const boot = async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const h = makeExplainHarness();
+    await plugin.init(h.ctx);
+    await plugin.start(h.ctx);
+    return { plugin, h };
+  };
+
+  it('a delegated admin may explain a user INSIDE their scope subtree without manage_users', async () => {
+    const { plugin } = await boot();
+    const caller = { userId: 'u_delegate', positions: [], permissions: ['sub_admin'] };
+    const d = await plugin.explainAccessForCaller({ object: 'task', operation: 'read', userId: 'u_east_1' }, caller);
+    expect(d.principal.userId).toBe('u_east_1');
+    expect(d.object).toBe('task');
+  });
+
+  it('the same delegate is DENIED for a user OUTSIDE the subtree (fail closed)', async () => {
+    const { plugin } = await boot();
+    const caller = { userId: 'u_delegate', positions: [], permissions: ['sub_admin'] };
+    await expect(
+      plugin.explainAccessForCaller({ object: 'task', operation: 'read', userId: 'u_west_1' }, caller),
+    ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+  });
+
+  it('manage_users still explains anyone (tenant-level path unchanged)', async () => {
+    const { plugin } = await boot();
+    const caller = { userId: 'u_hr', positions: [], permissions: ['hr_admin'] };
+    const d = await plugin.explainAccessForCaller({ object: 'task', operation: 'read', userId: 'u_west_1' }, caller);
+    expect(d.principal.userId).toBe('u_west_1');
+  });
+
+  it('no manage_users and no covering scope → denied; self-explain needs neither', async () => {
+    const { plugin } = await boot();
+    const plain = { userId: 'u_east_1', positions: [], permissions: [] };
+    await expect(
+      plugin.explainAccessForCaller({ object: 'task', operation: 'read', userId: 'u_west_1' }, plain),
+    ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    const self = await plugin.explainAccessForCaller({ object: 'task', operation: 'read', userId: 'u_east_1' }, plain);
+    expect(self.principal.userId).toBe('u_east_1');
+  });
+});

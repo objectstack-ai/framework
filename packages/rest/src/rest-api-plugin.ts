@@ -192,7 +192,9 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             };
 
             // Security service resolver — used by the ADR-0090 D5/D9
-            // /security/suggested-bindings routes (plugin-security).
+            // /security/suggested-bindings routes and the D6 /security/explain
+            // route (plugin-security). Returns undefined when plugin-security
+            // is not mounted so the routes fail cleanly (501).
             const securityServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('security');
