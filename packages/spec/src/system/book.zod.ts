@@ -82,15 +82,22 @@ export type BookGroup = {
   pages?: BookNode[];
 };
 
-/** Access audience for a book — a reference into the permission model (ADR-0046 §6.7). */
+/**
+ * Access audience for a book — a reference into the permission model
+ * (ADR-0046 §6.7, vocabulary per ADR-0090). The gate is a capability
+ * reference (a permission-set name), never a distribution one: books ship in
+ * packages, and packages own permission sets but never positions (ADR-0090
+ * D9) — a package gating its Admin Guide to its own `crm_admin` set keeps
+ * provenance and uninstall semantics intact (ADR-0086).
+ */
 export const BookAudienceSchema = lazySchema(() =>
   z.union([
     z.literal('org'), // default — inherits the package grant (§3.6)
-    z.literal('public'), // ≡ the data-layer `guest` profile (anonymous, indexable)
-    z.object({ profile: z.string() }), // role-gated, e.g. { profile: 'admin' }
+    z.literal('public'), // ≡ the built-in `guest` position (ADR-0090 D9): anonymous, indexable
+    z.object({ permissionSet: z.string() }), // capability-gated, e.g. { permissionSet: 'crm_admin' }
   ]),
 );
-export type BookAudience = 'org' | 'public' | { profile: string };
+export type BookAudience = 'org' | 'public' | { permissionSet: string };
 
 export const BookSchema = lazySchema(() =>
   z.object({
