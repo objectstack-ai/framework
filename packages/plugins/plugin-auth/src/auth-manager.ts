@@ -818,6 +818,23 @@ export class AuthManager {
       // sees `userCount > 0` and the toggle is enforced again.
       hooks: {
         before: createAuthMiddleware(async (ctx: any) => {
+          // ── #2780: per-number OTP send guard (admission control) ─────
+          // MUST run BEFORE the phone-number endpoints: better-auth's
+          // send-otp handler stores a fresh code and only THEN invokes
+          // `sendOTP` — a guard that throws inside the callback would
+          // still rotate (invalidate) the previously delivered code, so a
+          // blocked resend (or an attacker spamming the endpoint) could
+          // keep voiding the user's valid OTP. Rejecting here leaves the
+          // stored code untouched. Applies uniformly to registered and
+          // unregistered numbers (no account-existence oracle).
+          if (
+            ctx?.path === '/phone-number/send-otp' ||
+            ctx?.path === '/phone-number/request-password-reset'
+          ) {
+            const phone = typeof ctx?.body?.phoneNumber === 'string' ? ctx.body.phoneNumber : '';
+            await this.assertPhoneOtpSendAllowed(phone);
+          }
+
           // ── ADR-0069 D1: password complexity (validator) ────────────
           // better-auth enforces only min/max length; class-mix is custom.
           // Runs on the password-mutating endpoints; reads the candidate from
@@ -2085,14 +2102,35 @@ export class AuthManager {
   }
 
   /**
+   * #2780 — admission check for the OTP send endpoints, called from the
+   * `hooks.before` middleware (see the `/phone-number/*` branch there for
+   * why it cannot live in the `sendOTP` callback). Consumes one unit of the
+   * per-number budget and throws TOO_MANY_REQUESTS when the cooldown /
+   * hourly cap is exhausted. No-op while OTP is undeliverable — the send
+   * callback then fails loudly with NOT_SUPPORTED instead.
+   */
+  async assertPhoneOtpSendAllowed(phone: string): Promise<void> {
+    if (!phone || !this.isPhoneOtpDeliverable()) return;
+    const decision = await this.getOtpSendGuard().checkAndRecord(phone);
+    if (!decision.ok) {
+      const { APIError } = await import('better-auth/api');
+      throw new APIError('TOO_MANY_REQUESTS', {
+        message: `Too many verification codes requested for this phone number. Retry in ${decision.retryAfterSeconds ?? 60}s.`,
+      });
+    }
+  }
+
+  /**
    * #2780 — deliver a phone OTP through the SMS service.
    *
    * Security posture (all named requirements of #2780):
    *  - No SMS service ⇒ throw NOT_SUPPORTED (loud, like the pre-SMS wiring).
-   *  - Per-number cooldown + hourly cap BEFORE the provider is called
-   *    (SMS-pumping cost abuse); violations throw TOO_MANY_REQUESTS, which
-   *    /phone-number/send-otp surfaces as an honest 429 while the
-   *    request-password-reset route logs-and-200s (no enumeration oracle).
+   *  - The per-number cooldown + hourly cap live in the `hooks.before`
+   *    admission check, NOT here: better-auth stores the fresh code before
+   *    invoking this callback, so a rejection at this point would still
+   *    rotate (invalidate) the previously delivered code — letting a
+   *    blocked resend or an endpoint-spamming attacker void a user's valid
+   *    OTP. See the `/phone-number/*` branch in `hooks.before`.
    *  - The code is embedded in the message body ONLY — it must never reach
    *    a log line or an error message (the SmsService logs masked numbers
    *    and statuses, never bodies).
@@ -2107,13 +2145,6 @@ export class AuthManager {
         'NOT_SUPPORTED: phone-number OTP requires a configured SMS delivery service. ' +
         'Phone sign-in is password-based (POST /sign-in/phone-number).',
       );
-    }
-    const decision = await this.getOtpSendGuard().checkAndRecord(phone);
-    if (!decision.ok) {
-      const { APIError } = await import('better-auth/api');
-      throw new APIError('TOO_MANY_REQUESTS', {
-        message: `Too many verification codes requested for this phone number. Retry in ${decision.retryAfterSeconds ?? 60}s.`,
-      });
     }
     const otpCfg = this.config.phoneOtp ?? {};
     const minutes = Math.max(1, Math.round((otpCfg.expiresIn ?? 300) / 60));

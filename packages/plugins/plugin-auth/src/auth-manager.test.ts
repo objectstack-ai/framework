@@ -1143,27 +1143,40 @@ describe('AuthManager', () => {
       expect(sms.sent[0].templateParams).toEqual({ code: '123456' });
     });
 
-    it('enforces the per-number cooldown (TOO_MANY_REQUESTS, no second SMS)', async () => {
+    it('enforces the per-number cooldown at ADMISSION (before-hook), not in sendOTP', async () => {
       const { manager, opts } = await bootOtp();
       const sms = fakeSms();
       manager.setSmsService(sms.service);
 
-      await opts.sendOTP({ phoneNumber: PHONE, code: '111111' });
-      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '222222' }))
+      // Admission guard: first request per number passes, immediate second 429s.
+      await manager.assertPhoneOtpSendAllowed(PHONE);
+      await expect(manager.assertPhoneOtpSendAllowed(PHONE))
         .rejects.toThrow(/Too many verification codes/);
-      expect(sms.sent).toHaveLength(1);
+
+      // The sendOTP callback itself must NOT re-guard: better-auth stores the
+      // fresh code BEFORE invoking it, so a rejection at that point would
+      // still rotate (void) the previously delivered code. Delivery always
+      // proceeds once a request was admitted.
+      await opts.sendOTP({ phoneNumber: PHONE, code: '111111' });
+      await opts.sendOTP({ phoneNumber: PHONE, code: '222222' });
+      expect(sms.sent).toHaveLength(2);
     });
 
-    it('sendPasswordResetOTP shares the same guarded SMS path (cross-flow budget)', async () => {
-      const { manager, opts } = await bootOtp();
-      const sms = fakeSms();
-      manager.setSmsService(sms.service);
+    it('the admission budget spans both flows (send-otp + request-password-reset)', async () => {
+      const { manager } = await bootOtp();
+      manager.setSmsService(fakeSms().service);
 
-      await opts.sendPasswordResetOTP({ phoneNumber: PHONE, code: '333333' });
-      expect(sms.sent[0].body).toContain('333333');
-      // The cooldown spans both flows — a reset send blocks an immediate sign-in send.
-      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '444444' }))
+      // One admitted send (whatever the flow) blocks an immediate second one.
+      await manager.assertPhoneOtpSendAllowed(PHONE);
+      await expect(manager.assertPhoneOtpSendAllowed(PHONE))
         .rejects.toThrow(/Too many verification codes/);
+    });
+
+    it('admission is a no-op while OTP is undeliverable (sendOTP fails loudly instead)', async () => {
+      const { manager } = await bootOtp();
+      // No SMS service wired — the guard must not consume budget or throw.
+      await manager.assertPhoneOtpSendAllowed(PHONE);
+      await manager.assertPhoneOtpSendAllowed(PHONE);
     });
 
     it('surfaces a failed SMS delivery WITHOUT the code in the error', async () => {
@@ -1175,13 +1188,11 @@ describe('AuthManager', () => {
         .rejects.toSatisfy((e: Error) => /provider down/.test(e.message) && !e.message.includes('555555'));
     });
 
-    it('honours phoneOtp knobs (cooldown off ⇒ back-to-back sends allowed)', async () => {
-      const { manager, opts } = await bootOtp({ phoneOtp: { cooldownSeconds: 0, maxPerHour: 0 } });
-      const sms = fakeSms();
-      manager.setSmsService(sms.service);
-      await opts.sendOTP({ phoneNumber: PHONE, code: '111111' });
-      await opts.sendOTP({ phoneNumber: PHONE, code: '222222' });
-      expect(sms.sent).toHaveLength(2);
+    it('honours phoneOtp knobs (cooldown off ⇒ back-to-back admissions allowed)', async () => {
+      const { manager } = await bootOtp({ phoneOtp: { cooldownSeconds: 0, maxPerHour: 0 } });
+      manager.setSmsService(fakeSms().service);
+      await manager.assertPhoneOtpSendAllowed(PHONE);
+      await manager.assertPhoneOtpSendAllowed(PHONE);
     });
 
     it('features.phoneNumberOtp requires plugin + deliverable SMS', async () => {
