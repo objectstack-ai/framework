@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  SECURITY_FLS_UNQUALIFIED_KEY,
   validateSecurityPosture,
   SECURITY_OWD_UNSET,
   SECURITY_OWD_ALIAS,
@@ -119,6 +120,37 @@ describe('validateSecurityPosture (ADR-0090 D7)', () => {
   it("tolerates a plain '*' read wildcard without VAMA", () => {
     expect(
       rulesOf({ permissions: [{ name: 'reader', objects: { '*': { allowRead: true } } }] }),
+    ).toEqual([]);
+  });
+
+  // ── Rule: security-fls-unqualified-key (permission-zoo audit) ───────
+  it('errors on a bare FLS key — the runtime evaluator silently ignores it', () => {
+    const findings = validateSecurityPosture({
+      permissions: [
+        {
+          name: 'contrib',
+          objects: { crm_opportunity: { allowRead: true, allowEdit: true } },
+          fields: { cost_internal: { readable: true, editable: false } },
+        },
+      ],
+    }).filter((f) => f.rule === SECURITY_FLS_UNQUALIFIED_KEY);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].message).toMatch(/silently IGNORED/);
+    expect(findings[0].hint).toMatch(/crm_opportunity\.cost_internal/);
+  });
+
+  it('accepts object-qualified FLS keys', () => {
+    expect(
+      rulesOf({
+        permissions: [
+          {
+            name: 'contrib',
+            objects: { crm_opportunity: { allowRead: true } },
+            fields: { 'crm_opportunity.cost_internal': { readable: false, editable: false } },
+          },
+        ],
+      }),
     ).toEqual([]);
   });
 

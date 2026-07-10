@@ -21,6 +21,8 @@ export const Account = ObjectSchema.create({
   // [ADR-0090 D11] External principals may READ accounts (portal users see
   // the customer directory) but never write them — a non-default external
   // dial that is still strictly ≤ the internal `public_read_write`.
+  // Authoring-validated + Studio-surfaced today; runtime evaluation lands
+  // with the principal-taxonomy phase (#2696, liveness `planned`).
   externalSharingModel: 'public_read',
   label: 'Account',
   pluralLabel: 'Accounts',

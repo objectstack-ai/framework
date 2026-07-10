@@ -28,7 +28,9 @@ export const Announcement = ObjectSchema.create({
   // announcements are public_read for employees but PRIVATE to external
   // users — an external portal user sees only announcements they own or were
   // explicitly shared. Must never be wider than the internal model
-  // (validated: external ≤ internal).
+  // (validated: external ≤ internal). NOTE the dial is authoring-validated +
+  // Studio-surfaced today; runtime evaluation of external principals lands
+  // with the principal-taxonomy phase (#2696, liveness `planned`).
   externalSharingModel: 'private',
 
   fields: {

@@ -44,6 +44,7 @@ export const SECURITY_ROLE_WORD = 'security-role-word';
 export const SECURITY_BOOK_AUDIENCE_UNKNOWN_SET = 'security-book-audience-unknown-set';
 export const SECURITY_PRIVATE_NO_READSCOPE = 'security-private-no-readscope';
 export const SECURITY_MASTER_DETAIL_UNGRANTED = 'security-master-detail-ungranted';
+export const SECURITY_FLS_UNQUALIFIED_KEY = 'security-fls-unqualified-key';
 export const SECURITY_GRANT_EXPIRED_AT_AUTHORING = 'security-grant-expired-at-authoring';
 export const SECURITY_DELEGATION_MISSING_REASON = 'security-delegation-missing-reason';
 
@@ -251,6 +252,27 @@ export function validateSecurityPosture(stack: AnyRec, opts?: { nowMs?: number }
     const psName = typeof ps.name === 'string' ? ps.name : `(permission set ${i})`;
     const psPath = `permissions[${i}]`;
     const objectsMap = (ps.objects && typeof ps.objects === 'object' ? ps.objects : {}) as AnyRec;
+
+    // [#19 / permission zoo audit] FLS keys MUST be `<object>.<field>`
+    // qualified. The runtime evaluator matches keys by object prefix
+    // (`getFieldPermissions`: `key.startsWith(objectName + '.')`), so a bare
+    // `budget` key matches NOTHING — the declared masking silently never
+    // enforces (the worst declared-≠-enforced class, ADR-0049). The showcase
+    // itself shipped this bug for months.
+    const flsMap = (ps.fields && typeof ps.fields === 'object' ? ps.fields : {}) as AnyRec;
+    for (const flsKey of Object.keys(flsMap)) {
+      if (flsKey.includes('.')) continue;
+      findings.push({
+        severity: 'error',
+        rule: SECURITY_FLS_UNQUALIFIED_KEY,
+        where: `permission set "${psName}"`,
+        path: `${psPath}.fields["${flsKey}"]`,
+        message:
+          `field-permission key '${flsKey}' is not object-qualified — the runtime matches FLS keys ` +
+          `by '<object>.<field>' prefix, so a bare key is silently IGNORED and the declared masking never enforces.`,
+        hint: `Qualify the key with its object, e.g. 'crm_opportunity.${flsKey}': { readable: true, editable: false }.`,
+      });
+    }
 
     const wildcard = objectsMap['*'] as AnyRec | undefined;
     if (wildcard && (wildcard.viewAllRecords === true || wildcard.modifyAllRecords === true)) {

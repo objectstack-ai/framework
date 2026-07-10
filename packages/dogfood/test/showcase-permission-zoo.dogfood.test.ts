@@ -211,4 +211,40 @@ describe('showcase: ADR-0090 permission-model zoo', () => {
     });
     expect(r.status, 'read-only + create-intake set passes the guest tier').toBeLessThan(300);
   });
+
+  // ── FLS enforcement — object-qualified keys (permission-zoo audit) ───────
+  // The contributor set masks the project budget figures read-only. The keys
+  // were originally BARE (`budget`) — which the evaluator silently ignores
+  // (it matches `<object>.<field>` prefixes), so the declared masking never
+  // enforced. Qualified keys + the `security-fls-unqualified-key` lint close
+  // that; this proves the served pipeline actually denies the write now.
+  it('FLS: a contributor can edit a project but NOT its budget fields', async () => {
+    const plain = await ql.findOne('sys_user', { where: { email: 'zoo-plain@verify.test' }, context: SYS });
+    const contribSet = await ql.findOne('sys_permission_set', { where: { name: 'showcase_contributor' }, context: SYS });
+    await ql.insert('sys_user_permission_set', { user_id: plain.id, permission_set_id: contribSet.id }, { context: SYS })
+      .catch(() => { /* already granted by an earlier step — idempotent */ });
+
+    const projects = await ql.find('showcase_project', { limit: 1, context: SYS });
+    const projectId = projects?.[0]?.id;
+    expect(projectId, 'seeded project available').toBeTruthy();
+    const budgetBefore = projects[0].budget;
+
+    // Editable field → allowed (allowEdit on showcase_project).
+    const nameEdit = await stack.apiAs(plainTok, 'PATCH', `/data/showcase_project/${projectId}`, {
+      name: 'Renamed by contributor (FLS probe)',
+    });
+    expect(nameEdit.status, 'ordinary field edit passes').toBeLessThan(300);
+
+    // Masked field → denied. A LARGE budget keeps the spent_within_budget
+    // validation rule satisfied, so a rejection here can only be the FLS
+    // write-deny — before the key qualification this returned 2xx (the bare
+    // key was silently ignored).
+    const budgetEdit = await stack.apiAs(plainTok, 'PATCH', `/data/showcase_project/${projectId}`, {
+      budget: 999999999,
+    });
+    expect(budgetEdit.status, 'editable:false field write is denied').not.toBeLessThan(300);
+
+    const after = await ql.findOne('showcase_project', { where: { id: projectId }, context: SYS });
+    expect(after.budget, 'budget unchanged after the denied write').toBe(budgetBefore);
+  });
 });

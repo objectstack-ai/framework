@@ -110,6 +110,10 @@ declare `externalSharingModel` (same four values, ADR-0090 D11). It defaults to 
 **never be wider than the internal one** — e.g. accounts can be `public_read` for employees while
 staying `private` for dealer-portal users, who then see only records they own or were explicitly
 shared. If your object has no external audience, ignore this field entirely.
+*Status:* the dial is authoring-validated (D7 lint `security-external-wider-than-internal`) and
+surfaced in Studio; the runtime evaluator branch that applies it to `audience: 'external'`
+principals lands with the principal-taxonomy semantics phase (#2696, liveness `planned` +
+author-warning). No request evaluates as external today.
 
 ## 4. Worked example — a CRM package
 
