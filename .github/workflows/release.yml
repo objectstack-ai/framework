@@ -62,18 +62,6 @@ jobs:
         run: bash scripts/build-console.sh
 
       - name: Downstream backward-compat smoke (live hotcrm)
-        # TEMPORARY (ADR-0090 v2 launch window) — advisory, not blocking.
-        # ADR-0090 P1 (#2697) removed the sharing recipients `role` /
-        # `role_and_subordinates` from @objectstack/spec with NO compatibility
-        # aliases (docs/adr/0090 D3 — a deliberate, launch-window break). The
-        # latest published hotcrm tag (v1.2.2) still authors those values, so
-        # this gate necessarily goes red on a break the spec took on purpose,
-        # and no adopting hotcrm release exists yet to bump HOTCRM_REF to. Keep
-        # the step running for signal, but don't let it block the v2 publish.
-        # RESTORE (make blocking again): once hotcrm ships a release adopting
-        # the v2 recipient vocabulary, bump HOTCRM_REF below to that tag and
-        # delete this `continue-on-error` line so a red here blocks publish.
-        continue-on-error: true
         # Pre-publish gate (#2035): the about-to-publish @objectstack/spec must
         # not break a real third-party consumer pinned to a published release.
         # Clones objectstack-ai/hotcrm@${HOTCRM_REF}, installs it (published
@@ -82,11 +70,12 @@ jobs:
         # The deterministic in-repo floor is @objectstack/downstream-contract;
         # this is the live ceiling.
         env:
-          # v1.2.1: hotcrm dropped the ObjectSchema `detail` block removed by
-          # ADR-0085 (hotcrm#423) — the intended break, explicitly digested
-          # downstream. Bump this ref whenever a deliberate spec surface
-          # removal ships a matching hotcrm release.
-          HOTCRM_REF: v1.2.2
+          # v2.0.0: hotcrm adopted the ADR-0090 Permission Model v2 vocabulary
+          # (role→position recipients, profiles removed, explicit OWD —
+          # hotcrm#438), closing the launch-window advisory period from #2719.
+          # Bump this ref whenever a deliberate spec surface removal ships a
+          # matching hotcrm release.
+          HOTCRM_REF: v2.0.0
         run: bash scripts/downstream-smoke.sh
 
       - name: Create Release Pull Request or Publish to npm

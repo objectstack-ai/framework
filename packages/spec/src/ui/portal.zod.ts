@@ -7,8 +7,8 @@
  *
  * A Portal is **not** a new application or permission model. It is a
  * declarative projection of the existing app / view / action surface,
- * scoped to a route prefix, a set of profiles, and an optional anonymous
- * entry surface.
+ * scoped to a route prefix, a set of admitted positions, and an optional
+ * anonymous entry surface.
  *
  * Five invariants this schema preserves:
  *   1. Zero business code — layout is an enum + plugin id; theme is tokens;
@@ -16,9 +16,10 @@
  *   2. Data plane is untouched — portal cannot declare objects, fields,
  *      flows, or permissions. Data API (`/api/v1/data/...`) is unaware of
  *      portals.
- *   3. Portal ≠ permission boundary. The Profile is. Portals only narrow
- *      the UI projection; hiding a view in `navigation` is UX, not security.
- *   4. Stackable — the same user/profile can be admitted by multiple
+ *   3. Portal ≠ permission boundary. The permission model is (permission
+ *      sets distributed via positions, ADR-0090). Portals only narrow the
+ *      UI projection; hiding a view in `navigation` is UX, not security.
+ *   4. Stackable — the same user/position can be admitted by multiple
  *      portals. Routing or a picker decides which one is rendered.
  *   5. Template-first — a template author ships `customer.portal.ts` and
  *      the platform guarantees the rendering shell.
@@ -26,8 +27,8 @@
  * Architectural reach (consumer guidance, not part of the schema):
  *   - Dispatcher / HonoServer: at boot, enumerate portals and register
  *     `/<routePrefix>/*` route families with a per-portal auth scope.
- *   - Auth middleware: admit the request if `profile ∈ portal.profiles`,
- *     or it matches `anonymousEntry.routes[*]`.
+ *   - Auth middleware: admit the request if one of the caller's positions
+ *     ∈ `portal.positions`, or it matches `anonymousEntry.routes[*]`.
  *   - objectui LayoutDispatcher: select shell from `layout`.
  *   - objectui NavigationBuilder: render `navigation` (not the all-apps
  *     grid).
@@ -247,14 +248,37 @@ export const PortalSchema = lazySchema(() => z.object({
     .describe('Authentication mode for the portal.'),
 
   /**
-   * Profiles admitted to the portal. A user is allowed in iff at least
-   * one of their effective profiles is listed here. **This is a UI gate,
-   * not the source of truth — the data layer still enforces profile +
-   * sharing on every API call.**
+   * Positions admitted to the portal (ADR-0090 — formerly `profiles`; the
+   * Profile concept was removed by D2). A user is allowed in iff they hold
+   * at least one of the listed positions. Use the built-in `guest` position
+   * for anonymous-only portals (D9). **This is a UI gate, not the source of
+   * truth — the data layer still enforces permission sets + sharing on
+   * every API call.**
    */
-  profiles: z.array(SnakeCaseIdentifierSchema)
-    .min(1, 'A portal must admit at least one profile (use a dedicated profile for "anonymous-only" portals).')
-    .describe('Profiles admitted to the portal.'),
+  positions: z.array(SnakeCaseIdentifierSchema)
+    .min(1, "A portal must admit at least one position (use the built-in 'guest' position for anonymous-only portals).")
+    .describe('Positions admitted to the portal.'),
+
+  /**
+   * Tombstone for the removed `profiles` key (ADR-0090 D2): reject loudly
+   * with the FROM → TO prescription instead of silently stripping — a
+   * silently-dropped admission gate is exactly the class of authoring error
+   * the vocabulary freeze exists to prevent.
+   */
+  profiles: z
+    .unknown()
+    .optional()
+    .superRefine((v, ctx) => {
+      if (v !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "'profiles' was removed (ADR-0090 D2 — the Profile concept no longer exists). " +
+            "Declare `positions` instead: the flat distribution groups admitted to this portal " +
+            "(use the built-in 'guest' position for anonymous-only portals).",
+        });
+      }
+    }),
 
   /**
    * Anonymous entry surface — declarative routes that can be hit without

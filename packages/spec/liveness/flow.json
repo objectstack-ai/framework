@@ -44,7 +44,9 @@
     },
     "template": {
       "status": "dead",
-      "evidence": "no reader either layer"
+      "evidence": "no reader either layer",
+      "authorWarn": true,
+      "authorHint": "No reader in designer or engine — flagging a flow as a template/subflow does nothing. Invoke shared logic via a subflow node referencing the flow by name."
     },
     "type": {
       "status": "live",
@@ -100,7 +102,9 @@
         },
         "outputSchema": {
           "status": "dead",
-          "evidence": "declared, never validated"
+          "evidence": "declared, never validated",
+          "authorWarn": true,
+          "authorHint": "Declared but never validated — node outputs are NOT checked against this schema at runtime. Do not rely on it for contract enforcement."
         },
         "waitEventConfig": {
           "status": "live",
@@ -141,7 +145,9 @@
         },
         "fallbackNodeId": {
           "status": "dead",
-          "evidence": "engine uses per-node fault edges, not this"
+          "evidence": "engine uses per-node fault edges, not this",
+          "authorWarn": true,
+          "authorHint": "The engine routes failures via per-node fault edges, not errorHandling.fallbackNodeId — wire a fault edge from the failing node instead."
         }
       }
     }

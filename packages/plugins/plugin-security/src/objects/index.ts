@@ -15,4 +15,5 @@ export { SysPermissionSet } from './sys-permission-set.object.js';
 export { SysUserPermissionSet } from './sys-user-permission-set.object.js';
 export { SysPositionPermissionSet } from './sys-position-permission-set.object.js';
 export { SysUserPosition } from './sys-user-position.object.js';
+export { SysAudienceBindingSuggestion } from './sys-audience-binding-suggestion.object.js';
 export { defaultPermissionSets } from './default-permission-sets.js';

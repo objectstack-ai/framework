@@ -31,14 +31,14 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "user",
           group: "group",
-          role: "role",
+          position: "position",
           unit_and_subordinates: "unit_and_subordinates",
           guest: "guest"
         }
       },
       recipient_id: {
         label: "Recipient",
-        help: "ID of the user/group/role that receives access"
+        help: "ID of the user/group/position that receives access"
       },
       access_level: {
         label: "Access Level",
@@ -131,18 +131,19 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       recipient_type: {
         label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_business_unit_id tree; `team` is flat (better-auth).",
+        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `business_unit` walks the parent_business_unit_id tree; `team` is flat (better-auth); `position` expands the position's holders (positions are flat, ADR-0090 D3); `unit_and_subordinates` expands the named business unit PLUS every descendant unit's members via the sys_business_unit tree (ADR-0057 D5).",
         options: {
           user: "user",
           team: "team",
-          department: "department",
-          role: "role",
+          business_unit: "business_unit",
+          position: "position",
+          unit_and_subordinates: "unit_and_subordinates",
           queue: "queue"
         }
       },
       recipient_id: {
         label: "Recipient",
-        help: "department id / team id / role name / queue name / user id depending on recipient_type"
+        help: "business unit id / team id / position name / queue name / user id depending on recipient_type"
       },
       access_level: {
         label: "Access Level",

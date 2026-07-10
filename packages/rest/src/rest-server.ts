@@ -11,6 +11,7 @@ import {
     headerLabel,
     formatRowCells,
     formatRowForJson,
+    cellFontColor,
     type ExportFieldMeta,
 } from './export-format.js';
 import { runImport } from './import-runner.js';
@@ -101,6 +102,23 @@ export function mapDataError(error: any, object?: string): { status: number; bod
                 code: 'VALIDATION_FAILED',
                 fields: Array.isArray(error?.fields) ? error.fields : [],
                 ...(object ? { object } : {}),
+            },
+        };
+    }
+    // Capability gates (#2707 feeds / #2727 files): plugin-audit's engine
+    // hooks reject sys_comment / sys_attachment inserts fail-closed when the
+    // TARGET object's capability flag disallows them. 403 like
+    // CLONE_DISABLED; surfaced by `code` because the generic data routes map
+    // through here (they never reach sendError's `.status` passthrough).
+    // `error.object` names the gated TARGET object (not the join table), so
+    // prefer it.
+    if (error?.code === 'FEEDS_DISABLED' || error?.code === 'FILES_DISABLED') {
+        return {
+            status: 403,
+            body: {
+                error: error?.message ?? 'This capability is disabled for the target object',
+                code: error.code,
+                ...(error?.object || object ? { object: error?.object ?? object } : {}),
             },
         };
     }
@@ -766,7 +784,7 @@ function rowsToCsv(
  * ended. Dynamically imported so `node:stream` / `exceljs` stay out of the
  * module's static graph.
  */
-async function createXlsxStream(res: any): Promise<{
+async function createXlsxStream(res: any, useStyles = false): Promise<{
     ws: any;
     finalize: () => Promise<void>;
 }> {
@@ -780,7 +798,7 @@ async function createXlsxStream(res: any): Promise<{
         passthrough.on('error', reject);
     });
 
-    const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: passthrough, useStyles: false });
+    const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: passthrough, useStyles });
     const ws = wb.addWorksheet('Export');
 
     return {
@@ -953,6 +971,10 @@ export class RestServer {
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    /** [ADR-0090] `security` service resolver — used by the
+     *  /security/suggested-bindings (D5/D9) and /security/explain (D6)
+     *  routes (plugin-security). */
+    private securityServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     /** Sync probe: is a kernel service registered? Single-env path for nav
      *  capability gates (ADR-0057 D10) — resolveExecCtx sets no kernel in
      *  single-kernel deployments, so this prevents the gate failing open. */
@@ -983,6 +1005,7 @@ export class RestServer {
         analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         serviceExistsProvider?: (name: string) => boolean,
+        securityServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -1001,6 +1024,7 @@ export class RestServer {
         this.analyticsServiceProvider = analyticsServiceProvider;
         this.settingsServiceProvider = settingsServiceProvider;
         this.serviceExistsProvider = serviceExistsProvider;
+        this.securityServiceProvider = securityServiceProvider;
     }
 
     /**
@@ -1269,6 +1293,63 @@ export class RestServer {
         const pending = this.computeExecCtx(environmentId, req);
         perReq.set(key, pending);
         return pending;
+    }
+
+    /**
+     * [ADR-0046 §6.7] The audience-evaluation view of the caller for book/doc
+     * gating. `permissionSets` resolves through the security service's
+     * `resolvePermissionSetNames` — the SAME resolution as data-plane
+     * enforcement (positions expanded, additive baseline), so the docs gate
+     * can never drift from it. `permissionSets` stays undefined when the
+     * service is absent or resolution fails; `audienceAllows` then DENIES
+     * permission-set-gated audiences (fail closed, ADR-0049). Resolution is
+     * skipped unless `needPermissionSets` — callers pass true only when a
+     * `{ permissionSet }` audience is actually in play.
+     */
+    private async resolveAudienceCaller(
+        environmentId: string | undefined,
+        req: any,
+        opts: { needPermissionSets: boolean },
+    ): Promise<{ authenticated: boolean; permissionSets?: string[] }> {
+        const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+        const authenticated = !!ctx?.userId;
+        if (!authenticated || !opts.needPermissionSets || !this.securityServiceProvider) {
+            return { authenticated };
+        }
+        try {
+            const svc = await this.securityServiceProvider(environmentId);
+            if (!svc || typeof svc.resolvePermissionSetNames !== 'function') return { authenticated };
+            const names = await svc.resolvePermissionSetNames(ctx);
+            return { authenticated, permissionSets: Array.isArray(names) ? names : [] };
+        } catch {
+            return { authenticated }; // unresolved holdings → gated audiences deny
+        }
+    }
+
+    /** Whether any of these books carries a `{ permissionSet }` audience. */
+    private static anyPermissionSetAudience(books: readonly any[]): boolean {
+        return books.some(
+            (b) => b && typeof b === 'object' && b.audience && typeof b.audience === 'object'
+                && typeof b.audience.permissionSet === 'string',
+        );
+    }
+
+    /** Coerce a getMetaItems result (array | {items}) into an array. */
+    private static metaItemsArray(raw: unknown): any[] {
+        if (Array.isArray(raw)) return raw;
+        if (raw && typeof raw === 'object' && Array.isArray((raw as any).items)) return (raw as any).items;
+        return [];
+    }
+
+    /** Fetch every book of the environment, shaped for the audience resolver. */
+    private async fetchAudienceBooks(p: any, environmentId: string | undefined): Promise<any[]> {
+        const raw = await p.getMetaItems({
+            type: 'book',
+            ...(environmentId ? { environmentId } : {}),
+        } as any).catch(() => []);
+        return RestServer.metaItemsArray(raw).map((b: any) =>
+            b && typeof b === 'object' ? { ...b, packageId: b._packageId } : b,
+        );
     }
 
     /** Heavy path behind `resolveExecCtx` — resolve identity + RBAC/RLS + localization. */
@@ -1864,6 +1945,8 @@ export class RestServer {
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
             this.registerAnalyticsEndpoints(bp);
+            this.registerSecurityEndpoints(bp);
+            this.registerSecurityExplainEndpoints(bp);
             // Data-action routes (e.g. GET /data/:object/export, POST
             // /data/:object/import) use static-literal action segments that
             // MUST be registered BEFORE the greedy GET /data/:object/:id
@@ -2400,6 +2483,67 @@ export class RestServer {
                             }
                         }
 
+                        // ADR-0046 §6.7 — book list is audience-filtered: anonymous
+                        // callers see only `public` books; `{ permissionSet }`-gated
+                        // books require the caller to hold the named set (resolved
+                        // through the security service; unresolvable → fail closed).
+                        if (req.params.type === 'book') {
+                            const raw = visible as unknown;
+                            const list = RestServer.metaItemsArray(raw);
+                            if (list.length > 0) {
+                                const { audienceAllows } = await import('@objectstack/spec/system');
+                                const caller = await this.resolveAudienceCaller(environmentId, req, {
+                                    needPermissionSets: RestServer.anyPermissionSetAudience(list),
+                                });
+                                const filtered = list.filter((b: any) =>
+                                    b && typeof b === 'object' && audienceAllows((b as any).audience, caller));
+                                visible = Array.isArray(raw) ? filtered : { ...(raw as any), items: filtered };
+                            }
+                        }
+
+                        // ADR-0046 §6.7 — doc list is audience-filtered by each
+                        // doc's EFFECTIVE audience (union over the books that
+                        // claim it; unclaimed docs default to `org`). Runs on the
+                        // raw items (before locale collapse) so `_packageId`
+                        // provenance is still present for membership scoping.
+                        if (req.params.type === 'doc') {
+                            const raw = visible as unknown;
+                            const list = RestServer.metaItemsArray(raw);
+                            if (list.length > 0) {
+                                const { audienceAllows, docAudienceAllows, resolveDocAudiences } =
+                                    await import('@objectstack/spec/system');
+                                const books = await this.fetchAudienceBooks(p, environmentId);
+                                const caller = await this.resolveAudienceCaller(environmentId, req, {
+                                    needPermissionSets: RestServer.anyPermissionSetAudience(books),
+                                });
+                                let filtered: any[];
+                                if (caller.authenticated && !RestServer.anyPermissionSetAudience(books)) {
+                                    // Fast path: with no gated book anywhere, every
+                                    // effective audience admits an authenticated caller.
+                                    filtered = list;
+                                } else {
+                                    const corpus = list
+                                        .filter((d: any) => d && typeof d === 'object')
+                                        .map((d: any) => ({
+                                            name: d.name,
+                                            group: d.group,
+                                            tags: d.tags,
+                                            order: d.order,
+                                            packageId: d._packageId,
+                                        }));
+                                    const audiences = resolveDocAudiences(books as any, corpus);
+                                    filtered = list.filter((d: any) => {
+                                        if (!d || typeof d !== 'object') return false;
+                                        const eff = audiences.get(d.name);
+                                        return eff
+                                            ? docAudienceAllows(eff, caller)
+                                            : audienceAllows('org', caller);
+                                    });
+                                }
+                                visible = Array.isArray(raw) ? filtered : { ...(raw as any), items: filtered };
+                            }
+                        }
+
                         // ADR-0046 i18n: collapse each doc to the request
                         // locale (localized label/description, `translations`
                         // map dropped) before the content-strip step below.
@@ -2505,7 +2649,7 @@ export class RestServer {
                         const prot = await this.resolveProtocol(environmentId, req);
                         const locale = this.extractLocale(req);
                         const packageId = req.query?.package || undefined;
-                        const { resolveBookTree, deriveImplicitPackageBook, isPublicAudience, resolveDocLocale } =
+                        const { resolveBookTree, deriveImplicitPackageBook, audienceAllows, resolveDocAudiences, docAudienceAllows, resolveDocLocale } =
                             await import('@objectstack/spec/system');
 
                         const norm = (raw: any): any[] =>
@@ -2522,10 +2666,21 @@ export class RestServer {
                             book = deriveImplicitPackageBook(req.params.name, req.params.name);
                         }
 
-                        // §6.7 — anonymous callers only get `public` books.
-                        const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
-                        if (!ctx?.userId && !isPublicAudience((book as any).audience)) {
-                            sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                        // §6.7 — the book's audience gates the whole tree:
+                        // anonymous → `public` only; `{ permissionSet }` →
+                        // the caller must hold the named set (fail closed
+                        // when holdings cannot be resolved, ADR-0049).
+                        const audienceBooks = books.map((b: any) =>
+                            b && typeof b === 'object' ? { ...b, packageId: b._packageId } : b);
+                        const caller = await this.resolveAudienceCaller(environmentId, req, {
+                            needPermissionSets: RestServer.anyPermissionSetAudience([book, ...audienceBooks]),
+                        });
+                        if (!audienceAllows((book as any).audience, caller)) {
+                            if (!caller.authenticated) {
+                                sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                            } else {
+                                sendError(res, { code: 'PERMISSION_DENIED', message: 'This documentation is limited to holders of a permission set you do not have', status: 403 });
+                            }
                             return;
                         }
 
@@ -2546,6 +2701,26 @@ export class RestServer {
                             }));
 
                         const tree = resolveBookTree(book as any, docs, (book as any)._packageId);
+
+                        // §6.7 — the tree's ENTRIES are additionally filtered by
+                        // each doc's effective audience (union over claiming
+                        // books, unclaimed → org), so an anonymous reader of a
+                        // public book never sees nav entries that would 401 on
+                        // fetch, and gated-only docs stay out of non-holders'
+                        // trees. The book gate above passed, so this only ever
+                        // narrows further for anonymous / non-holder callers.
+                        const gatedTreePossible = !caller.authenticated
+                            || RestServer.anyPermissionSetAudience(audienceBooks);
+                        if (gatedTreePossible) {
+                            const audiences = resolveDocAudiences(audienceBooks as any, docs);
+                            tree.groups = tree.groups
+                                .map((g: any) => ({
+                                    ...g,
+                                    entries: g.entries.filter((e: any) =>
+                                        !e.doc || docAudienceAllows(audiences.get(e.doc), caller)),
+                                }))
+                                .filter((g: any) => g.entries.some((e: any) => e.doc || e.href));
+                        }
                         res.json(tree);
                     } catch (error: any) {
                         logError("[REST] Unhandled error:", error);
@@ -2613,7 +2788,10 @@ export class RestServer {
                         // `getMetaItem(type, name, packageId)` path runs.
                         const packageScoped = typeof req.query?.package === 'string'
                             && req.query.package.length > 0;
-                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped && req.params.type !== 'doc') {
+                        // `doc` and `book` bypass the shared cache: their §6.7
+                        // audience gate is per-caller, and a shared ETag would
+                        // leak gated content across viewers.
+                        if (metadata.enableCache && p.getMetaItemCached && !isAppType && !isDraftRead && !previewDrafts && !packageScoped && req.params.type !== 'doc' && req.params.type !== 'book') {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
@@ -2712,6 +2890,57 @@ export class RestServer {
                                 const registered = await this.resolveRegisteredServices((ctx as any)?.__kernel, [visible]);
                                 const serviceGate = registered ? (n: string) => registered.has(n) : undefined;
                                 if (serviceGate) visible = this.filterDashboardForUser(visible, serviceGate);
+                            }
+
+                            // ADR-0046 §6.7 — audience gate on single-item reads.
+                            // A `book` is gated by its own audience; a `doc` by its
+                            // EFFECTIVE audience (union over the books that claim
+                            // it, unclaimed → org). 401 for anonymous, 403 for an
+                            // authenticated non-holder; fail closed when holdings
+                            // cannot be resolved (ADR-0049).
+                            if ((req.params.type === 'book' || req.params.type === 'doc') && visible) {
+                                const { audienceAllows, docAudienceAllows, resolveDocAudiences } =
+                                    await import('@objectstack/spec/system');
+                                const target = isMetaEnvelope(visible) ? (visible as any).item : visible;
+                                let caller: { authenticated: boolean; permissionSets?: string[] };
+                                let allowed: boolean;
+                                if (req.params.type === 'book') {
+                                    caller = await this.resolveAudienceCaller(environmentId, req, {
+                                        needPermissionSets: RestServer.anyPermissionSetAudience([target]),
+                                    });
+                                    allowed = audienceAllows(target?.audience, caller);
+                                } else {
+                                    const books = await this.fetchAudienceBooks(p, environmentId);
+                                    caller = await this.resolveAudienceCaller(environmentId, req, {
+                                        needPermissionSets: RestServer.anyPermissionSetAudience(books),
+                                    });
+                                    if (caller.authenticated && !RestServer.anyPermissionSetAudience(books)) {
+                                        allowed = true; // no gated book anywhere → org suffices
+                                    } else {
+                                        const corpus = RestServer.metaItemsArray(await p.getMetaItems({
+                                            type: 'doc',
+                                            ...(environmentId ? { environmentId } : {}),
+                                        } as any).catch(() => []))
+                                            .filter((d: any) => d && typeof d === 'object')
+                                            .map((d: any) => ({
+                                                name: d.name,
+                                                group: d.group,
+                                                tags: d.tags,
+                                                order: d.order,
+                                                packageId: d._packageId,
+                                            }));
+                                        const audiences = resolveDocAudiences(books as any, corpus);
+                                        allowed = docAudienceAllows(audiences.get(target?.name), caller);
+                                    }
+                                }
+                                if (!allowed) {
+                                    if (!caller.authenticated) {
+                                        sendError(res, { code: 'unauthorized', message: 'This documentation requires sign-in', status: 401 });
+                                    } else {
+                                        sendError(res, { code: 'PERMISSION_DENIED', message: 'This documentation is limited to holders of a permission set you do not have', status: 403 });
+                                    }
+                                    return;
+                                }
                             }
 
                             // ADR-0046 i18n: collapse the doc to the request
@@ -3926,6 +4155,11 @@ export class RestServer {
         // Streams the response so 50k-row exports do not buffer in memory; the
         // xlsx path pipes exceljs' streaming writer straight onto the response.
         // Filename suggests `${object}-${YYYY-MM-DD}.${ext}` for browsers.
+        //
+        // xlsx only: select / radio cells are coloured with their option's
+        // `color` as the font colour (white cell background) when the effective
+        // limit is <= 10000. Larger exports drop styling for performance and set
+        // `X-Export-Styles: dropped` (else `applied`); csv / json are unaffected.
         this.routeManager.register({
             method: 'GET',
             path: `${dataPath}/:object/export`,
@@ -3949,9 +4183,17 @@ export class RestServer {
                     const includeHeader = String(q.header ?? 'true').toLowerCase() !== 'false';
                     const HARD_CAP = 50_000;
                     const MAX_CHUNK = 5_000;
+                    // Styled xlsx (per-cell font colour from select options) is far
+                    // heavier than a bare value dump, so cap it well below HARD_CAP;
+                    // above this the export still succeeds, just without colours.
+                    const STYLE_ROW_CAP = 10_000;
                     const requestedLimit = q.limit != null ? Math.max(1, Number(q.limit) || 0) : 10_000;
                     const limit = Math.min(requestedLimit, HARD_CAP);
                     const chunkSize = Math.min(MAX_CHUNK, Math.max(50, q.page != null ? Number(q.page) || 500 : 500));
+                    // Colour cells only for xlsx within the style cap; decided up
+                    // front (before streaming) since we can't know the true row
+                    // count until the stream drains.
+                    const styled = format === 'xlsx' && limit <= STYLE_ROW_CAP;
 
                     let filter: any = undefined;
                     if (typeof q.filter === 'string' && q.filter.length > 0) {
@@ -4039,13 +4281,17 @@ export class RestServer {
                     }
                     res.header('X-Export-Format', format);
                     res.header('X-Export-Limit', String(limit));
+                    // Signal whether select-option colours were applied. Only
+                    // meaningful for xlsx; 'dropped' means the limit exceeded the
+                    // style cap so the workbook is colourless but complete.
+                    if (format === 'xlsx') res.header('X-Export-Styles', styled ? 'applied' : 'dropped');
                     res.header('Cache-Control', 'no-store');
 
                     let exported = 0;
                     let firstChunk = true;
                     let skip = 0;
                     if (format === 'json') res.write('[');
-                    const xlsx = format === 'xlsx' ? await createXlsxStream(res) : null;
+                    const xlsx = format === 'xlsx' ? await createXlsxStream(res, styled) : null;
 
                     while (exported < limit) {
                         const take = Math.min(chunkSize, limit - exported);
@@ -4084,8 +4330,16 @@ export class RestServer {
                             if (firstChunk && includeHeader) {
                                 xlsx!.ws.addRow((fields ?? []).map((f) => headerLabel(f, metaMap))).commit();
                             }
+                            const cols = fields ?? [];
                             for (const row of rows) {
-                                xlsx!.ws.addRow(formatRowCells(row, fields ?? [], metaMap)).commit();
+                                const r = xlsx!.ws.addRow(formatRowCells(row, cols, metaMap));
+                                if (styled) {
+                                    cols.forEach((f, i) => {
+                                        const argb = cellFontColor(row?.[f], metaMap.get(f));
+                                        if (argb) r.getCell(i + 1).font = { color: { argb } };
+                                    });
+                                }
+                                r.commit();
                             }
                         } else {
                             for (let i = 0; i < rows.length; i++) {
@@ -4840,6 +5094,113 @@ export class RestServer {
         });
     }
 
+    /**
+     * [ADR-0090 D6] Access-explanation endpoint — the REST face of the
+     * explain engine (framework#2696).
+     *
+     *   GET  {basePath}/security/explain?object=…&operation=…&userId=…
+     *   POST {basePath}/security/explain   body: { object, operation, userId? }
+     *
+     * Delegates to the security service's `explain(request, callerContext)`
+     * (`SecurityPlugin.explainAccessForCaller`) — the same code paths the
+     * enforcement middleware runs, so the report is explained by
+     * construction. Caller authorization lives in the SERVICE, not here:
+     * explaining ANOTHER user requires `manage_users` or a delegated
+     * `adminScope` covering that user (D12); the service's
+     * `PermissionDeniedError` maps to 403. The route itself only insists on
+     * an authenticated caller (an access report is sensitive even about
+     * oneself, and the anonymous `guest` posture is not this endpoint's
+     * business) and returns 501 when no security service exposing `explain`
+     * is mounted (a deployment without `@objectstack/plugin-security`).
+     */
+    private registerSecurityExplainEndpoints(basePath: string): void {
+        const isScoped = basePath.includes('/environments/:environmentId');
+        // Resolve the ENVIRONMENT's security service first (its resolver /
+        // evaluator / RLS compiler are bound to the env kernel's own data
+        // engine); the host provider is the single-kernel fallback.
+        const resolveService = async (environmentId?: string, req?: any) => {
+            try {
+                const envId = await this.resolveRequestEnvironmentId(environmentId, req);
+                if (envId && envId !== 'platform' && this.kernelManager) {
+                    const kernel = await this.kernelManager.getOrCreate(envId);
+                    const svc = await kernel.getServiceAsync<any>('security').catch(() => undefined);
+                    if (svc) return svc;
+                }
+            } catch { /* fall back to the host service */ }
+            if (!this.securityServiceProvider) return undefined;
+            try { return await this.securityServiceProvider(environmentId); }
+            catch { return undefined; }
+        };
+
+        const handler = async (req: any, res: any) => {
+            try {
+                const environmentId = isScoped ? req.params?.environmentId : undefined;
+                const context = await this.resolveExecCtx(environmentId, req);
+                if (this.enforceAuth(req, res, context)) return;
+                if (!context?.userId) {
+                    // Even on requireAuth=false deployments the explain surface
+                    // stays authenticated-only — it is an admin diagnosis tool.
+                    return res.status(401).json({
+                        code: 'UNAUTHORIZED',
+                        message: 'The access-explanation endpoint requires an authenticated caller.',
+                    });
+                }
+
+                const svc = await resolveService(environmentId, req);
+                if (!svc || typeof svc.explain !== 'function') {
+                    return res.status(501).json({
+                        code: 'NOT_IMPLEMENTED',
+                        message: 'Access explanation is not available on this deployment (no security service with explain).',
+                    });
+                }
+
+                // GET reads the request from the query string, POST from the
+                // body — one contract (ExplainRequestSchema), two transports.
+                const src = req.method === 'GET' ? (req.query ?? {}) : (req.body ?? {});
+                const { ExplainRequestSchema } = await import('@objectstack/spec/security');
+                const parsed = (ExplainRequestSchema as any).safeParse({
+                    object: src.object,
+                    operation: src.operation ?? 'read',
+                    ...(src.userId != null && src.userId !== '' ? { userId: src.userId } : {}),
+                });
+                if (!parsed.success) {
+                    return res.status(400).json({
+                        code: 'VALIDATION_FAILED',
+                        message: 'Invalid explain request — expected { object: string, operation: read|create|update|delete|transfer|restore|purge, userId?: string }.',
+                        detail: String(parsed.error?.message ?? '').slice(0, 1000),
+                    });
+                }
+
+                const decision = await svc.explain(parsed.data, context);
+                res.json(decision);
+            } catch (error: any) {
+                const msg = String(error?.message ?? error ?? '');
+                if (
+                    error?.code === 'PERMISSION_DENIED' ||
+                    error?.name === 'PermissionDeniedError' ||
+                    msg.startsWith('[Security] Access denied')
+                ) {
+                    return res.status(403).json({ code: 'PERMISSION_DENIED', message: msg.slice(0, 1000) });
+                }
+                logError('[REST] Security explain error:', error);
+                res.status(500).json({ code: 'EXPLAIN_FAILED', error: msg.slice(0, 500) });
+            }
+        };
+
+        this.routeManager.register({
+            method: 'GET',
+            path: `${basePath}/security/explain`,
+            handler,
+            metadata: { summary: 'Explain why a principal can (or cannot) perform an operation on an object (ADR-0090 D6)', tags: ['security'] },
+        });
+        this.routeManager.register({
+            method: 'POST',
+            path: `${basePath}/security/explain`,
+            handler,
+            metadata: { summary: 'Explain why a principal can (or cannot) perform an operation on an object (ADR-0090 D6)', tags: ['security'] },
+        });
+    }
+
     private registerSharingEndpoints(basePath: string): void {
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
@@ -5088,6 +5449,106 @@ export class RestServer {
                 } catch (err: any) { handleError(err, res, 'RULE_EVALUATE_FAILED'); }
             },
             metadata: { summary: 'Re-evaluate a sharing rule and reconcile grants', tags: ['sharing'] },
+        });
+    }
+
+    /**
+     * Register the security admin endpoints (ADR-0090 D5/D9) — suggested
+     * audience bindings. A package permission set declaring `isDefault: true`
+     * is an install-time SUGGESTION to bind it to the `everyone` position;
+     * these routes surface pending suggestions and let a tenant admin resolve
+     * them. The `security` service (plugin-security) does the real gating:
+     * tenant-admin pre-check on all three, and confirm writes the binding
+     * with the caller's execution context so the audience-anchor and
+     * delegated-admin gates enforce it — never auto-bound, never system.
+     *
+     *   GET  {basePath}/security/suggested-bindings?status=&packageId=
+     *   POST {basePath}/security/suggested-bindings/:id/confirm
+     *   POST {basePath}/security/suggested-bindings/:id/dismiss
+     *
+     * Routes return 501 when the `security` service is not registered
+     * (deployment without plugin-security). Typed service errors carry their
+     * HTTP status (403 permission / 404 not found / 409 state).
+     */
+    private registerSecurityEndpoints(basePath: string): void {
+        const dataPath = basePath;
+        const isScoped = basePath.includes('/environments/:environmentId');
+
+        const resolveService = async (environmentId?: string) => {
+            if (!this.securityServiceProvider) return undefined;
+            try {
+                const svc = await this.securityServiceProvider(environmentId);
+                return svc && typeof svc.listAudienceBindingSuggestions === 'function' ? svc : undefined;
+            } catch { return undefined; }
+        };
+        const respond501 = (res: any) => res.status(501).json({
+            code: 'NOT_IMPLEMENTED',
+            message: 'Security service is not configured on this deployment',
+        });
+        const handleError = (err: any, res: any, defaultCode: string) => {
+            const status = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+            if (status !== 500) {
+                return res.status(status).json({ code: err?.code ?? defaultCode, error: String(err?.message ?? err) });
+            }
+            logError(`[REST] suggested-bindings ${defaultCode}:`, err);
+            return res.status(500).json({ code: defaultCode, error: String(err?.message ?? err).slice(0, 500) });
+        };
+
+        // LIST (reconciles against installed packages / declared sets first)
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/security/suggested-bindings`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.listAudienceBindingSuggestions(context ?? {}, {
+                        status: req.query?.status ? String(req.query.status) : undefined,
+                        packageId: req.query?.packageId ? String(req.query.packageId) : undefined,
+                    });
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_LIST_FAILED'); }
+            },
+            metadata: { summary: 'List suggested audience bindings (ADR-0090 D5/D9)', tags: ['security'] },
+        });
+
+        // CONFIRM — creates the anchor binding as the caller (gated write)
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/security/suggested-bindings/:id/confirm`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.confirmAudienceBindingSuggestion(context ?? {}, String(req.params.id));
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_CONFIRM_FAILED'); }
+            },
+            metadata: { summary: 'Confirm a suggested audience binding (creates the everyone/guest binding)', tags: ['security'] },
+        });
+
+        // DISMISS — records the admin's decline; nothing is bound
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/security/suggested-bindings/:id/dismiss`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(environmentId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.dismissAudienceBindingSuggestion(context ?? {}, String(req.params.id));
+                    res.json({ data: result });
+                } catch (err: any) { handleError(err, res, 'SUGGESTION_DISMISS_FAILED'); }
+            },
+            metadata: { summary: 'Dismiss a suggested audience binding', tags: ['security'] },
         });
     }
 

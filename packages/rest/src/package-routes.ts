@@ -9,9 +9,22 @@ import type { PackageService } from '@objectstack/service-package';
 export interface PackageRoutesOptions {
   /**
    * Protocol service (ObjectStackProtocol) — provides access to in-memory
-   * SchemaRegistry packages loaded via defineStack()/AppPlugin at boot time.
+   * SchemaRegistry packages loaded via defineStack()/AppPlugin at boot time,
+   * and (#2747) the full `deletePackage` uninstall semantics: package
+   * metadata rows, the durable `sys_packages` record, and the registered
+   * data-plane cleanups (e.g. plugin-security revoking the package's
+   * permission sets and bindings).
    */
-  protocol?: { getMetaItems?(req: { type: string }): Promise<{ items: any[] }> };
+  protocol?: {
+    getMetaItems?(req: { type: string }): Promise<{ items: any[] }>;
+    deletePackage?(req: { packageId: string; actor?: string }): Promise<{
+      success: boolean;
+      deletedCount: number;
+      failedCount: number;
+      failed: Array<{ type: string; name: string; error: string; code?: string }>;
+      cleanups: Array<{ name: string; success: boolean; removed: number; error?: string }>;
+    }>;
+  };
 }
 
 /**
@@ -160,6 +173,31 @@ export function registerPackageRoutes(
     try {
       const packageId = req.params.id;
       const version = req.query?.version;
+
+      // [#2747] A FULL uninstall (no version pin) goes through
+      // protocol.deletePackage — one uninstall semantic, not three dialects:
+      // it removes the package's metadata rows, drops the durable
+      // sys_packages record, and runs the registered data-plane cleanups
+      // (plugin-security revokes the package's permission sets/bindings —
+      // no ghost grants). A version-scoped delete keeps the narrow durable
+      // registry semantics, as does a deployment without the protocol.
+      if (!version && typeof options.protocol?.deletePackage === 'function') {
+        const result = await options.protocol.deletePackage({ packageId });
+        // Zero metadata rows is still a successful uninstall (e.g. a
+        // runtime-registered package that never published metadata) —
+        // only per-item failures make it a failure.
+        if (result.failedCount === 0) {
+          res.json({
+            success: true,
+            message: `Deleted ${packageId}`,
+            deletedCount: result.deletedCount,
+            cleanups: result.cleanups,
+          });
+          return;
+        }
+        res.status(400).json({ success: false, failed: result.failed, cleanups: result.cleanups });
+        return;
+      }
 
       const result = await packageService.delete(packageId, version);
 

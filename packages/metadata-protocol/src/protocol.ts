@@ -721,6 +721,31 @@ export type PublishMaterializer = (args: {
 }) => Promise<PublishMaterializeResult>;
 
 /**
+ * Uninstall-time data-plane cleanup (ADR-0086 D3, #2747). The exact mirror of
+ * {@link PublishMaterializer}: domain plugins own data-plane tables the
+ * protocol layer must not know the shape of (e.g. plugin-security's
+ * `sys_permission_set` and its binding tables), so they register a named
+ * cleanup here and {@link ObjectStackProtocolImplementation.deletePackage}
+ * invokes every cleanup with the uninstalled package id. Cleanups run
+ * best-effort — a failure is REPORTED on the uninstall response (`cleanups`),
+ * never thrown — but ghost grants are a security condition, so callers must
+ * surface a failed cleanup, not swallow it.
+ */
+export type UninstallCleanup = (args: {
+    packageId: string;
+    organizationId?: string;
+    actor?: string;
+}) => Promise<{ success: boolean; removed: number; error?: string }>;
+
+/** Per-cleanup outcome reported on the `deletePackage` response. */
+export interface UninstallCleanupOutcome {
+    name: string;
+    success: boolean;
+    removed: number;
+    error?: string;
+}
+
+/**
  * Post-persistence metadata-mutation notification (#2588). Emitted by
  * `saveMetaItem` / `publishMetaItem` / `deleteMetaItem` AFTER the write
  * landed. `type` is the singular metadata type name. Subscribe via
@@ -769,6 +794,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      */
     private publishMaterializers = new Map<string, PublishMaterializer>();
 
+    /** [#2747] Named uninstall cleanups, run by {@link deletePackage}. */
+    private uninstallCleanups = new Map<string, UninstallCleanup>();
+
     constructor(
         engine: IDataEngine,
         getServicesRegistry?: () => Map<string, any>,
@@ -791,6 +819,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     registerPublishMaterializer(type: string, materializer: PublishMaterializer): void {
         const singular = PLURAL_TO_SINGULAR[type] ?? type;
         this.publishMaterializers.set(singular, materializer);
+    }
+
+    /**
+     * Register a named uninstall-time data-plane cleanup (ADR-0086 D3, #2747).
+     * Called by domain plugins at init — e.g. plugin-security registers the
+     * cleanup that removes its package-owned `sys_permission_set` rows and
+     * their bindings when the owning package is uninstalled, so grants are
+     * revoked everywhere at once (no ghost grants). One cleanup per name; a
+     * second registration replaces the first (idempotent re-init).
+     */
+    registerUninstallCleanup(name: string, cleanup: UninstallCleanup): void {
+        this.uninstallCleanups.set(name, cleanup);
     }
 
     /**
@@ -4716,6 +4756,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         failedCount: number;
         deleted: Array<{ type: string; name: string; state: string }>;
         failed: Array<{ type: string; name: string; error: string; code?: string }>;
+        cleanups: UninstallCleanupOutcome[];
     }> {
         const where: Record<string, unknown> = { package_id: request.packageId };
         if (request.organizationId) where.organization_id = request.organizationId;
@@ -4766,12 +4807,56 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             );
         }
 
+        // [#2747] Unregister from the in-memory SchemaRegistry too, so the
+        // running kernel stops serving the package without waiting for a
+        // restart. Best-effort: the HTTP dispatcher already unregisters
+        // before calling us (second call is a no-op warn), and a package
+        // with live extenders refuses unregistration — that failure is
+        // logged, not fatal (the durable row is gone, so the next boot is
+        // clean either way).
+        try {
+            (this.engine as any)?.registry?.uninstallPackage?.(request.packageId);
+        } catch (e) {
+            console.warn(
+                `[protocol.deletePackage] registry unregistration skipped for '${request.packageId}': ${(e as Error)?.message}`,
+            );
+        }
+
+        // [#2747] Data-plane cleanups registered by domain plugins (mirror of
+        // the publish materializers): revoke what the package's metadata
+        // granted — e.g. plugin-security removes its package-owned
+        // sys_permission_set rows and their bindings. Best-effort per cleanup;
+        // outcomes ride on the response so a failed revocation (ghost grants —
+        // a security condition) is visible to the caller, never silent.
+        const cleanups: UninstallCleanupOutcome[] = [];
+        for (const [name, cleanup] of this.uninstallCleanups) {
+            try {
+                const r = await cleanup({
+                    packageId: request.packageId,
+                    ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                    ...(request.actor ? { actor: request.actor } : {}),
+                });
+                cleanups.push({
+                    name,
+                    success: r?.success !== false,
+                    removed: typeof r?.removed === 'number' ? r.removed : 0,
+                    ...(r?.error ? { error: r.error } : {}),
+                });
+            } catch (e: any) {
+                cleanups.push({ name, success: false, removed: 0, error: e?.message ?? 'cleanup failed' });
+                console.warn(
+                    `[protocol.deletePackage] uninstall cleanup '${name}' failed for '${request.packageId}': ${e?.message}`,
+                );
+            }
+        }
+
         return {
             success: failed.length === 0 && deleted.length > 0,
             deletedCount: deleted.length,
             failedCount: failed.length,
             deleted,
             failed,
+            cleanups,
         };
     }
 

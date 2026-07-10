@@ -319,6 +319,36 @@ describe('ObjectQL Engine', () => {
             expect(arg.owner).toBeUndefined();
         });
 
+        it('resolves field defaults BEFORE beforeInsert so a hook can derive from them (#2703)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        title: { type: 'text' },
+                        owner: { type: 'user', reference: 'sys_user', defaultValue: 'current_user' },
+                        current_status: { type: 'text' },
+                    },
+                } as any;
+                if (name === 'sys_user') return { name: 'sys_user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            // A beforeInsert hook that DERIVES `current_status` from the defaulted
+            // `owner` field — the exact os-tianshun-mtc#29 scenario.
+            engine.registerHook('beforeInsert', async (ctx: any) => {
+                const data = ctx.input.data;
+                data.current_status = data.owner ? 'assigned' : 'unassigned';
+            }, { object: 'ticket' });
+
+            await engine.insert('ticket', { title: 'T1' }, { context: { userId: 'u-42' } as any });
+
+            expect(mockDriver.create).toHaveBeenCalledWith(
+                'ticket',
+                expect.objectContaining({ title: 'T1', owner: 'u-42', current_status: 'assigned' }),
+                expect.anything(),
+            );
+        });
+
         it('should execute find operation', async () => {
             const result = await engine.find('task', {});
             expect(mockDriver.find).toHaveBeenCalled();

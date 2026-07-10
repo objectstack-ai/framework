@@ -130,6 +130,33 @@ describe('SqlDriver tenant scope (organization_id)', () => {
     });
   });
 
+  describe('NULL tenant column = GLOBAL/platform row (#2734)', () => {
+    beforeEach(async () => {
+      // A platform-seeded row with no organization (bootstrap positions,
+      // permission sets, business units, pre-org first-boot seeds).
+      await driver.create('account', { id: 'g1', name: 'Global', tier: 'global' });
+    });
+
+    it('a scoped read still sees the org-less row (any tenant)', async () => {
+      const rowsA = await driver.find('account', { object: 'account' }, { tenantId: 'org_a' });
+      const rowsB = await driver.find('account', { object: 'account' }, { tenantId: 'org_b' });
+      expect(rowsA.map((r: any) => r.id)).toContain('g1');
+      expect(rowsB.map((r: any) => r.id)).toContain('g1');
+      // …while cross-tenant rows stay hidden exactly as before.
+      expect(rowsA.map((r: any) => r.id).sort()).toEqual(['a1', 'a2', 'g1']);
+    });
+
+    it('a scoped by-id read resolves the global row', async () => {
+      const row = await driver.findOne('account', { object: 'account', where: { id: 'g1' } }, { tenantId: 'org_a' });
+      expect(row?.id).toBe('g1');
+    });
+
+    it('a scoped count includes the global row', async () => {
+      const a = await driver.count!('account', { object: 'account' }, { tenantId: 'org_a' });
+      expect(a).toBe(3); // a1, a2, g1 — never org_b's rows
+    });
+  });
+
   describe('updateMany / deleteMany', () => {
     it('updateMany only touches caller tenant rows', async () => {
       await driver.updateMany!(

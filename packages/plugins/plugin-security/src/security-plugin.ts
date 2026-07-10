@@ -9,6 +9,15 @@ import { explainAccess, buildContextForUser } from './explain-engine.js';
 import type { ExplainDecision, ExplainOperation } from '@objectstack/spec/security';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
+import {
+  syncAudienceBindingSuggestions,
+  listAudienceBindingSuggestions,
+  confirmAudienceBindingSuggestion,
+  dismissAudienceBindingSuggestion,
+  type SuggestionDeps,
+  type SuggestionListFilter,
+} from './suggested-audience-bindings.js';
+import { cleanupPackagePermissions } from './cleanup-package-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
@@ -22,6 +31,7 @@ import {
   extractMemberPairs,
   reconcileOrgAdminGrant,
 } from './auto-org-admin-grant.js';
+import { SysPositionDetailPage } from '@objectstack/platform-objects/pages';
 import {
   securityObjects,
   securityDefaultPermissionSets,
@@ -98,7 +108,7 @@ export interface SecurityPluginOptions {
   defaultPermissionSets?: PermissionSet[];
   /**
    * Permission set name applied as an implicit baseline whenever an
-   * authenticated request has no resolved permission sets (and no roles
+   * authenticated request has no resolved permission sets (and no positions
    * that map to one). This guarantees baseline tenant/owner RLS for
    * every logged-in user even before an admin assigns explicit
    * profiles. Set to `null` to disable.
@@ -231,6 +241,10 @@ export class SecurityPlugin implements Plugin {
     ctx.getService<{ register(m: any): void }>('manifest').register({
       ...securityPluginManifestHeader,
       objects: securityObjects,
+      // [ADR-0090] SDUI detail page for sys_position — Holders (assignments,
+      // name-keyed junction) + Permission Sets (bindings) as pure
+      // record:related_list declarations; no bespoke UI.
+      pages: [SysPositionDetailPage],
       // Permission sets ride along on the manifest so the metadata service
       // can resolve them by name when SecurityPlugin middleware queries
       // `metadata.list('permissions')`.
@@ -244,7 +258,7 @@ export class SecurityPlugin implements Plugin {
           group: 'group_access_control',
           priority: 100,
           items: [
-            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_position', icon: 'shield-check' },
+            { id: 'nav_positions', type: 'object', label: 'Positions', objectName: 'sys_position', icon: 'shield-check' },
             { id: 'nav_capabilities', type: 'object', label: 'Capabilities', objectName: 'sys_capability', icon: 'badge-check' },
             { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
           ],
@@ -386,15 +400,43 @@ export class SecurityPlugin implements Plugin {
     // service only once the metadata/ql/dbLoader handles are wired (above), so
     // a degraded start never exposes a half-initialised resolver.
     try {
+      // [ADR-0090 D5/D9] Suggested audience bindings — shared deps for the
+      // list/confirm/dismiss surface (same set resolution as the middleware
+      // and the delegated-admin gate, so admin-ness can never drift).
+      const suggestionDeps: SuggestionDeps = {
+        ql,
+        metadata,
+        resolveSets: (context: any) => this.resolvePermissionSetsForContext(context),
+        logger: ctx.logger,
+      };
       ctx.registerService('security', {
         getReadFilter: (object: string, context?: any) => this.getReadFilter(object, context),
+        // [ADR-0046 §6.7] Effective permission-set NAMES for a caller — the
+        // primitive the REST read layer needs to evaluate a permission-set-
+        // gated book/doc audience ({ permissionSet: '…' }). Same resolution
+        // as the middleware (positions expanded, additive baseline), so the
+        // docs gate can never drift from data-plane enforcement. Throws on
+        // resolution failure — callers must fail CLOSED (ADR-0049).
+        resolvePermissionSetNames: async (context?: any): Promise<string[]> => {
+          const sets = await this.resolvePermissionSetsForContext(context);
+          return sets.map((s) => s.name);
+        },
         // [ADR-0090 D6] First-class access explanation. Same code paths as
         // the middleware (resolution/evaluator/RLS compiler) — explained by
         // construction. Explaining ANOTHER user requires `manage_users`.
         explain: (request: { object: string; operation: string; userId?: string }, callerContext?: any) =>
           this.explainAccessForCaller(request, callerContext),
+        // [ADR-0090 D5/D9] Install-time suggestion surface: packages suggest
+        // audience-anchor bindings; a tenant admin confirms (the binding is
+        // written under the anchor + delegated-admin gates) or dismisses.
+        listAudienceBindingSuggestions: (callerContext?: any, filter?: SuggestionListFilter) =>
+          listAudienceBindingSuggestions(suggestionDeps, callerContext, filter),
+        confirmAudienceBindingSuggestion: (callerContext: any, id: string) =>
+          confirmAudienceBindingSuggestion(suggestionDeps, callerContext, id),
+        dismissAudienceBindingSuggestion: (callerContext: any, id: string) =>
+          dismissAudienceBindingSuggestion(suggestionDeps, callerContext, id),
       });
-      ctx.logger.info('[security] registered "security" service (getReadFilter, explain) — ADR-0021 D-C / ADR-0090 D6');
+      ctx.logger.info('[security] registered "security" service (getReadFilter, explain, audience-binding suggestions) — ADR-0021 D-C / ADR-0090 D5/D6/D9');
     } catch (e) {
       ctx.logger.warn?.('[security] failed to register "security" service', {
         error: (e as Error).message,
@@ -463,14 +505,14 @@ export class SecurityPlugin implements Plugin {
         await this.delegatedAdminGate.assert(opCtx);
       }
 
-      const roles = opCtx.context?.positions ?? [];
+      const positions = opCtx.context?.positions ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
-      // Skip security checks if no roles AND no explicit permission sets
+      // Skip security checks if no positions AND no explicit permission sets
       // AND no userId (anonymous/unauthenticated). The auth middleware
       // should handle authentication separately.
       if (
-        roles.length === 0 &&
+        positions.length === 0 &&
         explicitPermissionSets.length === 0 &&
         !opCtx.context?.userId
       ) {
@@ -529,7 +571,7 @@ export class SecurityPlugin implements Plugin {
               {
                 operation: opCtx.operation,
                 object: opCtx.object,
-                roles,
+                positions,
                 permissionSets: explicitPermissionSets,
                 requiredPermissions: required,
                 missingPermissions: missing,
@@ -551,8 +593,8 @@ export class SecurityPlugin implements Plugin {
         if (!allowed) {
           throw new PermissionDeniedError(
             `[Security] Access denied: operation '${opCtx.operation}' on object '${opCtx.object}' ` +
-              `is not permitted for roles [${roles.join(', ')}]`,
-            { operation: opCtx.operation, object: opCtx.object, roles, permissionSets: explicitPermissionSets },
+              `is not permitted for positions [${positions.join(', ')}]`,
+            { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
           );
         }
       }
@@ -632,7 +674,7 @@ export class SecurityPlugin implements Plugin {
                 {
                   operation: opCtx.operation,
                   object: opCtx.object,
-                  roles,
+                  positions,
                   permissionSets: explicitPermissionSets,
                   recordId: targetId,
                 },
@@ -702,7 +744,7 @@ export class SecurityPlugin implements Plugin {
               {
                 operation: opCtx.operation,
                 object: opCtx.object,
-                roles,
+                positions,
                 permissionSets: explicitPermissionSets,
                 forbiddenFields: forbidden,
               },
@@ -794,7 +836,7 @@ export class SecurityPlugin implements Plugin {
             );
             throw new PermissionDeniedError(
               `[Security] Access denied: the ${opCtx.operation} would violate a row-level CHECK on '${opCtx.object}'`,
-              { operation: opCtx.operation, object: opCtx.object, roles, permissionSets: explicitPermissionSets },
+              { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
             );
           }
         }
@@ -878,12 +920,12 @@ export class SecurityPlugin implements Plugin {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
-        // [ADR-0057 D6 / #2077] Seed stack-declared roles into sys_position so they
-        // stop being decorative (role→permission-set resolution + recipients).
+        // [ADR-0057 D6 / #2077] Seed stack-declared positions into sys_position so they
+        // stop being decorative (position→permission-set resolution + recipients).
         try {
           await bootstrapDeclaredPositions(ql, this.metadata, { logger: ctx.logger });
         } catch (e) {
-          ctx.logger.warn('[security] declared-role seeding failed', { error: (e as Error).message });
+          ctx.logger.warn('[security] declared-position seeding failed', { error: (e as Error).message });
         }
         // [ADR-0086 D5] Seed stack-declared permission sets into
         // sys_permission_set with package provenance (managed_by:'package' +
@@ -951,6 +993,12 @@ export class SecurityPlugin implements Plugin {
               async (args: { body: unknown; packageId: string | null }) => {
                 const r = await upsertPackagePermissionSet(ql, args.body, args.packageId, ctx.logger);
                 const applied = r.seeded + r.updated;
+                // [ADR-0090 D5] A published set carrying the install-time
+                // suggestion flag surfaces (or retires) its pending
+                // suggestion row right away — same convergent sync as boot.
+                if (applied > 0 && (args.body as { isDefault?: boolean } | null)?.isDefault !== undefined) {
+                  try { await syncAudienceBindingSuggestions(ql, this.metadata, ctx.logger); } catch { /* non-fatal */ }
+                }
                 // A publish that materialized nothing did NOT go live — report it
                 // as a failure with the reason so the package-door UI never shows
                 // a clean publish over a set the admin surface can't see (ADR-0049
@@ -971,15 +1019,43 @@ export class SecurityPlugin implements Plugin {
               },
             );
           }
+          // [#2747] Uninstall counterpart of the materializer above: when the
+          // owning package is uninstalled, revoke its data-plane permission
+          // rows (package-owned sets + their position/user bindings + the
+          // package's suggestion rows) so grants die with the package — the
+          // "no ghost grants" clause of ADR-0090 D5.
+          if (protocol && typeof protocol.registerUninstallCleanup === 'function') {
+            protocol.registerUninstallCleanup(
+              'security.package-permissions',
+              async (args: { packageId: string }) => {
+                const r = await cleanupPackagePermissions(ql, args.packageId, ctx.logger);
+                return {
+                  success: true,
+                  removed: r.sets + r.positionBindings + r.userGrants + r.suggestions,
+                };
+              },
+            );
+          }
         } catch (e) {
           ctx.logger.warn('[security] permission publish-materializer registration failed', { error: (e as Error).message });
         }
-        // [ADR-0068 D2] Seed the framework's reserved built-in identity roles
+        // [ADR-0068 D2] Seed the framework's reserved built-in identity positions
         // (platform_admin / org_*) so the role catalog is self-describing.
         try {
           await bootstrapBuiltinRoles(ql, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] built-in role seeding failed', { error: (e as Error).message });
+        }
+        // [ADR-0090 D5/D9] Reconcile the suggested-audience-binding surface:
+        // every declared `isDefault: true` set that is not already bound to
+        // its anchor becomes a PENDING suggestion row awaiting admin
+        // confirmation — never auto-bound. Runs after the anchors are seeded
+        // and after the baseline binding above, so the app's own fallback set
+        // (already bound) never nags.
+        try {
+          await syncAudienceBindingSuggestions(ql, this.metadata, ctx.logger);
+        } catch (e) {
+          ctx.logger.warn('[security] audience-binding suggestion sync failed (non-fatal)', { error: (e as Error).message });
         }
         // [ADR-0066 D1] Back-compat seed the capability registry (sys_capability)
         // from the curated platform set + the default grants' systemPermissions.
@@ -1105,7 +1181,7 @@ export class SecurityPlugin implements Plugin {
    *
    * Returns:
    *   - `undefined` → no scope applies (system context, or an unauthenticated
-   *     request with no userId/roles/permissions — authn is gated elsewhere).
+   *     request with no userId/positions/permissions — authn is gated elsewhere).
    *   - a `FilterCondition` → AND it into the object's scan (the join's `ON`/
    *     `WHERE` for analytics; the where clause for a plain find).
    *   - the `RLS_DENY_FILTER` sentinel → policies applied but none compiled, or
@@ -1119,9 +1195,12 @@ export class SecurityPlugin implements Plugin {
    */
   /**
    * [ADR-0090 D6] Explain access for a caller. `request.userId` (explaining
-   * someone else) requires the caller to hold `manage_users` or be system —
-   * an access report is itself sensitive data. The evaluation delegates to
-   * {@link explainAccess} with the SAME internals the middleware uses.
+   * someone else) requires the caller to hold `manage_users`, be system, or —
+   * [D12] — hold a delegated `adminScope` whose BU subtree covers the target
+   * user (an access report is itself sensitive data, but an admin who can
+   * already rewire a user's grants may read why they resolve as they do).
+   * The evaluation delegates to {@link explainAccess} with the SAME internals
+   * the middleware uses.
    */
   async explainAccessForCaller(
     request: { object: string; operation: string; userId?: string },
@@ -1138,10 +1217,20 @@ export class SecurityPlugin implements Plugin {
         const callerSets = await this.resolvePermissionSetsForContext(callerContext).catch(() => []);
         const held = this.permissionEvaluator.getSystemPermissions(callerSets);
         if (!held.has('manage_users')) {
-          throw new PermissionDeniedError(
-            `[Security] Access denied: explaining another user's access requires the 'manage_users' capability (ADR-0090 D6).`,
-            { object, operation, targetUserId: request.userId },
-          );
+          // [ADR-0090 D12] Delegated administrators may explain principals
+          // inside their delegation boundary (fail-closed on any error).
+          const delegated = this.delegatedAdminGate
+            ? await this.delegatedAdminGate
+                .scopesCoverUser(callerSets, request.userId)
+                .catch(() => false)
+            : false;
+          if (!delegated) {
+            throw new PermissionDeniedError(
+              `[Security] Access denied: explaining another user's access requires the 'manage_users' ` +
+                `capability or a delegated adminScope covering that user (ADR-0090 D6/D12).`,
+              { object, operation, targetUserId: request.userId },
+            );
+          }
         }
       }
       targetContext = await buildContextForUser(this.ql, request.userId);
@@ -1172,12 +1261,12 @@ export class SecurityPlugin implements Plugin {
   ): Promise<Record<string, unknown> | null | undefined> {
     // System operations bypass scoping (mirrors the middleware's isSystem skip).
     if (context?.isSystem) return undefined;
-    const roles = context?.positions ?? [];
+    const positions = context?.positions ?? [];
     const explicit = context?.permissions ?? [];
-    // Unauthenticated + role-less + permission-less → no scope (the auth layer,
-    // not RLS, gates anonymous access; the analytics REST endpoint already 401s
-    // without a token). Mirrors the middleware's early `return next()`.
-    if (roles.length === 0 && explicit.length === 0 && !context?.userId) {
+    // Unauthenticated + position-less + permission-less → no scope (the auth
+    // layer, not RLS, gates anonymous access; the analytics REST endpoint
+    // already 401s without a token). Mirrors the middleware's early `return next()`.
+    if (positions.length === 0 && explicit.length === 0 && !context?.userId) {
       return undefined;
     }
     try {
@@ -1197,7 +1286,7 @@ export class SecurityPlugin implements Plugin {
   }
 
   /**
-   * Resolve the effective permission sets for an execution context — roles +
+   * Resolve the effective permission sets for an execution context — positions +
    * explicit permission sets, with the configured baseline applied both as an
    * implicit request (when none were named) and as a post-resolution fallback
    * (when named ones resolved to nothing). Shared by the engine middleware and
@@ -1228,7 +1317,7 @@ export class SecurityPlugin implements Plugin {
       { logger: this.logger },
     );
     // Post-resolution fallback — closes the fail-open hole where a populated
-    // `roles` array maps to no permission set yet (no sys_position binding), which
+    // `positions` array maps to no permission set yet (no sys_position binding), which
     // would otherwise skip RLS entirely and expose every tenant's data.
     if (
       permissionSets.length === 0 &&

@@ -200,8 +200,11 @@ export const EnvironmentArtifactMetadataSchema = z
     skills: z.array(z.unknown()).optional(),
     permissions: z.array(z.unknown()).optional(),
     permissionSets: z.array(z.unknown()).optional(),
-    roles: z.array(z.unknown()).optional(),
-    profiles: z.array(z.unknown()).optional(),
+    // ADR-0090 D3/D2: `roles`/`profiles` categories retired with the concepts
+    // (stacks declare `positions`; the profile concept is gone). Old artifacts
+    // carrying them still parse via `passthrough()` — the keys are simply no
+    // longer part of the declared envelope.
+    positions: z.array(z.unknown()).optional(),
     translations: z.array(z.unknown()).optional(),
     datasources: z.array(z.unknown()).optional(),
     datasets: z.array(z.unknown()).optional(),

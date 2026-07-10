@@ -22,7 +22,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'references']);
 const SKIP_FILES = new Set(['content/docs/ai/skills-reference.mdx']);
 
 const DOMAINS = [
-  'Datasource', 'Connector', 'Policy', 'SharingRule', 'Role', 'PermissionSet',
+  'Datasource', 'Connector', 'Policy', 'SharingRule', 'Position', 'PermissionSet',
   'EmailTemplateDefinition', 'Report', 'Webhook', 'ObjectExtension', 'Cube',
   'Mapping', 'Theme', 'TranslationBundle', 'Page', 'Action',
 ].join('|');

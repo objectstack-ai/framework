@@ -43,7 +43,9 @@
     },
     "permissions": {
       "status": "dead",
-      "evidence": "tool.form.ts only; not on AIToolDefinition, no consumer"
+      "evidence": "tool.form.ts only; not on AIToolDefinition, no consumer",
+      "authorWarn": true,
+      "authorHint": "Not part of AIToolDefinition and no consumer — tool invocation is NOT permission-gated by this list. Gate the underlying action via requiredPermissions / permission sets (ADR-0066)."
     },
     "active": {
       "status": "live",

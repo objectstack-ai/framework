@@ -137,10 +137,30 @@ suggestion individually; nothing auto-binds, and the D7 linter rejects an
 `isDefault` set that carries anchor-forbidden bits (VAMA, destructive bits,
 wildcards, system permissions).
 
+Pending suggestions are materialized as `sys_audience_binding_suggestion`
+rows (one per package × set × anchor, read-only over the data API) and
+resolved through the security surface — both installing a package at runtime
+and declaring the set in the stack produce them:
+
+```http
+GET  /api/v1/security/suggested-bindings?status=pending   # list (reconciles first)
+POST /api/v1/security/suggested-bindings/:id/confirm      # create the everyone binding
+POST /api/v1/security/suggested-bindings/:id/dismiss      # decline the prompt
+```
+
+All three require a tenant-level administrator (the anchors are tenant-level
+only — D12). Confirm writes the `sys_position_permission_set` row **as the
+caller**, so the audience-anchor gate re-checks the forbidden-bits predicate
+at the data layer; a suggestion whose binding was created out-of-band (boot
+baseline, manual bind) is marked `confirmed` automatically, and uninstalling
+the package prunes its pending suggestions. Studio surfaces pending
+suggestions after marketplace installs and in the Access pillar.
+
 ## Delegated administration — `adminScope` (ADR-0090 D12)
 
 A permission set may carry an `adminScope`, making its holders **scoped
-administrators**:
+administrators** (full gate rules and runbook:
+[Delegated Administration](/docs/permissions/delegated-administration)):
 
 ```typescript
 export const EastSubsidiaryAdmin = definePermissionSet({
@@ -174,7 +194,11 @@ A package ships its own sets (`managedBy: 'package'` + `packageId`), seeded
 idempotently at boot and re-seeded on upgrade; environment-authored sets
 (`platform`/`user`) are never clobbered. The data layer refuses admin-door
 writes to package rows (two-doors separation), which is what makes package
-uninstall well-defined.
+uninstall well-defined — and enforced: uninstalling a package
+(`DELETE /api/v1/packages/:id`) revokes its own sets, their position/user
+bindings, and its pending audience-binding suggestions in the same request
+(no ghost grants); the uninstall response reports the revocation under
+`cleanups`. Environment-authored sets and other packages' rows survive.
 
 ---
 

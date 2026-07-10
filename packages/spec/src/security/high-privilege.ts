@@ -27,8 +27,15 @@ function coerceRecord(v: unknown): Record<string, unknown> | undefined {
  * anchor (`everyone` / `guest`)? Returns a human-readable description of the
  * first offending bit, or `null` when the set is anchor-safe.
  *
- * Offending bits: any `systemPermissions`, View/Modify All Data (VAMA),
- * delete/purge/transfer on any object, or a `'*'` wildcard object grant.
+ * Offending bits — exactly the ADR-0090 D5 list: any `systemPermissions`,
+ * View/Modify All Data (VAMA), or delete/purge/transfer on any object.
+ * A plain `'*'` wildcard grant is NOT high-privilege by itself (D5 permits
+ * a read/create/edit-own baseline to cover all objects — the platform's own
+ * `member_default` is exactly that shape); the wildcard ban is the GUEST
+ * tier's stricter rule (D9 "explicit objects only") — see
+ * {@link describeAnchorForbiddenBits}. Fixes #2753: the former blanket
+ * wildcard rejection made the default baseline unbindable to `everyone`,
+ * forcing it through the separate fallback channel D5 explicitly rejected.
  */
 export function describeHighPrivilegeBits(def: any): string | null {
   if (!def || typeof def !== 'object') return null;
@@ -43,7 +50,6 @@ export function describeHighPrivilegeBits(def: any): string | null {
       const p: any = rawPerm ?? {};
       if (p.viewAllRecords || p.modifyAllRecords) return `View/Modify All Data on '${objName}'`;
       if (p.allowDelete || p.allowPurge || p.allowTransfer) return `delete/purge/transfer on '${objName}'`;
-      if (objName === '*') return "a '*' wildcard grant";
     }
   }
   return null;
@@ -51,9 +57,10 @@ export function describeHighPrivilegeBits(def: any): string | null {
 
 /**
  * [ADR-0090 D9] Anchor-tier predicate. `everyone` uses the high-privilege
- * predicate as-is; `guest` faces the STRICTEST tier — additionally no edit
- * bit on any object (guest bindings are read-only by default; create is the
- * single case-by-case exception, e.g. public form intake).
+ * predicate as-is; `guest` faces the STRICTEST tier — additionally no `'*'`
+ * wildcard (explicit objects only) and no edit bit on any object (guest
+ * bindings are read-only by default; create is the single case-by-case
+ * exception, e.g. public form intake).
  *
  * Returns a description of the first offending bit, or `null` when the set
  * may be bound to the given anchor.
@@ -69,6 +76,7 @@ export function describeAnchorForbiddenBits(
   if (objects) {
     for (const [objName, rawPerm] of Object.entries(objects)) {
       const p: any = rawPerm ?? {};
+      if (objName === '*') return "a '*' wildcard grant (guest bindings admit explicit objects only)";
       if (p.allowEdit) return `edit on '${objName}' (guest bindings are read-only; create is the only case-by-case write)`;
     }
   }

@@ -260,7 +260,7 @@ is one diagram a reviewer (or AI) can read end-to-end.
       type: 'approval',
       label: 'Sales Manager Review',
       config: {
-        approvers: [{ type: 'role', value: 'sales_manager' }],
+        approvers: [{ type: 'position', value: 'sales_manager' }],
         behavior: 'first_response',            // or 'unanimous'
         lockRecord: true,                      // lock the record while pending
         approvalStatusField: 'approval_status', // mirror pending|approved|rejected|recalled onto the row
@@ -272,7 +272,7 @@ is one diagram a reviewer (or AI) can read end-to-end.
       type: 'approval',
       label: 'Sales Director Sign-off',
       config: {
-        approvers: [{ type: 'role', value: 'sales_director' }],
+        approvers: [{ type: 'position', value: 'sales_director' }],
         behavior: 'unanimous',
         approvalStatusField: 'approval_status',
       },
@@ -330,7 +330,7 @@ Three pieces author it:
 ```typescript
 {
   id: 'manager_review', type: 'approval',
-  config: { approvers: [{ type: 'role', value: 'manager' }], lockRecord: true, maxRevisions: 2 },
+  config: { approvers: [{ type: 'position', value: 'manager' }], lockRecord: true, maxRevisions: 2 },
 },
 { id: 'wait_revision', type: 'wait', label: 'Awaiting Revision',
   config: { eventType: 'signal', signalName: 'budget_revision' } },
@@ -376,7 +376,8 @@ branch — you never resume the flow by hand.
 | `type` | Resolves to |
 |:-------|:------------|
 | `user`       | A specific user id (`value` = user id) |
-| `role`       | All users with the named role (`sys_member.role`) |
+| `position`   | Holders of a position — `value` = the position machine name, resolved via `sys_user_position` (ADR-0090 D3) |
+| `role`       | The better-auth **org-membership tier** (`sys_member.role`: `owner`/`admin`/`member`) — **NOT** a position. `{ type: 'role', value: 'sales_manager' }` matches nobody; use `position` |
 | `team`       | Members of a flat `sys_team` |
 | `department` | A department + all descendant departments |
 | `manager`    | The submitter's manager (`sys_user.manager_id`) |
@@ -391,7 +392,7 @@ branch — you never resume the flow by hand.
 | `behavior` | `first_response` (first approver decides) or `unanimous` (all must approve). Default `first_response` |
 | `lockRecord` | Lock the triggering record from edits while pending. Default `true` |
 | `approvalStatusField` | Business-object field to mirror `pending`/`approved`/`rejected`/`recalled` onto (should be readonly) |
-| `escalation` | Optional per-node SLA — `{ enabled, timeoutHours, action: reassign\|auto_approve\|auto_reject\|notify, escalateTo?, notifySubmitter }` |
+| `escalation` | Optional per-node SLA — `{ enabled, timeoutHours, action: reassign\|auto_approve\|auto_reject\|notify, escalateTo?, notifySubmitter }`. `escalateTo` is a **position machine name** (expanded to its holders via `sys_user_position`, ADR-0090 D3) or a specific user id — never a membership tier. `reassign` without `escalateTo` degrades to notify (linted) |
 | `maxRevisions` | ADR-0044 — max **send-backs-for-revision** per run before auto-reject. Default `3`; `0` disables send-back. Only meaningful when the node has a `revise` out-edge |
 
 ### Branching, side-effects & rejection

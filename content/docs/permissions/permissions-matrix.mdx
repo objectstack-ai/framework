@@ -307,3 +307,9 @@ flowchart TD
 <Callout type="tip">
 **Performance:** For reads, steps 2–6 are compiled into a query filter (owner-match ∪ materialized shares, AND-ed with RLS) at query time, not evaluated record-by-record. By-id writes are verified with a pre-image check: the target row is re-read through the write-scope filter before the mutation. This keeps security checks efficient even on tables with millions of rows.
 </Callout>
+
+## See also
+
+- [Access-Matrix Snapshot Gate](/docs/permissions/access-matrix) — the CI gate that fails the build when this matrix drifts
+- [Explain Engine](/docs/permissions/explain) — the per-decision runtime zoom lens
+- [Delegated Administration](/docs/permissions/delegated-administration)

@@ -117,48 +117,88 @@ function checkItem(
   findings: LivenessLintFinding[],
 ): void {
   for (const [path, entry] of warnMap) {
-    const value = path.includes('.')
+    const values = path.includes('.')
       ? getNested(item, path)
-      : item[path];
-    if (!isAuthored(value)) continue;
-    const { kind, rule } = describe(entry);
-    const hint = entry.authorHint
-      ?? entry.note
-      ?? 'Remove it — it is declared in the spec but not consumed at runtime.';
-    findings.push({
-      where: whereBase,
-      message: `sets \`${path}\` but this ${type} property ${kind}.`,
-      hint,
-      rule,
-    });
+      : [item[path]];
+    for (const value of values instanceof Array ? values : [values]) {
+      if (!isAuthored(value)) continue;
+      const { kind, rule } = describe(entry);
+      const hint = entry.authorHint
+        ?? entry.note
+        ?? 'Remove it — it is declared in the spec but not consumed at runtime.';
+      findings.push({
+        where: whereBase,
+        message: `sets \`${path}\` but this ${type} property ${kind}.`,
+        hint,
+        rule,
+      });
+      break; // one finding per (item, path) even when the container is an array
+    }
   }
-}
-
-/** Resolve a dotted path one or more levels, treating a missing parent as absent. */
-function getNested(obj: AnyRec, path: string): unknown {
-  let cur: unknown = obj;
-  for (const seg of path.split('.')) {
-    if (cur === null || typeof cur !== 'object') return undefined;
-    cur = (cur as AnyRec)[seg];
-  }
-  return cur;
 }
 
 /**
+ * Resolve a dotted path one or more levels, treating a missing parent as
+ * absent. A container level that is an ARRAY fans out over its elements
+ * (e.g. `nodes.outputSchema` on a flow checks every node), returning the
+ * list of resolved values.
+ */
+function getNested(obj: AnyRec, path: string): unknown[] {
+  let cur: unknown[] = [obj];
+  for (const seg of path.split('.')) {
+    const next: unknown[] = [];
+    for (const c of cur) {
+      if (c === null || typeof c !== 'object') continue;
+      const v = Array.isArray(c) ? undefined : (c as AnyRec)[seg];
+      if (Array.isArray(c)) {
+        for (const el of c) {
+          if (el && typeof el === 'object') next.push((el as AnyRec)[seg]);
+        }
+      } else {
+        next.push(v);
+      }
+    }
+    cur = next;
+  }
+  // Final level may itself contain arrays-of-values; flatten one step so a
+  // trailing array container (e.g. `measures` → each measure) fans out too.
+  return cur.flatMap((v) => (Array.isArray(v) ? v : [v]));
+}
+
+/**
+ * The compiled-stack collection each governed metadata type lives in.
+ * `object`/`field` keep their bespoke walk (fields nest under objects);
+ * everything else is a flat top-level array on the stack definition.
+ */
+const TYPE_COLLECTIONS: Array<{ type: string; key: string }> = [
+  { type: 'flow', key: 'flows' },
+  { type: 'action', key: 'actions' },
+  { type: 'agent', key: 'agents' },
+  { type: 'tool', key: 'tools' },
+  { type: 'skill', key: 'skills' },
+  { type: 'dataset', key: 'datasets' },
+  { type: 'permission', key: 'permissions' },
+  { type: 'hook', key: 'hooks' },
+  { type: 'page', key: 'pages' },
+];
+
+/**
  * Lint the compiled stack for authored properties the liveness ledger flags as
- * misleading. Advisory only — returns findings, never throws. v1 covers the two
- * highest-signal surfaces (objects incl. their `enable.*` flags, and their
- * fields); the mechanism is ledger-driven, so coverage grows by marking more
- * entries `authorWarn` rather than touching this code.
+ * misleading. Advisory only — returns findings, never throws. Covers every
+ * governed metadata type: objects (incl. `enable.*`) and their fields walk
+ * bespoke nesting; the remaining types are flat stack collections. Container
+ * properties fan out over arrays (each flow node, each dataset measure). The
+ * mechanism stays ledger-driven — coverage grows by marking more entries
+ * `authorWarn` rather than touching this code.
  */
 export function lintLivenessProperties(stack: AnyRec): LivenessLintFinding[] {
   const dir = resolveLivenessDir();
   if (!dir) return [];
-  const objectWarn = loadWarnMap(dir, 'object');
-  const fieldWarn = loadWarnMap(dir, 'field');
-  if (objectWarn.size === 0 && fieldWarn.size === 0) return [];
 
   const findings: LivenessLintFinding[] = [];
+
+  const objectWarn = loadWarnMap(dir, 'object');
+  const fieldWarn = loadWarnMap(dir, 'field');
   for (const obj of asArray(stack.objects)) {
     const objName = typeof obj.name === 'string' ? obj.name : '(unnamed object)';
     if (objectWarn.size > 0) checkItem('object', obj, `object '${objName}'`, objectWarn, findings);
@@ -169,5 +209,15 @@ export function lintLivenessProperties(stack: AnyRec): LivenessLintFinding[] {
       }
     }
   }
+
+  for (const { type, key } of TYPE_COLLECTIONS) {
+    const warnMap = loadWarnMap(dir, type);
+    if (warnMap.size === 0) continue;
+    for (const item of asArray(stack[key])) {
+      const name = typeof item.name === 'string' ? item.name : `(unnamed ${type})`;
+      checkItem(type, item, `${type} '${name}'`, warnMap, findings);
+    }
+  }
+
   return findings;
 }

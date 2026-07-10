@@ -48,6 +48,7 @@ function makeKernel(opts: { withMcp?: boolean; recordedContexts?: any[] } = {}) 
   const mcpService: any = {
     lastOpts: undefined,
     lastReq: undefined,
+    renderSkill: (o: any) => `---\nname: objectstack\n---\n\n# ObjectStack\n\nMCP: ${o?.mcpUrl ?? '<YOUR_ENV_MCP_URL>'}\n`,
     handleHttpRequest: async (_req: Request, o: any) => {
       mcpService.lastOpts = o;
       mcpService.lastReq = _req;
@@ -169,5 +170,88 @@ describe('HttpDispatcher.handleMcp', () => {
       expect(recorded[0]?.userId).toBe('u1');
       expect(recorded[0]?.isSystem).toBe(false);
     });
+  });
+});
+
+describe('HttpDispatcher.handleMcpSkill (GET /mcp/skill)', () => {
+  const prev = process.env.OS_MCP_SERVER_ENABLED;
+  afterEach(() => {
+    if (prev === undefined) delete process.env.OS_MCP_SERVER_ENABLED;
+    else process.env.OS_MCP_SERVER_ENABLED = prev;
+  });
+
+  const ctx = (overrides: any = {}) =>
+    makeContext({
+      request: new Request('http://acme.example.com/api/v1/mcp/skill', {
+        method: 'GET',
+        headers: { host: 'acme.example.com', 'x-forwarded-proto': 'https' },
+      }),
+      // Anonymous on purpose: the skill is public like /discovery.
+      executionContext: undefined,
+      ...overrides,
+    });
+
+  /** Drain the single-chunk markdown "stream" the endpoint returns. */
+  async function drainSkill(res: any): Promise<{ status: number; headers: any; text: string }> {
+    const r = res.result;
+    expect(r?.type).toBe('stream');
+    let text = '';
+    for await (const chunk of r.events) text += chunk;
+    return { status: r.status, headers: r.headers, text };
+  }
+
+  it('serves the env-customized SKILL.md as text/markdown, anonymously', async () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    const { kernel } = makeKernel({ withMcp: true });
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const { status, headers, text } = await drainSkill(await d.handleMcpSkill('GET', ctx()));
+    expect(status).toBe(200);
+    expect(headers?.['content-type']).toContain('text/markdown');
+    expect(headers?.['cache-control']).toBe('no-store');
+    // No auth service in the fake kernel → URL derived from the request host.
+    expect(text).toContain('https://acme.example.com/api/v1/mcp');
+  });
+
+  it('404s when the MCP surface is opted out (nothing advertised)', async () => {
+    process.env.OS_MCP_SERVER_ENABLED = 'false';
+    const { kernel } = makeKernel({ withMcp: true });
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const res = await d.handleMcpSkill('GET', ctx());
+    expect(res.response.status).toBe(404);
+  });
+
+  it('501s when the MCP service is not loaded', async () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    const { kernel } = makeKernel({ withMcp: false });
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const res = await d.handleMcpSkill('GET', ctx());
+    expect(res.response.status).toBe(501);
+  });
+
+  it('405s non-GET with an Allow header', async () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    const { kernel } = makeKernel({ withMcp: true });
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const res = await d.handleMcpSkill('POST', ctx());
+    expect(res.response.status).toBe(405);
+    expect(res.response.headers?.Allow).toBe('GET');
+  });
+
+  it('prefers the auth service canonical URL over host derivation', async () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    const { kernel } = makeKernel({ withMcp: true });
+    const services = (kernel as any).__services ?? null;
+    // makeKernel exposes getService via closure; extend by wrapping.
+    const origGet = kernel.getServiceAsync;
+    (kernel as any).getServiceAsync = async (n: string) =>
+      n === 'auth'
+        ? { getMcpResourceUrl: () => 'https://canonical.example.com/api/v1/mcp' }
+        : origGet(n);
+    const d = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+    const { status, text } = await drainSkill(await d.handleMcpSkill('GET', ctx()));
+    expect(status).toBe(200);
+    expect(text).toContain('https://canonical.example.com/api/v1/mcp');
+    expect(text).not.toContain('acme.example.com');
+    void services;
   });
 });

@@ -61,7 +61,7 @@ interface SeedOptions {
  * boot path; the metadata-service facade only surfaces these once the
  * compiled-artifact loader runs (serve.ts).
  */
-function readDeclared(engine: any, type: string): any[] {
+export function readDeclared(engine: any, type: string): any[] {
   try {
     const reg = engine?._registry;
     if (reg?.listItems) {

@@ -72,7 +72,12 @@ export const METADATA_FORM_REGISTRY: Readonly<Record<string, FormView>> = Object
     view: viewForm,
     app: appForm,
     dashboard: dashboardForm,
-    role: positionForm,
+    // ADR-0090 D3/D2: the `role` and `profile` metadata kinds were retired
+    // in the P1 wave (positions replace roles; the profile concept is gone).
+    // The registry keys are the /meta type machine names, so the entries
+    // moved with them — a `role:`/`profile:` key here would be dead weight
+    // the extractor still emits translations for.
+    position: positionForm,
     action: actionForm,
     page: pageForm,
     agent: agentForm,
@@ -80,7 +85,6 @@ export const METADATA_FORM_REGISTRY: Readonly<Record<string, FormView>> = Object
     skill: skillForm,
     flow: flowForm,
     permission: permissionForm,
-    profile: permissionForm,
     email_template: emailTemplateForm,
 });
 

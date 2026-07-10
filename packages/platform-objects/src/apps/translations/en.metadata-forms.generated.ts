@@ -1338,67 +1338,12 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       }
     }
   },
-  profile: {
-    label: "Profile",
+  position: {
+    label: "Position",
     sections: {
-      identity: {
-        label: "Identity",
-        description: "Permission Sets stack on top of a Profile to grant additional access. Profiles are the base set assigned 1:1 to each user."
-      },
-      system_permissions: {
-        label: "System Permissions",
-        description: "High-level capabilities not tied to a specific object — e.g. manage_users, view_audit_logs."
-      },
-      object_and_field_permissions: {
-        label: "Object & Field Permissions",
-        description: "Per-object CRUD + per-field FLS. Edit via the matrix editor or paste JSON here."
-      },
-      tab_and_row_level_security: {
-        label: "Tab & Row-Level Security",
-        description: "Tab visibility, RLS policies, and custom context variables for predicate evaluation."
-      }
-    },
-    fields: {
-      name: {
-        label: "Name",
-        helpText: "Machine name (snake_case)"
-      },
-      label: {
-        label: "Label",
-        helpText: "Display label for admins"
-      },
-      systemPermissions: {
-        label: "System Permissions",
-        helpText: "List of system capability keys"
-      },
-      objects: {
-        label: "Objects",
-        helpText: "{ \"account\": { allowRead: true, allowEdit: true, ... } }"
-      },
-      fields: {
-        label: "Fields",
-        helpText: "{ \"account.amount\": { readable: true, editable: false } }"
-      },
-      tabPermissions: {
-        label: "Tab Permissions",
-        helpText: "{ \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
-      },
-      rowLevelSecurity: {
-        label: "Row Level Security",
-        helpText: "Array of RLS policies (see rls.zod.ts)"
-      },
-      contextVariables: {
-        label: "Context Variables",
-        helpText: "Custom variables referenced in RLS predicates"
-      }
-    }
-  },
-  role: {
-    label: "Role",
-    sections: {
-      role: {
-        label: "Role",
-        description: "Roles compose a hierarchy used for record sharing (sales VP → sales mgr → sales rep). Permissions themselves live on Permission Sets and Profiles."
+      position: {
+        label: "Position",
+        description: "A position is a flat, assignable bundle of permission sets (e.g. sales_rep, sales_manager). Capability lives on permission sets; visibility depth lives on the business-unit tree."
       }
     },
     fields: {
@@ -1408,10 +1353,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       },
       label: {
         label: "Label"
-      },
-      parent: {
-        label: "Parent",
-        helpText: "Parent role machine name (Reports To)"
       },
       description: {
         label: "Description"

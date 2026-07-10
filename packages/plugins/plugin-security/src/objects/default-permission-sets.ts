@@ -276,11 +276,17 @@ export const defaultPermissionSets: PermissionSet[] = [
     name: 'member_default',
     label: 'Member — Standard Access',
     objects: {
+      // [ADR-0090 D5, #2753] NO `allowDelete`: delete/purge/transfer are
+      // anchor-forbidden bits, and this set IS the `everyone` baseline — the
+      // bootstrap binds it to the anchor, so it must stay anchor-safe.
+      // Deleting records is not a baseline right; grant it per object via an
+      // ordinary (position-distributed) set where the domain calls for it.
+      // The owner-scoped delete RLS below is KEPT as a narrowing defense for
+      // members who receive a delete bit from such a set.
       '*': {
         allowRead: true,
         allowCreate: true,
         allowEdit: true,
-        allowDelete: true,
       },
       // Identity tables are managed by better-auth — no direct writes.
       ...denyWritesOnManagedObjects(),

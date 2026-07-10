@@ -15,6 +15,7 @@ import {
   SysUserPermissionSet,
   SysPositionPermissionSet,
   SysUserPosition,
+  SysAudienceBindingSuggestion,
   defaultPermissionSets,
 } from './objects/index.js';
 
@@ -29,6 +30,7 @@ export const securityObjects = [
   SysUserPermissionSet,
   SysPositionPermissionSet,
   SysUserPosition,
+  SysAudienceBindingSuggestion,
 ];
 
 /** Default platform permission sets (admin / member / viewer). */

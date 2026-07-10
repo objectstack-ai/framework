@@ -1338,67 +1338,12 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       }
     }
   },
-  profile: {
-    label: "プロファイル",
+  position: {
+    label: "ポジション",
     sections: {
-      identity: {
-        label: "ID",
-        description: "権限セットはプロファイルに追加アクセス権を重ねる。プロファイルは各ユーザーに 1:1 で割り当てる基本セット。"
-      },
-      system_permissions: {
-        label: "システム権限",
-        description: "特定オブジェクトに紐づかない高レベル機能 — 例: manage_users, view_audit_logs。"
-      },
-      object_and_field_permissions: {
-        label: "オブジェクトとフィールド権限",
-        description: "オブジェクト単位の CRUD + フィールド単位の FLS。マトリックスエディターで編集、またはここに JSON を貼り付け。"
-      },
-      tab_and_row_level_security: {
-        label: "タブと行レベルセキュリティ",
-        description: "タブ表示、RLS ポリシー、述語評価用カスタムコンテキスト変数。"
-      }
-    },
-    fields: {
-      name: {
-        label: "名前",
-        helpText: "マシン名（snake_case）"
-      },
-      label: {
-        label: "表示名",
-        helpText: "管理者向け表示ラベル"
-      },
-      systemPermissions: {
-        label: "システム権限",
-        helpText: "システム機能キーのリスト"
-      },
-      objects: {
-        label: "オブジェクト権限",
-        helpText: "例: { \"account\": { allowRead: true, allowEdit: true, ... } }"
-      },
-      fields: {
-        label: "フィールド",
-        helpText: "例: { \"account.amount\": { readable: true, editable: false } }"
-      },
-      tabPermissions: {
-        label: "タブ権限",
-        helpText: "例: { \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
-      },
-      rowLevelSecurity: {
-        label: "行レベルセキュリティ",
-        helpText: "RLS ポリシーの配列（rls.zod.ts 参照）"
-      },
-      contextVariables: {
-        label: "コンテキスト変数",
-        helpText: "RLS 述語で参照するカスタム変数"
-      }
-    }
-  },
-  role: {
-    label: "ロール",
-    sections: {
-      role: {
-        label: "ロール",
-        description: "ロールはレコード共有に使う階層を構成（sales VP → sales mgr → sales rep）。権限自体は Permission Sets と Profiles に存在。"
+      position: {
+        label: "ポジション",
+        description: "ポジションは権限セットをまとめて割り当てるフラットな単位(例: sales_rep、sales_manager)。能力は権限セットに、可視範囲の深さはビジネスユニットツリーにあります。"
       }
     },
     fields: {
@@ -1408,10 +1353,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       },
       label: {
         label: "表示名"
-      },
-      parent: {
-        label: "親",
-        helpText: "親ロールのマシン名（Reports To）"
       },
       description: {
         label: "説明"

@@ -2,3 +2,4 @@
 
 export { SysOrganizationDetailPage } from './sys-organization.page.js';
 export { SysUserDetailPage } from './sys-user.page.js';
+export { SysPositionDetailPage } from './sys-position.page.js';

@@ -1,5 +1,37 @@
 # @objectstack/cloud-connection
 
+## 14.1.0
+
+### Patch Changes
+
+- Updated dependencies [5a8465f]
+- Updated dependencies [7f8620b]
+- Updated dependencies [82ba3a6]
+  - @objectstack/spec@14.1.0
+  - @objectstack/core@14.1.0
+  - @objectstack/runtime@14.1.0
+  - @objectstack/types@14.1.0
+
+## 14.0.0
+
+### Patch Changes
+
+- Updated dependencies [57b8fe0]
+- Updated dependencies [0a8e685]
+- Updated dependencies [afa8115]
+- Updated dependencies [80f12ca]
+- Updated dependencies [e2fa074]
+- Updated dependencies [23c8668]
+- Updated dependencies [29f017d]
+- Updated dependencies [bc26360]
+- Updated dependencies [216fa9a]
+- Updated dependencies [6c22b12]
+- Updated dependencies [bd39dc5]
+  - @objectstack/runtime@14.0.0
+  - @objectstack/spec@14.0.0
+  - @objectstack/core@14.0.0
+  - @objectstack/types@14.0.0
+
 ## 13.0.0
 
 ### Patch Changes

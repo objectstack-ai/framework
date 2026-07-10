@@ -139,7 +139,7 @@ export type AuditEventActor = z.infer<typeof AuditEventActorSchema>;
  */
 export const AuditEventTargetSchema = lazySchema(() => z.object({
   /**
-   * Target type (e.g., 'object', 'record', 'user', 'role', 'config')
+   * Target type (e.g., 'object', 'record', 'user', 'position', 'config')
    */
   type: z.string().describe('Target type'),
   

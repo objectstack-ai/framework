@@ -1,18 +1,18 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * bootstrapDeclaredPositions — seed stack-declared `roles` into `sys_position`
+ * bootstrapDeclaredPositions — seed stack-declared `positions` into `sys_position`
  * (ADR-0057 D6, closes #2077).
  *
- * Reads the validated `role` metadata (registered from the stack's `positions: []`
+ * Reads the validated `position` metadata (registered from the stack's `positions: []`
  * via `metadataService.list('position')`) and idempotently upserts each into
- * `sys_position` by `name`, so the runtime role→permission-set resolution
+ * `sys_position` by `name`, so the runtime position→permission-set resolution
  * (`resolveExecutionContext` → `sys_position` → `sys_position_permission_set`) and
- * sharing-rule role recipients stop being decorative. Runs on `kernel:ready`
+ * sharing-rule position recipients stop being decorative. Runs on `kernel:ready`
  * alongside the platform-admin bootstrap.
  *
- * Pre-launch posture (ADR-0057): upsert only — no prune. Role visibility
- * HIERARCHY is NOT seeded here: per ADR-0057 D5 the role is a capability
+ * Pre-launch posture (ADR-0057): upsert only — no prune. Position visibility
+ * HIERARCHY is NOT seeded here: per ADR-0057 D5 the position is a capability
  * bundle, and "manager sees subordinates" lives on the `sys_business_unit`
  * tree, not `sys_position.parent`.
  */
@@ -44,7 +44,7 @@ interface SeedOptions {
 
 /**
  * Read declared metadata items of a type. The engine's SchemaRegistry
- * (populated by `manifest.register` from the stack's `roles`/`sharingRules`
+ * (populated by `manifest.register` from the stack's `positions`/`sharingRules`
  * arrays) is the reliable source in every boot path; the metadata-service
  * facade only surfaces these once the compiled-artifact loader runs (serve.ts).
  */

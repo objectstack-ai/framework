@@ -9,10 +9,13 @@
     "profiles",
     "permission-sets",
     "positions",
+    "delegated-administration",
     "sharing-rules",
     "field-level-security",
     "permission-metadata",
     "permissions-matrix",
+    "access-matrix",
+    "explain",
     "access-recipes"
   ]
 }

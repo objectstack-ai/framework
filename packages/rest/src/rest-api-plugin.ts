@@ -191,6 +191,16 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 } catch { return undefined; }
             };
 
+            // Security service resolver — used by the ADR-0090 D5/D9
+            // /security/suggested-bindings routes and the D6 /security/explain
+            // route (plugin-security). Returns undefined when plugin-security
+            // is not mounted so the routes fail cleanly (501).
+            const securityServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
+                try {
+                    return ctx.getService<any>('security');
+                } catch { return undefined; }
+            };
+
             if (!server) {
                 ctx.logger.warn(`RestApiPlugin: HTTP Server service '${serverService}' not found. REST routes skipped.`);
                 return;
@@ -209,7 +219,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 try { return ctx.getService<any>(name) != null; } catch { return false; }
             };
             try {
-                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultEnvironmentIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider, analyticsServiceProvider, settingsServiceProvider, serviceExistsProvider);
+                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultEnvironmentIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider, analyticsServiceProvider, settingsServiceProvider, serviceExistsProvider, securityServiceProvider);
                 restServer.registerRoutes();
 
                 ctx.logger.info('REST API successfully registered');

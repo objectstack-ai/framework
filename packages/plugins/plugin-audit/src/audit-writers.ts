@@ -488,10 +488,17 @@ export function installAuditWriters(
       activityRow.organization_id = tenantId ?? null;
     }
 
+    // `enable.activities` is an opt-OUT capability (#2707): absent block/flag
+    // = mirror on (spec default `true`), explicit `false` = this object's CRUD
+    // is not mirrored into the sys_activity timeline. This is the per-object
+    // lever for activity-row growth (ADR-0057). The compliance audit row is
+    // NOT gated — sys_audit_log capture stays unconditional.
+    const activitiesEnabled = getObjectDef(ctx.object)?.enable?.activities !== false;
+
     try {
       const sys = api.sudo();
       await sys.object('sys_audit_log').create(auditRow);
-      await sys.object('sys_activity').create(activityRow);
+      if (activitiesEnabled) await sys.object('sys_activity').create(activityRow);
       // M10.8 / ADR-0030: notify the assignee. Best-effort; never throws into
       // the user-facing CRUD path. Goes through the messaging single ingress
       // (`emit`) — the inbox channel materializes the bell row — rather than
@@ -520,6 +527,70 @@ export function installAuditWriters(
   engine.registerHook('afterInsert', writeAudit, { packageId });
   engine.registerHook('afterUpdate', writeAudit, { packageId });
   engine.registerHook('afterDelete', writeAudit, { packageId });
+
+  /**
+   * `enable.feeds` server-side enforcement (#2707). Comments are created
+   * through the generic data path (`dataSource.create('sys_comment', …)`),
+   * so the engine hook seam is the one gate every caller crosses — REST,
+   * SDK, and feed-service alike. Opt-OUT semantics matching `enable.clone`
+   * (cloneData in metadata-protocol): absent block/flag = allowed, only an
+   * explicit `feeds: false` on the *target* object rejects. The thrown
+   * error carries `.status`, which the REST layer's `sendError` forwards
+   * verbatim → 403 FEEDS_DISABLED, fail-closed like CLONE_DISABLED.
+   *
+   * The target object is resolved from `thread_id` (conventionally
+   * `{object}:{record_id}` — see sys-comment.object.ts). A missing or
+   * unconventional thread_id is allowed through: this is capability
+   * gating, not access control, and free-form threads have no object to
+   * gate on.
+   */
+  const enforceFeedsCapability = async (ctx: HookContext) => {
+    const data: any = (ctx.input as any)?.data;
+    const threadId = data?.thread_id;
+    if (typeof threadId !== 'string') return;
+    const sep = threadId.indexOf(':');
+    if (sep <= 0) return;
+    const targetObject = threadId.slice(0, sep);
+    const def = getObjectDef(targetObject);
+    if (def?.enable?.feeds === false) {
+      const err: any = new Error(`Comments are disabled for object '${targetObject}' (enable.feeds: false)`);
+      err.code = 'FEEDS_DISABLED';
+      err.status = 403;
+      err.object = targetObject;
+      throw err;
+    }
+  };
+  engine.registerHook('beforeInsert', enforceFeedsCapability, { object: 'sys_comment', packageId });
+
+  /**
+   * `enable.files` server-side enforcement (#2727). The generic Attachments
+   * panel persists `sys_attachment` join rows through the generic data path,
+   * so — like the feeds gate above — the engine hook seam is the one gate
+   * every caller crosses. Unlike feeds, `files` is opt-IN (spec default
+   * `false`): the panel is a new surface, not an existing behavior, so a
+   * parent object must declare `enable: { files: true }` before attachments
+   * may target it. Fail-closed: an absent enable block, an absent flag, and
+   * an unknown parent object all reject — opt-in means *explicit*.
+   *
+   * Deliberately NOT gated: `Field.file` / `Field.image` uploads. Those
+   * store the file URL in the record's own column via service-storage and
+   * never create a sys_attachment row, so field-level attachments keep
+   * working regardless of this flag.
+   */
+  const enforceFilesCapability = async (ctx: HookContext) => {
+    const data: any = (ctx.input as any)?.data;
+    const parentObject = data?.parent_object;
+    if (typeof parentObject !== 'string' || parentObject.length === 0) return; // schema requires it; let validation report the miss
+    const def = getObjectDef(parentObject);
+    if (def?.enable?.files !== true) {
+      const err: any = new Error(`File attachments are not enabled for object '${parentObject}' (requires enable.files: true)`);
+      err.code = 'FILES_DISABLED';
+      err.status = 403;
+      err.object = parentObject;
+      throw err;
+    }
+  };
+  engine.registerHook('beforeInsert', enforceFilesCapability, { object: 'sys_attachment', packageId });
 
   /**
    * M10.8: Dedicated hook on `sys_comment` afterInsert that parses the

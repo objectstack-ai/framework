@@ -11,7 +11,7 @@ description: Map a concrete access requirement onto the platform's layers — ob
 
 ## Recommended solution
 
-Authorization splits into three decoupled concerns (ADR-0066): **capability** (what can be done), **assignment** (who holds it — permission sets / roles, maintained at runtime), and **requirement** (what a resource declares it needs). A resource declares *what is required*; it never bakes in *who*.
+Authorization splits into three decoupled concerns (ADR-0066): **capability** (what can be done), **assignment** (who holds it — permission sets / positions, maintained at runtime), and **requirement** (what a resource declares it needs). A resource declares *what is required*; it never bakes in *who*.
 
 Pick the layer that matches the requirement:
 
@@ -45,7 +45,7 @@ definePermissionSet({
 
 Two separate questions:
 
-1. **Who can configure it?** Editing flows/automations needs `manage_metadata` (typically Studio users). Don't expose automation config to end users — see [role-based interfaces](/docs/ui/role-based-interfaces).
+1. **Who can configure it?** Editing flows/automations needs `manage_metadata` (typically Studio users). Don't expose automation config to end users — see [audience-based interfaces](/docs/ui/audience-based-interfaces).
 2. **As whom does it run?** A flow's `runAs` (ADR-0049):
    - `runAs: 'user'` (default) — runs as the triggering user; CRUD nodes respect that user's RLS. **Safer default.**
    - `runAs: 'system'` — elevated, bypasses RLS. Make elevation *explicit*, and surface it in the UI as "runs as system".

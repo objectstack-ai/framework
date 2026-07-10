@@ -1,5 +1,77 @@
 # @objectstack/plugin-approvals
 
+## 14.1.0
+
+### Minor Changes
+
+- 5a8465f: SLA escalation `escalateTo` is position-first (ADR-0090 D3 follow-up to the `position` approver type).
+
+  - **spec**: `ApprovalEscalationSchema.escalateTo` is documented as a position machine name or a
+    specific user id (was "User id, role, or manager level" — the same pre-D3 'role' trap the
+    `position` approver type fixed); the Studio xRef picker kind moves `role` → `position`.
+  - **plugin-approvals**: on escalation, `escalateTo` now expands position holders via
+    `sys_user_position` ∪ the `sys_member.role` transition source (ADR-0057 D4) for both the
+    `reassign` approver hand-off and the `notify` audience. An empty expansion falls back to
+    treating the value as a literal user id, so configs naming a specific user keep working
+    unchanged. The audit trail keeps the authored target.
+  - **lint**: new `approval-escalation-reassign-no-target` warning — `escalation.action: 'reassign'`
+    with no `escalateTo` silently degrades to a notify at runtime; the fix-it prescribes a position
+    or user id target (or `action: 'notify'`).
+
+### Patch Changes
+
+- Updated dependencies [5a8465f]
+- Updated dependencies [7f8620b]
+- Updated dependencies [82ba3a6]
+  - @objectstack/spec@14.1.0
+  - @objectstack/core@14.1.0
+  - @objectstack/formula@14.1.0
+  - @objectstack/metadata-core@14.1.0
+  - @objectstack/platform-objects@14.1.0
+
+## 14.0.0
+
+### Minor Changes
+
+- 216fa9a: Add a `position` approver type so approvals can route to org positions (ADR-0090 D3 fallout).
+
+  Post ADR-0090 D3 the `role` approver type resolves against the better-auth org-membership
+  tier (`sys_member.role`: `owner`/`admin`/`member`) — it was never a position. Downstream
+  apps that authored `{ type: 'role', value: 'sales_manager' }` silently routed approvals to
+  nobody. Now:
+
+  - **spec**: `ApproverType` gains `'position'` — `value` is the position machine name; the
+    approver expands to its holders via `sys_user_position`. Authoring guidance: keep
+    `type: 'role'` ONLY for membership tiers; for org positions use
+    `{ type: 'position', value: '<position_name>' }` (one-line fix for the mismatch above).
+  - **plugin-approvals**: the engine resolves `position` approvers via `sys_user_position` ∪
+    the `sys_member.role` transition source (same semantics as `PositionGraphService` in
+    plugin-sharing). The `department` approver type is now honored by its spec spelling
+    (previously only the off-spec `business_unit`/`bu` dialect matched).
+  - **lint**: new `validateApprovalApprovers` rule — `approval-role-not-membership-tier`
+    warns when a `role` approver's value is not a membership tier and prescribes the
+    `position` rewrite; `approval-approver-type-unknown` flags off-spec approver types
+    (with a `business_unit` → `department` fix-it). Wired into `os lint`.
+
+### Patch Changes
+
+- Updated dependencies [0a8e685]
+- Updated dependencies [afa8115]
+- Updated dependencies [80f12ca]
+- Updated dependencies [332b711]
+- Updated dependencies [e2fa074]
+- Updated dependencies [23c8668]
+- Updated dependencies [29f017d]
+- Updated dependencies [216fa9a]
+- Updated dependencies [6c22b12]
+- Updated dependencies [d0531c4]
+- Updated dependencies [cff5aac]
+  - @objectstack/spec@14.0.0
+  - @objectstack/platform-objects@14.0.0
+  - @objectstack/core@14.0.0
+  - @objectstack/formula@14.0.0
+  - @objectstack/metadata-core@14.0.0
+
 ## 13.0.0
 
 ### Patch Changes

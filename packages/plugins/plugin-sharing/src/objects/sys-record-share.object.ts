@@ -21,7 +21,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * Conventions:
  *  - `object_name` is the short object name (e.g. `account`, `lead`).
  *  - `recipient_type` mirrors `ShareRecipientType` from the spec
- *    (`user` is enforced today; `group`/`role` are persisted for
+ *    (`user` is enforced today; `group`/`position` are persisted for
  *    forward-compatibility).
  *  - `source = 'manual'` rows are created by a user via the REST
  *    `POST /data/:object/:id/shares` endpoint. `source = 'rule'` rows
@@ -135,7 +135,7 @@ export const SysRecordShare = ObjectSchema.create({
 
     // ── Recipient (who receives access) ──────────────────────────
     recipient_type: Field.select(
-      ['user', 'group', 'role', 'unit_and_subordinates', 'guest'],
+      ['user', 'group', 'position', 'unit_and_subordinates', 'guest'],
       {
         label: 'Recipient Type',
         required: true,
@@ -149,7 +149,7 @@ export const SysRecordShare = ObjectSchema.create({
       label: 'Recipient',
       required: true,
       maxLength: 100,
-      description: 'ID of the user/group/role that receives access',
+      description: 'ID of the user/group/position that receives access',
       group: 'Recipient',
     }),
 

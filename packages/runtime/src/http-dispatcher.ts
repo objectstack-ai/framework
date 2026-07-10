@@ -544,6 +544,84 @@ export class HttpDispatcher {
     }
 
     /**
+     * `GET /mcp/skill` — the environment-customized portable Agent Skill
+     * (`SKILL.md`), rendered by the MCP service (ADR-0036 Amendment C: ONE
+     * generic skill; only the connection URL is environment-specific).
+     *
+     * Served PUBLIC like `/discovery`: the content is generic agent
+     * instructions plus a URL the caller already knows — no schema, no
+     * tenant data. Gated on the same default-on switch as the `/mcp` route
+     * (404 when opted out, so the surface isn't advertised) and 501 when the
+     * MCP plugin isn't loaded, mirroring `handleMcp`.
+     */
+    async handleMcpSkill(method: string, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        if (!HttpDispatcher.isMcpEnabled()) {
+            return { handled: true, response: this.error('MCP server is not enabled for this environment', 404) };
+        }
+        if (method !== 'GET') {
+            return {
+                handled: true,
+                response: {
+                    status: 405,
+                    headers: { Allow: 'GET' },
+                    body: { success: false, error: { message: 'Method not allowed — use GET', code: 405 } },
+                },
+            };
+        }
+
+        const mcp: any = await this.resolveService('mcp', context.environmentId);
+        if (!mcp || typeof mcp.renderSkill !== 'function') {
+            return { handled: true, response: this.error('MCP server is not available', 501) };
+        }
+
+        // Resolve this environment's MCP URL for the skill's Connect section:
+        // the auth service owns the canonical value (base URL config); fall
+        // back to deriving from the request host so the endpoint still works
+        // when the auth plugin isn't loaded.
+        let mcpUrl: string | undefined;
+        try {
+            const authService: any = await this.resolveService('auth', context.environmentId);
+            const url = authService?.getMcpResourceUrl?.();
+            if (typeof url === 'string' && url) mcpUrl = url;
+        } catch { /* fall through to host derivation */ }
+        if (!mcpUrl) {
+            try {
+                const webReq = this.toMcpWebRequest(context.request, undefined);
+                const host = webReq?.headers.get('host');
+                if (host) {
+                    const proto = webReq?.headers.get('x-forwarded-proto') || 'http';
+                    mcpUrl = `${proto}://${host}/api/v1/mcp`;
+                }
+            } catch { /* leave the documented placeholder in place */ }
+        }
+
+        const markdown: string = mcp.renderSkill({ mcpUrl });
+        // Raw text must NOT ride the `response` channel — `sendResult` JSON-
+        // encodes those bodies unconditionally. The `result` stream channel is
+        // the one raw pipe through every adapter (string events are written
+        // verbatim, custom headers honored), so serve the markdown as a
+        // single-chunk "stream".
+        return {
+            handled: true,
+            result: {
+                type: 'stream',
+                status: 200,
+                contentType: 'text/markdown; charset=utf-8',
+                headers: {
+                    'content-type': 'text/markdown; charset=utf-8',
+                    'content-disposition': 'inline; filename="SKILL.md"',
+                    // Same reasoning as /discovery (cloud#152): reflects mutable
+                    // runtime config (base URL), must never be edge-cached stale.
+                    'cache-control': 'no-store',
+                },
+                events: (async function* () {
+                    yield markdown;
+                })(),
+            },
+        } as any;
+    }
+
+    /**
      * Normalise the inbound request into a Web-standard `Request` for the MCP
      * transport. Accepts an already-Web `Request`, or a node/Hono-style req
      * (plain `headers` object, path-only `url`). Returns undefined only if the
@@ -2013,6 +2091,69 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handle the security admin surface (`/security/...`) — ADR-0090 D5/D9
+     * suggested audience bindings. A package's `isDefault: true` permission
+     * set is an install-time SUGGESTION to bind it to the `everyone` position;
+     * these routes let an admin see and resolve those suggestions. The
+     * `security` service does the real gating (tenant-admin pre-check, and the
+     * confirm write runs under the audience-anchor + delegated-admin gates
+     * with the caller's execution context — never auto-bound, never system).
+     *
+     * Routes:
+     *   GET  /security/suggested-bindings?status=&packageId=   → list (reconciles first)
+     *   POST /security/suggested-bindings/:id/confirm          → create the anchor binding
+     *   POST /security/suggested-bindings/:id/dismiss          → decline the suggestion
+     */
+    async handleSecurity(path: string, method: string, _body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        const service = await this.resolveService('security', context.environmentId) as any;
+        if (!service || typeof service.listAudienceBindingSuggestions !== 'function') {
+            return { handled: true, response: this.error('Security service not available', 503) };
+        }
+
+        const ec = context.executionContext;
+        if (!ec?.userId && !ec?.isSystem) {
+            return { handled: true, response: this.error('Authentication required', 401) };
+        }
+
+        const m = method.toUpperCase();
+        // split+filter drops leading/trailing/duplicate slashes without a
+        // regex over request-controlled input (CodeQL js/polynomial-redos).
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] !== 'suggested-bindings') return { handled: false };
+
+        try {
+            // GET /security/suggested-bindings
+            if (parts.length === 1 && m === 'GET') {
+                const status = query?.status ? String(query.status) : undefined;
+                const packageId = query?.packageId ? String(query.packageId) : undefined;
+                const result = await service.listAudienceBindingSuggestions(ec, { status, packageId });
+                return { handled: true, response: this.success(result) };
+            }
+
+            // POST /security/suggested-bindings/:id/confirm|dismiss
+            if (parts.length === 3 && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                if (parts[2] === 'confirm') {
+                    const result = await service.confirmAudienceBindingSuggestion(ec, id);
+                    return { handled: true, response: this.success(result) };
+                }
+                if (parts[2] === 'dismiss') {
+                    const result = await service.dismissAudienceBindingSuggestion(ec, id);
+                    return { handled: true, response: this.success(result) };
+                }
+            }
+
+            return { handled: false };
+        } catch (err: any) {
+            // The service throws typed errors carrying their HTTP status:
+            // PermissionDeniedError → 403, SuggestionNotFoundError → 404,
+            // SuggestionStateError → 409.
+            const status = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+            return { handled: true, response: this.error(err?.message ?? 'Security operation failed', status) };
+        }
+    }
+
+    /**
      * Handles i18n requests
      * path: sub-path after /i18n/
      *
@@ -3244,12 +3385,14 @@ export class HttpDispatcher {
             if (def?.environmentId) _context.environmentId = def.environmentId;
         }
 
-        // Replicate the kernel swap that `dispatcher.handle()` does for
-        // data/meta/automation routes. Action routes are registered on the
-        // raw HTTP server and skip the `handle()` chain, so without this
-        // swap `getObjectQLService` would resolve the control-plane kernel
-        // (where the CRM bundle's actions are NOT registered). Routed via the
-        // host's KernelResolver (ADR-0006 Phase 5) — same seam as handle().
+        // Kernel-resolution fallback for the per-project kernel. HTTP action
+        // routes now flow through `dispatcher.dispatch()` (like data/meta/
+        // automation), which already swapped to the project kernel and resolved
+        // `executionContext` before reaching here — so on that path this block
+        // re-resolves idempotently (a no-op in single-kernel mode). Kept for
+        // DIRECT `handleActions` callers (unit tests / internal dispatch) so the
+        // call still lands on the kernel where the bundle's actions are
+        // registered, not the control-plane kernel (ADR-0006 Phase 5).
         let projectQl: any = null;
         if (this.kernelResolver && _context.environmentId && _context.environmentId !== 'platform') {
             try {
@@ -3339,8 +3482,25 @@ export class HttpDispatcher {
             },
         };
 
-        const userIdFromAuth = (_context as any)?.user?.id ?? (_context as any)?.userId ?? 'system';
-        const userFromAuth = (_context as any)?.user ?? { id: userIdFromAuth, name: userIdFromAuth };
+        // Resolve the caller identity from the request's ExecutionContext — the
+        // single source `dispatch()` populates via `resolveExecutionContext`,
+        // the same envelope the MCP `runAction` and record-change trigger paths
+        // read. The action body sandbox receives the operator's id and business
+        // roles (ADR-0090 `positions`, formerly `roles`) so a handler can branch
+        // on identity and enforce ownership. Falls back to a `system` principal
+        // only for a genuinely anonymous / self-invoked call (#2701).
+        const ec: any = _context?.executionContext;
+        const userFromAuth = ec?.userId
+            ? {
+                id: ec.userId,
+                name: ec.userId,
+                email: ec.email,
+                roles: Array.isArray(ec.positions) ? ec.positions : [],
+                positions: Array.isArray(ec.positions) ? ec.positions : [],
+                permissions: Array.isArray(ec.permissions) ? ec.permissions : [],
+                tenantId: ec.tenantId,
+              }
+            : { id: 'system', name: 'system', roles: [], positions: [], permissions: [] };
 
         const actionContext: any = {
             record,
@@ -3865,6 +4025,14 @@ export class HttpDispatcher {
             return this.handleData(cleanPath.substring(5), method, body, query, context);
         }
 
+        // `/mcp/skill` is the one sub-path NOT owned by the MCP transport:
+        // the public, environment-customized SKILL.md download. Matched
+        // before the transport branch below, which claims everything else
+        // under `/mcp`.
+        if (cleanPath === '/mcp/skill' || cleanPath.startsWith('/mcp/skill?')) {
+            return this.handleMcpSkill(method, context);
+        }
+
         if (cleanPath === '/mcp' || cleanPath.startsWith('/mcp/') || cleanPath.startsWith('/mcp?')) {
             return this.handleMcp(body, context);
         }
@@ -3902,6 +4070,12 @@ export class HttpDispatcher {
         // backed by the messaging service registered under the `notification` slot.
         if (cleanPath.startsWith('/notifications')) {
              return this.handleNotification(cleanPath.substring(14), method, body, query, context);
+        }
+
+        // Security admin surface (ADR-0090 D5/D9) — suggested audience
+        // bindings, dispatched to the `security` service (plugin-security).
+        if (cleanPath === '/security' || cleanPath.startsWith('/security/')) {
+             return this.handleSecurity(cleanPath.substring(9), method, body, query, context);
         }
 
         if (cleanPath.startsWith('/packages')) {

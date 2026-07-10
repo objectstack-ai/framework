@@ -57,7 +57,7 @@ Two orthogonal identity-layer gates run before all of this: the ADR-0069
 session from protected resources while keeping remediation reachable), and
 **anti-escalation** — RBAC tables are read-only for `organization_admin`, and
 since ADR-0090 D12 every RBAC-table write is additionally checked by the
-**delegated-admin gate**: tenant admins pass, delegates are confined to their
+**[delegated-admin gate](/docs/permissions/delegated-administration)**: tenant admins pass, delegates are confined to their
 `adminScope` (BU subtree + assignable-set allowlist, no self-escalation,
 strict containment for scope grants), and everyone else is denied. The
 `everyone`/`guest` audience-anchor bindings reject high-privilege sets at the
@@ -105,13 +105,13 @@ package (metadata); subject bindings and env-specific values stay as config.**
   seeds `stack.permissions` at boot — idempotent, re-seeded on upgrade, and it
   **never clobbers** env-authored (`platform`/`user`/legacy) rows. A package
   never writes into a foreign record.
-- The environment admin **assigns** sets to roles/users; the runtime unions
+- The environment admin **assigns** sets to positions/users; the runtime unions
   them. One shared set with hand-picked cross-package grants remains an
   env-admin-only construct.
 - This is what makes package **uninstall** well-defined (drop the package's
   own sets) and the objectui Access matrix scopable to `{ packageId }`.
-- Declared roles and sharing rules seed the same way
-  (`bootstrapDeclaredRoles`, ADR-0057 D6) — a declarable-but-never-seeded
+- Declared positions and sharing rules seed the same way
+  (`bootstrapDeclaredPositions`, ADR-0057 D6) — a declarable-but-never-seeded
   array is exactly the inert-metadata smell ADR-0078 prohibits.
 
 ### Two doors, one metadata (ADR-0086 D6/D7)
@@ -147,7 +147,7 @@ one of two doors, each writing only what it owns:
 
 | Stage | What holds today | Owned by |
 |---|---|---|
-| 1 · Package development | Zod-validated authoring; roles / sharingRules / permissions seeded at boot with provenance | ADR-0057 D6, ADR-0086 D5, ADR-0049/0078 gates |
+| 1 · Package development | Zod-validated authoring; positions / sharingRules / permissions seeded at boot with provenance | ADR-0057 D6, ADR-0086 D5, ADR-0049/0078 gates |
 | 2 · Distribution / install / upgrade / uninstall | Install-consent scopes (ADR-0025 — consent ≠ RBAC grants); namespaced, collision-free composition; provenance axis makes uninstall well-defined | ADR-0025/0028/0048/0086 |
 | 3 · Environment composition / assignment | Platform-owned assignment records (`sys_user_position` etc.); anti-escalation; union semantics | ADR-0057 D4 |
 | 4 · Runtime enforcement | The six-gate chain above; ~18 primitives enforced and CI-guarded | ADR-0056 D10 matrix |
@@ -170,8 +170,20 @@ Each layer carries a verdict (`grants` / `denies` / `narrows` / `widens` /
 `neutral` / `not_applicable`), a human explanation, and **contributor
 attribution** — which permission set granted, reached via which position /
 additive baseline / direct grant. For reads, the decision includes the
-composed row filter as the machine artifact. Explaining another user requires
-the `manage_users` capability.
+composed row filter as the machine artifact.
+
+The same report is reachable over REST as `GET/POST /api/v1/security/explain`
+(`object`, `operation`, optional `userId`; validated against
+`ExplainRequestSchema`). The endpoint is authenticated-only and delegates to
+the service, so both surfaces share one authorization rule: explaining
+**another** user requires the `manage_users` capability **or** a delegated
+`adminScope` whose business-unit subtree covers that user (ADR-0090 D12) —
+an administrator who can rewire a user's grants may read why they resolve as
+they do. Studio's Access pillar ships a "why can this user access?" panel on
+top of this endpoint.
+
+Full request/response walkthrough, layer vocabulary, and caller-authorization
+details: **[Explain Engine](/docs/permissions/explain)**.
 
 ## Governance: how "declared = enforced" is kept true
 
@@ -189,6 +201,7 @@ rather than a belief:
   `os compile` fails on any capability drift with semantic lines
   (`'crm_admin' gains delete on 'crm_lead'`) until the snapshot is updated via
   `--update-access-matrix` — the snapshot's git diff is the review artifact.
+  Opt-in, format, and workflow: **[Access-Matrix Snapshot Gate](/docs/permissions/access-matrix)**.
 
 - **Conformance matrix** (`packages/dogfood/test/authz-conformance.matrix.ts`,
   ADR-0056 D10): every authorization primitive sits in exactly one honest
@@ -248,7 +261,7 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 | [0056](/adr/0056-permission-model-landing-verification) | Permission-model landing: OWD, anonymous deny default, D10 matrix |
 | [0057](/adr/0057-erp-authorization-core-business-units-and-scope-depth) | Business units, scope depth, declarative RBAC seeding, platform-owned assignment |
 | [0066](/adr/0066-unified-authorization-model) | Unified model: capability registry, posture, precedence, future refinements |
-| [0068](/adr/0068-identity-roles) | Built-in identity roles, `EvalUser` |
+| [0068](/adr/0068-identity-roles) | Built-in identity positions (formerly "identity roles"), `EvalUser` |
 | [0069](/adr/0069-enterprise-authentication-hardening) | Enterprise authentication hardening (phased) |
 | [0078](/adr/0078-no-inert-declarable-metadata) | No inert declarable metadata |
 | [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |

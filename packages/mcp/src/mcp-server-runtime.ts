@@ -13,6 +13,7 @@ import type {
   RegisterObjectToolsOptions,
   RegisterActionToolsOptions,
 } from './mcp-http-tools.js';
+import { renderSkillMarkdown, type RenderSkillOptions } from './skill.js';
 import { z } from 'zod';
 
 /**
@@ -501,6 +502,19 @@ export class MCPServerRuntime {
     this.transport = undefined;
     this.started = false;
     this.config.logger?.info('[MCP] Server stopped');
+  }
+
+  /**
+   * Render the portable Agent Skill (`SKILL.md`) for this environment
+   * (ADR-0036 Amendment C: ONE generic skill, schema discovered live).
+   *
+   * Exposed on the runtime so HTTP hosts can serve it (`GET /api/v1/mcp/skill`
+   * in the runtime dispatcher) without depending on `@objectstack/mcp` —
+   * they duck-call this through the registered `'mcp'` service, mirroring
+   * how `handleHttpRequest` is reached.
+   */
+  renderSkill(options?: RenderSkillOptions): string {
+    return renderSkillMarkdown(options);
   }
 
   // ── HTTP (Streamable HTTP) transport ───────────────────────────

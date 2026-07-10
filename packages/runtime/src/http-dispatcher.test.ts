@@ -485,6 +485,74 @@ describe('HttpDispatcher', () => {
             });
         });
 
+        // ADR-0090 D5/D9: the /api/v1/security/suggested-bindings surface,
+        // dispatched to the `security` service registered by plugin-security.
+        describe('handleSecurity (ADR-0090 D5/D9 suggested audience bindings)', () => {
+            const secKernel = (service: any) =>
+                ({ context: { getService: (name: string) => (name === 'security' ? service : null) } } as any);
+            const ctx = (userId?: string) =>
+                ({ request: {}, executionContext: userId ? { userId } : undefined } as any);
+            const makeService = () => ({
+                listAudienceBindingSuggestions: vi.fn().mockResolvedValue({ suggestions: [{ id: 's1', status: 'pending' }], synced: { created: 1 } }),
+                confirmAudienceBindingSuggestion: vi.fn().mockResolvedValue({ suggestion: { id: 's1', status: 'confirmed' }, bindingCreated: true }),
+                dismissAudienceBindingSuggestion: vi.fn().mockResolvedValue({ suggestion: { id: 's1', status: 'dismissed' } }),
+            });
+
+            it('GET /suggested-bindings lists via the service with status/packageId filters', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, { status: 'pending', packageId: 'com.example.crm' }, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body?.data?.suggestions).toHaveLength(1);
+                expect(service.listAudienceBindingSuggestions).toHaveBeenCalledWith({ userId: 'u1' }, { status: 'pending', packageId: 'com.example.crm' });
+            });
+
+            it('POST /suggested-bindings/:id/confirm passes the caller execution context', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/confirm', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.bindingCreated).toBe(true);
+                expect(service.confirmAudienceBindingSuggestion).toHaveBeenCalledWith({ userId: 'u1' }, 's1');
+            });
+
+            it('POST /suggested-bindings/:id/dismiss dismisses via the service', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/dismiss', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.suggestion?.status).toBe('dismissed');
+            });
+
+            it('maps typed service errors onto their HTTP status (403/404/409)', async () => {
+                const service = makeService();
+                service.confirmAudienceBindingSuggestion = vi.fn().mockRejectedValue(
+                    Object.assign(new Error('[Security] Access denied: tenant admin required'), { statusCode: 403 }),
+                );
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings/s1/confirm', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(403);
+            });
+
+            it('401s an anonymous request without touching the service', async () => {
+                const service = makeService();
+                const d = new HttpDispatcher(secKernel(service));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, {}, ctx());
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(401);
+                expect(service.listAudienceBindingSuggestions).not.toHaveBeenCalled();
+            });
+
+            it('503s when the security service is missing (plugin-security not loaded)', async () => {
+                const d = new HttpDispatcher(secKernel(null));
+                const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(503);
+            });
+        });
+
         describe('handleAuth with async service', () => {
             it('should resolve auth service from Promise', async () => {
                 const mockAuth = {
@@ -2131,6 +2199,113 @@ describe('HttpDispatcher — ADR-0066 D4 action requiredPermissions gate', () =>
     const res = await dispatcher.handleActions('/sys_license/issue_and_sign', 'POST', {}, ctx);
     expect(res.response.status).toBe(403);
     expect(executeAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
+  // The action body sandbox must see the SESSION operator (id + business
+  // roles), resolved from the request's ExecutionContext — the same envelope
+  // `dispatch()` populates and that the MCP / record-change paths already read.
+  // Pre-#2701 the fallback chain read `_context.user` / `_context.userId`
+  // (fields HttpProtocolContext never carries) and hard-fell to `system`, so
+  // every action ran blind to who invoked it.
+  const captureCtx = (execCtx: any) => {
+    const executeAction = vi.fn(async () => ({ ok: true }));
+    const schemaOf = (name: string) => ({
+      name,
+      actions: [{ name: 'convert', label: 'Convert', type: 'script', execute: 'true' }],
+    });
+    const ql: any = {
+      executeAction,
+      getSchema: schemaOf,
+      registry: { getObject: schemaOf },
+      find: vi.fn().mockResolvedValue([]),
+      insert: vi.fn(), update: vi.fn(), delete: vi.fn(),
+    };
+    const kernel: any = { context: { getService: (n: string) => (n === 'objectql' ? ql : null) } };
+    const dispatcher = new HttpDispatcher(kernel);
+    const ctx: any = { request: {}, environmentId: 'platform', executionContext: execCtx };
+    return { dispatcher, executeAction, ctx };
+  };
+
+  const actionUser = (executeAction: any) => executeAction.mock.calls[0]?.[2]?.user;
+
+  it('forwards the session user id + business roles to the action body (not `system`)', async () => {
+    const { dispatcher, executeAction, ctx } = captureCtx({
+      userId: 'user_42',
+      positions: ['sales_rep', 'org_member'],
+      permissions: ['convert_lead'],
+      email: 'rep@acme.test',
+      tenantId: 'org_acme',
+    });
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    const user = actionUser(executeAction);
+    expect(user.id).toBe('user_42');
+    expect(user.roles).toEqual(['sales_rep', 'org_member']);
+    expect(user.positions).toEqual(['sales_rep', 'org_member']);
+    expect(user.permissions).toEqual(['convert_lead']);
+    expect(user.email).toBe('rep@acme.test');
+    expect(user.tenantId).toBe('org_acme');
+  });
+
+  it('falls back to a `system` principal only when the request is anonymous', async () => {
+    const { dispatcher, executeAction, ctx } = captureCtx(undefined);
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    const user = actionUser(executeAction);
+    expect(user.id).toBe('system');
+    expect(user.roles).toEqual([]);
+    expect(user.positions).toEqual([]);
+  });
+
+  it('sources identity from executionContext, ignoring a stray `_context.user` (regression guard)', async () => {
+    // HttpProtocolContext carries no `user`/`userId`; a caller must not be able
+    // to spoof identity by stuffing one on. The resolved session is the one source.
+    const { dispatcher, executeAction, ctx } = captureCtx({ userId: 'ec_user', positions: ['viewer'] });
+    (ctx as any).user = { id: 'spoofed' };
+    (ctx as any).userId = 'spoofed_2';
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    expect(actionUser(executeAction).id).toBe('ec_user');
+  });
+
+  it('resolves the session end-to-end: dispatch(/actions/…) threads the authenticated principal into ctx.user', async () => {
+    // Full pipeline: an api-key request → dispatch() → resolveExecutionContext →
+    // handleActions. This is the path registerActionRoutes now takes (it calls
+    // `dispatch('POST', '/actions/…')`) — the identity resolution that was
+    // bypassed pre-#2701, when the action route called handleActions directly.
+    const rows: any[] = [];
+    const executeAction = vi.fn(async () => ({ ok: true }));
+    const schemaOf = (name: string) => ({ name, actions: [{ name: 'convert', label: 'C', type: 'script', execute: 'true' }] });
+    const ql: any = {
+      executeAction,
+      getSchema: schemaOf,
+      registry: { getObject: schemaOf },
+      insert: async (_o: string, data: any) => { const id = `key_${rows.length + 1}`; rows.push({ id, ...data }); return { id }; },
+      find: async (obj: string, opts: any) => {
+        const where = opts?.where ?? {};
+        if (obj !== 'sys_api_key') return [];
+        return rows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+      },
+      update: async () => ({}), delete: async () => ({}),
+    };
+    const kernel: any = {
+      getService: (n: string) => (n === 'objectql' ? ql : undefined),
+      getServiceAsync: async (n: string) => (n === 'objectql' ? ql : undefined),
+      context: { getService: (n: string) => (n === 'objectql' ? ql : undefined) },
+    };
+    const dispatcher = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+
+    // Mint an api key bound to `user_9`, then invoke an action authenticated by it.
+    const mint = await dispatcher.handleKeys('POST', { name: 'agent' }, {
+      request: { headers: {} }, executionContext: { userId: 'user_9', positions: [], permissions: [] },
+    } as any);
+    const raw = mint.response.body.data.key;
+
+    await dispatcher.dispatch('POST', '/actions/lead/convert', {}, {}, {
+      request: { headers: { 'x-api-key': raw } },
+    } as any);
+
+    const user = executeAction.mock.calls[0]?.[2]?.user;
+    expect(user?.id).toBe('user_9'); // was `system` before the fix — the route bypassed dispatch()
   });
 });
 

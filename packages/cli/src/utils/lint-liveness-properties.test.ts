@@ -9,7 +9,7 @@ import {
 /**
  * These run against the REAL ledgers shipped by `@objectstack/spec` (the same
  * files the gate enforces), so they double as a contract test: if an
- * `authorWarn` annotation is removed from `enable.feeds` / `columnName` / etc.,
+ * `authorWarn` annotation is removed from `versioning` / `columnName` / etc.,
  * the matching assertion fails.
  */
 
@@ -18,14 +18,13 @@ const rules = (findings: { rule: string }[]) => findings.map((f) => f.rule);
 const paths = (findings: { message: string }[]) => findings.map((f) => f.message);
 
 describe('lintLivenessProperties', () => {
-  it('warns on an authored dead capability flag (enable.feeds: true)', () => {
-    const findings = lintLivenessProperties(objStack({ enable: { feeds: true } }));
-    expect(findings.length).toBeGreaterThan(0);
-    const feeds = findings.find((f) => f.message.includes('enable.feeds'));
-    expect(feeds).toBeDefined();
-    expect(feeds!.rule).toBe(LIVENESS_DEAD_PROPERTY);
-    expect(feeds!.where).toBe("object 'widget'");
-    expect(feeds!.hint.length).toBeGreaterThan(0);
+  it('warns on a present dead object block (versioning)', () => {
+    const findings = lintLivenessProperties(objStack({ versioning: { enabled: true } }));
+    const v = findings.find((f) => f.message.includes('versioning'));
+    expect(v).toBeDefined();
+    expect(v!.rule).toBe(LIVENESS_DEAD_PROPERTY);
+    expect(v!.where).toBe("object 'widget'");
+    expect(v!.hint.length).toBeGreaterThan(0);
   });
 
   it('does NOT warn on a default-on flag the author left alone (enable.trash: true)', () => {
@@ -33,14 +32,14 @@ describe('lintLivenessProperties', () => {
     expect(paths(findings).some((m) => m.includes('enable.trash'))).toBe(false);
   });
 
-  it('does NOT warn when a dead boolean flag is explicitly false (enable.files: false)', () => {
-    const findings = lintLivenessProperties(objStack({ enable: { files: false } }));
-    expect(paths(findings).some((m) => m.includes('enable.files'))).toBe(false);
-  });
-
-  it('warns on a present dead object block (versioning)', () => {
-    const findings = lintLivenessProperties(objStack({ versioning: { enabled: true } }));
-    expect(paths(findings).some((m) => m.includes('versioning'))).toBe(true);
+  // #2707/#2727: every ObjectCapabilities flag is now LIVE (opt-out
+  // writer/UI gates, the History-tab master switch, the opt-in Attachments
+  // gate) — authoring them must no longer warn.
+  it('does NOT warn on the now-live capability flags (feeds/activities/trackHistory/files)', () => {
+    const findings = lintLivenessProperties(
+      objStack({ enable: { feeds: true, activities: true, trackHistory: true, files: true } }),
+    );
+    expect(paths(findings).some((m) => m.includes('enable.'))).toBe(false);
   });
 
   it('warns on a misleading dead field prop (columnName)', () => {
@@ -72,7 +71,7 @@ describe('lintLivenessProperties', () => {
 
   it('handles objects as a keyed record (not just arrays)', () => {
     const findings = lintLivenessProperties({
-      objects: { widget: { name: 'widget', enable: { feeds: true } } },
+      objects: { widget: { name: 'widget', versioning: { enabled: true } } },
     });
     expect(rules(findings)).toContain(LIVENESS_DEAD_PROPERTY);
   });
@@ -80,5 +79,70 @@ describe('lintLivenessProperties', () => {
   it('returns [] on an empty / shapeless stack', () => {
     expect(lintLivenessProperties({})).toEqual([]);
     expect(lintLivenessProperties({ objects: [] })).toEqual([]);
+  });
+
+  // ── Coverage beyond object/field: flat stack collections ─────────────
+  // The 2026-07 authorWarn pass marked misleading dead props on flows,
+  // actions, agents, tools, datasets, permissions, and the object tenancy
+  // block. These run against the REAL ledgers, so they double as contract
+  // tests for those markings.
+
+  it('warns on flow.errorHandling.fallbackNodeId (engine uses fault edges)', () => {
+    const findings = lintLivenessProperties({
+      flows: [{ name: 'f1', errorHandling: { fallbackNodeId: 'n2' } }],
+    });
+    const f = findings.find((x) => x.message.includes('errorHandling.fallbackNodeId'));
+    expect(f).toBeDefined();
+    expect(f!.where).toBe("flow 'f1'");
+  });
+
+  it('fans out array containers: flow.nodes[].outputSchema warns once per flow', () => {
+    const findings = lintLivenessProperties({
+      flows: [{
+        name: 'f1',
+        nodes: [
+          { id: 'n1' },
+          { id: 'n2', outputSchema: { type: 'object' } },
+          { id: 'n3', outputSchema: { type: 'object' } },
+        ],
+      }],
+    });
+    const hits = findings.filter((x) => x.message.includes('nodes.outputSchema'));
+    expect(hits.length).toBe(1); // one finding per (flow, path), not per node
+    expect(hits[0].where).toBe("flow 'f1'");
+  });
+
+  it('warns on action.timeout (no runtime enforcement)', () => {
+    const findings = lintLivenessProperties({ actions: [{ name: 'a1', timeout: 5000 }] });
+    expect(paths(findings).some((m) => m.includes('`timeout`'))).toBe(true);
+  });
+
+  it('warns on the security-shaped dead props (tenancy.strategy / tool.permissions / permission.contextVariables)', () => {
+    const tenancy = lintLivenessProperties(objStack({ tenancy: { enabled: true, strategy: 'isolated' } }));
+    expect(paths(tenancy).some((m) => m.includes('tenancy.strategy'))).toBe(true);
+    // tenancy.enabled itself is live — must NOT warn.
+    expect(paths(tenancy).some((m) => m.includes('tenancy.enabled'))).toBe(false);
+
+    const tool = lintLivenessProperties({ tools: [{ name: 't1', permissions: ['crm.admin'] }] });
+    expect(paths(tool).some((m) => m.includes('`permissions`'))).toBe(true);
+
+    const perm = lintLivenessProperties({ permissions: [{ name: 'p1', contextVariables: { region: 'emea' } }] });
+    expect(paths(perm).some((m) => m.includes('contextVariables'))).toBe(true);
+  });
+
+  it('warns on dataset measure certified flag via array fan-out', () => {
+    const findings = lintLivenessProperties({
+      datasets: [{ name: 'd1', measures: [{ name: 'arr', certified: true }] }],
+    });
+    expect(paths(findings).some((m) => m.includes('measures.certified'))).toBe(true);
+  });
+
+  it('stays silent on clean flat-collection items', () => {
+    const findings = lintLivenessProperties({
+      flows: [{ name: 'clean', nodes: [{ id: 'n1' }] }],
+      actions: [{ name: 'clean' }],
+      tools: [{ name: 'clean' }],
+    });
+    expect(findings).toEqual([]);
   });
 });

@@ -2131,10 +2131,23 @@ export class ObjectQL implements IDataEngine {
     };
 
     await this.executeWithMiddleware(opCtx, async () => {
+      // Resolve field `defaultValue`s (including the `current_user` token)
+      // BEFORE the beforeInsert hook runs, so a hook that DERIVES one field
+      // from another can read the defaulted value instead of a stale `null`
+      // (#2703). The hook still has final say — it runs after and may override
+      // any defaulted field. `applyFieldDefaults` returns a fresh copy and only
+      // fills fields left `undefined`, so client-supplied values are untouched.
+      const nowSnap = new Date();
+      const defaultedData = Array.isArray(opCtx.data)
+        ? (opCtx.data as any[]).map((row) =>
+            this.applyFieldDefaults(object, row as Record<string, unknown>, opCtx.context, nowSnap),
+          )
+        : this.applyFieldDefaults(object, opCtx.data as Record<string, unknown>, opCtx.context, nowSnap);
+
       const hookContext: HookContext = {
           object,
           event: 'beforeInsert',
-          input: { data: opCtx.data, options: opCtx.options },
+          input: { data: defaultedData, options: opCtx.options },
           session: this.buildSession(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
@@ -2150,16 +2163,14 @@ export class ObjectQL implements IDataEngine {
 
       try {
         let result;
-        const nowSnap = new Date();
         const schemaForValidation = this._registry.getObject(object);
         // When the driver generates autonumbers natively (persistent SQL
         // sequence), the engine defers to it — see #1603.
         const driverOwnsAutonumber = (driver as any)?.supports?.autonumber === true;
         if (Array.isArray(hookContext.input.data)) {
-          // Bulk Create — apply defaults per row
-          const rows = (hookContext.input.data as any[]).map((row) =>
-            this.applyFieldDefaults(object, row as Record<string, unknown>, opCtx.context, nowSnap),
-          );
+          // Defaults are already resolved above (pre-hook, #2703); the hook may
+          // have overridden or added fields — take its data as-is.
+          const rows = hookContext.input.data as Array<Record<string, unknown>>;
           for (const r of rows) {
             await this.applyAutonumbers(object, r as Record<string, unknown>, opCtx.context, driverOwnsAutonumber);
           }
@@ -2178,12 +2189,8 @@ export class ObjectQL implements IDataEngine {
                result = await Promise.all(rows.map((item) => driver.create(object, item, hookContext.input.options as any)));
           }
         } else {
-          const row = this.applyFieldDefaults(
-            object,
-            hookContext.input.data as Record<string, unknown>,
-            opCtx.context,
-            nowSnap,
-          );
+          // Defaults already resolved pre-hook (#2703); use the hook's data.
+          const row = hookContext.input.data as Record<string, unknown>;
           await this.applyAutonumbers(object, row, opCtx.context, driverOwnsAutonumber);
           await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
           normalizeMultiValueFields(schemaForValidation, row);
@@ -2582,9 +2589,16 @@ export class ObjectQL implements IDataEngine {
      object = this.resolveObjectName(object);
      const driver = this.getDriver(object);
 
+     // The AST must ride on the opCtx so the security/sharing middlewares can
+     // inject their read filters (RLS, OWD/sharing scope) into `ast.where` —
+     // exactly like find(). Building it locally inside the executor (#2737)
+     // discarded every injected filter: `total` counted the RAW table while
+     // `records` were scoped, leaking invisible-row counts and breaking
+     // pagination.
      const opCtx: OperationContext = {
        object,
        operation: 'count',
+       ast: { object, where: query?.where },
        options: query,
        context: mergeReadContext(query?.context, options?.context),
      };
@@ -2592,10 +2606,10 @@ export class ObjectQL implements IDataEngine {
      await this.executeWithMiddleware(opCtx, async () => {
        const countOpts = this.buildDriverOptions(opCtx.context);
        if (driver.count) {
-           const ast: QueryAST = { object, where: query?.where };
-           return driver.count(object, ast, countOpts);
+           return driver.count(object, opCtx.ast as QueryAST, countOpts);
        }
-       // Fallback to find().length
+       // Fallback to find().length — find() applies the read filters itself,
+       // so pass the caller's original where, not the already-scoped ast.
        const res = await this.find(object, { where: query?.where, fields: ['id'], context: opCtx.context });
        return res.length;
      });
@@ -2611,17 +2625,21 @@ export class ObjectQL implements IDataEngine {
       const opCtx: OperationContext = {
         object,
         operation: 'aggregate',
+        // On the opCtx so middleware-injected read filters (RLS/sharing) land
+        // in `ast.where` — same #2737 hole as count(): a locally-built AST
+        // aggregated over rows the caller may not see.
+        ast: {
+            object,
+            where: query.where,
+            groupBy: query.groupBy as any,
+            aggregations: query.aggregations,
+        },
         options: query,
         context: mergeReadContext(query?.context, options?.context),
       };
 
       await this.executeWithMiddleware(opCtx, async () => {
-        const ast: QueryAST = {
-            object,
-            where: query.where,
-            groupBy: query.groupBy as any,
-            aggregations: query.aggregations,
-        };
+        const ast = opCtx.ast as QueryAST;
 
         // Prefer driver.aggregate() when available — driver.find() in many
         // drivers (e.g. driver-sql) does not honor `groupBy` / `aggregations`

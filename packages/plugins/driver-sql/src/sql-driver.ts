@@ -1202,13 +1202,28 @@ export class SqlDriver implements IDataDriver {
         // Reserve a persistent sequence value for each row's autonumber
         // field(s) — the engine no longer pre-fills these (see #1603).
         await this.fillAutoNumberFields(object, row, options);
-        // Same canonical-instant stamp as create()/upsert() so bulk-inserted
-        // rows don't fall back to the zone-naive CURRENT_TIMESTAMP default.
-        this.stampInsertTimestamps(object, row);
       }
     }
+    // Same write-side marshaling as create() (#2735): JSON-typed and
+    // object-valued fields must be serialized per row before they reach the
+    // knex binder — the raw batch used to hand `{lat, lng}` objects straight
+    // to SQLite ("Wrong API use: tried to bind a value of an unknown type"),
+    // silently failing the whole seed batch. Timestamp stamping runs on the
+    // FORMATTED copy, mirroring create().
+    const formattedRows = rows.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const formatted = this.applyWriteColumnMap(object, this.formatInput(object, row));
+      this.stampInsertTimestamps(object, formatted);
+      return formatted;
+    });
     const builder = this.getBuilder(object, options);
-    return await builder.insert(rows).returning('*');
+    const result = await builder.insert(formattedRows).returning('*');
+    // Read-back parity with create(): JSON columns come back as their stored
+    // strings from `returning('*')` — decode them so batch callers see the
+    // same shapes single-insert callers do.
+    return Array.isArray(result)
+      ? result.map((r) => this.formatOutput(object, r))
+      : result;
   }
 
   /**
@@ -2385,7 +2400,18 @@ export class SqlDriver implements IDataDriver {
     if (tenantId === undefined || tenantId === null || tenantId === '') return builder;
     const field = this.resolveTenantField(object);
     if (!field) return builder;
-    return builder.where(field, String(tenantId));
+    // `(field = :tenantId OR field IS NULL)` — a NULL tenant column marks a
+    // GLOBAL/platform row (bootstrap-seeded positions and permission sets,
+    // business units, pre-org first-boot seeds). Such a row belongs to no
+    // OTHER tenant, so the cross-tenant wall must not hide it: with strict
+    // equality every tenant admin saw ZERO RBAC rows on a fresh deployment,
+    // because every platform row is org-less (#2734). Rows stamped with a
+    // DIFFERENT tenant stay invisible exactly as before; authorization on
+    // global rows remains the job of the layers above (RBAC, RLS,
+    // managed_by gates).
+    return builder.where((b) => {
+      void b.where(field, String(tenantId)).orWhereNull(field);
+    });
   }
 
   /**
