@@ -1495,13 +1495,23 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Name of the dedicated datasource lifecycle-classed system data prefers
+   * when one is registered (ADR-0057 §3.6 / P3). Purely opt-in by the
+   * datasource's existence — no `telemetry` driver registered ⇒ resolution
+   * is exactly what it was before.
+   */
+  static readonly LIFECYCLE_DATASOURCE = 'telemetry';
+
+  /**
    * Helper to get the target driver
    *
    * Resolution priority (first match wins):
    * 1. Object's explicit `datasource` field (if not 'default')
    * 2. DatasourceMapping rules (namespace/package/pattern matching)
-   * 3. Package's `defaultDatasource` from manifest
-   * 4. Global default driver
+   * 3. Lifecycle-class separation (ADR-0057 §3.6): telemetry/event/audit
+   *    objects route to the dedicated 'telemetry' datasource when registered
+   * 4. Package's `defaultDatasource` from manifest
+   * 5. Global default driver
    */
   private getDriver(objectName: string): IDataDriver {
     const object = this._registry.getObject(objectName);
@@ -1524,7 +1534,22 @@ export class ObjectQL implements IDataEngine {
       return this.drivers.get(mappedDatasource)!;
     }
 
-    // 3. Check package's defaultDatasource
+    // 3. Lifecycle-class separation (ADR-0057 §3.6): high-frequency
+    // platform-generated data (telemetry / event) and the audit ledger move
+    // to a dedicated 'telemetry' datasource when one is registered, so their
+    // growth can never again pollute the business DB. `transient` stays on
+    // the primary deliberately: those objects are user-session data, and
+    // some (e.g. better-auth's sys_device_code) are also accessed outside
+    // the engine — splitting their storage would split their brain.
+    const lifecycleClass = (object as { lifecycle?: { class?: string } } | undefined)?.lifecycle?.class;
+    if (
+      (lifecycleClass === 'telemetry' || lifecycleClass === 'event' || lifecycleClass === 'audit') &&
+      this.drivers.has(ObjectQL.LIFECYCLE_DATASOURCE)
+    ) {
+      return this.drivers.get(ObjectQL.LIFECYCLE_DATASOURCE)!;
+    }
+
+    // 4. Check package's defaultDatasource
     // Use the object's FQN name (from getObject) for ownership lookup
     const fqn = object?.name || objectName;
     const owner = this._registry.getObjectOwner(fqn);
@@ -1542,7 +1567,7 @@ export class ObjectQL implements IDataEngine {
       }
     }
 
-    // 4. Fallback to global default driver
+    // 5. Fallback to global default driver
     if (this.defaultDriver && this.drivers.has(this.defaultDriver)) {
       return this.drivers.get(this.defaultDriver)!;
     }

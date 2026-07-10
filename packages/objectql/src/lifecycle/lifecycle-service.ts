@@ -64,6 +64,8 @@ export interface LifecycleEngineLike {
     options: { where: Record<string, unknown>; multi: true; context: LifecycleSweepContext },
   ): Promise<unknown>;
   getDriverForObject(objectName: string): unknown;
+  /** Datasource lookup by name; throws/absent when not registered. */
+  datasource?(name: string): unknown;
 }
 
 export interface LifecycleObjectLike {
@@ -95,12 +97,14 @@ export interface LifecycleServiceOptions {
 export interface LifecycleSweepEntry {
   object: string;
   class: string;
-  policy: 'ttl' | 'retention' | 'rotation' | 'rotation-fallback';
+  policy: 'ttl' | 'retention' | 'rotation' | 'rotation-fallback' | 'archive';
   cutoff: string;
   /** `undefined` when the driver doesn't report a count. */
   deleted?: number;
   /** Rotation only: expired shard tables DROPped this sweep (O(1) reclaim). */
   droppedShards?: number;
+  /** Archive only: rows copied to the cold store (then hot-deleted). */
+  archived?: number;
 }
 
 export interface LifecycleSweepReport {
@@ -127,6 +131,21 @@ interface RotationCapableDriver extends ReclaimCapableDriver {
     nowMs?: number,
   ): Promise<{ object: string; current: string; shards: string[]; dropped: string[] }>;
 }
+
+/** Driver surface the Archiver uses on both the hot and the cold store. */
+interface ArchiveCapableDriver {
+  name?: string;
+  find(object: string, query: Record<string, unknown>, options?: unknown): Promise<Array<Record<string, unknown>>>;
+  upsert(object: string, data: Record<string, unknown>, conflictKeys?: string[], options?: unknown): Promise<unknown>;
+  bulkDelete(object: string, ids: Array<string | number>, options?: unknown): Promise<void>;
+  deleteMany?(object: string, query: Record<string, unknown>, options?: unknown): Promise<number>;
+  syncSchema?(object: string, schema: unknown, options?: unknown): Promise<void>;
+}
+
+/** Max rows the Archiver moves per object per sweep — bounds sweep latency;
+ * the backlog drains across consecutive sweeps. */
+const ARCHIVE_BATCH_SIZE = 500;
+const ARCHIVE_MAX_BATCHES_PER_SWEEP = 20;
 
 export class LifecycleService {
   private readonly now: () => number;
@@ -249,12 +268,12 @@ export class LifecycleService {
   ): Promise<Array<number | undefined>> {
     const object = obj.name;
 
-    // Safety rule: declared `archive` means retain → archive → delete. Until
-    // the Archiver (P3) has copied the cold window out, hot deletion would
-    // destroy the compliance ledger — so it is skipped, never defaulted.
+    // Safety rule: declared `archive` means retain → archive → delete. Hot
+    // deletion happens ONLY for rows the Archiver has copied to the cold
+    // store; when the archive datasource isn't registered, rows are retained
+    // (never dropped unarchived) and the object is reported as skipped.
     if (lc.archive) {
-      report.skipped.push({ object, reason: 'archive-pending' });
-      return [];
+      return this.archiveObject(engine, obj, lc, report);
     }
 
     const outcomes: Array<number | undefined> = [];
@@ -303,6 +322,69 @@ export class LifecycleService {
     }
 
     return outcomes;
+  }
+
+  /**
+   * Archiver (ADR-0057 §3.3 / P3): copy rows past `archive.after` from the
+   * hot store to the archive datasource, then delete the copied rows hot.
+   * Batched (500 × 20 per sweep) so a large backlog drains across sweeps
+   * without one long-locking pass. Copies are per-row idempotent upserts, so
+   * a sweep interrupted between copy and hot-delete re-converges. When
+   * `archive.keep` is set, cold rows past it are pruned from the archive.
+   */
+  private async archiveObject(
+    engine: LifecycleEngineLike,
+    obj: LifecycleObjectLike,
+    lc: Lifecycle,
+    report: LifecycleSweepReport,
+  ): Promise<Array<number | undefined>> {
+    const object = obj.name;
+    const archive = lc.archive!;
+
+    let cold: ArchiveCapableDriver | undefined;
+    try {
+      cold = engine.datasource?.(archive.to) as ArchiveCapableDriver | undefined;
+    } catch {
+      cold = undefined;
+    }
+    const hot = engine.getDriverForObject(object) as ArchiveCapableDriver | undefined;
+    if (!cold || !hot || typeof hot.find !== 'function' || typeof cold.upsert !== 'function') {
+      // No archive target ⇒ retain everything. A compliance ledger cannot be
+      // destroyed by declaring a lifecycle — this is the safe default state
+      // for deployments that never provision cold storage.
+      report.skipped.push({ object, reason: 'archive-pending' });
+      return [];
+    }
+
+    // The cold store mirrors the hot schema (idempotent DDL).
+    if (typeof cold.syncSchema === 'function') {
+      await cold.syncSchema(object, obj);
+    }
+
+    const cutoff = new Date(this.now() - parseLifecycleDuration(archive.after)).toISOString();
+    let archived = 0;
+    for (let batch = 0; batch < ARCHIVE_MAX_BATCHES_PER_SWEEP; batch++) {
+      const rows = await hot.find(object, {
+        where: { created_at: { $lt: cutoff } },
+        limit: ARCHIVE_BATCH_SIZE,
+      });
+      if (!rows.length) break;
+      for (const row of rows) {
+        await cold.upsert(object, row, ['id']);
+      }
+      await hot.bulkDelete(object, rows.map((r) => r.id as string));
+      archived += rows.length;
+      if (rows.length < ARCHIVE_BATCH_SIZE) break;
+    }
+
+    // Cold-side retention: `keep` bounds the archive itself.
+    if (archive.keep && typeof cold.deleteMany === 'function') {
+      const keepCutoff = new Date(this.now() - parseLifecycleDuration(archive.keep)).toISOString();
+      await cold.deleteMany(object, { where: { created_at: { $lt: keepCutoff } } });
+    }
+
+    report.swept.push({ object, class: lc.class, policy: 'archive', cutoff, archived });
+    return [archived];
   }
 
   private async reap(

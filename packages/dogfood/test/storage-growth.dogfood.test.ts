@@ -234,4 +234,31 @@ describe('objectstack verify LIFECYCLE (ADR-0057): declared policies bound growt
     expect(ledger, 'archive-declared audit rows must be retained until archived').toBe(3);
     expect(report.skipped).toContainEqual({ object: 'growth_probe_ledger', reason: 'archive-pending' });
   });
+
+  it('ARCHIVER (P3): once the archive datasource exists, cold rows move there and leave the hot store', async () => {
+    // Provision a real second SQL store under the datasource name the ledger
+    // declares, then re-run the sweep: retain → archive → delete.
+    const { SqlDriver } = await import('@objectstack/driver-sql');
+    const cold = new SqlDriver({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    } as any);
+    Object.defineProperty(cold, 'name', { value: 'archive_missing' });
+    await cold.connect();
+    (engine as unknown as { registerDriver(d: unknown): void }).registerDriver(cold);
+
+    const report = await lifecycle.sweep();
+
+    const entry = report.swept.find((e) => e.object === 'growth_probe_ledger');
+    expect(entry?.policy).toBe('archive');
+    expect((entry as { archived?: number })?.archived).toBe(3);
+
+    // Hot store drained, cold store holds the ledger.
+    const hot = await driver.count('growth_probe_ledger', { object: 'growth_probe_ledger' });
+    expect(hot, 'archived rows must leave the hot store').toBe(0);
+    const coldRows = await cold.count('growth_probe_ledger', { object: 'growth_probe_ledger' });
+    expect(coldRows, 'archived rows must land in the cold store').toBe(3);
+    await cold.disconnect();
+  });
 });

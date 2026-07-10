@@ -16,6 +16,7 @@ function captureEngine(
   opts: {
     deleteImpl?: (object: string, options: any) => any;
     driver?: Record<string, unknown>;
+    datasources?: Record<string, unknown>;
   } = {},
 ) {
   const deletes: Array<{ object: string; where: any; multi: any; context: any }> = [];
@@ -26,6 +27,11 @@ function captureEngine(
       return opts.deleteImpl ? opts.deleteImpl(object, options) : { deletedCount: 3 };
     },
     getDriverForObject: () => opts.driver,
+    datasource(name: string) {
+      const ds = opts.datasources?.[name];
+      if (!ds) throw new Error(`[ObjectQL] Datasource '${name}' not found`);
+      return ds;
+    },
   };
   return { engine, deletes };
 }
@@ -275,6 +281,96 @@ describe('LifecycleService.sweep — Reaper', () => {
     } finally {
       delete process.env.OS_LIFECYCLE_DISABLED;
     }
+  });
+});
+
+describe('LifecycleService.sweep — Archiver (P3)', () => {
+  const AUDIT_OBJ: LifecycleObjectLike = {
+    name: 'sys_audit_log',
+    lifecycle: {
+      class: 'audit',
+      retention: { maxAge: '90d' },
+      archive: { after: '90d', to: 'archive', keep: '7y' },
+    } as any,
+  };
+
+  function coldStore() {
+    const upserts: Array<Record<string, unknown>> = [];
+    const coldDeletes: any[] = [];
+    return {
+      upserts,
+      coldDeletes,
+      driver: {
+        name: 'archive',
+        syncSchema: vi.fn(async () => {}),
+        find: async () => [],
+        upsert: async (_object: string, row: Record<string, unknown>) => {
+          upserts.push(row);
+          return row;
+        },
+        bulkDelete: async () => {},
+        deleteMany: async (_object: string, query: any) => {
+          coldDeletes.push(query);
+          return 0;
+        },
+      },
+    };
+  }
+
+  function hotStore(rows: Array<Record<string, unknown>>) {
+    const bulkDeleted: Array<Array<string | number>> = [];
+    let remaining = [...rows];
+    return {
+      bulkDeleted,
+      remaining: () => remaining,
+      driver: {
+        name: 'default',
+        find: async (_object: string, query: any) => remaining.slice(0, query.limit ?? remaining.length),
+        upsert: async () => ({}),
+        bulkDelete: async (_object: string, ids: Array<string | number>) => {
+          bulkDeleted.push(ids);
+          remaining = remaining.filter((r) => !ids.includes(r.id as string));
+        },
+        deleteMany: async () => 0,
+      },
+    };
+  }
+
+  it('copies past-window rows to the cold store, then hot-deletes exactly the copied ids', async () => {
+    const cold = coldStore();
+    const hot = hotStore([
+      { id: 'a', created_at: '2020-01-01T00:00:00.000Z' },
+      { id: 'b', created_at: '2020-06-01T00:00:00.000Z' },
+    ]);
+    const { engine } = captureEngine([AUDIT_OBJ], {
+      driver: hot.driver,
+      datasources: { archive: cold.driver },
+    });
+
+    const report = await service(engine).sweep();
+
+    expect(cold.driver.syncSchema).toHaveBeenCalledWith('sys_audit_log', AUDIT_OBJ);
+    expect(cold.upserts.map((r) => r.id)).toEqual(['a', 'b']);
+    expect(hot.bulkDeleted).toEqual([['a', 'b']]);
+    expect(hot.remaining()).toEqual([]);
+
+    const entry = report.swept.find((e) => e.policy === 'archive');
+    expect(entry?.archived).toBe(2);
+    expect(entry?.cutoff).toBe(isoCutoff('90d'));
+    // keep: '7y' → the archive itself is pruned past the keep window.
+    expect(cold.coldDeletes).toEqual([{ where: { created_at: { $lt: isoCutoff('7y') } } }]);
+    expect(report.skipped).toEqual([]);
+  });
+
+  it('retains everything and reports archive-pending when the archive datasource is missing', async () => {
+    const hot = hotStore([{ id: 'a', created_at: '2020-01-01T00:00:00.000Z' }]);
+    const { engine, deletes } = captureEngine([AUDIT_OBJ], { driver: hot.driver });
+
+    const report = await service(engine).sweep();
+
+    expect(deletes).toHaveLength(0);
+    expect(hot.bulkDeleted).toEqual([]);
+    expect(report.skipped).toEqual([{ object: 'sys_audit_log', reason: 'archive-pending' }]);
   });
 });
 
