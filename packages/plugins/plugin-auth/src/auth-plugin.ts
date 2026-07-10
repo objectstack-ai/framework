@@ -1167,6 +1167,86 @@ export class AuthPlugin implements Plugin {
     });
 
     // ────────────────────────────────────────────────────────────────────
+    // #2766 V1 — admin direct user management. `sys_user` CRUD is suppressed
+    // (managedBy better-auth), and until now the only add-a-teammate path was
+    // the email-dependent invite flow. These routes let a platform admin
+    // create a login-capable account (better-auth pipeline: scrypt hash +
+    // credential sys_account) and (re)set passwords, with an optional
+    // generated temporary password + a must-change-on-first-login flag.
+    //
+    // Both routes run the same ADR-0068 platform-admin gate as unlock-user
+    // above, then call trusted server-side better-auth surfaces — see
+    // admin-user-endpoints.ts for why the stock role check doesn't fit.
+    //
+    // NOTE: /admin/set-user-password intentionally SHADOWS better-auth's
+    // native route (registered before the catch-all below). The native
+    // handler only accepts the legacy `role === 'admin'` scalar, which
+    // ADR-0068 platform admins may not carry; this wrapper accepts the
+    // canonical platform-admin signals and adds the force-change stamp.
+    {
+      const adminUserDeps = (): import('./admin-user-endpoints.js').AdminUserEndpointDeps => ({
+        getAuthApi: () => this.authManager!.getApi() as any,
+        getAuthContext: () => this.authManager!.getAuthContext(),
+        getDataEngine: () => this.authManager!.getDataEngine(),
+        assertPasswordComplexity: (pw: string) => this.authManager!.checkPasswordComplexity(pw),
+        noteMustChangePasswordIssued: () => this.authManager!.noteMustChangePasswordIssued(),
+        phoneNumberEnabled: () => this.authManager!.isPhoneNumberEnabled(),
+        logger: ctx.logger,
+      });
+      const gateAdmin = async (c: any): Promise<{ id: string; email?: string } | Response> => {
+        const authApi = await this.authManager!.getApi();
+        const session = await (authApi as any).getSession({ headers: c.req.raw.headers });
+        if (!session?.user?.id) {
+          return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
+        }
+        const u: any = session.user;
+        const isAdmin =
+          u?.isPlatformAdmin === true ||
+          (Array.isArray(u?.positions) && u.positions.includes('platform_admin')) ||
+          u?.role === 'admin';
+        if (!isAdmin) {
+          return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);
+        }
+        return { id: String(u.id), email: typeof u.email === 'string' ? u.email : undefined };
+      };
+
+      rawApp.post(`${basePath}/admin/create-user`, async (c: any) => {
+        try {
+          const actor = await gateAdmin(c);
+          if (actor instanceof Response) return actor;
+          const authApi: any = await this.authManager!.getApi();
+          if (typeof authApi.createUser !== 'function') {
+            return c.json(
+              { success: false, error: { code: 'not_supported', message: 'The better-auth admin plugin is not enabled (auth.plugins.admin)' } },
+              501,
+            );
+          }
+          const { runAdminCreateUser } = await import('./admin-user-endpoints.js');
+          const { status, body } = await runAdminCreateUser(adminUserDeps(), c.req.raw, actor);
+          return c.json(body, status as any);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          ctx.logger.error('[AuthPlugin] admin/create-user failed', err);
+          return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+        }
+      });
+
+      rawApp.post(`${basePath}/admin/set-user-password`, async (c: any) => {
+        try {
+          const actor = await gateAdmin(c);
+          if (actor instanceof Response) return actor;
+          const { runAdminSetUserPassword } = await import('./admin-user-endpoints.js');
+          const { status, body } = await runAdminSetUserPassword(adminUserDeps(), c.req.raw, actor);
+          return c.json(body, status as any);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          ctx.logger.error('[AuthPlugin] admin/set-user-password failed', err);
+          return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+        }
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────────────
     // ADR-0069 P3 — register a SAML 2.0 IdP. Mirrors the OIDC bridge above:
     // the metadata `register_saml_provider` action posts FLAT fields; the shared
     // helper reshapes them into better-auth's nested `samlConfig` (deriving the

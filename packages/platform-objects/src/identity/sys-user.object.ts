@@ -115,19 +115,104 @@ export const SysUser = ObjectSchema.create({
       refreshAfter: true,
     },
     {
+      // #2766 V1 — a platform admin can add a login-capable teammate without
+      // the email-dependent invite flow. Hits the plugin-auth wrapper route
+      // (NOT better-auth's stock /admin/create-user): the wrapper runs the
+      // ADR-0068 admin gate, drives the better-auth pipeline (scrypt hash +
+      // credential sys_account), stamps must_change_password, and — when
+      // "Generate temporary password" is picked — returns the password ONCE
+      // in the response for the result dialog. It is never persisted or logged.
+      name: 'create_user',
+      label: 'Create User',
+      icon: 'user-plus',
+      variant: 'secondary',
+      locations: ['list_toolbar'],
+      type: 'api',
+      target: '/api/v1/auth/admin/create-user',
+      visible: 'features.admin == true',
+      successMessage: 'User created',
+      refreshAfter: true,
+      params: [
+        // The endpoint requires email OR phone (phone-only users get a
+        // placeholder address; requires auth.plugins.phoneNumber).
+        { field: 'email', required: false },
+        {
+          name: 'phoneNumber',
+          label: 'Phone Number',
+          type: 'text',
+          required: false,
+          helpText: 'Sign-in phone number (E.164, e.g. +8613800000000). Required when no email is given.',
+        },
+        { field: 'name', required: false },
+        {
+          name: 'generatePassword',
+          label: 'Generate Temporary Password',
+          type: 'boolean',
+          required: false,
+          defaultValue: true,
+        },
+        { name: 'password', label: 'Password (leave empty to generate)', type: 'text', required: false },
+        {
+          name: 'mustChangePassword',
+          label: 'Require Password Change On First Login',
+          type: 'boolean',
+          required: false,
+          defaultValue: true,
+        },
+      ],
+      resultDialog: {
+        title: 'User Created',
+        description:
+          'Copy the temporary password now — it is shown only once and never stored.',
+        acknowledge: 'I have saved this password',
+        fields: [
+          { path: 'user.email', label: 'Email', format: 'text' },
+          { path: 'temporaryPassword', label: 'Temporary Password', format: 'secret' },
+        ],
+      },
+    },
+    {
       name: 'set_user_password',
       label: 'Set Password',
       icon: 'key-round',
       variant: 'secondary',
       locations: ['list_item'],
       type: 'api',
+      // #2766 V1 — same path as better-auth's stock route, but served by the
+      // plugin-auth wrapper registered ahead of the catch-all: it accepts the
+      // ADR-0068 platform-admin signals (the stock handler only honors the
+      // legacy role scalar), can mint a temporary password, and stamps
+      // must_change_password.
       target: '/api/v1/auth/admin/set-user-password',
       recordIdParam: 'userId',
       successMessage: 'Password updated',
       refreshAfter: false,
       params: [
-        { name: 'newPassword', label: 'New Password', type: 'text', required: true },
+        {
+          name: 'generatePassword',
+          label: 'Generate Temporary Password',
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+        },
+        { name: 'newPassword', label: 'New Password (leave empty to generate)', type: 'text', required: false },
+        {
+          name: 'mustChangePassword',
+          label: 'Require Password Change On Next Login',
+          type: 'boolean',
+          required: false,
+          defaultValue: true,
+        },
       ],
+      resultDialog: {
+        title: 'Password Updated',
+        description:
+          'If a temporary password was generated, copy it now — it is shown only once and never stored.',
+        acknowledge: 'Done',
+        fields: [
+          { path: 'temporaryPassword', label: 'Temporary Password', format: 'secret' },
+        ],
+      },
     },
     {
       name: 'set_user_role',
@@ -460,6 +545,46 @@ export const SysUser = ObjectSchema.create({
       description: 'Timestamp of the last password change. Backs password_expiry_days; system-managed.',
     }),
 
+    // #2766 V1.5 — phone-number sign-in identifier (better-auth phoneNumber
+    // plugin, mapped via buildPhoneNumberPluginSchema). Unique when present;
+    // null for email-only accounts. Written through better-auth, not CRUD.
+    phone_number: Field.text({
+      label: 'Phone Number',
+      required: false,
+      readonly: true,
+      searchable: true,
+      maxLength: 32,
+      group: 'Account',
+      description:
+        'Sign-in phone number (E.164 recommended). Unique per user; managed by ' +
+        'better-auth when the phoneNumber plugin is enabled.',
+    }),
+
+    phone_number_verified: Field.boolean({
+      label: 'Phone Verified',
+      defaultValue: false,
+      readonly: true,
+      group: 'Account',
+      description:
+        'Whether the phone number has been verified (OTP verification requires ' +
+        'SMS infrastructure; false until that ships). System-managed.',
+    }),
+
+    // #2766 V1 — admin-issued "must change password on next sign-in" flag.
+    // Set by the /admin/create-user and /admin/set-user-password routes when
+    // a temporary password is issued; enforced through the ADR-0069 authGate
+    // (surfaces as PASSWORD_EXPIRED); cleared by stampPasswordChangedAt once
+    // the user completes a password change.
+    must_change_password: Field.boolean({
+      label: 'Must Change Password',
+      defaultValue: false,
+      readonly: true,
+      group: 'Admin',
+      description:
+        'When true, the user is blocked (403 PASSWORD_EXPIRED) until they change ' +
+        'their password. Stamped by the admin user-management routes; system-managed.',
+    }),
+
     // ADR-0069 D3 — when enforced MFA first applied to this user; starts the
     // grace clock. Stamped lazily at session validation; system-managed.
     mfa_required_at: Field.datetime({
@@ -574,6 +699,9 @@ export const SysUser = ObjectSchema.create({
   indexes: [
     { fields: ['email'], unique: true },
     { fields: ['created_at'], unique: false },
+    // #2766 V1.5 — phone sign-in identifier; unique when present (null for
+    // email-only accounts), also the upsert match key for identity import.
+    { fields: ['phone_number'], unique: true },
   ],
 
   enable: {
