@@ -53,14 +53,22 @@ describe('audience anchors (ADR-0090 D5/D9)', () => {
 });
 
 describe('describeHighPrivilegeBits (anchor-binding predicate)', () => {
-  it('flags VAMA, destructive bits, wildcards and system permissions', () => {
+  it('flags VAMA, destructive bits and system permissions (the ADR-0090 D5 list)', () => {
     expect(describeHighPrivilegeBits({ objects: { a: { viewAllRecords: true } } })).toMatch(/View\/Modify All/);
     expect(describeHighPrivilegeBits({ objects: { a: { modifyAllRecords: true } } })).toMatch(/View\/Modify All/);
     expect(describeHighPrivilegeBits({ objects: { a: { allowDelete: true } } })).toMatch(/delete\/purge\/transfer/);
     expect(describeHighPrivilegeBits({ objects: { a: { allowPurge: true } } })).toMatch(/delete\/purge\/transfer/);
     expect(describeHighPrivilegeBits({ objects: { a: { allowTransfer: true } } })).toMatch(/delete\/purge\/transfer/);
-    expect(describeHighPrivilegeBits({ objects: { '*': { allowRead: true } } })).toMatch(/wildcard/);
     expect(describeHighPrivilegeBits({ systemPermissions: ['manage_users'], objects: {} })).toMatch(/system permissions/);
+  });
+
+  it("a plain '*' wildcard without D5 bits is anchor-safe for everyone (#2753 — member_default's shape)", () => {
+    // D5 lists exactly viewAll/modifyAll, delete/purge/transfer, and system
+    // permissions; the blanket wildcard ban was an over-tightening that made
+    // the platform's own baseline unbindable to the anchor. The wildcard ban
+    // is the GUEST tier's rule (D9), asserted below.
+    expect(describeHighPrivilegeBits({ objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true } } })).toBeNull();
+    expect(describeHighPrivilegeBits({ objects: { '*': { allowRead: true, allowDelete: true } } })).toMatch(/delete\/purge\/transfer/);
   });
 
   it('accepts a low-privilege self-service set (the intended anchor shape)', () => {
@@ -83,6 +91,12 @@ describe('describeAnchorForbiddenBits (ADR-0090 D9 anchor tiers)', () => {
     const editSet = { objects: { helpdesk_ticket: { allowRead: true, allowEdit: true } } };
     expect(describeAnchorForbiddenBits(editSet, 'everyone')).toBeNull(); // everyone: edit OK
     expect(describeAnchorForbiddenBits(editSet, 'guest')).toMatch(/read-only/); // guest: refused
+  });
+
+  it("guest refuses a '*' wildcard that everyone accepts (D9 explicit-objects-only)", () => {
+    const wildcardBaseline = { objects: { '*': { allowRead: true } } };
+    expect(describeAnchorForbiddenBits(wildcardBaseline, 'everyone')).toBeNull();
+    expect(describeAnchorForbiddenBits(wildcardBaseline, 'guest')).toMatch(/wildcard/);
   });
 
   it('guest allows read + case-by-case create (public form intake shape)', () => {
