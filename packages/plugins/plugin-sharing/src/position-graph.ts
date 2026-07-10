@@ -1,5 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { isGrantActive } from '@objectstack/core';
+
 import type { SharingEngine } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
 
@@ -65,13 +67,18 @@ export class PositionGraphService {
     const scopeOrg = organizationId ?? this.organizationId;
     if (scopeOrg) filter.organization_id = scopeOrg;
     try {
+      // valid_from / valid_until ride the projection so the ADR-0091 D2
+      // validity filter below sees them — expired holders stop receiving
+      // position-recipient shares at resolution time, fail-closed.
       const rows = await this.engine.find('sys_user_position', {
         filter,
-        fields: ['user_id'],
+        fields: ['user_id', 'valid_from', 'valid_until'],
         limit: 10000,
         context: SYSTEM_CTX,
       });
+      const nowMs = Date.now();
       for (const r of (rows ?? []) as any[]) {
+        if (!isGrantActive(r, nowMs)) continue;
         const uid = String(r.user_id ?? '');
         if (uid) users.add(uid);
       }

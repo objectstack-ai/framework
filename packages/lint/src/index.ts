@@ -93,6 +93,9 @@ export {
   SECURITY_ROLE_WORD,
   SECURITY_BOOK_AUDIENCE_UNKNOWN_SET,
   SECURITY_PRIVATE_NO_READSCOPE,
+  SECURITY_MASTER_DETAIL_UNGRANTED,
+  SECURITY_GRANT_EXPIRED_AT_AUTHORING,
+  SECURITY_DELEGATION_MISSING_REASON,
 } from './validate-security-posture.js';
 export type { SecurityFinding, SecuritySeverity } from './validate-security-posture.js';
 

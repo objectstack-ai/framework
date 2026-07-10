@@ -81,6 +81,51 @@ export const SysUserPosition = ObjectSchema.create({
       description: 'User who granted this position assignment (stamped by the delegated-admin gate for delegate writes).',
     }),
 
+    valid_from: Field.datetime({
+      label: 'Valid From',
+      required: false,
+      description:
+        '[ADR-0091 D1] Grant is inactive before this instant. Null = active immediately. ' +
+        'Enforced fail-closed at resolution time (D2) — never by a background job.',
+    }),
+
+    valid_until: Field.datetime({
+      label: 'Valid Until',
+      required: false,
+      description:
+        '[ADR-0091 D1] Grant is inactive AT and AFTER this instant (half-open [from, until), UTC). ' +
+        'Null = never expires. Mandatory on delegation rows (D3). Enforced at resolution time (D2).',
+    }),
+
+    reason: Field.text({
+      label: 'Reason',
+      required: false,
+      maxLength: 500,
+      description:
+        '[ADR-0091 D1] Why this grant exists. Free text; REQUIRED on delegation (D3) and break-glass (D4) rows.',
+    }),
+
+    delegated_from: Field.lookup('sys_user', {
+      label: 'Delegated From',
+      required: false,
+      description:
+        '[ADR-0091 D3] The delegator whose authority this row carries (职务代理). ' +
+        'A row with delegated_from set is not itself delegatable and not self-renewable — chains are cut both ways.',
+    }),
+
+    last_certified_at: Field.datetime({
+      label: 'Last Certified At',
+      required: false,
+      description:
+        '[ADR-0091 D5] When this grant was last attested in a recertification review. Null = never certified.',
+    }),
+
+    certified_by: Field.lookup('sys_user', {
+      label: 'Certified By',
+      required: false,
+      description: '[ADR-0091 D5] Reviewer who last attested this grant.',
+    }),
+
     created_at: Field.datetime({
       label: 'Created At',
       defaultValue: 'NOW()',

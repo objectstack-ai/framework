@@ -196,6 +196,10 @@ every edition); *convenience and compliance workflow* are the product.
 
 1. **L1 (spec + filtering)** — columns, zod shapes, resolver filtering + tests
    (incl. explain states), liveness entries, lint rules. Community-complete.
+   **Landed** (grant-validity predicate in `@objectstack/core`; filtering in
+   `resolveAuthzContext` / explain `buildContextForUser` / sharing
+   `expandPositionUsers`; explain `state: 'expired'` contributors; D7 rules
+   `security-grant-expired-at-authoring` + `security-delegation-missing-reason`).
 2. **L2 (delegation + break-glass shape)** — `delegatable` flag, D12 gate
    branches, dual audit, dogfood proof (delegate approves during vacation
    window; access dies at `valid_until`).

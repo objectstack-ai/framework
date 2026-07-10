@@ -88,3 +88,6 @@ export {
   type ResolveLocalizationInput,
 } from './resolve-authz-context.js';
 export { isAuthGateAllowlisted, evaluateAuthGate, type AuthGate } from './auth-gate.js';
+
+// ADR-0091 D1/D2 — grant validity windows, the shared resolution-time predicate.
+export { isGrantActive, isGrantExpired, type GrantValidityWindow } from './grant-validity.js';

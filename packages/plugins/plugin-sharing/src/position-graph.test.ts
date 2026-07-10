@@ -63,6 +63,23 @@ describe('PositionGraphService (ADR-0090 D3 — flat expansion)', () => {
     expect(await g.expandPositionUsers('')).toEqual([]);
   });
 
+  it('filters holders outside their validity window (ADR-0091 D2) — expired holders stop receiving shares', async () => {
+    const past = '2000-01-01T00:00:00Z';
+    const future = '2999-01-01T00:00:00Z';
+    const g = new PositionGraphService({
+      engine: makeEngine(
+        [
+          { position: 'sales_rep', user_id: 'u_active' },
+          { position: 'sales_rep', user_id: 'u_expired', valid_until: past } as any,
+          { position: 'sales_rep', user_id: 'u_pending', valid_from: future } as any,
+          { position: 'sales_rep', user_id: 'u_windowed', valid_from: past, valid_until: future } as any,
+        ],
+        [],
+      ),
+    });
+    expect((await g.expandPositionUsers('sales_rep')).sort()).toEqual(['u_active', 'u_windowed']);
+  });
+
   it('caches per (org, position) within a pass', async () => {
     let calls = 0;
     const engine = {
