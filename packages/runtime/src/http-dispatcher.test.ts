@@ -2202,6 +2202,113 @@ describe('HttpDispatcher — ADR-0066 D4 action requiredPermissions gate', () =>
   });
 });
 
+describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
+  // The action body sandbox must see the SESSION operator (id + business
+  // roles), resolved from the request's ExecutionContext — the same envelope
+  // `dispatch()` populates and that the MCP / record-change paths already read.
+  // Pre-#2701 the fallback chain read `_context.user` / `_context.userId`
+  // (fields HttpProtocolContext never carries) and hard-fell to `system`, so
+  // every action ran blind to who invoked it.
+  const captureCtx = (execCtx: any) => {
+    const executeAction = vi.fn(async () => ({ ok: true }));
+    const schemaOf = (name: string) => ({
+      name,
+      actions: [{ name: 'convert', label: 'Convert', type: 'script', execute: 'true' }],
+    });
+    const ql: any = {
+      executeAction,
+      getSchema: schemaOf,
+      registry: { getObject: schemaOf },
+      find: vi.fn().mockResolvedValue([]),
+      insert: vi.fn(), update: vi.fn(), delete: vi.fn(),
+    };
+    const kernel: any = { context: { getService: (n: string) => (n === 'objectql' ? ql : null) } };
+    const dispatcher = new HttpDispatcher(kernel);
+    const ctx: any = { request: {}, environmentId: 'platform', executionContext: execCtx };
+    return { dispatcher, executeAction, ctx };
+  };
+
+  const actionUser = (executeAction: any) => executeAction.mock.calls[0]?.[2]?.user;
+
+  it('forwards the session user id + business roles to the action body (not `system`)', async () => {
+    const { dispatcher, executeAction, ctx } = captureCtx({
+      userId: 'user_42',
+      positions: ['sales_rep', 'org_member'],
+      permissions: ['convert_lead'],
+      email: 'rep@acme.test',
+      tenantId: 'org_acme',
+    });
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    const user = actionUser(executeAction);
+    expect(user.id).toBe('user_42');
+    expect(user.roles).toEqual(['sales_rep', 'org_member']);
+    expect(user.positions).toEqual(['sales_rep', 'org_member']);
+    expect(user.permissions).toEqual(['convert_lead']);
+    expect(user.email).toBe('rep@acme.test');
+    expect(user.tenantId).toBe('org_acme');
+  });
+
+  it('falls back to a `system` principal only when the request is anonymous', async () => {
+    const { dispatcher, executeAction, ctx } = captureCtx(undefined);
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    const user = actionUser(executeAction);
+    expect(user.id).toBe('system');
+    expect(user.roles).toEqual([]);
+    expect(user.positions).toEqual([]);
+  });
+
+  it('sources identity from executionContext, ignoring a stray `_context.user` (regression guard)', async () => {
+    // HttpProtocolContext carries no `user`/`userId`; a caller must not be able
+    // to spoof identity by stuffing one on. The resolved session is the one source.
+    const { dispatcher, executeAction, ctx } = captureCtx({ userId: 'ec_user', positions: ['viewer'] });
+    (ctx as any).user = { id: 'spoofed' };
+    (ctx as any).userId = 'spoofed_2';
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    expect(actionUser(executeAction).id).toBe('ec_user');
+  });
+
+  it('resolves the session end-to-end: dispatch(/actions/…) threads the authenticated principal into ctx.user', async () => {
+    // Full pipeline: an api-key request → dispatch() → resolveExecutionContext →
+    // handleActions. This is the path registerActionRoutes now takes (it calls
+    // `dispatch('POST', '/actions/…')`) — the identity resolution that was
+    // bypassed pre-#2701, when the action route called handleActions directly.
+    const rows: any[] = [];
+    const executeAction = vi.fn(async () => ({ ok: true }));
+    const schemaOf = (name: string) => ({ name, actions: [{ name: 'convert', label: 'C', type: 'script', execute: 'true' }] });
+    const ql: any = {
+      executeAction,
+      getSchema: schemaOf,
+      registry: { getObject: schemaOf },
+      insert: async (_o: string, data: any) => { const id = `key_${rows.length + 1}`; rows.push({ id, ...data }); return { id }; },
+      find: async (obj: string, opts: any) => {
+        const where = opts?.where ?? {};
+        if (obj !== 'sys_api_key') return [];
+        return rows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+      },
+      update: async () => ({}), delete: async () => ({}),
+    };
+    const kernel: any = {
+      getService: (n: string) => (n === 'objectql' ? ql : undefined),
+      getServiceAsync: async (n: string) => (n === 'objectql' ? ql : undefined),
+      context: { getService: (n: string) => (n === 'objectql' ? ql : undefined) },
+    };
+    const dispatcher = new HttpDispatcher(kernel, undefined, { enforceProjectMembership: false });
+
+    // Mint an api key bound to `user_9`, then invoke an action authenticated by it.
+    const mint = await dispatcher.handleKeys('POST', { name: 'agent' }, {
+      request: { headers: {} }, executionContext: { userId: 'user_9', positions: [], permissions: [] },
+    } as any);
+    const raw = mint.response.body.data.key;
+
+    await dispatcher.dispatch('POST', '/actions/lead/convert', {}, {}, {
+      request: { headers: { 'x-api-key': raw } },
+    } as any);
+
+    const user = executeAction.mock.calls[0]?.[2]?.user;
+    expect(user?.id).toBe('user_9'); // was `system` before the fix — the route bypassed dispatch()
+  });
+});
+
 describe('HttpDispatcher — MCP action bridge (list_actions / run_action)', () => {
   // A `todo_task` object with declarative actions, mirroring examples/app-todo:
   //  - complete_task: script bound to the `completeTask` handler (row-context)

@@ -983,12 +983,17 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // ── Actions (server-registered handlers, e.g. CRM convertLead) ───
             // Bridges UI `script` / `modal` actions to ObjectQL handlers
             // registered via `engine.registerAction(object, action, fn)`.
+            // Dispatched through `dispatcher.dispatch()` (like automation/AI) so
+            // the per-request pipeline resolves the session into `executionContext`
+            // and swaps to the per-project kernel BEFORE the action body sandbox
+            // runs — otherwise the handler's `ctx.user` sees no session and falls
+            // back to `system` (#2701). The scoped-URL `:environmentId` rides on
+            // `req.params` and is picked up by `prepareResolverHints`, exactly as
+            // the automation routes handle it.
             const registerActionRoutes = (base: string) => {
                 server!.post(`${base}/actions/:object/:action`, async (req: any, res: any) => {
                     try {
-                        const ctx: any = { request: req };
-                        if (req.params?.environmentId) ctx.environmentId = req.params.environmentId;
-                        const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}`, 'POST', req.body, ctx);
+                        const result = await dispatcher.dispatch('POST', `/actions/${req.params.object}/${req.params.action}`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -996,9 +1001,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 });
                 server!.post(`${base}/actions/:object/:action/:recordId`, async (req: any, res: any) => {
                     try {
-                        const ctx: any = { request: req };
-                        if (req.params?.environmentId) ctx.environmentId = req.params.environmentId;
-                        const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}/${req.params.recordId}`, 'POST', req.body, ctx);
+                        const result = await dispatcher.dispatch('POST', `/actions/${req.params.object}/${req.params.action}/${req.params.recordId}`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);

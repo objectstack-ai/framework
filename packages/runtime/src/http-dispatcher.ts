@@ -3385,12 +3385,14 @@ export class HttpDispatcher {
             if (def?.environmentId) _context.environmentId = def.environmentId;
         }
 
-        // Replicate the kernel swap that `dispatcher.handle()` does for
-        // data/meta/automation routes. Action routes are registered on the
-        // raw HTTP server and skip the `handle()` chain, so without this
-        // swap `getObjectQLService` would resolve the control-plane kernel
-        // (where the CRM bundle's actions are NOT registered). Routed via the
-        // host's KernelResolver (ADR-0006 Phase 5) — same seam as handle().
+        // Kernel-resolution fallback for the per-project kernel. HTTP action
+        // routes now flow through `dispatcher.dispatch()` (like data/meta/
+        // automation), which already swapped to the project kernel and resolved
+        // `executionContext` before reaching here — so on that path this block
+        // re-resolves idempotently (a no-op in single-kernel mode). Kept for
+        // DIRECT `handleActions` callers (unit tests / internal dispatch) so the
+        // call still lands on the kernel where the bundle's actions are
+        // registered, not the control-plane kernel (ADR-0006 Phase 5).
         let projectQl: any = null;
         if (this.kernelResolver && _context.environmentId && _context.environmentId !== 'platform') {
             try {
@@ -3480,8 +3482,25 @@ export class HttpDispatcher {
             },
         };
 
-        const userIdFromAuth = (_context as any)?.user?.id ?? (_context as any)?.userId ?? 'system';
-        const userFromAuth = (_context as any)?.user ?? { id: userIdFromAuth, name: userIdFromAuth };
+        // Resolve the caller identity from the request's ExecutionContext — the
+        // single source `dispatch()` populates via `resolveExecutionContext`,
+        // the same envelope the MCP `runAction` and record-change trigger paths
+        // read. The action body sandbox receives the operator's id and business
+        // roles (ADR-0090 `positions`, formerly `roles`) so a handler can branch
+        // on identity and enforce ownership. Falls back to a `system` principal
+        // only for a genuinely anonymous / self-invoked call (#2701).
+        const ec: any = _context?.executionContext;
+        const userFromAuth = ec?.userId
+            ? {
+                id: ec.userId,
+                name: ec.userId,
+                email: ec.email,
+                roles: Array.isArray(ec.positions) ? ec.positions : [],
+                positions: Array.isArray(ec.positions) ? ec.positions : [],
+                permissions: Array.isArray(ec.permissions) ? ec.permissions : [],
+                tenantId: ec.tenantId,
+              }
+            : { id: 'system', name: 'system', roles: [], positions: [], permissions: [] };
 
         const actionContext: any = {
             record,
