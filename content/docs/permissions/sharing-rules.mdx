@@ -56,6 +56,13 @@ externalSharingModel: 'private',        // external principals: own + shares onl
 - "External" is a property of the **principal** (`audience: 'external'`),
   never of the object. The BU depth axis does not apply to externals; their
   visibility = own records + explicit shares + the external OWD.
+- **Status: declared, not yet evaluated at runtime.** Today the dial is
+  authoring-validated (the linter above) and surfaced in Studio (the `Ext`
+  badge per object row); the evaluator branch that substitutes it for
+  external principals lands with the principal-taxonomy semantics phase
+  (tracked on #2696, liveness: `planned`). Until then no request is
+  evaluated as external — authoring the dial prepares your model without
+  changing behavior.
 
 ## Criteria-Based Sharing Rules
 

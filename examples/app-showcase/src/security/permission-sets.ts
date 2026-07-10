@@ -44,10 +44,14 @@ export const ContributorPermissionSet = definePermissionSet({
     showcase_invoice_line: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
   },
   // Field-level security — contributors can read but not edit budget figures.
+  // Keys MUST be `<object>.<field>` qualified: the runtime evaluator matches
+  // by object prefix, so a bare `budget` key silently enforces NOTHING (the
+  // showcase shipped exactly that bug — caught by the permission-zoo audit,
+  // now rejected at compile time by `security-fls-unqualified-key`).
   fields: {
-    budget: { readable: true, editable: false },
-    spent: { readable: true, editable: false },
-    budget_remaining: { readable: true, editable: false },
+    'showcase_project.budget': { readable: true, editable: false },
+    'showcase_project.spent': { readable: true, editable: false },
+    'showcase_project.budget_remaining': { readable: true, editable: false },
   },
   // Row-level security — contributors only see tasks assigned to them.
   rowLevelSecurity: [
