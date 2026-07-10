@@ -1259,6 +1259,12 @@ export default class Serve extends Command {
                 // operator override (env wins in buildPluginList()).
                 passwordRejectBreached:
                   String(process.env.OS_AUTH_PASSWORD_REJECT_BREACHED ?? 'false').toLowerCase() === 'true',
+                // #2766/#2780 — phone-number sign-in (phone+password always;
+                // OTP sign-in/reset once the sms capability has a deliverable
+                // provider). Opt-in: without this env the config flag had no
+                // `objectstack serve` switch at all.
+                phoneNumber:
+                  String(process.env.OS_AUTH_PHONE_NUMBER_ENABLED ?? 'false').toLowerCase() === 'true',
               },
               advanced: process.env.OS_COOKIE_DOMAIN
                 ? ({
