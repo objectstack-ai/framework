@@ -5,7 +5,7 @@ description: Complete guide to all ObjectStack packages, services, drivers, plug
 
 # Package Overview
 
-ObjectStack is organized into **70 package manifests** across multiple categories. This guide provides an overview of the framework packages, services, drivers, plugins, and adapters in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
+ObjectStack is organized into **71 package manifests** across multiple categories. This guide provides an overview of the framework packages, services, drivers, plugins, and adapters in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
 
 ### Package categories at a glance
 
@@ -15,7 +15,7 @@ ObjectStack is organized into **70 package manifests** across multiple categorie
 | **Client / DX** | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | **Framework adapters** | 1 | `hono` (other frameworks: build a thin adapter on `HttpDispatcher` — see below) |
 | **Drivers** | 4 | `driver-memory`, `driver-sql`, `driver-sqlite-wasm`, `driver-mongodb` |
-| **Plugins** | 18 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
+| **Plugins** | 19 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-sms`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
 | **Platform services** | 15 | `service-analytics`, `service-automation`, `service-cache`, `service-cluster`, `service-cluster-redis`, `service-datasource`, `service-i18n`, `service-job`, `service-knowledge`, `service-messaging`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-storage` |
 
 
@@ -362,6 +362,13 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Provider adapters, MJML templates, delivery tracking
 - **When to use**: Transactional and workflow-driven email
+
+### @objectstack/plugin-sms
+
+**SMS Plugin** — Outbound SMS delivery (`sms` service).
+
+- **Features**: Provider adapters (Aliyun SMS, Twilio), `sms` settings namespace with live rebind, backs phone-number OTP sign-in/reset and the messaging `sms` channel
+- **When to use**: Phone OTP first-login / self-service reset, SMS notifications
 
 ### @objectstack/plugin-webhooks
 

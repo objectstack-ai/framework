@@ -102,20 +102,22 @@ export const AuthPluginConfigSchema = lazySchema(() => z.object({
   ),
   /**
    * Enable better-auth's `phone-number` plugin so a phone number is a
-   * first-class sign-in identifier (#2766 V1.5). Scope note: only the
-   * phone+password surface is wired — `POST /sign-in/phone-number` — because
-   * the OTP flows (`/phone-number/send-otp`, `/phone-number/verify`,
-   * OTP-based reset) require an SMS delivery infrastructure that is tracked
-   * separately. Employees without an email address are created with a
+   * first-class sign-in identifier (#2766 V1.5). The phone+password surface
+   * (`POST /sign-in/phone-number`) always works; the OTP flows
+   * (`/phone-number/send-otp` + `/verify` for sign-in/verification,
+   * `/phone-number/request-password-reset` + `/reset-password` for
+   * self-service reset) additionally require a configured SMS delivery
+   * service (`@objectstack/plugin-sms`, #2780) and stay loudly NOT_SUPPORTED
+   * without one. Employees without an email address are created with a
    * generated placeholder address (never a real recipient — see
-   * placeholder-email.ts) and sign in with phone + password.
+   * placeholder-email.ts) and sign in with phone + password or phone OTP.
    *
    * The plugin augments `sys_user` with `phone_number` (unique) and
    * `phone_number_verified`, mapped to snake_case by
    * `buildPhoneNumberPluginSchema()`.
    */
   phoneNumber: z.boolean().default(false).describe(
-    'Enable phone-number sign-in (phone + password; OTP flows require separate SMS infrastructure)',
+    'Enable phone-number sign-in (phone + password; OTP sign-in/reset when an SMS service is configured)',
   ),
 }));
 

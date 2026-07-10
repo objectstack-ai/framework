@@ -201,6 +201,12 @@ export const AuthFeaturesConfigSchema = lazySchema(() => z.object({
   ssoEnforced: z.boolean().optional().describe(
     'SSO-only login enforced: the UI hides the local password form + self-registration (a break-glass "use a password" link remains)',
   ),
+  phoneNumber: z.boolean().optional().describe(
+    'Phone-number sign-in enabled (phone + password, #2766 V1.5)',
+  ),
+  phoneNumberOtp: z.boolean().optional().describe(
+    'Phone-number OTP sign-in and self-service password reset available — requires the phoneNumber plugin plus a deliverable SMS service (#2780)',
+  ),
 }));
 
 /**

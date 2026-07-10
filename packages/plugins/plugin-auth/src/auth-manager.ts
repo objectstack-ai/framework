@@ -11,12 +11,13 @@ import type {
   OidcProvidersConfig,
 } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
-import type { IEmailService } from '@objectstack/spec/contracts';
+import type { IEmailService, ISmsService } from '@objectstack/spec/contracts';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit, isMcpServerEnabled } from '@objectstack/types';
 import { mapMembershipRole, BUILTIN_IDENTITY_PLATFORM_ADMIN } from '@objectstack/spec';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
 import { isPlaceholderEmail } from './placeholder-email.js';
+import { OtpSendGuard } from './otp-send-guard.js';
 import {
   AUTH_USER_CONFIG,
   AUTH_SESSION_CONFIG,
@@ -317,6 +318,36 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * service registry on `kernel:ready`.
    */
   emailService?: IEmailService;
+
+  /**
+   * Optional outbound SMS service used by the phoneNumber plugin's OTP
+   * callbacks (`sendOTP`, `sendPasswordResetOTP`) and the import SMS-invite
+   * path (#2780). When omitted, `/phone-number/send-otp` fails loudly with
+   * NOT_SUPPORTED (the pre-SMS behaviour) instead of silently logging.
+   *
+   * Resolved lazily through {@link AuthManager.getSmsService}; safe to set
+   * after construction. AuthPlugin wires this from the kernel service
+   * registry (`sms`, see `@objectstack/plugin-sms`) on `kernel:ready`.
+   */
+  smsService?: ISmsService;
+
+  /**
+   * #2780 — knobs for the phone-number OTP surface. All optional; the
+   * defaults are deliberately conservative because every OTP send costs
+   * real money (SMS pumping abuse — see otp-send-guard.ts).
+   */
+  phoneOtp?: {
+    /** Per-number cooldown between sends, seconds. Default 60. `0` disables. */
+    cooldownSeconds?: number;
+    /** Per-number rolling-hour send cap. Default 5. `0` disables. */
+    maxPerHour?: number;
+    /** Wrong-code attempts before the OTP is invalidated (better-auth `allowedAttempts`). Default 3. */
+    allowedAttempts?: number;
+    /** OTP validity window, seconds (better-auth `expiresIn`). Default 300. */
+    expiresIn?: number;
+    /** OTP length (better-auth `otpLength`). Default 6. */
+    otpLength?: number;
+  };
 
   /**
    * Display name used by built-in auth email templates (`{{appName}}`
@@ -1541,20 +1572,41 @@ export class AuthManager {
 
     if (enabled.phoneNumber) {
       const { phoneNumber } = await import('better-auth/plugins/phone-number');
-      // #2766 V1.5 — phone+password sign-in only (`POST /sign-in/phone-number`).
-      // The OTP surface needs an SMS provider the platform doesn't have yet:
-      // `sendOTP` throws explicitly so /phone-number/send-otp fails loudly
-      // (NOT_SUPPORTED) instead of silently logging, and signUpOnVerification
-      // is deliberately NOT configured — phone-only accounts are created by
-      // the admin create-user/import routes with a placeholder email
+      // #2766 V1.5 wired phone+password sign-in; #2780 opens the OTP surface
+      // (`/phone-number/send-otp` + `/verify`, `/request-password-reset` +
+      // `/reset-password`) whenever an SMS service is available — resolved
+      // lazily per send so the plugin list stays stable while the capability
+      // upgrades at kernel:ready. Without one, sendOTP still fails loudly
+      // (NOT_SUPPORTED) instead of silently logging. signUpOnVerification
+      // stays deliberately NOT configured — phone-only accounts are created
+      // by the admin create-user/import routes with a placeholder email
       // (see placeholder-email.ts), never by OTP self-signup.
+      const otpCfg = this.config.phoneOtp ?? {};
       plugins.push(phoneNumber({
         schema: buildPhoneNumberPluginSchema(),
-        sendOTP: () => {
-          throw new Error(
-            'NOT_SUPPORTED: phone-number OTP requires an SMS delivery service, which is not configured. ' +
-            'Phone sign-in is password-based (POST /sign-in/phone-number).',
-          );
+        // Wrong-code attempts before the stored OTP is invalidated. Explicit
+        // (even though 3 is the better-auth default) — #2780 names it a
+        // security requirement, so it must not drift with a dependency bump.
+        allowedAttempts: otpCfg.allowedAttempts ?? 3,
+        ...(otpCfg.expiresIn != null ? { expiresIn: otpCfg.expiresIn } : {}),
+        ...(otpCfg.otpLength != null ? { otpLength: otpCfg.otpLength } : {}),
+        // Reject garbage before an SMS is paid for (same shape rule as the
+        // admin endpoints' normalizePhoneNumber).
+        phoneNumberValidator: (phone: string) =>
+          /^\+?[0-9]{6,15}$/.test(String(phone ?? '').replace(/[\s\-().]/g, '')),
+        // Sign-in / verify OTP. Throws surface to the endpoint (better-auth
+        // awaits this callback on /phone-number/send-otp), so the guard's
+        // TOO_MANY_REQUESTS becomes an honest 429 to the client.
+        sendOTP: async ({ phoneNumber: phone, code }) => {
+          await this.deliverPhoneOtp(phone, code, 'sign-in verification');
+        },
+        // Self-service password reset OTP (`/phone-number/request-password-
+        // reset`). better-auth invokes this via runInBackgroundOrAwait —
+        // errors are logged, the route still answers {status:true} — so a
+        // throw here can neither 500 the request nor leak whether the number
+        // is registered.
+        sendPasswordResetOTP: async ({ phoneNumber: phone, code }) => {
+          await this.deliverPhoneOtp(phone, code, 'password reset');
         },
       }));
     }
@@ -2001,6 +2053,109 @@ export class AuthManager {
   }
 
   /**
+   * Inject (or replace) the outbound SMS service used by the phone-number
+   * OTP callbacks and the SMS invite path (#2780). Mirrors
+   * {@link setEmailService}: resolved lazily per send, so it is safe to set
+   * after construction — AuthPlugin wires it on `kernel:ready` once
+   * `ctx.getService('sms')` (plugin-sms) resolves.
+   */
+  setSmsService(sms: ISmsService | undefined): void {
+    this.config.smsService = sms;
+  }
+
+  /** @internal Used by callback closures. */
+  private getSmsService(): ISmsService | undefined {
+    return this.config.smsService;
+  }
+
+  /** Lazy per-number OTP send guard (#2780) — see otp-send-guard.ts. */
+  private _otpSendGuard?: OtpSendGuard;
+  private getOtpSendGuard(): OtpSendGuard {
+    if (!this._otpSendGuard) {
+      const otpCfg = this.config.phoneOtp ?? {};
+      this._otpSendGuard = new OtpSendGuard({
+        ...(otpCfg.cooldownSeconds != null ? { cooldownSeconds: otpCfg.cooldownSeconds } : {}),
+        ...(otpCfg.maxPerHour != null ? { maxPerHour: otpCfg.maxPerHour } : {}),
+        // Share better-auth's cross-node KV when wired (ADR-0069 D2) so the
+        // per-number budget is enforced against ONE store across nodes.
+        ...(this.config.secondaryStorage ? { storage: this.config.secondaryStorage } : {}),
+      });
+    }
+    return this._otpSendGuard;
+  }
+
+  /**
+   * #2780 — deliver a phone OTP through the SMS service.
+   *
+   * Security posture (all named requirements of #2780):
+   *  - No SMS service ⇒ throw NOT_SUPPORTED (loud, like the pre-SMS wiring).
+   *  - Per-number cooldown + hourly cap BEFORE the provider is called
+   *    (SMS-pumping cost abuse); violations throw TOO_MANY_REQUESTS, which
+   *    /phone-number/send-otp surfaces as an honest 429 while the
+   *    request-password-reset route logs-and-200s (no enumeration oracle).
+   *  - The code is embedded in the message body ONLY — it must never reach
+   *    a log line or an error message (the SmsService logs masked numbers
+   *    and statuses, never bodies).
+   */
+  private async deliverPhoneOtp(phone: string, code: string, purpose: string): Promise<void> {
+    const sms = this.getSmsService();
+    if (!sms || !this.isPhoneOtpDeliverable()) {
+      // Absent service, or a log-only transport in production (the code
+      // would vanish into a log no user can read) — fail loudly, exactly
+      // like the pre-SMS wiring.
+      throw new Error(
+        'NOT_SUPPORTED: phone-number OTP requires a configured SMS delivery service. ' +
+        'Phone sign-in is password-based (POST /sign-in/phone-number).',
+      );
+    }
+    const decision = await this.getOtpSendGuard().checkAndRecord(phone);
+    if (!decision.ok) {
+      const { APIError } = await import('better-auth/api');
+      throw new APIError('TOO_MANY_REQUESTS', {
+        message: `Too many verification codes requested for this phone number. Retry in ${decision.retryAfterSeconds ?? 60}s.`,
+      });
+    }
+    const otpCfg = this.config.phoneOtp ?? {};
+    const minutes = Math.max(1, Math.round((otpCfg.expiresIn ?? 300) / 60));
+    const result = await sms.send({
+      to: phone,
+      body: `${code} is your ${this.getAppName()} ${purpose} code. It expires in ${minutes} minutes.`,
+      // Template-only providers (Aliyun) substitute into a registered OTP
+      // template; `code` is the conventional variable name.
+      templateParams: { code },
+    });
+    if (result.status === 'failed') {
+      // `result.error` is transport detail (never the code) — safe to surface.
+      throw new Error(`Phone OTP could not be sent: ${result.error ?? 'SMS delivery failed'}`);
+    }
+  }
+
+  /**
+   * #2780 — send the SMS variant of an import invitation: the account
+   * exists (placeholder email, phone identity) and the user should sign in
+   * with a verification code, then set a password. Carries NO credential —
+   * the OTP is requested by the user themself at the sign-in page.
+   *
+   * Throws when no SMS service is wired (callers gate on
+   * {@link isSmsServiceAvailable} first).
+   */
+  async sendPhoneInviteSms(phone: string): Promise<void> {
+    const sms = this.getSmsService();
+    if (!sms) {
+      throw new Error('SMS_SERVICE_REQUIRED: no SMS service is configured for this deployment.');
+    }
+    const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+    const body =
+      `Your ${this.getAppName()} account is ready. Sign in with this phone number using a verification code` +
+      (baseUrl ? ` at ${baseUrl}` : '') +
+      ', then set your password.';
+    const result = await sms.send({ to: phone, body, templateParams: { content: body } });
+    if (result.status === 'failed') {
+      throw new Error(`Invitation SMS failed: ${result.error ?? 'SMS delivery failed'}`);
+    }
+  }
+
+  /**
    * Override the brand name surfaced in built-in auth emails (`{{appName}}`),
    * sourced from the live `branding.workspace_name` setting.
    *
@@ -2383,6 +2538,10 @@ export class AuthManager {
       admin: pluginConfig.admin ?? (readBooleanEnv('OS_SCIM_ENABLED') ?? (pluginConfig as any).scim ?? false),
       // #2766 V1.5 — mirrors `enabled.phoneNumber` in buildPluginList().
       phoneNumber: (pluginConfig as any).phoneNumber ?? false,
+      // #2780 — OTP sign-in / self-service reset is only advertised when the
+      // SMS path can actually deliver (plugin on + deliverable SMS service),
+      // so the login UI never shows a dead "sign in with code" option.
+      phoneNumberOtp: ((pluginConfig as any).phoneNumber ?? false) && this.isPhoneOtpDeliverable(),
       ...(termsUrl ? { termsUrl } : {}),
       ...(privacyUrl ? { privacyUrl } : {}),
     };
@@ -2832,6 +2991,29 @@ export class AuthManager {
    */
   public isEmailServiceAvailable(): boolean {
     return !!this.getEmailService();
+  }
+
+  /**
+   * #2780 — is an SMS service wired? Gate for the import SMS-invite variant
+   * (mirrors {@link isEmailServiceAvailable} for the invite policy).
+   */
+  public isSmsServiceAvailable(): boolean {
+    return !!this.getSmsService();
+  }
+
+  /**
+   * #2780 — can a phone OTP actually reach a handset? True when an SMS
+   * service is wired AND it is either backed by a real provider or we are
+   * outside production (the dev LogSmsTransport prints the message, so local
+   * OTP flows stay testable end-to-end). In production an unconfigured
+   * log-only service keeps OTP OFF — advertising it would strand every user
+   * at a code that never arrives.
+   */
+  public isPhoneOtpDeliverable(): boolean {
+    const sms = this.getSmsService();
+    if (!sms) return false;
+    if (typeof sms.isConfigured !== 'function' || sms.isConfigured()) return true;
+    return (globalThis as any)?.process?.env?.NODE_ENV !== 'production';
   }
 
   /**

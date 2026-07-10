@@ -3,6 +3,7 @@
 /** Reference manifests bundled with service-settings. */
 export { authSettingsManifest } from './auth.manifest.js';
 export { mailSettingsManifest, mailTestActionHandler } from './mail.manifest.js';
+export { smsSettingsManifest, smsTestActionHandler } from './sms.manifest.js';
 export { brandingSettingsManifest } from './branding.manifest.js';
 export { featureFlagsSettingsManifest } from './feature-flags.manifest.js';
 export { storageSettingsManifest, storageTestActionHandler } from './storage.manifest.js';
@@ -17,6 +18,7 @@ export { companySettingsManifest } from './company.manifest.js';
 
 import { authSettingsManifest } from './auth.manifest.js';
 import { mailSettingsManifest } from './mail.manifest.js';
+import { smsSettingsManifest } from './sms.manifest.js';
 import { brandingSettingsManifest } from './branding.manifest.js';
 import { featureFlagsSettingsManifest } from './feature-flags.manifest.js';
 import { storageSettingsManifest } from './storage.manifest.js';
@@ -32,6 +34,7 @@ export const builtinSettingsManifests = [
   localizationSettingsManifest,
   authSettingsManifest,
   mailSettingsManifest,
+  smsSettingsManifest,
   storageSettingsManifest,
   aiSettingsManifest,
   knowledgeSettingsManifest,

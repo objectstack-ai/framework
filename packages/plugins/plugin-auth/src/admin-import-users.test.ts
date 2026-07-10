@@ -18,7 +18,9 @@ function makeDeps(opts: {
   existingUsers?: Array<Record<string, any>>;
   phoneEnabled?: boolean;
   emailAvailable?: boolean;
+  smsInviteAvailable?: boolean;
   resetFails?: boolean;
+  smsFails?: boolean;
 } = {}) {
   const existing = opts.existingUsers ?? [];
   let nextId = 1;
@@ -37,15 +39,20 @@ function makeDeps(opts: {
   const insert = vi.fn(async () => ({}));
   const warn = vi.fn();
   const noteMustChangePasswordIssued = vi.fn();
+  const sendInviteSms = vi.fn(async () => {
+    if (opts.smsFails) throw new Error('sms provider down');
+  });
   const deps: IdentityImportDeps = {
     getAuthApi: async () => ({ createUser, requestPasswordReset }),
     getDataEngine: () => ({ find, update, insert }),
     phoneNumberEnabled: () => opts.phoneEnabled ?? false,
     emailServiceAvailable: () => opts.emailAvailable ?? true,
+    smsInviteAvailable: () => opts.smsInviteAvailable ?? false,
+    sendInviteSms,
     noteMustChangePasswordIssued,
     logger: { warn },
   };
-  return { deps, createUser, requestPasswordReset, find, update, insert, warn, noteMustChangePasswordIssued };
+  return { deps, createUser, requestPasswordReset, sendInviteSms, find, update, insert, warn, noteMustChangePasswordIssued };
 }
 
 /** Red line: no generated password may reach any persistence/log surface. */
@@ -254,6 +261,82 @@ describe('runAdminImportUsers — invite policy', () => {
     expect(row.action).toBe('created');
     expect(row.code).toBe('INVITE_EMAIL_FAILED');
     expect((res.body.data as any).summary.created).toBe(1);
+  });
+
+  // #2780 — SMS invite variant for phone-only rows.
+  it('sends an SMS invite (not a reset email) to phone-only rows when SMS is available', async () => {
+    const m = makeDeps({ phoneEnabled: true, smsInviteAvailable: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'invite', format: 'json',
+        rows: [
+          { email: 'a@x.co', name: 'Mail' },
+          { phone_number: '+86 138 0000 0002', name: 'PhoneOnly' },
+        ],
+      }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    // Email row → reset email; phone-only row → invitation SMS to the
+    // NORMALIZED number, never a reset email to the placeholder address.
+    expect(m.requestPasswordReset).toHaveBeenCalledTimes(1);
+    expect(m.requestPasswordReset.mock.calls[0][0].body.email).toBe('a@x.co');
+    expect(m.sendInviteSms).toHaveBeenCalledTimes(1);
+    expect(m.sendInviteSms.mock.calls[0][0]).toBe('+8613800000002');
+    // The phone-only account got a placeholder email that never leaks the phone.
+    const phoneCreate = m.createUser.mock.calls.find((c) => c[0].body?.data?.phoneNumber);
+    expect(phoneCreate![0].body.email).toMatch(/@placeholder\.invalid$/);
+    // No temp passwords under invite.
+    expect(data.rows.every((r: any) => r.temporaryPassword === undefined)).toBe(true);
+  });
+
+  it('keeps the row created (with INVITE_SMS_FAILED) when the SMS fails — no rollback', async () => {
+    const m = makeDeps({ phoneEnabled: true, smsInviteAvailable: true, smsFails: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'invite', format: 'json', rows: [{ phone_number: '+8613800000003' }] }),
+      ACTOR,
+    );
+    const row = (res.body.data as any).rows[0];
+    expect(row.ok).toBe(true);
+    expect(row.action).toBe('created');
+    expect(row.code).toBe('INVITE_SMS_FAILED');
+    expect((res.body.data as any).summary.created).toBe(1);
+  });
+
+  it('with SMS but no email service: phone-only rows invite, email rows fail per-row', async () => {
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: false, smsInviteAvailable: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'invite', format: 'json',
+        rows: [
+          { email: 'a@x.co' },
+          { phone_number: '+8613800000004' },
+        ],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200); // not rejected outright — one channel works
+    const rows = (res.body.data as any).rows;
+    expect(rows[0].code).toBe('EMAIL_SERVICE_REQUIRED');
+    expect(rows[1].action).toBe('created');
+    expect(m.sendInviteSms).toHaveBeenCalledTimes(1);
+    expect(m.requestPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('still rejects invite outright when NEITHER email nor SMS is wired', async () => {
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: false, smsInviteAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'invite', format: 'json', rows: [{ phone_number: '+8613800000005' }] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe('EMAIL_SERVICE_REQUIRED');
+    expect(m.createUser).not.toHaveBeenCalled();
   });
 });
 

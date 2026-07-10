@@ -57,6 +57,8 @@ export { createInboxChannel, INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channe
 export type { InboxChannelOptions } from './inbox-channel.js';
 export { createEmailChannel, USER_OBJECT as EMAIL_USER_OBJECT } from './email-channel.js';
 export type { EmailChannelOptions, EmailSenderSurface } from './email-channel.js';
+export { createSmsChannel } from './sms-channel.js';
+export type { SmsChannelOptions, SmsSenderSurface } from './sms-channel.js';
 
 // Templates + renderer (ADR-0030 P3)
 export {

@@ -1,0 +1,35 @@
+{
+  "name": "@objectstack/plugin-sms",
+  "version": "14.2.0",
+  "license": "Apache-2.0",
+  "description": "SMS service plugin for ObjectStack — ISmsService + transport-pluggable outbound delivery (Aliyun / Twilio / log).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "keywords": [
+    "objectstack",
+    "plugin",
+    "sms",
+    "aliyun",
+    "twilio"
+  ]
+}

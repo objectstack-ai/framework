@@ -14,10 +14,14 @@
  * `ImportProtocolLike` whose `createData` drives `auth.api.createUser`.
  *
  * Password policies:
- *  - `invite`     — every row needs a REAL email. Accounts are created with a
- *                   random throwaway password the user never sees, then a
- *                   reset-password email ("set your password") is requested
- *                   for each created account. Requires a wired EmailService.
+ *  - `invite`     — every row needs a reachable identity. Accounts are created
+ *                   with a random throwaway password the user never sees, then
+ *                   a "set your password" invitation goes out per created
+ *                   account: a reset-password email for rows with a REAL
+ *                   email (requires a wired EmailService), or — #2780 — an
+ *                   invitation SMS for phone-only rows (requires a wired,
+ *                   deliverable SmsService + the phoneNumber plugin; the user
+ *                   first signs in via phone OTP and then sets a password).
  *  - `temporary`  — each created account gets a generated temporary password,
  *                   `must_change_password` is stamped (403 PASSWORD_EXPIRED
  *                   until changed), and the passwords are returned ONCE in the
@@ -63,6 +67,14 @@ export interface IdentityImportDeps {
   getMetaItem?(ref: { type: string; name: string }): Promise<any>;
   phoneNumberEnabled(): boolean;
   emailServiceAvailable(): boolean;
+  /**
+   * #2780 — can phone-only rows take the SMS-invite path? True when the
+   * phoneNumber plugin is on AND a deliverable SMS service is wired (the
+   * user must be able to complete phone-OTP first sign-in).
+   */
+  smsInviteAvailable(): boolean;
+  /** #2780 — deliver the invitation SMS (no credential in the message). */
+  sendInviteSms(phone: string): Promise<void>;
   noteMustChangePasswordIssued(): void;
   logger?: { warn(msg: string): void };
 }
@@ -82,7 +94,12 @@ interface RowIdentity {
  */
 function resolveRowIdentity(
   row: Record<string, any>,
-  opts: { policy: 'invite' | 'temporary'; phoneEnabled: boolean },
+  opts: {
+    policy: 'invite' | 'temporary';
+    phoneEnabled: boolean;
+    emailInviteOk: boolean;
+    smsInviteOk: boolean;
+  },
 ): RowIdentity {
   const rawEmail = typeof row.email === 'string' ? row.email.trim() : '';
   const hasEmail = rawEmail.length > 0;
@@ -109,13 +126,26 @@ function resolveRowIdentity(
   if (!hasEmail && !phone) {
     return { invalid: { code: 'NO_IDENTITY', error: 'Row needs an email or a phone_number' } };
   }
-  if (opts.policy === 'invite' && !hasEmail) {
-    return {
-      invalid: {
-        code: 'INVITE_REQUIRES_EMAIL',
-        error: 'The invite policy needs a real email for this row — use the temporary policy for phone-only users',
-      },
-    };
+  if (opts.policy === 'invite') {
+    // Every invite row must be REACHABLE through a wired channel: email rows
+    // need the email service, phone-only rows the SMS-invite path (#2780).
+    // Validated per row so a mixed file fails only the rows it must.
+    if (hasEmail && !opts.emailInviteOk) {
+      return {
+        invalid: {
+          code: 'EMAIL_SERVICE_REQUIRED',
+          error: 'This row\'s invitation needs a configured email service — wire an EmailService or use the temporary policy',
+        },
+      };
+    }
+    if (!hasEmail && !opts.smsInviteOk) {
+      return {
+        invalid: {
+          code: 'INVITE_REQUIRES_EMAIL',
+          error: 'The invite policy needs a real email for this row — configure SMS delivery (phone OTP) for SMS invitations, or use the temporary policy',
+        },
+      };
+    }
   }
   return { email: hasEmail ? rawEmail.toLowerCase() : undefined, phone };
 }
@@ -143,10 +173,13 @@ export async function runAdminImportUsers(
   if (matchBy === 'phone' && !deps.phoneNumberEnabled()) {
     return fail(400, 'PHONE_NOT_ENABLED', 'matchBy "phone" requires the phoneNumber auth plugin (auth.plugins.phoneNumber)');
   }
-  if (policy === 'invite' && !deps.emailServiceAvailable()) {
-    // Reject up front — otherwise N accounts get created whose invitation
-    // emails all fail (and outside dev we refuse to log the reset links).
-    return fail(400, 'EMAIL_SERVICE_REQUIRED', 'The invite policy requires a configured email service. Use the temporary policy or wire an EmailService.');
+  const emailInviteOk = deps.emailServiceAvailable();
+  const smsInviteOk = deps.smsInviteAvailable();
+  if (policy === 'invite' && !emailInviteOk && !smsInviteOk) {
+    // Reject up front — otherwise N accounts get created whose invitations
+    // all fail (and outside dev we refuse to log the reset links). With at
+    // least one channel wired, per-row validation covers the rest.
+    return fail(400, 'EMAIL_SERVICE_REQUIRED', 'The invite policy requires a configured email service (or SMS delivery for phone-only rows). Use the temporary policy or wire an EmailService / SmsService.');
   }
   if (body?.async === true) {
     // Async jobs are a persistence surface — they can't carry temporary
@@ -185,7 +218,7 @@ export async function runAdminImportUsers(
   const validIndex: number[] = [];
   for (let i = 0; i < prepared.rows.length; i++) {
     const row = { ...prepared.rows[i] };
-    const identity = resolveRowIdentity(row, { policy, phoneEnabled });
+    const identity = resolveRowIdentity(row, { policy, phoneEnabled, emailInviteOk, smsInviteOk });
     if (identity.invalid) {
       results[i] = { row: i + 1, ok: false, action: 'failed', code: identity.invalid.code, error: identity.invalid.error };
       continue;
@@ -200,7 +233,7 @@ export async function runAdminImportUsers(
 
   // ── Identity write protocol (the part generic import must NOT do) ────
   const temporaryPasswords = new Map<string, string>(); // record id → temp password
-  const createdEmails = new Map<string, { email: string; placeholder: boolean }>();
+  const createdEmails = new Map<string, { email: string; placeholder: boolean; phone?: string }>();
   const authApi = await deps.getAuthApi();
   if (typeof authApi.createUser !== 'function') {
     return fail(501, 'not_supported', 'The better-auth admin plugin is not enabled (auth.plugins.admin)');
@@ -255,7 +288,7 @@ export async function runAdminImportUsers(
           deps.logger?.warn(`[AuthPlugin] import-users: failed to stamp must_change_password for ${id}: ${(e as Error)?.message ?? e}`);
         }
       } else {
-        createdEmails.set(id, { email, placeholder });
+        createdEmails.set(id, { email, placeholder, ...(phone ? { phone } : {}) });
       }
       return { id };
     },
@@ -301,12 +334,29 @@ export async function runAdminImportUsers(
 
   // ── Post-write phases (skipped on dryRun) ─────────────────────────────
   if (!prepared.dryRun) {
-    // invite: request a set-your-password email per created account.
+    // invite: send a set-your-password invitation per created account —
+    // a reset-password email for real-email rows, an invitation SMS for
+    // phone-only (placeholder-email) rows (#2780). The SMS carries no
+    // credential: the user requests their own OTP at first sign-in, which
+    // keeps the placeholder-email interception logic fully aligned (the
+    // placeholder address itself is never a delivery target on any channel).
     if (policy === 'invite') {
       for (const r of results) {
         if (!r || r.action !== 'created' || !r.id) continue;
         const target = createdEmails.get(r.id);
-        if (!target || target.placeholder) continue;
+        if (!target) continue;
+        if (target.placeholder) {
+          if (!target.phone) continue; // defensive — placeholder rows were validated to carry a phone
+          try {
+            await deps.sendInviteSms(target.phone);
+          } catch (e) {
+            // The account exists; only the SMS failed. Not a rollback —
+            // remediation is re-sending or an admin set-user-password.
+            r.code = 'INVITE_SMS_FAILED';
+            r.error = `User created, but the invitation SMS failed: ${((e as Error)?.message ?? String(e)).slice(0, 200)}`;
+          }
+          continue;
+        }
         try {
           await authApi.requestPasswordReset({ body: { email: target.email } });
         } catch (e) {

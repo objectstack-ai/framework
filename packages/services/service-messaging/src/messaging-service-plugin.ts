@@ -11,6 +11,7 @@ import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
 import { HttpDispatcher } from './http-dispatcher.js';
 import { NotificationRetention, DEFAULT_NOTIFICATION_RETENTION_DAYS } from './retention.js';
 import { createEmailChannel } from './email-channel.js';
+import { createSmsChannel } from './sms-channel.js';
 import { NotificationTemplateStore } from './template-renderer.js';
 import {
     InboxMessage,
@@ -209,6 +210,24 @@ export class MessagingServicePlugin implements Plugin {
                 if (getEmail()) {
                     service.registerChannel(createEmailChannel({ getEmail, getData, store: templateStore }));
                     ctx.logger.info('[messaging] email channel registered (renders sys_notification_template)');
+                }
+            });
+
+            // SMS channel (#2780): same pattern as email — register when an
+            // `sms` service (plugin-sms) is present at kernel:ready; absent
+            // sms ⇒ no channel, so a notify(channels:['sms']) reports "not
+            // registered" rather than silently no-opping.
+            const getSms = () => {
+                try {
+                    return ctx.getService<import('./sms-channel.js').SmsSenderSurface>('sms');
+                } catch {
+                    return undefined;
+                }
+            };
+            ctx.hook('kernel:ready', async () => {
+                if (getSms()) {
+                    service.registerChannel(createSmsChannel({ getSms, getData, store: templateStore }));
+                    ctx.logger.info('[messaging] sms channel registered (renders sys_notification_template)');
                 }
             });
         }

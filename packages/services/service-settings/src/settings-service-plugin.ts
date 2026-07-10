@@ -18,6 +18,7 @@ import {
 import {
   builtinSettingsManifests,
   mailTestActionHandler,
+  smsTestActionHandler,
   storageTestActionHandler,
   aiTestActionHandler,
 } from './manifests/index.js';
@@ -82,6 +83,7 @@ export class SettingsServicePlugin implements Plugin {
       manifests: opts.manifests ?? builtinSettingsManifests,
       actionHandlers: opts.actionHandlers ?? {
         mail: { test: mailTestActionHandler },
+        sms: { test: smsTestActionHandler },
         storage: { test: storageTestActionHandler },
         ai: { test: aiTestActionHandler },
       },

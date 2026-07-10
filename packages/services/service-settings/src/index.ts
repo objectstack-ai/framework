@@ -65,6 +65,8 @@ export {
   featureFlagsSettingsManifest,
   mailSettingsManifest,
   mailTestActionHandler,
+  smsSettingsManifest,
+  smsTestActionHandler,
   storageSettingsManifest,
   storageTestActionHandler,
 } from './manifests/index.js';

@@ -62,6 +62,7 @@
     "@objectstack/plugin-reports": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/plugin-sharing": "workspace:*",
+    "@objectstack/plugin-sms": "workspace:*",
     "@objectstack/plugin-webhooks": "workspace:*",
     "@objectstack/rest": "workspace:*",
     "@objectstack/runtime": "workspace:^",

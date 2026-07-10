@@ -185,7 +185,7 @@ export default class Serve extends Command {
    * mirror this list on their per-project kernels.
    */
   static readonly ALWAYS_ON_CAPABILITIES: readonly string[] = Object.freeze([
-    'queue', 'job', 'cache', 'settings', 'email', 'storage', 'sharing', 'messaging',
+    'queue', 'job', 'cache', 'settings', 'email', 'sms', 'storage', 'sharing', 'messaging',
     // `analytics` is foundational post-ADR-0021: the AnalyticsService backs the
     // dataset/cube query endpoints (`/api/v1/analytics/*`). It must exist even
     // when an app declares no `analyticsCubes`, because a `dataset` can be
@@ -1659,6 +1659,15 @@ export default class Serve extends Command {
           export: 'EmailServicePlugin',
           nameMatch: ['plugin-email', 'EmailServicePlugin'],
         },
+        sms: {
+          // #2780 — backs phone-number OTP sign-in/reset (plugin-auth) and
+          // the messaging `sms` channel. Provider config lives in the `sms`
+          // settings namespace (OS_SMS_* env keys win at the resolver);
+          // unconfigured ⇒ dev LogSmsTransport (no real send).
+          pkg: '@objectstack/plugin-sms',
+          export: 'SmsServicePlugin',
+          nameMatch: ['plugin-sms', 'SmsServicePlugin'],
+        },
         sharing: {
           pkg: '@objectstack/plugin-sharing',
           export: 'SharingServicePlugin',
@@ -1758,6 +1767,19 @@ export default class Serve extends Command {
               ));
               arg.provider = 'log';
             }
+          } else if (cap === 'sms') {
+            // Compose SmsServicePlugin options from config.sms + OS_SMS_* env
+            // (#2780). Same precedence as email: env beats config. Provider
+            // credentials normally live in the `sms` settings namespace
+            // (bound at kernel:ready); constructor opts cover pre-settings
+            // boot and hosts without the settings service.
+            const cfgSms = (config as any).sms ?? {};
+            const provider = (process.env.OS_SMS_PROVIDER || cfgSms.provider || 'log').toLowerCase();
+            arg = {
+              provider,
+              ...(cfgSms.providerOptions ? { providerOptions: cfgSms.providerOptions } : {}),
+              ...(cfgSms.retries != null ? { retries: cfgSms.retries } : {}),
+            };
           } else if (cap === 'storage') {
             // Storage is now in the default capability slate. If the host
             // hasn't configured a backend explicitly we fall back to the

@@ -334,6 +334,26 @@ export class AuthPlugin implements Plugin {
             }
           }
 
+          // #2780 — inject the SMS service so the phoneNumber plugin's OTP
+          // callbacks (send-otp / password-reset OTP) and the import
+          // SMS-invite path can deliver. Same lazy-resolution contract as
+          // the email service: absent ⇒ OTP endpoints keep failing loudly
+          // (NOT_SUPPORTED) while phone+password sign-in still works.
+          let smsSvc: any;
+          try { smsSvc = ctx.getService<any>('sms'); } catch { smsSvc = undefined; }
+          if (smsSvc) {
+            this.authManager.setSmsService(smsSvc);
+            if (this.authManager.isPhoneNumberEnabled()) {
+              ctx.logger.info(
+                this.authManager.isPhoneOtpDeliverable()
+                  ? 'Auth: sms service wired (phone-number OTP sign-in / reset enabled)'
+                  : 'Auth: sms service present but NOT configured with a real provider — phone-number OTP stays disabled in production',
+              );
+            }
+          } else if (this.authManager.isPhoneNumberEnabled()) {
+            ctx.logger.info('Auth: no sms service registered — phone-number OTP disabled (password sign-in only)');
+          }
+
           // Bind the email brand name (`{{appName}}`) to the live
           // `branding.workspace_name` setting so the admin UI can rename the
           // product without a redeploy. Only an *explicitly set* value
@@ -731,6 +751,14 @@ export class AuthPlugin implements Plugin {
               '/sign-up/email': { window, max },
               '/request-password-reset': { window, max },
               '/reset-password': { window, max },
+              // #2780 — OTP endpoints cost an SMS per hit (pumping abuse);
+              // the per-number cooldown (otp-send-guard.ts) is always on,
+              // this adds the operator-tuned per-IP dimension. The plugin
+              // also ships its own /phone-number* default (10/min).
+              '/phone-number/send-otp': { window, max },
+              '/phone-number/request-password-reset': { window, max },
+              '/phone-number/verify': { window, max },
+              '/phone-number/reset-password': { window, max },
             },
           } as AuthManagerOptions['rateLimit'];
         }
@@ -1267,6 +1295,11 @@ export class AuthPlugin implements Plugin {
                 : {}),
               phoneNumberEnabled: () => this.authManager!.isPhoneNumberEnabled(),
               emailServiceAvailable: () => this.authManager!.isEmailServiceAvailable(),
+              // #2780 — SMS invites need the phone plugin (the invitee's
+              // first sign-in is a phone OTP) plus deliverable SMS.
+              smsInviteAvailable: () =>
+                this.authManager!.isPhoneNumberEnabled() && this.authManager!.isPhoneOtpDeliverable(),
+              sendInviteSms: (phone: string) => this.authManager!.sendPhoneInviteSms(phone),
               noteMustChangePasswordIssued: () => this.authManager!.noteMustChangePasswordIssued(),
               logger: ctx.logger,
             },

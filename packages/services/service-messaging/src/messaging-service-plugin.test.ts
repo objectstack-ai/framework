@@ -130,6 +130,27 @@ function provisionCtx() {
     return { ctx, engine, synced, fireReady: async () => { for (const fn of readyHooks) await fn(); } };
 }
 
+describe('MessagingServicePlugin — email/sms channel registration (kernel:ready)', () => {
+    it('registers the sms channel when an sms service is present', async () => {
+        const { ctx, fireReady } = provisionCtx();
+        ctx.registerService('sms', { async send() { return { status: 'sent' }; } });
+        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+
+        const messaging: any = ctx.getService('messaging');
+        expect(messaging.getRegisteredChannels()).not.toContain('sms');
+        await fireReady();
+        expect(messaging.getRegisteredChannels()).toContain('sms');
+    });
+
+    it('does NOT register the sms channel when no sms service exists', async () => {
+        const { ctx, fireReady } = provisionCtx();
+        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+        await fireReady();
+        const messaging: any = ctx.getService('messaging');
+        expect(messaging.getRegisteredChannels()).not.toContain('sms');
+    });
+});
+
 describe('MessagingServicePlugin — system table provisioning', () => {
     it('creates the inbox + receipt tables on kernel:ready', async () => {
         const { ctx, engine, synced, fireReady } = provisionCtx();

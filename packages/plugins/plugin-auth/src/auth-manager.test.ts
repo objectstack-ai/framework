@@ -1080,6 +1080,150 @@ describe('AuthManager', () => {
     });
   });
 
+  // #2780 — phone-number OTP delivered over the SMS service.
+  describe('phone-number OTP over SMS (#2780)', () => {
+    const PHONE = '+8613800000000';
+
+    const fakeSms = (opts: { failed?: boolean } = {}) => {
+      const sent: any[] = [];
+      return {
+        sent,
+        service: {
+          async send(input: any) {
+            sent.push(input);
+            return opts.failed
+              ? { id: 'sms_1', status: 'failed', error: 'provider down' }
+              : { id: 'sms_1', status: 'sent', messageId: 'prov_1' };
+          },
+          isConfigured: () => true,
+        } as any,
+      };
+    };
+
+    const bootOtp = async (config: any = {}) => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((cfg: any) => {
+        capturedConfig = cfg;
+        return { handler: vi.fn(), api: {} };
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        plugins: { phoneNumber: true },
+        ...config,
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+      const plugin = capturedConfig.plugins.find((p: any) => p.id === 'phone-number');
+      return { manager, plugin, opts: plugin.options };
+    };
+
+    it('passes allowedAttempts explicitly (default 3) and a phone-shape validator', async () => {
+      const { opts } = await bootOtp();
+      expect(opts.allowedAttempts).toBe(3);
+      expect(opts.phoneNumberValidator('+86 138-0000-0000')).toBe(true);
+      expect(opts.phoneNumberValidator('bob@example.com')).toBe(false);
+    });
+
+    it('sendOTP throws NOT_SUPPORTED without an SMS service (pre-#2780 behaviour preserved)', async () => {
+      const { opts } = await bootOtp();
+      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '123456' })).rejects.toThrow(/NOT_SUPPORTED/);
+    });
+
+    it('sendOTP delivers the code in the SMS body (and only there)', async () => {
+      const { manager, opts } = await bootOtp();
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+
+      await opts.sendOTP({ phoneNumber: PHONE, code: '123456' });
+      expect(sms.sent).toHaveLength(1);
+      expect(sms.sent[0].to).toBe(PHONE);
+      expect(sms.sent[0].body).toContain('123456');
+      expect(sms.sent[0].templateParams).toEqual({ code: '123456' });
+    });
+
+    it('enforces the per-number cooldown (TOO_MANY_REQUESTS, no second SMS)', async () => {
+      const { manager, opts } = await bootOtp();
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+
+      await opts.sendOTP({ phoneNumber: PHONE, code: '111111' });
+      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '222222' }))
+        .rejects.toThrow(/Too many verification codes/);
+      expect(sms.sent).toHaveLength(1);
+    });
+
+    it('sendPasswordResetOTP shares the same guarded SMS path (cross-flow budget)', async () => {
+      const { manager, opts } = await bootOtp();
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+
+      await opts.sendPasswordResetOTP({ phoneNumber: PHONE, code: '333333' });
+      expect(sms.sent[0].body).toContain('333333');
+      // The cooldown spans both flows — a reset send blocks an immediate sign-in send.
+      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '444444' }))
+        .rejects.toThrow(/Too many verification codes/);
+    });
+
+    it('surfaces a failed SMS delivery WITHOUT the code in the error', async () => {
+      const { manager, opts } = await bootOtp();
+      const sms = fakeSms({ failed: true });
+      manager.setSmsService(sms.service);
+
+      await expect(opts.sendOTP({ phoneNumber: PHONE, code: '555555' }))
+        .rejects.toSatisfy((e: Error) => /provider down/.test(e.message) && !e.message.includes('555555'));
+    });
+
+    it('honours phoneOtp knobs (cooldown off ⇒ back-to-back sends allowed)', async () => {
+      const { manager, opts } = await bootOtp({ phoneOtp: { cooldownSeconds: 0, maxPerHour: 0 } });
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+      await opts.sendOTP({ phoneNumber: PHONE, code: '111111' });
+      await opts.sendOTP({ phoneNumber: PHONE, code: '222222' });
+      expect(sms.sent).toHaveLength(2);
+    });
+
+    it('features.phoneNumberOtp requires plugin + deliverable SMS', async () => {
+      const { manager } = await bootOtp();
+      expect((manager.getPublicConfig() as any).features.phoneNumberOtp).toBe(false);
+      expect(manager.isSmsServiceAvailable()).toBe(false);
+
+      manager.setSmsService(fakeSms().service);
+      expect(manager.isSmsServiceAvailable()).toBe(true);
+      expect(manager.isPhoneOtpDeliverable()).toBe(true);
+      expect((manager.getPublicConfig() as any).features.phoneNumberOtp).toBe(true);
+    });
+
+    it('an unconfigured (log-only) SMS service does not advertise OTP in production', async () => {
+      const { manager } = await bootOtp();
+      manager.setSmsService({ async send() { return { id: 'x', status: 'sent' }; }, isConfigured: () => false } as any);
+      const prev = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        expect(manager.isPhoneOtpDeliverable()).toBe(false);
+        expect((manager.getPublicConfig() as any).features.phoneNumberOtp).toBe(false);
+      } finally {
+        process.env.NODE_ENV = prev;
+      }
+      // Outside production the dev log transport keeps OTP testable.
+      expect(manager.isPhoneOtpDeliverable()).toBe(true);
+    });
+
+    it('sendPhoneInviteSms sends a credential-free invite and throws without a service', async () => {
+      const { manager } = await bootOtp();
+      await expect(manager.sendPhoneInviteSms(PHONE)).rejects.toThrow(/SMS_SERVICE_REQUIRED/);
+
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+      await manager.sendPhoneInviteSms(PHONE);
+      expect(sms.sent).toHaveLength(1);
+      expect(sms.sent[0].to).toBe(PHONE);
+      expect(sms.sent[0].body).toMatch(/verification code/);
+      expect(sms.sent[0].body).toContain('http://localhost:3000');
+    });
+  });
+
   // #2766 V1.5 — placeholder addresses must never become real recipients.
   describe('placeholder-email interception (#2766 V1.5)', () => {
     const PLACEHOLDER = 'u-abcdefghijklmnopqrst@placeholder.invalid';
@@ -1206,6 +1350,7 @@ describe('AuthManager', () => {
         deviceAuthorization: false,
         admin: false,
         phoneNumber: false,
+        phoneNumberOtp: false,
         multiOrgEnabled: false,
         privacyUrl: 'https://objectstack.ai/privacy',
         termsUrl: 'https://objectstack.ai/terms',
