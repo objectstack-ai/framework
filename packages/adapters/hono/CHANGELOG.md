@@ -1,5 +1,13 @@
 # @objectstack/hono
 
+## 14.1.0
+
+### Patch Changes
+
+- @objectstack/plugin-hono-server@14.1.0
+- @objectstack/runtime@14.1.0
+- @objectstack/types@14.1.0
+
 ## 14.0.0
 
 ### Patch Changes

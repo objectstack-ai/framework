@@ -1,5 +1,34 @@
 # @objectstack/spec
 
+## 14.1.0
+
+### Patch Changes
+
+- 5a8465f: SLA escalation `escalateTo` is position-first (ADR-0090 D3 follow-up to the `position` approver type).
+
+  - **spec**: `ApprovalEscalationSchema.escalateTo` is documented as a position machine name or a
+    specific user id (was "User id, role, or manager level" — the same pre-D3 'role' trap the
+    `position` approver type fixed); the Studio xRef picker kind moves `role` → `position`.
+  - **plugin-approvals**: on escalation, `escalateTo` now expands position holders via
+    `sys_user_position` ∪ the `sys_member.role` transition source (ADR-0057 D4) for both the
+    `reassign` approver hand-off and the `notify` audience. An empty expansion falls back to
+    treating the value as a literal user id, so configs naming a specific user keep working
+    unchanged. The audit trail keeps the authored target.
+  - **lint**: new `approval-escalation-reassign-no-target` warning — `escalation.action: 'reassign'`
+    with no `escalateTo` silently degrades to a notify at runtime; the fix-it prescribes a position
+    or user id target (or `action: 'notify'`).
+
+- 7f8620b: Sync `PROTOCOL_VERSION` to `14.0.0` — the 14.0.0 release bumped `package.json` but the handshake constant still said 13, so `protocol-version.test.ts` failed on main for every PR. (Process note: the changesets Version PR cannot bump source constants; the protocol bump must accompany each major.)
+- 82ba3a6: docs(liveness): record the tenancy.strategy / crossTenantAccess removal decision (#2763)
+
+  Owner decision 2026-07-10: the platform has exactly two multi-tenancy
+  modes — per-tenant database (environment-level, zero object config) and
+  shared-DB organization row isolation (`tenancy.enabled` + `tenantField`).
+  Object-level isolation strategy has no requirement, so `strategy` and
+  `crossTenantAccess` are slated for removal at the next spec major.
+  Ledger notes + compile-time authorHints now state the decision and point
+  authors at the two real mechanisms.
+
 ## 14.0.0
 
 ### Major Changes
