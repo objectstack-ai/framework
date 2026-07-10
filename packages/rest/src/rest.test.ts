@@ -1927,6 +1927,26 @@ describe('mapDataError — schema/constraint envelopes', () => {
   const sqliteError = (message: string, code = 'SQLITE_ERROR') =>
     Object.assign(new Error(message), { code });
 
+  // #2707: plugin-audit's engine hook rejects sys_comment creation when the
+  // TARGET object declares `enable.feeds: false`. The generic data routes map
+  // errors through mapDataError (not sendError's `.status` passthrough), so
+  // the code needs its own branch — without it the 403 degraded to the
+  // catch-all 400 (caught live in the runtime smoke test).
+  it('maps FEEDS_DISABLED → 403 with the gated target object', () => {
+    const r = mapDataError(
+      Object.assign(new Error("Comments are disabled for object 'gate_probe' (enable.feeds: false)"), {
+        code: 'FEEDS_DISABLED',
+        status: 403,
+        object: 'gate_probe',
+      }),
+      'sys_comment',
+    );
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('FEEDS_DISABLED');
+    // Prefers the gated target object over the route's object (sys_comment).
+    expect(r.body.object).toBe('gate_probe');
+  });
+
   it('maps SQLite "has no column named" → 400 INVALID_FIELD with the field', () => {
     const r = mapDataError(
       sqliteError(

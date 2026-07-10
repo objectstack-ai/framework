@@ -9,8 +9,10 @@ describe('ObjectCapabilities', () => {
     expect(result.searchable).toBe(true);
     expect(result.apiEnabled).toBe(true);
     expect(result.files).toBe(false);
-    expect(result.feeds).toBe(false);
-    expect(result.activities).toBe(false);
+    // feeds/activities are opt-OUT capabilities (#2707): default on, consumers
+    // gate on explicit `false` only — same posture as trash/mru/clone.
+    expect(result.feeds).toBe(true);
+    expect(result.activities).toBe(true);
     expect(result.trash).toBe(true);
     expect(result.mru).toBe(true);
     expect(result.clone).toBe(true);
