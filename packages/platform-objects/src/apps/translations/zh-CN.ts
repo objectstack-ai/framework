@@ -58,6 +58,7 @@ export const zhCN: TranslationData = {
         nav_sharing_rules: { label: '共享规则' },
         nav_record_shares: { label: '记录共享' },
         nav_api_keys: { label: 'API 密钥' },
+        nav_connect_agent: { label: '连接智能体' },
 
         nav_approval_processes: { label: '审批流程' },
         nav_approval_requests: { label: '审批申请' },

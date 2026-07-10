@@ -30,3 +30,4 @@ export {
   OBJECTSTACK_SKILL_DESCRIPTION,
 } from './skill.js';
 export type { RenderSkillOptions } from './skill.js';
+export { CONNECT_AGENT_PAGE, CONNECT_AGENT_UI_BUNDLE } from './connect-ui.js';

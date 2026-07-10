@@ -544,6 +544,84 @@ export class HttpDispatcher {
     }
 
     /**
+     * `GET /mcp/skill` — the environment-customized portable Agent Skill
+     * (`SKILL.md`), rendered by the MCP service (ADR-0036 Amendment C: ONE
+     * generic skill; only the connection URL is environment-specific).
+     *
+     * Served PUBLIC like `/discovery`: the content is generic agent
+     * instructions plus a URL the caller already knows — no schema, no
+     * tenant data. Gated on the same default-on switch as the `/mcp` route
+     * (404 when opted out, so the surface isn't advertised) and 501 when the
+     * MCP plugin isn't loaded, mirroring `handleMcp`.
+     */
+    async handleMcpSkill(method: string, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        if (!HttpDispatcher.isMcpEnabled()) {
+            return { handled: true, response: this.error('MCP server is not enabled for this environment', 404) };
+        }
+        if (method !== 'GET') {
+            return {
+                handled: true,
+                response: {
+                    status: 405,
+                    headers: { Allow: 'GET' },
+                    body: { success: false, error: { message: 'Method not allowed — use GET', code: 405 } },
+                },
+            };
+        }
+
+        const mcp: any = await this.resolveService('mcp', context.environmentId);
+        if (!mcp || typeof mcp.renderSkill !== 'function') {
+            return { handled: true, response: this.error('MCP server is not available', 501) };
+        }
+
+        // Resolve this environment's MCP URL for the skill's Connect section:
+        // the auth service owns the canonical value (base URL config); fall
+        // back to deriving from the request host so the endpoint still works
+        // when the auth plugin isn't loaded.
+        let mcpUrl: string | undefined;
+        try {
+            const authService: any = await this.resolveService('auth', context.environmentId);
+            const url = authService?.getMcpResourceUrl?.();
+            if (typeof url === 'string' && url) mcpUrl = url;
+        } catch { /* fall through to host derivation */ }
+        if (!mcpUrl) {
+            try {
+                const webReq = this.toMcpWebRequest(context.request, undefined);
+                const host = webReq?.headers.get('host');
+                if (host) {
+                    const proto = webReq?.headers.get('x-forwarded-proto') || 'http';
+                    mcpUrl = `${proto}://${host}/api/v1/mcp`;
+                }
+            } catch { /* leave the documented placeholder in place */ }
+        }
+
+        const markdown: string = mcp.renderSkill({ mcpUrl });
+        // Raw text must NOT ride the `response` channel — `sendResult` JSON-
+        // encodes those bodies unconditionally. The `result` stream channel is
+        // the one raw pipe through every adapter (string events are written
+        // verbatim, custom headers honored), so serve the markdown as a
+        // single-chunk "stream".
+        return {
+            handled: true,
+            result: {
+                type: 'stream',
+                status: 200,
+                contentType: 'text/markdown; charset=utf-8',
+                headers: {
+                    'content-type': 'text/markdown; charset=utf-8',
+                    'content-disposition': 'inline; filename="SKILL.md"',
+                    // Same reasoning as /discovery (cloud#152): reflects mutable
+                    // runtime config (base URL), must never be edge-cached stale.
+                    'cache-control': 'no-store',
+                },
+                events: (async function* () {
+                    yield markdown;
+                })(),
+            },
+        } as any;
+    }
+
+    /**
      * Normalise the inbound request into a Web-standard `Request` for the MCP
      * transport. Accepts an already-Web `Request`, or a node/Hono-style req
      * (plain `headers` object, path-only `url`). Returns undefined only if the
@@ -3882,6 +3960,14 @@ export class HttpDispatcher {
 
         if (cleanPath.startsWith('/data')) {
             return this.handleData(cleanPath.substring(5), method, body, query, context);
+        }
+
+        // `/mcp/skill` is the one sub-path NOT owned by the MCP transport:
+        // the public, environment-customized SKILL.md download. Matched
+        // before the transport branch below, which claims everything else
+        // under `/mcp`.
+        if (cleanPath === '/mcp/skill' || cleanPath.startsWith('/mcp/skill?')) {
+            return this.handleMcpSkill(method, context);
         }
 
         if (cleanPath === '/mcp' || cleanPath.startsWith('/mcp/') || cleanPath.startsWith('/mcp?')) {

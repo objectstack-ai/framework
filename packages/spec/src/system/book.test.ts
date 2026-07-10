@@ -25,9 +25,12 @@ describe('BookSchema (ADR-0046 §6)', () => {
     expect(() => BookSchema.parse({ name: 'crm_guide', groups: [{ key: 'Start', label: 'x' }] })).toThrow();
   });
   it('accepts audience variants', () => {
-    for (const audience of ['org', 'public', { profile: 'admin' }] as const) {
+    for (const audience of ['org', 'public', { permissionSet: 'crm_admin' }] as const) {
       expect(() => BookSchema.parse({ name: 'b', audience, groups: [] })).not.toThrow();
     }
+  });
+  it('rejects the removed { profile } audience shape (ADR-0090 D2)', () => {
+    expect(() => BookSchema.parse({ name: 'b', audience: { profile: 'admin' }, groups: [] })).toThrow();
   });
 });
 
@@ -151,7 +154,7 @@ describe('deriveImplicitPackageBook + audience', () => {
   it('isPublicAudience only true for public', () => {
     expect(isPublicAudience('public')).toBe(true);
     expect(isPublicAudience('org')).toBe(false);
-    expect(isPublicAudience({ profile: 'admin' })).toBe(false);
+    expect(isPublicAudience({ permissionSet: 'crm_admin' })).toBe(false);
     expect(isPublicAudience(undefined)).toBe(false);
   });
 });

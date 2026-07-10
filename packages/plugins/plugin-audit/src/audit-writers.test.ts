@@ -294,3 +294,94 @@ describe('audit writers — declarative milestones (ADR-0052 §5b.2)', () => {
     expect(activity?.row.summary).toBe('Stage: proposal → Negotiation');
   });
 });
+
+describe('audit writers — enable.activities opt-out gate (#2707)', () => {
+  const SCHEMA = {
+    sys_audit_log: SINGLE_TENANT.sys_audit_log,
+    sys_activity: SINGLE_TENANT.sys_activity,
+    crm_lead: ['id', 'name'],
+  };
+
+  it('mirrors CRUD into sys_activity by default (absent enable block)', async () => {
+    const { engine, fire, created } = makeEngine(SCHEMA);
+    installAuditWriters(engine as any, 'test.audit');
+
+    await fire('afterInsert', {
+      object: 'crm_lead',
+      input: { id: 'lead-1' },
+      result: { id: 'lead-1', name: 'Acme' },
+      session: {},
+    });
+
+    expect(created.some((c) => c.object === 'sys_audit_log')).toBe(true);
+    expect(created.some((c) => c.object === 'sys_activity')).toBe(true);
+  });
+
+  it('skips ONLY the sys_activity mirror on explicit activities:false — audit row still written', async () => {
+    const { engine, fire, created } = makeEngine(SCHEMA, {
+      crm_lead: { enable: { activities: false } },
+    });
+    installAuditWriters(engine as any, 'test.audit');
+
+    await fire('afterInsert', {
+      object: 'crm_lead',
+      input: { id: 'lead-1' },
+      result: { id: 'lead-1', name: 'Acme' },
+      session: {},
+    });
+
+    // Compliance ledger is NOT gated by the capability flag…
+    expect(created.some((c) => c.object === 'sys_audit_log')).toBe(true);
+    // …but the timeline mirror is.
+    expect(created.some((c) => c.object === 'sys_activity')).toBe(false);
+  });
+});
+
+describe('audit writers — enable.feeds server-side enforcement (#2707)', () => {
+  const SCHEMA = {
+    sys_audit_log: SINGLE_TENANT.sys_audit_log,
+    sys_activity: SINGLE_TENANT.sys_activity,
+    crm_lead: ['id', 'name'],
+  };
+
+  const commentInsert = (threadId?: unknown) => ({
+    object: 'sys_comment',
+    input: { data: { thread_id: threadId, body: 'hello' } },
+    session: {},
+  });
+
+  it('rejects sys_comment creation targeting an object with explicit feeds:false (403 FEEDS_DISABLED)', async () => {
+    const { engine, fire } = makeEngine(SCHEMA, {
+      crm_lead: { enable: { feeds: false } },
+    });
+    installAuditWriters(engine as any, 'test.audit');
+
+    await expect(fire('beforeInsert', commentInsert('crm_lead:rec-1'))).rejects.toMatchObject({
+      code: 'FEEDS_DISABLED',
+      status: 403,
+      object: 'crm_lead',
+    });
+  });
+
+  it('allows comments when feeds is absent (opt-out default) or explicitly true', async () => {
+    const absent = makeEngine(SCHEMA);
+    installAuditWriters(absent.engine as any, 'test.audit');
+    await expect(absent.fire('beforeInsert', commentInsert('crm_lead:rec-1'))).resolves.toBeUndefined();
+
+    const explicit = makeEngine(SCHEMA, { crm_lead: { enable: { feeds: true } } });
+    installAuditWriters(explicit.engine as any, 'test.audit');
+    await expect(explicit.fire('beforeInsert', commentInsert('crm_lead:rec-1'))).resolves.toBeUndefined();
+  });
+
+  it('lets unconventional/missing thread_id through (capability gate, not access control)', async () => {
+    const { engine, fire } = makeEngine(SCHEMA, {
+      crm_lead: { enable: { feeds: false } },
+    });
+    installAuditWriters(engine as any, 'test.audit');
+
+    await expect(fire('beforeInsert', commentInsert(undefined))).resolves.toBeUndefined();
+    await expect(fire('beforeInsert', commentInsert('free-form-thread'))).resolves.toBeUndefined();
+    // Unknown target object → no def → allowed.
+    await expect(fire('beforeInsert', commentInsert('ghost_object:rec-9'))).resolves.toBeUndefined();
+  });
+});
