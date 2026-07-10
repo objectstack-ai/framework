@@ -29,6 +29,7 @@ export {
   AuditorPosition,
   OpsPosition,
   FieldOpsDelegatePosition,
+  ClientPortalUserPosition,
   allPositions,
 } from './positions.js';
 

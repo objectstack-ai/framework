@@ -142,7 +142,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
       expect(result.operation).toBe('all');
     });
 
-    it('should validate role restrictions', () => {
+    it('should validate position restrictions', () => {
       const policy = {
         name: 'sales_only',
         object: 'opportunity',
@@ -184,7 +184,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         id: 'user_123',
         email: 'john@example.com',
         tenantId: 'tenant_456',
-        role: 'sales_rep',
+        positions: ['sales_rep'],
         department: 'sales',
         attributes: {
           region: 'US-West',
@@ -197,24 +197,14 @@ describe('Row-Level Security (RLS) Protocol', () => {
       expect(result).toEqual(context);
     });
 
-    it('should validate multiple roles as array', () => {
+    it('should validate positions as an array (ADR-0090 D3 — formerly `role`)', () => {
       const context = {
         id: 'user_123',
-        role: ['sales_rep', 'team_lead'],
+        positions: ['sales_rep', 'team_lead'],
       };
 
       const result = RLSUserContextSchema.parse(context);
-      expect(result.role).toEqual(['sales_rep', 'team_lead']);
-    });
-
-    it('should validate single role as string', () => {
-      const context = {
-        id: 'user_123',
-        role: 'admin',
-      };
-
-      const result = RLSUserContextSchema.parse(context);
-      expect(result.role).toBe('admin');
+      expect(result.positions).toEqual(['sales_rep', 'team_lead']);
     });
 
     it('should validate email format', () => {
@@ -327,7 +317,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
     });
 
     describe('positionPolicy', () => {
-      it('should create role-based policy', () => {
+      it('should create a position-scoped policy', () => {
         const policy = RLS.positionPolicy(
           'sensitive_data',
           ['manager', 'director'],
@@ -344,7 +334,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
     });
 
     describe('allowAllPolicy', () => {
-      it('should create permissive policy for specified roles', () => {
+      it('should create permissive policy for specified positions', () => {
         const policy = RLS.allowAllPolicy('account', ['ceo', 'cfo']);
 
         expect(policy.name).toBe('account_ceo_cfo_full_access');

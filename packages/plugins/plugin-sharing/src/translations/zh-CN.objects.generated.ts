@@ -31,14 +31,14 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "用户",
           group: "组",
-          role: "角色",
-          unit_and_subordinates: "角色及下级",
+          position: "岗位",
+          unit_and_subordinates: "业务单元及下级",
           guest: "访客"
         }
       },
       recipient_id: {
         label: "接收方",
-        help: "获得访问权限的用户 / 组 / 角色 ID"
+        help: "获得访问权限的用户 / 组 / 岗位 ID"
       },
       access_level: {
         label: "访问级别",
@@ -135,14 +135,15 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         options: {
           user: "用户",
           team: "团队",
-          department: "部门",
-          role: "角色",
+          business_unit: "business_unit",
+          position: "岗位",
+          unit_and_subordinates: "unit_and_subordinates",
           queue: "队列"
         }
       },
       recipient_id: {
         label: "接收方",
-        help: "根据 recipient_type 填写 department id / team id / role name / queue name / user id"
+        help: "根据 recipient_type 填写 业务单元 id / 团队 id / 岗位名 / 队列名 / 用户 id"
       },
       access_level: {
         label: "访问级别",

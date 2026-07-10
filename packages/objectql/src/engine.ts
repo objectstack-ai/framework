@@ -2582,9 +2582,16 @@ export class ObjectQL implements IDataEngine {
      object = this.resolveObjectName(object);
      const driver = this.getDriver(object);
 
+     // The AST must ride on the opCtx so the security/sharing middlewares can
+     // inject their read filters (RLS, OWD/sharing scope) into `ast.where` —
+     // exactly like find(). Building it locally inside the executor (#2737)
+     // discarded every injected filter: `total` counted the RAW table while
+     // `records` were scoped, leaking invisible-row counts and breaking
+     // pagination.
      const opCtx: OperationContext = {
        object,
        operation: 'count',
+       ast: { object, where: query?.where },
        options: query,
        context: mergeReadContext(query?.context, options?.context),
      };
@@ -2592,10 +2599,10 @@ export class ObjectQL implements IDataEngine {
      await this.executeWithMiddleware(opCtx, async () => {
        const countOpts = this.buildDriverOptions(opCtx.context);
        if (driver.count) {
-           const ast: QueryAST = { object, where: query?.where };
-           return driver.count(object, ast, countOpts);
+           return driver.count(object, opCtx.ast as QueryAST, countOpts);
        }
-       // Fallback to find().length
+       // Fallback to find().length — find() applies the read filters itself,
+       // so pass the caller's original where, not the already-scoped ast.
        const res = await this.find(object, { where: query?.where, fields: ['id'], context: opCtx.context });
        return res.length;
      });
@@ -2611,17 +2618,21 @@ export class ObjectQL implements IDataEngine {
       const opCtx: OperationContext = {
         object,
         operation: 'aggregate',
+        // On the opCtx so middleware-injected read filters (RLS/sharing) land
+        // in `ast.where` — same #2737 hole as count(): a locally-built AST
+        // aggregated over rows the caller may not see.
+        ast: {
+            object,
+            where: query.where,
+            groupBy: query.groupBy as any,
+            aggregations: query.aggregations,
+        },
         options: query,
         context: mergeReadContext(query?.context, options?.context),
       };
 
       await this.executeWithMiddleware(opCtx, async () => {
-        const ast: QueryAST = {
-            object,
-            where: query.where,
-            groupBy: query.groupBy as any,
-            aggregations: query.aggregations,
-        };
+        const ast = opCtx.ast as QueryAST;
 
         // Prefer driver.aggregate() when available — driver.find() in many
         // drivers (e.g. driver-sql) does not honor `groupBy` / `aggregations`
