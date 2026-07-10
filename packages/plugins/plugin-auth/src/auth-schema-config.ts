@@ -327,6 +327,23 @@ export const AUTH_ADMIN_SESSION_FIELDS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Phone-number plugin – user field additions (#2766 V1.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Phone-number plugin adds sign-in-identifier fields to the `user` model.
+ *
+ * | camelCase (better-auth) | snake_case (ObjectStack) |
+ * |:------------------------|:-------------------------|
+ * | phoneNumber             | phone_number             |
+ * | phoneNumberVerified     | phone_number_verified    |
+ */
+export const AUTH_PHONE_NUMBER_USER_FIELDS = {
+  phoneNumber: 'phone_number',
+  phoneNumberVerified: 'phone_number_verified',
+} as const;
+
+// ---------------------------------------------------------------------------
 // OAuth Provider plugin – oauthClient table
 // ---------------------------------------------------------------------------
 
@@ -548,6 +565,20 @@ export function buildAdminPluginSchema() {
     },
     session: {
       fields: AUTH_ADMIN_SESSION_FIELDS,
+    },
+  };
+}
+
+/**
+ * Builds the `schema` option for better-auth's `phoneNumber()` plugin
+ * (#2766 V1.5). The plugin extends the user model with `phoneNumber` /
+ * `phoneNumberVerified`; both differ from their snake_case column names and
+ * are mapped explicitly.
+ */
+export function buildPhoneNumberPluginSchema() {
+  return {
+    user: {
+      fields: AUTH_PHONE_NUMBER_USER_FIELDS,
     },
   };
 }

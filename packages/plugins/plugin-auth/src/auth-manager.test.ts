@@ -1040,6 +1040,102 @@ describe('AuthManager', () => {
     });
   });
 
+  // #2766 V1.5 — phone+password sign-in via better-auth's phone-number plugin.
+  describe('phone-number plugin (#2766 V1.5)', () => {
+    const boot = async (plugins?: any) => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        ...(plugins ? { plugins } : {}),
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+      return { manager, capturedConfig };
+    };
+
+    it('is NOT registered by default', async () => {
+      const { capturedConfig } = await boot();
+      expect(capturedConfig.plugins.find((p: any) => p.id === 'phone-number')).toBeUndefined();
+    });
+
+    it('registers with snake_case schema mapping when enabled', async () => {
+      const { capturedConfig } = await boot({ phoneNumber: true });
+      const plugin = capturedConfig.plugins.find((p: any) => p.id === 'phone-number');
+      expect(plugin).toBeDefined();
+    });
+
+    it('features.phoneNumber mirrors the plugin switch', async () => {
+      const { manager } = await boot({ phoneNumber: true });
+      expect((manager.getPublicConfig() as any).features.phoneNumber).toBe(true);
+      expect(manager.isPhoneNumberEnabled()).toBe(true);
+      const { manager: off } = await boot();
+      expect((off.getPublicConfig() as any).features.phoneNumber).toBe(false);
+      expect(off.isPhoneNumberEnabled()).toBe(false);
+    });
+  });
+
+  // #2766 V1.5 — placeholder addresses must never become real recipients.
+  describe('placeholder-email interception (#2766 V1.5)', () => {
+    const PLACEHOLDER = 'u-abcdefghijklmnopqrst@placeholder.invalid';
+    const boot = async (extra: any = {}) => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        emailAndPassword: { enabled: true },
+        ...extra,
+      });
+      const emailService = { sendTemplate: vi.fn(async () => ({ status: 'sent' })) };
+      manager.setEmailService(emailService as any);
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+      return { manager, capturedConfig, emailService };
+    };
+
+    it('sendResetPassword refuses a placeholder recipient without touching the transport', async () => {
+      const { capturedConfig, emailService } = await boot();
+      const sendResetPassword = capturedConfig.emailAndPassword.sendResetPassword;
+      await expect(
+        sendResetPassword({ user: { id: 'u1', email: PLACEHOLDER }, url: 'http://x/reset', token: 't' }),
+      ).rejects.toThrow(/PLACEHOLDER_EMAIL/);
+      expect(emailService.sendTemplate).not.toHaveBeenCalled();
+    });
+
+    it('sendInvitationEmail refuses a placeholder recipient', async () => {
+      const { capturedConfig, emailService } = await boot();
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      await expect(
+        orgPlugin._opts.sendInvitationEmail({
+          email: PLACEHOLDER,
+          invitation: { id: 'inv1', organizationId: 'o1', role: 'member' },
+          organization: { name: 'Org' },
+          inviter: { user: { email: 'admin@example.com' } },
+        }),
+      ).rejects.toThrow(/PLACEHOLDER_EMAIL/);
+      expect(emailService.sendTemplate).not.toHaveBeenCalled();
+    });
+
+    // NOTE: the magic-link guard is the same isPlaceholderEmail() branch, but
+    // unlike organization the magic-link plugin doesn't expose its options
+    // (`_opts`), so it can't be invoked directly here. Covered by the two
+    // tests above plus the placeholder-email unit tests.
+    it('magic-link plugin registers when enabled (guard shares the tested code path)', async () => {
+      const { capturedConfig } = await boot({ plugins: { magicLink: true } });
+      expect(capturedConfig.plugins.find((p: any) => p.id === 'magic-link')).toBeDefined();
+    });
+  });
+
   describe('getPublicConfig', () => {
     it('should return safe public configuration', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -1109,6 +1205,7 @@ describe('AuthManager', () => {
         ssoEnforced: false,
         deviceAuthorization: false,
         admin: false,
+        phoneNumber: false,
         multiOrgEnabled: false,
         privacyUrl: 'https://objectstack.ai/privacy',
         termsUrl: 'https://objectstack.ai/terms',
@@ -2020,6 +2117,68 @@ describe('AuthManager', () => {
       const arg = engine.update.mock.calls[0][1];
       expect(arg.id).toBe('u1');
       expect(arg.password_changed_at instanceof Date).toBe(true);
+    });
+
+    it('stampPasswordChangedAt clears must_change_password in the same write (#2766 V1)', async () => {
+      const engine = makeEngine({ id: 'u1' });
+      const m = mgr(engine);
+      await (m as any).stampPasswordChangedAt('u1');
+      const arg = engine.update.mock.calls[0][1];
+      expect(arg.must_change_password).toBe(false);
+    });
+  });
+
+  // #2766 V1: admin-issued force password change — reuses the auth-gate seam.
+  describe('must-change-password gate (#2766 V1)', () => {
+    const SECRET = 'test-secret-at-least-32-chars-long';
+    const makeEngine = (user: any) => ({
+      findOne: vi.fn(async (_o: string, q: any) => {
+        const w = q?.where ?? {};
+        if (!user) return null;
+        return Object.entries(w).every(([k, v]) => (user as any)[k] === v) ? user : null;
+      }),
+      update: vi.fn(async () => ({})),
+      count: vi.fn(async () => 0),
+    });
+    const mgr = (engine: any, extra: any = {}) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const m = new AuthManager({ secret: SECRET, baseUrl: 'http://localhost:3000', dataEngine: engine, ...extra });
+      warn.mockRestore();
+      return m;
+    };
+
+    it('noteMustChangePasswordIssued activates the gate immediately (all config off)', () => {
+      const m = mgr(makeEngine(null), {});
+      expect(m.isAuthGateActive()).toBe(false);
+      m.noteMustChangePasswordIssued();
+      expect(m.isAuthGateActive()).toBe(true);
+    });
+
+    it('returns PASSWORD_EXPIRED for a flagged user with every config feature off', async () => {
+      const m = mgr(makeEngine({ id: 'u1', must_change_password: true }), {});
+      m.noteMustChangePasswordIssued(); // as the admin route does
+      const gate = await (m as any).computeAuthGate('u1', undefined, false);
+      expect(gate?.code).toBe('PASSWORD_EXPIRED');
+    });
+
+    it('does NOT gate an unflagged user even when the cache is hot', async () => {
+      const m = mgr(makeEngine({ id: 'u1', must_change_password: false }), {});
+      m.noteMustChangePasswordIssued();
+      await expect((m as any).computeAuthGate('u1', undefined, false)).resolves.toBeUndefined();
+    });
+
+    it('stays a no-op (no DB read) when nothing is flagged and config is off', async () => {
+      const engine = makeEngine({ id: 'u1', must_change_password: true });
+      const m = mgr(engine, {});
+      await expect((m as any).computeAuthGate('u1', undefined, false)).resolves.toBeUndefined();
+      expect(engine.findOne).not.toHaveBeenCalled();
+    });
+
+    it('fails open when the user lookup throws', async () => {
+      const engine = { findOne: vi.fn(async () => { throw new Error('db down'); }), update: vi.fn(), count: vi.fn(async () => 1) };
+      const m = mgr(engine, {});
+      m.noteMustChangePasswordIssued();
+      await expect((m as any).computeAuthGate('u1', undefined, false)).resolves.toBeUndefined();
     });
   });
 

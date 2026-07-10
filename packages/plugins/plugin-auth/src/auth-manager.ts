@@ -16,6 +16,7 @@ import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveOrgLimit, isMcpS
 import { mapMembershipRole, BUILTIN_IDENTITY_PLATFORM_ADMIN } from '@objectstack/spec';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
+import { isPlaceholderEmail } from './placeholder-email.js';
 import {
   AUTH_USER_CONFIG,
   AUTH_SESSION_CONFIG,
@@ -27,6 +28,7 @@ import {
   buildDeviceAuthorizationPluginSchema,
   buildJwtPluginSchema,
   buildAdminPluginSchema,
+  buildPhoneNumberPluginSchema,
 } from './auth-schema-config.js';
 
 /**
@@ -485,6 +487,14 @@ export class AuthManager {
   // Refreshed lazily with a TTL so isAuthGateActive() stays synchronous + cheap.
   private _orgMfaCache: { value: boolean; at: number } = { value: false, at: 0 };
   private _orgMfaRefreshing = false;
+  // #2766 V1 — cached "does any user have must_change_password set" flag, so
+  // the admin-issued temp-password gate activates without making
+  // isAuthGateActive() (and thus every request's extra session read) hot in
+  // deployments that never use the feature. Same lazy-TTL pattern as
+  // _orgMfaCache; primed synchronously by noteMustChangePasswordIssued() on
+  // the node that issues a flag (other nodes catch up within the TTL).
+  private _mustChangeCache: { value: boolean; at: number } = { value: false, at: 0 };
+  private _mustChangeRefreshing = false;
 
   /**
    * Result of the dev-only admin seed (set by `AuthPlugin.maybeSeedDevAdmin`
@@ -627,6 +637,16 @@ export class AuthManager {
           ...(this.config.emailAndPassword?.revokeSessionsOnPasswordReset != null
             ? { revokeSessionsOnPasswordReset: this.config.emailAndPassword.revokeSessionsOnPasswordReset } : {}),
         sendResetPassword: async ({ user, url, token }: { user: { id: string; email: string; name?: string }; url: string; token: string }) => {
+          // #2766 V1.5 — placeholder addresses (phone-only users) are never
+          // real recipients. Refuse loudly instead of "sending" into the void;
+          // the reset path for these users is phone sign-in / an admin
+          // set-user-password, not email.
+          if (isPlaceholderEmail(user.email)) {
+            throw new Error(
+              `Password-reset email refused: ${user.email} is a placeholder address (PLACEHOLDER_EMAIL). ` +
+              'This account has no real mailbox — use an admin password reset instead.',
+            );
+          }
           const email = this.getEmailService();
           if (!email) {
             // No transport wired but password reset is enabled — a
@@ -1242,6 +1262,9 @@ export class AuthManager {
       oidcProvider: resolveOidcProviderEnabled(pluginConfig),
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
       admin: pluginConfig.admin ?? scimEffective,
+      // #2766 V1.5 — phone+password sign-in. Opt-in; OTP flows stay off until
+      // SMS infrastructure exists (tracked separately).
+      phoneNumber: (pluginConfig as any).phoneNumber ?? false,
       sso: ssoFromEnv ?? (pluginConfig as any).sso ?? false,
       ssoDomainVerification: ssoDomainVerifyFromEnv ?? (pluginConfig as any).ssoDomainVerification ?? false,
       scim: scimEffective,
@@ -1438,13 +1461,22 @@ export class AuthManager {
         sendInvitationEmail: async ({ email: recipientEmail, invitation, organization: org, inviter }) => {
           const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
           const acceptUrl = `${baseUrl}/accept-invitation/${invitation.id}`;
+          // #2766 V1.5 — placeholder addresses are never real recipients.
+          if (isPlaceholderEmail(recipientEmail)) {
+            throw new Error(
+              `Invitation email refused: ${recipientEmail} is a placeholder address (PLACEHOLDER_EMAIL).`,
+            );
+          }
           const emailService = this.getEmailService();
           if (!emailService) {
+            // #2766 — the accept URL is a bearer credential; only print it in
+            // dev, never in production logs.
+            const dev = (globalThis as any)?.process?.env?.NODE_ENV !== 'production';
             console.warn(
               `[AuthManager] Invitation email not configured. ` +
               `To: ${recipientEmail} (org: ${org?.name ?? invitation.organizationId}, ` +
-              `role: ${invitation.role}, inviter: ${inviter?.user?.email ?? 'unknown'}) ` +
-              `URL: ${acceptUrl}`,
+              `role: ${invitation.role}, inviter: ${inviter?.user?.email ?? 'unknown'})` +
+              (dev ? ` URL: ${acceptUrl}` : ' (accept URL suppressed outside dev)'),
             );
             return;
           }
@@ -1507,15 +1539,45 @@ export class AuthManager {
       }));
     }
 
+    if (enabled.phoneNumber) {
+      const { phoneNumber } = await import('better-auth/plugins/phone-number');
+      // #2766 V1.5 — phone+password sign-in only (`POST /sign-in/phone-number`).
+      // The OTP surface needs an SMS provider the platform doesn't have yet:
+      // `sendOTP` throws explicitly so /phone-number/send-otp fails loudly
+      // (NOT_SUPPORTED) instead of silently logging, and signUpOnVerification
+      // is deliberately NOT configured — phone-only accounts are created by
+      // the admin create-user/import routes with a placeholder email
+      // (see placeholder-email.ts), never by OTP self-signup.
+      plugins.push(phoneNumber({
+        schema: buildPhoneNumberPluginSchema(),
+        sendOTP: () => {
+          throw new Error(
+            'NOT_SUPPORTED: phone-number OTP requires an SMS delivery service, which is not configured. ' +
+            'Phone sign-in is password-based (POST /sign-in/phone-number).',
+          );
+        },
+      }));
+    }
+
     if (enabled.magicLink) {
       const { magicLink } = await import('better-auth/plugins/magic-link');
       // magic-link reuses the `verification` table — no extra schema mapping needed.
       plugins.push(magicLink({
         sendMagicLink: async ({ email: recipientEmail, url, token }) => {
+          // #2766 V1.5 — placeholder addresses are never real recipients.
+          if (isPlaceholderEmail(recipientEmail)) {
+            throw new Error(
+              `Magic-link email refused: ${recipientEmail} is a placeholder address (PLACEHOLDER_EMAIL).`,
+            );
+          }
           const emailService = this.getEmailService();
           if (!emailService) {
+            // #2766 — a magic link IS a session credential; only print it in
+            // dev, never in production logs.
+            const dev = (globalThis as any)?.process?.env?.NODE_ENV !== 'production';
             console.warn(
-              `[AuthManager] Magic-link requested for ${recipientEmail} but no email service is wired. URL: ${url}`,
+              `[AuthManager] Magic-link requested for ${recipientEmail} but no email service is wired.` +
+              (dev ? ` URL: ${url}` : ' (link suppressed outside dev)'),
             );
             return;
           }
@@ -2314,7 +2376,13 @@ export class AuthManager {
       // for the env owner / local admin. Driven by `ssoOnlyMode` / `OS_AUTH_SSO_ONLY`.
       ssoEnforced: ssoOnly,
       deviceAuthorization: pluginConfig.deviceAuthorization ?? false,
-      admin: pluginConfig.admin ?? false,
+      // Mirrors `enabled.admin` in buildPluginList() (SCIM forces the admin
+      // plugin on, ADR-0071) — previously `?? false`, which advertised the
+      // admin surface as absent in SCIM-enabled deployments where it was
+      // actually mounted, hiding the admin sys_user actions (#2766 V1).
+      admin: pluginConfig.admin ?? (readBooleanEnv('OS_SCIM_ENABLED') ?? (pluginConfig as any).scim ?? false),
+      // #2766 V1.5 — mirrors `enabled.phoneNumber` in buildPluginList().
+      phoneNumber: (pluginConfig as any).phoneNumber ?? false,
       ...(termsUrl ? { termsUrl } : {}),
       ...(privacyUrl ? { privacyUrl } : {}),
     };
@@ -2722,19 +2790,85 @@ export class AuthManager {
   }
 
   /**
+   * #2766 V1 — public seam for the admin user-management routes, which accept
+   * admin-supplied passwords outside the better-auth endpoint hooks that
+   * normally run assertPasswordComplexity.
+   */
+  public async checkPasswordComplexity(password: string): Promise<void> {
+    return this.assertPasswordComplexity(password);
+  }
+
+  /**
    * ADR-0069 — is any authentication-policy gate enabled? Cheap, synchronous;
    * lets the transport seams skip session lookups entirely when off (the
    * default), keeping the gate zero-overhead until an admin opts in.
    */
   public isAuthGateActive(): boolean {
     // Per-org MFA (no global flag) can still activate the gate — keep the cheap
-    // sync check honest by consulting a lazily-refreshed cache.
+    // sync check honest by consulting a lazily-refreshed cache. Same for
+    // admin-issued must-change-password flags (#2766 V1).
     this.refreshOrgMfaCacheIfStale();
+    this.refreshMustChangeCacheIfStale();
     return (
       Math.floor(Number(this.config.passwordExpiryDays) || 0) > 0 ||
       this.config.mfaRequired === true ||
-      this._orgMfaCache.value
+      this._orgMfaCache.value ||
+      this._mustChangeCache.value
     );
+  }
+
+  /**
+   * #2766 V1.5 — is the phoneNumber plugin wired? Mirrors `enabled.phoneNumber`
+   * in buildPluginList() / `features.phoneNumber` in getPublicConfig().
+   */
+  public isPhoneNumberEnabled(): boolean {
+    return ((this.config.plugins ?? {}) as any).phoneNumber === true;
+  }
+
+  /**
+   * #2766 V2 — is an email transport wired? The identity import endpoint
+   * rejects the invite password policy up front when it isn't, instead of
+   * creating N accounts whose invitation emails all silently fail.
+   */
+  public isEmailServiceAvailable(): boolean {
+    return !!this.getEmailService();
+  }
+
+  /**
+   * #2766 V1 — flip the "someone must change their password" cache on this
+   * node the moment an admin issues a flag, so the gate is enforced on the
+   * flagged user's very next request instead of after the cache TTL. Called by
+   * the admin create-user / set-user-password routes.
+   */
+  public noteMustChangePasswordIssued(): void {
+    this._mustChangeCache = { value: true, at: Date.now() };
+  }
+
+  /**
+   * #2766 V1 — refresh the "any user has must_change_password" cache in the
+   * background when stale (60s TTL). Mirrors refreshOrgMfaCacheIfStale: the
+   * flag clears itself once no flagged users remain, returning the gate to
+   * zero overhead.
+   */
+  private refreshMustChangeCacheIfStale(): void {
+    if (this._mustChangeRefreshing) return;
+    if (Date.now() - this._mustChangeCache.at < 60_000) return;
+    const engine = this.getDataEngine();
+    if (!engine) return;
+    this._mustChangeRefreshing = true;
+    void (async () => {
+      try {
+        const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
+        const n = await engine.count('sys_user', {
+          where: { must_change_password: true }, context: SYSTEM_CTX,
+        } as any);
+        this._mustChangeCache = { value: typeof n === 'number' && n > 0, at: Date.now() };
+      } catch {
+        // leave the prior value; try again after the TTL
+      } finally {
+        this._mustChangeRefreshing = false;
+      }
+    })();
   }
 
   /**
@@ -2781,14 +2915,19 @@ export class AuthManager {
     const mfaGlobal = this.config.mfaRequired === true;
     // Per-org tightening: an org may require MFA above the global floor.
     const orgMaybeRequires = !mfaGlobal && !!_activeOrgId && this._orgMfaCache.value;
-    if (expiryDays <= 0 && !mfaGlobal && !orgMaybeRequires) return undefined; // no gate feature active
+    // #2766 V1 — an admin-issued must-change-password flag activates the gate
+    // even with every config feature off (per-user state, cached like org MFA).
+    const mustChangeMaybe = this._mustChangeCache.value;
+    if (expiryDays <= 0 && !mfaGlobal && !orgMaybeRequires && !mustChangeMaybe) {
+      return undefined; // no gate feature active
+    }
     const engine = this.getDataEngine();
     if (!engine || !userId) return undefined;
     try {
       const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
       const u = await engine.findOne('sys_user', {
         where: { id: userId },
-        fields: ['password_changed_at', 'two_factor_enabled', 'mfa_required_at'],
+        fields: ['password_changed_at', 'two_factor_enabled', 'mfa_required_at', 'must_change_password'],
         context: SYSTEM_CTX,
       } as any);
 
@@ -2799,6 +2938,17 @@ export class AuthManager {
           where: { id: _activeOrgId }, fields: ['require_mfa'], context: SYSTEM_CTX,
         } as any);
         mfaRequired = org?.require_mfa === true || org?.require_mfa === 1;
+      }
+
+      // ── Admin-issued force change (#2766 V1) ──────────────────────────
+      // Reuses the PASSWORD_EXPIRED code so the existing transport-seam 403
+      // handling and the Console change-password redirect apply unchanged;
+      // the semantic is identical ("must change password to continue").
+      if (u?.must_change_password === true || u?.must_change_password === 1) {
+        return {
+          code: 'PASSWORD_EXPIRED',
+          message: 'You must change your password before continuing.',
+        };
       }
 
       // ── Password expiry ───────────────────────────────────────────────
@@ -2852,9 +3002,11 @@ export class AuthManager {
     if (!engine || !userId) return;
     try {
       const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
+      // #2766 V1 — a completed password change also satisfies any pending
+      // admin-issued force-change flag, so clear it in the same write.
       await engine.update(
         'sys_user',
-        { id: userId, password_changed_at: new Date() },
+        { id: userId, password_changed_at: new Date(), must_change_password: false },
         { context: SYSTEM_CTX } as any,
       );
     } catch {
