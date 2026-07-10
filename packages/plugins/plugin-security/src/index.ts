@@ -26,6 +26,8 @@ export {
 } from './auto-org-admin-grant.js';
 export { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 export { bootstrapDeclaredPermissions } from './bootstrap-declared-permissions.js';
+export { cleanupPackagePermissions } from './cleanup-package-permissions.js';
+export type { PackagePermissionCleanupOutcome } from './cleanup-package-permissions.js';
 export { claimSeedOwnership } from './claim-seed-ownership.js';
 export { appDefaultPermissionSetName } from './app-default-permission-set.js';
 export { DelegatedAdminGate, isTenantAdmin } from './delegated-admin-gate.js';
