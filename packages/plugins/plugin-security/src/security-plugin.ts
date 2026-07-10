@@ -31,6 +31,7 @@ import {
   extractMemberPairs,
   reconcileOrgAdminGrant,
 } from './auto-org-admin-grant.js';
+import { SysPositionDetailPage } from '@objectstack/platform-objects/pages';
 import {
   securityObjects,
   securityDefaultPermissionSets,
@@ -240,6 +241,10 @@ export class SecurityPlugin implements Plugin {
     ctx.getService<{ register(m: any): void }>('manifest').register({
       ...securityPluginManifestHeader,
       objects: securityObjects,
+      // [ADR-0090] SDUI detail page for sys_position — Holders (assignments,
+      // name-keyed junction) + Permission Sets (bindings) as pure
+      // record:related_list declarations; no bespoke UI.
+      pages: [SysPositionDetailPage],
       // Permission sets ride along on the manifest so the metadata service
       // can resolve them by name when SecurityPlugin middleware queries
       // `metadata.list('permissions')`.

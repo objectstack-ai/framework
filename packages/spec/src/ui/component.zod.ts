@@ -71,6 +71,16 @@ export const RecordDetailsProps = z.object({
 export const RecordRelatedListProps = z.object({
   objectName: z.string().describe('Related object name (e.g., "task", "opportunity")'),
   relationshipField: z.string().describe('Field on related object that points to this record (e.g., "account_id")'),
+  /**
+   * Which field of THIS (parent) record `relationshipField` stores. Default
+   * `id` (ordinary FK). Set to another unique field for junctions that key on
+   * a machine name — e.g. `sys_user_position.position` stores
+   * `sys_position.name`, so the Holders list on a position declares
+   * `relationshipValueField: 'name'`. Used both to FILTER the list
+   * (`{[relationshipField]: parent[relationshipValueField]}`) and as the
+   * parent-side value written by the Add picker.
+   */
+  relationshipValueField: z.string().default('id').describe("Parent-record field whose value relationshipField stores (default 'id'; e.g. 'name' for name-keyed junctions)."),
   columns: z.array(z.string()).optional().describe('Fields to display in the related list. Optional: when omitted, columns derive from the related object\'s highlightFields / default list columns (a related list is just another surface that lists that object). Override chain: child highlightFields → field-level relatedListColumns → this inline list.'),
   sort: z.union([
     z.string(),
