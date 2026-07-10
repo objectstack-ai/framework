@@ -1,5 +1,5 @@
 ---
-'@objectstack/objectql': patch
+'@objectstack/objectql': minor
 ---
 
 fix(data): resolve field `defaultValue`s BEFORE the `beforeInsert` hook (#2703)
