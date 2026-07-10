@@ -57,7 +57,7 @@ Two orthogonal identity-layer gates run before all of this: the ADR-0069
 session from protected resources while keeping remediation reachable), and
 **anti-escalation** — RBAC tables are read-only for `organization_admin`, and
 since ADR-0090 D12 every RBAC-table write is additionally checked by the
-**delegated-admin gate**: tenant admins pass, delegates are confined to their
+**[delegated-admin gate](/docs/permissions/delegated-administration)**: tenant admins pass, delegates are confined to their
 `adminScope` (BU subtree + assignable-set allowlist, no self-escalation,
 strict containment for scope grants), and everyone else is denied. The
 `everyone`/`guest` audience-anchor bindings reject high-privilege sets at the
@@ -182,6 +182,9 @@ an administrator who can rewire a user's grants may read why they resolve as
 they do. Studio's Access pillar ships a "why can this user access?" panel on
 top of this endpoint.
 
+Full request/response walkthrough, layer vocabulary, and caller-authorization
+details: **[Explain Engine](/docs/permissions/explain)**.
+
 ## Governance: how "declared = enforced" is kept true
 
 Four CI-time mechanisms make the security posture a **checked artifact**
@@ -198,6 +201,7 @@ rather than a belief:
   `os compile` fails on any capability drift with semantic lines
   (`'crm_admin' gains delete on 'crm_lead'`) until the snapshot is updated via
   `--update-access-matrix` — the snapshot's git diff is the review artifact.
+  Opt-in, format, and workflow: **[Access-Matrix Snapshot Gate](/docs/permissions/access-matrix)**.
 
 - **Conformance matrix** (`packages/dogfood/test/authz-conformance.matrix.ts`,
   ADR-0056 D10): every authorization primitive sits in exactly one honest

@@ -1,0 +1,92 @@
+---
+title: Access-Matrix Snapshot Gate
+description: A committed (permission set × object) capability matrix that fails the build on any grant drift, with the semantic diff as the review artifact (ADR-0090 D6).
+---
+
+# Access-Matrix Snapshot Gate
+
+AI drafts permission metadata on this platform; the one thing it must never do
+is *silently* change who can do what. The access-matrix gate makes every
+capability change a **visible, reviewable build event**: the
+(permission set × object) matrix is derived purely from metadata on every
+`os compile`, diffed against a committed snapshot, and any drift **fails the
+build** with a semantic explanation until a human regenerates the snapshot.
+
+## Opting in
+
+The gate is per-app: commit an `access-matrix.json` next to
+`objectstack.config.ts`. Generate the first snapshot with:
+
+```bash
+os compile --update-access-matrix
+```
+
+No `access-matrix.json` → the gate is skipped (not opted in). Both
+`examples/app-crm` and `examples/app-showcase` are opted in.
+
+## What a drift failure looks like
+
+Change a grant — say, giving the showcase baseline set access to the private
+notes object — and the next `os compile` fails:
+
+```
+→ Checking access-matrix snapshot (ADR-0090 D6)...
+
+✗ Access matrix drift (1 change) — capability changes must be reviewed
+• 'showcase_member_default' gains access to 'showcase_private_note' (create, read, edit)
+If intended, re-run with --update-access-matrix and commit the snapshot — its diff IS the review artifact.
+```
+
+The diff lines are **semantic**, not JSON: gained/lost operations, View/Modify
+All changes, depth changes, OWD swings. If the change is intended, regenerate
+and commit — the snapshot's git diff then rides the pull request, where a
+reviewer sees the capability delta in plain language instead of spelunking
+through metadata files.
+
+## The snapshot format
+
+One entry per (permission set × object) grant, sorted for stable diffs
+(`AccessMatrixSchema`, version 1):
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "permissionSet": "showcase_auditor",
+      "object": "showcase_private_note",
+      "create": false,
+      "read": true,
+      "edit": false,
+      "delete": false,
+      "viewAllRecords": true,
+      "modifyAllRecords": false,
+      "sharingModel": "private"
+    }
+  ]
+}
+```
+
+`read` is also `true` when View/Modify All grants it; `edit`/`delete` are also
+`true` under Modify All — the matrix reports **effective** capability, not the
+raw flags. Each row carries the object's OWD so a baseline swing
+(`private` → `public_read_write`) is a visible diff too.
+
+## How it relates to the rest of the defense
+
+- The **[security posture linter](/docs/permissions/authorization#governance-how-declared--enforced-is-kept-true)**
+  (ADR-0090 D7) rejects *individually dangerous* declarations (unset OWD,
+  high-privilege anchor suggestions, retired aliases). The matrix gate catches
+  what the linter can't: a *legitimate-looking* change whose blast radius a
+  human should still sign off.
+- The **[explain engine](/docs/permissions/explain)** is the same evaluation
+  logic pointed at one decision at runtime; the matrix is the build-time sweep
+  across all of them.
+- Both are only possible because grants are **structured data** — the standing
+  argument for the closed authoring vocabulary over freeform predicates.
+
+## See also
+
+- [Authorization Architecture](/docs/permissions/authorization)
+- [Explain Engine](/docs/permissions/explain)
+- [Security Permissions Matrix](/docs/permissions/permissions-matrix) — the human-readable capability tables

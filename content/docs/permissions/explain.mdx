@@ -1,0 +1,107 @@
+---
+title: Explain Engine
+description: Ask the runtime why a decision came out the way it did — every pipeline layer, with contributor attribution, over the kernel service or REST (ADR-0090 D6).
+---
+
+# Explain Engine
+
+Authorization here is a nine-layer pipeline, and a nine-layer pipeline nobody
+can interrogate is a support ticket generator. The explain engine
+(ADR-0090 D6) is the first-class answer to *"why can 张三 PATCH 李四's
+leave_request?"* — it walks the **same code paths the enforcement middleware
+runs** (shared permission-set resolution, evaluator, FLS mask, RLS
+composition), so the report is *explained by construction*, never a parallel
+re-implementation that can drift.
+
+## What a decision looks like
+
+Each report carries the final verdict, the resolved principal, and one entry
+per pipeline layer, in enforcement order:
+
+```
+principal → required_permissions → object_crud → fls → owd_baseline
+         → depth → sharing → vama_bypass → rls
+```
+
+| Field | Meaning |
+|---|---|
+| `allowed` | The overall decision for `(object, operation, principal)` |
+| `principal` | Resolved identity: `userId`, `positions[]`, `permissionSets[]`, optional `principalKind` / `onBehalfOf` |
+| `layers[]` | One entry per layer: `layer`, `verdict`, human-readable `detail`, `contributors[]` |
+| `readFilter` | For reads: the composed row filter actually applied — the machine artifact |
+
+Layer verdicts are `grants` / `denies` / `narrows` / `widens` / `neutral` /
+`not_applicable`. **Contributor attribution** names the permission set that
+produced the verdict and how the caller holds it (position binding, additive
+`everyone` baseline, direct grant) — e.g. the showcase auditor's read of
+another user's private note reports:
+
+```json
+{
+  "layer": "vama_bypass",
+  "verdict": "widens",
+  "detail": "View/Modify All Data bypass held via [showcase_auditor] — ownership and sharing checks are skipped.",
+  "contributors": [{ "kind": "permission_set", "name": "showcase_auditor", "via": "position:auditor" }]
+}
+```
+
+## Calling it
+
+**Kernel service** (in-process, plugins/tests):
+
+```typescript
+const security = kernel.getService('security');
+const decision = await security.explain(
+  { object: 'showcase_private_note', operation: 'read', userId: targetUserId },
+  callerContext,
+);
+```
+
+**REST** — same contract, two transports (`ExplainRequestSchema`):
+
+```bash
+# GET, query-string form
+curl -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/v1/security/explain?object=showcase_private_note&operation=read&userId=usr_123"
+
+# POST, body form
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"object":"showcase_private_note","operation":"read","userId":"usr_123"}' \
+  "$BASE/api/v1/security/explain"
+```
+
+`operation` is one of `read | create | update | delete | transfer | restore |
+purge` (defaults to `read`); omit `userId` to explain **yourself**.
+
+## Who may ask
+
+The endpoint is **authenticated-only** — even on `requireAuth: false`
+deployments (an access report is sensitive even about oneself). Beyond that,
+authorization lives in the *service*, so REST and in-process callers share one
+rule:
+
+- **Yourself** — always allowed.
+- **Another user** — requires the `manage_users` capability **or** a delegated
+  `adminScope` whose business-unit subtree covers that user (ADR-0090 D12):
+  an administrator who can rewire a user's grants may read why they resolve
+  the way they do — and *only* a covering administrator. Anything else → 403.
+
+A deployment without `@objectstack/plugin-security` answers 501.
+
+## What it powers
+
+- **The admin simulator** — Studio's Access pillar builds its "why can this
+  user access?" panel on this endpoint.
+- **The [access-matrix snapshot gate](/docs/permissions/access-matrix)** —
+  the publish-time matrix is the same evaluation run over representative
+  (permission set × object) pairs; explain is the per-decision zoom lens.
+- **Delegated-administration audits** — explain reports both *who granted*
+  (the `granted_by` stamp) and, via contributor attribution, *who could
+  have* ([delegated administration](/docs/permissions/delegated-administration)).
+
+## See also
+
+- [Authorization Architecture](/docs/permissions/authorization) — the pipeline the layers mirror
+- [Access-Matrix Snapshot Gate](/docs/permissions/access-matrix)
+- [Delegated Administration](/docs/permissions/delegated-administration)
+- Reference: [Explain schema](/docs/references/security/explain)
