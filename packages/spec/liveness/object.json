@@ -61,6 +61,12 @@
       "evidence": "packages/objectql/src/engine.ts:1147",
       "note": "driver routing."
     },
+    "lifecycle": {
+      "status": "live",
+      "evidence": "packages/objectql/src/lifecycle/lifecycle-service.ts",
+      "proof": "packages/dogfood/test/storage-growth.dogfood.test.ts#adr0057-lifecycle-bounded-growth",
+      "note": "ADR-0057 data lifecycle contract. The platform LifecycleService (registered by ObjectQLPlugin, default-on) reaps rows past retention.maxAge / ttl.expireAfter under a system context, bounds rotation-declared telemetry by shards×unit, never hot-deletes archive-declared audit ledgers unarchived, and reclaims driver space (SQLite incremental_vacuum) after each sweep. Non-record classes without a bounding policy are rejected at parse time (LifecycleSchema superRefine)."
+    },
     "external": {
       "status": "live",
       "evidence": "packages/runtime/src/external-validation-plugin.ts",

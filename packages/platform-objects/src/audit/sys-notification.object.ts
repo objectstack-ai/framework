@@ -32,6 +32,12 @@ export const SysNotification = ObjectSchema.create({
   icon: 'bell',
   isSystem: true,
   managedBy: 'system',
+  // ADR-0057: one 90d window across the whole notification pipeline
+  // (event → delivery → receipt/inbox), matching NotificationRetention.
+  lifecycle: {
+    class: 'telemetry',
+    retention: { maxAge: '90d' },
+  },
   description: 'Notification events — one row per emit() (ADR-0030 Layer 2 ingress)',
   displayNameField: 'topic',
   nameField: 'topic', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

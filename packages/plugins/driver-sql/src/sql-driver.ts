@@ -1583,6 +1583,19 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Reclaim free pages after bulk deletions (ADR-0057 §3.4). On SQLite this
+   * issues `PRAGMA incremental_vacuum`, returning freelist pages to the OS —
+   * it pairs with the `auto_vacuum=INCREMENTAL` default set in {@link connect}
+   * (files created before that default need one full `VACUUM` to adopt it).
+   * Postgres/MySQL manage space via their own vacuum/purge machinery, so this
+   * is a no-op there.
+   */
+  async reclaimSpace(_options?: DriverOptions): Promise<void> {
+    if (!this.isSqlite) return;
+    await this.knex.raw('PRAGMA incremental_vacuum');
+  }
+
+  /**
    * Resolve the per-table tenant-isolation column for a schema, honoring an
    * explicit tenancy opt-out. Single source of truth for both {@link initObjects}
    * and {@link registerExternalObject} (they previously inlined this logic and

@@ -109,6 +109,7 @@ describe('registry invariants', () => {
         'permission/rowLevelSecurity.using',
         'dataset/dimensions.dateGranularity',
         'object/sharingModel',
+        'object/lifecycle',
       ].sort(),
     );
   });
