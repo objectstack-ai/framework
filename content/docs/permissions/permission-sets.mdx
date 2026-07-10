@@ -193,7 +193,11 @@ A package ships its own sets (`managedBy: 'package'` + `packageId`), seeded
 idempotently at boot and re-seeded on upgrade; environment-authored sets
 (`platform`/`user`) are never clobbered. The data layer refuses admin-door
 writes to package rows (two-doors separation), which is what makes package
-uninstall well-defined.
+uninstall well-defined — and enforced: uninstalling a package
+(`DELETE /api/v1/packages/:id`) revokes its own sets, their position/user
+bindings, and its pending audience-binding suggestions in the same request
+(no ghost grants); the uninstall response reports the revocation under
+`cleanups`. Environment-authored sets and other packages' rows survive.
 
 ---
 

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 export { ObjectStackProtocolImplementation, ConcurrentUpdateError, normalizeViewMetadata } from './protocol.js';
+export type { UninstallCleanup, UninstallCleanupOutcome } from './protocol.js';
 
 export { SysMetadataRepository, resetEnvWritableMetadataTypes } from './sys-metadata-repository.js';
 export type {

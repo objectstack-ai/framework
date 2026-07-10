@@ -77,3 +77,43 @@ describe('deletePackage — durable un-registration (#2532 counterpart)', () => 
     expect(del).toHaveBeenCalledWith('com.example.orders');
   });
 });
+
+describe('deletePackage — uninstall cleanups (#2747)', () => {
+  it('invokes registered cleanups with the package id and reports outcomes', async () => {
+    const { impl } = makeImpl();
+    const cleanup = vi.fn(async () => ({ success: true, removed: 3 }));
+    (impl as any).registerUninstallCleanup('security.package-permissions', cleanup);
+
+    const res: any = await (impl as any).deletePackage({ packageId: 'com.example.orders', actor: 'usr_1' });
+
+    expect(cleanup).toHaveBeenCalledWith(expect.objectContaining({ packageId: 'com.example.orders', actor: 'usr_1' }));
+    expect(res.cleanups).toEqual([
+      { name: 'security.package-permissions', success: true, removed: 3 },
+    ]);
+  });
+
+  it('reports a throwing cleanup as failed instead of aborting the uninstall', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { impl } = makeImpl();
+      (impl as any).registerUninstallCleanup('boom', async () => { throw new Error('db down'); });
+      const res: any = await (impl as any).deletePackage({ packageId: 'com.example.orders' });
+      expect(res.cleanups).toEqual([
+        { name: 'boom', success: false, removed: 0, error: 'db down' },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('re-registration under the same name replaces (idempotent re-init)', async () => {
+    const { impl } = makeImpl();
+    const first = vi.fn(async () => ({ success: true, removed: 1 }));
+    const second = vi.fn(async () => ({ success: true, removed: 2 }));
+    (impl as any).registerUninstallCleanup('x', first);
+    (impl as any).registerUninstallCleanup('x', second);
+    const res: any = await (impl as any).deletePackage({ packageId: 'p' });
+    expect(first).not.toHaveBeenCalled();
+    expect(res.cleanups[0].removed).toBe(2);
+  });
+});

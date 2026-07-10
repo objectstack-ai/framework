@@ -17,6 +17,7 @@ import {
   type SuggestionDeps,
   type SuggestionListFilter,
 } from './suggested-audience-bindings.js';
+import { cleanupPackagePermissions } from './cleanup-package-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
@@ -1000,6 +1001,23 @@ export class SecurityPlugin implements Plugin {
                   };
                 }
                 return { success: true, inserted: r.seeded, updated: r.updated };
+              },
+            );
+          }
+          // [#2747] Uninstall counterpart of the materializer above: when the
+          // owning package is uninstalled, revoke its data-plane permission
+          // rows (package-owned sets + their position/user bindings + the
+          // package's suggestion rows) so grants die with the package — the
+          // "no ghost grants" clause of ADR-0090 D5.
+          if (protocol && typeof protocol.registerUninstallCleanup === 'function') {
+            protocol.registerUninstallCleanup(
+              'security.package-permissions',
+              async (args: { packageId: string }) => {
+                const r = await cleanupPackagePermissions(ql, args.packageId, ctx.logger);
+                return {
+                  success: true,
+                  removed: r.sets + r.positionBindings + r.userGrants + r.suggestions,
+                };
               },
             );
           }
