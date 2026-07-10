@@ -150,6 +150,69 @@ describe('LifecycleService.sweep — Reaper', () => {
     expect(report.swept[0].policy).toBe('rotation-fallback');
   });
 
+  it('rotates physically when the driver supports it — no fallback age reap, reclaim on dropped shards', async () => {
+    const rotateShards = vi.fn(async () => ({
+      object: 'sys_activity',
+      current: 'sys_activity__r20260710',
+      shards: ['sys_activity__r20260710'],
+      dropped: ['sys_activity__r20260626'],
+    }));
+    const reclaimSpace = vi.fn(async () => {});
+    const driver = { name: 'default', supportsRotation: true, rotateShards, reclaimSpace };
+    const obj = {
+      name: 'sys_activity',
+      lifecycle: { class: 'telemetry' as const, storage: { strategy: 'rotation' as const, shards: 14, unit: 'day' as const } },
+    };
+    const { engine, deletes } = captureEngine([obj], { driver });
+
+    const report = await service(engine).sweep();
+
+    expect(rotateShards).toHaveBeenCalledWith(obj, FIXED_NOW);
+    // Rotation replaces the fallback age reap entirely (no retention declared).
+    expect(deletes).toHaveLength(0);
+    expect(report.swept).toEqual([
+      {
+        object: 'sys_activity',
+        class: 'telemetry',
+        policy: 'rotation',
+        cutoff: isoCutoff('14d'),
+        droppedShards: 1,
+      },
+    ]);
+    // A dropped shard freed pages — the datasource gets an incremental vacuum.
+    expect(reclaimSpace).toHaveBeenCalledTimes(1);
+  });
+
+  it('an explicit retention still trims inside the live shards after rotation', async () => {
+    const rotateShards = vi.fn(async () => ({
+      object: 'sys_activity',
+      current: 'sys_activity__r20260710',
+      shards: ['sys_activity__r20260710'],
+      dropped: [],
+    }));
+    const driver = { name: 'default', supportsRotation: true, rotateShards };
+    const { engine, deletes } = captureEngine(
+      [
+        {
+          name: 'sys_activity',
+          lifecycle: {
+            class: 'telemetry',
+            retention: { maxAge: '14d' },
+            storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+          },
+        },
+      ],
+      { driver },
+    );
+
+    const report = await service(engine).sweep();
+
+    expect(rotateShards).toHaveBeenCalledTimes(1);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].where).toEqual({ created_at: { $lt: isoCutoff('14d') } });
+    expect(report.swept.map((e) => e.policy)).toEqual(['rotation', 'retention']);
+  });
+
   it('prefers explicit retention over the rotation fallback window', async () => {
     const { engine, deletes } = captureEngine([
       {

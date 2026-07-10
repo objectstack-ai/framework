@@ -181,6 +181,42 @@ describe('objectstack verify LIFECYCLE (ADR-0057): declared policies bound growt
     expect(report.reclaimed.length, 'reclaimSpace must run on the touched datasource').toBeGreaterThan(0);
   });
 
+  it('ROTATOR (P2): a rotation-declared stream is physically sharded through the real engine → driver path', async () => {
+    engine.registry.registerObject({
+      name: 'growth_probe_stream',
+      label: 'Growth Probe Stream',
+      lifecycle: {
+        class: 'telemetry',
+        storage: { strategy: 'rotation', shards: 3, unit: 'day' },
+      },
+      fields: { payload: { type: 'text', label: 'Payload' } },
+    });
+    await engine.syncObjectSchema('growth_probe_stream');
+
+    // The base name is now a read view; writes land in the current shard.
+    const streamDriver = engine.getDriverForObject('growth_probe_stream') as DriverLike & {
+      execute(sql: string): Promise<unknown>;
+    };
+    const master = (await streamDriver.execute(
+      "SELECT name, type FROM sqlite_master WHERE name LIKE 'growth_probe_stream%' AND name NOT LIKE '%autoindex%'",
+    )) as Array<{ name: string; type: string }>;
+    const types = Object.fromEntries(master.map((r) => [r.name, r.type]));
+    expect(types['growth_probe_stream'], 'rotation must turn the base name into a view').toBe('view');
+    const shardNames = master.filter((r) => /__r\d{6,8}$/.test(r.name)).map((r) => r.name);
+    expect(shardNames.length, 'a current shard table must exist').toBeGreaterThan(0);
+
+    // Round-trip: write through the driver, read through the view, and a
+    // sweep applies the 'rotation' policy without touching the rows inside
+    // the window.
+    await streamDriver.create('growth_probe_stream', { payload: 'tick' });
+    expect(await streamDriver.count('growth_probe_stream', { object: 'growth_probe_stream' })).toBe(1);
+
+    const report = await lifecycle.sweep();
+    const entry = report.swept.find((e) => e.object === 'growth_probe_stream');
+    expect(entry?.policy).toBe('rotation');
+    expect(await streamDriver.count('growth_probe_stream', { object: 'growth_probe_stream' })).toBe(1);
+  });
+
   it('ARCHIVE SAFETY: an audit ledger with a declared archive is never hot-deleted unarchived', async () => {
     for (let i = 0; i < 3; i++) {
       await driver.create('growth_probe_ledger', {

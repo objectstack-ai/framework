@@ -69,6 +69,7 @@ export interface LifecycleEngineLike {
 export interface LifecycleObjectLike {
   name: string;
   lifecycle?: Lifecycle;
+  fields?: Record<string, unknown>;
 }
 
 export interface LifecycleLoggerLike {
@@ -94,10 +95,12 @@ export interface LifecycleServiceOptions {
 export interface LifecycleSweepEntry {
   object: string;
   class: string;
-  policy: 'ttl' | 'retention' | 'rotation-fallback';
+  policy: 'ttl' | 'retention' | 'rotation' | 'rotation-fallback';
   cutoff: string;
   /** `undefined` when the driver doesn't report a count. */
   deleted?: number;
+  /** Rotation only: expired shard tables DROPped this sweep (O(1) reclaim). */
+  droppedShards?: number;
 }
 
 export interface LifecycleSweepReport {
@@ -115,6 +118,14 @@ export interface LifecycleSweepReport {
 interface ReclaimCapableDriver {
   name?: string;
   reclaimSpace?(): Promise<void>;
+}
+
+interface RotationCapableDriver extends ReclaimCapableDriver {
+  supportsRotation?: boolean;
+  rotateShards?(
+    objectDef: LifecycleObjectLike,
+    nowMs?: number,
+  ): Promise<{ object: string; current: string; shards: string[]; dropped: string[] }>;
 }
 
 export class LifecycleService {
@@ -187,7 +198,7 @@ export class LifecycleService {
       for (const obj of declared) {
         const lc = obj.lifecycle as Lifecycle;
         try {
-          const outcomes = await this.reapObject(engine, obj.name, lc, report);
+          const outcomes = await this.reapObject(engine, obj, lc, report);
           const deletedSomething = outcomes.some((n) => n === undefined || n > 0);
           if (deletedSomething && lc.reclaim !== false) {
             const driver = engine.getDriverForObject(obj.name) as ReclaimCapableDriver | undefined;
@@ -226,14 +237,18 @@ export class LifecycleService {
     }
   }
 
-  /** Apply the Reaper policies declared on one object. Returns the deleted
-   * counts (one per applied policy) so the caller can decide on reclaim. */
+  /** Apply the policies declared on one object (Rotator first, then the
+   * Reaper). Returns per-policy outcomes so the caller can decide on
+   * reclaim: numbers are deleted-row counts; `undefined` means "work was
+   * done but the driver reports no count" (also used for dropped shards). */
   private async reapObject(
     engine: LifecycleEngineLike,
-    object: string,
+    obj: LifecycleObjectLike,
     lc: Lifecycle,
     report: LifecycleSweepReport,
   ): Promise<Array<number | undefined>> {
+    const object = obj.name;
+
     // Safety rule: declared `archive` means retain → archive → delete. Until
     // the Archiver (P3) has copied the cold window out, hot deletion would
     // destroy the compliance ledger — so it is skipped, never defaulted.
@@ -249,13 +264,40 @@ export class LifecycleService {
       outcomes.push(await this.reap(engine, object, lc, 'ttl', lc.ttl.field, cutoff, report));
     }
 
+    // Rotation (P2): physical time-sharding when the driver supports it —
+    // the window bound comes from DROPping expired shards (O(1) reclaim).
+    // Drivers without rotation fall through to an equivalent age-based reap,
+    // so the declared bound holds on every dialect.
+    let rotated = false;
+    if (lc.storage?.strategy === 'rotation') {
+      const driver = engine.getDriverForObject(object) as RotationCapableDriver | undefined;
+      if (driver && typeof driver.rotateShards === 'function' && driver.supportsRotation !== false) {
+        const windowMs = lc.storage.shards * SHARD_UNIT_MS[lc.storage.unit];
+        const res = await driver.rotateShards(obj, this.now());
+        report.swept.push({
+          object,
+          class: lc.class,
+          policy: 'rotation',
+          cutoff: new Date(this.now() - windowMs).toISOString(),
+          droppedShards: res.dropped.length,
+        });
+        // Dropped shards freed pages — signal the reclaim pass.
+        outcomes.push(res.dropped.length > 0 ? undefined : 0);
+        rotated = true;
+      }
+    }
+
     if (lc.retention) {
+      // Runs even when rotation is active: rotation reclaims at SHARD
+      // granularity, an explicit retention.maxAge trims to the day inside the
+      // live shards — and immediately bounds a legacy table the Rotator just
+      // adopted whole into its first shard.
       const cutoff = new Date(this.now() - parseLifecycleDuration(lc.retention.maxAge)).toISOString();
       outcomes.push(await this.reap(engine, object, lc, 'retention', 'created_at', cutoff, report));
-    } else if (lc.storage?.strategy === 'rotation' && !lc.ttl) {
-      // Rotation declared but no explicit retention: the shard window IS the
-      // bound. Until the Rotator (P2) shards physically, enforce the same
-      // window with an age-based reap so the declaration is never inert.
+    } else if (lc.storage?.strategy === 'rotation' && !rotated && !lc.ttl) {
+      // Rotation declared but the driver can't shard physically: the shard
+      // window IS the bound — enforce the same window with an age-based reap
+      // so the declaration is never inert.
       const cutoff = new Date(this.now() - lc.storage.shards * SHARD_UNIT_MS[lc.storage.unit]).toISOString();
       outcomes.push(await this.reap(engine, object, lc, 'rotation-fallback', 'created_at', cutoff, report));
     }
