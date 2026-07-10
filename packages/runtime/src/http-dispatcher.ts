@@ -2116,7 +2116,9 @@ export class HttpDispatcher {
         }
 
         const m = method.toUpperCase();
-        const parts = path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+        // split+filter drops leading/trailing/duplicate slashes without a
+        // regex over request-controlled input (CodeQL js/polynomial-redos).
+        const parts = path.split('/').filter(Boolean);
         if (parts[0] !== 'suggested-bindings') return { handled: false };
 
         try {
