@@ -319,6 +319,17 @@ claude mcp add --transport http support-desk https://your-deployment.example.com
 # first tool use opens a browser login — you're connected as yourself
 ```
 
+Or install the [official plugin](https://github.com/objectstack-ai/claude-plugin) —
+it bundles the portable ObjectStack agent skill and a guided `/objectstack:connect`
+command (one plugin serves every deployment; the URL is the only input):
+
+```bash
+claude plugin marketplace add objectstack-ai/claude-plugin
+```
+
+Admins find every client's copy-paste-ready connect snippet — plus the SKILL.md
+download and API-key minting — on the **Setup → Connect an Agent** page.
+
 For headless callers (CI, scripts), mint an API key instead
 (`POST /api/v1/keys`, shown once) and pass it as a header:
 

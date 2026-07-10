@@ -1,11 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { readEnvWithDeprecation, isMcpServerEnabled } from '@objectstack/types';
 import type { IAIService, IDataEngine, IMetadataService } from '@objectstack/spec/contracts';
 import { MCPServerRuntime } from './mcp-server-runtime.js';
 import type { MCPServerRuntimeConfig } from './mcp-server-runtime.js';
 import type { ToolRegistry } from './types.js';
+import { CONNECT_AGENT_UI_BUNDLE } from './connect-ui.js';
 
 /**
  * Configuration options for the MCPServerPlugin.
@@ -135,6 +136,19 @@ export class MCPServerPlugin implements Plugin {
       ctx.logger.info(
         '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_SERVER_ENABLED=true or autoStart for a long-lived (stdio) transport.',
       );
+    }
+
+    // ── Plugin-carried Setup UI (cloud ADR-0009 principle) ──
+    // "Connect an agent" page + nav entry ship WITH the MCP capability and
+    // follow the HTTP surface's default-on switch: an opted-out deployment
+    // advertises nothing, so it gets no page either.
+    if (isMcpServerEnabled()) {
+      ctx.hook('kernel:ready', async () => {
+        try {
+          const manifest = ctx.getService<{ register(m: unknown): void }>('manifest');
+          manifest?.register?.(CONNECT_AGENT_UI_BUNDLE);
+        } catch { /* no manifest service (bare kernels, tests) */ }
+      });
     }
 
     // Trigger hook for other plugins to extend MCP

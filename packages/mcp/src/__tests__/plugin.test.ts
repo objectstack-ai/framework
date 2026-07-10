@@ -236,4 +236,37 @@ describe('MCPServerPlugin', () => {
       await plugin.destroy();
     });
   });
+
+  describe('connect-agent UI bundle (plugin-carried Setup page)', () => {
+    async function startWithManifest(env?: string) {
+      if (env === undefined) delete process.env.OS_MCP_SERVER_ENABLED;
+      else process.env.OS_MCP_SERVER_ENABLED = env;
+      const manifest = { register: vi.fn() };
+      const ctx = createMockPluginContext({ manifest });
+      const plugin = new MCPServerPlugin();
+      await plugin.init(ctx as any);
+      await plugin.start(ctx as any);
+      // Replay the kernel:ready hooks the plugin registered.
+      for (const call of (ctx.hook as any).mock.calls) {
+        if (call[0] === 'kernel:ready') await call[1]();
+      }
+      return manifest;
+    }
+
+    it('registers the Connect-an-Agent page by default (surface default-on)', async () => {
+      const manifest = await startWithManifest();
+      expect(manifest.register).toHaveBeenCalledTimes(1);
+      const bundle = manifest.register.mock.calls[0][0];
+      expect(bundle.id).toBe('com.objectstack.mcp.connect-agent-ui');
+      expect(bundle.pages[0].name).toBe('connect_agent');
+      expect(bundle.navigationContributions[0].app).toBe('setup');
+      expect(bundle.navigationContributions[0].items[0].pageName).toBe('connect_agent');
+    });
+
+    it('registers nothing when the MCP surface is opted out', async () => {
+      const manifest = await startWithManifest('false');
+      expect(manifest.register).not.toHaveBeenCalled();
+    });
+  });
+
 });

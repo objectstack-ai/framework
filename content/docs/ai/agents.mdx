@@ -46,7 +46,9 @@ instead — see the callout in the [AI Overview](/docs/ai).)
 
 Every deployment serves MCP at `/api/v1/mcp` by default (a core platform
 capability — set `OS_MCP_SERVER_ENABLED=false` to opt out), with two
-authentication tracks:
+authentication tracks: The in-product entry point is the
+**Setup → Connect an Agent** page: per-client connect snippets, the portable
+SKILL.md download (`GET /api/v1/mcp/skill`), and API-key minting.
 
 - **OAuth 2.1 (interactive clients — recommended).** Each deployment is its
   own spec-compliant authorization server: the endpoint publishes
