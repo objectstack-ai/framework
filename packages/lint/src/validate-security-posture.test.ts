@@ -18,6 +18,8 @@ import {
   SECURITY_BOOK_AUDIENCE_UNKNOWN_SET,
   SECURITY_PRIVATE_NO_READSCOPE,
   SECURITY_MASTER_DETAIL_UNGRANTED,
+  SECURITY_GRANT_EXPIRED_AT_AUTHORING,
+  SECURITY_DELEGATION_MISSING_REASON,
 } from './validate-security-posture.js';
 
 const rulesOf = (stack: Record<string, unknown>) =>
@@ -355,6 +357,80 @@ describe('validateSecurityPosture · book audience (ADR-0046 §6.7 / ADR-0090)',
           { name: 'crm_default', groups: [] },
         ],
       }),
+    ).toEqual([]);
+  });
+
+  // ── ADR-0091: authored grant rows (seed data) — lifecycle sanity ──────
+  const NOW = Date.parse('2026-07-10T12:00:00Z');
+
+  it('errors on a seed grant whose valid_until is already in the past (dead on arrival)', () => {
+    const findings = validateSecurityPosture(
+      {
+        data: [
+          {
+            object: 'sys_user_position',
+            records: [
+              { user_id: 'u1', position: 'approver', valid_until: '2026-07-01T00:00:00Z' },
+              { user_id: 'u2', position: 'approver', valid_until: '2026-08-01T00:00:00Z' }, // future — fine
+            ],
+          },
+        ],
+      },
+      { nowMs: NOW },
+    );
+    const expired = findings.filter((f) => f.rule === SECURITY_GRANT_EXPIRED_AT_AUTHORING);
+    expect(expired).toHaveLength(1);
+    expect(expired[0]).toMatchObject({
+      severity: 'error',
+      where: 'seed "sys_user_position" record #0',
+      path: 'data[0].records[0].valid_until',
+    });
+  });
+
+  it('errors on an unparseable valid_until (the resolver fails closed — grant never active)', () => {
+    const findings = validateSecurityPosture(
+      { data: [{ object: 'sys_user_permission_set', records: [{ user_id: 'u1', permission_set_id: 'ps1', valid_until: 'not-a-date' }] }] },
+      { nowMs: NOW },
+    );
+    const expired = findings.filter((f) => f.rule === SECURITY_GRANT_EXPIRED_AT_AUTHORING);
+    expect(expired).toHaveLength(1);
+    expect(expired[0].message).toContain('not a parseable timestamp');
+  });
+
+  it('errors on a delegation row (delegated_from) without a reason — D3 dual audit', () => {
+    const findings = validateSecurityPosture(
+      {
+        data: [
+          {
+            object: 'sys_user_position',
+            records: [
+              { user_id: 'u2', position: 'approver', delegated_from: 'u1', valid_until: '2999-01-01T00:00:00Z' },
+              { user_id: 'u3', position: 'approver', delegated_from: 'u1', valid_until: '2999-01-01T00:00:00Z', reason: 'vacation stand-in' },
+            ],
+          },
+        ],
+      },
+      { nowMs: NOW },
+    );
+    const missing = findings.filter((f) => f.rule === SECURITY_DELEGATION_MISSING_REASON);
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({
+      severity: 'error',
+      path: 'data[0].records[0].reason',
+    });
+  });
+
+  it('stays silent on unbounded grants and non-grant seed objects', () => {
+    expect(
+      validateSecurityPosture(
+        {
+          data: [
+            { object: 'sys_user_position', records: [{ user_id: 'u1', position: 'approver' }] },
+            { object: 'crm_lead', records: [{ name: 'stale', valid_until: '2020-01-01T00:00:00Z' }] },
+          ],
+        },
+        { nowMs: NOW },
+      ),
     ).toEqual([]);
   });
 });

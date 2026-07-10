@@ -32,6 +32,7 @@ import {
 } from '@objectstack/spec';
 
 import { resolveApiKeyPrincipal } from './api-key.js';
+import { isGrantActive } from './grant-validity.js';
 
 /** The transport-agnostic authorization envelope produced from a request. */
 export interface ResolvedAuthzContext {
@@ -158,6 +159,11 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
     }
   }
 
+  // Single clock for every validity-window check in this resolution
+  // (ADR-0091 D2 — a grant row outside [valid_from, valid_until) does not
+  // resolve, fail-closed, with no background job involved).
+  const nowMs = input.nowMs ?? Date.now();
+
   // 4. [ADR-0057 D4] Platform-owned RBAC role assignments (sys_user_position) — the
   //    source of truth for custom roles, decoupled from sys_member.role.
   //    `organization_id = null` = global (cross-tenant); else match active org.
@@ -165,6 +171,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   for (const ur of userPositionRows) {
     const org = ur.organization_id ?? null;
     if (org && tenantId && org !== tenantId) continue;
+    if (!isGrantActive(ur, nowMs)) continue;
     const r = ur.position;
     if (typeof r === 'string' && r && !ctx.positions.includes(r)) ctx.positions.push(r);
   }
@@ -184,7 +191,10 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   }
 
   // 6. Permission sets — user-scoped grants (null org = global, else active org).
-  const upsRows = await tryFind(ql, 'sys_user_permission_set', { user_id: userId }, 100);
+  //    Rows outside their validity window are dropped BEFORE any derivation, so
+  //    an expired admin_full_access grant cannot yield platform_admin either.
+  const upsRowsAll = await tryFind(ql, 'sys_user_permission_set', { user_id: userId }, 100);
+  const upsRows = upsRowsAll.filter((r) => isGrantActive(r, nowMs));
   const psIds = new Set<string>(
     upsRows
       .filter((r) => {

@@ -119,6 +119,27 @@ describe('explainAccess (ADR-0090 D6)', () => {
     expect(d.layers[0].detail).toContain('on behalf of u9');
   });
 
+  it('surfaces expired grants in the principal layer with the dedicated state (ADR-0091 D2)', async () => {
+    const d = await explainAccess(makeDeps(), {
+      object: 'leave_request', operation: 'read',
+      context: {
+        ...CTX,
+        expiredGrants: [{ kind: 'position', name: 'payroll_approver', until: '2026-07-01T00:00:00Z' }],
+      },
+    });
+    const principal = d.layers.find((l) => l.layer === 'principal')!;
+    expect(principal.detail).toContain('EXPIRED');
+    expect(principal.detail).toContain('payroll_approver until 2026-07-01T00:00:00Z');
+    expect(principal.contributors).toContainEqual({
+      kind: 'position',
+      name: 'payroll_approver',
+      via: 'held until 2026-07-01T00:00:00Z — expired',
+      state: 'expired',
+    });
+    // Expired grants contribute nothing to the resolved principal itself.
+    expect(d.principal.positions).not.toContain('payroll_approver');
+  });
+
   it('lists masked fields in the fls layer', async () => {
     const d = await explainAccess(
       makeDeps({ getFieldMask: () => ({ salary: { readable: false }, name: { readable: true } }) }),
@@ -142,6 +163,47 @@ describe('buildContextForUser', () => {
 
   it('reconstructs positions + direct grants + the everyone anchor', async () => {
     const ctx = await buildContextForUser(ql, 'u2');
-    expect(ctx).toEqual({ userId: 'u2', positions: ['hr_specialist', 'everyone'], permissions: ['payroll_reader'] });
+    expect(ctx).toEqual({
+      userId: 'u2',
+      positions: ['hr_specialist', 'everyone'],
+      permissions: ['payroll_reader'],
+      expiredGrants: [],
+    });
+  });
+
+  it('filters grants outside their validity window and reports them as expired (ADR-0091 D2)', async () => {
+    const NOW = Date.parse('2026-07-10T12:00:00Z');
+    const qlWindowed = {
+      async find(object: string, _opts: any) {
+        if (object === 'sys_user_position') {
+          return [
+            { user_id: 'u2', position: 'hr_specialist' },
+            { user_id: 'u2', position: 'payroll_approver', valid_until: '2026-07-01T00:00:00Z' },
+            // Pending (future valid_from) is filtered but NOT reported as expired.
+            { user_id: 'u2', position: 'auditor', valid_from: '2026-08-01T00:00:00Z' },
+          ];
+        }
+        if (object === 'sys_user_permission_set') {
+          return [
+            { user_id: 'u2', permission_set_id: 'ps1' },
+            { user_id: 'u2', permission_set_id: 'ps2', valid_until: '2026-06-01T00:00:00Z' },
+          ];
+        }
+        if (object === 'sys_permission_set') {
+          return [
+            { id: 'ps1', name: 'payroll_reader' },
+            { id: 'ps2', name: 'quarter_close_admin' },
+          ];
+        }
+        return [];
+      },
+    };
+    const ctx = await buildContextForUser(qlWindowed, 'u2', NOW);
+    expect(ctx.positions).toEqual(['hr_specialist', 'everyone']);
+    expect(ctx.permissions).toEqual(['payroll_reader']);
+    expect(ctx.expiredGrants).toEqual([
+      { kind: 'position', name: 'payroll_approver', until: '2026-07-01T00:00:00Z' },
+      { kind: 'permission_set', name: 'quarter_close_admin', until: '2026-06-01T00:00:00Z' },
+    ]);
   });
 });

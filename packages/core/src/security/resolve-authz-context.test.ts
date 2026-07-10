@@ -170,6 +170,80 @@ describe('resolveLocalizationContext — batched fallback read (#2409)', () => {
   });
 });
 
+describe('grant validity windows (ADR-0091 D1/D2)', () => {
+  const NOW = Date.parse('2026-07-10T12:00:00Z');
+  const PAST = '2026-07-01T00:00:00Z';
+  const FUTURE = '2026-08-01T00:00:00Z';
+
+  it('an expired sys_user_position row does not resolve', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [
+        { user_id: 'u1', position: 'approver', organization_id: null, valid_until: PAST },
+        { user_id: 'u1', position: 'contributor', organization_id: null },
+      ],
+      sys_user_permission_set: [],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1'), nowMs: NOW });
+    expect(ctx.positions).not.toContain('approver');
+    expect(ctx.positions).toContain('contributor'); // null bounds = unbounded, unchanged
+  });
+
+  it('a not-yet-active sys_user_position row (future valid_from) does not resolve', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [{ user_id: 'u1', position: 'approver', organization_id: null, valid_from: FUTURE }],
+      sys_user_permission_set: [],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1'), nowMs: NOW });
+    expect(ctx.positions).not.toContain('approver');
+  });
+
+  it('a row inside its [from, until) window resolves; until is exclusive', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [
+        { user_id: 'u1', position: 'stand_in', organization_id: null, valid_from: PAST, valid_until: FUTURE },
+        // Boundary: valid_until exactly NOW → inactive AT the bound (half-open).
+        { user_id: 'u1', position: 'boundary', organization_id: null, valid_until: '2026-07-10T12:00:00Z' },
+      ],
+      sys_user_permission_set: [],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1'), nowMs: NOW });
+    expect(ctx.positions).toContain('stand_in');
+    expect(ctx.positions).not.toContain('boundary');
+  });
+
+  it('an expired direct permission-set grant resolves to nothing — including platform_admin derivation', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [],
+      sys_user_permission_set: [
+        { user_id: 'u1', permission_set_id: 'psA', organization_id: null, valid_until: PAST },
+      ],
+      sys_permission_set: [{ id: 'psA', name: 'admin_full_access' }],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1'), nowMs: NOW });
+    expect(ctx.permissions).not.toContain('admin_full_access');
+    expect(ctx.positions).not.toContain('platform_admin');
+  });
+
+  it('fails closed on an unparseable valid_until', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [{ user_id: 'u1', position: 'approver', organization_id: null, valid_until: 'not-a-date' }],
+      sys_user_permission_set: [],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('u1'), nowMs: NOW });
+    expect(ctx.positions).not.toContain('approver');
+  });
+});
+
 describe('audience anchors in the resolver (ADR-0090 D5)', () => {
   it('every authenticated principal implicitly holds `everyone` (additive, no cliff)', async () => {
     const ql = makeQl({

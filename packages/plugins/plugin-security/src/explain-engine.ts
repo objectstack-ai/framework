@@ -19,6 +19,7 @@
  * the SEMANTIC impact of a grant change instead of a JSON diff.
  */
 
+import { isGrantActive, isGrantExpired } from '@objectstack/core';
 import type { PermissionSet } from '@objectstack/spec/security';
 import type {
   ExplainDecision,
@@ -84,30 +85,55 @@ export interface ExplainInput {
  * explain API's `userId` parameter — the caller-facing authorization for
  * explaining OTHERS lives in the route/service wrapper, not here.
  */
-export async function buildContextForUser(ql: any, userId: string): Promise<any> {
+export async function buildContextForUser(ql: any, userId: string, nowMs: number = Date.now()): Promise<any> {
   const positions: string[] = [];
   const permissions: string[] = [];
+  // [ADR-0091 D2] Rows outside their validity window resolve to NOTHING (same
+  // predicate as resolveAuthzContext, fail-closed). Expired-but-present rows
+  // are collected separately so the principal layer can report the dedicated
+  // "held until … — expired" contributor state.
+  const expiredGrants: Array<{ kind: 'position' | 'permission_set'; name: string; until?: string }> = [];
+  const untilOf = (r: any): string | undefined => {
+    const v = r?.valid_until ?? r?.validUntil;
+    return v == null || v === '' ? undefined : String(v);
+  };
   try {
     const rows = await ql.find('sys_user_position', { where: { user_id: userId }, limit: 500, context: SYSTEM_CTX });
     for (const r of Array.isArray(rows) ? rows : []) {
       const p = String((r as any)?.position ?? '');
-      if (p && !positions.includes(p)) positions.push(p);
+      if (!p) continue;
+      if (!isGrantActive(r, nowMs)) {
+        if (isGrantExpired(r, nowMs)) expiredGrants.push({ kind: 'position', name: p, until: untilOf(r) });
+        continue;
+      }
+      if (!positions.includes(p)) positions.push(p);
     }
   } catch { /* table unavailable → positions stay empty */ }
   try {
     const grants = await ql.find('sys_user_permission_set', { where: { user_id: userId }, limit: 500, context: SYSTEM_CTX });
-    const ids = (Array.isArray(grants) ? grants : []).map((g: any) => g?.permission_set_id).filter(Boolean);
+    const grantRows = (Array.isArray(grants) ? grants : []) as any[];
+    const activeRows = grantRows.filter((g) => isGrantActive(g, nowMs));
+    const expiredRows = grantRows.filter((g) => !isGrantActive(g, nowMs) && isGrantExpired(g, nowMs));
+    const ids = [...activeRows, ...expiredRows].map((g: any) => g?.permission_set_id).filter(Boolean);
     if (ids.length > 0) {
       const sets = await ql.find('sys_permission_set', { where: { id: { $in: ids } }, limit: ids.length, context: SYSTEM_CTX });
+      const nameById = new Map<string, string>();
       for (const s of Array.isArray(sets) ? sets : []) {
-        const n = String((s as any)?.name ?? '');
+        if ((s as any)?.id && (s as any)?.name) nameById.set(String((s as any).id), String((s as any).name));
+      }
+      for (const g of activeRows) {
+        const n = nameById.get(String(g?.permission_set_id ?? ''));
         if (n && !permissions.includes(n)) permissions.push(n);
+      }
+      for (const g of expiredRows) {
+        const n = nameById.get(String(g?.permission_set_id ?? ''));
+        if (n) expiredGrants.push({ kind: 'permission_set', name: n, until: untilOf(g) });
       }
     }
   } catch { /* ignore */ }
   // [ADR-0090 D5] Authenticated principals implicitly hold the everyone anchor.
   if (!positions.includes('everyone')) positions.push('everyone');
-  return { userId, positions, permissions };
+  return { userId, positions, permissions, expiredGrants };
 }
 
 /** D1-equivalent OWD reading (mirrors plugin-sharing's effectiveSharingModel). */
@@ -142,6 +168,11 @@ export async function explainAccess(deps: ExplainEngineDeps, input: ExplainInput
     if ((context?.permissions ?? []).includes(name)) return 'direct grant';
     return 'resolved';
   };
+  // [ADR-0091 D2] Expired-but-present grant rows (populated by
+  // buildContextForUser when explaining by userId). They contributed nothing —
+  // reported so "why did access disappear" is self-answering.
+  const expiredGrants: Array<{ kind: 'position' | 'permission_set'; name: string; until?: string }> =
+    Array.isArray(context?.expiredGrants) ? context.expiredGrants : [];
   layers.push({
     layer: 'principal',
     verdict: 'neutral',
@@ -150,10 +181,21 @@ export async function explainAccess(deps: ExplainEngineDeps, input: ExplainInput
       `resolving to permission set(s) [${setNames.join(', ') || 'none'}] (union-merged, most-permissive).` +
       (context?.onBehalfOf?.userId
         ? ` Acting on behalf of ${context.onBehalfOf.userId} — D10 intersection semantics apply at enforcement.`
+        : '') +
+      (expiredGrants.length > 0
+        ? ` ${expiredGrants.length} grant(s) present but EXPIRED (ADR-0091): [${expiredGrants
+            .map((g) => `${g.name}${g.until ? ` until ${g.until}` : ''}`)
+            .join(', ')}] — contributing nothing.`
         : ''),
     contributors: [
       ...positions.map((p) => ({ kind: 'position' as const, name: p })),
       ...setNames.map((n) => ({ kind: 'permission_set' as const, name: n, via: viaOf(n) })),
+      ...expiredGrants.map((g) => ({
+        kind: g.kind,
+        name: g.name,
+        via: g.until ? `held until ${g.until} — expired` : 'expired',
+        state: 'expired' as const,
+      })),
     ],
   });
 

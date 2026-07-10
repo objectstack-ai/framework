@@ -54,6 +54,13 @@ export const ExplainLayerSchema = lazySchema(() => z.object({
     name: z.string(),
     /** How the contributor reached the principal (e.g. `position:sales_rep`, `baseline`, `everyone`). */
     via: z.string().optional(),
+    /**
+     * [ADR-0091 D2] Grant-lifecycle state. Omitted/`active` = contributing
+     * normally; `expired` = the grant row exists but is OUTSIDE its
+     * `[valid_from, valid_until)` window, so it contributed NOTHING — reported
+     * so "why did access disappear" is self-answering ("held until … — expired").
+     */
+    state: z.enum(['active', 'expired']).optional(),
   })).default([]),
 }));
 export type ExplainLayer = z.infer<typeof ExplainLayerSchema>;

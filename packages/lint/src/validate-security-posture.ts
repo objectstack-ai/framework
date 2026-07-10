@@ -17,6 +17,8 @@
  * | security-book-audience-unknown-set(warn)| ADR-0046 §6.7 { permissionSet } |
  * | security-private-no-readscope (info)    | admin-intent mismatch class     |
  * | security-master-detail-ungranted(warn)  | framework#2700 os-tianshun-mtc#43|
+ * | security-grant-expired-at-authoring(err)| ADR-0091 D2 resolution filtering|
+ * | security-delegation-missing-reason(err) | ADR-0091 D3 dual audit          |
  *
  * Per ADR-0049 discipline these are NOT advisory security: every `error` rule
  * mirrors a runtime enforcement point (D1 fail-closed OWD default, D4 zod
@@ -42,6 +44,8 @@ export const SECURITY_ROLE_WORD = 'security-role-word';
 export const SECURITY_BOOK_AUDIENCE_UNKNOWN_SET = 'security-book-audience-unknown-set';
 export const SECURITY_PRIVATE_NO_READSCOPE = 'security-private-no-readscope';
 export const SECURITY_MASTER_DETAIL_UNGRANTED = 'security-master-detail-ungranted';
+export const SECURITY_GRANT_EXPIRED_AT_AUTHORING = 'security-grant-expired-at-authoring';
+export const SECURITY_DELEGATION_MISSING_REASON = 'security-delegation-missing-reason';
 
 export type SecuritySeverity = 'error' | 'warning' | 'info';
 
@@ -149,8 +153,11 @@ function grantsObjectAccess(p: AnyRec): boolean {
 /**
  * Validate the security posture of a stack. Returns findings (empty = clean).
  * `error` findings gate the build in `os compile`; `info` is advisory.
+ *
+ * `opts.nowMs` injects the clock for the ADR-0091 authoring-time expiry rule
+ * (tests); production callers omit it.
  */
-export function validateSecurityPosture(stack: AnyRec): SecurityFinding[] {
+export function validateSecurityPosture(stack: AnyRec, opts?: { nowMs?: number }): SecurityFinding[] {
   const findings: SecurityFinding[] = [];
   if (!stack || typeof stack !== 'object') return findings;
 
@@ -476,6 +483,73 @@ export function validateSecurityPosture(stack: AnyRec): SecurityFinding[] {
             `{ allowRead: true, allowCreate: true, allowEdit: true }. If no role should ever touch ` +
             `it (a pure system/internal table), name it sys_* or set isSystem: true.`,
         });
+      }
+    }
+  }
+
+  // ── ADR-0091: authored grant rows (seed data) — lifecycle sanity ──────
+  // Grant assignments authored as seed data on the two user-grant tables.
+  // Both rules mirror runtime enforcement (D2 resolution-time filtering; the
+  // D3 delegation gate), per the ADR-0049 "no advisory security" discipline:
+  // the lint moves the failure from silent-dead-grant to author-time fix-it.
+  const GRANT_SEED_OBJECTS = new Set(['sys_user_position', 'sys_user_permission_set']);
+  const nowMs = opts?.nowMs ?? Date.now();
+  for (const [i, seed] of asArray(stack.data).entries()) {
+    const seedObject = typeof seed.object === 'string' ? seed.object : '';
+    if (!GRANT_SEED_OBJECTS.has(seedObject)) continue;
+    const records = Array.isArray(seed.records) ? (seed.records as AnyRec[]) : [];
+    for (let j = 0; j < records.length; j++) {
+      const rec = (records[j] ?? {}) as AnyRec;
+      const where = `seed "${seedObject}" record #${j}`;
+
+      // D2: a valid_until already in the past (or unparseable) at authoring
+      // time is a grant that will NEVER resolve — dead on arrival, fail-closed.
+      const until = rec.valid_until;
+      if (until != null && until !== '') {
+        const ms =
+          typeof until === 'number'
+            ? (until < 1e12 ? until * 1000 : until)
+            : until instanceof Date
+              ? until.getTime()
+              : typeof until === 'string'
+                ? Date.parse(until)
+                : Number.NaN;
+        if (Number.isNaN(ms) || ms <= nowMs) {
+          findings.push({
+            severity: 'error',
+            rule: SECURITY_GRANT_EXPIRED_AT_AUTHORING,
+            where,
+            path: `data[${i}].records[${j}].valid_until`,
+            message: Number.isNaN(ms)
+              ? `valid_until ${JSON.stringify(until)} is not a parseable timestamp — the resolver fails ` +
+                `closed (ADR-0091 D2), so this grant will NEVER be active.`
+              : `valid_until ${JSON.stringify(until)} is already in the past — this grant is expired at ` +
+                `authoring time and will never resolve (ADR-0091 D2 filters it fail-closed).`,
+            hint:
+              `Set valid_until to a future instant (ISO-8601 UTC), or drop the column for an unbounded ` +
+              `grant. If the row is a historical record, it belongs in audit history, not seed data.`,
+          });
+        }
+      }
+
+      // D3: delegation rows (delegated_from set) MUST carry a reason — the
+      // dual-audit half the runtime gate also rejects.
+      const delegatedFrom = rec.delegated_from;
+      if (delegatedFrom != null && delegatedFrom !== '') {
+        const reason = rec.reason;
+        if (typeof reason !== 'string' || reason.trim().length === 0) {
+          findings.push({
+            severity: 'error',
+            rule: SECURITY_DELEGATION_MISSING_REASON,
+            where,
+            path: `data[${i}].records[${j}].reason`,
+            message:
+              `delegation row (delegated_from = ${JSON.stringify(delegatedFrom)}) has no reason. ` +
+              `ADR-0091 D3 requires a mandatory reason on every delegation for the dual audit trail ` +
+              `(granted_by = writer, delegated_from = authority source, reason = why).`,
+            hint: `Add reason: 'vacation stand-in for 张三, 2026-08-01..15' (free text, required).`,
+          });
+        }
       }
     }
   }

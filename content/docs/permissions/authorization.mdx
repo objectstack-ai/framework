@@ -185,6 +185,31 @@ top of this endpoint.
 Full request/response walkthrough, layer vocabulary, and caller-authorization
 details: **[Explain Engine](/docs/permissions/explain)**.
 
+## Grant lifecycle: validity windows (ADR-0091 L1)
+
+Every user-grant row (`sys_user_position`, `sys_user_permission_set`) carries
+optional **effective-dating columns** — `valid_from` / `valid_until` (half-open
+`[from, until)`, UTC; null = unbounded) — plus the lifecycle-audit columns
+`reason`, `delegated_from`, `last_certified_at` / `certified_by`.
+
+Correctness lives in **resolution-time filtering, fail-closed** (ADR-0091 D2):
+a row outside its window simply stops resolving — in `resolveAuthzContext`,
+the explain engine, sharing-rule position expansion, and (transitively) the
+delegated-admin gate's held-scope resolution. No background cleanup job is
+involved (ADR-0049); the clock is checked on every resolution. An expired
+unscoped `admin_full_access` grant no longer derives `platform_admin`.
+
+The explain engine reports an expired-but-present row as a dedicated
+contributor state ("held until 2026-08-01 — expired"), so "why did access
+disappear" is self-answering. Two authoring lint rules mirror the runtime
+behavior: a seed grant whose `valid_until` is already past (or unparseable)
+is dead on arrival (error), and a delegation row (`delegated_from`) without
+`reason` breaks the dual audit (error).
+
+Delegation self-service, break-glass activation, and recertification
+campaigns build on this substrate — see ADR-0091 D3–D7 for the phasing and
+the open-core line.
+
 ## Governance: how "declared = enforced" is kept true
 
 Four CI-time mechanisms make the security posture a **checked artifact**
@@ -194,8 +219,10 @@ rather than a belief:
   `@objectstack/lint`, gating `os compile`): unset OWD on custom objects,
   retired OWD aliases, an external dial wider than internal, `'*'` wildcards
   carrying View/Modify All outside the platform admin set, high-privilege
-  `isDefault` (everyone-suggested) sets, and the reserved word "role" in
-  security identifiers — every error rule mirrors a runtime gate.
+  `isDefault` (everyone-suggested) sets, the reserved word "role" in
+  security identifiers, and the ADR-0091 grant-lifecycle rules (a seed grant
+  already expired at authoring time; a delegation row missing its mandatory
+  `reason`) — every error rule mirrors a runtime gate.
 - **Access-matrix snapshot** (ADR-0090 D6, `buildAccessMatrix` /
   `diffAccessMatrix`): with `access-matrix.json` committed next to the config,
   `os compile` fails on any capability drift with semantic lines
@@ -266,3 +293,4 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 | [0078](/adr/0078-no-inert-declarable-metadata) | No inert declarable metadata |
 | [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |
 | 0090 | Permission Model v2: position rename + vocabulary freeze, profile removal, fail-closed OWD default + external dial, audience anchors, principal taxonomy, publish linter, delegated administration, explain engine + access matrix |
+| 0091 | Grant lifecycle: validity windows + resolution-time filtering (L1, landed), delegation, break-glass, recertification substrate |
