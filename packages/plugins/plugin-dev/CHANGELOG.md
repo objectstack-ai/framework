@@ -1,5 +1,28 @@
 # @objectstack/plugin-dev
 
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [2a71f48]
+- Updated dependencies [02f6af4]
+- Updated dependencies [8f0b9df]
+- Updated dependencies [ff648ad]
+- Updated dependencies [bea4b92]
+  - @objectstack/plugin-auth@15.0.0
+  - @objectstack/rest@15.0.0
+  - @objectstack/spec@15.0.0
+  - @objectstack/plugin-security@15.0.0
+  - @objectstack/objectql@15.0.0
+  - @objectstack/runtime@15.0.0
+  - @objectstack/account@15.0.0
+  - @objectstack/setup@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/driver-memory@15.0.0
+  - @objectstack/plugin-hono-server@15.0.0
+  - @objectstack/service-i18n@15.0.0
+  - @objectstack/types@15.0.0
+
 ## 14.2.0
 
 ### Patch Changes

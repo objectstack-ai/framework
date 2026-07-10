@@ -1,5 +1,95 @@
 # @objectstack/cli
 
+## 15.0.0
+
+### Minor Changes
+
+- 8f0b9df: fix(cli,plugin-security): `os meta resync` to re-materialize default permission sets from dist (#2705)
+
+  The default permission sets (`admin_full_access` / `member_default` /
+  `viewer_readonly` …) were seeded **insert-once** at boot: `bootstrapPlatformAdmin`
+  skipped any row that already existed and never wrote the shipped declaration
+  back. So editing a default set's source, recompiling, and restarting `os dev`
+  **without** `--fresh` left the runtime serving the OLD value — silently, because
+  the runtime authz resolver hydrates permission sets from the `sys_permission_set`
+  row (`resolve-authz-context.ts`), not from the in-memory dist. A permission-gated
+  surface (e.g. `setup.access`) would keep its stale behavior with no error, which
+  repeatedly misled debugging. Every _other_ metadata seed (declared permission
+  sets, positions, built-in roles, capabilities) already upserts on boot, leaving
+  the platform-default path the lone insert-once holdout — a gap ADR-0090 widened
+  by persisting more facets (`system_permissions`, delegated-admin `admin_scope`)
+  onto the same row.
+
+  The insert-once posture is deliberate for prod (it protects an admin's Setup
+  edits and keeps the defaults env-authored — the exact posture
+  `bootstrapDeclaredPermissions` relies on), so this is **not** switched to a blind
+  upsert. Instead:
+
+  - `bootstrapPlatformAdmin` gains a `resync` option. Default boot behavior is
+    unchanged (insert-once). Under `resync`, an existing row is reconciled to the
+    shipped dist **only** when the platform still owns it (`managed_by` absent or
+    `'platform'`); a row an admin took over (`managed_by:'user'`) or a package owns
+    (`'package'`) is an intentional override and is left untouched.
+  - New `os meta resync` command boots the runtime, reconciles the default
+    permission-set rows to the compiled dist, and reports what was reconciled /
+    preserved / newly seeded — **without touching business data** and without a
+    `--fresh` wipe. Gated behind a confirmation prompt (`--yes` to skip; `--json`
+    for scripting).
+
+  Prod boot is unaffected; the fix is entirely opt-in via the new command.
+
+### Patch Changes
+
+- Updated dependencies [2a71f48]
+- Updated dependencies [02f6af4]
+- Updated dependencies [8f0b9df]
+- Updated dependencies [ff648ad]
+- Updated dependencies [bea4b92]
+  - @objectstack/plugin-auth@15.0.0
+  - @objectstack/platform-objects@15.0.0
+  - @objectstack/rest@15.0.0
+  - @objectstack/spec@15.0.0
+  - @objectstack/plugin-security@15.0.0
+  - @objectstack/lint@15.0.0
+  - @objectstack/objectql@15.0.0
+  - @objectstack/runtime@15.0.0
+  - @objectstack/verify@15.0.0
+  - @objectstack/account@15.0.0
+  - @objectstack/setup@15.0.0
+  - @objectstack/plugin-approvals@15.0.0
+  - @objectstack/plugin-audit@15.0.0
+  - @objectstack/plugin-email@15.0.0
+  - @objectstack/plugin-reports@15.0.0
+  - @objectstack/plugin-sharing@15.0.0
+  - @objectstack/service-job@15.0.0
+  - @objectstack/service-queue@15.0.0
+  - @objectstack/service-realtime@15.0.0
+  - @objectstack/service-settings@15.0.0
+  - @objectstack/service-storage@15.0.0
+  - @objectstack/client@15.0.0
+  - @objectstack/cloud-connection@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/formula@15.0.0
+  - @objectstack/mcp@15.0.0
+  - @objectstack/observability@15.0.0
+  - @objectstack/driver-memory@15.0.0
+  - @objectstack/driver-mongodb@15.0.0
+  - @objectstack/driver-sql@15.0.0
+  - @objectstack/driver-sqlite-wasm@15.0.0
+  - @objectstack/plugin-hono-server@15.0.0
+  - @objectstack/plugin-webhooks@15.0.0
+  - @objectstack/service-analytics@15.0.0
+  - @objectstack/service-automation@15.0.0
+  - @objectstack/service-cache@15.0.0
+  - @objectstack/service-datasource@15.0.0
+  - @objectstack/service-messaging@15.0.0
+  - @objectstack/service-package@15.0.0
+  - @objectstack/trigger-api@15.0.0
+  - @objectstack/trigger-record-change@15.0.0
+  - @objectstack/trigger-schedule@15.0.0
+  - @objectstack/types@15.0.0
+  - @objectstack/console@15.0.0
+
 ## 14.2.0
 
 ### Patch Changes
