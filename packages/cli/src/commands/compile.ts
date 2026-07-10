@@ -250,7 +250,7 @@ export default class Compile extends Command {
 
       // 3d-bis. Liveness author-warning lint — close the spec-liveness loop on
       //     the author side: an authored property the ledger marks dead-and-
-      //     misleading (e.g. `object.enable.feeds`, `field.columnName`) or
+      //     misleading (e.g. `object.enable.files`, `field.columnName`) or
       //     experimental is set hopefully but does nothing / isn't enforced at
       //     runtime. Advisory only; ledger-driven (entries opt in via
       //     `authorWarn`), so it's high-signal and NEVER fails the build.

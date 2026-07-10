@@ -29,45 +29,79 @@ export type ApiMethod = z.infer<typeof ApiMethod>;
 /**
  * Capability Flags
  * Defines what system features are enabled for this object.
- * 
- * Optimized based on industry standards (Salesforce, ServiceNow):
- * - Added `activities` (Tasks/Events)
- * - Added `mru` (Recent Items)
- * - Added `feeds` (Social/Chatter)
- * - Grouped API permissions
- * 
+ *
+ * Modeled on industry standards (Salesforce "Allow Activities"/"Track Field
+ * History"/"Enable Feed Tracking", Dataverse table options). Each flag has a
+ * defined enforcement contract (#2707); a flag with no runtime consumer is a
+ * bug, not a reservation — see `@objectstack/spec/liveness/object.json`.
+ *
+ * Opt-out flags (`feeds`, `activities`, `trash`, `mru`, `clone`, `searchable`,
+ * `apiEnabled`) default to `true`: absent block/flag = enabled, and consumers
+ * gate on explicit `false` only. Opt-in flags (`trackHistory`, `files`)
+ * default to `false`.
+ *
  * @example
  * {
  *   trackHistory: true,
  *   searchable: true,
  *   apiEnabled: true,
- *   files: true
+ *   activities: false
  * }
  */
 export const ObjectCapabilities = z.object({
-  /** Enable history tracking (Audit Trail) */
-  trackHistory: z.boolean().default(false).describe('Enable field history tracking for audit compliance'),
-  
+  /**
+   * History tracking (Audit Trail) master switch — opt-in.
+   *
+   * Contract: `true` surfaces the record History tab (audit-trail UI) in the
+   * console. Pair with per-field `trackHistory: true` to select which field
+   * diffs render as human-readable timeline summaries (ADR-0052 §5b). Audit
+   * *capture* into `sys_audit_log` is a compliance ledger and stays on
+   * regardless of this flag; retention is governed by data lifecycle
+   * (ADR-0057), not by hiding the UI.
+   */
+  trackHistory: z.boolean().default(false).describe('Show the record History tab (audit-trail UI). Pair with per-field trackHistory to pick which field diffs are summarized; audit capture itself is always on for compliance'),
+
   /** Enable global search indexing */
   searchable: z.boolean().default(true).describe('Index records for global search'),
-  
+
   /** Enable REST/GraphQL API access */
   apiEnabled: z.boolean().default(true).describe('Expose object via automatic APIs'),
 
-  /** 
+  /**
    * API Supported Operations
    * Granular control over API exposure.
    */
   apiMethods: z.array(ApiMethod).optional().describe('Whitelist of allowed API operations'),
-  
-  /** Enable standard attachments/files engine */
-  files: z.boolean().default(false).describe('Enable file attachments and document management'),
-  
-  /** Enable social collaboration (Comments, Mentions, Feeds) */
-  feeds: z.boolean().default(false).describe('Enable social feed, comments, and mentions (Chatter-like)'),
-  
-  /** Enable standard Activity suite (Tasks, Calendars, Events) */
-  activities: z.boolean().default(false).describe('Enable standard tasks and events tracking'),
+
+  /**
+   * Standard attachments/files engine — opt-in, NOT YET CONSUMED at runtime.
+   *
+   * Reserved for the generic Attachments related-list (Salesforce
+   * "Notes & Attachments" parity). Until that ships, model attachments with
+   * `Field.file` / `Field.image` (or relate to `sys_attachment`) — setting
+   * this flag alone enables nothing, and the compile-time liveness lint
+   * warns on it.
+   */
+  files: z.boolean().default(false).describe('RESERVED (no runtime effect yet) — use Field.file/Field.image for attachments; this flag will gate the future generic Attachments panel'),
+
+  /**
+   * Social collaboration (Comments, Mentions, Feeds) — opt-out.
+   *
+   * Contract: default on. An explicit `false` hides the record feed UI and
+   * rejects new `sys_comment` rows targeting this object (403
+   * FEEDS_DISABLED, enforced at the engine hook seam by plugin-audit).
+   */
+  feeds: z.boolean().default(true).describe('Record comments/collaboration feed. Default on; explicit false hides the feed UI and rejects new comments for this object'),
+
+  /**
+   * Activity timeline (sys_activity mirror of create/update/delete) — opt-out.
+   *
+   * Contract: default on. An explicit `false` stops plugin-audit from
+   * mirroring this object's CRUD into `sys_activity` (the record timeline)
+   * and hides the timeline merge in the console. The off-switch is also the
+   * per-object lever for activity-row growth (ADR-0057).
+   */
+  activities: z.boolean().default(true).describe('Record activity timeline (sys_activity mirror of CRUD). Default on; explicit false stops mirroring and hides the timeline'),
 
   /** Enable Recycle Bin / Soft Delete */
   trash: z.boolean().default(true).describe('Enable soft-delete with restore capability'),
