@@ -29,8 +29,8 @@ import type { Page } from '@objectstack/spec/ui';
  *    admin-internal audit columns. Banned / ban metadata is still
  *    editable from the header actions — we just don't show it in
  *    every user's body.
- *  - `tabs` is **explicitly curated** to the 4 related lists that matter
- *    on a user profile (Sessions / Linked Accounts / Organizations /
+ *  - `tabs` is **explicitly curated** to the 5 related lists that matter
+ *    on a user profile (Positions / Sessions / Linked Accounts / Organizations /
  *    Personal OAuth Apps). Without this override, the synthesizer
  *    auto-generates a tab per object that has a FK to sys_user
  *    (sys_position.created_by, sys_email.updated_by, sys_user_preference,
@@ -121,6 +121,38 @@ export const SysUserDetailPage: Page = {
         type: 'line',
         position: 'top',
         items: [
+          {
+            label: 'Positions',
+            icon: 'shield-check',
+            children: [
+              {
+                // [ADR-0090 D3] Position assignments (岗位分派) — pure SDUI:
+                // the Add picker creates sys_user_position rows storing the
+                // position's MACHINE NAME (valueField: 'name'), and every
+                // server-side rule (the D12 delegated-admin gate, audience-
+                // anchor rejection) surfaces its error in the dialog.
+                type: 'record:related_list',
+                properties: {
+                  objectName: 'sys_user_position',
+                  relationshipField: 'user_id',
+                  columns: ['position', 'business_unit_id', 'granted_by', 'created_at'],
+                  sort: [{ field: 'created_at', order: 'desc' }],
+                  limit: 25,
+                  showViewAll: true,
+                  title: 'Positions',
+                  add: {
+                    picker: {
+                      object: 'sys_position',
+                      valueField: 'name',
+                      labelField: 'label',
+                    },
+                    linkField: 'position',
+                    label: 'Assign position',
+                  },
+                },
+              },
+            ],
+          },
           {
             label: 'Sessions',
             icon: 'monitor',
