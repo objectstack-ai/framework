@@ -181,6 +181,28 @@ export class DelegatedAdminGate {
     }
   }
 
+  /**
+   * [ADR-0090 D6 × D12] Does the actor (via their resolved sets) hold a
+   * delegated `adminScope` whose BU subtree covers `targetUserId`? Used by
+   * the explain API: an administrator who can already manage a user's
+   * assignments inside their delegation boundary may also read WHY that
+   * user's access resolves the way it does — without tenant-level
+   * `manage_users`. Any scope kind qualifies (assignments, bindings,
+   * authoring): all of them administer capability inside the subtree, and
+   * the report is read-only. Fail-closed: unresolvable scopes/memberships
+   * cover nothing.
+   */
+  async scopesCoverUser(sets: PermissionSet[], targetUserId: string): Promise<boolean> {
+    const held = await this.resolveHeldScopes(sets);
+    if (held.length === 0) return false;
+    const userBUs = await this.businessUnitsOfUser(targetUserId);
+    if (userBUs.size === 0) return false;
+    for (const s of held) {
+      for (const bu of userBUs) if (s.subtree.has(bu)) return true;
+    }
+    return false;
+  }
+
   // ── sys_user_position: user ↔ position assignments ──────────────────
 
   private async assertAssignmentWrite(opCtx: any, ctx: any, held: HeldScope[]): Promise<void> {

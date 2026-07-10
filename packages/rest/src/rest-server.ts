@@ -969,6 +969,7 @@ export class RestServer {
     private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     private settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private securityServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
     /** Sync probe: is a kernel service registered? Single-env path for nav
      *  capability gates (ADR-0057 D10) — resolveExecCtx sets no kernel in
      *  single-kernel deployments, so this prevents the gate failing open. */
@@ -999,6 +1000,7 @@ export class RestServer {
         analyticsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         settingsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
         serviceExistsProvider?: (name: string) => boolean,
+        securityServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -1017,6 +1019,7 @@ export class RestServer {
         this.analyticsServiceProvider = analyticsServiceProvider;
         this.settingsServiceProvider = settingsServiceProvider;
         this.serviceExistsProvider = serviceExistsProvider;
+        this.securityServiceProvider = securityServiceProvider;
     }
 
     /**
@@ -1880,6 +1883,7 @@ export class RestServer {
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
             this.registerAnalyticsEndpoints(bp);
+            this.registerSecurityEndpoints(bp);
             // Data-action routes (e.g. GET /data/:object/export, POST
             // /data/:object/import) use static-literal action segments that
             // MUST be registered BEFORE the greedy GET /data/:object/:id
@@ -4853,6 +4857,113 @@ export class RestServer {
                 }
             },
             metadata: { summary: 'Run a semantic-layer dataset (preview/query)', tags: ['analytics'] },
+        });
+    }
+
+    /**
+     * [ADR-0090 D6] Access-explanation endpoint — the REST face of the
+     * explain engine (framework#2696).
+     *
+     *   GET  {basePath}/security/explain?object=…&operation=…&userId=…
+     *   POST {basePath}/security/explain   body: { object, operation, userId? }
+     *
+     * Delegates to the security service's `explain(request, callerContext)`
+     * (`SecurityPlugin.explainAccessForCaller`) — the same code paths the
+     * enforcement middleware runs, so the report is explained by
+     * construction. Caller authorization lives in the SERVICE, not here:
+     * explaining ANOTHER user requires `manage_users` or a delegated
+     * `adminScope` covering that user (D12); the service's
+     * `PermissionDeniedError` maps to 403. The route itself only insists on
+     * an authenticated caller (an access report is sensitive even about
+     * oneself, and the anonymous `guest` posture is not this endpoint's
+     * business) and returns 501 when no security service exposing `explain`
+     * is mounted (a deployment without `@objectstack/plugin-security`).
+     */
+    private registerSecurityEndpoints(basePath: string): void {
+        const isScoped = basePath.includes('/environments/:environmentId');
+        // Resolve the ENVIRONMENT's security service first (its resolver /
+        // evaluator / RLS compiler are bound to the env kernel's own data
+        // engine); the host provider is the single-kernel fallback.
+        const resolveService = async (environmentId?: string, req?: any) => {
+            try {
+                const envId = await this.resolveRequestEnvironmentId(environmentId, req);
+                if (envId && envId !== 'platform' && this.kernelManager) {
+                    const kernel = await this.kernelManager.getOrCreate(envId);
+                    const svc = await kernel.getServiceAsync<any>('security').catch(() => undefined);
+                    if (svc) return svc;
+                }
+            } catch { /* fall back to the host service */ }
+            if (!this.securityServiceProvider) return undefined;
+            try { return await this.securityServiceProvider(environmentId); }
+            catch { return undefined; }
+        };
+
+        const handler = async (req: any, res: any) => {
+            try {
+                const environmentId = isScoped ? req.params?.environmentId : undefined;
+                const context = await this.resolveExecCtx(environmentId, req);
+                if (this.enforceAuth(req, res, context)) return;
+                if (!context?.userId) {
+                    // Even on requireAuth=false deployments the explain surface
+                    // stays authenticated-only — it is an admin diagnosis tool.
+                    return res.status(401).json({
+                        code: 'UNAUTHORIZED',
+                        message: 'The access-explanation endpoint requires an authenticated caller.',
+                    });
+                }
+
+                const svc = await resolveService(environmentId, req);
+                if (!svc || typeof svc.explain !== 'function') {
+                    return res.status(501).json({
+                        code: 'NOT_IMPLEMENTED',
+                        message: 'Access explanation is not available on this deployment (no security service with explain).',
+                    });
+                }
+
+                // GET reads the request from the query string, POST from the
+                // body — one contract (ExplainRequestSchema), two transports.
+                const src = req.method === 'GET' ? (req.query ?? {}) : (req.body ?? {});
+                const { ExplainRequestSchema } = await import('@objectstack/spec/security');
+                const parsed = (ExplainRequestSchema as any).safeParse({
+                    object: src.object,
+                    operation: src.operation ?? 'read',
+                    ...(src.userId != null && src.userId !== '' ? { userId: src.userId } : {}),
+                });
+                if (!parsed.success) {
+                    return res.status(400).json({
+                        code: 'VALIDATION_FAILED',
+                        message: 'Invalid explain request — expected { object: string, operation: read|create|update|delete|transfer|restore|purge, userId?: string }.',
+                        detail: String(parsed.error?.message ?? '').slice(0, 1000),
+                    });
+                }
+
+                const decision = await svc.explain(parsed.data, context);
+                res.json(decision);
+            } catch (error: any) {
+                const msg = String(error?.message ?? error ?? '');
+                if (
+                    error?.code === 'PERMISSION_DENIED' ||
+                    error?.name === 'PermissionDeniedError' ||
+                    msg.startsWith('[Security] Access denied')
+                ) {
+                    return res.status(403).json({ code: 'PERMISSION_DENIED', message: msg.slice(0, 1000) });
+                }
+                logError('[REST] Security explain error:', error);
+                res.status(500).json({ code: 'EXPLAIN_FAILED', error: msg.slice(0, 500) });
+            }
+        };
+
+        this.routeManager.register({
+            method: 'GET',
+            path: `${basePath}/security/explain`,
+            handler,
+            metadata: { summary: 'Explain why a principal can (or cannot) perform an operation on an object (ADR-0090 D6)', tags: ['security'] },
+        });
+        this.routeManager.register({
+            method: 'POST',
+            path: `${basePath}/security/explain`,
+            handler,
+            metadata: { summary: 'Explain why a principal can (or cannot) perform an operation on an object (ADR-0090 D6)', tags: ['security'] },
         });
     }
 

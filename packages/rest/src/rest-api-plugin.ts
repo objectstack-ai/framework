@@ -181,6 +181,15 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 } catch { return undefined; }
             };
 
+            // Security service resolver — used by /security/explain (ADR-0090
+            // D6 access explanation). Returns undefined when plugin-security
+            // is not mounted so the route fails cleanly (501).
+            const securityServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
+                try {
+                    return ctx.getService<any>('security');
+                } catch { return undefined; }
+            };
+
             // Settings service resolver — used by resolveExecCtx to resolve the
             // reference timezone/locale (localization manifest) through the 4-tier
             // cascade incl. the `OS_LOCALIZATION_TIMEZONE` env override. Returns
@@ -209,7 +218,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 try { return ctx.getService<any>(name) != null; } catch { return false; }
             };
             try {
-                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultEnvironmentIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider, analyticsServiceProvider, settingsServiceProvider, serviceExistsProvider);
+                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultEnvironmentIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider, analyticsServiceProvider, settingsServiceProvider, serviceExistsProvider, securityServiceProvider);
                 restServer.registerRoutes();
 
                 ctx.logger.info('REST API successfully registered');
