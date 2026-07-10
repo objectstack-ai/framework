@@ -42,7 +42,7 @@ import type {
 } from '@objectstack/rest';
 import { prepareImportRequest, runImport } from '@objectstack/rest';
 import { generatePlaceholderEmail, isPlaceholderEmail } from './placeholder-email.js';
-import { generateTemporaryPassword, normalizePhoneNumber, type AdminActor, type EndpointResult } from './admin-user-endpoints.js';
+import { generateTemporaryPassword, normalizePhoneNumber, isLikelyEmail, type AdminActor, type EndpointResult } from './admin-user-endpoints.js';
 
 export const IMPORT_USERS_MAX_ROWS = 500;
 
@@ -86,7 +86,7 @@ function resolveRowIdentity(
 ): RowIdentity {
   const rawEmail = typeof row.email === 'string' ? row.email.trim() : '';
   const hasEmail = rawEmail.length > 0;
-  if (hasEmail && !/^\S+@\S+\.\S+$/.test(rawEmail)) {
+  if (hasEmail && !isLikelyEmail(rawEmail)) {
     return { invalid: { code: 'INVALID_EMAIL', error: `"${rawEmail}" is not a valid email` } };
   }
   if (hasEmail && isPlaceholderEmail(rawEmail)) {

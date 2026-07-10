@@ -160,6 +160,22 @@ function badRequest(message: string): EndpointResult {
 }
 
 /**
+ * Linear-time email plausibility check (local@domain with a dotted domain).
+ * Deliberately not a regex: the obvious `\S+@\S+\.\S+` is polynomially
+ * backtrackable on adversarial input (CodeQL js/polynomial-redos) since `\S`
+ * overlaps with `@` and `.`. better-auth revalidates on its own side; this
+ * only gates obviously-broken rows early.
+ */
+export function isLikelyEmail(value: string): boolean {
+  if (value.length === 0 || value.length > 254 || /\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@') || at === value.length - 1) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+}
+
+/**
  * Resolve the password for a create/set request: an explicit `password` /
  * `newPassword`, or a generated temporary one when `generatePassword` is true.
  * Returns an EndpointResult on validation failure.
@@ -289,7 +305,7 @@ export async function runAdminCreateUser(
   // email) that every mail callback refuses to send to.
   const rawEmail = body.email;
   const hasEmail = typeof rawEmail === 'string' && rawEmail.trim().length > 0;
-  if (hasEmail && !/^\S+@\S+\.\S+$/.test((rawEmail as string).trim())) {
+  if (hasEmail && !isLikelyEmail((rawEmail as string).trim())) {
     return badRequest('A valid email is required');
   }
   const rawPhone = body.phoneNumber ?? body.phone_number;

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   runAdminCreateUser,
   runAdminSetUserPassword,
@@ -68,6 +68,31 @@ function expectNoPasswordLeak(mocks: ReturnType<typeof makeDeps>, password: stri
     expect(JSON.stringify(call)).not.toContain(password);
   }
 }
+
+describe('isLikelyEmail (linear-time, no regex backtracking)', () => {
+  it('accepts normal addresses and rejects junk', async () => {
+    const { isLikelyEmail } = await import('./admin-user-endpoints.js');
+    expect(isLikelyEmail('a@b.co')).toBe(true);
+    expect(isLikelyEmail('first.last@sub.example.com')).toBe(true);
+    expect(isLikelyEmail('')).toBe(false);
+    expect(isLikelyEmail('no-at.example.com')).toBe(false);
+    expect(isLikelyEmail('a@b')).toBe(false);
+    expect(isLikelyEmail('a@@b.co')).toBe(false);
+    expect(isLikelyEmail('a@.co')).toBe(false);
+    expect(isLikelyEmail('a@b.')).toBe(false);
+    expect(isLikelyEmail('has space@b.co')).toBe(false);
+  });
+
+  it('is fast on the CodeQL adversarial inputs', async () => {
+    const { isLikelyEmail } = await import('./admin-user-endpoints.js');
+    const attack = '!@'.repeat(100_000);
+    const attack2 = '!@!.' + '!.'.repeat(100_000);
+    const t0 = Date.now();
+    expect(isLikelyEmail(attack)).toBe(false);
+    expect(isLikelyEmail(attack2)).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(200);
+  });
+});
 
 describe('generateTemporaryPassword', () => {
   it('meets the 4-class complexity policy and min length', () => {
