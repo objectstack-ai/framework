@@ -2826,6 +2826,15 @@ export class AuthManager {
   }
 
   /**
+   * #2766 V2 — is an email transport wired? The identity import endpoint
+   * rejects the invite password policy up front when it isn't, instead of
+   * creating N accounts whose invitation emails all silently fail.
+   */
+  public isEmailServiceAvailable(): boolean {
+    return !!this.getEmailService();
+  }
+
+  /**
    * #2766 V1 — flip the "someone must change their password" cache on this
    * node the moment an admin issues a flag, so the gate is enforced on the
    * flagged user's very next request instead of after the cache TTL. Called by

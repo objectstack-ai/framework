@@ -25,6 +25,7 @@
     "@noble/hashes": "^2.2.0",
     "@objectstack/core": "workspace:*",
     "@objectstack/platform-objects": "workspace:*",
+    "@objectstack/rest": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "better-auth": "^1.6.23",

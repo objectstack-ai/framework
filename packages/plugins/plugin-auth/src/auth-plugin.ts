@@ -1244,6 +1244,42 @@ export class AuthPlugin implements Plugin {
           return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
         }
       });
+
+      // #2766 V2 — identity bulk import (re-scoped #2758). Reuses the generic
+      // import framework's parsing + row engine but writes every row through
+      // better-auth (hash + credential account) — see admin-import-users.ts
+      // for the password policies (invite / temporary) and deliberate limits
+      // (sync ≤500 rows, no undo, profile-only upsert updates).
+      rawApp.post(`${basePath}/admin/import-users`, async (c: any) => {
+        try {
+          const actor = await gateAdmin(c);
+          if (actor instanceof Response) return actor;
+          const { runAdminImportUsers } = await import('./admin-import-users.js');
+          const metadataService: any = (() => {
+            try { return ctx.getService?.('metadata'); } catch { return undefined; }
+          })();
+          const { status, body } = await runAdminImportUsers(
+            {
+              getAuthApi: () => this.authManager!.getApi() as any,
+              getDataEngine: () => this.authManager!.getDataEngine(),
+              ...(metadataService?.getMetaItem
+                ? { getMetaItem: (ref: { type: string; name: string }) => metadataService.getMetaItem(ref) }
+                : {}),
+              phoneNumberEnabled: () => this.authManager!.isPhoneNumberEnabled(),
+              emailServiceAvailable: () => this.authManager!.isEmailServiceAvailable(),
+              noteMustChangePasswordIssued: () => this.authManager!.noteMustChangePasswordIssued(),
+              logger: ctx.logger,
+            },
+            c.req.raw,
+            actor,
+          );
+          return c.json(body, status as any);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          ctx.logger.error('[AuthPlugin] admin/import-users failed', err);
+          return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+        }
+      });
     }
 
     // ────────────────────────────────────────────────────────────────────

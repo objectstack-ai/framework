@@ -1,0 +1,343 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { describe, it, expect, vi } from 'vitest';
+import { runAdminImportUsers, IMPORT_USERS_MAX_ROWS, type IdentityImportDeps } from './admin-import-users.js';
+import type { AdminActor } from './admin-user-endpoints.js';
+
+const ACTOR: AdminActor = { id: 'admin-1', email: 'admin@example.com' };
+
+function makeRequest(body: unknown): Request {
+  return new Request('http://localhost/api/v1/auth/admin/import-users', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function makeDeps(opts: {
+  existingUsers?: Array<Record<string, any>>;
+  phoneEnabled?: boolean;
+  emailAvailable?: boolean;
+  resetFails?: boolean;
+} = {}) {
+  const existing = opts.existingUsers ?? [];
+  let nextId = 1;
+  const createUser = vi.fn(async ({ body }: any) => ({
+    user: { id: `u-${nextId++}`, email: body.email, name: body.name },
+  }));
+  const requestPasswordReset = vi.fn(async () => {
+    if (opts.resetFails) throw new Error('smtp down');
+    return { status: true };
+  });
+  const find = vi.fn(async (_obj: string, q: any) => {
+    const where = q?.where ?? {};
+    return existing.filter((u) => Object.entries(where).every(([k, v]) => u[k] === v));
+  });
+  const update = vi.fn(async () => ({}));
+  const insert = vi.fn(async () => ({}));
+  const warn = vi.fn();
+  const noteMustChangePasswordIssued = vi.fn();
+  const deps: IdentityImportDeps = {
+    getAuthApi: async () => ({ createUser, requestPasswordReset }),
+    getDataEngine: () => ({ find, update, insert }),
+    phoneNumberEnabled: () => opts.phoneEnabled ?? false,
+    emailServiceAvailable: () => opts.emailAvailable ?? true,
+    noteMustChangePasswordIssued,
+    logger: { warn },
+  };
+  return { deps, createUser, requestPasswordReset, find, update, insert, warn, noteMustChangePasswordIssued };
+}
+
+/** Red line: no generated password may reach any persistence/log surface. */
+function expectNoPasswordLeak(m: ReturnType<typeof makeDeps>, passwords: string[]) {
+  const surfaces = JSON.stringify([m.insert.mock.calls, m.update.mock.calls, m.warn.mock.calls]);
+  for (const pw of passwords) {
+    if (typeof pw === 'string' && pw.length > 0) expect(surfaces).not.toContain(pw);
+  }
+}
+
+describe('runAdminImportUsers — request validation', () => {
+  it('rejects a missing/invalid passwordPolicy', async () => {
+    const m = makeDeps();
+    const res = await runAdminImportUsers(m.deps, makeRequest({ format: 'json', rows: [] }), ACTOR);
+    expect(res.status).toBe(400);
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects matchBy phone when the phoneNumber plugin is off', async () => {
+    const m = makeDeps({ phoneEnabled: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'temporary', mode: 'upsert', matchBy: 'phone', format: 'json', rows: [] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe('PHONE_NOT_ENABLED');
+  });
+
+  it('rejects the invite policy without an email service', async () => {
+    const m = makeDeps({ emailAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'invite', format: 'json', rows: [{ email: 'a@b.co' }] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe('EMAIL_SERVICE_REQUIRED');
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects async: true explicitly (not silently)', async () => {
+    const m = makeDeps();
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'temporary', async: true, format: 'json', rows: [{ email: 'a@b.co' }] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe('ASYNC_NOT_SUPPORTED');
+  });
+
+  it('rejects payloads above the row cap with 413', async () => {
+    const m = makeDeps();
+    const rows = Array.from({ length: IMPORT_USERS_MAX_ROWS + 1 }, (_, i) => ({ email: `u${i}@x.co` }));
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'temporary', format: 'json', rows }),
+      ACTOR,
+    );
+    expect(res.status).toBe(413);
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('runAdminImportUsers — row validation (also on dryRun)', () => {
+  it('flags invite rows without a real email as INVITE_REQUIRES_EMAIL', async () => {
+    const m = makeDeps({ phoneEnabled: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'invite', dryRun: true, format: 'json',
+        rows: [
+          { email: 'ok@x.co', name: 'OK' },
+          { phone_number: '+8613800000000', name: 'PhoneOnly' },
+          { name: 'Nobody' },
+          { email: 'u-aaaaaaaaaaaaaaaaaaaa@placeholder.invalid' },
+          { email: 'not-an-email' },
+        ],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const rows = (res.body.data as any).rows;
+    expect(rows[0].action).toBe('created'); // dryRun projection
+    expect(rows[1].code).toBe('INVITE_REQUIRES_EMAIL');
+    expect(rows[2].code).toBe('NO_IDENTITY');
+    expect(rows[3].code).toBe('INVALID_EMAIL');
+    expect(rows[4].code).toBe('INVALID_EMAIL');
+    expect((res.body.data as any).summary.errors).toBe(4);
+    // dryRun writes nothing
+    expect(m.createUser).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.insert).not.toHaveBeenCalled();
+  });
+
+  it('flags phone columns when the plugin is off, and bad phone formats', async () => {
+    const m = makeDeps({ phoneEnabled: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', dryRun: true, format: 'json',
+        rows: [{ phone_number: '+8613800000000' }],
+      }),
+      ACTOR,
+    );
+    expect((res.body.data as any).rows[0].code).toBe('PHONE_NOT_ENABLED');
+
+    const m2 = makeDeps({ phoneEnabled: true });
+    const res2 = await runAdminImportUsers(
+      m2.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', dryRun: true, format: 'json',
+        rows: [{ phone_number: 'junk' }],
+      }),
+      ACTOR,
+    );
+    expect((res2.body.data as any).rows[0].code).toBe('INVALID_PHONE');
+  });
+});
+
+describe('runAdminImportUsers — temporary policy', () => {
+  it('creates each row through better-auth, stamps must_change_password, returns per-row temp passwords once', async () => {
+    const m = makeDeps({ phoneEnabled: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', format: 'json',
+        rows: [
+          { email: 'a@x.co', name: 'A' },
+          { phone_number: '+8613800000001', name: 'B' },
+        ],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(m.createUser).toHaveBeenCalledTimes(2);
+
+    // Row 1: real email; row 2: placeholder that never contains the phone.
+    const sent1 = m.createUser.mock.calls[0][0].body;
+    const sent2 = m.createUser.mock.calls[1][0].body;
+    expect(sent1.email).toBe('a@x.co');
+    expect(typeof sent1.password).toBe('string');
+    expect(sent2.email).toMatch(/@placeholder\.invalid$/);
+    expect(sent2.email).not.toContain('138');
+    expect(sent2.data.phoneNumber).toBe('+8613800000001');
+
+    // must_change_password stamped per created user + gate cache primed.
+    const stamps = m.update.mock.calls.filter((c) => c[1]?.must_change_password === true);
+    expect(stamps.length).toBe(2);
+    expect(m.noteMustChangePasswordIssued).toHaveBeenCalled();
+
+    // Temp passwords: response-only, one per row, and they are the ones sent
+    // to better-auth for hashing.
+    const pw1 = data.rows[0].temporaryPassword;
+    const pw2 = data.rows[1].temporaryPassword;
+    expect(pw1).toBe(sent1.password);
+    expect(pw2).toBe(sent2.password);
+    expectNoPasswordLeak(m, [pw1, pw2]);
+
+    // No invitation emails under the temporary policy.
+    expect(m.requestPasswordReset).not.toHaveBeenCalled();
+
+    // Run-level audit row without password material.
+    const audit = m.insert.mock.calls.find((c) => c[0] === 'sys_audit_log');
+    expect(audit).toBeTruthy();
+    const meta = JSON.parse(audit![1].metadata);
+    expect(meta.event).toBe('user.import_run');
+    expect(meta.created).toBe(2);
+  });
+});
+
+describe('runAdminImportUsers — invite policy', () => {
+  it('creates with a throwaway password and requests a reset email per created row', async () => {
+    const m = makeDeps();
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'invite', format: 'json',
+        rows: [{ email: 'a@x.co' }, { email: 'b@x.co' }],
+      }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(m.requestPasswordReset).toHaveBeenCalledTimes(2);
+    expect(m.requestPasswordReset.mock.calls.map((c) => c[0].body.email).sort()).toEqual(['a@x.co', 'b@x.co']);
+    // The throwaway password is not returned to the caller.
+    expect(data.rows[0].temporaryPassword).toBeUndefined();
+    // No must-change stamp for invite (users set their own password).
+    expect(m.update.mock.calls.filter((c) => c[1]?.must_change_password === true).length).toBe(0);
+    expectNoPasswordLeak(m, m.createUser.mock.calls.map((c) => c[0].body.password));
+  });
+
+  it('keeps the row created (with INVITE_EMAIL_FAILED) when the email fails — no rollback', async () => {
+    const m = makeDeps({ resetFails: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'invite', format: 'json', rows: [{ email: 'a@x.co' }] }),
+      ACTOR,
+    );
+    const row = (res.body.data as any).rows[0];
+    expect(row.ok).toBe(true);
+    expect(row.action).toBe('created');
+    expect(row.code).toBe('INVITE_EMAIL_FAILED');
+    expect((res.body.data as any).summary.created).toBe(1);
+  });
+});
+
+describe('runAdminImportUsers — upsert', () => {
+  it('matches by email: updates profile fields only, never credentials or email', async () => {
+    const m = makeDeps({
+      existingUsers: [{ id: 'u-old', email: 'a@x.co', name: 'Old Name' }],
+    });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', mode: 'upsert', matchBy: 'email', format: 'json',
+        rows: [
+          { email: 'a@x.co', name: 'New Name', password: 'Injected1!' }, // password column must be ignored
+          { email: 'new@x.co', name: 'Fresh' },
+        ],
+      }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.updated).toBe(1);
+    expect(data.summary.created).toBe(1);
+
+    // The existing user was patched with name only — no email, no password.
+    const patch = m.update.mock.calls.find((c) => c[1]?.id === 'u-old');
+    expect(patch).toBeTruthy();
+    expect(patch![1]).toEqual({ id: 'u-old', name: 'New Name' });
+
+    // The updated row never went through createUser; the new row did.
+    expect(m.createUser).toHaveBeenCalledTimes(1);
+    expect(m.createUser.mock.calls[0][0].body.email).toBe('new@x.co');
+
+    // Updated (existing) users never get a temporary password back.
+    expect(data.rows[0].temporaryPassword).toBeUndefined();
+    expect(typeof data.rows[1].temporaryPassword).toBe('string');
+  });
+
+  it('matches by phone_number when enabled', async () => {
+    const m = makeDeps({
+      phoneEnabled: true,
+      existingUsers: [{ id: 'u-p', email: 'p@x.co', phone_number: '+8613800000009', name: 'P' }],
+    });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', mode: 'upsert', matchBy: 'phone', format: 'json',
+        rows: [{ phone_number: '+86 138 0000 0009', name: 'P2' }],
+      }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.updated).toBe(1);
+    expect(m.find).toHaveBeenCalledWith('sys_user', expect.objectContaining({
+      where: { phone_number: '+8613800000009' },
+    }));
+  });
+
+  it('skips upsert rows whose match key is blank instead of creating duplicates', async () => {
+    const m = makeDeps({ phoneEnabled: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'temporary', mode: 'upsert', matchBy: 'phone', format: 'json',
+        rows: [{ email: 'email-only@x.co', name: 'NoPhone' }],
+      }),
+      ACTOR,
+    );
+    const row = (res.body.data as any).rows[0];
+    expect(row.action).toBe('skipped');
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('runAdminImportUsers — CSV payloads', () => {
+  it('accepts the same CSV shape as the generic import route', async () => {
+    const m = makeDeps();
+    const csv = 'email,name\nc1@x.co,C One\nc2@x.co,C Two\n';
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'temporary', csv }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(m.createUser.mock.calls.map((c) => c[0].body.email).sort()).toEqual(['c1@x.co', 'c2@x.co']);
+  });
+});

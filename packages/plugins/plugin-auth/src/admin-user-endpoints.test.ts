@@ -42,7 +42,7 @@ function makeDeps(overrides: Partial<Record<string, any>> = {}) {
   const deps: AdminUserEndpointDeps = {
     getAuthApi: async () => ({ createUser }) as any,
     getAuthContext: async () => authCtx as any,
-    getDataEngine: () => ({ update: engineUpdate, create: engineCreate }),
+    getDataEngine: () => ({ update: engineUpdate, insert: engineCreate }),
     assertPasswordComplexity: vi.fn(async () => undefined),
     noteMustChangePasswordIssued,
     logger: { warn },

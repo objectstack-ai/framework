@@ -87,7 +87,7 @@ export interface AdminUserEndpointDeps {
 
 export interface AdminUserDataEngine {
   update(object: string, doc: Record<string, unknown>, opts?: unknown): Promise<unknown>;
-  create(object: string, doc: Record<string, unknown>, opts?: unknown): Promise<unknown>;
+  insert(object: string, doc: Record<string, unknown>, opts?: unknown): Promise<unknown>;
 }
 
 /** The gated caller, passed by the route after its ADR-0068 check. */
@@ -242,7 +242,7 @@ async function writeAdminAudit(
   const engine = deps.getDataEngine();
   if (!engine) return;
   try {
-    await engine.create(
+    await engine.insert(
       'sys_audit_log',
       {
         action: entry.action,
