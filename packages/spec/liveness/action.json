@@ -154,7 +154,9 @@
     },
     "timeout": {
       "status": "dead",
-      "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer"
+      "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer",
+      "authorWarn": true,
+      "authorHint": "No action-level timeout is enforced at runtime — remove it. Per-action execution time limits are not configurable today."
     },
     "aria": {
       "status": "live",

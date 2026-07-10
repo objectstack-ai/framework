@@ -71,7 +71,9 @@
     },
     "tenantId": {
       "status": "dead",
-      "evidence": "no runtime reader"
+      "evidence": "no runtime reader",
+      "authorWarn": true,
+      "authorHint": "No runtime reader — it does NOT scope the agent to a tenant. Tenancy comes from the request context (resolveAuthzContext), not this field."
     },
     "knowledge": {
       "status": "live",

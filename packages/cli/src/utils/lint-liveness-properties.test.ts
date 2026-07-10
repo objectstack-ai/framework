@@ -80,4 +80,69 @@ describe('lintLivenessProperties', () => {
     expect(lintLivenessProperties({})).toEqual([]);
     expect(lintLivenessProperties({ objects: [] })).toEqual([]);
   });
+
+  // ── Coverage beyond object/field: flat stack collections ─────────────
+  // The 2026-07 authorWarn pass marked misleading dead props on flows,
+  // actions, agents, tools, datasets, permissions, and the object tenancy
+  // block. These run against the REAL ledgers, so they double as contract
+  // tests for those markings.
+
+  it('warns on flow.errorHandling.fallbackNodeId (engine uses fault edges)', () => {
+    const findings = lintLivenessProperties({
+      flows: [{ name: 'f1', errorHandling: { fallbackNodeId: 'n2' } }],
+    });
+    const f = findings.find((x) => x.message.includes('errorHandling.fallbackNodeId'));
+    expect(f).toBeDefined();
+    expect(f!.where).toBe("flow 'f1'");
+  });
+
+  it('fans out array containers: flow.nodes[].outputSchema warns once per flow', () => {
+    const findings = lintLivenessProperties({
+      flows: [{
+        name: 'f1',
+        nodes: [
+          { id: 'n1' },
+          { id: 'n2', outputSchema: { type: 'object' } },
+          { id: 'n3', outputSchema: { type: 'object' } },
+        ],
+      }],
+    });
+    const hits = findings.filter((x) => x.message.includes('nodes.outputSchema'));
+    expect(hits.length).toBe(1); // one finding per (flow, path), not per node
+    expect(hits[0].where).toBe("flow 'f1'");
+  });
+
+  it('warns on action.timeout (no runtime enforcement)', () => {
+    const findings = lintLivenessProperties({ actions: [{ name: 'a1', timeout: 5000 }] });
+    expect(paths(findings).some((m) => m.includes('`timeout`'))).toBe(true);
+  });
+
+  it('warns on the security-shaped dead props (tenancy.strategy / tool.permissions / permission.contextVariables)', () => {
+    const tenancy = lintLivenessProperties(objStack({ tenancy: { enabled: true, strategy: 'isolated' } }));
+    expect(paths(tenancy).some((m) => m.includes('tenancy.strategy'))).toBe(true);
+    // tenancy.enabled itself is live — must NOT warn.
+    expect(paths(tenancy).some((m) => m.includes('tenancy.enabled'))).toBe(false);
+
+    const tool = lintLivenessProperties({ tools: [{ name: 't1', permissions: ['crm.admin'] }] });
+    expect(paths(tool).some((m) => m.includes('`permissions`'))).toBe(true);
+
+    const perm = lintLivenessProperties({ permissions: [{ name: 'p1', contextVariables: { region: 'emea' } }] });
+    expect(paths(perm).some((m) => m.includes('contextVariables'))).toBe(true);
+  });
+
+  it('warns on dataset measure certified flag via array fan-out', () => {
+    const findings = lintLivenessProperties({
+      datasets: [{ name: 'd1', measures: [{ name: 'arr', certified: true }] }],
+    });
+    expect(paths(findings).some((m) => m.includes('measures.certified'))).toBe(true);
+  });
+
+  it('stays silent on clean flat-collection items', () => {
+    const findings = lintLivenessProperties({
+      flows: [{ name: 'clean', nodes: [{ id: 'n1' }] }],
+      actions: [{ name: 'clean' }],
+      tools: [{ name: 'clean' }],
+    });
+    expect(findings).toEqual([]);
+  });
 });

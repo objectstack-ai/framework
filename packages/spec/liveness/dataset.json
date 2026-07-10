@@ -101,7 +101,9 @@
         "certified": {
           "status": "dead",
           "evidence": "no runtime consumer — analytics execution never reads it; not compiled into the Cube",
-          "note": "measure trust/governance flag, declared but unenforced (ADR-0049 enforce-or-remove candidate). Not authorWarn'd: it may surface as an objectui badge, so it is not necessarily misleading."
+          "note": "measure trust/governance flag, declared but unenforced (ADR-0049 enforce-or-remove candidate). Not authorWarn'd: it may surface as an objectui badge, so it is not necessarily misleading.",
+          "authorWarn": true,
+          "authorHint": "Declared but unenforced — analytics execution never reads it, so nothing badges or restricts \"certified\" measures. Do not present governance guarantees based on this flag."
         },
         "derived": {
           "status": "live",
