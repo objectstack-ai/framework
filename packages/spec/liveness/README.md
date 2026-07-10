@@ -115,7 +115,10 @@ Two rules keep it false-positive-free, **both of which the marker author must re
    Object/string/array props warn when merely present, so this caveat is boolean-only.
 
 The lint is ledger-driven: coverage grows by marking more entries `authorWarn`, not by
-touching the lint code. Today it covers `object` (incl. `enable.*`) and `field`.
+touching the lint code. It covers **every governed type**: objects (incl. `enable.*`)
+and their fields walk bespoke nesting; flows/actions/agents/tools/skills/datasets/
+permissions/hooks/pages are checked as flat stack collections, and container
+properties fan out over arrays (each flow node, each dataset measure).
 
 ## Granularity — drill one level
 
@@ -157,24 +160,49 @@ The governed set is `GOVERNED` at the top of `check-liveness.mts`. To add a type
 2. Seed `<type>.json` from that type's liveness audit (file:line evidence) + targeted
    greps. **Classify only with evidence** — `live` needs a cited consumer; `dead` needs a
    confirmed absence.
-3. Add the type to `GOVERNED`; confirm the gate is green.
+3. **Confirmed absence means BOTH repos.** The renderer layer is a legitimate consumer
+   (`live` with objectui evidence as prose), so grep `../objectui` before writing `dead`.
+   Precedent: `enable.trackHistory` was misclassified dead for a month while
+   RecordDetailView had been gating the History tab on it the whole time (#2707).
+4. Add the type to `GOVERNED`; confirm the gate is green.
 
-## Current state — 10 governed types (~295 properties)
+## Current state — 12 governed types
 
-| Type | live | exp | dead | Notes |
-|---|---|---|---|---|
-| object | 35 | – | 13 | versioning/partitioning/cdc tier dead; ObjectCapabilities fully live post-#2707/#2727 (`apiEnabled`/`apiMethods` enforced #1937; `feeds`/`activities` opt-out gates; `trackHistory` UI master switch; `files` opt-in Attachments gate) |
-| field | 34 | – | 39 | ~half dead — aspirational enhanced-type + governance config; naming-drift props server-live/client-snake |
-| flow | 29 | 1 | 7 | `runAs` experimental (unenforced identity switch); status/active gate nothing; FlowNodeAction enum out of sync |
-| action | 26 | – | 5 | `disabled` CEL ignored (renderers read non-spec `enabled`); type:'form'/shortcut/bulkEnabled dead |
-| hook | 11 | – | 2 | model-healthy — near-total liveness; only label/description dead |
-| permission | 23 | 3 | 2 | CRUD/FLS/RLS live; allow{Transfer,Restore,Purge} experimental; isProfile/contextVariables dead |
-| role | 3 | – | 1 | `parent` dead (org hierarchy uses sys_department) |
-| agent | 18 | 4 | 5 | access/permissions/visibility dead (chat route hardcodes perms); autonomy experimental |
-| tool | 13 | 1 | 5 | write-only metadata; runtime uses a parallel AIToolDefinition |
-| skill | 15 | – | 2 | triggerPhrases dead (no matcher); permissions dead |
-| dataset | 26 | – | 1 | analytics semantic layer (compiled to a Cube); `measures.certified` dead; `dimensions.dateGranularity` carries the org-tz bucketing proof |
+Counts include drilled `children` entries; regenerate with the snippet below rather
+than hand-editing (this table drifted badly once — field was listed 34/39 while the
+ledger actually said 54/6).
 
-The `dead` set across types is the enforce-or-remove worklist (ADR-0049). Not yet governed
-(rollout): view, page, dashboard, app, report, job, datasource, translation,
-email_template, doc, book, validation, seed.
+```bash
+python3 - <<'EOF'
+import json, glob, os
+from collections import Counter
+for f in sorted(glob.glob('packages/spec/liveness/*.json')):
+    d = json.load(open(f)); c = Counter()
+    def walk(ps):
+        for v in ps.values():
+            if 'status' in v: c[v['status']] += 1
+            walk(v.get('children') or {})
+    walk(d.get('props', {}))
+    print(os.path.basename(f)[:-5], dict(c))
+EOF
+```
+
+| Type | live | exp | dead | planned | Notes |
+|---|---|---|---|---|---|
+| object | 36 | – | 14 | – | versioning/partitioning/cdc tier dead; ObjectCapabilities fully live post-#2707/#2727; `tenancy.strategy`/`crossTenantAccess` inert (only `enabled`+`tenantField` read) |
+| field | 54 | – | 6 | – | near-healthy; dead = referenceFilters/columnName/index/vectorConfig/fileAttachmentConfig/dependencies, all authorWarn'd |
+| flow | 27 | – | 4 | – | dead = description/template/nodes.outputSchema/errorHandling.fallbackNodeId (engine uses fault edges) |
+| action | 34 | 1 | 1 | – | `disabled` went LIVE via metadata-admin authoring UI (2026-06 audit missed objectui); only `timeout` dead |
+| hook | 11 | – | 2 | – | model-healthy; only label/description dead (benign) |
+| permission | 32 | – | 1 | – | CRUD/FLS/RLS live; `contextVariables` dead (RLS uses current_user.* built-ins only) |
+| position | 3 | – | – | – | (role's ADR-0090 successor) fully live |
+| agent | 14 | 5 | 1 | – | `tenantId` dead (tenancy comes from request context); autonomy tier experimental |
+| tool | 9 | 1 | 1 | – | `permissions` dead — tool invocation not permission-gated by it |
+| skill | 10 | – | – | – | fully live |
+| dataset | 19 | – | 1 | – | `measures.certified` declared-but-unenforced governance flag |
+| page | 16 | – | – | 1 | fully live + one planned |
+
+The `dead` set across types is the enforce-or-remove worklist (ADR-0049); every
+misleading entry carries `authorWarn` so authors hear about it at compile time.
+Not yet governed (rollout): view, dashboard, app, report, job, datasource,
+translation, email_template, doc, book, validation, seed.

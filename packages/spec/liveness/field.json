@@ -238,7 +238,9 @@
     },
     "dependencies": {
       "status": "dead",
-      "evidence": "no consumer"
+      "evidence": "no consumer",
+      "authorWarn": true,
+      "authorHint": "No consumer — field dependency/cascade behavior is not implemented. Formula inputs are inferred from the expression itself; visibility rules use their own conditions."
     },
     "inlineTitle": {
       "status": "live",

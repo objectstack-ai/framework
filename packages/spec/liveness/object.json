@@ -129,7 +129,9 @@
         "strategy": {
           "status": "dead",
           "evidence": "inert — only tenancy.enabled is read",
-          "note": "part of the live tenancy block (sql-driver reads enabled+tenantField); verify before touching."
+          "note": "part of the live tenancy block (sql-driver reads enabled+tenantField); verify before touching.",
+          "authorWarn": true,
+          "authorHint": "Only tenancy.enabled + tenantField are read (sql-driver row scoping) — 'shared'/'isolated'/'hybrid' changes nothing. Do not expect per-tenant databases from this knob."
         },
         "tenantField": {
           "status": "live",
@@ -139,7 +141,9 @@
         "crossTenantAccess": {
           "status": "dead",
           "evidence": "inert",
-          "note": "part of the live tenancy block; verify before touching."
+          "note": "part of the live tenancy block; verify before touching.",
+          "authorWarn": true,
+          "authorHint": "Inert — setting it true does NOT grant (or gate) cross-tenant access. Tenant isolation is enforced solely via tenancy.enabled row scoping."
         }
       }
     },
@@ -227,7 +231,9 @@
     },
     "abstract": {
       "status": "dead",
-      "evidence": "no runtime reader"
+      "evidence": "no runtime reader",
+      "authorWarn": true,
+      "authorHint": "No runtime reader — an abstract object still gets a table and is instantiable. Object inheritance/abstraction is not implemented."
     },
     "isSystem": {
       "status": "dead",
