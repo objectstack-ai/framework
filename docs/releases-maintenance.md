@@ -70,18 +70,20 @@ platform version maps to.
 
 Backend content comes from the spec/package changesets. Frontend content comes from
 objectui's history for the SHA range bundled in that release. Because `.objectui-sha`
-is version-controlled, the range for any two release points is:
+is version-controlled, `scripts/objectui-range.mjs` computes that range from any two
+framework revisions and prints the feat/fix commits grouped by type + the largest
+touched areas — ready to paste into a Console section:
 
 ```bash
-# objectui commit range bundled between two framework revisions
-OLD=$(git show <old-rev>:.objectui-sha)
-NEW=$(git show <new-rev>:.objectui-sha)
-git -C ../objectui log --no-merges --format='- %s' "$OLD..$NEW" | grep -E '^- (feat|fix)'
+# frontend delta bundled between two framework revisions (needs ../objectui)
+node scripts/objectui-range.mjs <old-rev> <new-rev>   # e.g. the two release commits
+node scripts/objectui-range.mjs --from <sha> --to <sha> --json   # explicit SHAs / tooling
 ```
 
-The framework changesets also embed companion frontend notes inline ("Companion
-objectui PR ships…", renderer notes), which are enough to write an accurate Console
-section without the objectui checkout.
+Without an objectui checkout it still prints the SHA range to inspect. The framework
+changesets also embed companion frontend notes inline ("Companion objectui PR
+ships…", renderer notes), which are enough to write an accurate Console section on
+their own.
 
 ## Drift guard
 
