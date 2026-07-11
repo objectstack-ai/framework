@@ -29,7 +29,8 @@
     "check:doc-authoring": "node scripts/check-doc-authoring.mjs",
     "check:role-word": "node scripts/check-role-word.mjs",
     "check:authz-resolver": "node scripts/check-single-authz-resolver.mjs",
-    "check:console-sha": "node scripts/check-console-sha.mjs"
+    "check:console-sha": "node scripts/check-console-sha.mjs",
+    "check:release-notes": "node scripts/check-release-notes.mjs"
   },
   "keywords": [
     "objectstack",

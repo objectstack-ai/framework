@@ -1,5 +1,13 @@
 # Release Notes
 
+> **📓 This file is historical.** Current, developer-facing release notes live in
+> the curated per-major pages under [`content/docs/releases/`](content/docs/releases)
+> — they lead with breaking changes + migration and cover backend **and** Console
+> (frontend) per platform version. For exhaustive per-package detail, see each
+> package's changeset-generated `CHANGELOG.md`. The entries below are kept for
+> historical reference; see `docs/releases-maintenance.md` for how release history
+> is maintained.
+
 > **v5.0 (2026): `project` → `environment`.** The runtime concept formerly called *Project* (per-tenant business workspace; Org/Project/Branch hierarchy) is now called *Environment* throughout the codebase: CLI flags (`--environment`/`-e`), HTTP paths (`/api/v1/environments/:environmentId/...`), headers (`X-Environment-Id`), env vars (`OS_ENVIRONMENT_ID`), exported symbols (`createSystemEnvironmentPlugin`, `SYSTEM_ENVIRONMENT_ID`), DB columns (`environment_id`), and JSON schemas (`EnvironmentArtifact`) all use the new term with no aliases or deprecation shims. The word "project" elsewhere in this document still refers to the npm/monorepo sense (i.e., the framework as a software project). See `.changeset/v5-project-to-environment-rename.md` for the full breaking-change list and ADR-0006 for the rationale.
 
 

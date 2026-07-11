@@ -72,6 +72,13 @@ jobs:
       - name: Single authz resolver guard
         run: pnpm check:authz-resolver
 
+      # Release-notes drift guard: the platform is one version-locked train, so
+      # every released @objectstack/spec major must have a curated, navigable
+      # release page at content/docs/releases/v<major>.mdx. Catches the gap that
+      # let v10–v14 ship with no page while spec was already at 14.x.
+      - name: Release-notes drift guard
+        run: pnpm check:release-notes
+
   typecheck:
     name: TypeScript Type Check
     runs-on: ubuntu-latest
