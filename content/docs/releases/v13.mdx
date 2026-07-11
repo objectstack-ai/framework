@@ -166,6 +166,17 @@ protocol's per-object prefix rule (`crm_account`) was silently inert.
 and `protocol.publishPackageDrafts` rejects any object draft whose name lacks
 the package prefix, atomically, with an actionable message.
 
+## New in Console (Studio)
+
+Permission Model v2 is a backend-heavy release; the matching Console surfaces —
+the Roles → Positions relabel across Setup, the Studio cross-reference picker
+moving its `role` kind to `position`, and the standalone **Explain**, **Access
+Matrix**, and **Delegated Administration** admin pages that expose the D6/D12
+engines — roll out across the v13–v14 line. See
+[v14](/docs/releases/v14)'s Console notes for the shipped surfaces, and the
+[objectui CHANGELOG](https://github.com/objectstack-ai/objectui/blob/main/CHANGELOG.md)
+for per-commit detail.
+
 ## Removed: declared-but-never-enforced subsystems (ADR-0056 D8)
 
 Compliance-grade configuration must never merely look live. These schemas were
