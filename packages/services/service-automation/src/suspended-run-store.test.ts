@@ -17,7 +17,7 @@ function createTestLogger() {
  */
 function createFakeEngine(): SuspendedRunStoreEngine & { rows: Map<string, any> } {
     const rows = new Map<string, any>();
-    // Equality plus the `$lt` operator the retention sweep uses.
+    // Equality plus the `$lt` operator (kept for where-clause generality).
     const matches = (row: any, where: any) =>
         !where || Object.entries(where).every(([k, v]) =>
             v && typeof v === 'object' && '$lt' in (v as any)
@@ -231,39 +231,6 @@ describe('ObjectStoreSuspendedRunStore — run-history retention + durable detai
         for (let n = 1; n <= 3; n++) await store.recordTerminal(terminalRecord(n));
         await store.recordTerminal(terminalRecord(2)); // update in place
         expect(await store.listHistory('busy_flow', 10)).toHaveLength(3);
-    });
-
-    it('pruneHistory deletes terminal rows past the age window but never paused rows', async () => {
-        const engine = createFakeEngine();
-        const store = new ObjectStoreSuspendedRunStore(engine, createTestLogger());
-        const now = Date.parse('2026-03-01T00:00:00.000Z');
-        // Backdate created_at: two ancient terminals (one failed), one fresh.
-        await store.recordTerminal(terminalRecord(1));
-        await store.recordTerminal(terminalRecord(2, { status: 'failed', error: 'x' }));
-        await store.recordTerminal(terminalRecord(3));
-        engine.rows.get('run_r1').created_at = '2026-01-01T00:00:00.000Z';
-        engine.rows.get('run_r2').created_at = '2026-01-02T00:00:00.000Z';
-        engine.rows.get('run_r3').created_at = '2026-02-28T00:00:00.000Z';
-        // An old suspended run — live resumable state, exempt from retention.
-        await store.save(baseRun());
-        engine.rows.get('run_abc').created_at = '2025-06-01T00:00:00.000Z';
-
-        const deleted = await store.pruneHistory(30, now);
-        expect(deleted).toBe(2);
-        expect(await store.loadTerminal('r1')).toBeNull();
-        expect(await store.loadTerminal('r2')).toBeNull();
-        expect(await store.loadTerminal('r3')).not.toBeNull();
-        expect(await store.load('run_abc')).not.toBeNull();
-    });
-
-    it('pruneHistory is a no-op for a non-positive window', async () => {
-        const engine = createFakeEngine();
-        const store = new ObjectStoreSuspendedRunStore(engine, createTestLogger());
-        await store.recordTerminal(terminalRecord(1));
-        engine.rows.get('run_r1').created_at = '2020-01-01T00:00:00.000Z';
-        expect(await store.pruneHistory(0)).toBe(0);
-        expect(await store.pruneHistory(-5)).toBe(0);
-        expect(await store.loadTerminal('r1')).not.toBeNull();
     });
 
     it('bounds steps_json bytes by dropping the oldest steps first', async () => {

@@ -27,22 +27,19 @@ const HISTORY_PREFIX = 'run_';
 const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 /**
- * Default per-flow cap on terminal run-history rows (#2585 retention stop-gap
- * until the ADR-0057 lifecycle sweep covers `sys_automation_run`). A busy
+ * Default per-flow cap on terminal run-history rows (#2585). A busy
  * per-record-change flow otherwise persists one row per execution forever —
  * exactly the unbounded self-telemetry growth ADR-0057 exists to prevent.
  * 100 newest terminal runs per flow keeps the Runs surface useful while
  * bounding the table. `0` disables the cap.
+ *
+ * This write-time COUNT bound is the only retention this store enforces.
+ * AGE retention is declarative (#2834): `sys_automation_run` declares
+ * `retention: { maxAge, onlyWhen: { status: { $in: [...] } } }` and the
+ * platform Reaper sweeps it — suspended (`paused`) rows are live resumable
+ * state and never match the predicate.
  */
 export const DEFAULT_MAX_TERMINAL_RUNS_PER_FLOW = 100;
-
-/**
- * Default age-based retention window for terminal run-history rows, in days.
- * Enforced by {@link ObjectStoreSuspendedRunStore.pruneHistory}, swept
- * periodically by the service plugin. `0` disables age pruning. Suspended
- * (`paused`) rows are live resumable state and are NEVER age-pruned.
- */
-export const DEFAULT_RUN_HISTORY_RETENTION_DAYS = 30;
 
 /** Max deletes one write-time overflow prune may issue — bounds the write
  *  amplification a single `recordTerminal` can incur on a legacy oversized
@@ -52,8 +49,6 @@ const OVERFLOW_PRUNE_BATCH = 50;
 /** Byte cap for a terminal row's persisted `steps_json`. When over, the step
  *  tail is halved until it fits — the newest steps carry the failure. */
 const MAX_STEPS_JSON_BYTES = 64 * 1024;
-
-const TERMINAL_STATUSES = ['completed', 'failed'] as const;
 
 function isTerminalStatus(status: unknown): boolean {
     return status === 'completed' || status === 'failed';
@@ -309,32 +304,6 @@ export class ObjectStoreSuspendedRunStore implements SuspendedRunStore {
     }
   }
 
-  /**
-   * Age-based retention sweep (#2585, ADR-0057 posture): delete terminal
-   * history rows older than `retentionDays`. Two equality-filtered bulk
-   * deletes (one per terminal status) so `paused` rows — live resumable state —
-   * can never match. Returns the number of rows deleted when the driver
-   * reports it. No-op for a non-positive window or a delete-less engine.
-   */
-  async pruneHistory(retentionDays: number, now: number = Date.now()): Promise<number | undefined> {
-    if (!(retentionDays > 0) || typeof this.engine.delete !== 'function') return 0;
-    const cutoffIso = new Date(now - retentionDays * 86_400_000).toISOString();
-    let total: number | undefined = 0;
-    for (const status of TERMINAL_STATUSES) {
-      // ISO-8601 comparand: `created_at` is a native timestamp column, which
-      // rejects a bare epoch-ms number on Postgres (same convention as the
-      // ADR-0057 LifecycleService Reaper).
-      const res = await this.engine.delete(TABLE, {
-        where: { status, created_at: { $lt: cutoffIso } },
-        multi: true,
-        context: SYSTEM_CTX,
-      });
-      const n = countDeleted(res);
-      total = n === undefined || total === undefined ? undefined : total + n;
-    }
-    return total;
-  }
-
   /** Load one terminal history row by raw `runId` (durable `getRun` fallback). */
   async loadTerminal(runId: string): Promise<RunRecord | null> {
     const rows = await this.engine.find(TABLE, {
@@ -435,18 +404,4 @@ function serializeStepsBounded(steps: RunRecord['steps']): string | null {
     tail = tail.slice(Math.ceil(tail.length / 2));
   }
   return null;
-}
-
-/** Best-effort row-count extraction from a driver's delete result (mirrors
- *  service-messaging's retention sweeper). */
-function countDeleted(res: unknown): number | undefined {
-  if (typeof res === 'number') return res;
-  if (Array.isArray(res)) return res.length;
-  if (res && typeof res === 'object') {
-    const r = res as Record<string, unknown>;
-    for (const k of ['deletedCount', 'deleted', 'count', 'affected', 'affectedRows']) {
-      if (typeof r[k] === 'number') return r[k] as number;
-    }
-  }
-  return undefined;
 }

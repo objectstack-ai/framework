@@ -25,7 +25,6 @@ export {
     InMemorySuspendedRunStore,
     ObjectStoreSuspendedRunStore,
     DEFAULT_MAX_TERMINAL_RUNS_PER_FLOW,
-    DEFAULT_RUN_HISTORY_RETENTION_DAYS,
 } from './suspended-run-store.js';
 export type { SuspendedRunStoreEngine, ObjectStoreSuspendedRunStoreOptions } from './suspended-run-store.js';
 

@@ -495,7 +495,9 @@ export class LifecycleService {
       // live shards — and immediately bounds a legacy table the Rotator just
       // adopted whole into its first shard.
       const windowMs = this.effectiveWindowMs(ov.maxAge, parseLifecycleDuration(lc.retention.maxAge), object);
-      outcomes.push(await this.reap(engine, object, lc, 'retention', 'created_at', windowMs, report));
+      outcomes.push(
+        await this.reap(engine, object, lc, 'retention', 'created_at', windowMs, report, lc.retention.onlyWhen),
+      );
     } else if (lc.storage?.strategy === 'rotation' && !rotated && !lc.ttl) {
       // Rotation declared but the driver can't shard physically: the shard
       // window IS the bound — enforce the same window with an age-based reap
@@ -591,12 +593,16 @@ export class LifecycleService {
     field: string,
     windowMs: number,
     report: LifecycleSweepReport,
+    onlyWhen?: Record<string, unknown>,
   ): Promise<number | undefined> {
     const cutoff = new Date(this.now() - windowMs).toISOString();
     const overrideKey = policy === 'ttl' ? 'expireAfter' : 'maxAge';
     const tenantWindows = (this.governance.tenantOverrides.get(object) ?? []).filter(
       (t) => typeof t[overrideKey] === 'string',
     );
+    // `retention.onlyWhen` narrows every delete to the declared row filter —
+    // rows outside it (live workflow state) are retained regardless of age.
+    const scope = onlyWhen ?? {};
 
     let total: number | undefined = 0;
     const accumulate = (res: unknown) => {
@@ -608,7 +614,7 @@ export class LifecycleService {
     if (tenantWindows.length === 0) {
       accumulate(
         await engine.delete(object, {
-          where: { [field]: { $lt: cutoff } },
+          where: { [field]: { $lt: cutoff }, ...scope },
           multi: true,
           context: { ...SYSTEM_CTX },
         }),
@@ -621,7 +627,7 @@ export class LifecycleService {
         const tCutoff = new Date(this.now() - tMs).toISOString();
         accumulate(
           await engine.delete(object, {
-            where: { [field]: { $lt: tCutoff }, organization_id: t.tenantId },
+            where: { [field]: { $lt: tCutoff }, organization_id: t.tenantId, ...scope },
             multi: true,
             context: { ...SYSTEM_CTX },
           }),
@@ -637,6 +643,7 @@ export class LifecycleService {
               { organization_id: { $nin: tenantWindows.map((t) => t.tenantId) } },
               { organization_id: null },
             ],
+            ...scope,
           },
           multi: true,
           context: { ...SYSTEM_CTX },

@@ -166,12 +166,19 @@ lifecycle: {
   retention: { maxAge: '90d' },
   archive: { after: '90d', to: 'archive', keep: '7y' },
 }
+
+// Mixed table (live workflow state + terminal history): scope the reap
+lifecycle: {
+  class: 'telemetry',
+  retention: { maxAge: '30d', onlyWhen: { status: { $in: ['completed', 'failed'] } } },
+}
 ```
 
 | Key | Description |
 | :--- | :--- |
 | `class` | Persistence contract (see table below); `record` is the implicit default |
 | `retention.maxAge` | Age-based reap on `created_at` |
+| `retention.onlyWhen` | Row filter the reap is scoped to (per-field equality or `{ $in: [...] }`); rows outside it are retained regardless of age. Incompatible with rotation `storage` and `archive` |
 | `ttl` | Per-row expiry: `field` + `expireAfter` |
 | `storage` | `{ strategy: 'rotation', shards, unit }` — time-shard + O(1) shard `DROP` (SQLite) |
 | `archive` | Cold-store hand-off: `after` (must equal `retention.maxAge`) + `to` (datasource name) + optional `keep` |

@@ -42,14 +42,64 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "封禁到期时间",
         help: "设置后，到达该时间会自动解除封禁。"
       },
+      failed_login_count: {
+        label: "Failed Login Count",
+        help: "Consecutive failed sign-in attempts; reset to 0 on success. Maintained by the auth manager."
+      },
+      locked_until: {
+        label: "Locked Until",
+        help: "When set and in the future, sign-in is rejected (brute-force lockout). Auto-clears past this time; an admin can clear it early via Unlock."
+      },
+      password_changed_at: {
+        label: "Password Changed At",
+        help: "Timestamp of the last password change. Backs password_expiry_days; system-managed."
+      },
+      phone_number: {
+        label: "Phone Number",
+        help: "Sign-in phone number (E.164 recommended). Unique per user; managed by better-auth when the phoneNumber plugin is enabled."
+      },
+      phone_number_verified: {
+        label: "Phone Verified",
+        help: "Whether the phone number has been verified (OTP verification requires SMS infrastructure; false until that ships). System-managed."
+      },
+      must_change_password: {
+        label: "Must Change Password",
+        help: "When true, the user is blocked (403 PASSWORD_EXPIRED) until they change their password. Stamped by the admin user-management routes; system-managed."
+      },
+      mfa_required_at: {
+        label: "MFA Required At",
+        help: "When enforced MFA first applied to this user (grace-period clock). Backs mfa_required; system-managed."
+      },
+      last_login_at: {
+        label: "Last Login At",
+        help: "Timestamp of the last successful sign-in. Stamped by the auth manager; system-managed."
+      },
+      last_login_ip: {
+        label: "Last Login IP",
+        help: "Client IP of the last successful sign-in (from the trusted proxy forwarded header). System-managed."
+      },
+      ai_access: {
+        label: "AI Access",
+        help: "Whether this user holds an AI seat — grants access to the in-UI AI agents (build / ask). The framework synthesizes the `ai_seat` capability from this flag (plugin-hono-server resolveCtx). Assignment is capped by the licensed / purchased seat count (enforced by @objectstack/security-enterprise AiSeatPlugin). Owned by objectql (better-auth is oblivious to this column)."
+      },
       image: {
         label: "头像"
       },
       manager_id: {
-        label: "经理"
+        label: "经理",
+        help: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise)."
       },
       primary_business_unit_id: {
-        label: "主属业务单元"
+        label: "主属业务单元",
+        help: "The user's primary business unit — a denormalised projection of sys_business_unit_member.is_primary, maintained by plugin-sharing (ADR-0057 addendum D12). Lets a user-lookup filter candidates by business unit without traversing the membership junction. Do not edit directly; set it via business-unit membership."
+      },
+      source: {
+        label: "Identity Source",
+        help: "How this identity was created — idp_provisioned (federated SSO JIT) or env_native (local signup / app end-user). System-managed; do not edit.",
+        options: {
+          idp_provisioned: "IdP-Provisioned",
+          env_native: "Env-Native"
+        }
       },
       id: {
         label: "用户 ID"
@@ -91,6 +141,14 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       unban_user: {
         label: "解除封禁",
         successMessage: "用户已解除封禁"
+      },
+      unlock_user: {
+        label: "Unlock Account",
+        successMessage: "Account unlocked"
+      },
+      create_user: {
+        label: "Create User",
+        successMessage: "User created"
       },
       set_user_password: {
         label: "设置密码",
@@ -152,6 +210,18 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       expires_at: {
         label: "过期时间"
+      },
+      last_activity_at: {
+        label: "Last Activity At",
+        help: "Timestamp of the last request on this session; drives idle-timeout. System-managed."
+      },
+      revoked_at: {
+        label: "Revoked At",
+        help: "When set, this session was revoked (idle / absolute-max / concurrent-cap / admin). System-managed."
+      },
+      revoke_reason: {
+        label: "Revoke Reason",
+        help: "Why the session was revoked (idle_timeout, absolute_max, concurrent_cap, …)."
       },
       active_organization_id: {
         label: "当前组织"
@@ -251,6 +321,10 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       password: {
         label: "密码哈希",
         help: "邮箱/密码提供方使用的密码哈希"
+      },
+      previous_password_hashes: {
+        label: "Previous Password Hashes",
+        help: "JSON array of prior password hashes (bounded by password_history_count); reuse-prevention only. System-managed."
       }
     },
     _views: {
@@ -320,6 +394,10 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       metadata: {
         label: "元数据",
         help: "JSON 序列化的组织元数据"
+      },
+      require_mfa: {
+        label: "Require Multi-Factor Auth",
+        help: "When true, every member of this organization must enroll an authenticator app to access data."
       },
       id: {
         label: "组织 ID"
@@ -645,6 +723,9 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      org_chart: {
+        label: "Org Chart"
+      },
       active: {
         label: "启用"
       },
@@ -1226,263 +1307,57 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_audit_log: {
-    label: "审计日志",
-    pluralLabel: "审计日志",
-    description: "平台事件的不可变审计追踪",
+  sys_notification: {
+    label: "通知",
+    pluralLabel: "通知",
+    description: "按用户存储的通知收件箱条目",
     fields: {
-      created_at: {
-        label: "时间戳"
+      id: {
+        label: "通知 ID"
       },
-      action: {
-        label: "操作",
-        help: "操作类型（snake_case）",
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
+      },
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          create: "创建",
-          update: "更新",
-          delete: "删除",
-          restore: "恢复",
-          login: "登录",
-          logout: "登出",
-          permission_change: "权限变更",
-          config_change: "配置变更",
-          export: "导出",
-          import: "导入"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      user_id: {
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
+      },
+      source_object: {
+        label: "来源对象",
+        help: "关联记录的对象名称（例如 lead、opportunity）"
+      },
+      source_id: {
+        label: "来源记录",
+        help: "source_object 中的记录 ID"
+      },
+      actor_id: {
         label: "执行人",
-        help: "执行该操作的用户（系统操作时为 null）"
+        help: "触发该通知的用户（提及人、分配人）"
       },
-      object_name: {
-        label: "对象",
-        help: "目标对象（例如 sys_user、project_task）"
-      },
-      record_id: {
-        label: "记录 ID",
-        help: "受影响记录的 ID"
-      },
-      old_value: {
-        label: "旧值",
-        help: "旧状态的 JSON 序列化内容"
-      },
-      new_value: {
-        label: "新值",
-        help: "新状态的 JSON 序列化内容"
-      },
-      ip_address: {
-        label: "IP 地址"
-      },
-      user_agent: {
-        label: "用户代理"
-      },
-      tenant_id: {
-        label: "租户",
-        help: "用于多租户隔离的租户上下文"
-      },
-      metadata: {
-        label: "元数据",
-        help: "附加上下文的 JSON 序列化内容"
-      },
-      id: {
-        label: "审计日志 ID"
+      created_at: {
+        label: "创建时间"
       }
     },
     _views: {
       recent: {
-        label: "最近"
+        label: "Recent"
       },
-      writes_only: {
-        label: "写入"
-      },
-      auth_events: {
-        label: "认证"
-      },
-      config_changes: {
-        label: "配置"
-      },
-      all_events: {
-        label: "全部"
-      }
-    }
-  },
-  sys_presence: {
-    label: "在线状态",
-    pluralLabel: "在线状态",
-    description: "实时用户在线与活动跟踪",
-    fields: {
-      id: {
-        label: "在线状态 ID"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      },
-      user_id: {
-        label: "用户"
-      },
-      session_id: {
-        label: "会话"
-      },
-      status: {
-        label: "状态",
-        options: {
-          online: "在线",
-          away: "离开",
-          busy: "忙碌",
-          offline: "离线"
-        }
-      },
-      last_seen: {
-        label: "最近在线时间"
-      },
-      current_location: {
-        label: "当前位置"
-      },
-      device: {
-        label: "设备",
-        options: {
-          desktop: "桌面端",
-          mobile: "移动端",
-          tablet: "平板端",
-          other: "其他"
-        }
-      },
-      custom_status: {
-        label: "自定义状态"
-      },
-      metadata: {
-        label: "元数据",
-        help: "与在线状态关联的任意 JSON 元数据（对应 PresenceStateSchema.metadata）。"
-      }
-    }
-  },
-  sys_activity: {
-    label: "活动",
-    pluralLabel: "活动",
-    description: "最近活动流条目（轻量、去规范化）",
-    fields: {
-      id: {
-        label: "活动 ID"
-      },
-      timestamp: {
-        label: "时间戳"
-      },
-      type: {
-        label: "类型",
-        options: {
-          created: "已创建",
-          updated: "已更新",
-          deleted: "已删除",
-          commented: "已评论",
-          mentioned: "被提及",
-          shared: "已共享",
-          assigned: "已分配",
-          completed: "已完成",
-          login: "登录",
-          logout: "登出",
-          system: "系统"
-        }
-      },
-      summary: {
-        label: "摘要",
-        help: "人类可读的单行摘要"
-      },
-      actor_id: {
-        label: "执行人"
-      },
-      actor_name: {
-        label: "执行人名称"
-      },
-      actor_avatar_url: {
-        label: "执行人头像"
-      },
-      object_name: {
-        label: "对象",
-        help: "目标对象短名称（例如 account、sys_user）"
-      },
-      record_id: {
-        label: "记录 ID"
-      },
-      record_label: {
-        label: "记录标签",
-        help: "写入时目标记录的显示标签"
-      },
-      url: {
-        label: "URL",
-        help: "指向活动目标的可选深度链接"
-      },
-      environment_id: {
-        label: "项目",
-        help: "项目上下文（多项目部署）"
-      },
-      metadata: {
-        label: "元数据",
-        help: "附加上下文的 JSON 序列化内容"
-      }
-    }
-  },
-  sys_comment: {
-    label: "评论",
-    pluralLabel: "评论",
-    description: "通过 thread_id 附加到记录的线程化评论",
-    fields: {
-      id: {
-        label: "评论 ID"
-      },
-      thread_id: {
-        label: "线程",
-        help: "线程标识——约定格式为 `{object}:{record_id}`（例如 `sys_user:abc123`）"
-      },
-      parent_id: {
-        label: "父评论",
-        help: "可选的父评论，用于嵌套回复"
-      },
-      reply_count: {
-        label: "回复数"
-      },
-      author_id: {
-        label: "作者"
-      },
-      author_name: {
-        label: "作者名称"
-      },
-      author_avatar_url: {
-        label: "作者头像"
-      },
-      body: {
-        label: "正文",
-        help: "评论文本（支持 Markdown）"
-      },
-      mentions: {
-        label: "提及",
-        help: "@mention 对象的 JSON 数组"
-      },
-      reactions: {
-        label: "回应",
-        help: "表情回应对象的 JSON 数组"
-      },
-      is_edited: {
-        label: "已编辑"
-      },
-      edited_at: {
-        label: "编辑时间"
-      },
-      visibility: {
-        label: "可见性",
-        options: {
-          public: "公开",
-          internal: "内部",
-          private: "私有"
-        }
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -1544,60 +1419,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "更新时间"
-      }
-    }
-  },
-  sys_notification: {
-    label: "通知",
-    pluralLabel: "通知",
-    description: "按用户存储的通知收件箱条目",
-    fields: {
-      id: {
-        label: "通知 ID"
-      },
-      topic: {
-        label: "Topic",
-        help: "Notification topic, e.g. task.assigned, collab.mention"
-      },
-      payload: {
-        label: "Payload",
-        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
-      },
-      severity: {
-        label: "Severity",
-        help: "Severity hint for rendering / filtering",
-        options: {
-          info: "info",
-          warning: "warning",
-          critical: "critical"
-        }
-      },
-      dedup_key: {
-        label: "Dedup Key",
-        help: "Idempotency key within a topic window; a repeat emit is a no-op"
-      },
-      source_object: {
-        label: "来源对象",
-        help: "关联记录的对象名称（例如 lead、opportunity）"
-      },
-      source_id: {
-        label: "来源记录",
-        help: "source_object 中的记录 ID"
-      },
-      actor_id: {
-        label: "执行人",
-        help: "触发该通知的用户（提及人、分配人）"
-      },
-      created_at: {
-        label: "创建时间"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recent"
-      },
-      by_topic: {
-        label: "By Topic"
       }
     }
   },
@@ -2505,6 +2326,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "密文",
         help: "提供方编码后的密文数据（base64 / JSON）。实现定义；仅匹配的 ICryptoProvider 可读取。"
       }
+    },
+    _views: {
+      all: {
+        label: "All Secrets"
+      }
     }
   },
   sys_setting_audit: {
@@ -2579,6 +2405,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       request_id: {
         label: "请求 ID",
         help: "与 sys_audit_log / tracing 关联。"
+      }
+    },
+    _views: {
+      recent: {
+        label: "Recent"
       }
     }
   }

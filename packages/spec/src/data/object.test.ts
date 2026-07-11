@@ -102,6 +102,49 @@ describe('LifecycleSchema (ADR-0057)', () => {
     }
   });
 
+  it('accepts retention.onlyWhen with scalar and $in predicates (#2834 mixed tables)', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'telemetry',
+      retention: {
+        maxAge: '30d',
+        onlyWhen: { status: { $in: ['completed', 'failed'] }, archived: true },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects onlyWhen operators other than $in and empty $in lists', () => {
+    for (const bad of [
+      { status: { $nin: ['paused'] } }, // unsupported operator
+      { status: { $in: [] } }, // empty list matches nothing — surely a mistake
+      { status: { $in: ['a'], extra: 1 } }, // strict object: no extra keys
+    ]) {
+      const result = LifecycleSchema.safeParse({
+        class: 'telemetry',
+        retention: { maxAge: '30d', onlyWhen: bad },
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('rejects onlyWhen combined with rotation storage (shard DROPs ignore filters)', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'telemetry',
+      retention: { maxAge: '14d', onlyWhen: { status: 'done' } },
+      storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects onlyWhen combined with archive (the Archiver moves rows by age alone)', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'audit',
+      retention: { maxAge: '90d', onlyWhen: { status: 'done' } },
+      archive: { after: '90d', to: 'datalake' },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('is accepted as an object-level property by ObjectSchema.create', () => {
     const obj = ObjectSchema.create({
       name: 'my_trace',

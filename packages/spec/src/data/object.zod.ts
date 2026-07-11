@@ -306,6 +306,17 @@ export const LifecycleSchema = lazySchema(() => z.object({
   ),
   retention: z.object({
     maxAge: lifecycleDuration('retention.maxAge').describe('Rows older than this (by created_at) are deleted by the Reaper — or archived first when `archive` is set.'),
+    onlyWhen: z.record(
+      z.string(),
+      z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.object({ $in: z.array(z.union([z.string(), z.number()])).min(1) }).strict(),
+      ]),
+    ).optional().describe(
+      'Row filter the retention applies to — per-field equality or {$in: [...]} (e.g. { status: { $in: ["completed", "failed"] } }). Rows OUTSIDE the filter are retained regardless of age: for tables that interleave live workflow state with terminal history (sys_automation_run). Incompatible with rotation storage and archive, which act on whole shards / age alone.',
+    ),
   }).optional().describe('Age-based retention window enforced by the LifecycleService Reaper.'),
   ttl: z.object({
     field: z.string().describe('Timestamp field the TTL is measured from (e.g. created_at, expires_at).'),
@@ -341,6 +352,18 @@ export const LifecycleSchema = lazySchema(() => z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: `lifecycle.archive.after ('${lc.archive.after}') must equal retention.maxAge ('${lc.retention.maxAge}') — the hot window ends where the archive begins`,
+    });
+  }
+  if (lc.retention?.onlyWhen && lc.storage?.strategy === 'rotation') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'lifecycle.retention.onlyWhen cannot be combined with rotation storage — the Rotator DROPs whole shards and would destroy rows the filter protects',
+    });
+  }
+  if (lc.retention?.onlyWhen && lc.archive) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'lifecycle.retention.onlyWhen cannot be combined with archive — the Archiver moves rows by age alone and would archive rows the filter protects',
     });
   }
 }));

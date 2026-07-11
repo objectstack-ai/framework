@@ -98,6 +98,29 @@ describe('LifecycleService.sweep — Reaper', () => {
     expect(report.swept[0].policy).toBe('ttl');
   });
 
+  it('merges retention.onlyWhen into the reap filter (mixed tables, #2834)', async () => {
+    const { engine, deletes } = captureEngine([
+      {
+        name: 'sys_automation_run',
+        lifecycle: {
+          class: 'telemetry',
+          retention: { maxAge: '30d', onlyWhen: { status: { $in: ['completed', 'failed'] } } },
+        } as any,
+      },
+    ]);
+
+    const report = await service(engine).sweep();
+
+    // Age cutoff AND the status predicate — a paused run older than the
+    // window must never match the delete.
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].where).toEqual({
+      created_at: { $lt: isoCutoff('30d') },
+      status: { $in: ['completed', 'failed'] },
+    });
+    expect(report.swept[0].policy).toBe('retention');
+  });
+
   it('never touches record-class or undeclared objects', async () => {
     const { engine, deletes } = captureEngine([
       { name: 'crm_account' },
@@ -494,6 +517,39 @@ describe('LifecycleService.sweep — governance (P4)', () => {
     expect(deletes[1].where).toEqual({
       created_at: { $lt: isoCutoff('30d') },
       $or: [{ organization_id: { $nin: ['org_reg'] } }, { organization_id: null }],
+    });
+    expect(deletes).toHaveLength(2);
+  });
+
+  it('retention.onlyWhen survives tenant-scoped overrides on every pass', async () => {
+    const { engine, deletes } = captureEngine([
+      {
+        name: 'sys_automation_run',
+        lifecycle: {
+          class: 'telemetry',
+          retention: { maxAge: '30d', onlyWhen: { status: { $in: ['completed', 'failed'] } } },
+        } as any,
+      },
+    ]);
+    (engine as any).find = async (object: string) =>
+      object === 'sys_organization' ? [{ id: 'org_reg' }] : [];
+    const settings = fakeSettings(
+      {},
+      { org_reg: { retention_overrides: { sys_automation_run: { maxAge: '2y' } } } },
+    );
+
+    await service(engine, { getSettings: () => settings }).sweep();
+
+    const predicate = { status: { $in: ['completed', 'failed'] } };
+    expect(deletes[0].where).toEqual({
+      created_at: { $lt: isoCutoff('2y') },
+      organization_id: 'org_reg',
+      ...predicate,
+    });
+    expect(deletes[1].where).toEqual({
+      created_at: { $lt: isoCutoff('30d') },
+      $or: [{ organization_id: { $nin: ['org_reg'] } }, { organization_id: null }],
+      ...predicate,
     });
     expect(deletes).toHaveLength(2);
   });

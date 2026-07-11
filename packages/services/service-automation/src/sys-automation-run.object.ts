@@ -40,15 +40,21 @@ export const SysAutomationRun = ObjectSchema.create({
   icon: 'pause-circle',
   isSystem: true,
   managedBy: 'system',
-  // ADR-0057: deliberately NO `lifecycle` block. This is a MIXED table — live
-  // suspended runs (resumable workflow state, record semantics: an approval
-  // may legitimately stay paused for months) interleaved with terminal run
-  // history (telemetry semantics). A blanket age-based retention would reap
-  // suspended runs and strand in-flight approvals; the declarative contract
-  // has no status predicate yet. Bounding is owned by the automation store's
-  // specialized default-on sweep instead (ObjectStoreSuspendedRunStore
-  // .pruneHistory, #2585): TERMINAL statuses only, by age + per-flow cap —
-  // suspended rows are never age-pruned.
+  // ADR-0057 (#2834): MIXED table — live suspended runs (resumable workflow
+  // state, record semantics: an approval may legitimately stay paused for
+  // months) interleaved with terminal run history (telemetry semantics).
+  // `retention.onlyWhen` scopes the age sweep to TERMINAL statuses only, so
+  // the platform Reaper prunes 30d-old history while suspended (`paused`) and
+  // in-flight (`running`) rows never match. The write-time per-flow overflow
+  // cap (ObjectStoreSuspendedRunStore.pruneFlowOverflow, #2585) stays in the
+  // store — a count bound the declarative contract can't express.
+  lifecycle: {
+    class: 'telemetry',
+    retention: {
+      maxAge: '30d',
+      onlyWhen: { status: { $in: ['completed', 'failed'] } },
+    },
+  },
   description: 'Durable automation run state: live suspended runs (resumable, ADR-0019) and terminal run history (completed / failed, for observability).',
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

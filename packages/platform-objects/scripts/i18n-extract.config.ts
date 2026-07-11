@@ -59,8 +59,12 @@ import {
 // ── Audit ─────────────────────────────────────────────────────────────────
 // sys_audit_log / sys_activity / sys_comment moved to @objectstack/plugin-audit
 // and sys_presence to @objectstack/service-realtime (ADR-0029 K2 / D8). Their
-// i18n extraction now lives in those packages; the already-generated bundles
-// here keep working until the next regeneration. sys_attachment stays here
+// i18n extraction lives in those packages (each has its own
+// scripts/i18n-extract.config.ts + src/translations bundles) and the leftover
+// copies here were pruned in the #2834 ⑤ regeneration — verified line-by-line
+// against the owning plugins' bundles before committing. The
+// bundle-ownership test guards this invariant from here on: this package's
+// bundles carry ONLY this package's objects. sys_attachment stays here
 // pending the storage-domain decomposition (it belongs with service-storage).
 import {
   SysNotification,

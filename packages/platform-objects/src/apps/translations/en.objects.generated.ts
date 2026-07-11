@@ -42,14 +42,64 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Ban Expires",
         help: "When set, the ban auto-clears at this time."
       },
+      failed_login_count: {
+        label: "Failed Login Count",
+        help: "Consecutive failed sign-in attempts; reset to 0 on success. Maintained by the auth manager."
+      },
+      locked_until: {
+        label: "Locked Until",
+        help: "When set and in the future, sign-in is rejected (brute-force lockout). Auto-clears past this time; an admin can clear it early via Unlock."
+      },
+      password_changed_at: {
+        label: "Password Changed At",
+        help: "Timestamp of the last password change. Backs password_expiry_days; system-managed."
+      },
+      phone_number: {
+        label: "Phone Number",
+        help: "Sign-in phone number (E.164 recommended). Unique per user; managed by better-auth when the phoneNumber plugin is enabled."
+      },
+      phone_number_verified: {
+        label: "Phone Verified",
+        help: "Whether the phone number has been verified (OTP verification requires SMS infrastructure; false until that ships). System-managed."
+      },
+      must_change_password: {
+        label: "Must Change Password",
+        help: "When true, the user is blocked (403 PASSWORD_EXPIRED) until they change their password. Stamped by the admin user-management routes; system-managed."
+      },
+      mfa_required_at: {
+        label: "MFA Required At",
+        help: "When enforced MFA first applied to this user (grace-period clock). Backs mfa_required; system-managed."
+      },
+      last_login_at: {
+        label: "Last Login At",
+        help: "Timestamp of the last successful sign-in. Stamped by the auth manager; system-managed."
+      },
+      last_login_ip: {
+        label: "Last Login IP",
+        help: "Client IP of the last successful sign-in (from the trusted proxy forwarded header). System-managed."
+      },
+      ai_access: {
+        label: "AI Access",
+        help: "Whether this user holds an AI seat — grants access to the in-UI AI agents (build / ask). The framework synthesizes the `ai_seat` capability from this flag (plugin-hono-server resolveCtx). Assignment is capped by the licensed / purchased seat count (enforced by @objectstack/security-enterprise AiSeatPlugin). Owned by objectql (better-auth is oblivious to this column)."
+      },
       image: {
         label: "Profile Image"
       },
       manager_id: {
-        label: "Manager"
+        label: "Manager",
+        help: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise)."
       },
       primary_business_unit_id: {
-        label: "Primary Business Unit"
+        label: "Primary Business Unit",
+        help: "The user's primary business unit — a denormalised projection of sys_business_unit_member.is_primary, maintained by plugin-sharing (ADR-0057 addendum D12). Lets a user-lookup filter candidates by business unit without traversing the membership junction. Do not edit directly; set it via business-unit membership."
+      },
+      source: {
+        label: "Identity Source",
+        help: "How this identity was created — idp_provisioned (federated SSO JIT) or env_native (local signup / app end-user). System-managed; do not edit.",
+        options: {
+          idp_provisioned: "IdP-Provisioned",
+          env_native: "Env-Native"
+        }
       },
       id: {
         label: "User ID"
@@ -91,6 +141,14 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       unban_user: {
         label: "Unban User",
         successMessage: "User unbanned"
+      },
+      unlock_user: {
+        label: "Unlock Account",
+        successMessage: "Account unlocked"
+      },
+      create_user: {
+        label: "Create User",
+        successMessage: "User created"
       },
       set_user_password: {
         label: "Set Password",
@@ -152,6 +210,18 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       expires_at: {
         label: "Expires At"
+      },
+      last_activity_at: {
+        label: "Last Activity At",
+        help: "Timestamp of the last request on this session; drives idle-timeout. System-managed."
+      },
+      revoked_at: {
+        label: "Revoked At",
+        help: "When set, this session was revoked (idle / absolute-max / concurrent-cap / admin). System-managed."
+      },
+      revoke_reason: {
+        label: "Revoke Reason",
+        help: "Why the session was revoked (idle_timeout, absolute_max, concurrent_cap, …)."
       },
       active_organization_id: {
         label: "Active Organization"
@@ -251,6 +321,10 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       password: {
         label: "Password Hash",
         help: "Hashed password for email/password provider"
+      },
+      previous_password_hashes: {
+        label: "Previous Password Hashes",
+        help: "JSON array of prior password hashes (bounded by password_history_count); reuse-prevention only. System-managed."
       }
     },
     _views: {
@@ -320,6 +394,10 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       metadata: {
         label: "Metadata",
         help: "JSON-serialized organization metadata"
+      },
+      require_mfa: {
+        label: "Require Multi-Factor Auth",
+        help: "When true, every member of this organization must enroll an authenticator app to access data."
       },
       id: {
         label: "Organization ID"
@@ -645,6 +723,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      org_chart: {
+        label: "Org Chart"
+      },
       active: {
         label: "Active"
       },
@@ -1226,263 +1307,57 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_audit_log: {
-    label: "Audit Log",
-    pluralLabel: "Audit Logs",
-    description: "Immutable audit trail for platform events",
+  sys_notification: {
+    label: "Notification",
+    pluralLabel: "Notifications",
+    description: "Per-user notification inbox entries",
     fields: {
-      created_at: {
-        label: "Timestamp"
+      id: {
+        label: "Notification ID"
       },
-      action: {
-        label: "Action",
-        help: "Action type (snake_case)",
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
+      },
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          create: "create",
-          update: "update",
-          delete: "delete",
-          restore: "restore",
-          login: "login",
-          logout: "logout",
-          permission_change: "permission_change",
-          config_change: "config_change",
-          export: "export",
-          import: "import"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      user_id: {
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
+      },
+      source_object: {
+        label: "Source Object",
+        help: "Object name of the related record (e.g. lead, opportunity)"
+      },
+      source_id: {
+        label: "Source Record",
+        help: "Record id within source_object"
+      },
+      actor_id: {
         label: "Actor",
-        help: "User who performed the action (null for system actions)"
+        help: "User who caused the notification (mentioner, assigner)"
       },
-      object_name: {
-        label: "Object",
-        help: "Target object (e.g. sys_user, project_task)"
-      },
-      record_id: {
-        label: "Record ID",
-        help: "ID of the affected record"
-      },
-      old_value: {
-        label: "Old Value",
-        help: "JSON-serialized previous state"
-      },
-      new_value: {
-        label: "New Value",
-        help: "JSON-serialized new state"
-      },
-      ip_address: {
-        label: "IP Address"
-      },
-      user_agent: {
-        label: "User Agent"
-      },
-      tenant_id: {
-        label: "Tenant",
-        help: "Tenant context for multi-tenant isolation"
-      },
-      metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
-      },
-      id: {
-        label: "Audit Log ID"
+      created_at: {
+        label: "Created At"
       }
     },
     _views: {
       recent: {
         label: "Recent"
       },
-      writes_only: {
-        label: "Writes"
-      },
-      auth_events: {
-        label: "Auth"
-      },
-      config_changes: {
-        label: "Config"
-      },
-      all_events: {
-        label: "All"
-      }
-    }
-  },
-  sys_presence: {
-    label: "Presence",
-    pluralLabel: "Presences",
-    description: "Real-time user presence and activity tracking",
-    fields: {
-      id: {
-        label: "Presence ID"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      },
-      user_id: {
-        label: "User"
-      },
-      session_id: {
-        label: "Session"
-      },
-      status: {
-        label: "Status",
-        options: {
-          online: "Online",
-          away: "Away",
-          busy: "Busy",
-          offline: "Offline"
-        }
-      },
-      last_seen: {
-        label: "Last Seen"
-      },
-      current_location: {
-        label: "Current Location"
-      },
-      device: {
-        label: "Device",
-        options: {
-          desktop: "Desktop",
-          mobile: "Mobile",
-          tablet: "Tablet",
-          other: "Other"
-        }
-      },
-      custom_status: {
-        label: "Custom Status"
-      },
-      metadata: {
-        label: "Metadata",
-        help: "Arbitrary JSON metadata associated with the presence state (matches PresenceStateSchema.metadata)."
-      }
-    }
-  },
-  sys_activity: {
-    label: "Activity",
-    pluralLabel: "Activities",
-    description: "Recent activity stream entries (lightweight, denormalized)",
-    fields: {
-      id: {
-        label: "Activity ID"
-      },
-      timestamp: {
-        label: "Timestamp"
-      },
-      type: {
-        label: "Type",
-        options: {
-          created: "created",
-          updated: "updated",
-          deleted: "deleted",
-          commented: "commented",
-          mentioned: "mentioned",
-          shared: "shared",
-          assigned: "assigned",
-          completed: "completed",
-          login: "login",
-          logout: "logout",
-          system: "system"
-        }
-      },
-      summary: {
-        label: "Summary",
-        help: "Human-readable one-line summary"
-      },
-      actor_id: {
-        label: "Actor"
-      },
-      actor_name: {
-        label: "Actor Name"
-      },
-      actor_avatar_url: {
-        label: "Actor Avatar"
-      },
-      object_name: {
-        label: "Object",
-        help: "Target object short name (e.g. account, sys_user)"
-      },
-      record_id: {
-        label: "Record ID"
-      },
-      record_label: {
-        label: "Record Label",
-        help: "Display label of the target record at write time"
-      },
-      url: {
-        label: "URL",
-        help: "Optional deep-link to the activity target"
-      },
-      environment_id: {
-        label: "Project",
-        help: "Environment context (multi-environment deployments)"
-      },
-      metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
-      }
-    }
-  },
-  sys_comment: {
-    label: "Comment",
-    pluralLabel: "Comments",
-    description: "Threaded comments attached to records via thread_id",
-    fields: {
-      id: {
-        label: "Comment ID"
-      },
-      thread_id: {
-        label: "Thread",
-        help: "Thread identifier — conventionally `{object}:{record_id}` (e.g. `sys_user:abc123`)"
-      },
-      parent_id: {
-        label: "Parent Comment",
-        help: "Optional parent comment for nested replies"
-      },
-      reply_count: {
-        label: "Reply Count"
-      },
-      author_id: {
-        label: "Author"
-      },
-      author_name: {
-        label: "Author Name"
-      },
-      author_avatar_url: {
-        label: "Author Avatar"
-      },
-      body: {
-        label: "Body",
-        help: "Comment text (Markdown supported)"
-      },
-      mentions: {
-        label: "Mentions",
-        help: "JSON array of @mention objects"
-      },
-      reactions: {
-        label: "Reactions",
-        help: "JSON array of emoji reaction objects"
-      },
-      is_edited: {
-        label: "Edited"
-      },
-      edited_at: {
-        label: "Edited At"
-      },
-      visibility: {
-        label: "Visibility",
-        options: {
-          public: "public",
-          internal: "internal",
-          private: "private"
-        }
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -1544,60 +1419,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "Updated At"
-      }
-    }
-  },
-  sys_notification: {
-    label: "Notification",
-    pluralLabel: "Notifications",
-    description: "Per-user notification inbox entries",
-    fields: {
-      id: {
-        label: "Notification ID"
-      },
-      topic: {
-        label: "Topic",
-        help: "Notification topic, e.g. task.assigned, collab.mention"
-      },
-      payload: {
-        label: "Payload",
-        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
-      },
-      severity: {
-        label: "Severity",
-        help: "Severity hint for rendering / filtering",
-        options: {
-          info: "info",
-          warning: "warning",
-          critical: "critical"
-        }
-      },
-      dedup_key: {
-        label: "Dedup Key",
-        help: "Idempotency key within a topic window; a repeat emit is a no-op"
-      },
-      source_object: {
-        label: "Source Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
-      },
-      source_id: {
-        label: "Source Record",
-        help: "Record id within source_object"
-      },
-      actor_id: {
-        label: "Actor",
-        help: "User who caused the notification (mentioner, assigner)"
-      },
-      created_at: {
-        label: "Created At"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recent"
-      },
-      by_topic: {
-        label: "By Topic"
       }
     }
   },
@@ -2505,6 +2326,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Ciphertext",
         help: "Provider-encoded ciphertext blob (base64 / JSON). Implementation-defined; only the matching ICryptoProvider can read it."
       }
+    },
+    _views: {
+      all: {
+        label: "All Secrets"
+      }
     }
   },
   sys_setting_audit: {
@@ -2579,6 +2405,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       request_id: {
         label: "Request ID",
         help: "Correlates with sys_audit_log / tracing."
+      }
+    },
+    _views: {
+      recent: {
+        label: "Recent"
       }
     }
   }

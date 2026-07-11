@@ -42,14 +42,64 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "利用停止期限",
         help: "設定されている場合、この日時に利用停止が自動解除されます。"
       },
+      failed_login_count: {
+        label: "Failed Login Count",
+        help: "Consecutive failed sign-in attempts; reset to 0 on success. Maintained by the auth manager."
+      },
+      locked_until: {
+        label: "Locked Until",
+        help: "When set and in the future, sign-in is rejected (brute-force lockout). Auto-clears past this time; an admin can clear it early via Unlock."
+      },
+      password_changed_at: {
+        label: "Password Changed At",
+        help: "Timestamp of the last password change. Backs password_expiry_days; system-managed."
+      },
+      phone_number: {
+        label: "Phone Number",
+        help: "Sign-in phone number (E.164 recommended). Unique per user; managed by better-auth when the phoneNumber plugin is enabled."
+      },
+      phone_number_verified: {
+        label: "Phone Verified",
+        help: "Whether the phone number has been verified (OTP verification requires SMS infrastructure; false until that ships). System-managed."
+      },
+      must_change_password: {
+        label: "Must Change Password",
+        help: "When true, the user is blocked (403 PASSWORD_EXPIRED) until they change their password. Stamped by the admin user-management routes; system-managed."
+      },
+      mfa_required_at: {
+        label: "MFA Required At",
+        help: "When enforced MFA first applied to this user (grace-period clock). Backs mfa_required; system-managed."
+      },
+      last_login_at: {
+        label: "Last Login At",
+        help: "Timestamp of the last successful sign-in. Stamped by the auth manager; system-managed."
+      },
+      last_login_ip: {
+        label: "Last Login IP",
+        help: "Client IP of the last successful sign-in (from the trusted proxy forwarded header). System-managed."
+      },
+      ai_access: {
+        label: "AI Access",
+        help: "Whether this user holds an AI seat — grants access to the in-UI AI agents (build / ask). The framework synthesizes the `ai_seat` capability from this flag (plugin-hono-server resolveCtx). Assignment is capped by the licensed / purchased seat count (enforced by @objectstack/security-enterprise AiSeatPlugin). Owned by objectql (better-auth is oblivious to this column)."
+      },
       image: {
         label: "プロフィール画像"
       },
       manager_id: {
-        label: "マネージャー"
+        label: "マネージャー",
+        help: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise)."
       },
       primary_business_unit_id: {
-        label: "主所属ビジネスユニット"
+        label: "主所属ビジネスユニット",
+        help: "The user's primary business unit — a denormalised projection of sys_business_unit_member.is_primary, maintained by plugin-sharing (ADR-0057 addendum D12). Lets a user-lookup filter candidates by business unit without traversing the membership junction. Do not edit directly; set it via business-unit membership."
+      },
+      source: {
+        label: "Identity Source",
+        help: "How this identity was created — idp_provisioned (federated SSO JIT) or env_native (local signup / app end-user). System-managed; do not edit.",
+        options: {
+          idp_provisioned: "IdP-Provisioned",
+          env_native: "Env-Native"
+        }
       },
       id: {
         label: "ユーザー ID"
@@ -91,6 +141,14 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       unban_user: {
         label: "利用停止を解除",
         successMessage: "ユーザーの利用停止を解除しました"
+      },
+      unlock_user: {
+        label: "Unlock Account",
+        successMessage: "Account unlocked"
+      },
+      create_user: {
+        label: "Create User",
+        successMessage: "User created"
       },
       set_user_password: {
         label: "パスワードを設定",
@@ -152,6 +210,18 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       expires_at: {
         label: "有効期限"
+      },
+      last_activity_at: {
+        label: "Last Activity At",
+        help: "Timestamp of the last request on this session; drives idle-timeout. System-managed."
+      },
+      revoked_at: {
+        label: "Revoked At",
+        help: "When set, this session was revoked (idle / absolute-max / concurrent-cap / admin). System-managed."
+      },
+      revoke_reason: {
+        label: "Revoke Reason",
+        help: "Why the session was revoked (idle_timeout, absolute_max, concurrent_cap, …)."
       },
       active_organization_id: {
         label: "アクティブ組織"
@@ -251,6 +321,10 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       password: {
         label: "パスワードハッシュ",
         help: "メール/パスワードプロバイダー用のハッシュ化パスワード"
+      },
+      previous_password_hashes: {
+        label: "Previous Password Hashes",
+        help: "JSON array of prior password hashes (bounded by password_history_count); reuse-prevention only. System-managed."
       }
     },
     _views: {
@@ -320,6 +394,10 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       metadata: {
         label: "メタデータ",
         help: "JSON シリアライズされた組織メタデータ"
+      },
+      require_mfa: {
+        label: "Require Multi-Factor Auth",
+        help: "When true, every member of this organization must enroll an authenticator app to access data."
       },
       id: {
         label: "組織 ID"
@@ -645,6 +723,9 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      org_chart: {
+        label: "Org Chart"
+      },
       active: {
         label: "有効"
       },
@@ -1226,263 +1307,57 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_audit_log: {
-    label: "監査ログ",
-    pluralLabel: "監査ログ",
-    description: "プラットフォームイベントの不変の監査証跡",
+  sys_notification: {
+    label: "通知",
+    pluralLabel: "通知",
+    description: "ユーザーごとの通知受信ボックスエントリ",
     fields: {
-      created_at: {
-        label: "タイムスタンプ"
+      id: {
+        label: "通知 ID"
       },
-      action: {
-        label: "アクション",
-        help: "アクションタイプ（snake_case）",
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
+      },
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          create: "作成",
-          update: "更新",
-          delete: "削除",
-          restore: "復元",
-          login: "ログイン",
-          logout: "ログアウト",
-          permission_change: "権限変更",
-          config_change: "構成変更",
-          export: "エクスポート",
-          import: "インポート"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      user_id: {
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
+      },
+      source_object: {
+        label: "ソースオブジェクト",
+        help: "関連レコードのオブジェクト名（例: lead、opportunity）"
+      },
+      source_id: {
+        label: "ソースレコード",
+        help: "source_object 内のレコード ID"
+      },
+      actor_id: {
         label: "操作者",
-        help: "アクションを実行したユーザー（システム操作の場合は null）"
+        help: "通知を引き起こしたユーザー（メンション者、担当者）"
       },
-      object_name: {
-        label: "オブジェクト",
-        help: "対象オブジェクト（例: sys_user、project_task）"
-      },
-      record_id: {
-        label: "レコード ID",
-        help: "影響を受けたレコードの ID"
-      },
-      old_value: {
-        label: "変更前の値",
-        help: "JSON シリアライズされた以前の状態"
-      },
-      new_value: {
-        label: "変更後の値",
-        help: "JSON シリアライズされた新しい状態"
-      },
-      ip_address: {
-        label: "IP アドレス"
-      },
-      user_agent: {
-        label: "ユーザーエージェント"
-      },
-      tenant_id: {
-        label: "テナント",
-        help: "マルチテナント分離のためのテナントコンテキスト"
-      },
-      metadata: {
-        label: "メタデータ",
-        help: "JSON シリアライズされた追加コンテキスト"
-      },
-      id: {
-        label: "監査ログ ID"
+      created_at: {
+        label: "作成日時"
       }
     },
     _views: {
       recent: {
-        label: "最近"
+        label: "Recent"
       },
-      writes_only: {
-        label: "書き込み"
-      },
-      auth_events: {
-        label: "認証"
-      },
-      config_changes: {
-        label: "構成変更"
-      },
-      all_events: {
-        label: "すべて"
-      }
-    }
-  },
-  sys_presence: {
-    label: "在席状況",
-    pluralLabel: "在席状況",
-    description: "リアルタイムのユーザー在席状況とアクティビティ追跡",
-    fields: {
-      id: {
-        label: "在席 ID"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      },
-      user_id: {
-        label: "ユーザー"
-      },
-      session_id: {
-        label: "セッション"
-      },
-      status: {
-        label: "ステータス",
-        options: {
-          online: "オンライン",
-          away: "離席中",
-          busy: "取り込み中",
-          offline: "オフライン"
-        }
-      },
-      last_seen: {
-        label: "最終確認日時"
-      },
-      current_location: {
-        label: "現在地"
-      },
-      device: {
-        label: "デバイス",
-        options: {
-          desktop: "デスクトップ",
-          mobile: "モバイル",
-          tablet: "タブレット",
-          other: "その他"
-        }
-      },
-      custom_status: {
-        label: "カスタムステータス"
-      },
-      metadata: {
-        label: "メタデータ",
-        help: "在席状態に関連付けられた任意の JSON メタデータ（PresenceStateSchema.metadata に対応）。"
-      }
-    }
-  },
-  sys_activity: {
-    label: "アクティビティ",
-    pluralLabel: "アクティビティ",
-    description: "最近のアクティビティストリームエントリ（軽量、非正規化）",
-    fields: {
-      id: {
-        label: "アクティビティ ID"
-      },
-      timestamp: {
-        label: "タイムスタンプ"
-      },
-      type: {
-        label: "タイプ",
-        options: {
-          created: "作成",
-          updated: "更新",
-          deleted: "削除",
-          commented: "コメント",
-          mentioned: "メンション",
-          shared: "共有",
-          assigned: "割り当て",
-          completed: "完了",
-          login: "ログイン",
-          logout: "ログアウト",
-          system: "システム"
-        }
-      },
-      summary: {
-        label: "サマリー",
-        help: "判別しやすい 1 行サマリー"
-      },
-      actor_id: {
-        label: "操作者"
-      },
-      actor_name: {
-        label: "操作者名"
-      },
-      actor_avatar_url: {
-        label: "操作者アバター"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "対象オブジェクトの短い名前（例: account、sys_user）"
-      },
-      record_id: {
-        label: "レコード ID"
-      },
-      record_label: {
-        label: "レコード表示名",
-        help: "書き込み時点の対象レコードの表示名"
-      },
-      url: {
-        label: "URL",
-        help: "アクティビティターゲットへのオプションのディープリンク"
-      },
-      environment_id: {
-        label: "プロジェクト",
-        help: "プロジェクトコンテキスト（マルチプロジェクトデプロイメント）"
-      },
-      metadata: {
-        label: "メタデータ",
-        help: "JSON シリアライズされた追加コンテキスト"
-      }
-    }
-  },
-  sys_comment: {
-    label: "コメント",
-    pluralLabel: "コメント",
-    description: "thread_id を介してレコードに添付されたスレッドコメント",
-    fields: {
-      id: {
-        label: "コメント ID"
-      },
-      thread_id: {
-        label: "スレッド",
-        help: "スレッド識別子 — 通常は `{object}:{record_id}`（例: `sys_user:abc123`）"
-      },
-      parent_id: {
-        label: "親コメント",
-        help: "ネストした返信用のオプションの親コメント"
-      },
-      reply_count: {
-        label: "返信数"
-      },
-      author_id: {
-        label: "投稿者"
-      },
-      author_name: {
-        label: "投稿者名"
-      },
-      author_avatar_url: {
-        label: "投稿者アバター"
-      },
-      body: {
-        label: "本文",
-        help: "コメントテキスト（Markdown 対応）"
-      },
-      mentions: {
-        label: "メンション",
-        help: "@メンションオブジェクトの JSON 配列"
-      },
-      reactions: {
-        label: "リアクション",
-        help: "絵文字リアクションオブジェクトの JSON 配列"
-      },
-      is_edited: {
-        label: "編集済み"
-      },
-      edited_at: {
-        label: "編集日時"
-      },
-      visibility: {
-        label: "公開範囲",
-        options: {
-          public: "公開",
-          internal: "内部",
-          private: "非公開"
-        }
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -1544,60 +1419,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "更新日時"
-      }
-    }
-  },
-  sys_notification: {
-    label: "通知",
-    pluralLabel: "通知",
-    description: "ユーザーごとの通知受信ボックスエントリ",
-    fields: {
-      id: {
-        label: "通知 ID"
-      },
-      topic: {
-        label: "Topic",
-        help: "Notification topic, e.g. task.assigned, collab.mention"
-      },
-      payload: {
-        label: "Payload",
-        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
-      },
-      severity: {
-        label: "Severity",
-        help: "Severity hint for rendering / filtering",
-        options: {
-          info: "info",
-          warning: "warning",
-          critical: "critical"
-        }
-      },
-      dedup_key: {
-        label: "Dedup Key",
-        help: "Idempotency key within a topic window; a repeat emit is a no-op"
-      },
-      source_object: {
-        label: "ソースオブジェクト",
-        help: "関連レコードのオブジェクト名（例: lead、opportunity）"
-      },
-      source_id: {
-        label: "ソースレコード",
-        help: "source_object 内のレコード ID"
-      },
-      actor_id: {
-        label: "操作者",
-        help: "通知を引き起こしたユーザー（メンション者、担当者）"
-      },
-      created_at: {
-        label: "作成日時"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recent"
-      },
-      by_topic: {
-        label: "By Topic"
       }
     }
   },
@@ -2505,6 +2326,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "暗号文",
         help: "プロバイダーエンコードされた暗号文 blob（base64 / JSON）。実装定義のため、対応する ICryptoProvider のみが読み取り可能。"
       }
+    },
+    _views: {
+      all: {
+        label: "All Secrets"
+      }
     }
   },
   sys_setting_audit: {
@@ -2579,6 +2405,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       request_id: {
         label: "リクエスト ID",
         help: "sys_audit_log / トレーシングとの相関用。"
+      }
+    },
+    _views: {
+      recent: {
+        label: "Recent"
       }
     }
   }

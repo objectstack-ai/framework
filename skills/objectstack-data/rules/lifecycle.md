@@ -72,6 +72,22 @@ export const ConsentLog = ObjectSchema.create({
     subject: Field.text({}),
   },
 });
+
+// ✅ MIXED table: terminal history is telemetry, but paused rows are live
+// workflow state — `onlyWhen` scopes the age sweep to the declared filter
+export const AutomationRun = ObjectSchema.create({
+  name: 'sys_automation_run',
+  lifecycle: {
+    class: 'telemetry',
+    retention: {
+      maxAge: '30d',
+      onlyWhen: { status: { $in: ['completed', 'failed'] } },  // paused rows never reaped
+    },
+  },
+  fields: {
+    status: Field.select(['running', 'paused', 'completed', 'failed'], {}),
+  },
+});
 ```
 
 Duration literals: `<n>` + `h` / `d` / `w` / `y` — e.g. `'6h'`, `'14d'`,
@@ -91,6 +107,14 @@ lifecycle: { class: 'audit', retention: { maxAge: '90d' }, archive: { after: '30
 
 // ❌ Free-form durations
 lifecycle: { class: 'telemetry', retention: { maxAge: '2 weeks' } }  // use '2w'
+
+// ❌ onlyWhen + rotation/archive — shard DROPs and the Archiver act on age
+//    alone and would destroy/move rows the filter protects
+lifecycle: {
+  class: 'telemetry',
+  retention: { maxAge: '14d', onlyWhen: { status: 'done' } },
+  storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+}
 ```
 
 ## Safety Semantics
@@ -127,3 +151,6 @@ lifecycle: { class: 'telemetry', retention: { maxAge: '2 weeks' } }  // use '2w'
 3. Written by machines at high frequency, value decays in days/weeks? → `telemetry` + `retention` (add rotation `storage` for the hottest tables).
 4. Meaningless after a deadline (tokens, receipts, read-state)? → `transient` + `ttl` on the natural expiry field.
 5. Bus/fan-out messages? → `event` + a short `ttl` (hours).
+6. Table mixes prunable history with live state (e.g. terminal vs paused runs)?
+   → add `retention.onlyWhen: { status: { $in: [...] } }` so rows outside the
+   filter are retained regardless of age. Not combinable with rotation/archive.

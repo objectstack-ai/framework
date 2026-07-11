@@ -42,14 +42,64 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "El bloqueo caduca el",
         help: "Si se establece, el bloqueo se elimina automáticamente en ese momento."
       },
+      failed_login_count: {
+        label: "Failed Login Count",
+        help: "Consecutive failed sign-in attempts; reset to 0 on success. Maintained by the auth manager."
+      },
+      locked_until: {
+        label: "Locked Until",
+        help: "When set and in the future, sign-in is rejected (brute-force lockout). Auto-clears past this time; an admin can clear it early via Unlock."
+      },
+      password_changed_at: {
+        label: "Password Changed At",
+        help: "Timestamp of the last password change. Backs password_expiry_days; system-managed."
+      },
+      phone_number: {
+        label: "Phone Number",
+        help: "Sign-in phone number (E.164 recommended). Unique per user; managed by better-auth when the phoneNumber plugin is enabled."
+      },
+      phone_number_verified: {
+        label: "Phone Verified",
+        help: "Whether the phone number has been verified (OTP verification requires SMS infrastructure; false until that ships). System-managed."
+      },
+      must_change_password: {
+        label: "Must Change Password",
+        help: "When true, the user is blocked (403 PASSWORD_EXPIRED) until they change their password. Stamped by the admin user-management routes; system-managed."
+      },
+      mfa_required_at: {
+        label: "MFA Required At",
+        help: "When enforced MFA first applied to this user (grace-period clock). Backs mfa_required; system-managed."
+      },
+      last_login_at: {
+        label: "Last Login At",
+        help: "Timestamp of the last successful sign-in. Stamped by the auth manager; system-managed."
+      },
+      last_login_ip: {
+        label: "Last Login IP",
+        help: "Client IP of the last successful sign-in (from the trusted proxy forwarded header). System-managed."
+      },
+      ai_access: {
+        label: "AI Access",
+        help: "Whether this user holds an AI seat — grants access to the in-UI AI agents (build / ask). The framework synthesizes the `ai_seat` capability from this flag (plugin-hono-server resolveCtx). Assignment is capped by the licensed / purchased seat count (enforced by @objectstack/security-enterprise AiSeatPlugin). Owned by objectql (better-auth is oblivious to this column)."
+      },
       image: {
         label: "Imagen de perfil"
       },
       manager_id: {
-        label: "Gerente"
+        label: "Gerente",
+        help: "This user's direct manager. Forms the reporting chain the `own_and_reports` hierarchy scope walks (ADR-0057 / @objectstack/security-enterprise)."
       },
       primary_business_unit_id: {
-        label: "Unidad de negocio principal"
+        label: "Unidad de negocio principal",
+        help: "The user's primary business unit — a denormalised projection of sys_business_unit_member.is_primary, maintained by plugin-sharing (ADR-0057 addendum D12). Lets a user-lookup filter candidates by business unit without traversing the membership junction. Do not edit directly; set it via business-unit membership."
+      },
+      source: {
+        label: "Identity Source",
+        help: "How this identity was created — idp_provisioned (federated SSO JIT) or env_native (local signup / app end-user). System-managed; do not edit.",
+        options: {
+          idp_provisioned: "IdP-Provisioned",
+          env_native: "Env-Native"
+        }
       },
       id: {
         label: "ID de usuario"
@@ -91,6 +141,14 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       unban_user: {
         label: "Desbloquear usuario",
         successMessage: "Usuario desbloqueado"
+      },
+      unlock_user: {
+        label: "Unlock Account",
+        successMessage: "Account unlocked"
+      },
+      create_user: {
+        label: "Create User",
+        successMessage: "User created"
       },
       set_user_password: {
         label: "Establecer contraseña",
@@ -152,6 +210,18 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       expires_at: {
         label: "Caduca el"
+      },
+      last_activity_at: {
+        label: "Last Activity At",
+        help: "Timestamp of the last request on this session; drives idle-timeout. System-managed."
+      },
+      revoked_at: {
+        label: "Revoked At",
+        help: "When set, this session was revoked (idle / absolute-max / concurrent-cap / admin). System-managed."
+      },
+      revoke_reason: {
+        label: "Revoke Reason",
+        help: "Why the session was revoked (idle_timeout, absolute_max, concurrent_cap, …)."
       },
       active_organization_id: {
         label: "Organización activa"
@@ -251,6 +321,10 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       password: {
         label: "Hash de la contraseña",
         help: "Hash de la contraseña para el proveedor de correo electrónico/contraseña."
+      },
+      previous_password_hashes: {
+        label: "Previous Password Hashes",
+        help: "JSON array of prior password hashes (bounded by password_history_count); reuse-prevention only. System-managed."
       }
     },
     _views: {
@@ -320,6 +394,10 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       metadata: {
         label: "Metadatos",
         help: "Metadatos de la organización serializados en JSON."
+      },
+      require_mfa: {
+        label: "Require Multi-Factor Auth",
+        help: "When true, every member of this organization must enroll an authenticator app to access data."
       },
       id: {
         label: "ID de organización"
@@ -645,6 +723,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     },
     _views: {
+      org_chart: {
+        label: "Org Chart"
+      },
       active: {
         label: "Activo"
       },
@@ -1226,263 +1307,57 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_audit_log: {
-    label: "Registro de auditoría",
-    pluralLabel: "Registros de auditoría",
-    description: "Registro de auditoría inmutable para eventos de la plataforma",
+  sys_notification: {
+    label: "Notificación",
+    pluralLabel: "Notificaciones",
+    description: "Entradas del buzón de notificaciones por usuario",
     fields: {
-      created_at: {
-        label: "Marca temporal"
+      id: {
+        label: "ID de notificación"
       },
-      action: {
-        label: "Acción",
-        help: "Tipo de acción (snake_case).",
+      topic: {
+        label: "Topic",
+        help: "Notification topic, e.g. task.assigned, collab.mention"
+      },
+      payload: {
+        label: "Payload",
+        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
+      },
+      severity: {
+        label: "Severity",
+        help: "Severity hint for rendering / filtering",
         options: {
-          create: "Crear",
-          update: "Actualizar",
-          delete: "Eliminar",
-          restore: "Restaurar",
-          login: "Inicio de sesión",
-          logout: "Cierre de sesión",
-          permission_change: "Cambio de permisos",
-          config_change: "Cambio de configuración",
-          export: "Exportar",
-          import: "Importar"
+          info: "info",
+          warning: "warning",
+          critical: "critical"
         }
       },
-      user_id: {
+      dedup_key: {
+        label: "Dedup Key",
+        help: "Idempotency key within a topic window; a repeat emit is a no-op"
+      },
+      source_object: {
+        label: "Objeto de origen",
+        help: "Nombre del objeto del registro relacionado (p. ej. lead, opportunity)."
+      },
+      source_id: {
+        label: "Registro de origen",
+        help: "ID del registro dentro de source_object."
+      },
+      actor_id: {
         label: "Actor",
-        help: "Usuario que realizó la acción (null para acciones del sistema)."
+        help: "Usuario que provocó la notificación (quien menciona, quien asigna)."
       },
-      object_name: {
-        label: "Objeto",
-        help: "Objeto de destino (p. ej. sys_user, project_task)."
-      },
-      record_id: {
-        label: "ID de registro",
-        help: "ID del registro afectado."
-      },
-      old_value: {
-        label: "Valor anterior",
-        help: "Estado anterior serializado en JSON."
-      },
-      new_value: {
-        label: "Valor nuevo",
-        help: "Estado nuevo serializado en JSON."
-      },
-      ip_address: {
-        label: "Dirección IP"
-      },
-      user_agent: {
-        label: "Agente de usuario"
-      },
-      tenant_id: {
-        label: "Inquilino",
-        help: "Contexto del tenant para el aislamiento multi-tenant."
-      },
-      metadata: {
-        label: "Metadatos",
-        help: "Contexto adicional serializado en JSON."
-      },
-      id: {
-        label: "ID de registro de auditoría"
+      created_at: {
+        label: "Creado el"
       }
     },
     _views: {
       recent: {
-        label: "Recientes"
+        label: "Recent"
       },
-      writes_only: {
-        label: "Escrituras"
-      },
-      auth_events: {
-        label: "Autenticación"
-      },
-      config_changes: {
-        label: "Configuración"
-      },
-      all_events: {
-        label: "Todos"
-      }
-    }
-  },
-  sys_presence: {
-    label: "Presencia",
-    pluralLabel: "Presencias",
-    description: "Seguimiento en tiempo real de presencia y actividad de usuarios",
-    fields: {
-      id: {
-        label: "ID de presencia"
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      },
-      user_id: {
-        label: "Usuario"
-      },
-      session_id: {
-        label: "Sesión"
-      },
-      status: {
-        label: "Estado",
-        options: {
-          online: "En línea",
-          away: "Ausente",
-          busy: "Ocupado",
-          offline: "Desconectado"
-        }
-      },
-      last_seen: {
-        label: "Visto por última vez"
-      },
-      current_location: {
-        label: "Ubicación actual"
-      },
-      device: {
-        label: "Dispositivo",
-        options: {
-          desktop: "Escritorio",
-          mobile: "Móvil",
-          tablet: "Tableta",
-          other: "Otro"
-        }
-      },
-      custom_status: {
-        label: "Estado personalizado"
-      },
-      metadata: {
-        label: "Metadatos",
-        help: "Metadatos JSON arbitrarios asociados al estado de presencia (coincide con PresenceStateSchema.metadata)."
-      }
-    }
-  },
-  sys_activity: {
-    label: "Actividad",
-    pluralLabel: "Actividades",
-    description: "Entradas recientes del flujo de actividad (ligeras y desnormalizadas).",
-    fields: {
-      id: {
-        label: "ID de actividad"
-      },
-      timestamp: {
-        label: "Marca temporal"
-      },
-      type: {
-        label: "Tipo",
-        options: {
-          created: "Creado",
-          updated: "Actualizado",
-          deleted: "Eliminado",
-          commented: "Comentado",
-          mentioned: "Mencionado",
-          shared: "Compartido",
-          assigned: "Asignado",
-          completed: "Completado",
-          login: "Inicio de sesión",
-          logout: "Cierre de sesión",
-          system: "Sistema"
-        }
-      },
-      summary: {
-        label: "Resumen",
-        help: "Resumen legible de una línea."
-      },
-      actor_id: {
-        label: "Actor"
-      },
-      actor_name: {
-        label: "Nombre del actor"
-      },
-      actor_avatar_url: {
-        label: "Avatar del actor"
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto de destino (p. ej. account, sys_user)."
-      },
-      record_id: {
-        label: "ID de registro"
-      },
-      record_label: {
-        label: "Nombre visible del registro",
-        help: "Nombre visible del registro de destino en el momento de escritura."
-      },
-      url: {
-        label: "URL",
-        help: "Enlace profundo opcional al destino de la actividad."
-      },
-      environment_id: {
-        label: "Proyecto",
-        help: "Contexto del proyecto (implementaciones multiproyecto)."
-      },
-      metadata: {
-        label: "Metadatos",
-        help: "Contexto adicional serializado en JSON."
-      }
-    }
-  },
-  sys_comment: {
-    label: "Comentario",
-    pluralLabel: "Comentarios",
-    description: "Comentarios en hilo adjuntos a registros mediante thread_id.",
-    fields: {
-      id: {
-        label: "ID de comentario"
-      },
-      thread_id: {
-        label: "Hilo",
-        help: "Identificador del hilo; por convención `{object}:{record_id}` (p. ej. `sys_user:abc123`)."
-      },
-      parent_id: {
-        label: "Comentario principal",
-        help: "Comentario principal opcional para respuestas anidadas."
-      },
-      reply_count: {
-        label: "Número de respuestas"
-      },
-      author_id: {
-        label: "Autor"
-      },
-      author_name: {
-        label: "Nombre del autor"
-      },
-      author_avatar_url: {
-        label: "Avatar del autor"
-      },
-      body: {
-        label: "Contenido",
-        help: "Texto del comentario (compatible con Markdown)."
-      },
-      mentions: {
-        label: "Menciones",
-        help: "Matriz JSON de objetos @mention."
-      },
-      reactions: {
-        label: "Reacciones",
-        help: "Matriz JSON de objetos de reacción emoji."
-      },
-      is_edited: {
-        label: "Editado"
-      },
-      edited_at: {
-        label: "Editado el"
-      },
-      visibility: {
-        label: "Visibilidad",
-        options: {
-          public: "Público",
-          internal: "Interno",
-          private: "Privado"
-        }
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
+      by_topic: {
+        label: "By Topic"
       }
     }
   },
@@ -1544,60 +1419,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       updated_at: {
         label: "Actualizado el"
-      }
-    }
-  },
-  sys_notification: {
-    label: "Notificación",
-    pluralLabel: "Notificaciones",
-    description: "Entradas del buzón de notificaciones por usuario",
-    fields: {
-      id: {
-        label: "ID de notificación"
-      },
-      topic: {
-        label: "Topic",
-        help: "Notification topic, e.g. task.assigned, collab.mention"
-      },
-      payload: {
-        label: "Payload",
-        help: "Template inputs carried to channels (title/body/url/actor/source/…)"
-      },
-      severity: {
-        label: "Severity",
-        help: "Severity hint for rendering / filtering",
-        options: {
-          info: "info",
-          warning: "warning",
-          critical: "critical"
-        }
-      },
-      dedup_key: {
-        label: "Dedup Key",
-        help: "Idempotency key within a topic window; a repeat emit is a no-op"
-      },
-      source_object: {
-        label: "Objeto de origen",
-        help: "Nombre del objeto del registro relacionado (p. ej. lead, opportunity)."
-      },
-      source_id: {
-        label: "Registro de origen",
-        help: "ID del registro dentro de source_object."
-      },
-      actor_id: {
-        label: "Actor",
-        help: "Usuario que provocó la notificación (quien menciona, quien asigna)."
-      },
-      created_at: {
-        label: "Creado el"
-      }
-    },
-    _views: {
-      recent: {
-        label: "Recent"
-      },
-      by_topic: {
-        label: "By Topic"
       }
     }
   },
@@ -2505,6 +2326,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Texto cifrado",
         help: "Blob de texto cifrado codificado por el proveedor (base64 / JSON). La implementación lo define; solo el ICryptoProvider correspondiente puede leerlo."
       }
+    },
+    _views: {
+      all: {
+        label: "All Secrets"
+      }
     }
   },
   sys_setting_audit: {
@@ -2579,6 +2405,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       request_id: {
         label: "ID de solicitud",
         help: "Se correlaciona con sys_audit_log / tracing."
+      }
+    },
+    _views: {
+      recent: {
+        label: "Recent"
       }
     }
   }

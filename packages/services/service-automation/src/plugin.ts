@@ -8,7 +8,6 @@ import { SysAutomationRun } from './sys-automation-run.object.js';
 import {
     ObjectStoreSuspendedRunStore,
     DEFAULT_MAX_TERMINAL_RUNS_PER_FLOW,
-    DEFAULT_RUN_HISTORY_RETENTION_DAYS,
     type SuspendedRunStoreEngine,
 } from './suspended-run-store.js';
 
@@ -37,25 +36,19 @@ export interface AutomationServicePluginOptions {
      */
     maxLogSize?: number;
     /**
-     * Retention window in days for durable terminal run history in
-     * `sys_automation_run` (#2585; ADR-0057 posture — platform self-telemetry
-     * must be bounded). When > 0, a periodic sweep deletes terminal
-     * (completed / failed) history rows older than the window; suspended
-     * (`paused`) rows are live resumable state and are never pruned.
-     * **Default-on** at {@link DEFAULT_RUN_HISTORY_RETENTION_DAYS} (30). Set
-     * to `0` to disable age pruning (history kept until the per-flow cap).
-     */
-    runHistoryRetentionDays?: number;
-    /**
      * Per-flow cap on terminal run-history rows, enforced at write time (the
      * "or 100 runs/flow, whichever first" half of the #2585 retention
      * contract). Defaults to {@link DEFAULT_MAX_TERMINAL_RUNS_PER_FLOW} (100);
      * `0` disables the cap.
+     *
+     * The AGE half of the contract is declarative since ADR-0057 (#2834):
+     * `sys_automation_run` declares `retention: { maxAge: '30d', onlyWhen:
+     * { status: { $in: ['completed', 'failed'] } } }` and the platform
+     * LifecycleService enforces it — suspended (`paused`) rows stay outside
+     * the filter and are retained regardless of age. Tune the window via the
+     * `lifecycle` settings namespace (`retention_overrides`).
      */
     runHistoryMaxPerFlow?: number;
-    /** Run-history retention sweep interval in ms (default 1 hour). Only used
-     *  when `runHistoryRetentionDays` > 0. */
-    runHistorySweepMs?: number;
 }
 
 /**
@@ -97,8 +90,6 @@ export class AutomationServicePlugin implements Plugin {
 
     private engine?: AutomationEngine;
     private readonly options: AutomationServicePluginOptions;
-    /** Periodic run-history retention sweep (#2585); cleared on destroy. */
-    private retentionTimer?: ReturnType<typeof setInterval>;
     /**
      * Flow names this plugin has registered into the engine from the
      * artifact / ObjectQL registry, tracked so a `metadata:reloaded` re-sync
@@ -193,35 +184,13 @@ export class AutomationServicePlugin implements Plugin {
             }
         }
 
-        // Run-history age retention (#2585, ADR-0057 posture): default-on sweep
-        // so `sys_automation_run` terminal history can't grow without bound.
-        // Runs once at kernel:ready then on a low-frequency interval; the timer
-        // is unref'd so it never keeps the process alive. Mirrors the
-        // service-messaging notification retention sweep.
-        const retentionDays = this.options.runHistoryRetentionDays ?? DEFAULT_RUN_HISTORY_RETENTION_DAYS;
-        if (durableStore && retentionDays > 0 && typeof ctx.hook === 'function') {
-            const store = durableStore;
-            const sweepMs = this.options.runHistorySweepMs ?? 3_600_000;
-            ctx.hook('kernel:ready', async () => {
-                const sweep = () => {
-                    void store.pruneHistory(retentionDays).then((deleted) => {
-                        if (deleted === undefined || deleted > 0) {
-                            ctx.logger.info(
-                                `[Automation] run-history retention: pruned ${deleted ?? '?'} terminal run(s) older than ${retentionDays}d`,
-                            );
-                        }
-                    }).catch((err) =>
-                        ctx.logger.warn(`[Automation] run-history retention sweep failed: ${(err as Error)?.message ?? err}`),
-                    );
-                };
-                sweep();
-                this.retentionTimer = setInterval(sweep, sweepMs);
-                this.retentionTimer.unref?.();
-                ctx.logger.info(
-                    `[Automation] run-history retention on (terminal runs > ${retentionDays}d pruned every ${Math.round(sweepMs / 1000)}s; cap ${this.options.runHistoryMaxPerFlow ?? DEFAULT_MAX_TERMINAL_RUNS_PER_FLOW}/flow at write)`,
-                );
-            });
-        }
+        // Run-history AGE retention is declarative since ADR-0057 (#2834):
+        // sys_automation_run carries `retention: { maxAge: '30d', onlyWhen:
+        // { status: { $in: ['completed', 'failed'] } } }` and the platform
+        // Reaper sweeps it — the status predicate keeps suspended approval
+        // runs alive indefinitely, exactly like the old pruneHistory loop did.
+        // Only the write-time per-flow overflow cap stays here (it is a
+        // count-based bound the declarative contract can't express).
 
         // #1870 — bridge `script`-node function calls to the host function
         // registry. ObjectQL holds the name→handler map populated from
@@ -482,10 +451,6 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async destroy(): Promise<void> {
-        if (this.retentionTimer) {
-            clearInterval(this.retentionTimer);
-            this.retentionTimer = undefined;
-        }
         this.engine = undefined;
     }
 }
