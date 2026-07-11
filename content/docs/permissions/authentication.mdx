@@ -488,6 +488,59 @@ const response = await fetch('http://localhost:3000/api/v1/auth/magic-link/send'
 const response = await fetch(`http://localhost:3000/api/v1/auth/magic-link/verify?token=${token}`);
 ```
 
+### Phone-Number Sign-In
+
+Enable phone numbers as a first-class sign-in identifier (better-auth
+`phone-number` plugin). Opt-in — off by default:
+
+```typescript
+new AuthPlugin({
+  secret: process.env.OS_AUTH_SECRET,
+  baseUrl: 'http://localhost:3000',
+  plugins: {
+    phoneNumber: true,  // Enable phone sign-in
+  }
+})
+```
+
+With the CLI `serve` command, `OS_AUTH_PHONE_NUMBER_ENABLED=true` flips the
+same flag. The plugin adds `sys_user.phone_number` (unique) and
+`sys_user.phone_number_verified`; the login UI discovers the capability via
+`features.phoneNumber` on `GET /api/v1/auth/config`.
+
+#### Sign In with Phone + Password
+
+```typescript
+const response = await fetch('http://localhost:3000/api/v1/auth/sign-in/phone-number', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    phoneNumber: '+8613800000000',
+    password: 'password123'
+  })
+});
+```
+
+#### OTP Flows (Require an SMS Service)
+
+The OTP surfaces — `POST /phone-number/send-otp` + `POST /phone-number/verify`
+(sign-in / verification) and `POST /phone-number/request-password-reset` +
+`POST /phone-number/reset-password` (self-service reset) — only work when an
+SMS service is wired (`@objectstack/service-sms` registers the `sms` kernel
+service). Without one, `send-otp` fails loudly instead of silently dropping
+the code; phone sign-in is then password-based only (an admin sets the
+password — see Admin User Management below). OTP requests are rate-limited
+per phone number to prevent SMS-pumping abuse.
+
+#### Placeholder Emails for Phone-Only Accounts
+
+better-auth requires a unique email per user, so accounts created with only a
+phone number get a generated placeholder address of the form
+`u-<random>@placeholder.invalid`. These are never deliverable (`.invalid` is
+an RFC 2606 reserved TLD), never derived from the phone number (so exports
+and logs can't leak it), and every auth mail callback (password reset,
+invitation, magic link) refuses them with a `PLACEHOLDER_EMAIL` error.
+
 ### Organizations (Multi-Tenant)
 
 Enable organization/team support:
@@ -501,6 +554,64 @@ new AuthPlugin({
   }
 })
 ```
+
+### Admin User Management
+
+With `plugins: { admin: true }` (forced on when SCIM is enabled), platform
+admins get email-independent account management on the Users list — the
+`create_user` / `set_user_password` actions there drive these endpoints. All
+three routes are gated server-side on the platform-admin signals
+(`isPlatformAdmin`, the `platform_admin` position, or the legacy `role`
+scalar) and drive the better-auth pipeline, so created accounts get a real
+scrypt-hashed credential and can sign in immediately.
+
+#### Create a User Directly
+
+```typescript
+const response = await fetch('http://localhost:3000/api/v1/auth/admin/create-user', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: 'new.user@example.com',   // and/or phoneNumber (requires plugins.phoneNumber)
+    name: 'New User',
+    generatePassword: true,          // or pass an explicit `password`
+    mustChangePassword: true         // default true
+  })
+});
+// → { success, data: { user, temporaryPassword? } }
+```
+
+A generated temporary password is returned **once** in the response (the
+Users-list action reveals it in a one-shot dialog) and is never persisted or
+logged. While `mustChangePassword` is set, the user is blocked with
+`403 PASSWORD_EXPIRED` on every protected route until they complete a
+password change — the same gate and Console redirect as password expiry.
+
+#### Set / Reset a Password
+
+`POST /api/v1/auth/admin/set-user-password` accepts
+`{ userId, newPassword }` or `{ userId, generatePassword: true }` plus the
+same `mustChangePassword` flag. It also provisions a credential account for
+SSO-onboarded users who never had a local password.
+
+#### Bulk Import Users
+
+`POST /api/v1/auth/admin/import-users` accepts the same payload shapes as the
+generic data import (`rows[]` / `csv` / `xlsxBase64`, `dryRun`), but writes
+every row through better-auth so the accounts are login-capable:
+
+- `passwordPolicy: 'invite'` — rows need a reachable identity: a real email
+  (invitation goes out as a set-your-password email; requires an email
+  service) or, for phone-only rows, a wired SMS service (invitation SMS +
+  phone-OTP first sign-in).
+- `passwordPolicy: 'temporary'` — per-row generated temporary passwords,
+  returned once in the response, with `mustChangePassword` enforced.
+- `mode: 'insert' | 'upsert'` with `matchBy: 'email' | 'phone'`. Upsert
+  updates only touch profile fields (`name`, `phone_number`, `role`) — a
+  re-imported file can never modify an existing user's email or reset their
+  password.
+- Synchronous only, at most 500 rows per request (password hashing is
+  CPU-bound); split larger files into batches. Imports are not undoable.
 
 ---
 
@@ -612,6 +723,21 @@ All endpoints are available under `/api/v1/auth/*`:
 
 - `POST /api/v1/auth/magic-link/send` - Send magic link email
 - `GET /api/v1/auth/magic-link/verify` - Verify magic link
+
+#### Phone Number (requires `plugins.phoneNumber`)
+
+- `POST /api/v1/auth/sign-in/phone-number` - Sign in with phone + password
+- `POST /api/v1/auth/phone-number/send-otp` - Send a sign-in/verification OTP (requires an SMS service; rate-limited)
+- `POST /api/v1/auth/phone-number/verify` - Verify an OTP
+- `POST /api/v1/auth/phone-number/request-password-reset` - Request an OTP-based password reset (requires an SMS service)
+- `POST /api/v1/auth/phone-number/reset-password` - Complete an OTP-based password reset
+
+#### Admin User Management (requires `plugins.admin`; platform-admin gated)
+
+- `POST /api/v1/auth/admin/create-user` - Create a login-capable account (optional one-time temporary password + forced change)
+- `POST /api/v1/auth/admin/set-user-password` - Set/reset a user's password (also provisions a credential for SSO-onboarded users)
+- `POST /api/v1/auth/admin/import-users` - Bulk import users (CSV/JSON/XLSX; invite or temporary password policy; ≤500 rows, dry-run supported)
+- `POST /api/v1/auth/admin/unlock-user` - Clear a brute-force lockout early
 
 For complete API documentation, see the [Better-Auth API Reference](https://www.better-auth.com/docs).
 
