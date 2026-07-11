@@ -49,6 +49,24 @@ export type {
     HookSkipReason,
 } from './hook-metrics.js';
 
+// Export LifecycleService (ADR-0057 — declarative retention/rotation/archival)
+export {
+  LifecycleService,
+  DEFAULT_LIFECYCLE_SWEEP_MS,
+  DEFAULT_LIFECYCLE_INITIAL_DELAY_MS,
+} from './lifecycle/lifecycle-service.js';
+export type {
+  LifecycleServiceOptions,
+  LifecycleSweepReport,
+  LifecycleSweepEntry,
+  LifecycleEngineLike,
+  LifecycleObjectLike,
+  LifecycleSettingsLike,
+  LifecycleGovernanceAlert,
+} from './lifecycle/lifecycle-service.js';
+export { parseLifecycleDuration } from './lifecycle/duration.js';
+export { lifecycleSettingsManifest } from './lifecycle/lifecycle-settings.js';
+
 // Export MetadataFacade
 export { MetadataFacade } from './metadata-facade.js';
 

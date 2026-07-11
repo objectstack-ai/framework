@@ -263,6 +263,88 @@ export const VersioningConfigSchema = lazySchema(() => z.object({
   versionField: z.string().default('version').describe('Field name for version number/timestamp'),
 }));
 
+/**
+ * Data Lifecycle (ADR-0057)
+ *
+ * Declares how long an object's data lives and how its space is reclaimed —
+ * the axis validation/permissions never covered. Enforced at runtime by the
+ * platform-owned LifecycleService (`@objectstack/objectql`): Reaper (TTL/age
+ * batch delete), Rotator (time-shard + DROP oldest), Archiver (cold-store
+ * copy then delete). A declared policy with no runtime consumer is a spec
+ * defect (ADR-0049 enforce-or-remove); the liveness gate requires every
+ * non-`record` class to declare `retention`, `ttl`, or rotation `storage`.
+ */
+
+/**
+ * Lifecycle class — what persistence contract the object's data carries.
+ *
+ * | class       | contract                                        |
+ * |-------------|-------------------------------------------------|
+ * | `record`    | business truth — permanent, recoverable          |
+ * | `audit`     | compliance ledger — retain → archive → delete    |
+ * | `telemetry` | high-frequency log — rotation, short retention   |
+ * | `transient` | ephemeral state — TTL auto-expire                |
+ * | `event`     | event-bus messages — very short TTL              |
+ *
+ * `record` is the back-compat default: an object with no `lifecycle` block
+ * behaves exactly as today (immortal data).
+ */
+export const LifecycleClassSchema = z.enum(['record', 'audit', 'telemetry', 'transient', 'event']);
+
+/**
+ * Duration literal: `<n><unit>` where unit is h(ours), d(ays), w(eeks) or
+ * y(ears) — e.g. `'6h'`, `'14d'`, `'12w'`, `'7y'`. Parsed by
+ * `@objectstack/objectql` `parseLifecycleDuration`.
+ */
+export const LIFECYCLE_DURATION_REGEX = /^\d+(h|d|w|y)$/;
+const lifecycleDuration = (what: string) =>
+  z.string().regex(LIFECYCLE_DURATION_REGEX, `${what} must be a duration literal like '6h', '14d', '12w' or '7y'`);
+
+export const LifecycleSchema = lazySchema(() => z.object({
+  class: LifecycleClassSchema.describe(
+    'Persistence contract: record (business truth, permanent) | audit (compliance ledger) | telemetry (high-freq log) | transient (ephemeral state) | event (bus messages).',
+  ),
+  retention: z.object({
+    maxAge: lifecycleDuration('retention.maxAge').describe('Rows older than this (by created_at) are deleted by the Reaper — or archived first when `archive` is set.'),
+  }).optional().describe('Age-based retention window enforced by the LifecycleService Reaper.'),
+  ttl: z.object({
+    field: z.string().describe('Timestamp field the TTL is measured from (e.g. created_at, expires_at).'),
+    expireAfter: lifecycleDuration('ttl.expireAfter').describe('Rows expire this long after `field` and are deleted by the Reaper.'),
+  }).optional().describe('Per-row TTL auto-expiry (transient/event classes).'),
+  storage: z.object({
+    strategy: z.literal('rotation').describe('Time-shard the table; rotate by DROPping the oldest shard (O(1) reclaim).'),
+    shards: z.number().int().min(2).describe('Number of shards retained; total window = shards × unit.'),
+    unit: z.enum(['day', 'week', 'month']).describe('Time width of one shard.'),
+  }).optional().describe('Physical storage strategy for high-frequency telemetry (LifecycleService Rotator).'),
+  archive: z.object({
+    after: lifecycleDuration('archive.after').describe('Rows older than this are copied to the archive datasource before hot deletion.'),
+    to: z.string().describe('Target datasource name for cold storage. When it is not registered, the Archiver skips (audit rows are then retained, never dropped unarchived).'),
+    keep: lifecycleDuration('archive.keep').optional().describe('How long archived rows are kept in cold storage (undefined = forever).'),
+  }).optional().describe('Cold-store archival (LifecycleService Archiver) — audit-class hot→cold hand-off.'),
+  reclaim: z.boolean().optional().describe('Run driver space reclamation (SQLite incremental_vacuum) after sweeping this object. Default true for non-record classes.'),
+}).superRefine((lc, ctx) => {
+  // ADR-0057 §3.5: a non-`record` lifecycle class with no bounding policy is a
+  // false surface — the object would still grow forever. Enforce-or-remove.
+  if (lc.class !== 'record' && !lc.retention && !lc.ttl && !lc.storage) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `lifecycle.class '${lc.class}' requires at least one bounding policy: retention, ttl, or storage (rotation) — ADR-0057 §3.5`,
+    });
+  }
+  if (lc.class === 'record' && (lc.retention || lc.ttl || lc.storage || lc.archive)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `lifecycle.class 'record' is permanent business truth — retention/ttl/storage/archive policies are not allowed on it (ADR-0057 §3.1)`,
+    });
+  }
+  if (lc.archive && lc.retention && lc.archive.after !== lc.retention.maxAge) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `lifecycle.archive.after ('${lc.archive.after}') must equal retention.maxAge ('${lc.retention.maxAge}') — the hot window ends where the archive begins`,
+    });
+  }
+}));
+
 
 /**
  * Object Field Group Schema — MVP (data-layer protocol)
@@ -607,7 +689,11 @@ const ObjectSchemaBase = z.object({
   
   // Versioning configuration
   versioning: VersioningConfigSchema.optional().describe('Record versioning and history tracking configuration'),
-  
+
+  // Data lifecycle (ADR-0057) — retention / rotation / archival contract,
+  // enforced by the LifecycleService. Absent = `record` (today's behavior).
+  lifecycle: LifecycleSchema.optional().describe('Data lifecycle contract (ADR-0057): class + retention/ttl/rotation/archive policies enforced by the platform LifecycleService.'),
+
   // Partitioning strategy
   
   /**
@@ -1112,6 +1198,8 @@ export type TenancyConfig = z.infer<typeof TenancyConfigSchema>;
 export type ObjectAccessConfig = z.infer<typeof ObjectAccessConfigSchema>;
 export type SoftDeleteConfig = z.infer<typeof SoftDeleteConfigSchema>;
 export type VersioningConfig = z.infer<typeof VersioningConfigSchema>;
+export type LifecycleClass = z.infer<typeof LifecycleClassSchema>;
+export type Lifecycle = z.infer<typeof LifecycleSchema>;
 
 /**
  * Resolved CRUD affordance matrix for an object — what generic

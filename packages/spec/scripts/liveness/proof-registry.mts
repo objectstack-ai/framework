@@ -119,6 +119,18 @@ export const HIGH_RISK_CLASSES: HighRiskClass[] = [
     ledgerBindings: [{ type: 'flow', path: 'runAs' }],
   },
   {
+    id: 'data-lifecycle',
+    label: 'Data lifecycle (ADR-0057)',
+    summary:
+      'declared lifecycle policies actually bound growth at runtime — the Reaper deletes past-window rows, record-class/business data stays untouched, archive-declared audit ledgers are never hot-deleted unarchived.',
+    proofId: 'adr0057-lifecycle-bounded-growth',
+    proofRef: 'packages/dogfood/test/storage-growth.dogfood.test.ts#adr0057-lifecycle-bounded-growth',
+    bound: true,
+    // `lifecycle` declares the retention contract the LifecycleService enforces —
+    // a declaration whose sweeper stopped running is dead surface (ADR-0049).
+    ledgerBindings: [{ type: 'object', path: 'lifecycle' }],
+  },
+  {
     id: 'form-widget',
     label: 'Form layout / section / widget',
     summary: 'server-side form resolution.',

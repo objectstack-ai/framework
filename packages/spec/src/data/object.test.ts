@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, type ServiceObject } from './object.zod';
+import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, LifecycleSchema, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
   it('should apply default values correctly', () => {
@@ -33,6 +33,91 @@ describe('ObjectCapabilities', () => {
 
     const result = ObjectCapabilities.parse(capabilities);
     expect(result).toEqual(capabilities);
+  });
+});
+
+describe('LifecycleSchema (ADR-0057)', () => {
+  it('accepts the ADR §3.2 telemetry rotation shape', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'telemetry',
+      retention: { maxAge: '14d' },
+      storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+      reclaim: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the ADR §3.2 audit archive-then-delete shape', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'audit',
+      retention: { maxAge: '90d' },
+      archive: { after: '90d', to: 'datalake', keep: '7y' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the ADR §3.2 transient ttl shape', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'transient',
+      ttl: { field: 'created_at', expireAfter: '7d' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a bare record class (permanent, no policies)', () => {
+    expect(LifecycleSchema.safeParse({ class: 'record' }).success).toBe(true);
+  });
+
+  it('rejects a non-record class with no bounding policy (§3.5 enforce-or-remove)', () => {
+    for (const cls of ['audit', 'telemetry', 'transient', 'event'] as const) {
+      const result = LifecycleSchema.safeParse({ class: cls });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('rejects retention/ttl/storage/archive on a record class', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'record',
+      retention: { maxAge: '30d' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an archive window that does not start where the hot window ends', () => {
+    const result = LifecycleSchema.safeParse({
+      class: 'audit',
+      retention: { maxAge: '90d' },
+      archive: { after: '30d', to: 'datalake' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects malformed duration literals', () => {
+    for (const bad of ['14', 'd14', '14 days', '2mo', '-3d', '1.5d']) {
+      const result = LifecycleSchema.safeParse({
+        class: 'telemetry',
+        retention: { maxAge: bad },
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('is accepted as an object-level property by ObjectSchema.create', () => {
+    const obj = ObjectSchema.create({
+      name: 'my_trace',
+      fields: {},
+      lifecycle: {
+        class: 'telemetry',
+        retention: { maxAge: '14d' },
+      },
+    });
+    expect(obj.lifecycle?.class).toBe('telemetry');
+    expect(obj.lifecycle?.retention?.maxAge).toBe('14d');
+  });
+
+  it('objects without a lifecycle block stay back-compatible (undefined = record semantics)', () => {
+    const obj = ObjectSchema.create({ name: 'plain_object', fields: {} });
+    expect(obj.lifecycle).toBeUndefined();
   });
 });
 

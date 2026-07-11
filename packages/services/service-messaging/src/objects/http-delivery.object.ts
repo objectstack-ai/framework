@@ -32,6 +32,12 @@ export const HttpDelivery = ObjectSchema.create({
     icon: 'globe',
     isSystem: true,
     managedBy: 'system',
+    // ADR-0057: webhook delivery attempts are debugging telemetry — 30d is
+    // ample for retry forensics.
+    lifecycle: {
+        class: 'telemetry',
+        retention: { maxAge: '30d' },
+    },
     userActions: { create: false, edit: false, delete: false, import: false },
     description:
         'Durable outbox row for one outbound-HTTP attempt (ADR-0018). Managed by @objectstack/service-messaging; do not write directly.',
