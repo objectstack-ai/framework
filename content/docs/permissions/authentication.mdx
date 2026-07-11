@@ -353,6 +353,18 @@ when SMS is deliverable: the created account receives a **credential-free
 invitation SMS** and the employee completes first sign-in via phone OTP, then
 sets their own password.
 
+#### SMS text customisation & localisation
+
+The OTP and invitation bodies are localised and tenant-customisable: a
+`sys_notification_template` row for `(auth.phone_otp | auth.phone_invite,
+channel 'sms', locale)` wins — built-in English and Chinese rows are seeded
+once (never overwriting your edits) and can be changed under Setup →
+Notification Templates. The locale follows the deployment default
+(`localization.locale` setting) with a `zh-CN → zh → en` fallback chain;
+holes are `{{code}}`, `{{appName}}`, `{{minutes}}` (OTP) and `{{appName}}`,
+`{{baseUrl}}` (invitation). Template lookups are best-effort — an outage
+falls back to the built-in text and never blocks an OTP send.
+
 ---
 
 ## OAuth Providers
