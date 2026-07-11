@@ -138,6 +138,73 @@ versioning: {
 }
 ```
 
+#### Data Lifecycle (Retention & Rotation)
+
+Declares how long the object's data lives and how its space is reclaimed
+(ADR-0057). The platform **LifecycleService** (registered by
+`ObjectQLPlugin`, default-on) sweeps declared policies hourly. Objects
+without a `lifecycle` block keep permanent `record` semantics — nothing is
+ever deleted.
+
+```typescript
+// High-frequency telemetry: rotation window + age reap
+lifecycle: {
+  class: 'telemetry',
+  retention: { maxAge: '14d' },
+  storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+}
+
+// Ephemeral rows: TTL on the natural expiry field
+lifecycle: {
+  class: 'transient',
+  ttl: { field: 'expires_at', expireAfter: '1d' },
+}
+
+// Compliance ledger: hot window, then cold storage
+lifecycle: {
+  class: 'audit',
+  retention: { maxAge: '90d' },
+  archive: { after: '90d', to: 'archive', keep: '7y' },
+}
+```
+
+| Key | Description |
+| :--- | :--- |
+| `class` | Persistence contract (see table below); `record` is the implicit default |
+| `retention.maxAge` | Age-based reap on `created_at` |
+| `ttl` | Per-row expiry: `field` + `expireAfter` |
+| `storage` | `{ strategy: 'rotation', shards, unit }` — time-shard + O(1) shard `DROP` (SQLite) |
+| `archive` | Cold-store hand-off: `after` (must equal `retention.maxAge`) + `to` (datasource name) + optional `keep` |
+| `reclaim` | Space reclamation after sweeps (default on for non-`record`) |
+
+| Class | Contract | Typical use |
+| :--- | :--- | :--- |
+| `record` | Business truth — permanent, no policies allowed | accounts, invoices |
+| `audit` | Compliance ledger — retain → archive → delete | audit logs |
+| `telemetry` | High-frequency log — rotation / short retention | activity streams, job runs |
+| `transient` | Ephemeral state — TTL auto-expire | receipts, device codes |
+| `event` | Bus messages — very short TTL (hours) | scheduled fan-out |
+
+Enforcement rules:
+
+- A non-`record` class **must** declare at least one bounding policy
+  (`retention`, `ttl`, or rotation `storage`) — rejected at parse time
+  otherwise. Policies on `record` are rejected too.
+- Duration literals are `<n>` + `h`/`d`/`w`/`y` (e.g. `'6h'`, `'14d'`, `'7y'`);
+  `archive.after` must equal `retention.maxAge`.
+- An `archive`-declared object is **never** hot-deleted before the archive
+  copy succeeded. No datasource registered under the `archive.to` name ⇒
+  rows are retained (safe default), not dropped.
+- Registering a datasource named `telemetry` routes every
+  `telemetry`/`event`/`audit` object to it — separate storage, opt-in purely
+  by the datasource's existence.
+
+Operations knobs live in the `lifecycle` settings namespace: a runtime
+`enabled` switch, tenant-scoped `retention_overrides` (a regulated tenant
+sets years while dev keeps days), row `quotas` and `growth_alert_rows`
+(observe-and-alert only). `OS_LIFECYCLE_DISABLED=1` disables sweeping
+entirely.
+
 ### Record Name
 
 Auto-generate unique record identifiers:

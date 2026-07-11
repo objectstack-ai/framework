@@ -166,6 +166,19 @@ export OS_DATABASE_URL=file:./data/app.db
 export OS_DATABASE_URL=:memory:
 ```
 
+### Space Reclamation & Table Rotation (ADR-0057)
+
+The SQL driver connects SQLite with `auto_vacuum=INCREMENTAL` and exposes
+`reclaimSpace()` (`PRAGMA incremental_vacuum`), which the platform
+LifecycleService calls after every sweep that deleted rows — so the database
+file actually shrinks instead of pinning at its high-water mark. Objects
+declaring `lifecycle.storage.strategy: 'rotation'` are physically
+time-sharded on SQLite: writes land in the current shard, reads go through a
+view under the table's name, and expired shards are reclaimed with a single
+`DROP TABLE`. On PostgreSQL/MySQL both are no-ops — those engines manage
+space with their own vacuum machinery, and rotation falls back to an
+equivalent age-based reap.
+
 ## Memory Driver
 
 The in-memory driver keeps records in plain in-process objects (queried via
