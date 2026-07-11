@@ -120,6 +120,46 @@ export function foldWildcardSuperUser(objects: Record<string, any>): void {
     }
 }
 
+/** Minimal schema shape the managed-write clamp needs. */
+export interface ManagedSchemaLike {
+    managedBy?: string;
+    userActions?: { create?: boolean; edit?: boolean; delete?: boolean } | null;
+}
+
+/**
+ * Re-clamp a `/me/permissions` `objects` map by the SECOND server-side
+ * enforcement layer that permission sets don't model: the identity write guard
+ * (ADR-0092 D2). The guard fail-closed rejects USER-CONTEXT insert/update/delete
+ * on every `managedBy: 'better-auth'` object except where the object opted a
+ * write affordance in (`userActions.{create,edit,delete}` — e.g. sys_user opens
+ * `edit` for its profile fields; the field-level `readonly` flags then narrow it
+ * to `{name, image}`).
+ *
+ * Without this clamp, {@link foldWildcardSuperUser} would report `allowEdit:true`
+ * for a platform admin on identity tables the guard actually blocks (sys_member,
+ * sys_account, …) — a false-POSITIVE that mirrors, inverted, the false-negative
+ * the fold fixes. The real effective answer for a user-context caller is
+ * `permission-set grant ∩ guard policy`, and the guard policy for a managed
+ * object is exactly its resolved CRUD affordance. Only `better-auth` objects are
+ * clamped — the guard covers only them; `system`/`config`/`append-only` objects
+ * have no such guard, so their permission-set result stands (an admin CAN write
+ * them via the data API, and the hint must not under-report that).
+ */
+export function clampManagedObjectWrites(
+    objects: Record<string, any>,
+    schemaOf: (objectName: string) => ManagedSchemaLike | undefined,
+): void {
+    for (const [obj, acc] of Object.entries(objects) as Array<[string, any]>) {
+        if (obj === '*' || !acc) continue;
+        const schema = schemaOf(obj);
+        if (schema?.managedBy !== 'better-auth') continue;
+        const ua = schema.userActions ?? {};
+        if (ua.edit !== true) acc.allowEdit = false;
+        if (ua.create !== true) acc.allowCreate = false;
+        if (ua.delete !== true) acc.allowDelete = false;
+    }
+}
+
 export class HonoServerPlugin implements Plugin {
     name = 'com.objectstack.server.hono';
     type = 'server';
@@ -835,10 +875,21 @@ export class HonoServerPlugin implements Plugin {
                         }
                     }
                 }
-                // Fold the `'*'` wildcard super-user grant into every per-object
-                // entry (see foldWildcardSuperUser) so the client's per-object FLS
-                // matches the server's actual enforcement (ADR-0057 D10).
+                // Make the client's per-object FLS reflect the server's ACTUAL
+                // effective enforcement = permission-set grant ∩ identity write
+                // guard (ADR-0057 D10). (1) Fold the `'*'` super-user grant into
+                // every object so an admin's wildcard is not shadowed by another
+                // set's explicit deny; (2) re-clamp `better-auth` managed objects
+                // by their write affordance, since the guard (ADR-0092 D2) blocks
+                // user-context writes there except where the object opted in
+                // (sys_user → edit). Together these remove both the false-negative
+                // (admin sees sys_user editable) and the false-positive (admin does
+                // NOT see sys_member editable, matching the guard).
                 foldWildcardSuperUser(objects);
+                clampManagedObjectWrites(objects, (name) => {
+                    try { return ql?.getSchema?.(name) as ManagedSchemaLike | undefined; }
+                    catch { return undefined; }
+                });
                 return c.json({
                     authenticated: true,
                     userId: execCtx.userId,

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { foldWildcardSuperUser } from './hono-plugin.js';
+import { foldWildcardSuperUser, clampManagedObjectWrites, type ManagedSchemaLike } from './hono-plugin.js';
 
 /**
  * ADR-0057 D10 / ADR-0092 D5 — the `/me/permissions` per-object FLS map must
@@ -46,5 +46,62 @@ describe('foldWildcardSuperUser', () => {
     const objects: Record<string, any> = { sys_user: { allowEdit: false } };
     foldWildcardSuperUser(objects);
     expect(objects.sys_user.allowEdit).toBe(false);
+  });
+});
+
+/**
+ * ADR-0092 D2 — the identity write guard is a second enforcement layer the
+ * permission sets don't model. The client hint must reflect permission ∩ guard:
+ * managed (`better-auth`) objects are user-context-writable only where the
+ * object opened the affordance; others (system/config/…) are untouched.
+ */
+describe('clampManagedObjectWrites', () => {
+  const SCHEMAS: Record<string, ManagedSchemaLike> = {
+    sys_user: { managedBy: 'better-auth', userActions: { edit: true } },
+    sys_member: { managedBy: 'better-auth' },
+    sys_session: { managedBy: 'better-auth' },
+    sys_automation_run: { managedBy: 'system' }, // NOT better-auth → not guarded
+    crm_lead: { managedBy: 'platform' },
+  };
+  const schemaOf = (n: string) => SCHEMAS[n];
+
+  it('keeps write on a managed object that opened the edit affordance (sys_user)', () => {
+    const objects: Record<string, any> = { sys_user: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true } };
+    clampManagedObjectWrites(objects, schemaOf);
+    // edit opted-in stays; create/delete were NOT opted in → clamped off.
+    expect(objects.sys_user).toMatchObject({ allowRead: true, allowEdit: true, allowCreate: false, allowDelete: false });
+  });
+
+  it('clamps write to false on managed objects the guard blocks (sys_member, sys_session)', () => {
+    const objects: Record<string, any> = {
+      sys_member: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true },
+      sys_session: { allowRead: true, allowEdit: true },
+    };
+    clampManagedObjectWrites(objects, schemaOf);
+    expect(objects.sys_member).toMatchObject({ allowRead: true, allowEdit: false, allowCreate: false, allowDelete: false });
+    expect(objects.sys_session.allowEdit).toBe(false);
+    expect(objects.sys_session.allowRead).toBe(true); // read never clamped
+  });
+
+  it('leaves non-better-auth managed buckets untouched (system objects have no write guard)', () => {
+    const objects: Record<string, any> = { sys_automation_run: { allowEdit: true }, crm_lead: { allowEdit: true } };
+    clampManagedObjectWrites(objects, schemaOf);
+    expect(objects.sys_automation_run.allowEdit).toBe(true);
+    expect(objects.crm_lead.allowEdit).toBe(true);
+  });
+
+  it('fold + clamp compose to permission ∩ guard for a platform admin', () => {
+    // As produced for a platform admin (admin_full_access '*' modifyAll) who
+    // also holds organization_admin (explicit managed denies).
+    const objects: Record<string, any> = {
+      '*': { allowRead: true, allowEdit: true, viewAllRecords: true, modifyAllRecords: true },
+      sys_user: { allowRead: true, allowEdit: false, allowCreate: false, allowDelete: false },
+      sys_member: { allowRead: true, allowEdit: false, allowCreate: false, allowDelete: false },
+    };
+    foldWildcardSuperUser(objects);
+    clampManagedObjectWrites(objects, schemaOf);
+    expect(objects.sys_user.allowEdit).toBe(true);   // opened + admin → editable
+    expect(objects.sys_member.allowEdit).toBe(false); // guard blocks → not editable
+    expect(objects.sys_member.allowRead).toBe(true);  // read still granted by super-user
   });
 });
