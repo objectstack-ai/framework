@@ -1,0 +1,70 @@
+---
+title: services.sms
+description: Outbound SMS delivery through pluggable providers (Aliyun SMS, Twilio).
+---
+
+# `services.sms`
+
+- **Stability:** `stable`
+- **Canonical source:** `packages/spec/src/contracts/sms-service.ts`
+
+## Methods
+
+```ts
+services.sms.send(input: SendSmsInput): Promise<SendSmsResult>
+services.sms.isConfigured(): boolean
+```
+
+`SendSmsInput` carries the recipient (`to`, E.164 recommended), the rendered
+`body`, and optional provider-template fields (`templateId`,
+`templateParams`) for template-only providers such as Aliyun SMS — which
+refuse free-form bodies and only deliver pre-registered templates.
+
+`isConfigured()` is `false` while the service runs on the development
+`LogSmsTransport` fallback (messages are logged, never delivered). Consumers
+that advertise SMS-dependent features — phone OTP sign-in, SMS invitations —
+gate on it in production (`features.phoneNumberOtp`).
+
+## Returns
+
+`SendSmsResult`:
+
+- `id: string` — correlation id for the attempt
+- `status: 'sent' | 'failed'`
+- `messageId?: string` — provider message id (Aliyun BizId, Twilio SID)
+- `error?: string` — transport detail when `status='failed'`
+
+## No persistence, no body logging
+
+Unlike `services.email` (which persists to `sys_email`), the SMS service
+deliberately has **no persistence surface and never logs message bodies**:
+SMS bodies routinely carry one-time passwords, so a message log would be a
+credential store. Diagnostics log masked recipients and statuses only.
+
+## Configuration
+
+Providers are configured through the `sms` settings namespace
+(Setup → Settings → SMS Delivery), with live rebinding — no restart needed:
+
+- `provider` — `log` (default, no real delivery) / `aliyun` / `twilio`
+- Aliyun: `aliyun_access_key_id`, `aliyun_access_key_secret` (encrypted),
+  `aliyun_sign_name`, `aliyun_template_code` (default catch-all template with
+  a single `${content}` variable for generic notification SMS)
+- Twilio: `twilio_account_sid`, `twilio_auth_token` (encrypted), and
+  `twilio_from_number` or `twilio_messaging_service_sid`
+
+Every key accepts the standard settings env override (`OS_SMS_PROVIDER`,
+`OS_SMS_ALIYUN_ACCESS_KEY_ID`, …). The **Send test SMS** action exercises the
+live (or unsaved) provider configuration.
+
+## Consumers
+
+- **Phone-number OTP auth** — sign-in verification codes and self-service
+  password-reset codes (`/phone-number/*`, see
+  [Authentication](/docs/permissions/authentication)).
+- **Messaging `sms` channel** — `notify(channels:['sms'])` resolves the
+  recipient's `sys_user.phone_number`, renders the `(topic, 'sms', locale)`
+  row from `sys_notification_template`, and delivers through this service
+  with outbox retry/dead-letter.
+- **Identity import SMS invitations** — the `invite` password policy sends a
+  credential-free invitation SMS to phone-only rows.

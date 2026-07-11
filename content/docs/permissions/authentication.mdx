@@ -270,6 +270,89 @@ const response = await fetch('http://localhost:3000/api/v1/auth/send-verificatio
 const response = await fetch(`http://localhost:3000/api/v1/auth/verify-email?token=${token}`);
 ```
 
+### Phone-Number Authentication (SMS OTP)
+
+Phone numbers are a first-class sign-in identifier (better-auth `phoneNumber`
+plugin). Opt in per deployment:
+
+```bash
+OS_AUTH_PHONE_NUMBER_ENABLED=true   # or auth.plugins.phoneNumber in config
+```
+
+The plugin adds `sys_user.phone_number` (unique) and `phone_number_verified`.
+Phone-only employees are created by the admin create-user / import routes with
+an undeliverable placeholder email (`u-<random>@placeholder.invalid`) — never
+by OTP self-signup.
+
+#### Phone + password sign-in
+
+Always available once the plugin is on:
+
+```typescript
+const response = await fetch('http://localhost:3000/api/v1/auth/sign-in/phone-number', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phoneNumber: '+8613800000000', password: 'password123' })
+});
+```
+
+#### OTP sign-in and self-service reset (requires SMS delivery)
+
+The OTP surface opens only when a **deliverable SMS service** is configured
+(`services.sms`, Setup → Settings → SMS Delivery); without one these endpoints
+fail loudly with `NOT_SUPPORTED`. The public config advertises real
+availability as `features.phoneNumberOtp`, which is what the Console login UI
+gates its "Sign in with verification code" mode and the SMS reset branch on.
+
+```typescript
+// Sign-in / verification: request a code, then verify (creates a session)
+await fetch('/api/v1/auth/phone-number/send-otp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phoneNumber: '+8613800000000' })
+});
+await fetch('/api/v1/auth/phone-number/verify', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phoneNumber: '+8613800000000', code: '123456' })
+});
+
+// Self-service password reset over SMS
+await fetch('/api/v1/auth/phone-number/request-password-reset', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phoneNumber: '+8613800000000' })
+});
+await fetch('/api/v1/auth/phone-number/reset-password', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phoneNumber: '+8613800000000', otp: '123456', newPassword: 'NewPass123!' })
+});
+```
+
+Abuse hardening ships with the feature (SMS is a paid channel):
+
+- **Per-number admission guard** (always on): 60s cooldown + 5 sends per
+  rolling hour per number, shared across the sign-in and reset flows and —
+  in a cluster — across nodes via the shared KV. Rejected requests get an
+  honest `429` with the retry window and never invalidate an already
+  delivered code. Tune via `AuthManager` `phoneOtp`
+  (`cooldownSeconds` / `maxPerHour` / `allowedAttempts` / `expiresIn` /
+  `otpLength`).
+- **Wrong-code attempts** are capped at 3 (`allowedAttempts`), then the code
+  is invalidated.
+- **Per-IP rate limiting**: the plugin ships a `/phone-number/*` default
+  (10/min), and the `auth` settings `rate_limit_max` /
+  `rate_limit_window_seconds` tighten all four OTP endpoints.
+- **OTP codes never reach logs** — the SMS service logs masked numbers and
+  statuses only; `request-password-reset` always answers `{status:true}` so
+  it cannot be used as an account-existence oracle.
+
+The identity import endpoint's `invite` policy also supports phone-only rows
+when SMS is deliverable: the created account receives a **credential-free
+invitation SMS** and the employee completes first sign-in via phone OTP, then
+sets their own password.
+
 ---
 
 ## OAuth Providers
