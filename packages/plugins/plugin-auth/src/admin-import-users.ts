@@ -57,11 +57,17 @@ import type {
 import { prepareImportRequest, runImport } from '@objectstack/rest';
 import { generatePlaceholderEmail, isPlaceholderEmail } from './placeholder-email.js';
 import { generateTemporaryPassword, normalizePhoneNumber, isLikelyEmail, type AdminActor, type EndpointResult } from './admin-user-endpoints.js';
+import { SYS_USER_IMPORT_UPDATE_FIELDS } from './sys-user-writable-fields.js';
 
 export const IMPORT_USERS_MAX_ROWS = 500;
 
-/** Profile fields an upsert row may modify on an EXISTING user. */
-const UPDATE_ALLOWED_FIELDS = new Set(['name', 'phone_number', 'role']);
+/**
+ * Profile fields an upsert row may modify on an EXISTING user — shared with
+ * the identity write guard's Tier-1 whitelist via sys-user-writable-fields.ts
+ * (ADR-0092 D3: one file, one derivation; the import surface is a strict
+ * superset that additionally allows `phone_number` / `role`).
+ */
+const UPDATE_ALLOWED_FIELDS = SYS_USER_IMPORT_UPDATE_FIELDS;
 
 export interface IdentityImportEngine {
   find(objectName: string, query?: any): Promise<any[]>;

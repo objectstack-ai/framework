@@ -18,6 +18,12 @@ import {
   type AuthManagerOptions,
 } from './auth-manager.js';
 import { ensureDefaultOrganization } from './ensure-default-organization.js';
+import {
+  registerIdentityWriteGuard,
+  registerManagedUpdateWhitelist,
+  type SecondaryStorageLike,
+} from './identity-write-guard.js';
+import { SYS_USER_PROFILE_EDIT_FIELDS } from './sys-user-writable-fields.js';
 import { runSetInitialPassword } from './set-initial-password.js';
 import { runRegisterSsoProviderFromForm, runRegisterSamlProviderFromForm, runRequestDomainVerification, runVerifyDomain } from './register-sso-provider.js';
 import { runResendVerificationEmail } from './send-verification-email.js';
@@ -125,6 +131,10 @@ export class AuthPlugin implements Plugin {
   private options: AuthPluginOptions;
   private authManager: AuthManager | null = null;
   private configuredSocialProviders: SocialProviderConfig | undefined;
+  // ADR-0092 D6 — the EFFECTIVE better-auth secondaryStorage (host-supplied or
+  // the kernel-cache adapter wired in init). The identity write guard's
+  // session-snapshot refresh reads through this; undefined = refresh no-ops.
+  private effectiveSecondaryStorage: AuthManagerOptions['secondaryStorage'];
 
   constructor(options: AuthPluginOptions = {}) {
     this.options = {
@@ -221,6 +231,9 @@ export class AuthPlugin implements Plugin {
 
     // Initialize auth manager with data engine
     this.authManager = new AuthManager(authConfig);
+    // ADR-0092 D6 — remember the storage better-auth will actually use so the
+    // identity write guard can keep cached session snapshots coherent.
+    this.effectiveSecondaryStorage = authConfig.secondaryStorage;
 
     // Register auth service
     ctx.registerService('auth', this.authManager);
@@ -532,6 +545,29 @@ export class AuthPlugin implements Plugin {
         ctx.logger.info('Identity-source afterInsert stamp registered on sys_account (SCIM-safe)');
       } catch {
         // Engine not available — skip; OAuth path still stamps via databaseHooks.
+      }
+    });
+
+    // ADR-0092 D2/D6 — generic identity write guard. Every object whose
+    // schema declares `managedBy: 'better-auth'` gets fail-closed protection
+    // against USER-CONTEXT writes through the generic data path; the only
+    // opening is the per-object update whitelist (sys_user → profile fields).
+    // Internal writes (better-auth adapter, isSystem plugin/system contexts)
+    // bypass — see identity-write-guard.ts for the full contract.
+    ctx.hook('kernel:ready', async () => {
+      try {
+        const engine: any = ctx.getService<any>('objectql');
+        if (!engine || typeof engine.registerHook !== 'function') return;
+        registerManagedUpdateWhitelist(SystemObjectName.USER, SYS_USER_PROFILE_EDIT_FIELDS);
+        registerIdentityWriteGuard(engine, {
+          packageId: 'com.objectstack.plugin-auth.identity-write-guard',
+          logger: ctx.logger,
+          getSecondaryStorage: () =>
+            this.effectiveSecondaryStorage as SecondaryStorageLike | undefined,
+        });
+      } catch {
+        // Engine not available (mock mode) — permission-set defaults remain
+        // the only gate, exactly the pre-guard status quo.
       }
     });
 

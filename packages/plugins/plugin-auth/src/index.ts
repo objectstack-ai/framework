@@ -15,6 +15,8 @@ export * from './set-initial-password.js';
 export * from './admin-user-endpoints.js';
 export * from './placeholder-email.js';
 export * from './admin-import-users.js';
+export * from './identity-write-guard.js';
+export * from './sys-user-writable-fields.js';
 export * from './otp-send-guard.js';
 export * from './register-sso-provider.js';
 export * from './send-verification-email.js';
