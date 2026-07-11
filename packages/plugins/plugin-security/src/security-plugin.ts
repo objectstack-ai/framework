@@ -5,7 +5,12 @@ import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/se
 import { describeHighPrivilegeBits, describeAnchorForbiddenBits } from '@objectstack/spec/security';
 import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
 import { DelegatedAdminGate } from './delegated-admin-gate.js';
-import { explainAccess, buildContextForUser } from './explain-engine.js';
+import {
+  explainAccess,
+  buildContextForUser,
+  resolveDelegatorContext,
+  intersectFieldMasks,
+} from './explain-engine.js';
 import type { ExplainDecision, ExplainOperation } from '@objectstack/spec/security';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
 import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
@@ -547,6 +552,37 @@ export class SecurityPlugin implements Plugin {
         );
       }
 
+      // [ADR-0090 D10 — agent intersection] When this principal acts ON BEHALF
+      // OF a user (an AI agent or a service), its effective permission is the
+      // INTERSECTION of its own grants and the delegator's grants — never the
+      // union (confused-deputy prevention). Resolve the delegator's effective
+      // permission sets ONCE here; every gate below AND-composes the two lists
+      // so the tighter of the two wins at each axis (CRUD, capabilities, FLS,
+      // depth, row-level using/check, VAMA). The whole thing is gated on the
+      // presence of the delegation LINK (not the `principalKind` label — a
+      // service acting for a user is the identical risk): on the ordinary
+      // non-delegated path `delegatorSets` stays null, every combine reduces to
+      // today's expression, no extra `ql` read happens, and behaviour is
+      // byte-identical. A dangling link (delegator deleted) fails CLOSED — see
+      // resolveDelegatorContext for why "empty sets" would be wrong (the
+      // additive baseline would resurrect access for a non-existent user).
+      let delegatorSets: PermissionSet[] | null = null;
+      let delegatorContext: any = null;
+      if (permissionSets.length > 0 && opCtx.context?.onBehalfOf?.userId) {
+        const del = await resolveDelegatorContext(this.ql, opCtx.context);
+        if (del.kind === 'missing') {
+          throw new PermissionDeniedError(
+            `[Security] Access denied: on-behalf-of principal names delegator ` +
+              `'${del.userId}', who does not exist — refusing to act (ADR-0090 D10 fail-closed)`,
+            { operation: opCtx.operation, object: opCtx.object },
+          );
+        }
+        if (del.kind === 'resolved') {
+          delegatorContext = del.context;
+          delegatorSets = await this.resolvePermissionSetsForContext(delegatorContext);
+        }
+      }
+
       // [ADR-0066 D2/D3] Resolve the object's security posture (private flag,
       // platform-global flag, capability contract) once for the checks below.
       const secMeta =
@@ -564,17 +600,22 @@ export class SecurityPlugin implements Plugin {
         if (required.length > 0) {
           const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
           const missing = required.filter((cap) => !held.has(cap));
-          if (missing.length > 0) {
+          // [ADR-0090 D10] Both principals must hold every required capability.
+          const missingDel = delegatorSets
+            ? required.filter((cap) => !this.permissionEvaluator.getSystemPermissions(delegatorSets!).has(cap))
+            : [];
+          if (missing.length > 0 || missingDel.length > 0) {
+            const allMissing = [...new Set([...missing, ...missingDel])];
             throw new PermissionDeniedError(
               `[Security] Access denied: '${opCtx.object}' (operation '${opCtx.operation}') requires capability ` +
-                `[${required.join(', ')}] — caller is missing [${missing.join(', ')}]`,
+                `[${required.join(', ')}] — ${missing.length > 0 ? 'caller' : 'the delegator'} is missing [${allMissing.join(', ')}]`,
               {
                 operation: opCtx.operation,
                 object: opCtx.object,
                 positions,
                 permissionSets: explicitPermissionSets,
                 requiredPermissions: required,
-                missingPermissions: missing,
+                missingPermissions: allMissing,
               },
             );
           }
@@ -597,6 +638,21 @@ export class SecurityPlugin implements Plugin {
             { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
           );
         }
+
+        // [ADR-0090 D10] The delegator must independently grant the same op — an
+        // agent may never act beyond the reach of the user it stands in for.
+        if (delegatorSets && !this.permissionEvaluator.checkObjectPermission(
+          opCtx.operation,
+          opCtx.object,
+          delegatorSets,
+          { isPrivate: secMeta.isPrivate },
+        )) {
+          throw new PermissionDeniedError(
+            `[Security] Access denied: on-behalf-of principal may not '${opCtx.operation}' ` +
+              `'${opCtx.object}' — the delegator lacks that grant (ADR-0090 D10 intersection)`,
+            { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
+          );
+        }
       }
 
       // 2.6. [ADR-0057 D1] Stash the grant's access DEPTH for this object so the
@@ -605,10 +661,25 @@ export class SecurityPlugin implements Plugin {
       //      (plugin-sharing), so we pass the scope STRING, not the resolved set.
       if (permissionSets.length > 0) {
         const sc: any = opCtx.context;
+        // The AGENT's own depth drives plugin-sharing's owner-match for the
+        // agent identity (unchanged on the non-delegated path).
         if (['find', 'findOne', 'count', 'aggregate'].includes(opCtx.operation)) {
           sc.__readScope = this.permissionEvaluator.getEffectiveScope('read', opCtx.object, permissionSets, { isPrivate: secMeta.isPrivate });
+          // [ADR-0090 D10] Stash the DELEGATOR's own read depth SEPARATELY (not a
+          // min of the two). The OWD/sharing owner-match is identity-scoped:
+          // plugin-sharing re-runs the owner filter under the delegator's
+          // identity + THIS depth and AND-s it in, giving a true per-identity
+          // intersection. Narrowing __readScope alone would wrongly scope the
+          // AGENT's identity to the delegator's depth (owner_id = agentId),
+          // hiding the very rows the delegator legitimately owns.
+          if (delegatorSets) {
+            sc.__delegatorReadScope = this.permissionEvaluator.getEffectiveScope('read', opCtx.object, delegatorSets, { isPrivate: secMeta.isPrivate });
+          }
         } else if (['update', 'delete', 'transfer', 'restore', 'purge'].includes(opCtx.operation)) {
           sc.__writeScope = this.permissionEvaluator.getEffectiveScope('write', opCtx.object, permissionSets, { isPrivate: secMeta.isPrivate });
+          if (delegatorSets) {
+            sc.__delegatorWriteScope = this.permissionEvaluator.getEffectiveScope('write', opCtx.object, delegatorSets, { isPrivate: secMeta.isPrivate });
+          }
         }
       }
 
@@ -655,11 +726,20 @@ export class SecurityPlugin implements Plugin {
             rlsOperation,
             opCtx.context,
           );
-          if (writeFilter) {
+          // [ADR-0090 D10] The target row must satisfy BOTH principals' write
+          // RLS — a by-id write on behalf of a user may only touch rows that
+          // user could also touch. Compute the delegator's write filter against
+          // the delegator's context (its userId/tenant substitutions) and AND
+          // it into the same pre-image re-read.
+          const delWriteFilter = delegatorSets
+            ? await this.computeRlsFilter(delegatorSets, opCtx.object, rlsOperation, delegatorContext)
+            : null;
+          const writeParts = [writeFilter, delWriteFilter].filter(Boolean) as Record<string, unknown>[];
+          if (writeParts.length > 0) {
             let visible: unknown = null;
             try {
               visible = await this.ql.findOne(opCtx.object, {
-                where: { $and: [{ id: targetId }, writeFilter] },
+                where: { $and: [{ id: targetId }, ...writeParts] },
                 context: opCtx.context,
               });
             } catch {
@@ -701,6 +781,17 @@ export class SecurityPlugin implements Plugin {
           opCtx,
           opCtx.context,
         );
+        // [ADR-0090 D10] The delegator must ALSO have edit access to the master
+        // — a detail write on behalf of a user requires that user's master-edit.
+        if (delegatorSets) {
+          await this.assertControlledByParentWrite(
+            delegatorSets,
+            opCtx.object,
+            opCtx.operation,
+            opCtx,
+            delegatorContext,
+          );
+        }
       }
 
       // 2.5. Field-Level Security write enforcement.
@@ -732,6 +823,13 @@ export class SecurityPlugin implements Plugin {
         );
         // [ADR-0066 D3] AND-gate field-level requiredPermissions into the map.
         fieldPerms = this.foldFieldRequiredPermissions(fieldPerms, secMeta.fieldRequiredPermissions, permissionSets);
+        // [ADR-0090 D10] Intersect with the delegator's field perms — a field
+        // the agent may edit but the delegator may not becomes forbidden.
+        if (delegatorSets) {
+          let delFieldPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, delegatorSets);
+          delFieldPerms = this.foldFieldRequiredPermissions(delFieldPerms, secMeta.fieldRequiredPermissions, delegatorSets);
+          fieldPerms = intersectFieldMasks(fieldPerms, delFieldPerms);
+        }
         if (Object.keys(fieldPerms).length > 0) {
           const forbidden = this.fieldMasker.detectForbiddenWrites(
             opCtx.data,
@@ -805,7 +903,14 @@ export class SecurityPlugin implements Plugin {
           opCtx.operation,
           opCtx.context,
         );
-        if (checkFilter) {
+        // [ADR-0090 D10] The post-image must satisfy the delegator's CHECK too —
+        // an on-behalf-of write may not produce a row the delegator itself
+        // could not have written.
+        const delCheckFilter = delegatorSets
+          ? await this.computeWriteCheckFilter(delegatorSets, opCtx.object, opCtx.operation, delegatorContext)
+          : null;
+        const checkParts = [checkFilter, delCheckFilter].filter(Boolean) as Record<string, unknown>[];
+        if (checkParts.length > 0) {
           // Build the post-image. Insert → the new row. Update by-id → the
           // pre-image merged with the change set (so a check on an unchanged
           // field still sees its value). A bulk update (no single id) cannot
@@ -830,7 +935,7 @@ export class SecurityPlugin implements Plugin {
               if (pre && typeof pre === 'object') postImage = { ...(pre as Record<string, unknown>), ...(opCtx.data as Record<string, unknown>) };
             }
           }
-          if (postImage && !matchesFilterCondition(postImage, checkFilter as any)) {
+          if (postImage && !checkParts.every((f) => matchesFilterCondition(postImage as any, f as any))) {
             this.logger.warn?.(
               `[Security] RLS check FAILED on ${opCtx.operation} '${opCtx.object}' — write denied (fail-closed)`,
             );
@@ -854,6 +959,13 @@ export class SecurityPlugin implements Plugin {
       if (opCtx.ast) {
         let guardPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, permissionSets);
         guardPerms = this.foldFieldRequiredPermissions(guardPerms, secMeta.fieldRequiredPermissions, permissionSets);
+        // [ADR-0090 D10] A field readable only by the agent is not queryable on
+        // the delegator's behalf — intersect before the oracle guard.
+        if (delegatorSets) {
+          let delGuard = this.permissionEvaluator.getFieldPermissions(opCtx.object, delegatorSets);
+          delGuard = this.foldFieldRequiredPermissions(delGuard, secMeta.fieldRequiredPermissions, delegatorSets);
+          guardPerms = intersectFieldMasks(guardPerms, delGuard);
+        }
         if (Object.keys(guardPerms).length > 0) {
           assertReadableQueryFields(opCtx.ast as unknown as Record<string, unknown>, guardPerms, opCtx.object);
         }
@@ -880,6 +992,16 @@ export class SecurityPlugin implements Plugin {
           opCtx.context,
         );
         if (cbpFilter) extra.push(cbpFilter);
+        // [ADR-0090 D10] AND the delegator's read RLS (and CBP) into the same
+        // where — the delegated principal sees only rows BOTH may see. Computed
+        // against the delegator's own context so its userId/tenant substitutions
+        // are faithful.
+        if (delegatorSets) {
+          const delRls = await this.computeRlsFilter(delegatorSets, opCtx.object, opCtx.operation, delegatorContext);
+          if (delRls) extra.push(delRls);
+          const delCbp = await this.computeControlledByParentFilter(delegatorSets, opCtx.object, delegatorContext);
+          if (delCbp) extra.push(delCbp);
+        }
         if (extra.length) {
           opCtx.ast.where = opCtx.ast.where
             ? { $and: [opCtx.ast.where, ...extra] }
@@ -901,6 +1023,12 @@ export class SecurityPlugin implements Plugin {
         let fieldPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, permissionSets);
         // [ADR-0066 D3] AND-gate field-level requiredPermissions into the mask.
         fieldPerms = this.foldFieldRequiredPermissions(fieldPerms, secMeta.fieldRequiredPermissions, permissionSets);
+        // [ADR-0090 D10] Mask any field the delegator cannot read, too.
+        if (delegatorSets) {
+          let delFieldPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, delegatorSets);
+          delFieldPerms = this.foldFieldRequiredPermissions(delFieldPerms, secMeta.fieldRequiredPermissions, delegatorSets);
+          fieldPerms = intersectFieldMasks(fieldPerms, delFieldPerms);
+        }
         if (Object.keys(fieldPerms).length > 0) {
           opCtx.result = this.fieldMasker.maskResults(opCtx.result, fieldPerms, opCtx.object);
         }

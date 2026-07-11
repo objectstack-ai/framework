@@ -321,7 +321,23 @@ export function buildSharingMiddleware(service: SharingService): EngineMiddlewar
 
     // READS — AND the visibility filter into the AST.
     if (op === 'find' || op === 'findOne' || op === 'count' || op === 'aggregate') {
-      const filter = await service.buildReadFilter(ctx.object, exec ?? {});
+      let filter = await service.buildReadFilter(ctx.object, exec ?? {});
+      // [ADR-0090 D10] Agent/service intersection on the OWD/sharing axis. When
+      // the principal acts on behalf of a user, the owner-match and record
+      // shares are IDENTITY-scoped — so we re-run the visibility filter under
+      // the DELEGATOR's own identity + depth (stashed by plugin-security as
+      // `__delegatorReadScope`) and AND it in. The delegated principal then
+      // sees only rows BOTH identities may see (an over-privileged agent can
+      // never exceed the user it stands in for). Non-delegated path unchanged.
+      if (exec?.onBehalfOf?.userId) {
+        const delFilter = await service.buildReadFilter(ctx.object, {
+          ...exec,
+          userId: exec.onBehalfOf.userId,
+          onBehalfOf: undefined,
+          __readScope: exec.__delegatorReadScope,
+        });
+        filter = composeAnd(filter, delFilter);
+      }
       if (filter) {
         const ast: any = ctx.ast ?? {};
         ast.where = composeAnd(ast.where, filter);
@@ -337,7 +353,17 @@ export function buildSharingMiddleware(service: SharingService): EngineMiddlewar
       const options: any = ctx.options;
       const id = inferTargetId(data, options);
       if (id != null) {
-        const ok = await service.canEdit(ctx.object, String(id), exec ?? {});
+        let ok = await service.canEdit(ctx.object, String(id), exec ?? {});
+        // [ADR-0090 D10] The delegator must ALSO be able to edit the row — an
+        // on-behalf-of write may only touch rows the delegator could touch.
+        if (ok && exec?.onBehalfOf?.userId) {
+          ok = await service.canEdit(ctx.object, String(id), {
+            ...exec,
+            userId: exec.onBehalfOf.userId,
+            onBehalfOf: undefined,
+            __writeScope: exec.__delegatorWriteScope,
+          });
+        }
         if (!ok) {
           const err: any = new Error(
             `FORBIDDEN: insufficient privileges to ${op} ${ctx.object} ${id}`,
