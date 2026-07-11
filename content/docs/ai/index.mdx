@@ -20,7 +20,7 @@ AI in ObjectStack is a **cross-protocol capability layer**: agents, tools, and k
 - **Knowledge & RAG → the Knowledge Protocol + adapter plugins** (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) — permission-aware retrieval over your own objects.
 - **Agents, tools, skills → typed metadata** (`defineAgent` / `defineTool` / `defineSkill`) plus the Model Registry. Author them as source (`*.agent.ts`, `*.tool.ts`, …) with your own AI coding agent (Claude Code, Cursor), aided by the ObjectStack [skills](/docs/ai/skills-reference) and MCP introspection.
 
-The **cloud / Enterprise** tier adds an in-product chat *runtime* on top of these same primitives — the `ask` data-query assistant, the `build` Studio authoring assistant, and the `/api/v1/ai/*` chat endpoints (`@objectstack/service-ai`, cloud [ADR-0025](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md)). The open edition has no built-in in-product chat.
+The **cloud / Enterprise** tier adds an in-product chat *runtime* on top of these same primitives — the `ask` data-query assistant, the `build` Studio authoring assistant, and the `/api/v1/ai/*` chat endpoints (`@objectstack/service-ai`, cloud [ADR-0025](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md)). The open edition has no built-in in-product chat — that runtime is documented in the [cloud AI & Agents docs](https://docs.objectos.app/docs/ai).
 </Callout>
 
 ## What's in this module
