@@ -14,15 +14,25 @@
  * `ImportProtocolLike` whose `createData` drives `auth.api.createUser`.
  *
  * Password policies:
- *  - `invite`     — every row needs a reachable identity. Accounts are created
- *                   with a random throwaway password the user never sees, then
- *                   a "set your password" invitation goes out per created
- *                   account: a reset-password email for rows with a REAL
- *                   email (requires a wired EmailService), or — #2780 — an
- *                   invitation SMS for phone-only rows (requires a wired,
+ *  - `none`       — THE DEFAULT. No password is set at all: better-auth
+ *                   creates the account without a credential record, and the
+ *                   user's first sign-in is channel-based (phone OTP, magic
+ *                   link, or an email reset link). The Console already
+ *                   detects credential-less accounts (`hasLocalPassword()`)
+ *                   and offers `set-initial-password`, so users are nudged to
+ *                   set a password after their first OTP sign-in. Import's
+ *                   job is identity — credentials are the auth domain's.
+ *  - `invite`     — like `none` (credential-less creation; better-auth's
+ *                   reset-password creates the credential account on first
+ *                   set), plus a "set your password" invitation goes out per
+ *                   created account: a reset-password email for rows with a
+ *                   REAL email (requires a wired EmailService), or — #2780 —
+ *                   an invitation SMS for phone-only rows (requires a wired,
  *                   deliverable SmsService + the phoneNumber plugin; the user
  *                   first signs in via phone OTP and then sets a password).
- *  - `temporary`  — each created account gets a generated temporary password,
+ *                   Rows are validated per-channel reachability.
+ *  - `temporary`  — the no-infrastructure fallback (no email, no SMS): each
+ *                   created account gets a generated temporary password,
  *                   `must_change_password` is stamped (403 PASSWORD_EXPIRED
  *                   until changed), and the passwords are returned ONCE in the
  *                   HTTP response, one per row. Never persisted, never logged.
@@ -95,7 +105,7 @@ interface RowIdentity {
 function resolveRowIdentity(
   row: Record<string, any>,
   opts: {
-    policy: 'invite' | 'temporary';
+    policy: 'none' | 'invite' | 'temporary';
     phoneEnabled: boolean;
     emailInviteOk: boolean;
     smsInviteOk: boolean;
@@ -162,9 +172,12 @@ export async function runAdminImportUsers(
   });
 
   // ── Request-level validation ─────────────────────────────────────────
-  const policy = body?.passwordPolicy;
-  if (policy !== 'invite' && policy !== 'temporary') {
-    return fail(400, 'invalid_request', 'passwordPolicy must be "invite" or "temporary"');
+  // Default policy: `none` — import provisions identity, not credentials.
+  // Users first sign in via a channel (phone OTP / magic link / reset link)
+  // and the Console's hasLocalPassword() flow nudges them to set a password.
+  const policy = body?.passwordPolicy === undefined ? 'none' : body.passwordPolicy;
+  if (policy !== 'none' && policy !== 'invite' && policy !== 'temporary') {
+    return fail(400, 'invalid_request', 'passwordPolicy must be "none" (default), "invite", or "temporary"');
   }
   const mode = body?.mode === 'upsert' ? 'upsert' : body?.mode === 'insert' || body?.mode === undefined ? 'insert' : undefined;
   if (!mode) return fail(400, 'invalid_request', 'mode must be "insert" or "upsert"');
@@ -254,7 +267,7 @@ export async function runAdminImportUsers(
       const data: Record<string, any> = args?.data ?? {};
       const email: string = typeof data.email === 'string' && data.email.length > 0
         ? data.email
-        : generatePlaceholderEmail(); // temporary policy only — invite rows were validated to carry one
+        : generatePlaceholderEmail(); // phone-only rows (none/temporary, or invite via SMS)
       const placeholder = !(typeof data.email === 'string' && data.email.length > 0);
       const phone: string | undefined = typeof data.phone_number === 'string' && data.phone_number.length > 0 ? data.phone_number : undefined;
       const name: string = typeof data.name === 'string' && data.name.trim().length > 0
@@ -262,16 +275,17 @@ export async function runAdminImportUsers(
         : placeholder ? (phone as string) : email.split('@')[0];
       const role: string | undefined = typeof data.role === 'string' && data.role.length > 0 ? data.role : undefined;
 
-      // Both policies create with a generated password: `temporary` hands it
-      // to the caller; `invite` throws it away (the user sets their own via
-      // the reset link) — the account is never password-less.
-      const password = generateTemporaryPassword();
+      // Only the `temporary` policy sets a password. `none`/`invite` create
+      // credential-less accounts (better-auth: omitted password → no
+      // credential record); the credential is minted later by the user via
+      // set-initial-password / the reset flow, which creates it on demand.
+      const password = policy === 'temporary' ? generateTemporaryPassword() : undefined;
 
       const created = await authApi.createUser({
         body: {
           email,
           name,
-          password,
+          ...(password ? { password } : {}),
           ...(role ? { role } : {}),
           ...(phone ? { data: { phoneNumber: phone } } : {}),
         },
@@ -280,16 +294,17 @@ export async function runAdminImportUsers(
       if (!id) throw Object.assign(new Error('better-auth returned no user id'), { code: 'CREATE_FAILED' });
 
       if (policy === 'temporary') {
-        temporaryPasswords.set(id, password);
+        temporaryPasswords.set(id, password as string);
         try {
           await engine.update('sys_user', { id, must_change_password: true }, { context: SYSTEM_CTX } as any);
           deps.noteMustChangePasswordIssued();
         } catch (e) {
           deps.logger?.warn(`[AuthPlugin] import-users: failed to stamp must_change_password for ${id}: ${(e as Error)?.message ?? e}`);
         }
-      } else {
+      } else if (policy === 'invite') {
         createdEmails.set(id, { email, placeholder, ...(phone ? { phone } : {}) });
       }
+      // `none`: nothing else to do — identity only.
       return { id };
     },
 

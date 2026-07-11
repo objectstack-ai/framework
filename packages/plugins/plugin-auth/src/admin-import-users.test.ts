@@ -64,11 +64,26 @@ function expectNoPasswordLeak(m: ReturnType<typeof makeDeps>, passwords: string[
 }
 
 describe('runAdminImportUsers — request validation', () => {
-  it('rejects a missing/invalid passwordPolicy', async () => {
+  it('rejects an unknown passwordPolicy', async () => {
     const m = makeDeps();
-    const res = await runAdminImportUsers(m.deps, makeRequest({ format: 'json', rows: [] }), ACTOR);
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'plaintext', format: 'json', rows: [] }),
+      ACTOR,
+    );
     expect(res.status).toBe(400);
     expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it('defaults to the none policy when passwordPolicy is omitted', async () => {
+    const m = makeDeps();
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ format: 'json', rows: [{ email: 'a@b.co' }] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    expect((res.body.data as any).summary.passwordPolicy).toBe('none');
   });
 
   it('rejects matchBy phone when the phoneNumber plugin is off', async () => {
@@ -171,6 +186,52 @@ describe('runAdminImportUsers — row validation (also on dryRun)', () => {
       ACTOR,
     );
     expect((res2.body.data as any).rows[0].code).toBe('INVALID_PHONE');
+  });
+});
+
+describe('runAdminImportUsers — none policy (default: identity only, no credentials)', () => {
+  it('creates credential-less accounts: no password sent to better-auth, no stamps, no invitations', async () => {
+    const m = makeDeps({ phoneEnabled: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'none', format: 'json',
+        rows: [
+          { email: 'a@x.co', name: 'A' },
+          { phone_number: '+8613800000001', name: 'B' },
+        ],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(data.summary.passwordPolicy).toBe('none');
+
+    // better-auth receives NO password key at all → credential-less account.
+    for (const call of m.createUser.mock.calls) {
+      expect('password' in call[0].body).toBe(false);
+    }
+    // Phone-only row still gets a placeholder email.
+    expect(m.createUser.mock.calls[1][0].body.email).toMatch(/@placeholder\.invalid$/);
+
+    // No must_change_password stamps, no temporary passwords, no invitations.
+    expect(m.update.mock.calls.filter((c) => c[1]?.must_change_password === true).length).toBe(0);
+    expect(m.noteMustChangePasswordIssued).not.toHaveBeenCalled();
+    expect(data.rows.every((r: any) => r.temporaryPassword === undefined)).toBe(true);
+    expect(m.requestPasswordReset).not.toHaveBeenCalled();
+    expect(m.sendInviteSms).not.toHaveBeenCalled();
+  });
+
+  it('does not require an email or SMS service (unlike invite)', async () => {
+    const m = makeDeps({ emailAvailable: false, smsInviteAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'none', format: 'json', rows: [{ email: 'a@b.co' }] }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    expect((res.body.data as any).summary.created).toBe(1);
   });
 });
 
