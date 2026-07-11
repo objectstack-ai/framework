@@ -683,12 +683,17 @@ SSO-onboarded users who never had a local password.
 generic data import (`rows[]` / `csv` / `xlsxBase64`, `dryRun`), but writes
 every row through better-auth so the accounts are login-capable:
 
-- `passwordPolicy: 'invite'` — rows need a reachable identity: a real email
-  (invitation goes out as a set-your-password email; requires an email
-  service) or, for phone-only rows, a wired SMS service (invitation SMS +
-  phone-OTP first sign-in).
-- `passwordPolicy: 'temporary'` — per-row generated temporary passwords,
-  returned once in the response, with `mustChangePassword` enforced.
+- `passwordPolicy: 'none'` (**default**) — identity only: accounts are created
+  without a credential record. Users first sign in through a channel (phone
+  OTP, magic link, or a password-reset link) and the Console detects the
+  missing password (`hasLocalPassword()`) and offers set-initial-password.
+- `passwordPolicy: 'invite'` — `none` plus an invitation per created account:
+  rows need a reachable identity — a real email (set-your-password email;
+  requires an email service) or, for phone-only rows, a wired SMS service
+  (invitation SMS + phone-OTP first sign-in).
+- `passwordPolicy: 'temporary'` — the no-infrastructure fallback (no email,
+  no SMS): per-row generated temporary passwords, returned once in the
+  response, with `mustChangePassword` enforced.
 - `mode: 'insert' | 'upsert'` with `matchBy: 'email' | 'phone'`. Upsert
   updates only touch profile fields (`name`, `phone_number`, `role`) — a
   re-imported file can never modify an existing user's email or reset their
