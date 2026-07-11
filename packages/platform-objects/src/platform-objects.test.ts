@@ -14,6 +14,7 @@ import {
   SysOrganization,
   SysScimProvider,
   SysSession,
+  SysSsoProvider,
   SysTeam,
   SysTeamMember,
   SysTwoFactor,
@@ -171,6 +172,23 @@ describe('@objectstack/platform-objects', () => {
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('delete');
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('update');
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('create');
+    });
+
+    it('SysSsoProvider request_domain_verification resultDialog paths address the inner data payload (no `data.` prefix)', () => {
+      // The console action runtime unwraps the `{ success, data }` envelope
+      // before resolving resultDialog field paths (same as create_user,
+      // two-factor and OAuth). These paths must therefore be relative to the
+      // INNER data — a `data.` prefix double-nests and blanks the dialog.
+      // Regression guard for the "temporary password / DNS record shows empty"
+      // class of bug.
+      const action = (SysSsoProvider.actions ?? []).find(
+        (a) => a.target === '/api/v1/auth/admin/sso/request-domain-verification',
+      );
+      expect(action?.resultDialog?.fields?.map((f) => f.path)).toEqual([
+        'dnsRecordType',
+        'dnsRecordName',
+        'dnsRecordValue',
+      ]);
     });
   });
 

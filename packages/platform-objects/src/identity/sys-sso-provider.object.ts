@@ -132,9 +132,13 @@ export const SysSsoProvider = ObjectSchema.create({
       // for a one-time DNS-TXT challenge and reveals the ready-to-paste record
       // ONCE via `resultDialog`. Routed through the env bridge (plugin-auth /
       // cloud AuthProxyPlugin) which reshapes the `{domainVerificationToken}`
-      // response into the `{ data: { dnsRecordName, dnsRecordValue } }` envelope
-      // the dialog reads. When the feature is OFF the bridge returns a clear
-      // "not enabled for this environment" error instead of a bare 404.
+      // response into a `{ success, data: { dnsRecordName, dnsRecordValue } }`
+      // envelope. The console action runtime unwraps that envelope, so the
+      // `resultDialog` field paths are relative to the inner `data` payload
+      // (`dnsRecordName`, not `data.dnsRecordName`) — consistent with every
+      // other object's resultDialog (create_user, two-factor, OAuth). When the
+      // feature is OFF the bridge returns a clear "not enabled for this
+      // environment" error instead of a bare 404.
       target: '/api/v1/auth/admin/sso/request-domain-verification',
       params: [
         { name: 'providerId', field: 'provider_id', defaultFromRow: true, required: true },
@@ -146,9 +150,9 @@ export const SysSsoProvider = ObjectSchema.create({
           'Add the DNS TXT record below at your domain’s DNS provider, then run “Verify Domain”. The token is shown once.',
         acknowledge: 'Done',
         fields: [
-          { path: 'data.dnsRecordType', label: 'Record type', format: 'text' },
-          { path: 'data.dnsRecordName', label: 'Name / Host', format: 'secret' },
-          { path: 'data.dnsRecordValue', label: 'Value', format: 'secret' },
+          { path: 'dnsRecordType', label: 'Record type', format: 'text' },
+          { path: 'dnsRecordName', label: 'Name / Host', format: 'secret' },
+          { path: 'dnsRecordValue', label: 'Value', format: 'secret' },
         ],
       },
     },
