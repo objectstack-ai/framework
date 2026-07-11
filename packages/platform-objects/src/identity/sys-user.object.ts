@@ -77,15 +77,17 @@ export const SysUser = ObjectSchema.create({
     // These actions hit /api/v1/auth/admin/* endpoints that are only
     // wired when `auth.plugins.admin` is enabled. When the plugin is
     // disabled the actions still render (schema is static) but server
-    // returns 404. UI surfaces them under the row menu so platform
-    // admins can manage accounts without dropping to SQL or
+    // returns 404. UI surfaces them under the row menu AND the
+    // record-detail header (`record_header`, overflowing into the ⋯
+    // "More" menu) so platform admins can manage an account from either
+    // the Users list or an open user record — without dropping to SQL or
     // a custom Setup wizard.
     {
       name: 'ban_user',
       label: 'Ban User',
       icon: 'ban',
       variant: 'danger',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/ban-user',
       recordIdParam: 'userId',
@@ -101,7 +103,7 @@ export const SysUser = ObjectSchema.create({
       label: 'Unban User',
       icon: 'check-circle-2',
       variant: 'secondary',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/unban-user',
       recordIdParam: 'userId',
@@ -116,7 +118,7 @@ export const SysUser = ObjectSchema.create({
       label: 'Unlock Account',
       icon: 'lock-open',
       variant: 'secondary',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/unlock-user',
       recordIdParam: 'userId',
@@ -185,7 +187,7 @@ export const SysUser = ObjectSchema.create({
       label: 'Set Password',
       icon: 'key-round',
       variant: 'secondary',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       // #2766 V1 — same path as better-auth's stock route, but served by the
       // plugin-auth wrapper registered ahead of the catch-all: it accepts the
@@ -228,7 +230,7 @@ export const SysUser = ObjectSchema.create({
       label: 'Set Platform Role',
       icon: 'shield-check',
       variant: 'secondary',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/set-role',
       recordIdParam: 'userId',
@@ -243,7 +245,7 @@ export const SysUser = ObjectSchema.create({
       label: 'Impersonate User',
       icon: 'user-cog',
       variant: 'secondary',
-      locations: ['list_item'],
+      locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/impersonate-user',
       recordIdParam: 'userId',
