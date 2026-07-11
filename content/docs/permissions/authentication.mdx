@@ -713,6 +713,12 @@ every row through better-auth so the accounts are login-capable:
 - Synchronous only, at most 500 rows per request (password hashing is
   CPU-bound); split larger files into batches. Imports are not undoable.
 
+In the Console, platform admins reach this from the **Users list → Import**
+toolbar button (shown when the admin plugin is enabled). The import wizard
+uploads a CSV/Excel file, maps columns, previews with a dry-run, and — for
+the `temporary` policy — reveals the generated passwords once with a
+download, splitting files above 500 rows into batches automatically.
+
 ---
 
 ## Client Integration
@@ -836,7 +842,7 @@ All endpoints are available under `/api/v1/auth/*`:
 
 - `POST /api/v1/auth/admin/create-user` - Create a login-capable account (optional one-time temporary password + forced change)
 - `POST /api/v1/auth/admin/set-user-password` - Set/reset a user's password (also provisions a credential for SSO-onboarded users)
-- `POST /api/v1/auth/admin/import-users` - Bulk import users (CSV/JSON/XLSX; invite or temporary password policy; ≤500 rows, dry-run supported)
+- `POST /api/v1/auth/admin/import-users` - Bulk import users (CSV/JSON/XLSX; `none` (default) / `invite` / `temporary` password policy; ≤500 rows, dry-run supported)
 - `POST /api/v1/auth/admin/unlock-user` - Clear a brute-force lockout early
 
 For complete API documentation, see the [Better-Auth API Reference](https://www.better-auth.com/docs).
