@@ -1,5 +1,15 @@
 # @objectstack/service-cache
 
+## 14.5.0
+
+### Patch Changes
+
+- Updated dependencies [526805e]
+- Updated dependencies [33ebd34]
+  - @objectstack/spec@14.5.0
+  - @objectstack/core@14.5.0
+  - @objectstack/observability@14.5.0
+
 ## 14.4.0
 
 ### Patch Changes

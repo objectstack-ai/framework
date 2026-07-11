@@ -1,5 +1,15 @@
 # @objectstack/console
 
+## 14.5.0
+
+### Patch Changes
+
+- 6da03ee: Console (objectui) refreshed to `5da9905b30fc`. Frontend changes in this range:
+
+  - fix(plugin-form): honor userActions.edit on managed objects, don't blanket-disable fields (ADR-0092 D4) (#2395)
+
+  objectui range: `6fa8e6aeb67c...5da9905b30fc`
+
 ## 14.4.0
 
 ## 14.3.0

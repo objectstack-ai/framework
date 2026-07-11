@@ -1,5 +1,15 @@
 # @objectstack/driver-sql
 
+## 14.5.0
+
+### Patch Changes
+
+- Updated dependencies [526805e]
+- Updated dependencies [33ebd34]
+  - @objectstack/spec@14.5.0
+  - @objectstack/core@14.5.0
+  - @objectstack/types@14.5.0
+
 ## 14.4.0
 
 ### Minor Changes

@@ -1,5 +1,72 @@
 # @objectstack/cli
 
+## 14.5.0
+
+### Minor Changes
+
+- 526805e: ADR-0057 data-lifecycle follow-ups (#2834): the per-plugin retention sweepers are retired, telemetry separation goes live in dev, and the lifecycle contract reaches the Studio.
+
+  - **BREAKING (ships as minor per the launch-window convention)**: `JobRunRetention` / `NotificationRetention` and the `retentionDays` / `retentionSweepMs` options on `JobServicePlugin` / `MessagingServicePlugin` are removed. The platform LifecycleService enforces the same windows from the `lifecycle` declarations (`sys_job_run` 30d, notification pipeline 90d); tune them at runtime via the `lifecycle` settings namespace (`retention_overrides`, tenant-scoped).
+  - **Fix**: `sys_automation_run` no longer declares a blanket 30d lifecycle retention — that table interleaves live SUSPENDED runs (an approval may stay paused for months) with terminal history, and a blanket age reap could strand in-flight approvals. Bounding stays with the automation store's terminal-only sweep.
+  - **CLI**: `objectstack dev` now provisions a dedicated `telemetry` datasource (`<primary>.telemetry.db`) for file-backed SQLite primaries, so lifecycle-classed system data stops sharing the business dev DB (`OS_TELEMETRY_DB=0` opts out; `OS_TELEMETRY_DB=<path>` opts in anywhere). New `os db clean` runs the one-time `VACUUM` that lets legacy files adopt `auto_vacuum=INCREMENTAL` and reports reclaimed bytes.
+  - **Studio**: the object metadata form exposes the `lifecycle` block (class + retention/TTL/rotation/archive/reclaim); metadata-forms i18n bundles regenerated with curated zh-CN translations.
+
+### Patch Changes
+
+- Updated dependencies [526805e]
+- Updated dependencies [6da03ee]
+- Updated dependencies [a348394]
+- Updated dependencies [5bced2f]
+- Updated dependencies [33ebd34]
+- Updated dependencies [6da03ee]
+- Updated dependencies [e2c05d6]
+- Updated dependencies [6da03ee]
+  - @objectstack/spec@14.5.0
+  - @objectstack/service-job@14.5.0
+  - @objectstack/service-messaging@14.5.0
+  - @objectstack/service-automation@14.5.0
+  - @objectstack/platform-objects@14.5.0
+  - @objectstack/console@14.5.0
+  - @objectstack/plugin-auth@14.5.0
+  - @objectstack/objectql@14.5.0
+  - @objectstack/plugin-hono-server@14.5.0
+  - @objectstack/account@14.5.0
+  - @objectstack/setup@14.5.0
+  - @objectstack/client@14.5.0
+  - @objectstack/cloud-connection@14.5.0
+  - @objectstack/core@14.5.0
+  - @objectstack/formula@14.5.0
+  - @objectstack/lint@14.5.0
+  - @objectstack/mcp@14.5.0
+  - @objectstack/observability@14.5.0
+  - @objectstack/driver-memory@14.5.0
+  - @objectstack/driver-mongodb@14.5.0
+  - @objectstack/driver-sql@14.5.0
+  - @objectstack/driver-sqlite-wasm@14.5.0
+  - @objectstack/plugin-approvals@14.5.0
+  - @objectstack/plugin-audit@14.5.0
+  - @objectstack/plugin-email@14.5.0
+  - @objectstack/plugin-reports@14.5.0
+  - @objectstack/plugin-security@14.5.0
+  - @objectstack/plugin-sharing@14.5.0
+  - @objectstack/plugin-webhooks@14.5.0
+  - @objectstack/rest@14.5.0
+  - @objectstack/runtime@14.5.0
+  - @objectstack/service-analytics@14.5.0
+  - @objectstack/service-cache@14.5.0
+  - @objectstack/service-datasource@14.5.0
+  - @objectstack/service-package@14.5.0
+  - @objectstack/service-queue@14.5.0
+  - @objectstack/service-realtime@14.5.0
+  - @objectstack/service-settings@14.5.0
+  - @objectstack/service-sms@14.5.0
+  - @objectstack/service-storage@14.5.0
+  - @objectstack/trigger-api@14.5.0
+  - @objectstack/trigger-record-change@14.5.0
+  - @objectstack/trigger-schedule@14.5.0
+  - @objectstack/types@14.5.0
+  - @objectstack/verify@14.5.0
+
 ## 14.4.0
 
 ### Patch Changes
