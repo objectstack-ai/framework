@@ -49,6 +49,20 @@ export interface DispatcherPluginConfig {
     enforceProjectMembership?: boolean;
 
     /**
+     * Reject anonymous requests to `auth: true` service routes (AI, etc.) with
+     * HTTP 401, mirroring the REST API's `requireAuth` gate. Must match the
+     * REST plugin's `api.requireAuth` so `/ai` and `/meta` stay in lockstep
+     * with `/data` — otherwise the AI routes' declared `auth: true` contract is
+     * never enforced and anonymous callers reach adapter/model status routes.
+     *
+     * Defaults to `false` (backward-compatible: previously nothing enforced
+     * `RouteDefinition.auth` here). Hosts pass their `api.requireAuth` through —
+     * the framework `serve` command and the cloud apps do so from the same
+     * stack `api` config the REST plugin reads.
+     */
+    requireAuth?: boolean;
+
+    /**
      * Security response headers. When provided, every response routed
      * through this plugin gets the headers merged in (route-specific
      * headers still win on conflict).
@@ -99,6 +113,10 @@ interface RouteDefinition {
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
     path: string;
     description: string;
+    /** Whether this route requires authentication (default: true). */
+    auth?: boolean;
+    /** Required permissions for accessing this route. */
+    permissions?: string[];
     handler: (req: any) => Promise<any>;
 }
 
@@ -112,6 +130,7 @@ function mountRouteOnServer(
     routePath: string,
     securityHeaders?: Record<string, string>,
     resolveUser?: (headers: Record<string, any>) => Promise<any | undefined>,
+    requireAuth = false,
 ): boolean {
     const handler = async (req: any, res: any) => {
         try {
@@ -124,8 +143,26 @@ function mountRouteOnServer(
                 try {
                     user = await resolveUser(req.headers ?? {});
                 } catch {
-                    /* fall through anonymous — route's `auth: true` guard runs separately */
+                    /* fall through anonymous — enforced just below */
                 }
+            }
+
+            // Enforce the route's declared `auth` contract. This used to be
+            // assumed to run "separately"/upstream, but nothing did: an
+            // anonymous caller reached `auth: true` handlers (e.g.
+            // `GET /ai/status`) and got adapter/model config back. Gate here
+            // when the deployment requires auth. Off (or `auth: false`) → the
+            // handler runs as before.
+            if (requireAuth && route.auth !== false && !user) {
+                res.status(401);
+                if (securityHeaders) {
+                    for (const [k, v] of Object.entries(securityHeaders)) res.header(k, v);
+                }
+                res.json({
+                    error: 'unauthenticated',
+                    message: 'Authentication is required to access this endpoint.',
+                });
+                return;
             }
 
             const result = await route.handler({
@@ -377,8 +414,15 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // Tests / single-tenant deploys can opt out via the explicit flag.
             const enforceMembership =
                 config.enforceProjectMembership ?? (config.scoping?.enableProjectScoping ?? false);
+            // Secure-by-default alignment with the REST plugin's `requireAuth`.
+            // The cloud apps pass the whole stack `api` block as `scoping`
+            // (which carries `requireAuth`), so honour it there too; an explicit
+            // top-level `requireAuth` wins. Off → unchanged (routes stay open).
+            const requireAuth =
+                config.requireAuth ?? (config.scoping as { requireAuth?: boolean } | undefined)?.requireAuth ?? false;
             const dispatcher = new HttpDispatcher(kernel, undefined, {
                 enforceProjectMembership: enforceMembership,
+                requireAuth,
             });
             const prefix = config.prefix || '/api/v1';
 
@@ -1095,11 +1139,11 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 let count = 0;
                 if (enableProjectScoping && projectResolution === 'required') {
-                    if (mountRouteOnServer(route, server, toScopedPath(routePath), securityHeaders, resolveRequestUser)) count++;
+                    if (mountRouteOnServer(route, server, toScopedPath(routePath), securityHeaders, resolveRequestUser, requireAuth)) count++;
                 } else {
-                    if (mountRouteOnServer(route, server, routePath, securityHeaders, resolveRequestUser)) count++;
+                    if (mountRouteOnServer(route, server, routePath, securityHeaders, resolveRequestUser, requireAuth)) count++;
                     if (enableProjectScoping) {
-                        if (mountRouteOnServer(route, server, toScopedPath(routePath), securityHeaders, resolveRequestUser)) count++;
+                        if (mountRouteOnServer(route, server, toScopedPath(routePath), securityHeaders, resolveRequestUser, requireAuth)) count++;
                     }
                 }
                 return count;

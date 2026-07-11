@@ -126,6 +126,14 @@ export interface HttpDispatcherOptions {
      * called on every scoped request so idle projects are evicted after TTL.
      */
     scopeManager?: EnvironmentScopeManager;
+    /**
+     * Reject anonymous requests to `auth: true` service routes (AI) and to the
+     * metadata catch-all with HTTP 401, mirroring the REST API's `requireAuth`
+     * gate. Matches {@link DispatcherPluginConfig.requireAuth}; the dispatcher
+     * plugin threads the host's `api.requireAuth` here. Defaults to `false`
+     * (backward-compatible — nothing enforced `RouteDefinition.auth` before).
+     */
+    requireAuth?: boolean;
 }
 
 /**
@@ -155,6 +163,12 @@ export class HttpDispatcher {
      */
     private enforceMembership: boolean;
     /**
+     * When `true`, `auth: true` AI routes and the metadata catch-all reject
+     * anonymous callers with 401 (mirrors the REST `requireAuth` gate). Set
+     * from {@link HttpDispatcherOptions.requireAuth}. Defaults to `false`.
+     */
+    private requireAuth: boolean;
+    /**
      * In-memory cache of positive membership checks, keyed by
      * `${environmentId}:${userId}`. Entries expire 60 seconds after insertion
      * — a short TTL is acceptable because a user whose access was just
@@ -180,6 +194,7 @@ export class HttpDispatcher {
             try { return (kernel as any).getService?.(name); } catch { return undefined; }
         };
         this.enforceMembership = options?.enforceProjectMembership ?? true;
+        this.requireAuth = options?.requireAuth ?? false;
         // ADR-0006 kernel-resolution seam — the host's resolver owns env
         // resolution + kernel selection. Optional service so single-environment
         // hosts that register none are unchanged.
@@ -1565,8 +1580,22 @@ export class HttpDispatcher {
      * Fallback for backward compat: /metadata (all objects), /metadata/:objectName (get object)
      */
     async handleMetadata(path: string, _context: HttpProtocolContext, method?: string, body?: any, query?: any): Promise<HttpDispatcherResult> {
+        // Defense-in-depth: the metadata catch-all must honour the same
+        // `requireAuth` gate as the REST `/meta` routes (which serve `/meta` on
+        // the cloud runtime). Object/field schemas — SYSTEM-object schemas on a
+        // tenant-less host — must not be readable by anonymous callers when the
+        // deployment requires auth. No-op when `requireAuth` is off.
+        if (this.requireAuth) {
+            const ec: any = _context.executionContext;
+            if (!ec?.userId && !ec?.isSystem) {
+                return {
+                    handled: true,
+                    response: this.error('Authentication is required to access this endpoint.', 401, { code: 'unauthenticated' }),
+                };
+            }
+        }
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
-        
+
         // GET /metadata/types
         if (parts[0] === 'types') {
             // PRIORITY 1: Try protocol service — it returns BOTH legacy
@@ -3589,7 +3618,7 @@ export class HttpDispatcher {
 
         // Try to get route definitions from the AI service's cached routes
         const routes = (this.kernel as any).__aiRoutes as Array<{
-            method: string; path: string; handler: (req: any) => Promise<any>;
+            method: string; path: string; handler: (req: any) => Promise<any>; auth?: boolean;
         }> | undefined;
 
         if (!routes) {
@@ -3607,12 +3636,30 @@ export class HttpDispatcher {
             const params = matchRoute(route.path, fullPath);
             if (params === null) continue;
 
+            // Enforce the route's declared `auth` contract. Nothing upstream
+            // does: `enforceAuthGate` only covers ADR-0069 password/MFA gates
+            // and `enforceProjectMembership` bails when the request is
+            // anonymous or unscoped — so without this an anonymous caller
+            // reached `auth: true` handlers (e.g. GET /ai/status) and got the
+            // adapter/model config back. Gate when the deployment requires
+            // auth; an authenticated user (or an internal system context)
+            // passes, matching the REST `enforceAuth` seam. Off → unchanged.
+            if (this.requireAuth && route.auth !== false) {
+                const gec: any = context.executionContext;
+                if (!gec?.userId && !gec?.isSystem) {
+                    return {
+                        handled: true,
+                        response: this.error('Authentication is required to access this endpoint.', 401, { code: 'unauthenticated' }),
+                    };
+                }
+            }
+
             // Resolve `req.user` from the already-resolved ExecutionContext so
             // AI route handlers can attribute the call to the authenticated
             // actor (drives auto-titled conversations, permission-aware
             // tools, HITL conversation linkage, …). Falls back to undefined
-            // for anonymous requests — the route's own `auth: true` guard
-            // is enforced by upstream middleware.
+            // for anonymous requests (only reachable when the deployment does
+            // NOT require auth — the gate above rejects them otherwise).
             const ec: any = context.executionContext;
             // `ai_seat` is synthesized into ec.permissions by resolveExecutionContext
             // (the single, scope-correct source — security/resolve-execution-context.ts),

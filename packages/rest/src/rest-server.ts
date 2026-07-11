@@ -1935,9 +1935,54 @@ export class RestServer {
     }
     
     /**
-     * Register metadata endpoints
+     * Register the metadata routes behind the SAME `requireAuth` gate the
+     * `/data` routes use.
+     *
+     * `registerMetadataEndpoints` builds ~17 `/meta/*` routes but — unlike the
+     * `/data` handlers — never calls {@link enforceAuth}: its handlers assumed
+     * the `requireAuth` gate rejected anonymous callers "upstream", yet nothing
+     * upstream covers `/meta`, so on a `requireAuth` deployment an anonymous
+     * caller could read object / field schemas. On a tenant-less runtime host
+     * those are SYSTEM-object schemas and the host is publicly reachable — a
+     * real leak.
+     *
+     * Rather than add the gate to every handler (and have the next new route
+     * forget it — the exact failure mode that caused this), wrap the route
+     * registrar for the duration of registration so every meta route, present
+     * and future, inherits it. The check is a no-op when `requireAuth` is off
+     * (demo / single-tenant), so the previously-public metadata surface there
+     * is unchanged; an authenticated user passes exactly as on `/data`.
      */
     private registerMetadataEndpoints(basePath: string): void {
+        const realRouteManager = this.routeManager;
+        const guardedRouteManager = {
+            register: (entry: { handler: unknown; [k: string]: unknown }) => {
+                const inner = entry.handler;
+                if (typeof inner !== 'function') return realRouteManager.register(entry as any);
+                return realRouteManager.register({
+                    ...entry,
+                    handler: async (req: any, res: any) => {
+                        // `req.params.environmentId` is present only on the
+                        // scoped `/environments/:id/meta/...` variant — mirrors
+                        // the `isScoped ? req.params.environmentId : undefined`
+                        // each `/data` handler derives.
+                        const environmentId = req?.params?.environmentId;
+                        const context = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+                        if (this.enforceAuth(req, res, context)) return;
+                        return (inner as (rq: any, rs: any) => unknown)(req, res);
+                    },
+                } as any);
+            },
+        } as unknown as RouteManager;
+        this.routeManager = guardedRouteManager;
+        try {
+            this.registerMetadataEndpointsInner(basePath);
+        } finally {
+            this.routeManager = realRouteManager;
+        }
+    }
+
+    private registerMetadataEndpointsInner(basePath: string): void {
         const { metadata } = this.config;
         const metaPath = `${basePath}${metadata.prefix}`;
         const isScoped = basePath.includes('/environments/:environmentId');
