@@ -322,8 +322,8 @@ export class ObjectStoreSuspendedRunStore implements SuspendedRunStore {
     let total: number | undefined = 0;
     for (const status of TERMINAL_STATUSES) {
       // ISO-8601 comparand: `created_at` is a native timestamp column, which
-      // rejects a bare epoch-ms number on Postgres (see service-messaging's
-      // NotificationRetention for the prior art this mirrors).
+      // rejects a bare epoch-ms number on Postgres (same convention as the
+      // ADR-0057 LifecycleService Reaper).
       const res = await this.engine.delete(TABLE, {
         where: { status, created_at: { $lt: cutoffIso } },
         multi: true,

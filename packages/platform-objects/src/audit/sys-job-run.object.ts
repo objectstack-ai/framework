@@ -22,8 +22,9 @@ export const SysJobRun = ObjectSchema.create({
   icon: 'play',
   isSystem: true,
   managedBy: 'append-only',
-  // ADR-0057: mirrors the JobRunRetention default (30d) so the platform
-  // LifecycleService and the plugin sweeper enforce one window.
+  // ADR-0057: run history is append-only telemetry. The platform
+  // LifecycleService is the ONE sweeper for this window (the plugin-local
+  // JobRunRetention it replaced kept the same 30d default).
   lifecycle: {
     class: 'telemetry',
     retention: { maxAge: '30d' },

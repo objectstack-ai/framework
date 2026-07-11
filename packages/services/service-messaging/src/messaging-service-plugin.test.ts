@@ -134,7 +134,7 @@ describe('MessagingServicePlugin — email/sms channel registration (kernel:read
     it('registers the sms channel when an sms service is present', async () => {
         const { ctx, fireReady } = provisionCtx();
         ctx.registerService('sms', { async send() { return { status: 'sent' }; } });
-        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+        await new MessagingServicePlugin({ reliableDelivery: false }).init(ctx);
 
         const messaging: any = ctx.getService('messaging');
         expect(messaging.getRegisteredChannels()).not.toContain('sms');
@@ -144,7 +144,7 @@ describe('MessagingServicePlugin — email/sms channel registration (kernel:read
 
     it('does NOT register the sms channel when no sms service exists', async () => {
         const { ctx, fireReady } = provisionCtx();
-        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+        await new MessagingServicePlugin({ reliableDelivery: false }).init(ctx);
         await fireReady();
         const messaging: any = ctx.getService('messaging');
         expect(messaging.getRegisteredChannels()).not.toContain('sms');
@@ -155,7 +155,7 @@ describe('MessagingServicePlugin — system table provisioning', () => {
     it('creates the inbox + receipt tables on kernel:ready', async () => {
         const { ctx, engine, synced, fireReady } = provisionCtx();
         // reliableDelivery/retention off so only the provisioning hook runs.
-        await new MessagingServicePlugin({ reliableDelivery: false, retentionDays: 0 }).init(ctx);
+        await new MessagingServicePlugin({ reliableDelivery: false }).init(ctx);
 
         // Before kernel:ready the inbox read throws the "no such table" the
         // engine logs as `Find operation failed`.

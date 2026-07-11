@@ -104,8 +104,8 @@ export type {
     DispatchCluster,
     DispatchLockHandle,
 } from './dispatcher.js';
-export { NotificationRetention, DEFAULT_RETENTION_TARGETS } from './retention.js';
-export type { NotificationRetentionOptions, RetentionTarget, PruneOutcome } from './retention.js';
+// NotificationRetention was retired (ADR-0057): the pipeline objects declare
+// `lifecycle` windows and the platform LifecycleService is the one sweeper.
 
 // Generic outbound-HTTP delivery outbox (ADR-0018 M3) — the raw-callout
 // counterpart to the notification outbox, shared by the Flow `http` node and

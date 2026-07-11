@@ -33,7 +33,8 @@ export const SysNotification = ObjectSchema.create({
   isSystem: true,
   managedBy: 'system',
   // ADR-0057: one 90d window across the whole notification pipeline
-  // (event → delivery → receipt/inbox), matching NotificationRetention.
+  // (event → delivery → receipt/inbox), enforced by the LifecycleService
+  // (the retired NotificationRetention sweeper kept the same default).
   lifecycle: {
     class: 'telemetry',
     retention: { maxAge: '90d' },

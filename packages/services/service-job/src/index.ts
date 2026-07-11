@@ -8,12 +8,5 @@ export { CronJobAdapter } from './cron-job-adapter.js';
 export type { CronJobAdapterOptions } from './cron-job-adapter.js';
 export { DbJobAdapter } from './db-job-adapter.js';
 export type { DbJobAdapterOptions, JobEngineLike, JobLoggerLike } from './db-job-adapter.js';
-export {
-  JobRunRetention,
-  DEFAULT_JOB_RUN_RETENTION_DAYS,
-  DEFAULT_JOB_RUN_SWEEP_MS,
-} from './job-run-retention.js';
-export type {
-  JobRunRetentionOptions,
-  JobRunPruneOutcome,
-} from './job-run-retention.js';
+// JobRunRetention was retired (ADR-0057): sys_job_run declares a `lifecycle`
+// window and the platform LifecycleService is the one sweeper.

@@ -160,6 +160,15 @@ fix or acceptance.**
     `AutomationServicePluginOptions.maxLogSize` (default unchanged at 1000,
     `DEFAULT_MAX_EXECUTION_LOG_SIZE`); +2 tests. Durable `sys_automation_run`-style
     persistence is deferred to the HA fast-follow (roadmap), not a GA blocker.
+- **Superseded (ADR-0057, #2786/#2834):** the plugin-local sweepers above were
+  the stop-gap. Retention is now a *declarative platform primitive*: objects
+  carry a `lifecycle` block (`sys_job_run` 30d, notification pipeline 90d) and
+  the ObjectQL-registered **LifecycleService** is the ONE sweeper —
+  `JobRunRetention` / `NotificationRetention` and their `retentionDays`
+  options were removed. Windows are tuned via the `lifecycle` settings
+  namespace (`retention_overrides`, tenant-scoped). `sys_automation_run`
+  deliberately keeps its OWN terminal-only sweep (suspended runs are live
+  resumable state; the declarative contract has no status predicate).
 - **Owner:** _______  ·  Verify ✅ (confirmed real @ `main`; scope corrected)  ·  Sign-off ☐  ·  Notes: `sys_job_run` retention is the one true fix; messaging default-flipped; automation already bounded (now tunable). Awaiting human sign-off.
 
 ### P1-3 — Graceful shutdown (mostly a false positive; one real drain bug fixed)

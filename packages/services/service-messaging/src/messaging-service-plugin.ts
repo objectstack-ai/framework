@@ -9,7 +9,6 @@ import { SqlNotificationOutbox } from './sql-outbox.js';
 import { SqlHttpOutbox } from './sql-http-outbox.js';
 import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
 import { HttpDispatcher } from './http-dispatcher.js';
-import { NotificationRetention, DEFAULT_NOTIFICATION_RETENTION_DAYS } from './retention.js';
 import { createEmailChannel } from './email-channel.js';
 import { createSmsChannel } from './sms-channel.js';
 import { NotificationTemplateStore } from './template-renderer.js';
@@ -45,21 +44,6 @@ export interface MessagingServicePluginOptions {
      * `prefix.` entry for a prefix match (default none).
      */
     mandatoryTopics?: readonly string[];
-    /**
-     * Retention window in days for the notification pipeline (ADR-0030
-     * hardening). When > 0, a periodic sweep prunes events, deliveries, inbox
-     * materializations and receipts older than this — bounding the event-log
-     * growth from high-frequency periodic flows.
-     *
-     * **Default-on** at {@link DEFAULT_NOTIFICATION_RETENTION_DAYS} as of GA
-     * (launch-readiness.md P1-2): an unbounded notification log is a slow leak,
-     * so retention ships enabled rather than opt-in. Set to `0` to disable
-     * retention entirely (notification history kept forever; operator owns
-     * cleanup). Raise/lower the number to widen/narrow the window.
-     */
-    retentionDays?: number;
-    /** Retention sweep interval in ms (default 1 hour). Only used when `retentionDays` is set. */
-    retentionSweepMs?: number;
 }
 
 /**
@@ -94,7 +78,6 @@ export class MessagingServicePlugin implements Plugin {
     private readonly options: Required<MessagingServicePluginOptions>;
     private dispatcher?: NotificationDispatcher;
     private httpDispatcher?: HttpDispatcher;
-    private retentionTimer?: ReturnType<typeof setInterval>;
 
     constructor(options: MessagingServicePluginOptions = {}) {
         this.options = {
@@ -103,8 +86,6 @@ export class MessagingServicePlugin implements Plugin {
             partitionCount: 8,
             dispatchIntervalMs: 500,
             mandatoryTopics: [],
-            retentionDays: DEFAULT_NOTIFICATION_RETENTION_DAYS,
-            retentionSweepMs: 3_600_000,
             ...options,
         };
     }
@@ -286,27 +267,13 @@ export class MessagingServicePlugin implements Plugin {
             });
         }
 
-        // Retention sweep (ADR-0030 hardening): opt-in pruning of the
-        // notification pipeline so the event log can't grow unbounded. Runs once
-        // at ready then on a low-frequency interval; the timer is unref'd so it
-        // never keeps the process alive.
-        if (this.options.retentionDays > 0 && typeof ctx.hook === 'function') {
-            ctx.hook('kernel:ready', async () => {
-                const retention = new NotificationRetention({ getData, logger: ctx.logger });
-                const days = this.options.retentionDays;
-                const sweep = () => {
-                    void retention.prune(days).catch((err) =>
-                        ctx.logger.warn(`[messaging] retention sweep failed: ${(err as Error)?.message ?? err}`),
-                    );
-                };
-                sweep();
-                this.retentionTimer = setInterval(sweep, this.options.retentionSweepMs);
-                this.retentionTimer.unref?.();
-                ctx.logger.info(
-                    `[messaging] retention on (prune > ${days}d every ${Math.round(this.options.retentionSweepMs / 1000)}s)`,
-                );
-            });
-        }
+        // Retention is owned by the platform LifecycleService (ADR-0057): the
+        // pipeline objects (sys_notification / delivery / receipt / inbox)
+        // declare one 90d `lifecycle` window and the Reaper enforces it — the
+        // plugin-local NotificationRetention sweeper this used to wire is
+        // retired (ADR-0057 §6: lifecycle is a platform primitive, owned once).
+        // Override windows per environment/tenant via the `lifecycle`
+        // settings namespace (`retention_overrides`).
 
         ctx.logger.info(
             `[messaging] service registered with channels: ${service.getRegisteredChannels().join(', ') || '(none)'}`,
@@ -354,9 +321,5 @@ export class MessagingServicePlugin implements Plugin {
         this.dispatcher = undefined;
         await this.httpDispatcher?.stop();
         this.httpDispatcher = undefined;
-        if (this.retentionTimer) {
-            clearInterval(this.retentionTimer);
-            this.retentionTimer = undefined;
-        }
     }
 }

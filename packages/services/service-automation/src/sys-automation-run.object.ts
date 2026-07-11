@@ -40,13 +40,15 @@ export const SysAutomationRun = ObjectSchema.create({
   icon: 'pause-circle',
   isSystem: true,
   managedBy: 'system',
-  // ADR-0057 (#2786 "why now"): terminal run history is append-only
-  // telemetry — bounded like sys_job_run. Suspended runs are recent by
-  // definition (SLA-bounded), so a 30d age reap cannot strand a live run.
-  lifecycle: {
-    class: 'telemetry',
-    retention: { maxAge: '30d' },
-  },
+  // ADR-0057: deliberately NO `lifecycle` block. This is a MIXED table — live
+  // suspended runs (resumable workflow state, record semantics: an approval
+  // may legitimately stay paused for months) interleaved with terminal run
+  // history (telemetry semantics). A blanket age-based retention would reap
+  // suspended runs and strand in-flight approvals; the declarative contract
+  // has no status predicate yet. Bounding is owned by the automation store's
+  // specialized default-on sweep instead (ObjectStoreSuspendedRunStore
+  // .pruneHistory, #2585): TERMINAL statuses only, by age + per-flow cap —
+  // suspended rows are never age-pruned.
   description: 'Durable automation run state: live suspended runs (resumable, ADR-0019) and terminal run history (completed / failed, for observability).',
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

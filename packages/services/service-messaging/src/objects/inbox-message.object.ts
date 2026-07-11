@@ -23,7 +23,7 @@ export const InboxMessage = ObjectSchema.create({
     pluralLabel: 'Inbox Messages',
     icon: 'inbox',
     // ADR-0057: user-facing but ephemeral — expires with the pipeline's 90d
-    // window (the same bound NotificationRetention applies when enabled).
+    // window, enforced by the platform LifecycleService.
     lifecycle: {
         class: 'transient',
         ttl: { field: 'created_at', expireAfter: '90d' },

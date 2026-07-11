@@ -1,8 +1,9 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Regression for the messaging / job retention sweeps on Postgres
- * (service-messaging `NotificationRetention`, service-job `JobRunRetention`):
+ * Regression for age-based retention sweeps on Postgres (today the ADR-0057
+ * LifecycleService Reaper; originally the retired NotificationRetention /
+ * JobRunRetention plugin sweepers, which hit this exact bug):
  *
  * The builtin `created_at` audit column is provisioned as a native `TIMESTAMP`
  * (`table.timestamp`), so a retention prune MUST filter it with an ISO-8601
