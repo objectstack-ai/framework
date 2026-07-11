@@ -83,6 +83,12 @@ the [HARDENING.md recipes](https://github.com/objectstack-ai/framework/blob/main
       checklist in HARDENING.md).
 - [ ] Cross-tenant negative tests in CI.
 - [ ] Backup / restore drill documented and tested.
+- [ ] Data-retention windows reviewed (ADR-0057): the platform's default
+      `lifecycle` declarations bound telemetry (activity 14d, job runs 30d,
+      notifications 90d, audit 90d-hot); extend per environment/tenant via
+      the `lifecycle.retention_overrides` setting **before** go-live if your
+      compliance regime needs longer, and register an `archive` datasource
+      if audit data must move to cold storage instead of being retained hot.
 
 ## What's NOT in the runtime (yet)
 

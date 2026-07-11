@@ -90,6 +90,7 @@ The core ecosystem defines several standard service contracts:
 | `auth` | `IAuthService` | `plugin-auth` |
 | `api-registry` | `ApiRegistry` | `@objectstack/core` |
 | `cache` | `ICacheService` | Redis, Memcached, or in-memory |
+| `lifecycle` | `LifecycleService` (`@objectstack/objectql`) | Registered by `ObjectQLPlugin` — enforces object `lifecycle` declarations (ADR-0057 retention/rotation/archival); call `sweep()` for an on-demand pass |
 
 The logger is not a registered service — it is exposed directly as `ctx.logger`
 (the `Logger` contract). Inter-plugin events also do not go through a service:
