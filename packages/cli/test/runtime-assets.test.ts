@@ -13,11 +13,13 @@ import os from 'os';
 import path from 'path';
 import { createRuntimeAssetsPlugin } from '../src/utils/console.js';
 
-const assetsDir = path.join(os.tmpdir(), `os-test-runtime-assets-${Date.now()}`);
+// Atomically create a uniquely-named temp dir (random suffix) instead of a
+// predictable `Date.now()` name — avoids the temp-file race/symlink attack
+// flagged by CodeQL js/insecure-temporary-file.
+const assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'os-test-runtime-assets-'));
 const testPng = path.join(assetsDir, 'test-logo.png');
 
 beforeAll(() => {
-  fs.mkdirSync(assetsDir, { recursive: true });
   fs.writeFileSync(testPng, Buffer.from('fake-png-content'));
 });
 
