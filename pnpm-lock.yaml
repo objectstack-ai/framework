@@ -749,6 +749,9 @@ importers:
         specifier: workspace:*
         version: link:../verify
     devDependencies:
+      '@objectstack/core':
+        specifier: workspace:*
+        version: link:../core
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:../plugins/driver-memory

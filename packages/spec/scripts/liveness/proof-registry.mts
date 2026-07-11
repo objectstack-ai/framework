@@ -119,6 +119,19 @@ export const HIGH_RISK_CLASSES: HighRiskClass[] = [
     ledgerBindings: [{ type: 'flow', path: 'runAs' }],
   },
   {
+    id: 'delegation',
+    label: 'Delegation of duty',
+    summary:
+      'a non-admin holder of a delegatable position may self-service a time-boxed grant that dies at valid_until (ADR-0091 D3) — the write is gated and the resolution expires, both proven end-to-end.',
+    proofId: 'delegation-of-duty',
+    proofRef: 'packages/dogfood/test/delegation-of-duty.dogfood.test.ts#delegation-of-duty',
+    bound: true,
+    // `delegatable` opens the D12 self-service branch — an authority-widening
+    // flag whose end-to-end enforcement (gated write + expiring resolution) a
+    // static consumer pointer cannot vouch for.
+    ledgerBindings: [{ type: 'position', path: 'delegatable' }],
+  },
+  {
     id: 'form-widget',
     label: 'Form layout / section / widget',
     summary: 'server-side form resolution.',

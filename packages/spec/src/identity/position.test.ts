@@ -35,6 +35,22 @@ describe('PositionSchema', () => {
     });
   });
 
+  describe('Delegation (ADR-0091 D3)', () => {
+    it('defaults delegatable to false (opt-in)', () => {
+      const parsed = PositionSchema.parse({ name: 'approver', label: 'Approver' });
+      expect(parsed.delegatable).toBe(false);
+    });
+
+    it('accepts an explicit delegatable flag', () => {
+      expect(PositionSchema.parse({ name: 'approver', label: 'Approver', delegatable: true }).delegatable).toBe(true);
+      expect(PositionSchema.parse({ name: 'approver', label: 'Approver', delegatable: false }).delegatable).toBe(false);
+    });
+
+    it('rejects a non-boolean delegatable', () => {
+      expect(() => PositionSchema.parse({ name: 'approver', label: 'Approver', delegatable: 'yes' as any })).toThrow();
+    });
+  });
+
   describe('Hierarchy', () => {
     it('should accept position without parent (top level)', () => {
       const position: Position = {

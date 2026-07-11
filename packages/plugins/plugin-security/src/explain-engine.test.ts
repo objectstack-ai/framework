@@ -140,6 +140,25 @@ describe('explainAccess (ADR-0090 D6)', () => {
     expect(d.principal.positions).not.toContain('payroll_approver');
   });
 
+  it('attributes a delegated position "via delegation from X until Y" in the principal layer (ADR-0091 D3)', async () => {
+    const d = await explainAccess(makeDeps(), {
+      object: 'leave_request', operation: 'read',
+      context: {
+        ...CTX,
+        positions: ['sales_rep', 'approver', 'everyone'],
+        delegatedPositions: [{ name: 'approver', from: 'u_boss', until: '2026-07-20T00:00:00Z' }],
+      },
+    });
+    const principal = d.layers.find((l) => l.layer === 'principal')!;
+    expect(principal.detail).toContain('held via delegation');
+    expect(principal.detail).toContain('approver from u_boss until 2026-07-20T00:00:00Z');
+    expect(principal.contributors).toContainEqual({
+      kind: 'position',
+      name: 'approver',
+      via: 'delegation from u_boss until 2026-07-20T00:00:00Z',
+    });
+  });
+
   it('lists masked fields in the fls layer', async () => {
     const d = await explainAccess(
       makeDeps({ getFieldMask: () => ({ salary: { readable: false }, name: { readable: true } }) }),
@@ -168,7 +187,28 @@ describe('buildContextForUser', () => {
       positions: ['hr_specialist', 'everyone'],
       permissions: ['payroll_reader'],
       expiredGrants: [],
+      delegatedPositions: [],
     });
+  });
+
+  it('surfaces delegation provenance for a position held via a delegated_from row (ADR-0091 D3)', async () => {
+    const NOW = Date.parse('2026-07-10T12:00:00Z');
+    const qlDelegated = {
+      async find(object: string, _opts: any) {
+        if (object === 'sys_user_position') {
+          return [
+            { user_id: 'u2', position: 'hr_specialist' },
+            { user_id: 'u2', position: 'approver', delegated_from: 'u_boss', valid_until: '2026-07-20T00:00:00Z' },
+          ];
+        }
+        return [];
+      },
+    };
+    const ctx = await buildContextForUser(qlDelegated, 'u2', NOW);
+    expect(ctx.positions).toEqual(['hr_specialist', 'approver', 'everyone']);
+    expect(ctx.delegatedPositions).toEqual([
+      { name: 'approver', from: 'u_boss', until: '2026-07-20T00:00:00Z' },
+    ]);
   });
 
   it('filters grants outside their validity window and reports them as expired (ADR-0091 D2)', async () => {

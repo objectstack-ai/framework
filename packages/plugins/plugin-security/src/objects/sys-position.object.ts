@@ -204,6 +204,18 @@ export const SysPosition = ObjectSchema.create({
       group: 'Status',
     }),
 
+    // [ADR-0091 D3] Opt-in to self-service delegation of duty (职务代理). When
+    // true, a holder may assign this position to a delegate — time-boxed,
+    // reasoned, dual-audited — without being a delegated administrator. Admin-
+    // ish positions (those distributing an adminScope set) MUST NOT set this;
+    // the D7 lint and the D12 gate reject that combination.
+    delegatable: Field.boolean({
+      label: 'Delegatable',
+      defaultValue: false,
+      description: 'ADR-0091 D3: holders may self-service delegate this position, time-boxed.',
+      group: 'Status',
+    }),
+
     // ── System ───────────────────────────────────────────────────
     // ADR-0068 D2/D3 — provenance of this row. `system` = a framework-reserved
     // built-in identity position (seeded by bootstrapBuiltinPositions); `config` =

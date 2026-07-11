@@ -46,6 +46,22 @@ export const PositionSchema = lazySchema(() => z.object({
 
   /** Description */
   description: z.string().optional(),
+
+  /**
+   * [ADR-0091 D3] Delegation of duty (职务代理). When true, a holder of this
+   * position may SELF-SERVICE assign it to a delegate — time-boxed
+   * (`valid_until` within the config ceiling), reasoned, dual-audited —
+   * WITHOUT being a delegated administrator. Default false: approval-duty
+   * positions (an approver going on leave) opt in; admin-ish positions do
+   * NOT — delegating administration would bypass the D12 containment gate,
+   * so a delegatable position must never distribute an `adminScope`-carrying
+   * set (enforced by the `security-delegatable-admin-position` lint rule and
+   * the D12 gate). A grant that itself arrived via delegation is not
+   * re-delegatable (chains are cut).
+   */
+  delegatable: z.boolean().default(false).describe(
+    'ADR-0091 D3: holders may self-service delegate this position, time-boxed (default false).',
+  ),
 }));
 
 /**

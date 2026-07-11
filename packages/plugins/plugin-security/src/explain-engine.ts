@@ -93,6 +93,9 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
   // are collected separately so the principal layer can report the dedicated
   // "held until … — expired" contributor state.
   const expiredGrants: Array<{ kind: 'position' | 'permission_set'; name: string; until?: string }> = [];
+  // [ADR-0091 D3] Delegation provenance: a position held via a `delegated_from`
+  // row is reported "via delegation from X, until Y" in the principal layer.
+  const delegatedPositions: Array<{ name: string; from: string; until?: string }> = [];
   const untilOf = (r: any): string | undefined => {
     const v = r?.valid_until ?? r?.validUntil;
     return v == null || v === '' ? undefined : String(v);
@@ -107,6 +110,10 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
         continue;
       }
       if (!positions.includes(p)) positions.push(p);
+      const from = (r as any)?.delegated_from;
+      if (from != null && from !== '') {
+        delegatedPositions.push({ name: p, from: String(from), until: untilOf(r) });
+      }
     }
   } catch { /* table unavailable → positions stay empty */ }
   try {
@@ -133,7 +140,7 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
   } catch { /* ignore */ }
   // [ADR-0090 D5] Authenticated principals implicitly hold the everyone anchor.
   if (!positions.includes('everyone')) positions.push('everyone');
-  return { userId, positions, permissions, expiredGrants };
+  return { userId, positions, permissions, expiredGrants, delegatedPositions };
 }
 
 /** D1-equivalent OWD reading (mirrors plugin-sharing's effectiveSharingModel). */
@@ -173,6 +180,12 @@ export async function explainAccess(deps: ExplainEngineDeps, input: ExplainInput
   // reported so "why did access disappear" is self-answering.
   const expiredGrants: Array<{ kind: 'position' | 'permission_set'; name: string; until?: string }> =
     Array.isArray(context?.expiredGrants) ? context.expiredGrants : [];
+  // [ADR-0091 D3] Positions held via delegation — attributed "via delegation
+  // from X, until Y" so a delegated hat is visible in the report.
+  const delegatedPositions: Array<{ name: string; from: string; until?: string }> =
+    Array.isArray(context?.delegatedPositions) ? context.delegatedPositions : [];
+  const delegationOf = (name: string): { from: string; until?: string } | undefined =>
+    delegatedPositions.find((d) => d.name === name);
   layers.push({
     layer: 'principal',
     verdict: 'neutral',
@@ -182,13 +195,23 @@ export async function explainAccess(deps: ExplainEngineDeps, input: ExplainInput
       (context?.onBehalfOf?.userId
         ? ` Acting on behalf of ${context.onBehalfOf.userId} — D10 intersection semantics apply at enforcement.`
         : '') +
+      (delegatedPositions.length > 0
+        ? ` ${delegatedPositions.length} position(s) held via delegation (ADR-0091 D3): [${delegatedPositions
+            .map((d) => `${d.name} from ${d.from}${d.until ? ` until ${d.until}` : ''}`)
+            .join(', ')}].`
+        : '') +
       (expiredGrants.length > 0
         ? ` ${expiredGrants.length} grant(s) present but EXPIRED (ADR-0091): [${expiredGrants
             .map((g) => `${g.name}${g.until ? ` until ${g.until}` : ''}`)
             .join(', ')}] — contributing nothing.`
         : ''),
     contributors: [
-      ...positions.map((p) => ({ kind: 'position' as const, name: p })),
+      ...positions.map((p) => {
+        const d = delegationOf(p);
+        return d
+          ? { kind: 'position' as const, name: p, via: `delegation from ${d.from}${d.until ? ` until ${d.until}` : ''}` }
+          : { kind: 'position' as const, name: p };
+      }),
       ...setNames.map((n) => ({ kind: 'permission_set' as const, name: n, via: viaOf(n) })),
       ...expiredGrants.map((g) => ({
         kind: g.kind,

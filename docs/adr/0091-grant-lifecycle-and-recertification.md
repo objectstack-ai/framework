@@ -202,7 +202,14 @@ every edition); *convenience and compliance workflow* are the product.
    `security-grant-expired-at-authoring` + `security-delegation-missing-reason`).
 2. **L2 (delegation + break-glass shape)** — `delegatable` flag, D12 gate
    branches, dual audit, dogfood proof (delegate approves during vacation
-   window; access dies at `valid_until`).
+   window; access dies at `valid_until`). **Delegation landed** (spec
+   `PositionSchema.delegatable` + `sys_position.delegatable`; the D12 gate's
+   self-service branch — a non-admin holder may insert a time-boxed, reasoned,
+   dual-audited delegation of a `delegatable` position they hold DIRECTLY, with
+   the 30-day ceiling, chains cut both ways, and no self-delegation of an
+   `adminScope`-carrying position; explain "via delegation from X, until Y";
+   liveness proof `delegation-of-duty`). Break-glass *activation* is enterprise
+   (D7); its community *shape* is L1 (a time-boxed direct grant with a reason).
 3. **L3 (enterprise)** — cloud-side campaign/notification/activation product
    design doc, consuming L1/L2 substrate only.
 

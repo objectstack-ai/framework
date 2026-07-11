@@ -318,3 +318,159 @@ describe('DelegatedAdminGate — env-set authoring (sys_permission_set)', () => 
     })).rejects.toThrow(/tenant-level/);
   });
 });
+
+// ── [ADR-0091 D3] Self-service delegation of duty ──────────────────────────
+
+const T0 = Date.parse('2026-07-01T00:00:00Z');
+const DAY = 24 * 60 * 60 * 1000;
+const iso = (ms: number) => new Date(ms).toISOString();
+
+/**
+ * Delegation fixture: a non-admin holder of a `delegatable` position may
+ * assign it to a delegate, time-boxed, WITHOUT any adminScope.
+ *
+ *   approver   (delegatable) → [approve_set]        ← u_boss holds directly
+ *   admin_pos  (delegatable) → [sub_admin/adminScope] ← u_boss holds directly
+ *   plain_pos  (NOT delegatable)                     ← u_boss holds directly
+ *   spare_pos  (delegatable)                         ← u_boss does NOT hold
+ *   approver                                         ← u_relay holds via delegation
+ */
+function makeDelegationHarness(nowMs = T0) {
+  const tables: Record<string, any[]> = {
+    sys_position: [
+      { id: 'p_appr', name: 'approver', delegatable: true },
+      { id: 'p_admin', name: 'admin_pos', delegatable: true },
+      { id: 'p_plain', name: 'plain_pos', delegatable: false },
+      { id: 'p_spare', name: 'spare_pos', delegatable: true },
+      { id: 'p_everyone', name: 'everyone' },
+    ],
+    sys_permission_set: [
+      { id: 's_appr', name: 'approve_set' },
+      { id: 's_sub', name: 'sub_admin', admin_scope: JSON.stringify(EAST_SCOPE) },
+    ],
+    sys_position_permission_set: [
+      { id: 'b_appr', position_id: 'p_appr', permission_set_id: 's_appr' },
+      { id: 'b_admin', position_id: 'p_admin', permission_set_id: 's_sub' },
+    ],
+    sys_user_position: [
+      { id: 'h1', user_id: 'u_boss', position: 'approver' },
+      { id: 'h2', user_id: 'u_boss', position: 'plain_pos' },
+      { id: 'h3', user_id: 'u_boss', position: 'admin_pos' },
+      { id: 'h4', user_id: 'u_relay', position: 'approver', delegated_from: 'u_boss', valid_until: iso(nowMs + 20 * DAY) },
+    ],
+    sys_user: [{ id: 'u_boss' }, { id: 'u_relay' }, { id: 'u_deleg' }],
+  };
+  const matches = (row: any, where: any): boolean =>
+    Object.entries(where ?? {}).every(([k, v]) => {
+      if (v && typeof v === 'object' && Array.isArray((v as any).$in)) return (v as any).$in.includes(row[k]);
+      return row[k] === v;
+    });
+  const ql = {
+    tables,
+    async find(object: string, opts: any) {
+      const rows = (tables[object] ?? []).filter((r) => matches(r, opts?.where));
+      return typeof opts?.limit === 'number' ? rows.slice(0, opts.limit) : rows;
+    },
+    async findOne(object: string, opts: any) {
+      return (tables[object] ?? []).filter((r) => matches(r, opts?.where))[0] ?? null;
+    },
+  } as any;
+  const gate = new DelegatedAdminGate({
+    ql,
+    resolveSets: async () => [{ name: 'member_default', objects: {} }],
+    now: () => nowMs,
+  });
+  const delegate = (userId: string, row: any) =>
+    gate.assert({ object: 'sys_user_position', operation: 'insert', data: row, context: { userId, positions: [] } });
+  return { gate, ql, tables, delegate };
+}
+
+describe('DelegatedAdminGate — self-service delegation of duty (ADR-0091 D3)', () => {
+  it('a direct holder delegates a delegatable position, time-boxed + reasoned; granted_by is stamped', async () => {
+    const d = makeDelegationHarness();
+    const row: any = { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 10 * DAY), reason: 'vacation stand-in' };
+    await expect(d.delegate('u_boss', row)).resolves.toBeUndefined();
+    expect(row.granted_by).toBe('u_boss'); // dual audit: writer + authority source
+  });
+
+  it('a delegation with no valid_until is rejected (an open-ended delegation is a permanent grant)', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', reason: 'x' }))
+      .rejects.toThrow(/requires a valid_until/);
+  });
+
+  it('valid_until in the past is rejected', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 - DAY), reason: 'x' }))
+      .rejects.toThrow(/not in the future/);
+  });
+
+  it('valid_until beyond the 30-day ceiling is rejected; exactly at the ceiling is allowed', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 31 * DAY), reason: 'x' }))
+      .rejects.toThrow(/ceiling/);
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 30 * DAY), reason: 'x' }))
+      .resolves.toBeUndefined();
+  });
+
+  it('a delegation with no reason is rejected (dual audit)', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY) }))
+      .rejects.toThrow(/requires a reason/);
+  });
+
+  it('you may only delegate authority you hold yourself (delegated_from must be you)', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_other', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/only delegate authority you hold yourself/);
+  });
+
+  it('a non-delegatable position cannot be delegated even by a direct holder', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'plain_pos', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/not delegatable/);
+  });
+
+  it('you cannot delegate a position you do not hold', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'spare_pos', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/do not currently hold/);
+  });
+
+  it('a grant held ONLY via delegation is not re-delegatable (chains are cut)', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_relay', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_relay', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/only via delegation/);
+  });
+
+  it('a delegatable position distributing an adminScope set cannot be self-delegated (D12 containment)', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'admin_pos', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/administration cannot be self-delegated/);
+  });
+
+  it('you cannot delegate a position to yourself', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_boss', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/to yourself/);
+  });
+
+  it('a direct holding that has itself EXPIRED can no longer be delegated (L1 validity threads through)', async () => {
+    const d = makeDelegationHarness();
+    d.tables.sys_user_position.find((r: any) => r.id === 'h1').valid_until = iso(T0 - DAY); // boss's own approver holding expired
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/do not currently hold/);
+  });
+
+  it('a plain assignment (no delegated_from) by the same non-admin still fails closed — the branch triggers only on delegation', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'approver', business_unit_id: 'bu_x' }))
+      .rejects.toThrow(/delegated adminScope/);
+  });
+
+  it('delegating an audience anchor is rejected by the anchor invariant before delegation rules', async () => {
+    const d = makeDelegationHarness();
+    await expect(d.delegate('u_boss', { user_id: 'u_deleg', position: 'everyone', delegated_from: 'u_boss', valid_until: iso(T0 + 5 * DAY), reason: 'x' }))
+      .rejects.toThrow(/audience anchor/);
+  });
+});

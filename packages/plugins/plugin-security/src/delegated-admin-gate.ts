@@ -30,6 +30,7 @@
  * reconciliation are unaffected).
  */
 
+import { isGrantActive } from '@objectstack/core';
 import type { AdminScope, PermissionSet } from '@objectstack/spec/security';
 import { PermissionDeniedError } from './errors.js';
 
@@ -38,6 +39,18 @@ const SYSTEM_CTX = { isSystem: true } as const;
 const MAX_TREE_DEPTH = 32;
 /** Max existing assignments examined for a binding blast-radius check. */
 const BLAST_RADIUS_CAP = 500;
+/** [ADR-0091 D3] Default self-delegation ceiling: 30 days. A "temporary"
+ *  grant that can be rolled forever is a permanent grant with extra steps. */
+const DEFAULT_DELEGATION_CEILING_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Coerce a stored timestamp to epoch ms; undefined = absent, NaN = unparseable. */
+function toEpochMs(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'number') return value < 1e12 ? value * 1000 : value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') return Date.parse(value);
+  return Number.NaN;
+}
 
 const GOVERNED_OBJECTS = new Set([
   'sys_user_position',
@@ -54,6 +67,10 @@ export interface DelegatedAdminGateDeps {
   /** Shared permission-set resolution (same path as the CRUD middleware). */
   resolveSets: (context: any) => Promise<PermissionSet[]>;
   logger?: { warn?: (msg: string, meta?: any) => void };
+  /** [ADR-0091 D3] Clock for delegation validity/ceiling checks (tests inject). */
+  now?: () => number;
+  /** [ADR-0091 D3] Max self-delegation duration (ms). Default 30 days. */
+  delegationCeilingMs?: number;
 }
 
 interface HeldScope {
@@ -144,6 +161,18 @@ export class DelegatedAdminGate {
 
     if (isTenantAdmin(sets)) return; // status quo — downstream CRUD/RLS decide
 
+    // ── [ADR-0091 D3] Self-service delegation of duty (职务代理) ──────────
+    // A write that STAMPS `delegated_from` is a delegation: the holder passes
+    // their OWN hat, judged by delegation rules — not by an adminScope. This
+    // is the ONE authority path open to a non-admin, so it is tried before the
+    // held-scope resolution that would otherwise fail closed. (Tenant admins
+    // short-circuited above; a scope-holding delegate who stamps
+    // `delegated_from` is still held to the delegation invariants — a
+    // delegation is a delegation regardless of who writes it.)
+    if (this.isDelegationWrite(opCtx)) {
+      return this.assertSelfDelegation(opCtx, ctx);
+    }
+
     const held = await this.resolveHeldScopes(sets);
     if (held.length === 0) {
       throw new PermissionDeniedError(
@@ -201,6 +230,151 @@ export class DelegatedAdminGate {
       for (const bu of userBUs) if (s.subtree.has(bu)) return true;
     }
     return false;
+  }
+
+  // ── [ADR-0091 D3] Self-service delegation of duty ────────────────────
+
+  /** A delegation write = a `sys_user_position` INSERT whose rows stamp
+   *  `delegated_from`. Insert-only by design: a delegation is not
+   *  self-renewable (no update path to push `valid_until` forward — continuing
+   *  past expiry requires a fresh delegation, leaving a new audit record). */
+  private isDelegationWrite(opCtx: any): boolean {
+    if (opCtx?.object !== 'sys_user_position' || opCtx?.operation !== 'insert') return false;
+    return rowsOf(opCtx).some((r) => r?.delegated_from != null && r.delegated_from !== '');
+  }
+
+  private now(): number {
+    return this.deps.now ? this.deps.now() : Date.now();
+  }
+
+  /**
+   * A holder of a `delegatable` position may assign it to a delegate WITHOUT
+   * being an administrator, iff every row is a well-formed delegation
+   * (ADR-0091 D3):
+   *  1. `delegated_from` = the writer (you delegate your OWN authority);
+   *  2. mandatory `valid_until`, in the future, within the config ceiling;
+   *  3. mandatory `reason` (dual-audit substrate);
+   *  4. the delegator CURRENTLY holds the position (validity-filtered) and
+   *     holds it DIRECTLY — a grant that itself arrived via delegation is not
+   *     re-delegatable (chains are cut);
+   *  5. the position is `delegatable: true`;
+   *  6. the position distributes NO `adminScope`-carrying set (administration
+   *     is never self-delegated — that would bypass the D12 containment gate).
+   * The writer is stamped into `granted_by` (dual audit: `granted_by` = writer,
+   * `delegated_from` = authority source).
+   */
+  private async assertSelfDelegation(opCtx: any, ctx: any): Promise<void> {
+    const now = this.now();
+    const ceiling = this.deps.delegationCeilingMs ?? DEFAULT_DELEGATION_CEILING_MS;
+    const ceilingDays = Math.round(ceiling / (24 * 60 * 60 * 1000));
+
+    for (const row of rowsOf(opCtx)) {
+      const deny = (reason: string, meta: Record<string, unknown> = {}): never => {
+        throw new PermissionDeniedError(
+          `[Security] Access denied: delegation of duty rejected — ${reason} (ADR-0091 D3).`,
+          { operation: opCtx.operation, object: opCtx.object, ...meta },
+        );
+      };
+
+      // Homogeneity: a delegation insert must be ALL delegations — a mixed
+      // batch can't be audited as one authority act.
+      const df = row?.delegated_from;
+      if (df == null || df === '') {
+        deny('a delegation insert may not mix delegation and non-delegation rows');
+      }
+      // 1. You may only delegate your OWN authority.
+      if (String(df) !== String(ctx.userId)) {
+        deny(`delegated_from '${df}' is not you — you may only delegate authority you hold yourself`);
+      }
+      const positionName = String(row?.position ?? '');
+      if (!positionName) deny('the delegation names no position');
+
+      const targetUser = row?.user_id != null ? String(row.user_id) : '';
+      if (!targetUser) deny('the delegation names no delegate (user_id)');
+      if (targetUser === String(ctx.userId)) {
+        deny('you cannot delegate a position to yourself');
+      }
+
+      // 2. valid_until: mandatory, future, within ceiling.
+      const until = toEpochMs(row?.valid_until);
+      if (until === undefined) {
+        deny(`'${positionName}' delegation requires a valid_until — an open-ended delegation is a permanent grant`, { position: positionName });
+      }
+      if (Number.isNaN(until as number)) deny('valid_until is not a parseable timestamp', { position: positionName });
+      if (!((until as number) > now)) deny('valid_until is not in the future', { position: positionName });
+      if ((until as number) > now + ceiling) {
+        deny(`valid_until exceeds the ${ceilingDays}-day delegation ceiling`, { position: positionName });
+      }
+
+      // 3. reason: mandatory.
+      if (typeof row?.reason !== 'string' || row.reason.trim().length === 0) {
+        deny(`'${positionName}' delegation requires a reason (dual audit)`, { position: positionName });
+      }
+
+      // 4. Delegator currently holds it, directly (no re-delegation).
+      const holdings = await this.activeHoldings(String(ctx.userId), positionName, now);
+      const directHolding = holdings.some((h) => h.direct);
+      if (!directHolding) {
+        if (holdings.length > 0) {
+          deny(`you hold '${positionName}' only via delegation — a delegated grant is not re-delegatable`, { position: positionName });
+        }
+        deny(`you do not currently hold '${positionName}' — only a current holder may delegate it`, { position: positionName });
+      }
+
+      // 5. The position must opt in to delegation.
+      if (!(await this.positionIsDelegatable(positionName))) {
+        deny(`position '${positionName}' is not delegatable — set delegatable: true on the position to allow it`, { position: positionName });
+      }
+
+      // 6. A delegatable position must not distribute administration.
+      const boundSets = await this.setsBoundToPosition(positionName);
+      for (const b of boundSets) {
+        if (parseMaybeJson((b as any).admin_scope ?? (b as any).adminScope)) {
+          deny(`position '${positionName}' distributes the admin set '${b.name}' — administration cannot be self-delegated (D12 containment)`, { position: positionName, permissionSet: b.name });
+        }
+      }
+
+      // Dual audit: stamp the writer (never overwrite an explicit value).
+      if (row.granted_by == null) row.granted_by = ctx.userId;
+    }
+  }
+
+  /** The actor's holdings of `positionName` that are inside their validity
+   *  window, tagged `direct` when the holding itself did NOT arrive via
+   *  delegation (only a direct holding is re-delegatable). */
+  private async activeHoldings(
+    userId: string,
+    positionName: string,
+    now: number,
+  ): Promise<Array<{ direct: boolean }>> {
+    const ql = this.deps.ql;
+    if (!ql?.find) return [];
+    let rows: any[] = [];
+    try {
+      rows = await ql.find('sys_user_position', {
+        where: { user_id: userId, position: positionName },
+        limit: 200,
+        context: SYSTEM_CTX,
+      });
+    } catch {
+      rows = [];
+    }
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => isGrantActive(r, now))
+      .map((r) => ({ direct: r?.delegated_from == null || r.delegated_from === '' }));
+  }
+
+  private async positionIsDelegatable(positionName: string): Promise<boolean> {
+    const ql = this.deps.ql;
+    if (!ql?.find) return false;
+    try {
+      const rows = await ql.find('sys_position', { where: { name: positionName }, limit: 1, context: SYSTEM_CTX });
+      const pos = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      const v = (pos as any)?.delegatable;
+      return v === true || v === 1 || v === '1';
+    } catch {
+      return false;
+    }
   }
 
   // ── sys_user_position: user ↔ position assignments ──────────────────

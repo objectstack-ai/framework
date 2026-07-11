@@ -206,9 +206,25 @@ behavior: a seed grant whose `valid_until` is already past (or unparseable)
 is dead on arrival (error), and a delegation row (`delegated_from`) without
 `reason` breaks the dual audit (error).
 
-Delegation self-service, break-glass activation, and recertification
-campaigns build on this substrate — see ADR-0091 D3–D7 for the phasing and
-the open-core line.
+**Delegation of duty (职务代理, ADR-0091 D3)** builds on this substrate and is
+enforced today. A position opts in with `delegatable: true`; a holder may then
+**self-service** assign it to a delegate WITHOUT being an administrator — the
+D12 gate grows a branch that approves a `sys_user_position` insert iff it is a
+well-formed delegation: `delegated_from` = the writer, a mandatory `valid_until`
+within the 30-day ceiling, a mandatory `reason`, and the writer holds the
+position **directly** (a grant that itself arrived via delegation is not
+re-delegatable — chains are cut). Delegation is insert-only, so a "temporary"
+grant can't be silently rolled forever (no self-renewal); continuing past
+expiry needs a fresh delegation, leaving a new audit record. A `delegatable`
+position may never distribute an `adminScope`-carrying set — administration is
+never self-delegated (that would bypass the D12 containment). The write is
+dual-audited (`granted_by` = writer, `delegated_from` = authority source) and
+the explain engine attributes a delegated hat "via delegation from X, until Y".
+
+Break-glass *activation* and recertification *campaigns* remain enterprise
+product — see ADR-0091 D4–D7 for the open-core line; their community *shapes*
+(a time-boxed direct grant with a reason; certification stamps) are the L1
+substrate above.
 
 ## Governance: how "declared = enforced" is kept true
 
