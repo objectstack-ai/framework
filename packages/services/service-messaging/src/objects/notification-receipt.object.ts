@@ -26,6 +26,13 @@ export const NotificationReceipt = ObjectSchema.create({
     icon: 'check-check',
     isSystem: true,
     managedBy: 'system',
+    // ADR-0057: read-state rows expire with the pipeline's 90d window — NOT
+    // shorter, or read notifications would resurface as unread while their
+    // inbox rows are still alive.
+    lifecycle: {
+        class: 'transient',
+        ttl: { field: 'created_at', expireAfter: '90d' },
+    },
     description: 'Per-recipient × channel receipt; the source of truth for notification read-state.',
     titleFormat: '{state}',
     highlightFields: ['notification_id', 'user_id', 'channel', 'state', 'at'],

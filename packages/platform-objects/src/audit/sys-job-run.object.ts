@@ -22,6 +22,12 @@ export const SysJobRun = ObjectSchema.create({
   icon: 'play',
   isSystem: true,
   managedBy: 'append-only',
+  // ADR-0057: mirrors the JobRunRetention default (30d) so the platform
+  // LifecycleService and the plugin sweeper enforce one window.
+  lifecycle: {
+    class: 'telemetry',
+    retention: { maxAge: '30d' },
+  },
   description: 'Background job execution audit trail',
   displayNameField: 'job_name',
   nameField: 'job_name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

@@ -179,6 +179,15 @@ export interface IDataDriver {
   dropTable(object: string, options?: DriverOptions): Promise<void>;
 
   /**
+   * Reclaim free space after bulk deletions (ADR-0057 §3.4). SQLite issues
+   * `PRAGMA incremental_vacuum` (pairs with the `auto_vacuum=INCREMENTAL`
+   * connect-time default); engines with their own background reclamation
+   * (Postgres autovacuum) may no-op. Optional — the LifecycleService calls
+   * it best-effort after every sweep that deleted rows.
+   */
+  reclaimSpace?(options?: DriverOptions): Promise<void>;
+
+  /**
    * Analyze query performance.
    * Returns execution plan without executing the query (optional).
    */

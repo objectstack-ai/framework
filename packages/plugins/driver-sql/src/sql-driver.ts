@@ -731,7 +731,9 @@ export class SqlDriver implements IDataDriver {
     this.injectTenantOnInsert(object, toInsert, options);
     await this.fillAutoNumberFields(object, toInsert, options);
 
-    const builder = this.getBuilder(object, options);
+    // Rotation (ADR-0057 P2): the base name is a read-only view — new rows
+    // land in the current shard.
+    const builder = this.getBuilder(this.rotationWriteTarget(object) ?? object, options);
     const formatted = this.applyWriteColumnMap(object, this.formatInput(object, toInsert));
     this.stampInsertTimestamps(object, formatted);
 
@@ -1109,6 +1111,8 @@ export class SqlDriver implements IDataDriver {
 
   async update(object: string, id: string | number, data: Record<string, any>, options?: DriverOptions): Promise<any> {
     this.auditMissingTenant(object, 'update', options);
+    const rotationShards = this.rotationShardsOf(object);
+    if (rotationShards) return this.rotatedUpdateById(object, rotationShards, id, data, options);
     const builder = this.getBuilder(object, options).where('id', id);
     this.applyTenantScope(builder, object, options);
     const formatted = this.applyWriteColumnMap(object, this.formatInput(object, data));
@@ -1151,7 +1155,10 @@ export class SqlDriver implements IDataDriver {
     this.stampInsertTimestamps(object, formatted);
     const mergeKeys = conflictKeys && conflictKeys.length > 0 ? conflictKeys : ['id'];
 
-    const builder = this.getBuilder(object, options);
+    // Rotation: conflict-merge is scoped to the CURRENT shard (telemetry is
+    // effectively append-only; a cross-shard upsert would need a probe-first
+    // strategy nothing on the platform requires today).
+    const builder = this.getBuilder(this.rotationWriteTarget(object) ?? object, options);
     // `created_at` is insert-only — never overwrite it when an existing row is
     // merged on conflict (the stamped/seeded value belongs to the original
     // insert). Everything else (incl. `updated_at`) merges as before, so an
@@ -1168,6 +1175,17 @@ export class SqlDriver implements IDataDriver {
 
   async delete(object: string, id: string | number, options?: DriverOptions): Promise<boolean> {
     this.auditMissingTenant(object, 'delete', options);
+    const rotationShards = this.rotationShardsOf(object);
+    if (rotationShards) {
+      // The row lives in exactly one shard — probe newest-first.
+      for (const shard of rotationShards) {
+        const builder = this.getBuilder(shard, options).where('id', id);
+        this.applyTenantScope(builder, object, options);
+        const count = await builder.delete();
+        if (count > 0) return true;
+      }
+      return false;
+    }
     const builder = this.getBuilder(object, options).where('id', id);
     this.applyTenantScope(builder, object, options);
     const count = await builder.delete();
@@ -1216,7 +1234,7 @@ export class SqlDriver implements IDataDriver {
       this.stampInsertTimestamps(object, formatted);
       return formatted;
     });
-    const builder = this.getBuilder(object, options);
+    const builder = this.getBuilder(this.rotationWriteTarget(object) ?? object, options);
     const result = await builder.insert(formattedRows).returning('*');
     // Read-back parity with create(): JSON columns come back as their stored
     // strings from `returning('*')` — decode them so batch callers see the
@@ -1242,27 +1260,62 @@ export class SqlDriver implements IDataDriver {
 
   async bulkDelete(object: string, ids: Array<string | number>, options?: DriverOptions): Promise<void> {
     this.auditMissingTenant(object, 'bulkDelete', options);
-    const builder = this.getBuilder(object, options).whereIn('id', ids);
-    this.applyTenantScope(builder, object, options);
-    await builder.delete();
+    for (const target of this.rotationShardsOf(object) ?? [object]) {
+      const builder = this.getBuilder(target, options).whereIn('id', ids);
+      this.applyTenantScope(builder, object, options);
+      await builder.delete();
+    }
   }
 
   async updateMany(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<number> {
     this.auditMissingTenant(object, 'updateMany', options);
-    const builder = this.getBuilder(object, options);
-    this.applyTenantScope(builder, object, options);
-    if (query.where) this.applyFilters(builder, query.where);
-    const count = await builder.update(data);
-    return count || 0;
+    let total = 0;
+    for (const target of this.rotationShardsOf(object) ?? [object]) {
+      const builder = this.getBuilder(target, options);
+      this.applyTenantScope(builder, object, options);
+      if (query.where) this.applyFilters(builder, query.where);
+      total += (await builder.update(data)) || 0;
+    }
+    return total;
   }
 
   async deleteMany(object: string, query: QueryAST, options?: DriverOptions): Promise<number> {
     this.auditMissingTenant(object, 'deleteMany', options);
-    const builder = this.getBuilder(object, options);
-    this.applyTenantScope(builder, object, options);
-    if (query.where) this.applyFilters(builder, query.where);
-    const count = await builder.delete();
-    return count || 0;
+    let total = 0;
+    for (const target of this.rotationShardsOf(object) ?? [object]) {
+      const builder = this.getBuilder(target, options);
+      this.applyTenantScope(builder, object, options);
+      if (query.where) this.applyFilters(builder, query.where);
+      total += (await builder.delete()) || 0;
+    }
+    return total;
+  }
+
+  /** By-id update for a rotation-managed object: the row lives in exactly one
+   * shard — probe newest-first, mirroring the un-rotated {@link update}. */
+  protected async rotatedUpdateById(
+    object: string,
+    shards: string[],
+    id: string | number,
+    data: Record<string, any>,
+    options?: DriverOptions,
+  ): Promise<any> {
+    const formatted = this.applyWriteColumnMap(object, this.formatInput(object, data));
+    if (this.tablesWithTimestamps.has(object)) {
+      formatted.updated_at = this.isSqlite ? new Date().toISOString() : this.knex.fn.now();
+    }
+    for (const shard of shards) {
+      const builder = this.getBuilder(shard, options).where('id', id);
+      this.applyTenantScope(builder, object, options);
+      const count = await builder.update(formatted);
+      if (count > 0) {
+        const readback = this.getBuilder(shard, options).where('id', id);
+        this.applyTenantScope(readback, object, options);
+        const updated = await readback.first();
+        return this.formatOutput(object, updated) || null;
+      }
+    }
+    return null;
   }
 
   async count(object: string, query?: QueryAST, options?: DriverOptions): Promise<number> {
@@ -1583,6 +1636,232 @@ export class SqlDriver implements IDataDriver {
   }
 
   /**
+   * Reclaim free pages after bulk deletions (ADR-0057 §3.4). On SQLite this
+   * issues `PRAGMA incremental_vacuum`, returning freelist pages to the OS —
+   * it pairs with the `auto_vacuum=INCREMENTAL` default set in {@link connect}
+   * (files created before that default need one full `VACUUM` to adopt it).
+   * Postgres/MySQL manage space via their own vacuum/purge machinery, so this
+   * is a no-op there.
+   */
+  async reclaimSpace(_options?: DriverOptions): Promise<void> {
+    if (!this.isSqlite) return;
+    await this.knex.raw('PRAGMA incremental_vacuum');
+  }
+
+  // ── Data-lifecycle rotation (ADR-0057 P2) ─────────────────────────────────
+  //
+  // High-frequency telemetry declared with `lifecycle.storage.strategy =
+  // 'rotation'` is physically time-sharded: writes land in the CURRENT shard
+  // table (`<table>__r<key>`), reads go through a UNION ALL view named after
+  // the base table (so every query path is unchanged), and expiry is an O(1)
+  // `DROP TABLE` of the oldest shard — real space reclamation with no
+  // row-by-row delete (the ServiceNow Table Rotation model, ADR-0057 §3.3).
+  //
+  // The view is READ-ONLY by design (SQLite views reject writes and don't
+  // support RETURNING): the driver redirects every write path shard-wise
+  // instead — inserts to the current shard; by-id updates/deletes probe each
+  // live shard; bulk updates/deletes fan out and sum. SQLite-only
+  // ({@link supportsRotation}); on other dialects the LifecycleService falls
+  // back to an age-based reap, so the declared bound holds everywhere — only
+  // the reclamation mechanics differ.
+
+  /** table → live rotation state (shard names newest-first + write target). */
+  protected rotationStateByTable = new Map<string, { shards: string[]; current: string }>();
+
+  get supportsRotation(): boolean {
+    return this.isSqlite;
+  }
+
+  /** Live shard set (newest first) when `object` is rotation-managed. */
+  protected rotationShardsOf(object: string): string[] | undefined {
+    return this.rotationStateByTable.get(object)?.shards;
+  }
+
+  /** The shard new rows land in when `object` is rotation-managed. */
+  protected rotationWriteTarget(object: string): string | undefined {
+    return this.rotationStateByTable.get(object)?.current;
+  }
+
+  /**
+   * Shard key for an instant: `day` → UTC `YYYYMMDD`, `week` → the UTC
+   * Monday's `YYYYMMDD`, `month` → `YYYYMM`. Keys of one unit sort
+   * lexicographically = chronologically, which `ensureRotation` relies on.
+   */
+  protected rotationShardKey(nowMs: number, unit: 'day' | 'week' | 'month'): string {
+    const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+    if (unit === 'month') return ymd(nowMs).slice(0, 6);
+    if (unit === 'week') {
+      const dow = (new Date(nowMs).getUTCDay() + 6) % 7; // Monday = 0
+      return ymd(nowMs - dow * 86_400_000);
+    }
+    return ymd(nowMs);
+  }
+
+  /**
+   * Public Rotator entry point (called by the LifecycleService each sweep and
+   * by {@link initObjects} at boot). Idempotent: ensures the current shard +
+   * read view exist, adopts a legacy pre-rotation base table as the current
+   * shard, column-syncs every retained shard so the UNION stays uniform, and
+   * drops shards past the `shards × unit` window.
+   */
+  async rotateShards(
+    objectDef: { name: string; fields?: Record<string, any>; lifecycle?: any },
+    nowMs: number = Date.now(),
+  ): Promise<{ object: string; current: string; shards: string[]; dropped: string[] }> {
+    this.assertSchemaMutable('rotateShards');
+    const policy = objectDef.lifecycle?.storage;
+    if (!policy || policy.strategy !== 'rotation') {
+      throw new Error(`[sql-driver] rotateShards: '${objectDef.name}' declares no lifecycle.storage rotation policy`);
+    }
+    if (!this.supportsRotation) {
+      throw new Error(`[sql-driver] rotateShards: rotation is not supported on dialect '${this.dialectName}'`);
+    }
+    const tableName = StorageNameMapping.resolveTableName(objectDef as any);
+    return this.ensureRotation(tableName, objectDef, policy, nowMs);
+  }
+
+  protected async ensureRotation(
+    tableName: string,
+    obj: { name: string; fields?: Record<string, any> },
+    policy: { shards: number; unit: 'day' | 'week' | 'month' },
+    nowMs: number = Date.now(),
+  ): Promise<{ object: string; current: string; shards: string[]; dropped: string[] }> {
+    const current = `${tableName}__r${this.rotationShardKey(nowMs, policy.unit)}`;
+
+    // Physical inventory: the base name (table before adoption, view after)
+    // and every existing shard.
+    const esc = tableName.replace(/[\\%_]/g, '\\$&');
+    const raw: any = await this.knex.raw(
+      `SELECT name, type FROM sqlite_master WHERE name = ? OR (name LIKE ? ESCAPE '\\')`,
+      [tableName, `${esc}\\_\\_r%`],
+    );
+    const rows: Array<{ name: string; type: string }> = Array.isArray(raw) ? raw : raw?.rows ?? [];
+    const baseType = rows.find((r) => r.name === tableName)?.type as 'table' | 'view' | undefined;
+    const shardNames = new Set(
+      rows.map((r) => r.name).filter((n) => n !== tableName && /__r\d{6,8}$/.test(n)),
+    );
+
+    // Adopt a legacy pre-rotation table: its whole history becomes the
+    // current shard (coarse, but safe — it then ages out of the window).
+    if (baseType === 'table') {
+      if (!shardNames.has(current)) {
+        await this.knex.schema.renameTable(tableName, current);
+      } else {
+        // Partial-failure recovery: both exist — merge, then drop the base.
+        await this.knex.raw(`INSERT INTO "${current}" SELECT * FROM "${tableName}"`);
+        await this.knex.schema.dropTable(tableName);
+      }
+      shardNames.add(current);
+    }
+    shardNames.add(current);
+
+    // Time-based window: retain shards whose period falls inside the last
+    // `shards × unit` (ends at the current period); everything older is the
+    // O(1) reclaim. Count-based retention would silently stretch the window
+    // when rotation cadence has gaps.
+    const unitMs = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 }[policy.unit];
+    const oldestRetainedKey = this.rotationShardKey(nowMs - (Math.max(1, policy.shards) - 1) * unitMs, policy.unit);
+    const parsed = [...shardNames].sort((a, b) => b.localeCompare(a));
+    const keyOf = (n: string) => n.slice(tableName.length + 3);
+    const retained = parsed.filter((n) => keyOf(n) >= oldestRetainedKey);
+    const dropped = parsed.filter((n) => keyOf(n) < oldestRetainedKey);
+
+    // Column-sync every retained shard (creates the current one; adds any
+    // newly declared columns to older shards so the UNION stays uniform).
+    for (const shard of retained) {
+      await this.ensureShardTable(shard, obj);
+      this.aliasShardBookkeeping(tableName, shard);
+    }
+
+    for (const d of dropped) {
+      await this.knex.schema.dropTableIfExists(d);
+    }
+
+    // Rebuild the read view over the retained set, newest shard first. An
+    // explicit column list (not `*`) keeps the view stable when old shards
+    // carry orphaned columns.
+    const cols = this.rotationColumnList(obj);
+    await this.knex.raw(`DROP VIEW IF EXISTS "${tableName}"`);
+    await this.knex.raw(
+      `CREATE VIEW "${tableName}" AS ` + retained.map((s) => `SELECT ${cols} FROM "${s}"`).join(' UNION ALL '),
+    );
+
+    this.rotationStateByTable.set(tableName, { shards: retained, current });
+    if (dropped.length > 0) {
+      (this.logger as { info?: (msg: string) => void }).info?.(
+        `[sql-driver] rotated ${tableName}: ${retained.length} shard(s) live, dropped ${dropped.join(', ')}`,
+      );
+    }
+    return { object: tableName, current, shards: retained, dropped };
+  }
+
+  /** Create/column-sync one physical shard table (mirrors the managed-table
+   * branch of {@link initObjects}, scoped to a shard). */
+  protected async ensureShardTable(shardName: string, obj: { fields?: Record<string, any> }): Promise<void> {
+    const builtinColumns = new Set(['id', 'created_at', 'updated_at']);
+    const exists = await this.knex.schema.hasTable(shardName);
+    if (!exists) {
+      await this.knex.schema.createTable(shardName, (table) => {
+        table.string('id').primary();
+        table.timestamp('created_at').defaultTo(this.knex.fn.now());
+        table.timestamp('updated_at').defaultTo(this.knex.fn.now());
+        for (const [name, field] of Object.entries(obj.fields ?? {})) {
+          if (builtinColumns.has(name)) continue;
+          this.createColumn(table, name, field);
+        }
+      });
+    } else {
+      const columnInfo = await this.knex(shardName).columnInfo();
+      const existingColumns = Object.keys(columnInfo);
+      await this.knex.schema.alterTable(shardName, (table) => {
+        for (const [name, field] of Object.entries(obj.fields ?? {})) {
+          if (!existingColumns.includes(name)) {
+            this.createColumn(table, name, field);
+          }
+        }
+      });
+    }
+
+    // Declared indexes per shard. Auto-derived names already embed the shard
+    // name; explicit names get a shard prefix so they can't collide across
+    // shards in the same database.
+    const declared = (obj as any).indexes;
+    if (Array.isArray(declared) && declared.length > 0) {
+      const colInfo = await this.knex(shardName).columnInfo();
+      const perShard = declared.map((idx: any) => ({
+        ...idx,
+        name: typeof idx?.name === 'string' && idx.name.trim() ? `${shardName}__${idx.name.trim()}` : undefined,
+      }));
+      await this.syncDeclaredIndexes(shardName, perShard, new Set(Object.keys(colInfo)));
+    }
+  }
+
+  /** Quoted, deterministic column list for the rotation view. */
+  protected rotationColumnList(obj: { fields?: Record<string, any> }): string {
+    const builtin = ['id', 'created_at', 'updated_at'];
+    const declared = Object.keys(obj.fields ?? {}).filter((f) => !builtin.includes(f));
+    return [...builtin, ...declared].map((c) => `"${c}"`).join(', ');
+  }
+
+  /**
+   * Point every per-table bookkeeping map (read coercion, JSON/boolean
+   * columns, tenant scope, timestamp stamping) for a shard at the base
+   * table's entries, so a builder targeting a shard behaves exactly like one
+   * targeting the view.
+   */
+  protected aliasShardBookkeeping(base: string, shard: string): void {
+    this.jsonFields[shard] = this.jsonFields[base] ?? [];
+    this.booleanFields[shard] = this.booleanFields[base] ?? [];
+    this.numericFields[shard] = this.numericFields[base] ?? [];
+    this.autoNumberFields[shard] = this.autoNumberFields[base] ?? [];
+    if (this.dateFields[base]) this.dateFields[shard] = this.dateFields[base];
+    if (this.datetimeFields[base]) this.datetimeFields[shard] = this.datetimeFields[base];
+    if (this.timeFields[base]) this.timeFields[shard] = this.timeFields[base];
+    this.tenantFieldByTable[shard] = this.tenantFieldByTable[base] ?? null;
+    this.tablesWithTimestamps.add(shard);
+  }
+
+  /**
    * Resolve the per-table tenant-isolation column for a schema, honoring an
    * explicit tenancy opt-out. Single source of truth for both {@link initObjects}
    * and {@link registerExternalObject} (they previously inlined this logic and
@@ -1777,6 +2056,16 @@ export class SqlDriver implements IDataDriver {
       this.numericFields[tableName] = numericCols;
       this.autoNumberFields[tableName] = autoNumberCols;
       this.tenantFieldByTable[tableName] = tenantField;
+
+      // ADR-0057 P2: rotation-declared telemetry is physically time-sharded —
+      // the Rotator owns its DDL (shard tables + a read view under the base
+      // name); the plain create/alter path below would collide with the view.
+      const rotationPolicy = (obj as any).lifecycle?.storage;
+      if (rotationPolicy?.strategy === 'rotation' && this.supportsRotation) {
+        this.tablesWithTimestamps.add(tableName);
+        await this.ensureRotation(tableName, obj, rotationPolicy);
+        continue;
+      }
 
       let exists = await this.knex.schema.hasTable(tableName);
 
@@ -3162,17 +3451,32 @@ export class SqlDriver implements IDataDriver {
       }
     }
 
-    if (!this.isSqlite) return copy;
-
-    const fields = this.jsonFields[object];
-    if (fields && fields.length > 0) {
-      if (!copied) { copy = { ...copy }; copied = true; }
-      for (const field of fields) {
-        if (copy[field] !== undefined && typeof copy[field] === 'object' && copy[field] !== null) {
+    // JSON field serialisation: PostgreSQL native jsonb columns require
+    // valid JSON for ALL values (strings, numbers, booleans, objects).
+    // SQLite stores JSON as plain TEXT so only objects/arrays need
+    // stringification (better-sqlite3 can only bind primitives).
+    const jsonFields = this.jsonFields[object];
+    if (jsonFields && jsonFields.length > 0) {
+      for (const field of jsonFields) {
+        if (copy[field] === undefined || copy[field] === null) continue;
+        if (this.isSqlite) {
+          // SQLite: only objects/arrays need JSON.stringify; primitives
+          // are stored as-is and re-parsed on read by formatOutput.
+          if (typeof copy[field] === 'object') {
+            if (!copied) { copy = { ...copy }; copied = true; }
+            copy[field] = JSON.stringify(copy[field]);
+          }
+        } else {
+          // PostgreSQL: every value must be valid JSON so the native
+          // jsonb column accepts it. JSON.stringify wraps strings in
+          // quotes, leaves numbers/booleans unchanged as literals.
+          if (!copied) { copy = { ...copy }; copied = true; }
           copy[field] = JSON.stringify(copy[field]);
         }
       }
     }
+
+    if (!this.isSqlite) return copy;
 
     // Safety net: better-sqlite3 can only bind numbers/strings/bigints/buffers/
     // null. Any value still an array or plain object here (a field type not

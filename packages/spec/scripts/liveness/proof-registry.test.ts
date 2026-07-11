@@ -110,6 +110,7 @@ describe('registry invariants', () => {
         'dataset/dimensions.dateGranularity',
         'object/sharingModel',
         'position/delegatable',
+        'object/lifecycle',
       ].sort(),
     );
   });

@@ -20,6 +20,15 @@ export const SysAuditLog = ObjectSchema.create({
   icon: 'scroll-text',
   isSystem: true,
   managedBy: 'append-only',
+  // ADR-0057: compliance ledger — retain hot 90d, then archive-then-delete.
+  // The LifecycleService NEVER hot-deletes rows with `archive` declared until
+  // the archive copy succeeded; deployments without an 'archive' datasource
+  // simply retain everything (today's behavior).
+  lifecycle: {
+    class: 'audit',
+    retention: { maxAge: '90d' },
+    archive: { after: '90d', to: 'archive', keep: '7y' },
+  },
   description: 'Immutable audit trail for platform events',
   displayNameField: 'action',
   nameField: 'action', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

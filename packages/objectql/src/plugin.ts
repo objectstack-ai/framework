@@ -4,6 +4,8 @@ import { ObjectQL } from './engine.js';
 import { ObjectStackProtocolImplementation } from '@objectstack/metadata-protocol';
 import { Plugin, PluginContext } from '@objectstack/core';
 import { StorageNameMapping } from '@objectstack/spec/system';
+import { LifecycleService } from './lifecycle/lifecycle-service.js';
+import { lifecycleSettingsManifest } from './lifecycle/lifecycle-settings.js';
 import {
   SysMetadataObject,
   SysMetadataHistoryObject,
@@ -98,6 +100,19 @@ export interface ObjectQLPluginOptions {
    * Safe to leave unset: hydration tolerates a missing table.
    */
   hydrateMetadataFromDb?: boolean;
+  /**
+   * ADR-0057 LifecycleService tuning. Lifecycle enforcement is a platform
+   * primitive and defaults ON — objects without a `lifecycle` declaration are
+   * never touched, so a kernel with no declarations sees zero deletes. Set
+   * `enabled: false` (or env `OS_LIFECYCLE_DISABLED=1`) to disable the
+   * periodic sweep entirely; the `lifecycle` service stays registered so
+   * tooling can still run `sweep()` explicitly.
+   */
+  lifecycle?: {
+    enabled?: boolean;
+    sweepIntervalMs?: number;
+    initialDelayMs?: number;
+  };
 }
 
 export class ObjectQLPlugin implements Plugin {
@@ -118,6 +133,9 @@ export class ObjectQLPlugin implements Plugin {
   private hydrateMetadataFromDb = false;
   /** Unsubscribe handles for metadata-event subscriptions (ADR-0008 PR-7). */
   private metadataUnsubscribes: Array<() => void> = [];
+  /** ADR-0057 lifecycle enforcement (Reaper/Rotator/Archiver). */
+  private lifecycleService: LifecycleService | undefined;
+  private lifecycleOptions: ObjectQLPluginOptions['lifecycle'];
 
   constructor(qlOrOptions?: ObjectQL | ObjectQLPluginOptions, hostContext?: Record<string, any>) {
     // Back-compat: legacy callers passed `(ObjectQL, hostContext)` positionally.
@@ -141,6 +159,7 @@ export class ObjectQLPlugin implements Plugin {
         ? opts.skipSchemaSync
         : process.env.OS_SKIP_SCHEMA_SYNC === '1';
     this.hydrateMetadataFromDb = opts.hydrateMetadataFromDb === true;
+    this.lifecycleOptions = opts.lifecycle;
   }
 
   init = async (ctx: PluginContext) => {
@@ -295,6 +314,27 @@ export class ObjectQLPlugin implements Plugin {
         message: 'Analytics SQL generation not implemented by ObjectQL adapter',
       }),
     });
+
+    // ADR-0057: the platform-owned LifecycleService. Registered from the
+    // engine plugin (not an opt-in capability) so every kernel that has data
+    // also has lifecycle enforcement — a declared retention that drives no
+    // sweeper is dead surface (ADR-0049).
+    this.lifecycleService = new LifecycleService({
+      getEngine: () => this.ql,
+      logger: ctx.logger,
+      // P4 governance: overrides/quotas resolve from the 'lifecycle'
+      // settings namespace when a SettingsService is present. Lazy per
+      // sweep — plugin registration order doesn't matter.
+      getSettings: () => {
+        try {
+          return ctx.getService('settings') as never;
+        } catch {
+          return undefined;
+        }
+      },
+      ...this.lifecycleOptions,
+    });
+    ctx.registerService('lifecycle', this.lifecycleService);
   }
 
   start = async (ctx: PluginContext) => {
@@ -335,6 +375,14 @@ export class ObjectQLPlugin implements Plugin {
     ctx.hook('kernel:ready', async () => {
         await this.resyncAuthoredHooks(ctx);
         await this.resyncAuthoredActions(ctx);
+        // ADR-0057 P4: surface the lifecycle governance namespace in Settings
+        // (overrides / quotas / growth alerts) when a SettingsService exists.
+        try {
+            const settings = ctx.getService('settings') as { registerManifest?: (m: unknown) => void };
+            settings?.registerManifest?.(lifecycleSettingsManifest);
+        } catch {
+            // No settings service — governance stays at declared defaults.
+        }
     });
     ctx.hook('metadata:reloaded', async () => {
         await this.resyncAuthoredHooks(ctx);
@@ -449,9 +497,14 @@ export class ObjectQLPlugin implements Plugin {
         driversRegistered: this.ql?.['drivers']?.size || 0,
         objectsRegistered: this.ql?.registry?.getAllObjects?.()?.length || 0
     });
+
+    // ADR-0057: arm the periodic lifecycle sweep once the engine is live.
+    this.lifecycleService?.start();
   }
 
   stop = async (ctx: PluginContext) => {
+    // ADR-0057: disarm the lifecycle sweep timers.
+    this.lifecycleService?.stop();
     // ADR-0008 PR-7: tear down metadata subscriptions on plugin stop so
     // tests don't leak watchers and reloaded plugins don't double-subscribe.
     for (const unsub of this.metadataUnsubscribes) {

@@ -7,6 +7,7 @@
     "audit-service",
     "queue-service",
     "email-service",
+    "sms-service",
     "settings-service",
     "storage-service",
     "examples",

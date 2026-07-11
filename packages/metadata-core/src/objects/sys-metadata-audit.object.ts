@@ -37,6 +37,14 @@ export const SysMetadataAuditObject = ObjectSchema.create({
   icon: 'shield-check',
   isSystem: true,
   managedBy: 'append-only',
+  // ADR-0057: compliance ledger for metadata changes — hot 365d, then
+  // archive-then-delete. Without an 'archive' datasource rows are retained
+  // forever (the Reaper never hot-deletes archive-declared objects).
+  lifecycle: {
+    class: 'audit',
+    retention: { maxAge: '365d' },
+    archive: { after: '365d', to: 'archive' },
+  },
   description: 'Append-only audit trail of metadata write decisions (ADR-0010).',
 
   fields: {

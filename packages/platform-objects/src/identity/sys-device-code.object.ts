@@ -26,6 +26,12 @@ export const SysDeviceCode = ObjectSchema.create({
   icon: 'key-round',
   isSystem: true,
   managedBy: 'better-auth',
+  // ADR-0057: device codes are dead the moment `expires_at` passes — keep a
+  // 1d grace for post-mortem, then reap.
+  lifecycle: {
+    class: 'transient',
+    ttl: { field: 'expires_at', expireAfter: '1d' },
+  },
   // [ADR-0066 D2/④] Secure-by-default: rows are LIVE pending device-grant
   // codes — reading `user_code`/`device_code` lets an attacker hijack a
   // pending CLI login. Not covered by the wildcard `'*'` grant; admins retain

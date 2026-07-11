@@ -23,6 +23,15 @@ export const SysActivity = ObjectSchema.create({
   icon: 'activity',
   isSystem: true,
   managedBy: 'append-only',
+  // ADR-0057: the highest-frequency telemetry table on the platform (the
+  // 260 MB dev.db regression was ~50% this table). 14 day-shards once the
+  // Rotator lands; the same 14d window is age-reaped until then.
+  lifecycle: {
+    class: 'telemetry',
+    retention: { maxAge: '14d' },
+    storage: { strategy: 'rotation', shards: 14, unit: 'day' },
+    reclaim: true,
+  },
   description: 'Recent activity stream entries (lightweight, denormalized)',
   displayNameField: 'summary',
   nameField: 'summary', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

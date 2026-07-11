@@ -24,6 +24,11 @@ export const NotificationDelivery = ObjectSchema.create({
     icon: 'send',
     isSystem: true,
     managedBy: 'system',
+    // ADR-0057: pipeline telemetry — same 90d window as sys_notification.
+    lifecycle: {
+        class: 'telemetry',
+        retention: { maxAge: '90d' },
+    },
     description: 'Durable per-recipient × channel delivery outbox (ADR-0030 Layer 4).',
     titleFormat: '{channel} → {recipient_id}',
     highlightFields: ['notification_id', 'recipient_id', 'channel', 'status', 'attempts'],

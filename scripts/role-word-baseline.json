@@ -20,6 +20,7 @@
   "content/docs/kernel/runtime-services/examples.mdx": 2,
   "content/docs/kernel/runtime-services/sharing-service.mdx": 2,
   "content/docs/kernel/services-checklist.mdx": 5,
+  "content/docs/permissions/authentication.mdx": 2,
   "content/docs/permissions/authorization.mdx": 3,
   "content/docs/permissions/index.mdx": 1,
   "content/docs/permissions/permission-metadata.mdx": 2,

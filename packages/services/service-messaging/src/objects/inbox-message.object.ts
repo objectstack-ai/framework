@@ -22,6 +22,12 @@ export const InboxMessage = ObjectSchema.create({
     label: 'Inbox Message',
     pluralLabel: 'Inbox Messages',
     icon: 'inbox',
+    // ADR-0057: user-facing but ephemeral — expires with the pipeline's 90d
+    // window (the same bound NotificationRetention applies when enabled).
+    lifecycle: {
+        class: 'transient',
+        ttl: { field: 'created_at', expireAfter: '90d' },
+    },
     description: 'User-facing in-app notification rows materialized by the inbox messaging channel.',
     nameField: 'title', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
     titleFormat: '{title}',
