@@ -208,6 +208,78 @@ export const objectForm = defineForm({
       collapsed: true,
       fields: [
         { field: 'datasource', type: 'text', helpText: 'Target datasource ID (default: "default")' },
+        {
+          field: 'lifecycle',
+          type: 'composite',
+          helpText:
+            'Data lifecycle contract (ADR-0057): how long rows live and how space is reclaimed. Leave empty for permanent record semantics. Non-record classes require at least one bounding policy (retention, TTL, or rotation).',
+          fields: [
+            {
+              field: 'class',
+              type: 'select',
+              helpText: 'Persistence contract for the rows of this object',
+              options: [
+                { label: 'Record (business truth — permanent)', value: 'record' },
+                { label: 'Audit (compliance ledger — retain → archive → delete)', value: 'audit' },
+                { label: 'Telemetry (high-frequency log — short retention)', value: 'telemetry' },
+                { label: 'Transient (ephemeral state — TTL expiry)', value: 'transient' },
+                { label: 'Event (bus messages — very short TTL)', value: 'event' },
+              ],
+            },
+            {
+              field: 'retention',
+              type: 'composite',
+              helpText: 'Age-based retention window',
+              fields: [
+                { field: 'maxAge', type: 'text', helpText: 'Rows older than this (by created_at) are reaped. Duration literal: h/d/w/y, e.g. "30d"' },
+              ],
+            },
+            {
+              field: 'ttl',
+              type: 'composite',
+              helpText: 'Per-row TTL expiry',
+              fields: [
+                { field: 'field', type: 'text', helpText: 'Timestamp field the TTL is measured from (e.g. expires_at)' },
+                { field: 'expireAfter', type: 'text', helpText: 'Rows expire this long after the field, e.g. "1d"' },
+              ],
+            },
+            {
+              field: 'storage',
+              type: 'composite',
+              helpText: 'Physical rotation for high-frequency telemetry (SQLite: O(1) shard DROP)',
+              fields: [
+                {
+                  field: 'strategy',
+                  type: 'select',
+                  helpText: 'Storage strategy',
+                  options: [{ label: 'Rotation (time-shard + drop oldest)', value: 'rotation' }],
+                },
+                { field: 'shards', type: 'number', min: 2, helpText: 'Shards retained; total window = shards × unit' },
+                {
+                  field: 'unit',
+                  type: 'select',
+                  helpText: 'Time width of one shard',
+                  options: [
+                    { label: 'Day', value: 'day' },
+                    { label: 'Week', value: 'week' },
+                    { label: 'Month', value: 'month' },
+                  ],
+                },
+              ],
+            },
+            {
+              field: 'archive',
+              type: 'composite',
+              helpText: 'Cold-store hand-off (audit class). Rows are never hot-deleted before the archive copy succeeded.',
+              fields: [
+                { field: 'after', type: 'text', helpText: 'Archive rows older than this — must equal retention.maxAge' },
+                { field: 'to', type: 'text', helpText: 'Target datasource name for cold storage' },
+                { field: 'keep', type: 'text', helpText: 'How long the archive keeps rows (empty = forever), e.g. "7y"' },
+              ],
+            },
+            { field: 'reclaim', type: 'boolean', helpText: 'Reclaim driver space after sweeps (default on for non-record classes)' },
+          ],
+        },
       ],
     },
   ],
