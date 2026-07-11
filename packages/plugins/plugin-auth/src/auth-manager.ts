@@ -19,6 +19,12 @@ import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-
 import { isPlaceholderEmail } from './placeholder-email.js';
 import { OtpSendGuard } from './otp-send-guard.js';
 import {
+  PHONE_SMS_TOPICS,
+  builtinPhoneSmsBody,
+  interpolatePhoneSms,
+  loadPhoneSmsTemplateBody,
+} from './phone-sms-texts.js';
+import {
   AUTH_USER_CONFIG,
   AUTH_SESSION_CONFIG,
   AUTH_ACCOUNT_CONFIG,
@@ -1615,7 +1621,7 @@ export class AuthManager {
         // awaits this callback on /phone-number/send-otp), so the guard's
         // TOO_MANY_REQUESTS becomes an honest 429 to the client.
         sendOTP: async ({ phoneNumber: phone, code }) => {
-          await this.deliverPhoneOtp(phone, code, 'sign-in verification');
+          await this.deliverPhoneOtp(phone, code);
         },
         // Self-service password reset OTP (`/phone-number/request-password-
         // reset`). better-auth invokes this via runInBackgroundOrAwait —
@@ -1623,7 +1629,7 @@ export class AuthManager {
         // throw here can neither 500 the request nor leak whether the number
         // is registered.
         sendPasswordResetOTP: async ({ phoneNumber: phone, code }) => {
-          await this.deliverPhoneOtp(phone, code, 'password reset');
+          await this.deliverPhoneOtp(phone, code);
         },
       }));
     }
@@ -2135,7 +2141,7 @@ export class AuthManager {
    *    a log line or an error message (the SmsService logs masked numbers
    *    and statuses, never bodies).
    */
-  private async deliverPhoneOtp(phone: string, code: string, purpose: string): Promise<void> {
+  private async deliverPhoneOtp(phone: string, code: string): Promise<void> {
     const sms = this.getSmsService();
     if (!sms || !this.isPhoneOtpDeliverable()) {
       // Absent service, or a log-only transport in production (the code
@@ -2148,9 +2154,19 @@ export class AuthManager {
     }
     const otpCfg = this.config.phoneOtp ?? {};
     const minutes = Math.max(1, Math.round((otpCfg.expiresIn ?? 300) / 60));
+    // #2815 — localised, tenant-customisable body: a sys_notification_template
+    // row for (auth.phone_otp, sms, deployment locale) wins; the built-in
+    // bilingual text is the fallback. Purpose-neutral wording on purpose —
+    // one provider template covers sign-in and reset, and the SMS reveals
+    // nothing about what the code unlocks.
+    const body = await this.renderPhoneSmsBody(PHONE_SMS_TOPICS.otp, {
+      code,
+      appName: this.getAppName(),
+      minutes,
+    });
     const result = await sms.send({
       to: phone,
-      body: `${code} is your ${this.getAppName()} ${purpose} code. It expires in ${minutes} minutes.`,
+      body,
       // Template-only providers (Aliyun) substitute into a registered OTP
       // template; `code` is the conventional variable name.
       templateParams: { code },
@@ -2176,14 +2192,42 @@ export class AuthManager {
       throw new Error('SMS_SERVICE_REQUIRED: no SMS service is configured for this deployment.');
     }
     const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
-    const body =
-      `Your ${this.getAppName()} account is ready. Sign in with this phone number using a verification code` +
-      (baseUrl ? ` at ${baseUrl}` : '') +
-      ', then set your password.';
+    // #2815 — localised, tenant-customisable body (see deliverPhoneOtp).
+    const body = await this.renderPhoneSmsBody(PHONE_SMS_TOPICS.invite, {
+      appName: this.getAppName(),
+      baseUrl,
+    });
     const result = await sms.send({ to: phone, body, templateParams: { content: body } });
     if (result.status === 'failed') {
       throw new Error(`Invitation SMS failed: ${result.error ?? 'SMS delivery failed'}`);
     }
+  }
+
+  /**
+   * #2815 — the deployment-default locale for auth SMS bodies, sourced from
+   * the live `localization.locale` setting. AuthPlugin pushes it on
+   * `kernel:ready` and on every settings change (same pattern as
+   * {@link setAppName}). Unset ⇒ the built-in English text.
+   *
+   * Per-user locale is not resolved yet — `sys_user` carries no locale
+   * column; when it grows one, resolution should prefer it (#2815).
+   */
+  setDefaultSmsLocale(locale: string | undefined): void {
+    this.smsLocale = locale?.trim() || undefined;
+  }
+  private smsLocale?: string;
+
+  /**
+   * #2815 — resolve an auth SMS body: the tenant's
+   * `sys_notification_template` row for `(topic, 'sms', locale chain)` when
+   * one exists, else the built-in bilingual text. Template lookups are
+   * best-effort — an outage must never block an OTP send.
+   */
+  private async renderPhoneSmsBody(topic: string, data: Record<string, unknown>): Promise<string> {
+    const template =
+      (await loadPhoneSmsTemplateBody(this.getDataEngine(), topic, this.smsLocale)) ??
+      builtinPhoneSmsBody(topic, this.smsLocale);
+    return interpolatePhoneSms(template, data);
   }
 
   /**

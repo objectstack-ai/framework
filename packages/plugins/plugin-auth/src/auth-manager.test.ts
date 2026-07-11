@@ -1233,6 +1233,59 @@ describe('AuthManager', () => {
       expect(sms.sent[0].body).toMatch(/verification code/);
       expect(sms.sent[0].body).toContain('http://localhost:3000');
     });
+
+    // #2815 — localised, tenant-customisable SMS bodies.
+    it('renders the built-in Chinese OTP text for a zh-CN deployment locale', async () => {
+      const { manager, opts } = await bootOtp();
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+      manager.setDefaultSmsLocale('zh-CN');
+
+      await opts.sendOTP({ phoneNumber: PHONE, code: '123456' });
+      expect(sms.sent[0].body).toContain('验证码');
+      expect(sms.sent[0].body).toContain('123456');
+      expect(sms.sent[0].templateParams).toEqual({ code: '123456' });
+
+      await manager.sendPhoneInviteSms(PHONE);
+      expect(sms.sent[1].body).toContain('账号已开通');
+      expect(sms.sent[1].body).toContain('http://localhost:3000');
+    });
+
+    it('a tenant sys_notification_template row overrides the built-in text', async () => {
+      const { manager, opts } = await bootOtp({
+        dataEngine: {
+          async find(object: string, q: any) {
+            if (
+              object === 'sys_notification_template' &&
+              q?.where?.topic === 'auth.phone_otp' &&
+              q?.where?.channel === 'sms' &&
+              q?.where?.locale === 'zh-CN'
+            ) {
+              return [{ body: '【定制】验证码 {{code}}（{{minutes}} 分钟）' }];
+            }
+            return [];
+          },
+        },
+      });
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+      manager.setDefaultSmsLocale('zh-CN');
+
+      await opts.sendOTP({ phoneNumber: PHONE, code: '654321' });
+      expect(sms.sent[0].body).toBe('【定制】验证码 654321（5 分钟）');
+    });
+
+    it('a broken template lookup falls back to the built-in text (never blocks the send)', async () => {
+      const { manager, opts } = await bootOtp({
+        dataEngine: { async find() { throw new Error('no such table'); } },
+      });
+      const sms = fakeSms();
+      manager.setSmsService(sms.service);
+
+      await opts.sendOTP({ phoneNumber: PHONE, code: '111222' });
+      expect(sms.sent[0].body).toContain('111222');
+      expect(sms.sent[0].body).toContain('verification code');
+    });
   });
 
   // #2766 V1.5 — placeholder addresses must never become real recipients.
