@@ -198,20 +198,24 @@ real enforced consumer.
 
 ## New in Console (Studio)
 
-The version-locked `@objectstack/console` bundle carries the frontend for this
-line, including the Permission Model v2 alignment that spans v13–v14:
+The Console bundled across the 14.x line (objectui `397dcad7..6fa8e6ae`) carries:
 
-- **Position assignment panels** — the generic `record:related_list` Add-picker
-  and `relationshipValueField` support render the `sys_user` **Positions** tab
-  and the `sys_position` **Holders** / **Permission Sets** tabs. With older
-  renderers these degrade to read-only lists.
-- **Record Attachments** — `RecordAttachmentsPanel` (upload / list / download /
-  delete over the three-step presigned storage flow) renders on record pages
-  when the object sets `enable: { files: true }`.
-- **Permission Model v2 surfaces** — Setup relabels Roles → Positions, the
-  Studio cross-reference picker moves its `role` kind to `position`, and
-  standalone **Explain**, **Access Matrix**, and **Delegated Administration**
-  pages expose the D6/D12 engines.
+- **Position assignment panels** — `relationshipValueField` renderer support
+  (aligned to 14.3) renders the `sys_user` **Positions** tab and the
+  `sys_position` **Holders** / **Permission Sets** tabs; older renderers degrade
+  to read-only lists.
+- **Phone-number auth** — SMS one-time-code **login** and **password reset**
+  (framework#2780 frontend).
+- **Object Capabilities section** in the Settings panel (the `enable.*` gates),
+  and an **effective-holders list** for permission sets with a more discoverable
+  explain user-picker.
+- **Dynamic runtime branding** consumed across the console, a cloud **AI
+  model-status** admin panel, and spreadsheet attachments that reach the build
+  agent.
+
+The record **Attachments panel** and the **"why can this user access?" explain
+panel** landed in the console bundled during the 13.x line — see
+[v13](/docs/releases/v13).
 
 For exhaustive, per-commit frontend detail, see the
 [objectui CHANGELOG](https://github.com/objectstack-ai/objectui/blob/main/CHANGELOG.md).

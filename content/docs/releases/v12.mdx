@@ -175,27 +175,28 @@ validation rejects mappings targeting undefined objects at build time.
 
 ## New in Console (Studio)
 
-The Console build frozen into `@objectstack/console` 12.x renders the adaptive
-surfaces and related-list model this release derives:
+The Console frozen into `@objectstack/console` across the 12.x line (objectui
+`77826989..b0aa2512`, 58 commits) is a broad Studio and record-UX push:
 
-- **Records open at the right size automatically** — the renderer consumes
-  `deriveRecordSurface` / `deriveRecordFlowSurface`: field-heavy records open as
-  a full page, light ones as a drawer/modal, and create/edit tasks always as an
-  overlay that returns losslessly to its origin. An explicit form/navigation
-  config still wins.
-- **Related lists gain structure** — a `relatedList: 'primary'` child gets its
-  own detail-page tab while the rest collapse into one shared **Related** tab;
-  every eligible FK surfaces its own list (a child referencing the parent
-  through several relationships now shows each), self-referential hierarchies
-  surface a "child" list, and the lookup picker and related list of the same
-  object share one `highlightFields` column source.
-- **Parameterized nav landings** — an `ObjectNavItem.filters` entry resolves to
-  the bare data surface (`/:object/data?filter[…]`) with removable filter chips,
-  for drill-throughs and "assigned to me" links.
-- **Dependent picklists** — `SelectOption.visibleWhen` hides options client-side
-  as a UX affordance (the value is still authorized server-side).
+- **Studio authoring surfaces** — metadata-driven **Validations / Hooks /
+  Actions** config panels, per-object **API / Hooks / Actions** tabs, a form
+  designer whose column density matches the runtime form, and a
+  **review-then-publish** confirmation with field-level change detail.
+- **Security authoring UI** (pairing with the v12–v13 security work) — an OWD
+  **sharing-model control** in Studio Settings, ADR-0066 **posture /
+  per-operation `requiredPermissions` / capability-lint** surfaced in the
+  authoring UI, and ADR-0090 D2 **provenance + default badges** replacing the
+  old profile toggles.
+- **Record UX** — create/edit **task flows as derived overlays** with a lossless
+  return to origin (framework#2604), the **`/:objectName/data`** parameterized
+  bare data surface with removable filter chips, **URL-driven detail tabs**
+  (`?tab=` survives remounts), **per-user persisted list filters**,
+  `Action.order` honored in the record header, cascading **`visibleWhen`**
+  select options, and **registered import mappings** in the import wizard.
+- **Infrastructure** — a **data-invalidation bus** (refresh data, don't rebuild
+  the UI) behind the snappier navigation.
 
-For exhaustive, per-commit frontend detail, see the
+Per-commit detail: the
 [objectui CHANGELOG](https://github.com/objectstack-ai/objectui/blob/main/CHANGELOG.md).
 
 ## Notable fixes
