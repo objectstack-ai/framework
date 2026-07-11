@@ -22,6 +22,19 @@ export interface ExportFieldMeta {
   reference?: string;
   /** Field on the referenced record to show as its label. */
   displayField?: string;
+  // The following four drive the import path's required-field pre-check
+  // (import-runner.ts). They mirror the engine's insert-time validation
+  // (objectql record-validator.ts) so a dry run can predict a NOT NULL /
+  // required failure instead of green-lighting a row the real insert rejects.
+  // Unused by the export path (formatting only reads type/options/reference).
+  /** Field is required — a value (or default) must exist on insert. */
+  required?: boolean;
+  /** Engine-owned column the client never supplies (never required of import). */
+  system?: boolean;
+  /** Read-only column the client never supplies (never required of import). */
+  readonly?: boolean;
+  /** Field declares a `defaultValue` the engine applies on insert (satisfies required). */
+  hasDefault?: boolean;
 }
 
 /** Field types whose stored value points at another record. */
@@ -78,6 +91,13 @@ export function buildFieldMetaMap(schema: unknown): Map<string, ExportFieldMeta>
       options: Array.isArray(f.options) ? f.options : undefined,
       reference: typeof f.reference === 'string' ? f.reference : undefined,
       displayField: typeof f.displayField === 'string' ? f.displayField : undefined,
+      required: f.required === true,
+      system: f.system === true,
+      readonly: f.readonly === true,
+      // Mirror the engine's `applyFieldDefaults` gate (`f.defaultValue == null`
+      // ⇒ no default): any non-null default — literal, expression object, or the
+      // `current_user` token — counts as satisfying a required field.
+      hasDefault: f.defaultValue != null,
     });
   }
   return map;

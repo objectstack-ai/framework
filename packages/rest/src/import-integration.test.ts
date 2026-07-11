@@ -97,6 +97,31 @@ const TASK = {
   },
 };
 
+// Mirrors an AI-built object with required fields and NO default (framework
+// import dry-run fidelity): `member_name` (required text) and `status` (required
+// select, no default) must be present on create; `tier` is required but carries
+// a default, so the engine fills it and the importer must NOT demand it.
+const MEMBER = {
+  name: 'member', label: 'Member', systemFields: false,
+  fields: {
+    id: { name: 'id', type: 'text' as const, primaryKey: true },
+    member_name: { name: 'member_name', type: 'text' as const, label: 'Name', required: true },
+    status: {
+      name: 'status', type: 'select' as const, label: 'Status', required: true,
+      options: [
+        { label: 'Active', value: 'active' },
+        { label: 'Frozen', value: 'frozen' },
+        { label: 'Lost Contact', value: 'lost_contact' },
+        { label: 'Archived', value: 'archived' },
+      ],
+    },
+    tier: {
+      name: 'tier', type: 'select' as const, label: 'Tier', required: true, defaultValue: 'standard',
+      options: [{ label: 'Standard', value: 'standard' }, { label: 'Gold', value: 'gold' }],
+    },
+  },
+};
+
 function createMockServer() {
   const noop = () => {};
   return { get: noop, post: noop, put: noop, delete: noop, patch: noop, use: noop, listen: async () => {}, close: async () => {} };
@@ -119,6 +144,7 @@ async function boot() {
   await engine.init();
   engine.registry.registerObject(USER as any);
   engine.registry.registerObject(TASK as any);
+  engine.registry.registerObject(MEMBER as any);
   await engine.insert('user', { id: 'u1', name: '张三', email: 'zhang@x.com' });
   await engine.insert('user', { id: 'u2', name: '李四', email: 'li@x.com' });
 
@@ -307,6 +333,71 @@ describe('import route — real engine + protocol integration', () => {
     expect(res._status).toBe(400);
     expect(res._json.code).toBe('INVALID_REQUEST');
     expect(String(res._json.error)).toMatch(/xlsx/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Required-field dry-run fidelity — the dry run must predict the real insert's
+// NOT NULL / required failures instead of green-lighting a row the insert
+// rejects. Mirrors the live mx1n_member case (required `status` select, no
+// default): dryRun said ok, the real insert died on a NOT NULL constraint.
+// ---------------------------------------------------------------------------
+describe('import route — required-field dry-run fidelity', () => {
+  let route: any;
+  let engine: any;
+  beforeEach(async () => { ({ route, engine } = await boot()); });
+
+  const imp = (body: any) => {
+    const res = makeRes();
+    return route.handler({ params: { object: 'member' }, body } as any, res).then(() => res);
+  };
+
+  it('dry run fails a create row missing a required no-default field — and the real insert agrees', async () => {
+    const rows = [
+      { id: 'm1', member_name: 'Alice' },                  // status missing → must fail
+      { id: 'm2', member_name: 'Bob', status: 'active' },  // complete → ok
+    ];
+    // Dry run: no longer reports success for the row the insert will reject.
+    const dry = await imp({ format: 'json', dryRun: true, rows });
+    expect(dry._json).toMatchObject({ dryRun: true, total: 2, ok: 1, errors: 1 });
+    expect(dry._json.results.find((r: any) => !r.ok)).toMatchObject({ row: 1, field: 'status', code: 'required' });
+    expect(await engine.findOne('member', { where: { id: 'm2' } })).toBeNull(); // dry run never writes
+
+    // Real insert: SAME verdict (parity), and a readable `status is required`
+    // instead of a raw `NOT NULL constraint failed: member.status`.
+    const real = await imp({ format: 'json', rows });
+    expect(real._json).toMatchObject({ total: 2, ok: 1, errors: 1, created: 1 });
+    expect(real._json.results.find((r: any) => !r.ok)).toMatchObject({ field: 'status', code: 'required', error: 'status is required' });
+    expect((await engine.findOne('member', { where: { id: 'm2' } }))?.status).toBe('active');
+    expect(await engine.findOne('member', { where: { id: 'm1' } })).toBeNull();
+  });
+
+  it('a required field with a schema default is satisfied without being mapped', async () => {
+    // `tier` is required but defaulted — the importer must not demand it; the
+    // engine fills 'standard'. Only member_name + status are supplied.
+    const res = await imp({ format: 'json', rows: [{ id: 'm3', member_name: 'Cara', status: 'frozen' }] });
+    expect(res._json).toMatchObject({ ok: 1, errors: 0, created: 1 });
+    expect(await engine.findOne('member', { where: { id: 'm3' } }))
+      .toMatchObject({ member_name: 'Cara', status: 'frozen', tier: 'standard' });
+  });
+
+  it('flags a required text field too (not just selects); a blank cell counts as missing', async () => {
+    const res = await imp({ format: 'json', dryRun: true, rows: [
+      { id: 'm4', status: 'active' },                     // member_name missing
+      { id: 'm5', member_name: '   ', status: 'active' }, // member_name blank
+    ] });
+    expect(res._json).toMatchObject({ ok: 0, errors: 2 });
+    for (const r of res._json.results) expect(r).toMatchObject({ field: 'member_name', code: 'required' });
+  });
+
+  it('required check does not apply to update-mode rows (only the touched fields matter)', async () => {
+    await engine.insert('member', { id: 'm6', member_name: 'Dan', status: 'active', tier: 'gold' });
+    // writeMode:update on an existing match, touching only member_name — status
+    // is not supplied but the record already has it, so this must NOT fail.
+    const res = await imp({ format: 'json', writeMode: 'update', matchFields: ['id'],
+      rows: [{ id: 'm6', member_name: 'Daniel' }] });
+    expect(res._json).toMatchObject({ ok: 1, errors: 0, updated: 1 });
+    expect((await engine.findOne('member', { where: { id: 'm6' } }))?.member_name).toBe('Daniel');
   });
 });
 

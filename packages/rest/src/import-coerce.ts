@@ -323,6 +323,53 @@ export async function coerceFieldValue(
   return { value: trim && typeof raw === 'string' ? raw.trim() : raw };
 }
 
+// ── required-field pre-check ───────────────────────────────────────
+
+/**
+ * Engine-owned lifecycle columns the client never supplies. Mirrors
+ * `record-validator.ts`'s `SKIP_FIELDS`, so the import's required pre-check and
+ * the engine's insert-time required check agree on which fields the caller is
+ * responsible for.
+ */
+const REQUIRED_CHECK_SKIP = new Set<string>([
+  'id', 'created_at', 'created_by', 'updated_at', 'updated_by',
+]);
+
+function isBlankValue(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * The first required field a would-be CREATE leaves unsatisfied, or `null` when
+ * every required field has either a mapped value or a schema default.
+ *
+ * This mirrors the engine's insert-time required check (objectql
+ * `record-validator.ts` + `applyFieldDefaults`) so the import's dry run predicts
+ * the SAME verdict the real insert produces: a required (⇒ NOT NULL) field with
+ * no default and no value fails both. Without it, dry run only reports coercion
+ * errors and green-lights a row that then dies on `NOT NULL constraint failed`.
+ *
+ * Matches the engine's exemptions exactly — `system`/`readonly` columns, the
+ * runtime-generated `autonumber`, a field carrying a `defaultValue`, and the
+ * engine-owned lifecycle columns are never required of the importer. Applies to
+ * CREATE only; an UPDATE touches just the supplied fields, so callers gate on
+ * "will create" before calling.
+ */
+export function firstMissingRequiredField(
+  data: Record<string, unknown>,
+  metaMap: Map<string, ExportFieldMeta>,
+): string | null {
+  for (const meta of metaMap.values()) {
+    if (!meta.required) continue;
+    if (meta.system || meta.readonly) continue;
+    if (meta.hasDefault) continue;
+    if (meta.type === 'autonumber') continue;
+    if (REQUIRED_CHECK_SKIP.has(meta.name)) continue;
+    if (isBlankValue(data[meta.name])) return meta.name;
+  }
+  return null;
+}
+
 /**
  * Coerce a whole raw row into a storage-ready record. Unknown columns (no
  * matching field metadata) pass through untouched so ad-hoc / schemaless

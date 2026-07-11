@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { coerceRow, type RefResolver, type RefMatch } from './import-coerce.js';
+import { coerceRow, firstMissingRequiredField, type RefResolver, type RefMatch } from './import-coerce.js';
 import type { ExportFieldMeta } from './export-format.js';
 import { bulkWrite, withTransientRetry, type BulkWriteRowResult } from '@objectstack/core';
 
@@ -310,7 +310,22 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
             const willUpdate = existing && typeof existing === 'object';
             const willCreate = !willUpdate && (writeMode === 'insert' || writeMode === 'upsert');
 
-            if (!willUpdate && !willCreate) {
+            // Required-field pre-check (CREATE only). Give dry run the same
+            // verdict the real insert produces — a required (⇒ NOT NULL) field
+            // with no default and no value fails both — instead of reporting
+            // success for a row that then dies on `NOT NULL constraint failed`.
+            // Shared by both paths so they stay identical (and a real insert
+            // gets a readable `<field> is required` instead of a raw driver
+            // error). Skipped when automations run: a beforeInsert hook may
+            // populate a required field, so we defer to the engine's own
+            // validation rather than false-reject here.
+            const requiredMiss =
+              willCreate && !runAutomations ? firstMissingRequiredField(data, metaMap) : null;
+
+            if (requiredMiss) {
+              errCount++;
+              results[i] = { row: rowNo, ok: false, action: 'failed', field: requiredMiss, code: 'required', error: `${requiredMiss} is required` };
+            } else if (!willUpdate && !willCreate) {
               // update mode, no match → skip.
               skipped++;
               results[i] = { row: rowNo, ok: true, action: 'skipped', code: 'NO_MATCH' };
