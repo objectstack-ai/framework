@@ -74,6 +74,7 @@ predicate/schema/binding mistakes that fail silently at runtime), and `os dev --
 | `os init [name]` | | Initialize a new ObjectStack project in the current directory |
 | `os dev [package]` | | Start development mode with hot reload |
 | `os serve [config]` | | Start the ObjectStack server with plugin auto-detection |
+| `os db clean` | | Reclaim SQLite free space with a one-time `VACUUM` (ADR-0057) |
 
 #### `os init`
 
@@ -133,6 +134,13 @@ os dev --database file:./data/test.db --auth-secret $(openssl rand -hex 32)
 | `--ui` | — | Force Studio UI on (already on by default in dev) |
 | `--no-compile` | — | Skip the auto-compile step (errors if no artifact present) |
 | `-v, --verbose` | — | Verbose output |
+
+With a file-backed SQLite database, dev also provisions a sibling
+`<db>.telemetry.<ext>` file registered as the `telemetry` datasource —
+lifecycle-classed system data (activity streams, job runs, notifications,
+audit) lands there instead of the business DB (ADR-0057). Opt out with
+`OS_TELEMETRY_DB=0`, or point it elsewhere (any mode, including `serve`)
+with `OS_TELEMETRY_DB=<path>`.
 
 #### `os serve`
 
@@ -194,6 +202,23 @@ export default defineStack({
   ],
 });
 ```
+
+#### `os db clean`
+
+Reclaims SQLite free space with a one-time `VACUUM` (ADR-0057 §3.4). The
+platform reclaims space incrementally (`auto_vacuum=INCREMENTAL`), but that
+setting only takes effect on a fresh database — files created before it
+stay pinned at their high-water mark until one full `VACUUM` rebuilds them.
+Non-destructive: every row survives; free pages return to the OS. Cleans
+the telemetry sibling too when one exists.
+
+```bash
+os db clean                                      # default: the per-project dev DB
+os db clean --database file:./data/app.db        # explicit target
+```
+
+**Options:**
+- `-d, --database <url>` — SQLite database URL/path (defaults to `$OS_DATABASE_URL`, then the per-project dev DB)
 
 #### Console UI
 
