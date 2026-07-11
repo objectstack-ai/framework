@@ -387,9 +387,45 @@ export class AuthPlugin implements Plugin {
                 });
                 ctx.logger.info('Auth: bound appName to settings namespace=branding');
               }
+
+              // #2815 — bind the auth SMS locale to the deployment default
+              // (`localization.locale`) so OTP/invitation texts render in the
+              // workspace language. Live-rebinds on settings changes.
+              const applySmsLocale = async () => {
+                try {
+                  const resolved = await settings.get('localization', 'locale', {});
+                  const value = resolved?.value;
+                  this.authManager?.setDefaultSmsLocale(
+                    typeof value === 'string' ? value : undefined,
+                  );
+                } catch (err: any) {
+                  ctx.logger.warn(
+                    'Auth: failed to apply localization.locale: ' + (err?.message ?? err),
+                  );
+                }
+              };
+              await applySmsLocale();
+              if (typeof settings.subscribe === 'function') {
+                settings.subscribe('localization', () => {
+                  void applySmsLocale();
+                });
+              }
             }
           } catch {
             // settings service is optional — keep the configured appName.
+          }
+
+          // #2815 — seed the built-in bilingual auth SMS templates into
+          // sys_notification_template (insert-if-missing; tenant edits are
+          // never overwritten). Only meaningful when phone sign-in is on;
+          // the table may not exist yet on a fresh env (messaging provisions
+          // it at kernel:ready), so failures log-and-continue.
+          if (this.authManager.isPhoneNumberEnabled()) {
+            const engine = this.authManager.getDataEngine();
+            if (engine) {
+              const { seedPhoneSmsTemplates } = await import('./phone-sms-texts.js');
+              await seedPhoneSmsTemplates(engine, ctx.logger);
+            }
           }
         }
 
