@@ -81,6 +81,45 @@ export interface HonoPluginOptions {
  * - `@objectstack/rest` → CRUD, metadata, discovery, UI, batch
  * - `createDispatcherPlugin()` → auth, graphql, analytics, packages, etc.
  */
+
+/**
+ * Fold the `'*'` wildcard super-user grant into every per-object entry of a
+ * `/me/permissions` `objects` map, mutating it in place.
+ *
+ * The endpoint merges each resolved permission set's explicit `objects` entries
+ * most-permissively per key, but treats `'*'` and named objects as independent
+ * keys — so a wildcard "Modify/View All Data" grant is never propagated into a
+ * per-object entry another set explicitly denied. That makes the client's
+ * per-object FLS STRICTER than the server's actual enforcement
+ * (`PermissionEvaluator.checkObjectPermission`, which returns allow as soon as
+ * ANY set grants — including via the `'*'` modifyAll/viewAll super-user bypass,
+ * with no deny-wins). The mismatch surfaces for a platform admin
+ * (`admin_full_access` `'*': {modifyAllRecords}`) who ALSO holds
+ * `organization_admin` (which denies writes on identity tables): the client
+ * would see `sys_user.allowEdit:false` and disable a form the server accepts
+ * (verified: `PATCH /data/sys_user {name}` → 200). ADR-0057 D10 makes the
+ * server the authoritative gate; the client must mirror it, never diverge.
+ *
+ * The super-user grant covers private/managed objects on the server, so folding
+ * it here is exactly as broad as real enforcement — never broader.
+ */
+export function foldWildcardSuperUser(objects: Record<string, any>): void {
+    const wild = objects?.['*'];
+    if (!wild) return;
+    const superRead = wild.viewAllRecords === true || wild.modifyAllRecords === true;
+    const superWrite = wild.modifyAllRecords === true;
+    if (!superRead && !superWrite) return;
+    for (const [obj, acc] of Object.entries(objects) as Array<[string, any]>) {
+        if (obj === '*' || !acc) continue;
+        if (superRead) acc.allowRead = true;
+        if (superWrite) {
+            acc.allowEdit = true;
+            acc.allowCreate = true;
+            acc.allowDelete = true;
+        }
+    }
+}
+
 export class HonoServerPlugin implements Plugin {
     name = 'com.objectstack.server.hono';
     type = 'server';
@@ -796,6 +835,10 @@ export class HonoServerPlugin implements Plugin {
                         }
                     }
                 }
+                // Fold the `'*'` wildcard super-user grant into every per-object
+                // entry (see foldWildcardSuperUser) so the client's per-object FLS
+                // matches the server's actual enforcement (ADR-0057 D10).
+                foldWildcardSuperUser(objects);
                 return c.json({
                     authenticated: true,
                     userId: execCtx.userId,
