@@ -102,6 +102,7 @@ export const defaultPermissionSets: PermissionSet[] = [
       'manage_metadata',
       'manage_platform_settings',
       'setup.access',
+      'setup.write',
       'studio.access',
     ],
   }),
@@ -154,7 +155,7 @@ export const defaultPermissionSets: PermissionSet[] = [
       sys_user_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
       sys_user_position: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
     },
-    systemPermissions: ['manage_org_users', 'setup.access'],
+    systemPermissions: ['manage_org_users', 'setup.access', 'setup.write'],
     rowLevelSecurity: [
       {
         name: 'tenant_isolation',

@@ -38,6 +38,11 @@ export const PLATFORM_CAPABILITIES: readonly PlatformCapability[] = [
   { name: 'manage_metadata', label: 'Manage Metadata', description: 'Author and publish object/view/flow and other metadata.', scope: 'platform' },
   { name: 'manage_platform_settings', label: 'Manage Platform Settings', description: 'Configure global platform settings (mail, storage, AI, licensing, …) and platform-only Setup pages.', scope: 'platform' },
   { name: 'setup.access', label: 'Setup Access', description: 'Enter the Setup app shell.', scope: 'platform' },
+  // [Finding-1] The write counterpart to `setup.access`: saving changes to
+  // tenant/Setup settings pages (branding, company, localization, feature
+  // flags). Previously referenced by settings manifests but never declared or
+  // granted — which was harmless only while settings writes went ungated.
+  { name: 'setup.write', label: 'Write Settings', description: 'Save changes to tenant/Setup settings pages.', scope: 'org' },
   { name: 'studio.access', label: 'Studio Access', description: 'Enter the Studio metadata-design surfaces.', scope: 'platform' },
 ];
 
