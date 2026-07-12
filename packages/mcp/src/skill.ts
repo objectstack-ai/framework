@@ -60,9 +60,11 @@ description: ${OBJECTSTACK_SKILL_DESCRIPTION}
 
 ${intro} An ObjectStack environment exposes its data **objects** (tables) and
 its business **actions** (registered app logic: approvals, conversions, flow
-triggers) as tools over the Model Context Protocol (MCP). Every operation runs **as you** —
-under your account's permissions and row-level security — so you may see a
-subset of rows, or get a permission error on a write. That is expected
+triggers) as tools over the Model Context Protocol (MCP). Every operation runs
+under the permissions and row-level security of the identity that connected you
+— and, for an OAuth connection, **within the consent scopes you were granted**
+(a read-only scope can never write, even where that user could). So you may see
+a subset of rows, or get a permission error on a write. That is expected
 governance, not a failure.
 
 ## When to use
@@ -88,8 +90,10 @@ Two authentication tracks are supported:
 server with no credentials; the deployment is its own OAuth 2.1 authorization
 server, so an OAuth-capable client (claude.ai custom connectors, Claude
 Desktop, Claude Code) discovers it automatically, registers itself, and opens
-a browser login. You sign in as yourself and every tool call runs under your
-own permissions. Example (Claude Code):
+a browser login. You authorize the connection in the browser; the client then
+acts as an agent **on your behalf** — every tool call is bounded by the
+intersection of the consent scopes you grant and your own permissions/RLS (it
+can never exceed either). Example (Claude Code):
 
 \`\`\`
 claude mcp add --transport http objectstack ${url}

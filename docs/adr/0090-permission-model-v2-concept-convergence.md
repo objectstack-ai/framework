@@ -312,6 +312,12 @@ package-owned sets:
 
 ### D10 — Principal taxonomy; agents act on intersected authority
 
+> **Status (2026-07):** the P1 ctx *shape* shipped pre-launch as written below; the agent
+> **evaluation semantics** have since landed — the intersection at every layer (#2838), the
+> producer that resolves an MCP OAuth client to `principalKind:'agent'` + `onBehalfOf` with a
+> scope-derived ceiling (#2843), and delegated action capabilities (#2845). Follow-ups tracked in
+> #2849 (agent action-body boundary / grant-ceiling lint) and the agent audit-provenance gap.
+
 ExecutionContext principals gain an explicit taxonomy:
 
 ```

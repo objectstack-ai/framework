@@ -56,10 +56,15 @@ SKILL.md download (`GET /api/v1/mcp/skill`), and API-key minting.
   discovery metadata, clients self-register via Dynamic Client Registration
   (RFC 7591) and run an authorization-code + PKCE flow. Nothing is
   pre-registered with Anthropic or any central service, so **self-hosted and
-  private deployments work out of the box**. You log in through the browser
-  as yourself; every tool call runs under your permissions and RLS. Consent
-  scopes (`data:read`, `data:write`, `actions:execute`) narrow which tool
-  families the client gets.
+  private deployments work out of the box**. You authorize the client in the
+  browser; it then acts as an **agent on your behalf** (`principalKind: 'agent'`),
+  bounded by the **intersection** of the consent scopes and your own
+  permissions/RLS — it can never exceed either. The consent scopes
+  (`data:read`, `data:write`, `actions:execute`) are a real ceiling, not just a
+  tool-family filter: they narrow the exposed tools **and** cap what the agent
+  can do at the data layer — a `data:read` token can never write a record even
+  where you could, and `actions:execute` lets the agent invoke the business
+  actions you are entitled to run.
 - **API key (headless).** Mint a key (`POST /api/v1/keys`, shown once) and
   send it as `x-api-key` — for CI, scripts, and agents without a browser.
 

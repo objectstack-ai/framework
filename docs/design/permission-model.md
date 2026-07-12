@@ -270,15 +270,24 @@ Every request carries a **principal** — who (or what) is asking. Five kinds, i
 **both** the assistant is allowed to do **and** 张三 is allowed to do — the overlap, never the
 union. Why: if an assistant with big permissions simply obeyed whoever prompts it, any intern
 could ask it to fetch the CEO's records. The overlap rule makes that structurally impossible.
+*Status: enforced.* The evaluator intersects the agent's own grants with the delegator's at every
+layer — object CRUD, FLS, depth, row-level `using`/`check`, and RLS — and the producer resolves an
+MCP OAuth client to `principalKind:'agent'` + `onBehalfOf` with a scope-derived ceiling
+(#2838 / #2843 / #2845). An agent's own View-All is stripped unless the delegator also holds it.
 
 Three more agent guardrails:
 
-1. **Ceiling** — sets held by agents may never contain super-user bits (View/Modify All, purge,
-   transfer, system permissions). Lint rejects the binding, not the request.
-2. **Human co-sign for destructive actions** — an agent may *start* a deletion or mass change,
-   but a human must confirm it, regardless of grants.
-3. **Double signature in the audit log** — every agent write records both "performed by:
-   assistant-X" and "on behalf of: 张三", plus the run that did it.
+1. **Ceiling** — an agent can never wield super-user bits (View/Modify All, purge, transfer, system
+   permissions) it does not *also* hold via the delegator: the intersection above caps it at
+   runtime today. *Planned:* a dedicated authoring lint that rejects **binding** such a set to an
+   agent up front (defense-in-depth on top of the runtime cap) — see #2849.
+2. **Human co-sign for destructive actions** — an agent may *start* a deletion or mass change, but a
+   human confirms it, regardless of grants. *Planned* (HITL signal exists on actions; the enforced
+   co-sign gate is not yet wired).
+3. **Double signature in the audit log** — every agent write should record both "performed by:
+   assistant-X" and "on behalf of: 张三", plus the run that did it. *Planned:* the audit writer
+   currently stamps only the delegating user; agent provenance (principal kind + client) is not yet
+   captured.
 
 ## 10. Running a large organization
 
