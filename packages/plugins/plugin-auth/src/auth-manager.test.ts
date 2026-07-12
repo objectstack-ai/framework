@@ -1342,6 +1342,35 @@ describe('AuthManager', () => {
       const { capturedConfig } = await boot({ plugins: { magicLink: true } });
       expect(capturedConfig.plugins.find((p: any) => p.id === 'magic-link')).toBeDefined();
     });
+
+    // The emailed accept URL must be an absolute link — a bare host in baseUrl
+    // (no scheme) produced relative-looking links email clients wouldn't open.
+    it('sendInvitationEmail builds an https:// accept URL when baseUrl lacks a scheme', async () => {
+      const { capturedConfig, emailService } = await boot({ baseUrl: 'cloud.objectos.ai' });
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      await orgPlugin._opts.sendInvitationEmail({
+        email: 'invitee@example.com',
+        invitation: { id: 'tok123', organizationId: 'o1', role: 'member' },
+        organization: { name: 'Org' },
+        inviter: { user: { email: 'admin@example.com' } },
+      });
+      expect(emailService.sendTemplate).toHaveBeenCalledTimes(1);
+      const { data } = emailService.sendTemplate.mock.calls[0][0];
+      expect(data.acceptUrl).toBe('https://cloud.objectos.ai/accept-invitation/tok123');
+    });
+
+    it('sendInvitationEmail preserves an explicit scheme in baseUrl', async () => {
+      const { capturedConfig, emailService } = await boot({ baseUrl: 'http://localhost:3000/' });
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      await orgPlugin._opts.sendInvitationEmail({
+        email: 'invitee@example.com',
+        invitation: { id: 'tok456', organizationId: 'o1', role: 'member' },
+        organization: { name: 'Org' },
+        inviter: { user: { email: 'admin@example.com' } },
+      });
+      const { data } = emailService.sendTemplate.mock.calls[0][0];
+      expect(data.acceptUrl).toBe('http://localhost:3000/accept-invitation/tok456');
+    });
   });
 
   describe('getPublicConfig', () => {

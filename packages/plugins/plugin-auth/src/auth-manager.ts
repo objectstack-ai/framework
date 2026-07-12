@@ -1513,8 +1513,7 @@ export class AuthManager {
         // operators / UI can fall back to copy-paste flows. Replace this
         // with a real mail integration when available.
         sendInvitationEmail: async ({ email: recipientEmail, invitation, organization: org, inviter }) => {
-          const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
-          const acceptUrl = `${baseUrl}/accept-invitation/${invitation.id}`;
+          const acceptUrl = `${this.getCanonicalOrigin()}/accept-invitation/${invitation.id}`;
           // #2766 V1.5 — placeholder addresses are never real recipients.
           if (isPlaceholderEmail(recipientEmail)) {
             throw new Error(
@@ -2360,7 +2359,12 @@ export class AuthManager {
 
   /** Canonical origin of this deployment (config `baseUrl`, auto-detected in dev). */
   private getCanonicalOrigin(): string {
-    return (this.config.baseUrl || 'http://localhost:3000').replace(/\/$/, '');
+    const raw = (this.config.baseUrl || 'http://localhost:3000').trim().replace(/\/$/, '');
+    // Guarantee an absolute origin with a scheme. A bare host (e.g. baseUrl
+    // configured as `cloud.objectos.ai`) yields relative-looking links that
+    // email clients won't linkify and that break when clicked — prepend
+    // https:// so invitation / OAuth URLs open correctly.
+    return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   }
 
   /**
