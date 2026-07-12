@@ -2040,7 +2040,7 @@ export class HttpDispatcher {
      * Handles Analytics requests
      * path: sub-path after /analytics/
      */
-    async handleAnalytics(path: string, method: string, body: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+    async handleAnalytics(path: string, method: string, body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const analyticsService = await this.getService(CoreServiceName.enum.analytics);
         if (!analyticsService) return { handled: false }; // 404 handled by caller if unhandled
 
@@ -2049,7 +2049,12 @@ export class HttpDispatcher {
 
         // POST /analytics/query
         if (subPath === 'query' && m === 'POST') {
-            const result = await analyticsService.query(body);
+            // [#2852] Pass the request's execution context so the analytics
+            // service scopes each object by its per-object read filter (tenant +
+            // RLS). Without it, `getReadScope(object, undefined)` returned no
+            // filter and the query ran UNSCOPED — an authenticated caller saw
+            // rows RLS would otherwise hide.
+            const result = await analyticsService.query(body, context?.executionContext);
             return { handled: true, response: this.success(result) };
         }
 
@@ -2061,8 +2066,9 @@ export class HttpDispatcher {
 
         // POST /analytics/sql (Dry-run or debug)
         if (subPath === 'sql' && m === 'POST') {
-             // Assuming service has generateSql method
-             const result = await analyticsService.generateSql(body);
+             // [#2852] Scope the generated SQL to the caller too, so a preview
+             // reflects the same per-object read filter the real query applies.
+             const result = await analyticsService.generateSql(body, context?.executionContext);
              return { handled: true, response: this.success(result) };
         }
 
