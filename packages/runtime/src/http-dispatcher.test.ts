@@ -383,6 +383,26 @@ describe('HttpDispatcher', () => {
                 expect(mockAnalytics.query).toHaveBeenCalled();
             });
 
+            // [#2852] The execution context must reach the analytics service so
+            // it scopes each object by its per-object read filter (tenant + RLS).
+            // Previously it was dropped and the query ran UNSCOPED.
+            it('threads the execution context into analytics.query and generateSql (RLS scoping)', async () => {
+                const mockAnalytics = {
+                    query: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+                    generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT 1', params: [] }),
+                };
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) =>
+                    name === 'analytics' ? mockAnalytics : null,
+                );
+                const ec = { userId: 'u1', positions: [], permissions: [], tenantId: 'org-1' };
+
+                await dispatcher.handleAnalytics('query', 'POST', { cube: 'leads' }, { request: {}, executionContext: ec } as any);
+                expect(mockAnalytics.query).toHaveBeenCalledWith({ cube: 'leads' }, ec);
+
+                await dispatcher.handleAnalytics('sql', 'POST', { cube: 'leads' }, { request: {}, executionContext: ec } as any);
+                expect(mockAnalytics.generateSql).toHaveBeenCalledWith({ cube: 'leads' }, ec);
+            });
+
             it('should handle POST /analytics/sql with async service', async () => {
                 const mockAnalytics = {
                     generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT * FROM t' }),
