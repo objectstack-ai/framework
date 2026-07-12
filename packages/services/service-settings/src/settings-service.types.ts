@@ -36,6 +36,16 @@ export interface SettingsContext {
   permissions?: string[];
   /** Source IP / request id for audit correlation. */
   requestId?: string;
+  /**
+   * [Finding-1] Marks a context that arrived across the HTTP trust boundary
+   * (set by the settings routes) as opposed to a trusted in-process/boot caller.
+   * When true, the service ENFORCES the manifest's `readPermission` /
+   * `writePermission` and drops the "empty permissions ⇒ pass-through" escape —
+   * so an unauthenticated request can neither enumerate protected namespaces nor
+   * write. In-process callers (seed/boot/kernel.getService('settings')) leave it
+   * unset and keep full trusted access.
+   */
+  enforced?: boolean;
 }
 
 /** Storage row shape used by both the engine and the in-memory store. */
@@ -231,6 +241,26 @@ export class UnknownKeyError extends Error {
   readonly code = 'SETTINGS_UNKNOWN_KEY' as const;
   constructor(readonly namespace: string, readonly key: string) {
     super(`Key '${key}' is not declared in manifest '${namespace}'.`);
+  }
+}
+
+/**
+ * [Finding-1] Thrown when an ENFORCED (HTTP-boundary) caller lacks the
+ * capability a manifest declares for the operation — `readPermission` for
+ * reads, `writePermission` for writes/actions. Maps to HTTP 403. Trusted
+ * in-process callers (no `enforced` flag) never hit this.
+ */
+export class SettingsForbiddenError extends Error {
+  readonly code = 'SETTINGS_FORBIDDEN' as const;
+  constructor(
+    readonly namespace: string,
+    readonly required: string,
+    readonly operation: 'read' | 'write',
+  ) {
+    super(
+      `Access denied: ${operation === 'read' ? 'reading' : 'writing to'} settings namespace ` +
+        `'${namespace}' requires the '${required}' capability`,
+    );
   }
 }
 

@@ -174,6 +174,53 @@ describe('SettingsService — listManifests permission filter', () => {
   });
 });
 
+describe('SettingsService — [Finding-1] enforced (HTTP-boundary) authz', () => {
+  const admin = { enforced: true, permissions: ['setup.access', 'setup.write'] };
+  const anon = { enforced: true };
+
+  it('listManifests: an enforced caller with no capability sees NOTHING (no pass-through)', () => {
+    const svc = new SettingsService();
+    svc.registerManifest(brandingSettingsManifest);
+    // Trusted (non-enforced) empty ctx still passes through …
+    expect(svc.listManifests({ permissions: [] }).length).toBe(1);
+    // … but an enforced empty ctx does not.
+    expect(svc.listManifests(anon).length).toBe(0);
+    expect(svc.listManifests(admin).length).toBe(1);
+  });
+
+  it('getNamespace: enforced read requires the manifest readPermission', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest); // readPermission: setup.access
+    await expect(svc.getNamespace('branding', anon)).rejects.toMatchObject({ code: 'SETTINGS_FORBIDDEN' });
+    await expect(svc.getNamespace('branding', admin)).resolves.toBeTruthy();
+    // Trusted in-process caller (no enforced) is never gated.
+    await expect(svc.getNamespace('branding', {})).resolves.toBeTruthy();
+  });
+
+  it('setMany: enforced write requires the manifest writePermission (the closed hole)', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest); // writePermission: setup.write
+    // No capability → denied.
+    await expect(svc.setMany('branding', { workspace_name: 'X' }, anon)).rejects.toMatchObject({ code: 'SETTINGS_FORBIDDEN' });
+    // Read-only capability is NOT enough to write.
+    await expect(
+      svc.setMany('branding', { workspace_name: 'X' }, { enforced: true, permissions: ['setup.access'] }),
+    ).rejects.toMatchObject({ code: 'SETTINGS_FORBIDDEN' });
+    // Full write capability → allowed.
+    await expect(svc.setMany('branding', { workspace_name: 'X' }, admin)).resolves.toBeTruthy();
+    // Trusted in-process caller (no enforced) writes without a capability.
+    await expect(svc.setMany('branding', { workspace_name: 'Y' }, {})).resolves.toBeTruthy();
+  });
+
+  it('runAction: enforced action requires the write capability', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    svc.registerAction('branding', 'ping', () => ({ ok: true, message: 'pong' }));
+    await expect(svc.runAction('branding', 'ping', null, anon)).rejects.toMatchObject({ code: 'SETTINGS_FORBIDDEN' });
+    await expect(svc.runAction('branding', 'ping', null, admin)).resolves.toMatchObject({ ok: true });
+  });
+});
+
 describe('SettingsService — runAction', () => {
   it('returns an error for unregistered actions', async () => {
     const svc = new SettingsService();

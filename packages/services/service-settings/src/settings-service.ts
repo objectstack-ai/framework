@@ -22,6 +22,7 @@ import {
   type SettingsRow,
   type SettingsServiceOptions,
   envKeyOf,
+  SettingsForbiddenError,
   SettingsLockedError,
   SettingsValidationError,
   UnknownKeyError,
@@ -208,13 +209,42 @@ export class SettingsService {
     return reg.manifest;
   }
 
+  /**
+   * [Finding-1] Capability a manifest demands for an operation. Reads default to
+   * `setup.access`; writes default to the manifest's `writePermission`, falling
+   * back to its `readPermission`, then `setup.access` — so a write ALWAYS
+   * requires at least as much as a read and is never ungated.
+   */
+  private requiredCapability(m: SettingsManifest, op: 'read' | 'write'): string {
+    return op === 'read'
+      ? (m.readPermission ?? 'setup.access')
+      : (m.writePermission ?? m.readPermission ?? 'setup.access');
+  }
+
+  /**
+   * [Finding-1] Enforce the manifest's capability for an ENFORCED (HTTP-boundary)
+   * caller. Trusted in-process callers (`enforced` unset) are never gated — the
+   * seed/boot paths that call the service directly keep full access.
+   */
+  private assertPermitted(m: SettingsManifest, op: 'read' | 'write', ctx: SettingsContext): void {
+    if (!ctx.enforced) return;
+    const required = this.requiredCapability(m, op);
+    const held = new Set(ctx.permissions ?? []);
+    if (!held.has(required)) {
+      throw new SettingsForbiddenError(m.namespace, required, op);
+    }
+  }
+
   /** List all registered manifests, optionally filtered by permission. */
   listManifests(ctx: SettingsContext = {}): SettingsManifest[] {
     const perms = new Set(ctx.permissions ?? []);
     const all = Array.from(this.registry.values()).map((r) => r.manifest);
-    // Empty permissions ⇒ pass-through (server-side trust, e.g. boot tests).
-    if (perms.size === 0) return all;
-    return all.filter((m) => perms.has(m.readPermission ?? 'setup.access'));
+    // Empty permissions ⇒ pass-through ONLY for a trusted (non-enforced)
+    // in-process caller. An ENFORCED HTTP caller with no capabilities sees only
+    // the manifests it may read — never the whole set (Finding-1: an
+    // unauthenticated request previously enumerated every namespace).
+    if (perms.size === 0 && !ctx.enforced) return all;
+    return all.filter((m) => perms.has(this.requiredCapability(m, 'read')));
   }
 
   /** Register a handler for an `action_button` declared in a manifest. */
@@ -325,6 +355,9 @@ export class SettingsService {
   ): Promise<SettingsNamespacePayload> {
     const reg = this.registry.get(namespace);
     if (!reg) throw new UnknownNamespaceError(namespace);
+    // [Finding-1] Reading a namespace's values requires the manifest's read
+    // capability for an enforced (HTTP) caller.
+    this.assertPermitted(reg.manifest, 'read', ctx);
 
     const values: Record<string, ResolvedSettingValue> = {};
     for (const [key] of reg.scopes) {
@@ -424,6 +457,11 @@ export class SettingsService {
   ): Promise<Record<string, ResolvedSettingValue>> {
     const reg = this.registry.get(namespace);
     if (!reg) throw new UnknownNamespaceError(namespace);
+    // [Finding-1] Writing requires the manifest's write capability for an
+    // enforced (HTTP) caller. Checked BEFORE any lock/validation work so an
+    // unauthorized write is rejected outright (this is the gate that was
+    // missing — the write path previously trusted a spoofable header identity).
+    this.assertPermitted(reg.manifest, 'write', ctx);
 
     // Pre-flight: reject the whole batch if any key is locked or unknown.
     for (const key of Object.keys(patch)) {
@@ -680,6 +718,10 @@ export class SettingsService {
   ): Promise<SettingsActionResult> {
     const reg = this.registry.get(namespace);
     if (!reg) throw new UnknownNamespaceError(namespace);
+    // [Finding-1] Settings actions (test-connection, rotate, reset, …) are
+    // mutating/side-effecting operations — gate them like a write for an
+    // enforced (HTTP) caller.
+    this.assertPermitted(reg.manifest, 'write', ctx);
     const handler = reg.actions.get(actionId);
     if (!handler) {
       // Built-in fallback: every namespace gets a `reset` action that

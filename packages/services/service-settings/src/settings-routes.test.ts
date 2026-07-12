@@ -41,12 +41,17 @@ function makeReqRes(opts: { params?: Record<string, string>; body?: any; headers
   return { req, res, state };
 }
 
+// [Finding-1] An authorized admin context (verified, holds the branding
+// manifest's setup.access/setup.write capabilities). The production plugin
+// derives this from the verified session/API-key; here we inject it directly.
+const adminProvider = () => ({ enforced: true, permissions: ['setup.access', 'setup.write'] });
+
 describe('settings-routes', () => {
   it('GET /api/settings → manifests', async () => {
     const http = new MockHttp();
     const svc = new SettingsService();
     svc.registerManifest(brandingSettingsManifest);
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('GET /api/settings')!;
     const { req, res, state } = makeReqRes();
@@ -58,7 +63,7 @@ describe('settings-routes', () => {
     const http = new MockHttp();
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(brandingSettingsManifest);
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('GET /api/settings/:namespace')!;
     const { req, res, state } = makeReqRes({ params: { namespace: 'branding' } });
@@ -71,7 +76,7 @@ describe('settings-routes', () => {
     const http = new MockHttp();
     const svc = new SettingsService({ env: { OS_BRANDING_WORKSPACE_NAME: 'X' } });
     svc.registerManifest(brandingSettingsManifest);
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('PUT /api/settings/:namespace')!;
     const { req, res, state } = makeReqRes({ params: { namespace: 'branding' }, body: { workspace_name: 'Y' } });
@@ -94,7 +99,7 @@ describe('settings-routes', () => {
     const http = new MockHttp();
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(brandingSettingsManifest);
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('PUT /api/settings/:namespace')!;
     const { req, res, state } = makeReqRes({ params: { namespace: 'branding' }, body: { values: { workspace_name: 'My Co' } } });
@@ -108,7 +113,7 @@ describe('settings-routes', () => {
     const http = new MockHttp();
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(brandingSettingsManifest);
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('PUT /api/settings/:namespace')!;
     // Exactly what GET returns: { values: { key: { value, source, ... } } }
@@ -126,12 +131,86 @@ describe('settings-routes', () => {
     const svc = new SettingsService({ env: {} });
     svc.registerManifest(brandingSettingsManifest);
     svc.registerAction('branding', 'ping', () => ({ ok: true, message: 'pong' }));
-    registerSettingsRoutes(http, svc);
+    registerSettingsRoutes(http, svc, { contextFromRequest: adminProvider });
 
     const h = http.routes.get('POST /api/settings/:namespace/:actionId')!;
     const { req, res, state } = makeReqRes({ params: { namespace: 'branding', actionId: 'ping' }, body: null });
     await h(req, res);
     expect(state.status).toBe(200);
     expect(state.body.ok).toBe(true);
+  });
+
+  // ── [Finding-1] the DEFAULT (no verified provider) is SECURE ──────────────
+  // Header-trusted identity is gone; an unauthenticated request can neither
+  // enumerate protected namespaces nor write them.
+  it('anonymous GET /api/settings hides manifests that require a read capability', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService();
+    svc.registerManifest(brandingSettingsManifest); // requires setup.access
+    registerSettingsRoutes(http, svc); // secure default → anonymous + enforced
+
+    const h = http.routes.get('GET /api/settings')!;
+    const { req, res, state } = makeReqRes();
+    await h(req, res);
+    expect(state.body.manifests.length).toBe(0);
+  });
+
+  it('anonymous GET /api/settings/:ns is DENIED (403), not served', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc);
+
+    const h = http.routes.get('GET /api/settings/:namespace')!;
+    const { req, res, state } = makeReqRes({ params: { namespace: 'branding' } });
+    await h(req, res);
+    expect(state.status).toBe(403);
+    expect(state.body.error.code).toBe('SETTINGS_FORBIDDEN');
+  });
+
+  it('anonymous PUT /api/settings/:ns is DENIED (403) — the unauthenticated write hole is closed', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc);
+
+    const h = http.routes.get('PUT /api/settings/:namespace')!;
+    const { req, res, state } = makeReqRes({ params: { namespace: 'branding' }, body: { workspace_name: 'pwn' } });
+    await h(req, res);
+    expect(state.status).toBe(403);
+    expect(state.body.error.code).toBe('SETTINGS_FORBIDDEN');
+  });
+
+  it('a spoofed x-user-id / x-permissions header grants NOTHING (default ignores identity headers)', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc);
+
+    const h = http.routes.get('PUT /api/settings/:namespace')!;
+    const { req, res, state } = makeReqRes({
+      params: { namespace: 'branding' },
+      body: { workspace_name: 'pwn' },
+      headers: { 'x-user-id': 'attacker', 'x-permissions': 'setup.write,setup.access' },
+    });
+    await h(req, res);
+    expect(state.status).toBe(403);
+  });
+
+  it('a caller holding only read (setup.access) may read but NOT write', async () => {
+    const http = new MockHttp();
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest(brandingSettingsManifest);
+    registerSettingsRoutes(http, svc, { contextFromRequest: () => ({ enforced: true, permissions: ['setup.access'] }) });
+
+    const read = http.routes.get('GET /api/settings/:namespace')!;
+    const r1 = makeReqRes({ params: { namespace: 'branding' } });
+    await read(r1.req, r1.res);
+    expect(r1.state.body.manifest.namespace).toBe('branding');
+
+    const write = http.routes.get('PUT /api/settings/:namespace')!;
+    const r2 = makeReqRes({ params: { namespace: 'branding' }, body: { workspace_name: 'X' } });
+    await write(r2.req, r2.res);
+    expect(r2.state.status).toBe(403); // has setup.access, lacks setup.write
   });
 });
