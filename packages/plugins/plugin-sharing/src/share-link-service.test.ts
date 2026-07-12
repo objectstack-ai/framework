@@ -163,4 +163,49 @@ describe('ShareLinkService', () => {
     ];
     expect(await service.resolveToken('expired-token-xyz-123')).toBeNull();
   });
+
+  // ── [Finding-2] verified-authz enforcement ────────────────────────────────
+  describe('authorization (Finding-2)', () => {
+    it('only the creator may revoke a link (a different user is denied)', async () => {
+      const link = await service.createLink(
+        { object: 'ai_conversations', recordId: 'c1', audience: 'link_only', permission: 'view' },
+        { userId: 'owner' },
+      );
+      // A different signed-in user cannot revoke someone else's link.
+      await expect(service.revokeLink(link.id, { userId: 'attacker' })).rejects.toMatchObject({ status: 403 });
+      // The row is untouched.
+      expect(engine._tables.sys_share_link[0].revoked_at).toBeNull();
+      // The creator can.
+      await expect(service.revokeLink(link.id, { userId: 'owner' })).resolves.toBeUndefined();
+      expect(engine._tables.sys_share_link[0].revoked_at).not.toBeNull();
+    });
+
+    it('a system/internal caller may revoke any link', async () => {
+      const link = await service.createLink(
+        { object: 'ai_conversations', recordId: 'c1', audience: 'link_only', permission: 'view' },
+        { userId: 'owner' },
+      );
+      await expect(service.revokeLink(link.id, { isSystem: true })).resolves.toBeUndefined();
+      expect(engine._tables.sys_share_link[0].revoked_at).not.toBeNull();
+    });
+
+    it('an HTTP caller cannot mint a link for a record it cannot see (403, not 404)', async () => {
+      // The record-access re-read runs under the caller context; a record the
+      // caller cannot see (here: does not exist) yields a fail-closed 403 for an
+      // untrusted caller — never a link, and without leaking existence.
+      await expect(
+        service.createLink(
+          { object: 'ai_conversations', recordId: 'ghost', audience: 'link_only', permission: 'view' },
+          { userId: 'u1' },
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      // A system caller still gets the plain 404.
+      await expect(
+        service.createLink(
+          { object: 'ai_conversations', recordId: 'ghost', audience: 'link_only', permission: 'view' },
+          { isSystem: true },
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+  });
 });

@@ -101,6 +101,14 @@ export interface ShareLinkExecutionContext {
   userId?: string;
   tenantId?: string;
   isSystem?: boolean;
+  /**
+   * [Finding-2] The caller's resolved positions / permissions. Populated by the
+   * verified route wiring so RLS-aware checks (e.g. "can this caller actually
+   * read the record being shared?") evaluate against the real principal rather
+   * than a spoofable header identity.
+   */
+  positions?: string[];
+  permissions?: string[];
 }
 
 /**

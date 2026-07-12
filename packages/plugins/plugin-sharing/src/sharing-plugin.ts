@@ -1,8 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { resolveAuthzContext } from '@objectstack/core';
 import type { EngineMiddleware, OperationContext } from '@objectstack/objectql';
-import type { IHttpServer } from '@objectstack/spec/contracts';
+import type { IHttpServer, IHttpRequest, ShareLinkExecutionContext } from '@objectstack/spec/contracts';
 import { SysRecordShare, SysSharingRule, SysShareLink } from './objects/index.js';
 import { SysBusinessUnit, SysBusinessUnitMember } from '@objectstack/platform-objects/identity';
 import { SharingService, type SharingEngine } from './sharing-service.js';
@@ -288,8 +289,43 @@ export class SharingServicePlugin implements Plugin {
             // No HTTP server — service still reachable via getService.
           }
           if (http) {
+            // [Finding-2] Derive the caller from the platform's VERIFIED
+            // resolution (session / API key / OAuth), never from spoofable
+            // `x-user-id` headers. `positions`/`permissions` flow through so the
+            // createLink record-access check evaluates real RLS. An
+            // unresolvable request → anonymous (the authed routes then 401).
+            const ql: any = engine;
+            const verifiedContextFromRequest = async (req: IHttpRequest): Promise<ShareLinkExecutionContext> => {
+              try {
+                const headers = new Headers();
+                for (const [k, v] of Object.entries(req.headers ?? {})) {
+                  if (v == null) continue;
+                  headers.set(String(k), Array.isArray(v) ? v.join(',') : String(v));
+                }
+                const getSession = async (h: any) => {
+                  try {
+                    const authService: any = ctx.getService('auth');
+                    let api: any = authService?.api;
+                    if (!api && typeof authService?.getApi === 'function') api = await authService.getApi();
+                    return await api?.getSession?.({ headers: h });
+                  } catch {
+                    return undefined;
+                  }
+                };
+                const authz = await resolveAuthzContext({ ql, headers, getSession });
+                return {
+                  userId: authz.userId,
+                  tenantId: authz.tenantId,
+                  positions: authz.positions,
+                  permissions: authz.permissions,
+                };
+              } catch {
+                return {}; // anonymous → authed routes 401
+              }
+            };
             registerShareLinkRoutes(http, this.linkService, engine as SharingEngine, {
               basePath: this.options.shareLinkBasePath,
+              contextFromRequest: verifiedContextFromRequest,
             });
             ctx.logger.info(
               'SharingServicePlugin: share-link routes mounted at ' +

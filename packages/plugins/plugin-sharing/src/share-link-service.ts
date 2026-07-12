@@ -234,16 +234,23 @@ export class ShareLinkService implements IShareLinkService {
       throw makeError(400, 'VALIDATION_FAILED', 'emailAllowlist is required when audience=email');
     }
 
-    // Confirm the target record actually exists — silently issuing
-    // links against ghost rows is a footgun.
+    // Confirm the target record exists AND — for an HTTP caller — that the
+    // caller may actually SEE it. [Finding-2] Reading under the caller's own
+    // context (positions/permissions/RLS) means you can only mint a link for a
+    // record you can access; a client can no longer share arbitrary rows of a
+    // publicSharing-enabled object it cannot see. Internal (isSystem) callers
+    // read under the system context as before.
     const exists = await this.engine.find(input.object, {
       where: { id: input.recordId },
       fields: ['id'],
       limit: 1,
-      context: SYSTEM_CTX,
+      context: context.isSystem ? SYSTEM_CTX : context,
     } as any);
     if (!Array.isArray(exists) || exists.length === 0) {
-      throw makeError(404, 'RECORD_NOT_FOUND', `${input.object}/${input.recordId} does not exist`);
+      // Don't distinguish "missing" from "not visible" for an untrusted caller.
+      throw context.isSystem
+        ? makeError(404, 'RECORD_NOT_FOUND', `${input.object}/${input.recordId} does not exist`)
+        : makeError(403, 'FORBIDDEN', `Not permitted to share ${input.object}/${input.recordId}`);
     }
 
     const maxDays = policy.maxExpiryDays ?? DEFAULT_MAX_EXPIRY_DAYS;
@@ -277,17 +284,23 @@ export class ShareLinkService implements IShareLinkService {
     return row;
   }
 
-  async revokeLink(idOrToken: string, _context: ShareLinkExecutionContext): Promise<void> {
+  async revokeLink(idOrToken: string, context: ShareLinkExecutionContext): Promise<void> {
     if (!idOrToken) throw makeError(400, 'VALIDATION_FAILED', 'id or token is required');
     const filter = idOrToken.startsWith('shl_') ? { id: idOrToken } : { token: idOrToken };
     const rows = await this.engine.find('sys_share_link', {
       where: filter,
-      fields: ['id', 'revoked_at'],
+      fields: ['id', 'revoked_at', 'created_by'],
       limit: 1,
       context: SYSTEM_CTX,
     } as any);
     const row = Array.isArray(rows) ? (rows[0] as any) : undefined;
     if (!row) return; // No-op when missing
+    // [Finding-2] Only the link's creator may revoke it (internal/system callers
+    // bypass). Previously the caller context was ignored, so any client could
+    // revoke any user's link by id/token (sharing DoS).
+    if (!context.isSystem && row.created_by !== context.userId) {
+      throw makeError(403, 'FORBIDDEN', 'Not permitted to revoke this share link');
+    }
     if (row.revoked_at) return; // Already revoked
     await this.engine.update(
       'sys_share_link',

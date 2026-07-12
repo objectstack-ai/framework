@@ -30,20 +30,23 @@ const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
 
 export interface ShareLinkRoutesOptions {
   basePath?: string;
-  /** Read caller identity for authenticated routes. */
-  contextFromRequest?: (req: IHttpRequest) => ShareLinkExecutionContext;
+  /**
+   * Derive the VERIFIED caller identity for the authenticated routes
+   * (create / list / revoke). Production wiring (`SharingServicePlugin`) passes
+   * a resolver backed by `resolveAuthzContext` (session / API key / OAuth).
+   *
+   * [Finding-2] The default is SECURE: it trusts NO identity header and yields
+   * an anonymous context (the authenticated routes then 401). The old default
+   * trusted `x-user-id` / `x-tenant-id`, which let a client forge attribution
+   * and enumerate/revoke other users' links.
+   */
+  contextFromRequest?: (req: IHttpRequest) => ShareLinkExecutionContext | Promise<ShareLinkExecutionContext>;
 }
 
-const defaultContext = (req: IHttpRequest): ShareLinkExecutionContext => {
-  const header = (name: string): string | undefined => {
-    const v = req.headers?.[name];
-    return Array.isArray(v) ? v[0] : v;
-  };
-  return {
-    userId: header('x-user-id'),
-    tenantId: header('x-tenant-id'),
-  };
-};
+// [Finding-2] Secure default: anonymous (no identity read from headers). A
+// deployment that wants authenticated share-link management must wire a
+// verified `contextFromRequest` (the plugin does).
+const defaultContext = (_req: IHttpRequest): ShareLinkExecutionContext => ({});
 
 function sendError(res: IHttpResponse, status: number, code: string, message: string) {
   res.status(status).json({ error: { code, message } });
@@ -73,7 +76,9 @@ export function registerShareLinkRoutes(
   // ── CREATE ─────────────────────────────────────────────────────
   http.post(base, (async (req, res) => {
     try {
-      const ctx = ctxOf(req);
+      const ctx = await ctxOf(req);
+      // [Finding-2] Managing links requires a verified principal.
+      if (!ctx.userId) return sendError(res, 401, 'UNAUTHENTICATED', 'Sign in to create share links');
       const body: any = req.body ?? {};
       if (!body.object || !body.recordId) {
         return sendError(res, 400, 'VALIDATION_FAILED', 'object and recordId are required');
@@ -105,13 +110,16 @@ export function registerShareLinkRoutes(
   // ── LIST ───────────────────────────────────────────────────────
   http.get(base, (async (req, res) => {
     try {
-      const ctx = ctxOf(req);
+      const ctx = await ctxOf(req);
+      if (!ctx.userId) return sendError(res, 401, 'UNAUTHENTICATED', 'Sign in to list share links');
       const q = req.query ?? {};
       const link = await service.listLinks(
         {
           object: typeof q.object === 'string' ? q.object : undefined,
           recordId: typeof q.recordId === 'string' ? q.recordId : undefined,
-          createdBy: typeof q.createdBy === 'string' ? q.createdBy : undefined,
+          // [Finding-2] Force the caller's own id — a client can no longer pass
+          // `?createdBy=<victim>` to enumerate another user's link tokens.
+          createdBy: ctx.userId,
           includeRevoked: q.includeRevoked === 'true' || q.includeRevoked === '1',
         },
         ctx,
@@ -125,7 +133,8 @@ export function registerShareLinkRoutes(
   // ── REVOKE ─────────────────────────────────────────────────────
   http.delete(`${base}/:idOrToken`, (async (req, res) => {
     try {
-      const ctx = ctxOf(req);
+      const ctx = await ctxOf(req);
+      if (!ctx.userId) return sendError(res, 401, 'UNAUTHENTICATED', 'Sign in to revoke share links');
       await service.revokeLink(req.params.idOrToken, ctx);
       await res.status(200).json({ ok: true });
     } catch (err: any) {
@@ -140,10 +149,10 @@ export function registerShareLinkRoutes(
   http.get(`${base}/:token/resolve`, (async (req, res) => {
     try {
       const q = req.query ?? {};
-      const signedInUserId = (() => {
-        const v = req.headers?.['x-user-id'];
-        return Array.isArray(v) ? v[0] : v;
-      })();
+      // [Finding-2] The `audience: 'signed_in'` gate must key off the VERIFIED
+      // session, not a spoofable `x-user-id` header — otherwise anyone can pass
+      // the "must be signed in" check by inventing a user id.
+      const signedInUserId = (await ctxOf(req)).userId;
       const recipientEmail = typeof q.email === 'string' ? q.email : undefined;
       const providedPassword =
         typeof q.password === 'string'
