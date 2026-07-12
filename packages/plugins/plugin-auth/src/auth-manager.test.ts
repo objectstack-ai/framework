@@ -1343,9 +1343,11 @@ describe('AuthManager', () => {
       expect(capturedConfig.plugins.find((p: any) => p.id === 'magic-link')).toBeDefined();
     });
 
-    // The emailed accept URL must be an absolute link — a bare host in baseUrl
-    // (no scheme) produced relative-looking links email clients wouldn't open.
-    it('sendInvitationEmail builds an https:// accept URL when baseUrl lacks a scheme', async () => {
+    // The emailed accept URL must be an absolute link pointing at the Console
+    // SPA route, which is mounted under `uiBasePath` (default `/_console`) —
+    // the same basename as /login. A bare host in baseUrl (no scheme) also
+    // produced relative-looking links email clients wouldn't open.
+    it('sendInvitationEmail builds an absolute https:// accept URL under the Console base', async () => {
       const { capturedConfig, emailService } = await boot({ baseUrl: 'cloud.objectos.ai' });
       const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
       await orgPlugin._opts.sendInvitationEmail({
@@ -1356,7 +1358,7 @@ describe('AuthManager', () => {
       });
       expect(emailService.sendTemplate).toHaveBeenCalledTimes(1);
       const { data } = emailService.sendTemplate.mock.calls[0][0];
-      expect(data.acceptUrl).toBe('https://cloud.objectos.ai/accept-invitation/tok123');
+      expect(data.acceptUrl).toBe('https://cloud.objectos.ai/_console/accept-invitation/tok123');
     });
 
     it('sendInvitationEmail preserves an explicit scheme in baseUrl', async () => {
@@ -1369,7 +1371,23 @@ describe('AuthManager', () => {
         inviter: { user: { email: 'admin@example.com' } },
       });
       const { data } = emailService.sendTemplate.mock.calls[0][0];
-      expect(data.acceptUrl).toBe('http://localhost:3000/accept-invitation/tok456');
+      expect(data.acceptUrl).toBe('http://localhost:3000/_console/accept-invitation/tok456');
+    });
+
+    it('sendInvitationEmail honours a custom uiBasePath (Console mounted elsewhere)', async () => {
+      const { capturedConfig, emailService } = await boot({
+        baseUrl: 'https://acme.example.com',
+        uiBasePath: '/console/',
+      });
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      await orgPlugin._opts.sendInvitationEmail({
+        email: 'invitee@example.com',
+        invitation: { id: 'tok789', organizationId: 'o1', role: 'member' },
+        organization: { name: 'Org' },
+        inviter: { user: { email: 'admin@example.com' } },
+      });
+      const { data } = emailService.sendTemplate.mock.calls[0][0];
+      expect(data.acceptUrl).toBe('https://acme.example.com/console/accept-invitation/tok789');
     });
   });
 
