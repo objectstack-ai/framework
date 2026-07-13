@@ -3,7 +3,7 @@
 - **Status:** Proposed (implementation in progress)
 - **Date:** 2026-07-13
 - **Deciders:** ObjectStack Protocol Architects
-- **Implementation:** #2882 (Phase 0 — tactical create-user bind, merged) → this PR (Phases 1–3 — `tenancy` service, fail-fast boot guard, membership reconciler, consumer migration, backfill, docs). One deviation from the plan below, noted in D2: the endpoint-level create-user bind is **delegated to the shared reconciler** rather than deleted outright, as belt-and-suspenders until the `user.create.after` hook's coverage of `admin.createUser` is confirmed in integration — both are idempotent and yield-to-existing, so double-coverage is harmless (as D2 anticipates).
+- **Implementation:** #2882 (Phase 0 — tactical create-user bind, merged) → this PR (Phases 1–3 — `tenancy` service, fail-fast boot guard, membership reconciler, consumer migration, backfill, docs). One revision from the original plan, ratified in D2: the endpoint-level create-user bind **delegates to the shared reconciler** (one implementation, two call sites) instead of being deleted. Runtime verification confirmed the hook fires for `admin.createUser`, but better-auth *defers* `user.create.after` post-commit (#1881), so the endpoint keeps its delegated call to report `organizationId` / `membershipCreated` deterministically in its response. Cloud-host semantics (personal-org hook precedence, multi-org non-binding, D5 blast radius) verified against `objectstack-ai/cloud` — see D2/D3/D5.
 - **Relates to:** [ADR-0049](./0049-no-unenforced-security-properties.md) (no unenforced security properties), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (org-scoped identity optionality), [ADR-0068](./0068-unified-user-context-and-built-in-identity-roles.md) (platform-admin gate), [ADR-0092](./0092-sys-user-profile-field-delegation.md) (identity write guard), the default-org bootstrap (`plugin-auth/src/ensure-default-organization.ts`, referenced in code as "ADR-0081 D1" — that decision record predates this repo's ADR series), #2766 (admin user management), PR #2882 (single-org create-user membership bind — the tactical fix this ADR generalizes)
 
 ## TL;DR
@@ -130,6 +130,14 @@ while the set of creation paths is still enumerable.
   toggle; this ADR does not couple the two.)
 - Default role for auto-bound users is `member`. Elevation is a separate,
   audited action (`update-member-role`), never part of creation.
+- **`auto` joins; it never creates.** The reconciler binds a user to the one
+  organization the deployment *already is* — it never mints an organization.
+  This keeps the framework's deliberate B2B/invitation posture (documented in
+  the cloud's `personal-org-hook.ts`: "the framework's SecurityPlugin
+  deliberately does NOT auto-create a personal workspace per signup").
+  Workspace-per-user is a *product* decision that stays with hosts (the cloud's
+  personal-org hook); joining the sole existing org is *bookkeeping* the
+  framework owns. The two must not be conflated when evaluating this default.
 
 **Rejected alternative:** making membership strictly mandatory (no policy knob).
 Rejected because invite-only single-org deployments are legitimate (a shared
@@ -167,10 +175,19 @@ host user.create.after (if any)  →  framework membership reconciler
   `policy-skip` / `no-target-org` / `failed`) emits one structured log line,
   and `bound` writes the same audit metadata PR #2882 introduced
   (`organizationId`, `membershipCreated`).
-- **Retirement:** the endpoint-level `bindUserToSoleOrganization` (PR #2882)
-  is deleted once the reconciler lands; its tests migrate to the reconciler.
-  Interim double-coverage is harmless (both sides are idempotent and
-  yield-to-existing).
+- **Endpoint delegation (revised from "retirement"):** the endpoint-level
+  `bindUserToSoleOrganization` (PR #2882) now *delegates to the shared
+  reconciler* — one implementation, two call sites — and this is ratified as
+  the **final** state, not an interim one. Runtime verification confirmed the
+  hook fires for `admin.createUser` (the created user's membership pre-existed
+  when the endpoint-side call ran), so deletion would be *safe in the common
+  case* — but better-auth defers `user.create.after` via
+  `queueAfterTransactionHook` (post-commit, not awaited inline; framework
+  #1881), so an endpoint that must *report* membership state in its response
+  (`organizationId`, `membershipCreated`) cannot rely on the deferred hook
+  having completed. The delegated endpoint call makes the response
+  deterministic; both call sites are idempotent and yield-to-existing, so
+  double-coverage never double-binds.
 
 **Rejected alternatives:**
 - *Per-endpoint helper calls* (status quo after #2882): every future endpoint
@@ -194,6 +211,17 @@ was the correct call for an endpoint that had no better signal, and the wrong
 long-term contract: it infers configuration from data shape, so a multi-org
 deployment's transient first-boot state (one org created, second pending) is
 indistinguishable from single-org. Mode is configuration; read it as such.
+
+**Verified against the cloud host (the multi-org reality check):** the cloud
+control plane attaches `createUserSignupOrgHook`
+(`service-cloud/src/personal-org-hook.ts`) — a `user.create.after` hook that
+provisions a personal org + `owner` membership per signup. Under this ADR's
+composition it chains *first*; the framework reconciler then either finds the
+membership and yields, or (multi mode) resolves no target org and no-ops. Both
+sides are idempotent-on-existing-membership, which the cloud hook's own header
+already relies on ("whichever runs first wins and the other no-ops"). "Framework
+never guesses in multi mode" is therefore not a hedge — it is exactly the
+division of labor the production host already assumes.
 
 ### D4 — The `tenancy` kernel service
 
@@ -253,6 +281,24 @@ to load (missing, or its `init()` throws):
   release notes must say so loudly, and the error message must make recovery
   a two-minute task. Shipping this in a minor release with a prominent
   BREAKING callout is acceptable; shipping it silently is not.
+- **Blast radius (verified against the cloud repo):** the guard lives in the
+  CLI's `serve.ts`, and the cloud does **not** boot through it — control-plane
+  and per-env kernels come from the cloud's own `artifact-kernel-factory`,
+  where `@objectstack/organizations` is a bundled workspace dependency that
+  cannot fail to import. Self-hosted EE additionally *forces*
+  `OS_MULTI_ORG_ENABLED=false` when the multi-org entitlement is absent
+  (`objectos-ee/objectstack.config.ts`). The only deployments the guard can
+  stop are **misconfigured CE self-hosts** — the flag set, the enterprise
+  package absent — which were running with zero isolation while believing
+  otherwise. That is precisely the population the guard exists to stop; it
+  supports shipping in the next minor rather than waiting for a major.
+- **Host-side follow-up (cloud repo):** the cloud's kernel factories carry the
+  same silent `catch → warn` degradation pattern this decision removes from
+  `serve.ts`. It is unreachable in practice there (bundled dependency), but as
+  defense-in-depth the factories should *fail the kernel build* (throw — not
+  `process.exit`, which would kill a multi-tenant host serving other envs)
+  when multi-org is requested and the plugin cannot load. Tracked as a cloud
+  PR alongside this one.
 
 ### D6 — Backfill for pre-existing member-less users
 
