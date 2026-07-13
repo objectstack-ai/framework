@@ -114,6 +114,25 @@ describe('canonical issuer / resource URLs', () => {
     expect(manager().getAuthIssuer()).toBe('https://acme.example.com/api/v1/auth');
   });
 
+  // getCanonicalOrigin() backs every user-facing URL (invitation, loginPage,
+  // consentPage, device verificationUri, and the reset/verify/magic-link email
+  // links better-auth derives from baseURL). A bare host must become https://.
+  it('a bare-host baseUrl is promoted to an absolute https:// origin', () => {
+    const m = new AuthManager({
+      secret: 'test-secret-at-least-32-chars-long',
+      baseUrl: 'cloud.objectos.ai',
+    });
+    expect(m.getAuthIssuer()).toBe('https://cloud.objectos.ai/api/v1/auth');
+  });
+
+  it('an explicit scheme and a trailing slash are preserved / trimmed, not doubled', () => {
+    const m = new AuthManager({
+      secret: 'test-secret-at-least-32-chars-long',
+      baseUrl: 'https://acme.example.com/',
+    });
+    expect(m.getAuthIssuer()).toBe('https://acme.example.com/api/v1/auth');
+  });
+
   it('MCP resource = baseUrl + api prefix + /mcp (derived from the auth basePath)', () => {
     expect(manager().getMcpResourceUrl()).toBe('https://acme.example.com/api/v1/mcp');
   });

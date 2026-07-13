@@ -580,7 +580,10 @@ export class AuthManager {
     const betterAuthConfig: BetterAuthOptions = {
       // Base configuration
       secret: this.config.secret || this.generateSecret(),
-      baseURL: this.config.baseUrl || 'http://localhost:3000',
+      // Absolute origin (getCanonicalOrigin prepends https:// when baseUrl is a
+      // bare host) so the reset-password / verify-email / magic-link URLs
+      // better-auth derives from baseURL are always clickable links.
+      baseURL: this.getCanonicalOrigin(),
       basePath: this.config.basePath || '/api/v1/auth',
 
       // Database adapter configuration
@@ -1720,7 +1723,7 @@ export class AuthManager {
       plugins.push(jwt({ schema: buildJwtPluginSchema() }));
 
       const { oauthProvider } = await import('@better-auth/oauth-provider');
-      const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+      const baseUrl = this.getCanonicalOrigin();
       const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
       const dcr = resolveDcrEnabled(pluginConfig);
       plugins.push(oauthProvider({
@@ -1812,7 +1815,7 @@ export class AuthManager {
     // `verification_uri_complete`.
     if (enabled.deviceAuthorization) {
       const { deviceAuthorization } = await import('better-auth/plugins/device-authorization');
-      const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+      const baseUrl = this.getCanonicalOrigin();
       const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
       plugins.push(deviceAuthorization({
         verificationUri: `${baseUrl}${uiBase}/auth/device`,
@@ -2198,7 +2201,7 @@ export class AuthManager {
     if (!sms) {
       throw new Error('SMS_SERVICE_REQUIRED: no SMS service is configured for this deployment.');
     }
-    const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+    const baseUrl = this.getCanonicalOrigin();
     // #2815 — localised, tenant-customisable body (see deliverPhoneOtp).
     const body = await this.renderPhoneSmsBody(PHONE_SMS_TOPICS.invite, {
       appName: this.getAppName(),

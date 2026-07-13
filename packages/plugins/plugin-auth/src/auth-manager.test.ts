@@ -801,6 +801,26 @@ describe('AuthManager', () => {
       warnSpy.mockRestore();
     });
 
+    it('passes an absolute https:// baseURL to better-auth when baseUrl is a bare host', async () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'cloud.objectos.ai',
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      // reset-password / verify-email / magic-link email links are derived
+      // from this baseURL — it must carry a scheme or they are unclickable.
+      expect(capturedConfig.baseURL).toBe('https://cloud.objectos.ai');
+    });
+
     it('should override the default fallback (localhost:3000) when no baseUrl was configured', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
