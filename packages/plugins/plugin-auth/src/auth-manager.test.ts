@@ -1484,6 +1484,7 @@ describe('AuthManager', () => {
         phoneNumber: false,
         phoneNumberOtp: false,
         multiOrgEnabled: false,
+        degradedTenancy: false,
         privacyUrl: 'https://objectstack.ai/privacy',
         termsUrl: 'https://objectstack.ai/terms',
       });

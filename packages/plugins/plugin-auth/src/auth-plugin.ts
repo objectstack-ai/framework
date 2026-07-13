@@ -198,40 +198,14 @@ export class AuthPlugin implements Plugin {
       ctx.logger.warn('No data engine service found - auth will use in-memory storage');
     }
 
-    // ADR-0093 D4 — register the `tenancy` service (single source of truth for
-    // tenancy mode). Baseline derives `isolationActive` from the presence of
-    // the `org-scoping` service (registered by @objectstack/organizations when
-    // installed), so the enterprise package needs no change to light it up.
-    // `getService` is a cheap registry lookup and org-scoping registers AFTER
-    // plugin-auth, so the probe is deferred to first read (start()/request time).
-    const tenancy: TenancyService = createTenancyService({
-      requested: resolveMultiOrgEnabled(),
-      probeIsolation: () => {
-        try {
-          return !!ctx.getService('org-scoping');
-        } catch {
-          return false;
-        }
-      },
-      getEngine: () => {
-        try {
-          return ctx.getService('objectql');
-        } catch {
-          return undefined;
-        }
-      },
-      logger: ctx.logger,
-    });
-    ctx.registerService('tenancy', tenancy);
-    this.tenancy = tenancy;
-
     const authConfig: AuthManagerOptions & AuthPluginOptions = {
       ...this.options,
       dataEngine,
       logger: ctx.logger,
       // ADR-0093 D2/D3 — the membership reconciler consults the tenancy service
-      // (lazily; it is registered above but read at hook-fire time) to resolve
-      // the target org. membershipPolicy defaults to 'auto' in the reconciler.
+      // (lazily, at hook-fire time — the service is registered below, after the
+      // `auth` service) to resolve the target org. membershipPolicy defaults to
+      // 'auto' in the reconciler.
       getTenancy: () => {
         try {
           return ctx.getService<TenancyService>('tenancy');
@@ -288,6 +262,35 @@ export class AuthPlugin implements Plugin {
 
     // Register auth service
     ctx.registerService('auth', this.authManager);
+
+    // ADR-0093 D4 — register the `tenancy` service (single source of truth for
+    // tenancy mode). Registered AFTER `auth` so `auth` stays the plugin's first
+    // service registration (consumers and tests rely on that ordering). Baseline
+    // derives `isolationActive` from the presence of the `org-scoping` service
+    // (registered by @objectstack/organizations when installed), so the
+    // enterprise package needs no change to light it up. `getService` is a cheap
+    // registry lookup and org-scoping registers AFTER plugin-auth, so the probe
+    // is deferred to first read (start()/request time).
+    const tenancy: TenancyService = createTenancyService({
+      requested: resolveMultiOrgEnabled(),
+      probeIsolation: () => {
+        try {
+          return !!ctx.getService('org-scoping');
+        } catch {
+          return false;
+        }
+      },
+      getEngine: () => {
+        try {
+          return ctx.getService('objectql');
+        } catch {
+          return undefined;
+        }
+      },
+      logger: ctx.logger,
+    });
+    ctx.registerService('tenancy', tenancy);
+    this.tenancy = tenancy;
 
     ctx.getService<{ register(m: any): void }>('manifest').register({
       ...authPluginManifestHeader,
