@@ -12,6 +12,7 @@
     "@objectstack/example-crm": "workspace:*",
     "@objectstack/example-showcase": "workspace:*",
     "@objectstack/objectql": "workspace:*",
+    "@objectstack/plugin-auth": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/verify": "workspace:*"
