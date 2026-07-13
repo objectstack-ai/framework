@@ -334,15 +334,24 @@ export class SecurityPlugin implements Plugin {
       });
     }
 
-    // Probe for OrgScopingPlugin presence. When registered, its
-    // `init()` exposes itself as the `org-scoping` service. We capture
-    // the boolean once at start time (plugin DI graph is static after
-    // start) and let `collectRLSPolicies` consult it on every request.
+    // Probe whether org-scoping (auto-stamp + tenant RLS) is active. We capture
+    // the boolean once at start time (plugin DI graph is static after start)
+    // and let `collectRLSPolicies` consult it on every request.
+    //
+    // ADR-0093 D4 — prefer the `tenancy` service, the single source of truth.
+    // It derives `isolationActive` from the very same `org-scoping` presence
+    // probe, so this is behavior-identical while centralizing the fact. Fall
+    // back to probing `org-scoping` directly when the tenancy service isn't
+    // wired (e.g. an embedding without plugin-auth), preserving prior behavior.
     try {
-      const orgScoping = ctx.getService('org-scoping');
-      this.orgScopingEnabled = !!orgScoping;
+      const tenancy = ctx.getService<{ isolationActive?: boolean }>('tenancy');
+      this.orgScopingEnabled = !!tenancy?.isolationActive;
     } catch {
-      this.orgScopingEnabled = false;
+      try {
+        this.orgScopingEnabled = !!ctx.getService('org-scoping');
+      } catch {
+        this.orgScopingEnabled = false;
+      }
     }
     if (this.orgScopingEnabled) {
       ctx.logger.info(

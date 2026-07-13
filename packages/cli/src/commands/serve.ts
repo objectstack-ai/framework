@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled, isMcpServerEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled } from '@objectstack/types';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -1407,11 +1407,45 @@ export default class Serve extends Command {
                 const mod: any = await import(/* webpackIgnore: true */ organizationsPkg);
                 await kernel.use(new mod.OrganizationsPlugin());
                 trackPlugin('Organizations');
-              } catch {
-                // Requested multi-org without the enterprise package — loud,
-                // not silent: RLS tenant policies will be STRIPPED and every
-                // org boundary is inert until the package is installed.
-                console.warn(chalk.yellow('  ⚠ OS_MULTI_ORG_ENABLED=true but @objectstack/organizations (enterprise) is not installed — running single-org.'));
+              } catch (orgErr) {
+                // ADR-0093 D5 — degraded tenancy fails fast. Multi-org was
+                // requested but the enterprise package can't provide tenant
+                // isolation: `tenant_isolation` RLS would be stripped and every
+                // org boundary inert. A deployment that asked for isolation must
+                // NOT serve traffic pretending to have it (ADR-0049 at the
+                // deployment layer). Refuse to boot unless the operator has
+                // explicitly opted into the degraded state.
+                //
+                // process.exit (not throw): this catch sits inside the broad
+                // AuthPlugin try below, which swallows errors — a throw would be
+                // caught and boot would silently continue degraded, which is the
+                // exact footgun this guard closes.
+                const cause = orgErr instanceof Error ? orgErr.message : String(orgErr);
+                if (!resolveAllowDegradedTenancy()) {
+                  console.error(
+                    chalk.red(
+                      '\n  ✖ FATAL: OS_MULTI_ORG_ENABLED=true but @objectstack/organizations could not be loaded,\n' +
+                        '    so tenant isolation is INACTIVE. Refusing to boot — a deployment that requested\n' +
+                        '    multi-tenant isolation must not serve traffic without it (ADR-0093 D5).\n\n' +
+                        '    Fix one of:\n' +
+                        '      • install @objectstack/organizations (the enterprise multi-org runtime), or\n' +
+                        '      • unset OS_MULTI_ORG_ENABLED to run single-org, or\n' +
+                        '      • set OS_ALLOW_DEGRADED_TENANCY=1 to boot in an explicitly degraded single-org state.\n\n' +
+                        `    cause: ${cause}\n`,
+                    ),
+                  );
+                  process.exit(1);
+                }
+                // Explicitly opted into degraded operation — boot, but brand it
+                // loudly. The `tenancy` service also reports `degraded: true` to
+                // /auth/config and the Setup dashboard so it stays visible.
+                console.warn(
+                  chalk.yellow(
+                    '  ⚠ DEGRADED TENANCY (OS_ALLOW_DEGRADED_TENANCY=1): OS_MULTI_ORG_ENABLED=true but ' +
+                      '@objectstack/organizations is unavailable — booting with tenant isolation INACTIVE. ' +
+                      'Organization boundaries are NOT enforced; wildcard tenant RLS is stripped. (ADR-0093 D5)',
+                  ),
+                );
               }
             }
 

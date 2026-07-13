@@ -1,8 +1,9 @@
 # ADR-0093: Tenancy mode as a first-class capability, and a single owner for the user→membership lifecycle
 
-- **Status:** Proposed
+- **Status:** Proposed (implementation in progress)
 - **Date:** 2026-07-13
 - **Deciders:** ObjectStack Protocol Architects
+- **Implementation:** #2882 (Phase 0 — tactical create-user bind, merged) → this PR (Phases 1–3 — `tenancy` service, fail-fast boot guard, membership reconciler, consumer migration, backfill, docs). One deviation from the plan below, noted in D2: the endpoint-level create-user bind is **delegated to the shared reconciler** rather than deleted outright, as belt-and-suspenders until the `user.create.after` hook's coverage of `admin.createUser` is confirmed in integration — both are idempotent and yield-to-existing, so double-coverage is harmless (as D2 anticipates).
 - **Relates to:** [ADR-0049](./0049-no-unenforced-security-properties.md) (no unenforced security properties), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (org-scoped identity optionality), [ADR-0068](./0068-unified-user-context-and-built-in-identity-roles.md) (platform-admin gate), [ADR-0092](./0092-sys-user-profile-field-delegation.md) (identity write guard), the default-org bootstrap (`plugin-auth/src/ensure-default-organization.ts`, referenced in code as "ADR-0081 D1" — that decision record predates this repo's ADR series), #2766 (admin user management), PR #2882 (single-org create-user membership bind — the tactical fix this ADR generalizes)
 
 ## TL;DR

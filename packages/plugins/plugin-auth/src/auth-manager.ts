@@ -17,6 +17,8 @@ import { mapMembershipRole, BUILTIN_IDENTITY_PLATFORM_ADMIN } from '@objectstack
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { createObjectQLAdapterFactory, withSystemReadContext } from './objectql-adapter.js';
 import { isPlaceholderEmail } from './placeholder-email.js';
+import { reconcileMembership, type MembershipPolicy } from './reconcile-membership.js';
+import type { TenancyService } from './tenancy-service.js';
 import { OtpSendGuard } from './otp-send-guard.js';
 import {
   PHONE_SMS_TOPICS,
@@ -386,6 +388,32 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * "create organization" screen.
    */
   databaseHooks?: BetterAuthOptions['databaseHooks'];
+
+  /**
+   * ADR-0093 D1/D2 — deployment membership policy for the reconciler composed
+   * into `user.create.after`. `'auto'` (default) binds every new member-less
+   * user to the single-org default org; `'invite-only'` never auto-binds
+   * (membership comes only from invite / add-member / SSO JIT / host hooks).
+   * @default 'auto'
+   */
+  membershipPolicy?: MembershipPolicy;
+
+  /**
+   * ADR-0093 D3/D4 — accessor for the `tenancy` service, consulted by the
+   * membership reconciler to resolve the target org (single → default org;
+   * multi → none). A lazy accessor because the service is registered on the
+   * kernel after the AuthManager is constructed; the reconciler calls it at
+   * hook-fire time (well after boot). Omitted → the reconciler no-ops
+   * (no target org), preserving pre-ADR-0093 behavior.
+   */
+  getTenancy?: () => TenancyService | undefined;
+
+  /**
+   * Optional structured logger (the kernel `ctx.logger`) for best-effort
+   * bookkeeping surfaces such as the ADR-0093 membership reconciler. Omitted →
+   * those surfaces run silently (they already fail closed to no-op).
+   */
+  logger?: { info?: (msg: string, meta?: any) => void; warn?: (msg: string, meta?: any) => void };
 
   /**
    * ADR-0069 D2 — account lockout (anti-brute-force). After this many
@@ -2590,7 +2618,14 @@ export class AuthManager {
     const pluginConfig: Partial<AuthPluginConfig> = this.config.plugins ?? {};
     // Multi-org capability (UI org-switcher, "create org" action, etc.).
     // `OS_MULTI_ORG_ENABLED` (default `'false'` → single-org / per-env runtime).
-    const multiOrgEnabled = resolveMultiOrgEnabled();
+    // ADR-0093 D4 — the `tenancy` service is the single source of truth. Prefer
+    // it; fall back to the raw env flag only when it isn't wired (e.g. a lean
+    // embedding). `multiOrgEnabled` now reflects ACTUAL capability
+    // (`mode === 'multi'`), so a degraded deployment (requested but no isolation)
+    // reports `false` and the org-management UI hides instead of rendering broken.
+    const tenancy = this.config.getTenancy?.();
+    const multiOrgEnabled = tenancy ? tenancy.mode === 'multi' : resolveMultiOrgEnabled();
+    const degradedTenancy = tenancy?.degraded ?? false;
 
     // Legal links shown beneath the login / register cards. Defaults to
     // the public ObjectStack pages so vanilla deployments don't link to
@@ -2620,6 +2655,11 @@ export class AuthManager {
       magicLink: pluginConfig.magicLink ?? false,
       organization: pluginConfig.organization ?? true,
       multiOrgEnabled,
+      // ADR-0093 D5 — brand the degraded state everywhere an operator looks.
+      // True iff multi-org was requested but tenant isolation is inactive
+      // (booted only because OS_ALLOW_DEGRADED_TENANCY=1). The console can
+      // surface a warning banner off this flag.
+      degradedTenancy,
       // Shared decision point with `buildPluginList()` — the /auth/config
       // response MUST match what's actually wired, otherwise the frontend
       // renders UI for endpoints that 404.
@@ -2944,6 +2984,39 @@ export class AuthManager {
           }
         : hostSessionBefore;
 
+    // ADR-0093 D2 — the single owner of the membership invariant. Composed into
+    // `user.create.after`, the one seam EVERY creation path flows through
+    // (email signup, admin create-user, bulk import, SSO JIT). Host hook (e.g.
+    // the cloud's personal-org provisioning) chains FIRST and wins; the
+    // reconciler then yields to whatever membership exists, so there is never a
+    // double bind. Best-effort — never fails user creation.
+    const hostUserAfter = (host as any)?.user?.create?.after;
+    const membershipReconciler = async (user: any) => {
+      try {
+        await reconcileMembership(this.config.dataEngine, user?.id, {
+          policy: this.config.membershipPolicy ?? 'auto',
+          resolveTargetOrg: async () => {
+            const tenancy = this.config.getTenancy?.();
+            // Single-org → default org; multi-org → none (invite/JIT own it).
+            return tenancy ? await tenancy.defaultOrgId() : null;
+          },
+          logger: this.config.logger,
+        });
+      } catch {
+        // reconcileMembership never throws, but guard the hook regardless —
+        // membership bookkeeping must never break user creation.
+      }
+    };
+    const userAfter = hostUserAfter
+      ? async (user: any, ctx: any) => {
+          const hostResult = await hostUserAfter(user, ctx);
+          await membershipReconciler(user);
+          return hostResult;
+        }
+      : async (user: any) => {
+          await membershipReconciler(user);
+        };
+
     return {
       ...(host ?? {}),
       account: {
@@ -2951,6 +3024,13 @@ export class AuthManager {
         create: {
           ...((host as any)?.account?.create ?? {}),
           after,
+        },
+      },
+      user: {
+        ...((host as any)?.user ?? {}),
+        create: {
+          ...((host as any)?.user?.create ?? {}),
+          after: userAfter,
         },
       },
       ...(sessionBefore

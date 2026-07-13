@@ -104,6 +104,23 @@ export function resolveMultiOrgEnabled(): boolean {
 }
 
 /**
+ * Escape hatch for the degraded-tenancy boot guard (ADR-0093 D5).
+ *
+ * When `OS_MULTI_ORG_ENABLED=true` but the enterprise `@objectstack/organizations`
+ * package cannot provide tenant isolation, the platform refuses to boot — a
+ * deployment that asked for tenant isolation must not serve traffic pretending
+ * to have it (ADR-0049 at the deployment layer). Setting this to a truthy value
+ * (`true`/`1`/`on`/`yes`, case-insensitive) boots anyway in an explicitly
+ * *degraded* state that is branded everywhere an operator looks. Defaults OFF —
+ * an unset flag means "fail fast".
+ */
+export function resolveAllowDegradedTenancy(): boolean {
+  const raw = readEnvWithDeprecation('OS_ALLOW_DEGRADED_TENANCY', [], { silent: true });
+  if (raw == null) return false;
+  return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
+}
+
+/**
  * SINGLE decision point for "is the MCP HTTP surface (`/api/v1/mcp`) on?".
  *
  * MCP is a core platform capability and defaults ON: an unset

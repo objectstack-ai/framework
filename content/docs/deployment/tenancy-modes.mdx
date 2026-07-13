@@ -1,0 +1,138 @@
+---
+title: Tenancy Modes & Membership
+description: Single-org vs multi-org tenancy, the membership policy for new users, and the degraded-tenancy boot guard (ADR-0093).
+---
+
+# Tenancy Modes & Membership
+
+An ObjectStack deployment runs in one of two tenancy modes. The mode governs
+whether organization boundaries isolate data, how new users are placed into an
+organization, and which organization-management UI is available.
+
+This page describes the runtime contract introduced by
+[ADR-0093](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0093-tenancy-mode-and-membership-lifecycle.md).
+
+---
+
+## The two modes
+
+| | **Single-org** (default) | **Multi-org** |
+|---|---|---|
+| Enabled by | unset / `OS_MULTI_ORG_ENABLED=false` | `OS_MULTI_ORG_ENABLED=true` **and** `@objectstack/organizations` installed |
+| Tenant isolation | **off** — `organization_id` is not auto-stamped and the wildcard `tenant_isolation` RLS is stripped | **on** — `organization_id` is auto-stamped and tenant RLS filters every read |
+| Access control | RBAC permission sets only | RBAC permission sets **plus** per-org tenant isolation |
+| Organization row | one bootstrapped "Default Organization" | many, operator/user created |
+| Org-management UI (create/switch/delete org) | hidden | shown |
+
+The multi-org runtime lives in the enterprise `@objectstack/organizations`
+package. When it is installed it registers an `org-scoping` service; the
+framework detects that and turns tenant isolation on.
+
+### One source of truth: the `tenancy` service
+
+Rather than re-deriving "what mode is this?" from the env flag, a service probe,
+or row counts, the platform exposes a single `tenancy` kernel service:
+
+```ts
+interface TenancyService {
+  mode: 'single' | 'multi';   // multi iff isolation is actually active
+  isolationActive: boolean;    // org-scoping wired?
+  requested: boolean;          // OS_MULTI_ORG_ENABLED
+  degraded: boolean;           // requested && !isolationActive
+  defaultOrgId(): Promise<string | null>; // single → default org; multi → null
+}
+```
+
+`/auth/config` reports `features.multiOrgEnabled` (from `mode`) and
+`features.degradedTenancy` so the console renders the correct UI.
+
+---
+
+## Membership: how new users join an organization
+
+Every human user should end up as a member of an organization (a `sys_member`
+row). A single reconciler owns this invariant — it runs as a
+`user.create.after` hook, so **every** creation path is covered uniformly:
+email sign-up, the admin **Create User** and **Import Users** flows, and SSO
+just-in-time provisioning.
+
+The reconciler:
+
+- **yields** to any membership that already exists (e.g. one created by an
+  invitation, `add-member`, SSO provisioning, or a host hook) — it never
+  creates a second membership;
+- binds only to an **unambiguous** target org — in single-org mode, the default
+  organization; in multi-org mode it binds nothing (invitations, `add-member`,
+  and SSO provisioning own membership there, where guessing an org would risk
+  the wrong tenant);
+- is **best-effort** — a failure logs a warning and never fails user creation.
+
+### Membership policy
+
+Control auto-binding with the `membershipPolicy` auth option:
+
+| Policy | Behavior |
+|---|---|
+| `'auto'` (default) | New member-less users are bound to the single-org default organization. |
+| `'invite-only'` | Users are **never** auto-bound; membership comes only from invitations, `add-member`, SSO provisioning, or host hooks. Choose this for a deployment whose end-users are deliberately not teammates. |
+
+```ts
+createAuthPlugin({ membershipPolicy: 'invite-only' /* … */ });
+```
+
+> **Note** — In single-org mode, membership does **not** gate data access (there
+> is no tenant isolation to enforce); RBAC permission sets do. Membership drives
+> the Members list, the active-organization a session resolves, and invitations.
+
+### Backfill for pre-existing users
+
+On boot (`kernel:ready`), single-org / `auto` deployments backfill memberships
+for any pre-existing member-less users (e.g. accounts created before the
+reconciler existed), binding them to the default organization. It is bounded,
+idempotent, and self-guards (it no-ops under `invite-only` and in multi-org).
+Opt out with `OS_SKIP_MEMBERSHIP_BACKFILL=1`.
+
+---
+
+## Degraded tenancy: the boot guard
+
+Setting `OS_MULTI_ORG_ENABLED=true` **without** a working
+`@objectstack/organizations` package is dangerous: tenant isolation cannot be
+enforced, so the wildcard tenant RLS is stripped and every organization
+boundary becomes inert — while the operator believes the deployment is
+multi-tenant.
+
+The platform **refuses to boot** in this state:
+
+```
+✖ FATAL: OS_MULTI_ORG_ENABLED=true but @objectstack/organizations could not be
+  loaded, so tenant isolation is INACTIVE. Refusing to boot …
+```
+
+Resolve it one of three ways:
+
+- **install `@objectstack/organizations`** (the enterprise multi-org runtime); or
+- **unset `OS_MULTI_ORG_ENABLED`** to run single-org; or
+- **set `OS_ALLOW_DEGRADED_TENANCY=1`** to boot anyway in an explicitly degraded
+  single-org state.
+
+When you opt into the degraded state, it is branded everywhere an operator
+looks — a boot warning, `features.degradedTenancy: true` in `/auth/config`, and
+the Setup system-overview surface — so degraded operation is always a visible,
+chosen state, never a silent one.
+
+> **Upgrading?** A deployment that was *silently* degraded before this guard
+> existed will now fail to boot after upgrade. That is intentional — it was not
+> actually isolating tenants. Either install the enterprise package or set
+> `OS_ALLOW_DEGRADED_TENANCY=1` to acknowledge the state.
+
+---
+
+## Environment variables
+
+| Variable | Default | Effect |
+|---|---|---|
+| `OS_MULTI_ORG_ENABLED` | `false` | Request multi-org tenancy. Requires `@objectstack/organizations`. |
+| `OS_ALLOW_DEGRADED_TENANCY` | `false` | Boot even when multi-org is requested but isolation is unavailable (degraded). |
+| `OS_ORG_LIMIT` | unset (unlimited) | Cap on organizations a single user may create (multi-org only). |
+| `OS_SKIP_MEMBERSHIP_BACKFILL` | unset | Skip the boot-time membership backfill. |
