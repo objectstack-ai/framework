@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@marcbachmann/cel-js": "^7.6.1",
+    "@marcbachmann/cel-js": "^8.0.0",
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
