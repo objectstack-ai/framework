@@ -1,5 +1,15 @@
 # @objectstack/lint
 
+## 14.6.0
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+- Updated dependencies [ce6d151]
+  - @objectstack/spec@14.6.0
+  - @objectstack/formula@14.6.0
+  - @objectstack/sdui-parser@14.6.0
+
 ## 14.5.0
 
 ### Patch Changes

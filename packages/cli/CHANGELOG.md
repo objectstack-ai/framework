@@ -1,5 +1,65 @@
 # @objectstack/cli
 
+## 14.6.0
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+- Updated dependencies [160d565]
+- Updated dependencies [b42ae3d]
+- Updated dependencies [1d4c359]
+- Updated dependencies [1d4c359]
+- Updated dependencies [e4cf774]
+- Updated dependencies [ce6d151]
+- Updated dependencies [8f4a261]
+- Updated dependencies [6e2b8ae]
+  - @objectstack/spec@14.6.0
+  - @objectstack/platform-objects@14.6.0
+  - @objectstack/plugin-auth@14.6.0
+  - @objectstack/console@14.6.0
+  - @objectstack/client@14.6.0
+  - @objectstack/driver-sql@14.6.0
+  - @objectstack/objectql@14.6.0
+  - @objectstack/plugin-security@14.6.0
+  - @objectstack/account@14.6.0
+  - @objectstack/setup@14.6.0
+  - @objectstack/cloud-connection@14.6.0
+  - @objectstack/core@14.6.0
+  - @objectstack/formula@14.6.0
+  - @objectstack/lint@14.6.0
+  - @objectstack/mcp@14.6.0
+  - @objectstack/metadata@14.6.0
+  - @objectstack/observability@14.6.0
+  - @objectstack/driver-memory@14.6.0
+  - @objectstack/driver-mongodb@14.6.0
+  - @objectstack/driver-sqlite-wasm@14.6.0
+  - @objectstack/plugin-approvals@14.6.0
+  - @objectstack/plugin-audit@14.6.0
+  - @objectstack/plugin-email@14.6.0
+  - @objectstack/plugin-hono-server@14.6.0
+  - @objectstack/plugin-reports@14.6.0
+  - @objectstack/plugin-sharing@14.6.0
+  - @objectstack/plugin-webhooks@14.6.0
+  - @objectstack/rest@14.6.0
+  - @objectstack/runtime@14.6.0
+  - @objectstack/service-analytics@14.6.0
+  - @objectstack/service-automation@14.6.0
+  - @objectstack/service-cache@14.6.0
+  - @objectstack/service-datasource@14.6.0
+  - @objectstack/service-job@14.6.0
+  - @objectstack/service-messaging@14.6.0
+  - @objectstack/service-package@14.6.0
+  - @objectstack/service-queue@14.6.0
+  - @objectstack/service-realtime@14.6.0
+  - @objectstack/service-settings@14.6.0
+  - @objectstack/service-sms@14.6.0
+  - @objectstack/service-storage@14.6.0
+  - @objectstack/trigger-api@14.6.0
+  - @objectstack/trigger-record-change@14.6.0
+  - @objectstack/trigger-schedule@14.6.0
+  - @objectstack/types@14.6.0
+  - @objectstack/verify@14.6.0
+
 ## 14.5.0
 
 ### Minor Changes

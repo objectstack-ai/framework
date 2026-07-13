@@ -1,5 +1,59 @@
 # Changelog
 
+## 14.6.0
+
+### Patch Changes
+
+- 160d565: fix(auth): guarantee an absolute https origin for every user-facing auth URL
+
+  Follow-up to the invitation-link fix. Several other user-facing links were
+  built from the raw `config.baseUrl` with no scheme guarantee, so a bare-host
+  `baseUrl` (e.g. `cloud.objectos.ai`) produced relative-looking, unclickable
+  links. All now flow through the hardened `getCanonicalOrigin()` (prepends
+  `https://` when the scheme is missing, trims a trailing slash):
+
+  - better-auth `baseURL` — the reset-password, verify-email and magic-link
+    email links are derived from it.
+  - OAuth `loginPage` / `consentPage` redirect targets.
+  - Device-authorization `verificationUri`.
+  - The phone-invite SMS `{{baseUrl}}`.
+
+  Deployments that already configure an absolute `baseUrl` are unaffected.
+
+- e4cf774: fix(auth): single-source Console page-URL construction; correct SMS + OAuth-callback landing paths
+
+  Root-cause hardening after the invitation-link fixes. Every user-facing link
+  to a Console page is `${origin}${uiBasePath}${path}`, but that composition was
+  hand-written at each call site — which is how the scheme / `/_console` prefix
+  kept getting dropped one link at a time.
+
+  **plugin-auth**
+
+  - New single-source `getConsolePageUrl(path)` helper; `loginPage`,
+    `consentPage`, device `verificationUri` and the invitation accept URL all
+    compose through it, so future page links can't drift.
+  - Phone-invite SMS now links to the actual Console sign-in page
+    (`${origin}${uiBasePath}/login`) via a new `{{loginUrl}}` template variable
+    instead of the bare origin. `{{baseUrl}}` is still provided for backward
+    compatibility with tenant-overridden templates.
+
+  **client**
+
+  - `signInWithProvider` now defaults `callbackURL` to the current page
+    (`window.location.href`) instead of a hard-coded `origin + '/login'`. The
+    SDK cannot know the app's mount path (Console lives under `/_console`), so
+    returning the user to where they started is the only base-path-correct
+    default; it also mirrors `linkSocial`. Pass an explicit `callbackURL` to
+    override.
+
+- Updated dependencies [609cb13]
+- Updated dependencies [ce6d151]
+  - @objectstack/spec@14.6.0
+  - @objectstack/platform-objects@14.6.0
+  - @objectstack/core@14.6.0
+  - @objectstack/rest@14.6.0
+  - @objectstack/types@14.6.0
+
 ## 14.5.0
 
 ### Minor Changes

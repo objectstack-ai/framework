@@ -1,5 +1,18 @@
 # @objectstack/plugin-sharing
 
+## 14.6.0
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+- Updated dependencies [ce6d151]
+- Updated dependencies [8f4a261]
+  - @objectstack/spec@14.6.0
+  - @objectstack/platform-objects@14.6.0
+  - @objectstack/objectql@14.6.0
+  - @objectstack/core@14.6.0
+  - @objectstack/formula@14.6.0
+
 ## 14.5.0
 
 ### Minor Changes

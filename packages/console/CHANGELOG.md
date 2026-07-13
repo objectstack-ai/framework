@@ -1,5 +1,36 @@
 # @objectstack/console
 
+## 14.6.0
+
+### Minor Changes
+
+- 1d4c359: Console (objectui) refreshed to `94d00d41b1bd`. Frontend changes in this range:
+
+  - feat(auth): phone number + password sign-in on the login page (#2418)
+
+  objectui range: `2fb38edbeb12...94d00d41b1bd`
+
+- 1d4c359: Console (objectui) refreshed to `e7bebe929349`. Frontend changes in this range:
+
+  - fix(plugin-gantt): 拖边缘调时长——整高边缘带命中判定，修复 headless 命中不稳 (#2420)
+  - feat(console-ai): unify AI chat — one conversation key + one surface→agent resolver (ADR-0057 P1+P2) (#2414)
+
+  objectui range: `94d00d41b1bd...e7bebe929349`
+
+### Patch Changes
+
+- b42ae3d: Console (objectui) refreshed to `2fb38edbeb12`. Frontend changes in this range:
+
+  - fix(app-shell): propagate action-param `visible` predicate through resolveActionParams (#2419)
+
+  Completes the create-user phone fix: `resolveActionParams` now carries the
+  `visible` CEL predicate through to `ActionParamDialog`, so the `phoneNumber`
+  field is hidden when the `phoneNumber` auth plugin is off
+  (`features.phoneNumber == false`) instead of rendering a field the backend
+  rejects.
+
+  objectui range: `9138e68413f3...2fb38edbeb12`
+
 ## 14.5.0
 
 ### Minor Changes
