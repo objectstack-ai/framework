@@ -2,7 +2,7 @@
 "@objectstack/console": minor
 ---
 
-Console (objectui) refreshed to `3cf3b9c10147`. Frontend changes in this range:
+Console (objectui) refreshed to `a44e7b6b28c6`. Frontend changes in this range:
 
 - fix(form): honor field widget hint on the section-layout path
 - feat(plugin-gantt): 写后回读服务端重算字段 + 工具栏手动刷新按钮 (#2436 第 6/7 项) (#2442)
@@ -15,4 +15,4 @@ Console (objectui) refreshed to `3cf3b9c10147`. Frontend changes in this range:
 - feat(plugin-gantt): api 数据源支持读取 + 全部回写（改期/依赖/删除/内联编辑） (#2423)
 - fix(console-ai): preserve ?package= across the /ai URL mirror (ADR-0057 P1 hardening) (#2422)
 
-objectui range: `6a741605b1e0...3cf3b9c10147`
+objectui range: `6a741605b1e0...a44e7b6b28c6`
