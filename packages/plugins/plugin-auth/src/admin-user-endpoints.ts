@@ -82,6 +82,17 @@ export interface AdminUserEndpointDeps {
   noteMustChangePasswordIssued(): void;
   /** Is the better-auth phoneNumber plugin wired (#2766 V1.5)? */
   phoneNumberEnabled?(): boolean;
+  /**
+   * ADR-0093 D3 — accessor for the `tenancy` service. When present, the
+   * create-user membership bind resolves its target org through
+   * `tenancy.defaultOrgId()` (single → default org; MULTI → null, never
+   * guess). Without it the bind falls back to `resolveDefaultOrgId`, which
+   * prefers the `slug='default'` org — correct single-org, but in multi-org
+   * (where a bootstrap default org coexists with real tenants) it would
+   * mis-bind new users into the default org. Wire this everywhere tenancy
+   * is registered.
+   */
+  getTenancy?(): { defaultOrgId(): Promise<string | null> } | undefined;
   logger?: { warn(msg: string): void };
 }
 
@@ -271,9 +282,15 @@ async function bindUserToSoleOrganization(
   userId: string,
 ): Promise<{ organizationId: string | null; membershipCreated: boolean }> {
   const engine = deps.getDataEngine();
+  // ADR-0093 D3 — mode-aware target resolution. The tenancy service returns
+  // null in multi mode (the framework never guesses a tenant), which also
+  // keeps this endpoint bind from grabbing the bootstrap `slug='default'` org
+  // in a multi-org deployment. Fallback (no tenancy wired: lean embeddings,
+  // legacy mocks) keeps the single-org resolution.
+  const tenancy = deps.getTenancy?.();
   const result = await reconcileMembership(engine, userId, {
     policy: 'auto',
-    resolveTargetOrg: () => resolveDefaultOrgId(engine),
+    resolveTargetOrg: () => (tenancy ? tenancy.defaultOrgId() : resolveDefaultOrgId(engine)),
     logger: deps.logger
       ? { warn: (msg, meta) => deps.logger?.warn(`${msg} ${meta ? JSON.stringify(meta) : ''}`.trim()) }
       : undefined,

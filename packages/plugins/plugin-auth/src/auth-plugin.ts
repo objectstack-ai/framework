@@ -1379,6 +1379,10 @@ export class AuthPlugin implements Plugin {
         assertPasswordComplexity: (pw: string) => this.authManager!.checkPasswordComplexity(pw),
         noteMustChangePasswordIssued: () => this.authManager!.noteMustChangePasswordIssued(),
         phoneNumberEnabled: () => this.authManager!.isPhoneNumberEnabled(),
+        // ADR-0093 D3 — mode-aware create-user bind: multi-org resolves NO
+        // target org (never grab the bootstrap default org in a multi-tenant
+        // deployment); single-org resolves the default org.
+        getTenancy: () => this.tenancy ?? undefined,
         logger: ctx.logger,
       });
       const gateAdmin = async (c: any): Promise<{ id: string; email?: string } | Response> => {

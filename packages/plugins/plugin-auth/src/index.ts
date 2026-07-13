@@ -22,4 +22,8 @@ export * from './register-sso-provider.js';
 export * from './send-verification-email.js';
 export * from './objectql-adapter.js';
 export * from './auth-schema-config.js';
+// ADR-0093 — membership reconciler + tenancy service (public host API: hosts
+// compose the reconciler into their own hooks; embeddings query tenancy mode).
+export * from './reconcile-membership.js';
+export * from './tenancy-service.js';
 export type { AuthConfig, AuthProviderConfig, AuthPluginConfig } from '@objectstack/spec/system';

@@ -397,6 +397,41 @@ describe('runAdminCreateUser', () => {
     expect(m.warn).toHaveBeenCalled();
   });
 
+  it('multi-org via tenancy: does NOT bind even when a slug=default org exists (ADR-0093 D3 regression)', async () => {
+    // A multi-org deployment carries the bootstrap default org NEXT TO real
+    // tenant orgs. Without the tenancy service the raw resolver would prefer
+    // slug='default' and mis-bind the new user into it; the tenancy service
+    // reports multi mode (defaultOrgId → null) and the bind must no-op.
+    const m = makeDepsWithOrgs({
+      orgs: [{ id: 'org_default', slug: 'default' }, { id: 'org_tenant_b' }],
+    });
+    m.deps.getTenancy = () => ({ defaultOrgId: async () => null });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.organizationId).toBeUndefined();
+    expect(data.membershipCreated).toBe(false);
+    expect(m.engineInsert.mock.calls.some((c) => c[0] === 'sys_member')).toBe(false);
+  });
+
+  it('single-org via tenancy: binds to the org the tenancy service resolves', async () => {
+    const m = makeDepsWithOrgs({ orgs: [{ id: 'org_default', slug: 'default' }] });
+    m.deps.getTenancy = () => ({ defaultOrgId: async () => 'org_default' });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.organizationId).toBe('org_default');
+    expect(data.membershipCreated).toBe(true);
+  });
+
   it('no-ops the bind (no throw) when the engine has no find surface', async () => {
     // Default makeDeps engine exposes only update/insert — the bind must be a
     // clean no-op, leaving exactly the audit insert.
