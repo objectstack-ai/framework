@@ -886,6 +886,30 @@ describe('AuthManager', () => {
     });
   });
 
+  describe('onAPIError.errorURL (objectui#2458 item 1)', () => {
+    it('points browser-flow errors at the console login page so ?error= is surfaced', async () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      // Default error redirect (`${baseURL}/error` → `/?error=…`) loses the
+      // query on the root→console bounce; the login page renders it instead.
+      expect(capturedConfig.onAPIError).toEqual({
+        errorURL: 'http://localhost:3000/_console/login',
+      });
+    });
+  });
+
   describe('emailAndPassword passthrough', () => {
     it('should default emailAndPassword to enabled: true', async () => {
       let capturedConfig: any;

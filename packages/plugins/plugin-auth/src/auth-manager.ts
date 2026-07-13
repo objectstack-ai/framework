@@ -1169,6 +1169,17 @@ export class AuthManager {
         }),
       },
 
+      // Where better-auth redirects a browser flow that fails server-side —
+      // most importantly an OAuth callback error (expired/replayed `state`,
+      // IdP error). The default is `${baseURL}/error`, which bounces to
+      // `/?error=<code>`; the root→console redirect then DROPS the query, so
+      // the user lands on a silent login form right after a successful IdP
+      // sign-in (objectui#2458 item 1). Point it at the console login page,
+      // which renders `?error=` as an inline banner.
+      onAPIError: {
+        errorURL: this.getConsolePageUrl('/login'),
+      },
+
       // Trusted origins for CSRF protection (supports wildcards like "https://*.example.com")
       // Auto-includes origins from OS_CORS_ORIGIN env var so CORS and CSRF stay in sync.
       ...(() => {
