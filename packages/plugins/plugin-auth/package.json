@@ -20,7 +20,7 @@
   "dependencies": {
     "@better-auth/core": "^1.6.23",
     "@better-auth/oauth-provider": "^1.6.23",
-    "@better-auth/scim": "^1.6.23",
+    "@better-auth/scim": "1.7.0-rc.1",
     "@better-auth/sso": "^1.6.23",
     "@noble/hashes": "^2.2.0",
     "@objectstack/core": "workspace:*",
@@ -32,7 +32,7 @@
     "jose": "^6.2.3"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },

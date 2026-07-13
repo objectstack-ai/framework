@@ -63,7 +63,6 @@
     "@objectstack/plugin-reports": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/plugin-sharing": "workspace:*",
-    "@objectstack/service-sms": "workspace:*",
     "@objectstack/plugin-webhooks": "workspace:*",
     "@objectstack/rest": "workspace:*",
     "@objectstack/runtime": "workspace:^",
@@ -77,6 +76,7 @@
     "@objectstack/service-queue": "workspace:*",
     "@objectstack/service-realtime": "workspace:*",
     "@objectstack/service-settings": "workspace:*",
+    "@objectstack/service-sms": "workspace:*",
     "@objectstack/service-storage": "workspace:*",
     "@objectstack/setup": "workspace:*",
     "@objectstack/spec": "workspace:*",
@@ -99,7 +99,7 @@
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.53",
     "@oclif/plugin-plugins": "^5.4.84",
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
