@@ -779,6 +779,14 @@ export class ObjectQL implements IDataEngine {
    * defaults are applied verbatim. Records that already supplied a value for a
    * field are left untouched.
    *
+   * "Supplied a value" means the field is present with a non-null value. Both an
+   * OMITTED field (`undefined`) and an EXPLICIT `null` are treated as "not
+   * supplied" and get the default. This runs on the INSERT path only, where a
+   * `null` from a form (an unpicked control serializes to `null`, not omission)
+   * unambiguously means "no value"; the UPDATE path never calls this, so a
+   * deliberate "set to null" on update is preserved (#2706). Empty string `''`
+   * is a real, user-entered value and is left as-is.
+   *
    * Implements ROADMAP §M9.9b — `defaultValue` accepts Expression so authors
    * can replace "write a hook to default to today/current-user" with a
    * declarative `defaultValue: cel\`today()\``.
@@ -799,7 +807,11 @@ export class ObjectQL implements IDataEngine {
     const out = { ...record };
     const now = nowSnapshot ?? new Date();
     for (const f of fieldEntries) {
-      if (out[f.name] !== undefined) continue;
+      // Apply the default when the field is either OMITTED (`undefined`) or an
+      // EXPLICIT `null` — both mean "no value supplied" on insert (#2706). A
+      // real value (including `''`) is respected. Insert-only path, so an
+      // intentional "set to null" on update is never touched here.
+      if (out[f.name] != null) continue;
       if (f.defaultValue == null) continue;
       const dv = f.defaultValue;
       if (typeof dv === 'object' && dv !== null && (dv as any).dialect && typeof (dv as any).source === 'string') {

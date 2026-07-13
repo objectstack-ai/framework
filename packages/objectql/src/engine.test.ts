@@ -319,6 +319,50 @@ describe('ObjectQL Engine', () => {
             expect(arg.owner).toBeUndefined();
         });
 
+        it('backfills a default when the field is EXPLICITLY null, not just omitted (#2706)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        title: { type: 'text' },
+                        owner: { type: 'user', reference: 'sys_user', defaultValue: 'current_user' },
+                        status: { type: 'text', defaultValue: 'planned' },
+                    },
+                } as any;
+                if (name === 'sys_user') return { name: 'sys_user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            // A form serializes an unpicked control as explicit `null` (not
+            // omission) — both the dynamic `current_user` token and a static
+            // default must still fill in.
+            await engine.insert('ticket', { title: 'T1', owner: null, status: null }, { context: { userId: 'u-42' } as any });
+
+            expect(mockDriver.create).toHaveBeenCalledWith(
+                'ticket',
+                expect.objectContaining({ title: 'T1', owner: 'u-42', status: 'planned' }),
+                expect.anything(),
+            );
+        });
+
+        it('respects an explicit empty-string value and does not overwrite it with the default (#2706)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'ticket') return {
+                    name: 'ticket',
+                    fields: {
+                        title: { type: 'text' },
+                        status: { type: 'text', defaultValue: 'planned' },
+                    },
+                } as any;
+                return undefined;
+            });
+
+            await engine.insert('ticket', { title: 'T1', status: '' });
+
+            const arg = (mockDriver.create as any).mock.calls.at(-1)[1];
+            expect(arg.status).toBe('');
+        });
+
         it('resolves field defaults BEFORE beforeInsert so a hook can derive from them (#2703)', async () => {
             vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
                 if (name === 'ticket') return {
