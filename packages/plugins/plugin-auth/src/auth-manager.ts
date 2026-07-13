@@ -1513,8 +1513,15 @@ export class AuthManager {
         // operators / UI can fall back to copy-paste flows. Replace this
         // with a real mail integration when available.
         sendInvitationEmail: async ({ email: recipientEmail, invitation, organization: org, inviter }) => {
-          const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
-          const acceptUrl = `${baseUrl}/accept-invitation/${invitation.id}`;
+          // The accept-invitation page is a Console SPA route mounted under
+          // `uiBasePath` (default `/_console`) — the SAME router/basename as
+          // /login, /register and /oauth/consent. The Console builds the very
+          // same link for its "copy invitation link" action
+          // (`${origin}${BASE_URL}accept-invitation/<id>`), so the emailed link
+          // MUST carry that prefix (and an absolute https origin) or it 404s at
+          // the host root instead of resolving to the page.
+          const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
+          const acceptUrl = `${this.getCanonicalOrigin()}${uiBase}/accept-invitation/${invitation.id}`;
           // #2766 V1.5 — placeholder addresses are never real recipients.
           if (isPlaceholderEmail(recipientEmail)) {
             throw new Error(
@@ -2360,7 +2367,12 @@ export class AuthManager {
 
   /** Canonical origin of this deployment (config `baseUrl`, auto-detected in dev). */
   private getCanonicalOrigin(): string {
-    return (this.config.baseUrl || 'http://localhost:3000').replace(/\/$/, '');
+    const raw = (this.config.baseUrl || 'http://localhost:3000').trim().replace(/\/$/, '');
+    // Guarantee an absolute origin with a scheme. A bare host (e.g. baseUrl
+    // configured as `cloud.objectos.ai`) yields relative-looking links that
+    // email clients won't linkify and that break when clicked — prepend
+    // https:// so invitation / OAuth URLs open correctly.
+    return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   }
 
   /**
