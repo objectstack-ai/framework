@@ -112,6 +112,8 @@ export interface EndpointResult {
 }
 
 import { generatePlaceholderEmail } from './placeholder-email.js';
+import { reconcileMembership } from './reconcile-membership.js';
+import { resolveDefaultOrgId } from './tenancy-service.js';
 
 const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
 
@@ -246,92 +248,40 @@ async function stampMustChangePassword(
   }
 }
 
-/** Normalize an ObjectQL find result (array or `{ records }`) to a row array. */
-async function findRows(
-  engine: AdminUserDataEngine,
-  object: string,
-  where: Record<string, unknown>,
-  limit: number,
-): Promise<any[]> {
-  if (typeof engine.find !== 'function') return [];
-  try {
-    const rows = await engine.find(object, { where, limit }, { context: SYSTEM_CTX });
-    return Array.isArray(rows)
-      ? rows
-      : Array.isArray((rows as any)?.records)
-        ? (rows as any).records
-        : [];
-  } catch {
-    return [];
-  }
-}
-
-function genMemberId(): string {
-  const rand = Math.random().toString(36).slice(2, 10);
-  const ts = Date.now().toString(36);
-  return `mem_${ts}${rand}`;
-}
-
 /**
  * Bind an admin-created user to the organization (single-org membership).
  *
- * Unlike the invite / add-member flows, `/admin/create-user` only ever built a
- * login-capable account and never wrote a `sys_member` row — so in a single-org
- * deployment the new user did not "belong to" the Default Organization and was
- * missing from the Members list, even though both are just "add a teammate".
+ * ADR-0093 D2 — this now delegates to the shared membership reconciler, the
+ * single owner of the "every new user gets a membership" invariant. The
+ * reconciler ALSO runs as a `user.create.after` hook (covering signup / import /
+ * SSO JIT); this endpoint-side call is retained as belt-and-suspenders for the
+ * admin create path until the hook's coverage is verified in integration — both
+ * are idempotent and yield to any existing membership, so double-coverage never
+ * double-binds (ADR-0093 D2 "interim double-coverage is harmless"). The target
+ * org is the single-org default (resolveDefaultOrgId); multi-org resolves to
+ * none, so this no-ops there just as before.
  *
- * This binds the new user to the org only when it is UNAMBIGUOUS: exactly one
- * `sys_organization` exists (single-org, incl. plugin-auth's default-org
- * bootstrap — ADR-0081 D1). Multi-org (≥2 orgs) is deliberately left untouched:
- * there the active-org-aware invite / add-member endpoints own membership, and
- * guessing an org here would risk the wrong one. Zero orgs (org capability off)
- * is a no-op too.
- *
- * Idempotent and never throws — membership is a convenience, so a failure must
- * not fail account creation; the real state is surfaced in the response.
+ * Returns the shape the response/audit consumed pre-ADR-0093:
+ * `membershipCreated` is true only when THIS call inserted the row (a `bound`
+ * outcome); a `yielded` outcome (the hook or a race already bound it) reports
+ * the org with `membershipCreated: false`.
  */
 async function bindUserToSoleOrganization(
   deps: AdminUserEndpointDeps,
   userId: string,
 ): Promise<{ organizationId: string | null; membershipCreated: boolean }> {
   const engine = deps.getDataEngine();
-  if (!engine || typeof engine.find !== 'function' || typeof engine.insert !== 'function') {
-    return { organizationId: null, membershipCreated: false };
-  }
-  try {
-    // Only auto-bind when the org is unambiguous — exactly one row.
-    const orgs = await findRows(engine, 'sys_organization', {}, 2);
-    if (orgs.length !== 1 || !orgs[0]?.id) {
-      return { organizationId: null, membershipCreated: false };
-    }
-    const organizationId = String(orgs[0].id);
-
-    // Idempotent: respect an existing membership (retry / race) so we never
-    // trip the (organization_id, user_id) unique index.
-    const existing = await findRows(
-      engine,
-      'sys_member',
-      { organization_id: organizationId, user_id: userId },
-      1,
-    );
-    if (existing.length > 0) {
-      return { organizationId, membershipCreated: false };
-    }
-
-    await engine.insert(
-      'sys_member',
-      { id: genMemberId(), organization_id: organizationId, user_id: userId, role: 'member' },
-      { context: SYSTEM_CTX },
-    );
-    return { organizationId, membershipCreated: true };
-  } catch (error) {
-    deps.logger?.warn(
-      `[AuthPlugin] failed to bind created user ${userId} to the default organization: ${
-        (error as Error)?.message ?? error
-      }`,
-    );
-    return { organizationId: null, membershipCreated: false };
-  }
+  const result = await reconcileMembership(engine, userId, {
+    policy: 'auto',
+    resolveTargetOrg: () => resolveDefaultOrgId(engine),
+    logger: deps.logger
+      ? { warn: (msg, meta) => deps.logger?.warn(`${msg} ${meta ? JSON.stringify(meta) : ''}`.trim()) }
+      : undefined,
+  });
+  return {
+    organizationId: result.organizationId ?? null,
+    membershipCreated: result.outcome === 'bound',
+  };
 }
 
 /**

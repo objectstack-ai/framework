@@ -292,14 +292,19 @@ describe('runAdminCreateUser', () => {
    * a test can assert the membership bind.
    */
   function makeDepsWithOrgs(opts: {
-    orgs?: Array<{ id: string }>;
+    orgs?: Array<{ id: string; slug?: string }>;
     members?: Array<{ organization_id: string; user_id: string }>;
   }) {
     const orgs = opts.orgs ?? [];
     const members = opts.members ?? [];
     const find = vi.fn(async (object: string, query: any) => {
       const where = query?.where ?? {};
-      if (object === 'sys_organization') return orgs.slice(0, query?.limit ?? orgs.length);
+      if (object === 'sys_organization') {
+        // Honor the slug filter like the real engine — resolveDefaultOrgId
+        // queries { slug: 'default' } first, then an unfiltered top-2.
+        const rows = where.slug === undefined ? orgs : orgs.filter((o) => o.slug === where.slug);
+        return rows.slice(0, query?.limit ?? rows.length);
+      }
       if (object === 'sys_member') {
         return members.filter(
           (m) =>

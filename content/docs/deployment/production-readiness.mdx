@@ -82,6 +82,11 @@ the [HARDENING.md recipes](https://github.com/objectstack-ai/framework/blob/main
 - [ ] better-auth session TTL / refresh / revoke verified (curl
       checklist in HARDENING.md).
 - [ ] Cross-tenant negative tests in CI.
+- [ ] Multi-org deployments: tenant isolation is **active**, not degraded —
+      confirm `features.degradedTenancy` is `false` in `/auth/config`. A
+      deployment requesting multi-org without `@objectstack/organizations` now
+      refuses to boot unless `OS_ALLOW_DEGRADED_TENANCY=1`; never set that flag
+      in production. See [Tenancy Modes & Membership](/docs/deployment/tenancy-modes).
 - [ ] Backup / restore drill documented and tested.
 - [ ] Data-retention windows reviewed (ADR-0057): the platform's default
       `lifecycle` declarations bound telemetry (activity 14d, job runs 30d,

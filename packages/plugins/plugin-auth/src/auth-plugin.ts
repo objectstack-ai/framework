@@ -18,6 +18,8 @@ import {
   type AuthManagerOptions,
 } from './auth-manager.js';
 import { ensureDefaultOrganization } from './ensure-default-organization.js';
+import { createTenancyService, type TenancyService } from './tenancy-service.js';
+import { backfillMemberships, type MembershipPolicy } from './reconcile-membership.js';
 import {
   registerIdentityWriteGuard,
   registerManagedUpdateWhitelist,
@@ -37,6 +39,15 @@ import {
  * Extends AuthConfig from spec with additional runtime options
  */
 export interface AuthPluginOptions extends Partial<AuthConfig> {
+  /**
+   * ADR-0093 D1 — deployment membership policy. `'auto'` (default) auto-binds
+   * every new user to the single-org default org via the reconciler; invite-only
+   * deployments set `'invite-only'` to grant membership solely through explicit
+   * flows (invite / add-member / SSO JIT / host hooks).
+   * @default 'auto'
+   */
+  membershipPolicy?: MembershipPolicy;
+
   /**
    * Whether to automatically register auth routes
    * @default true
@@ -130,6 +141,8 @@ export class AuthPlugin implements Plugin {
   
   private options: AuthPluginOptions;
   private authManager: AuthManager | null = null;
+  /** ADR-0093 D4 — the tenancy service registered in init(); reused at kernel:ready. */
+  private tenancy: TenancyService | null = null;
   private configuredSocialProviders: SocialProviderConfig | undefined;
   // ADR-0092 D6 — the EFFECTIVE better-auth secondaryStorage (host-supplied or
   // the kernel-cache adapter wired in init). The identity write guard's
@@ -188,6 +201,18 @@ export class AuthPlugin implements Plugin {
     const authConfig: AuthManagerOptions & AuthPluginOptions = {
       ...this.options,
       dataEngine,
+      logger: ctx.logger,
+      // ADR-0093 D2/D3 — the membership reconciler consults the tenancy service
+      // (lazily, at hook-fire time — the service is registered below, after the
+      // `auth` service) to resolve the target org. membershipPolicy defaults to
+      // 'auto' in the reconciler.
+      getTenancy: () => {
+        try {
+          return ctx.getService<TenancyService>('tenancy');
+        } catch {
+          return undefined;
+        }
+      },
     };
 
     // ADR-0069 D2 — wire the kernel `cache` service as better-auth's shared
@@ -237,6 +262,35 @@ export class AuthPlugin implements Plugin {
 
     // Register auth service
     ctx.registerService('auth', this.authManager);
+
+    // ADR-0093 D4 — register the `tenancy` service (single source of truth for
+    // tenancy mode). Registered AFTER `auth` so `auth` stays the plugin's first
+    // service registration (consumers and tests rely on that ordering). Baseline
+    // derives `isolationActive` from the presence of the `org-scoping` service
+    // (registered by @objectstack/organizations when installed), so the
+    // enterprise package needs no change to light it up. `getService` is a cheap
+    // registry lookup and org-scoping registers AFTER plugin-auth, so the probe
+    // is deferred to first read (start()/request time).
+    const tenancy: TenancyService = createTenancyService({
+      requested: resolveMultiOrgEnabled(),
+      probeIsolation: () => {
+        try {
+          return !!ctx.getService('org-scoping');
+        } catch {
+          return false;
+        }
+      },
+      getEngine: () => {
+        try {
+          return ctx.getService('objectql');
+        } catch {
+          return undefined;
+        }
+      },
+      logger: ctx.logger,
+    });
+    ctx.registerService('tenancy', tenancy);
+    this.tenancy = tenancy;
 
     ctx.getService<{ register(m: any): void }>('manifest').register({
       ...authPluginManifestHeader,
@@ -536,6 +590,39 @@ export class AuthPlugin implements Plugin {
       } catch {
         /* objectql optional in mock mode — the kernel:ready pass still runs */
       }
+    }
+
+    // ADR-0093 D6 — backfill memberships for pre-existing member-less users
+    // (historical create-user / import rows from before the reconciler existed).
+    // Registered AFTER the default-org bootstrap hook so a target org exists by
+    // the time it runs. `backfillMemberships` self-guards: it no-ops under
+    // `invite-only` policy and in multi-org (tenancy.defaultOrgId() → null),
+    // where a wrong org guess would be a data-exposure bug, not a convenience.
+    // Opt out entirely via OS_SKIP_MEMBERSHIP_BACKFILL=1 (operators who curate
+    // memberships by hand).
+    if (String(process.env.OS_SKIP_MEMBERSHIP_BACKFILL ?? '').trim() !== '1') {
+      ctx.hook('kernel:ready', async () => {
+        try {
+          const ql: any = ctx.getService<any>('objectql');
+          const tenancy = this.tenancy;
+          if (!ql || !tenancy) return;
+          const res = await backfillMemberships(ql, {
+            policy: this.options.membershipPolicy ?? 'auto',
+            resolveTargetOrg: () => tenancy.defaultOrgId(),
+            logger: ctx.logger,
+          });
+          if (res.bound > 0) {
+            ctx.logger.info(
+              `[auth] membership backfill bound ${res.bound} pre-existing member-less user(s) to the default organization (ADR-0093 D6)`,
+              res,
+            );
+          }
+        } catch (e) {
+          ctx.logger.warn?.('[auth] membership backfill failed', {
+            error: (e as Error).message,
+          });
+        }
+      });
     }
 
     // Identity-source provenance for accounts created OUTSIDE better-auth's

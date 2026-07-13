@@ -1,7 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { _resetEnvDeprecationWarnings, readEnvWithDeprecation } from './env.js';
+import {
+  _resetEnvDeprecationWarnings,
+  readEnvWithDeprecation,
+  resolveAllowDegradedTenancy,
+} from './env.js';
 
 describe('readEnvWithDeprecation', () => {
   const originalPreferred = process.env.OS_TEST_FOO;
@@ -95,6 +99,33 @@ describe('readEnvWithDeprecation', () => {
     } finally {
       if (originalAlt === undefined) delete process.env.ALT_TEST_FOO;
       else process.env.ALT_TEST_FOO = originalAlt;
+    }
+  });
+});
+
+describe('resolveAllowDegradedTenancy (ADR-0093 D5)', () => {
+  const original = process.env.OS_ALLOW_DEGRADED_TENANCY;
+  afterEach(() => {
+    if (original === undefined) delete process.env.OS_ALLOW_DEGRADED_TENANCY;
+    else process.env.OS_ALLOW_DEGRADED_TENANCY = original;
+  });
+
+  it('defaults OFF (unset → fail fast)', () => {
+    delete process.env.OS_ALLOW_DEGRADED_TENANCY;
+    expect(resolveAllowDegradedTenancy()).toBe(false);
+  });
+
+  it('accepts truthy opt-in values case-insensitively', () => {
+    for (const v of ['1', 'true', 'TRUE', 'on', 'Yes']) {
+      process.env.OS_ALLOW_DEGRADED_TENANCY = v;
+      expect(resolveAllowDegradedTenancy()).toBe(true);
+    }
+  });
+
+  it('treats anything else as off', () => {
+    for (const v of ['0', 'false', 'off', 'no', '', 'maybe']) {
+      process.env.OS_ALLOW_DEGRADED_TENANCY = v;
+      expect(resolveAllowDegradedTenancy()).toBe(false);
     }
   });
 });

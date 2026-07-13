@@ -8,6 +8,7 @@
     "publish-and-preview",
     "environment-variables",
     "single-project-mode",
+    "tenancy-modes",
     "migration-from-objectql",
     "troubleshooting"
   ]
