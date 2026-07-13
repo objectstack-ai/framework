@@ -14,7 +14,7 @@ import {
 } from './explain-engine.js';
 import type { ExplainDecision, ExplainOperation } from '@objectstack/spec/security';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
-import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
+import { bootstrapDeclaredPermissions, upsertPackagePermissionSet, subscribeEnvPermissionProjection } from './bootstrap-declared-permissions.js';
 import {
   syncAudienceBindingSuggestions,
   listAudienceBindingSuggestions,
@@ -1044,6 +1044,11 @@ export class SecurityPlugin implements Plugin {
     // insert seed rows. Falls back to immediate execution when the
     // kernel does not expose `hook` (test stubs).
     let bootstrapRanOnce = false;
+    // [framework#2857] Guard so the env-projection mutation subscriber is wired
+    // exactly once even though runBootstrap re-runs (e.g. after the first user
+    // insert) — onMetadataMutation appends listeners, so re-wiring would project
+    // each save N times.
+    let envProjectionWired = false;
     const runBootstrap = async () => {
       try {
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
@@ -1164,6 +1169,20 @@ export class SecurityPlugin implements Plugin {
                 };
               },
             );
+          }
+          // [framework#2857] Environment door — project an env-scope permission
+          // metadata save onto its sys_permission_set record. saveMetaItem writes
+          // only the sys_metadata overlay, so without this the admin/Setup surface
+          // (which reads the record) went stale while the layered read showed the
+          // edit. onMetadataMutation fires post-persistence for active (non-draft)
+          // saves; the subscriber re-reads the FRESH effective body via the layered
+          // read (the MetadataManager registry would hand back the stale
+          // boot-declared body for a seeded set) and projects it. Env-authored
+          // rows only — a package record's baseline is its declaration, owned by
+          // boot re-seed / publish, never an env override.
+          if (!envProjectionWired) {
+            const unsub = subscribeEnvPermissionProjection(protocol, ql, ctx.logger);
+            if (unsub) envProjectionWired = true;
           }
         } catch (e) {
           ctx.logger.warn('[security] permission publish-materializer registration failed', { error: (e as Error).message });

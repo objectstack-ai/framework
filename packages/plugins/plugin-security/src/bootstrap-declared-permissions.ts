@@ -158,6 +158,108 @@ export async function upsertPackagePermissionSet(
   return out;
 }
 
+/**
+ * Project an ENVIRONMENT-authored PermissionSet body onto its
+ * `sys_permission_set` row — the mirror image of {@link upsertPackagePermissionSet}
+ * for the environment door (ADR-0086 two-doors; framework#2857).
+ *
+ * An env-scope `save('permission', name, body)` writes only the `sys_metadata`
+ * overlay; nothing projected the six facet columns onto the queryable
+ * `sys_permission_set` record, so the admin/Setup surface (which reads the
+ * record) went stale while the layered read showed the edit — split-brain.
+ * This closes that gap for env-authored sets: it owns rows whose `managed_by`
+ * is NOT `'package'` (i.e. `platform`/`user`/absent) and REFUSES to touch a
+ * package-owned row — a package's record mirrors its declaration and changes
+ * only via boot re-seed / publish, never through an env override.
+ */
+export async function upsertEnvPermissionSet(
+  ql: any,
+  ps: any,
+  logger?: SeedOptions['logger'],
+): Promise<PermissionSeedOutcome> {
+  const out: PermissionSeedOutcome = { seeded: 0, updated: 0, skippedEnvAuthored: 0, skippedForeign: 0 };
+  if (!ql || typeof ql.find !== 'function' || !ps?.name) return out;
+
+  // Ownership is decided by the EXISTING RECORD's `managed_by`, never the body:
+  // the layered read stamps `_packageId` provenance on env-authored sets too
+  // (a declared-then-env-overridden set), so the body cannot tell the two doors
+  // apart — only the record's provenance can.
+  const existing = (await tryFind(ql, 'sys_permission_set', { name: ps.name }, 1))[0];
+  if (!existing?.id) {
+    // No data record. A set's admin-surface row is created through the data API
+    // (the Setup "New" flow), not the metadata door, so there is nothing to
+    // project here — leave creation to that path / the boot seeder.
+    return out;
+  }
+
+  // A package-owned record is the package's declared baseline (re-seeded at
+  // boot / on publish); an env override lives in the overlay/effective layer,
+  // not this row. Refusing here keeps the two doors from fighting.
+  if (existing.managed_by === 'package') {
+    out.skippedForeign += 1;
+    logger?.warn?.('[security] env permission save targets a package-owned set — record left at package baseline', { name: ps.name });
+    return out;
+  }
+
+  // Env-authored row (platform / user / absent provenance): project the saved
+  // facets so the record matches the layered read the editor shows.
+  if (await tryUpdate(ql, 'sys_permission_set', { id: existing.id, ...toRowFields(ps) })) {
+    out.updated += 1;
+  }
+  return out;
+}
+
+/**
+ * Handle one `permission` metadata-mutation event (framework#2857): re-read the
+ * FRESH effective body via the protocol's layered read — the boot-time metadata
+ * registry would hand back a stale declared body — and project it onto the env
+ * record. Exported (and Promise-returning) so the wiring is unit-testable
+ * without the dev server. Returns the projection outcome, or `null` when the
+ * event is skipped (draft, non-permission, or no readable body).
+ */
+export async function projectEnvPermissionOnMutation(
+  protocol: any,
+  ql: any,
+  evt: { type?: string; name?: string; state?: string; organizationId?: string | null } | null | undefined,
+  logger?: SeedOptions['logger'],
+): Promise<PermissionSeedOutcome | null> {
+  if (evt?.type !== 'permission' || evt.state === 'draft' || !evt.name) return null;
+  let body: any = null;
+  if (protocol && typeof protocol.getMetaItemLayered === 'function') {
+    const layered = await protocol.getMetaItemLayered({
+      type: 'permission',
+      name: evt.name,
+      ...(evt.organizationId ? { environmentId: evt.organizationId } : {}),
+    });
+    // `getMetaItemLayered` may return a layered envelope (`{ effective | code }`)
+    // OR the effective body directly (top-level `name`/`systemPermissions`) —
+    // accept both so a body isn't silently dropped.
+    body = layered?.effective ?? layered?.code ?? layered ?? null;
+  }
+  if (!body?.name) return null;
+  return upsertEnvPermissionSet(ql, body, logger);
+}
+
+/**
+ * Subscribe env-permission projection to the protocol's post-persistence
+ * mutation choke point (framework#2857). Returns the unsubscribe fn, or `null`
+ * when the protocol doesn't expose `onMetadataMutation`.
+ */
+export function subscribeEnvPermissionProjection(
+  protocol: any,
+  ql: any,
+  logger?: SeedOptions['logger'],
+): (() => void) | null {
+  if (!protocol || typeof protocol.onMetadataMutation !== 'function') return null;
+  return protocol.onMetadataMutation((evt: any) => {
+    void projectEnvPermissionOnMutation(protocol, ql, evt, logger).catch((err: any) => {
+      logger?.warn?.('[security] env permission projection after save failed', {
+        name: evt?.name, error: err?.message,
+      });
+    });
+  });
+}
+
 export async function bootstrapDeclaredPermissions(
   ql: any,
   metadataService: any,
