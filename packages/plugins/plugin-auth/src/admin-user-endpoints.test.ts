@@ -283,6 +283,129 @@ describe('runAdminCreateUser', () => {
     expect(sent.data.phoneNumber).toBe('+8613800000000');
     expect((res.body.data as any).placeholderEmail).toBe(false);
   });
+
+  // ── single-org membership: bind the created user to the sole org ─────────
+
+  /**
+   * Build deps whose data engine also exposes `find`, seeded with a fixed set
+   * of `sys_organization` / `sys_member` rows. Records `sys_member` inserts so
+   * a test can assert the membership bind.
+   */
+  function makeDepsWithOrgs(opts: {
+    orgs?: Array<{ id: string }>;
+    members?: Array<{ organization_id: string; user_id: string }>;
+  }) {
+    const orgs = opts.orgs ?? [];
+    const members = opts.members ?? [];
+    const find = vi.fn(async (object: string, query: any) => {
+      const where = query?.where ?? {};
+      if (object === 'sys_organization') return orgs.slice(0, query?.limit ?? orgs.length);
+      if (object === 'sys_member') {
+        return members.filter(
+          (m) =>
+            (where.organization_id === undefined || m.organization_id === where.organization_id) &&
+            (where.user_id === undefined || m.user_id === where.user_id),
+        );
+      }
+      return [];
+    });
+    const engineUpdate = vi.fn(async () => ({}));
+    const engineInsert = vi.fn(async () => ({}));
+    const m = makeDeps({
+      getDataEngine: () => ({ update: engineUpdate, insert: engineInsert, find }),
+    });
+    return { ...m, find, engineUpdate, engineInsert };
+  }
+
+  it('binds the created user to the sole organization (single-org)', async () => {
+    const m = makeDepsWithOrgs({ orgs: [{ id: 'org_only' }] });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.organizationId).toBe('org_only');
+    expect(data.membershipCreated).toBe(true);
+
+    const memberInsert = m.engineInsert.mock.calls.find((c) => c[0] === 'sys_member');
+    expect(memberInsert).toBeTruthy();
+    expect(memberInsert![1]).toMatchObject({
+      organization_id: 'org_only',
+      user_id: 'user-9',
+      role: 'member',
+    });
+    // audit records the membership outcome
+    const auditRow = m.engineInsert.mock.calls.find((c) => c[0] === 'sys_audit_log')![1];
+    const meta = JSON.parse(auditRow.metadata);
+    expect(meta.organizationId).toBe('org_only');
+    expect(meta.membershipCreated).toBe(true);
+  });
+
+  it('does NOT bind when the org is ambiguous (multi-org, ≥2 orgs)', async () => {
+    const m = makeDepsWithOrgs({ orgs: [{ id: 'org_a' }, { id: 'org_b' }] });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.organizationId).toBeUndefined();
+    expect(data.membershipCreated).toBe(false);
+    expect(m.engineInsert.mock.calls.some((c) => c[0] === 'sys_member')).toBe(false);
+  });
+
+  it('is idempotent when a membership already exists', async () => {
+    const m = makeDepsWithOrgs({
+      orgs: [{ id: 'org_only' }],
+      members: [{ organization_id: 'org_only', user_id: 'user-9' }],
+    });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.organizationId).toBe('org_only');
+    expect(data.membershipCreated).toBe(false);
+    expect(m.engineInsert.mock.calls.some((c) => c[0] === 'sys_member')).toBe(false);
+  });
+
+  it('does not fail account creation when the membership bind throws', async () => {
+    const m = makeDepsWithOrgs({ orgs: [{ id: 'org_only' }] });
+    m.engineInsert.mockImplementation(async (object: string) => {
+      if (object === 'sys_member') throw new Error('unique violation');
+      return {};
+    });
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.user.id).toBe('user-9');
+    expect(data.membershipCreated).toBe(false);
+    expect(m.warn).toHaveBeenCalled();
+  });
+
+  it('no-ops the bind (no throw) when the engine has no find surface', async () => {
+    // Default makeDeps engine exposes only update/insert — the bind must be a
+    // clean no-op, leaving exactly the audit insert.
+    const m = makeDeps();
+    const res = await runAdminCreateUser(
+      m.deps,
+      makeRequest({ email: 'a@b.co', generatePassword: true }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    expect((res.body.data as any).membershipCreated).toBe(false);
+    expect((res.body.data as any).organizationId).toBeUndefined();
+    expect(m.engineCreate).toHaveBeenCalledTimes(1); // audit only
+  });
 });
 
 describe('runAdminSetUserPassword', () => {
