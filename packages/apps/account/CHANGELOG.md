@@ -1,5 +1,13 @@
 # @objectstack/account
 
+## 14.5.1
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+  - @objectstack/spec@14.5.1
+  - @objectstack/platform-objects@14.5.1
+
 ## 14.5.0
 
 ### Patch Changes

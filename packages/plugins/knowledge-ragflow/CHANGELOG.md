@@ -1,5 +1,14 @@
 # @objectstack/knowledge-ragflow
 
+## 14.5.1
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+  - @objectstack/spec@14.5.1
+  - @objectstack/core@14.5.1
+  - @objectstack/service-knowledge@14.5.1
+
 ## 14.5.0
 
 ### Patch Changes

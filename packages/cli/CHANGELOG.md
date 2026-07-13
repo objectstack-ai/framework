@@ -1,5 +1,61 @@
 # @objectstack/cli
 
+## 14.5.1
+
+### Patch Changes
+
+- Updated dependencies [609cb13]
+- Updated dependencies [160d565]
+- Updated dependencies [b42ae3d]
+- Updated dependencies [e4cf774]
+- Updated dependencies [6e2b8ae]
+  - @objectstack/spec@14.5.1
+  - @objectstack/platform-objects@14.5.1
+  - @objectstack/plugin-auth@14.5.1
+  - @objectstack/console@14.5.1
+  - @objectstack/client@14.5.1
+  - @objectstack/plugin-security@14.5.1
+  - @objectstack/account@14.5.1
+  - @objectstack/setup@14.5.1
+  - @objectstack/cloud-connection@14.5.1
+  - @objectstack/core@14.5.1
+  - @objectstack/formula@14.5.1
+  - @objectstack/lint@14.5.1
+  - @objectstack/mcp@14.5.1
+  - @objectstack/metadata@14.5.1
+  - @objectstack/objectql@14.5.1
+  - @objectstack/observability@14.5.1
+  - @objectstack/driver-memory@14.5.1
+  - @objectstack/driver-mongodb@14.5.1
+  - @objectstack/driver-sql@14.5.1
+  - @objectstack/driver-sqlite-wasm@14.5.1
+  - @objectstack/plugin-approvals@14.5.1
+  - @objectstack/plugin-audit@14.5.1
+  - @objectstack/plugin-email@14.5.1
+  - @objectstack/plugin-hono-server@14.5.1
+  - @objectstack/plugin-reports@14.5.1
+  - @objectstack/plugin-sharing@14.5.1
+  - @objectstack/plugin-webhooks@14.5.1
+  - @objectstack/rest@14.5.1
+  - @objectstack/runtime@14.5.1
+  - @objectstack/service-analytics@14.5.1
+  - @objectstack/service-automation@14.5.1
+  - @objectstack/service-cache@14.5.1
+  - @objectstack/service-datasource@14.5.1
+  - @objectstack/service-job@14.5.1
+  - @objectstack/service-messaging@14.5.1
+  - @objectstack/service-package@14.5.1
+  - @objectstack/service-queue@14.5.1
+  - @objectstack/service-realtime@14.5.1
+  - @objectstack/service-settings@14.5.1
+  - @objectstack/service-sms@14.5.1
+  - @objectstack/service-storage@14.5.1
+  - @objectstack/trigger-api@14.5.1
+  - @objectstack/trigger-record-change@14.5.1
+  - @objectstack/trigger-schedule@14.5.1
+  - @objectstack/types@14.5.1
+  - @objectstack/verify@14.5.1
+
 ## 14.5.0
 
 ### Minor Changes
