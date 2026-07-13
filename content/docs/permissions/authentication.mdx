@@ -409,6 +409,9 @@ override the env-derived configuration.
 
 ```typescript
 // Recommended: use the client SDK, which posts to /sign-in/social and redirects.
+// `callbackURL` defaults to the current page (window.location.href) — the SDK
+// can't know your app's mount path, so it returns you where you started. Pass
+// an explicit `callbackURL` to land elsewhere.
 await client.auth.signInWithProvider('google');
 
 // Equivalent direct API call: POST /sign-in/social returns a redirect URL.
@@ -417,7 +420,7 @@ const response = await fetch('http://localhost:3000/api/v1/auth/sign-in/social',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     provider: 'google',
-    callbackURL: window.location.origin + '/login',
+    callbackURL: window.location.href,
   }),
 });
 const data = await response.json();
