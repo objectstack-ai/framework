@@ -2972,34 +2972,7 @@ export class SqlDriver implements IDataDriver {
           const localField = this.mapSortField(fieldRaw);
           const field = this.remoteColumn(table, fieldRaw, localField);
           const coerced = this.coerceFilterValue(table, localField, value);
-          const apply = (b: any) => {
-            const method = nextJoin === 'or' ? 'orWhere' : 'where';
-            const methodIn = nextJoin === 'or' ? 'orWhereIn' : 'whereIn';
-            const methodNotIn = nextJoin === 'or' ? 'orWhereNotIn' : 'whereNotIn';
-
-            if (op === 'contains') {
-              this.applyContainsLike(b, method, field, value);
-              return;
-            }
-
-            switch (op) {
-              case '=':
-                b[method](field, coerced);
-                break;
-              case '!=':
-                b[method](field, '<>', coerced);
-                break;
-              case 'in':
-                b[methodIn](field, coerced);
-                break;
-              case 'nin':
-                b[methodNotIn](field, coerced);
-                break;
-              default:
-                b[method](field, op, coerced);
-            }
-          };
-          apply(builder);
+          this.applyAstComparison(builder, nextJoin, field, op, value, coerced);
         } else {
           const method = nextJoin === 'or' ? 'orWhere' : 'where';
           (builder as any)[method]((qb: any) => {
@@ -3021,9 +2994,140 @@ export class SqlDriver implements IDataDriver {
    * but the explicit clause is correct for all three).
    */
   private applyContainsLike(builder: any, method: string, field: string, value: unknown): void {
+    this.applyLike(builder, method, field, value, 'contains');
+  }
+
+  /**
+   * Parameterized `LIKE`/`NOT LIKE` match with the LIKE metacharacters `%` / `_`
+   * (and the escape char `\`) escaped in the user value so they match literally
+   * — otherwise a value of `%` matches every row (a filter-bypass, P0). Binds an
+   * explicit `ESCAPE '\'` because SQLite does not honour a default escape
+   * character (MySQL/Postgres do, but the explicit clause is correct for all
+   * three). `shape` positions the wildcard: `contains` → `%v%`, `starts` → `v%`,
+   * `ends` → `%v`.
+   */
+  private applyLike(
+    builder: any,
+    method: string,
+    field: string,
+    value: unknown,
+    shape: 'contains' | 'starts' | 'ends',
+    negate = false,
+  ): void {
     const escaped = String(value).replace(/[\\%_]/g, '\\$&');
+    const pattern = shape === 'starts' ? `${escaped}%` : shape === 'ends' ? `%${escaped}` : `%${escaped}%`;
+    const keyword = negate ? 'NOT LIKE' : 'LIKE';
     const rawMethod = method.startsWith('or') ? 'orWhereRaw' : 'whereRaw';
-    builder[rawMethod]('?? LIKE ? ESCAPE ?', [field, `%${escaped}%`, '\\']);
+    builder[rawMethod](`?? ${keyword} ? ESCAPE ?`, [field, pattern, '\\']);
+  }
+
+  /**
+   * Apply one comparison node from the array-format (`[field, op, value]`)
+   * `where` to the Knex builder, honouring the operator whitelist from
+   * `@objectstack/spec` (`VALID_AST_OPERATORS`) plus the alias spellings the
+   * ObjectUI client emits (`isnull` / `isnotnull` / `is_empty`, …).
+   *
+   * Why this is NOT a thin `builder.where(field, op, value)` passthrough
+   * (issue #2704): an unrecognised operator used to be forwarded to Knex
+   * verbatim. Knex then either rejected it with a 400 (`is_empty` →
+   * "operator not permitted", blanking the whole grid) or — when the comparand
+   * was `null` — silently compiled a clause that matched EVERY row
+   * (`isnull` / `is`). On a permission- or assignment-scoped list view that
+   * silent full-table scan is a data leak, strictly worse than an error. So
+   * null predicates compile to a real `IS NULL` / `IS NOT NULL` (unified with
+   * the `{field, equals, null}` path), and any operator off the whitelist
+   * throws instead of ever reaching Knex.
+   */
+  protected applyAstComparison(
+    builder: any,
+    join: 'and' | 'or',
+    field: string,
+    op: string,
+    rawValue: unknown,
+    coerced: unknown,
+  ): void {
+    const where = join === 'or' ? 'orWhere' : 'where';
+    const whereNull = join === 'or' ? 'orWhereNull' : 'whereNull';
+    const whereNotNull = join === 'or' ? 'orWhereNotNull' : 'whereNotNull';
+    const opLower = String(op).toLowerCase();
+
+    switch (opLower) {
+      // Equality — 2-arg form so Knex renders `IS NULL` for a null comparand,
+      // keeping the `{field, equals, null}` path working.
+      case '=':
+      case '==':
+        builder[where](field, coerced);
+        return;
+      case '!=':
+      case '<>':
+        // `<> NULL` matches nothing; a null comparand means "has any value".
+        if (coerced == null) builder[whereNotNull](field);
+        else builder[where](field, '<>', coerced);
+        return;
+      case '>':
+      case '>=':
+      case '<':
+      case '<=':
+      case 'like':
+      case 'ilike':
+        builder[where](field, opLower, coerced);
+        return;
+      case 'in':
+        builder[join === 'or' ? 'orWhereIn' : 'whereIn'](field, coerced as any[]);
+        return;
+      case 'nin':
+      case 'not_in':
+      case 'notin':
+        builder[join === 'or' ? 'orWhereNotIn' : 'whereNotIn'](field, coerced as any[]);
+        return;
+      case 'between': {
+        const arr = Array.isArray(coerced) ? coerced : [];
+        if (arr.length !== 2) {
+          throw new Error(`[sql-driver] operator "between" on field "${field}" requires a [min, max] value array.`);
+        }
+        builder[join === 'or' ? 'orWhereBetween' : 'whereBetween'](field, arr as [any, any]);
+        return;
+      }
+      case 'contains':
+        this.applyLike(builder, where, field, rawValue, 'contains');
+        return;
+      case 'notcontains':
+      case 'not_contains':
+        this.applyLike(builder, where, field, rawValue, 'contains', true);
+        return;
+      case 'startswith':
+      case 'starts_with':
+        this.applyLike(builder, where, field, rawValue, 'starts');
+        return;
+      case 'endswith':
+      case 'ends_with':
+        this.applyLike(builder, where, field, rawValue, 'ends');
+        return;
+      // Null / empty predicates — value-independent, unified with `equals`+null.
+      case 'is_null':
+      case 'isnull':
+      case 'is_empty':
+      case 'isempty':
+      case 'empty':
+        builder[whereNull](field);
+        return;
+      case 'is_not_null':
+      case 'isnotnull':
+      case 'is_not_empty':
+      case 'isnotempty':
+      case 'not_empty':
+      case 'notempty':
+      case 'is_set':
+      case 'set':
+        builder[whereNotNull](field);
+        return;
+      default:
+        throw new Error(
+          `[sql-driver] Unsupported filter operator "${op}" on field "${field}". Supported operators: ` +
+            `=, !=, <, <=, >, >=, in, nin, between, contains, not_contains, starts_with, ends_with, ` +
+            `is_null, is_not_null (see @objectstack/spec VALID_AST_OPERATORS).`,
+        );
+    }
   }
 
   protected applyFilterCondition(builder: Knex.QueryBuilder, condition: any, logicalOp: 'and' | 'or' = 'and', tableHint?: string | null) {
@@ -3048,6 +3152,17 @@ export class SqlDriver implements IDataDriver {
             });
           }
         });
+      } else if (key === '$not' && value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        // Spec LOGICAL_OPERATORS declares `$not` alongside `$and`/`$or`; both
+        // driver-mongodb and driver-memory implement it, and CEL `!expr` in a
+        // permission/scope rule compiles to `{ $not: {...} }` (cel-to-filter.ts).
+        // Without this branch `$not` fell through to the field handler, was
+        // treated as a column named "$not", and produced wrong SQL — the same
+        // class of silent filter-bypass this fix (issue #2704) closes.
+        const notMethod = logicalOp === 'or' ? 'orWhereNot' : 'whereNot';
+        (builder as any)[notMethod]((qb: any) => {
+          this.applyFilterCondition(qb, value, 'and', table);
+        });
       } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
         const localField = this.mapSortField(key);
         const field = this.remoteColumn(table, key, localField);
@@ -3059,7 +3174,9 @@ export class SqlDriver implements IDataDriver {
               (builder as any)[method](field, coerced);
               break;
             case '$ne':
-              (builder as any)[method](field, '<>', coerced);
+              // `<> NULL` matches nothing; a null comparand means "has any value".
+              if (coerced == null) (builder as any)[logicalOp === 'or' ? 'orWhereNotNull' : 'whereNotNull'](field);
+              else (builder as any)[method](field, '<>', coerced);
               break;
             case '$gt':
               (builder as any)[method](field, '>', coerced);
@@ -3084,10 +3201,53 @@ export class SqlDriver implements IDataDriver {
               break;
             }
             case '$contains':
+            // `$regex` reaches SQL only via the better-auth adapter, which emits
+            // it for a `contains` search (a plain substring, not a real regex).
+            // SQL has no portable regex, so compile the intended substring LIKE
+            // — correct for that producer and safe (the value is LIKE-escaped),
+            // where the old equality default silently made it an exact match.
+            case '$regex':
               this.applyContainsLike(builder, method, field, opValue);
               break;
+            case '$notContains':
+              this.applyLike(builder, method, field, opValue, 'contains', true);
+              break;
+            case '$startsWith':
+              this.applyLike(builder, method, field, opValue, 'starts');
+              break;
+            case '$endsWith':
+              this.applyLike(builder, method, field, opValue, 'ends');
+              break;
+            case '$between': {
+              const arr = Array.isArray(coerced) ? coerced : [];
+              if (arr.length !== 2) {
+                throw new Error(`[sql-driver] operator "$between" on field "${field}" requires a [min, max] value array.`);
+              }
+              (builder as any)[logicalOp === 'or' ? 'orWhereBetween' : 'whereBetween'](field, arr as [any, any]);
+              break;
+            }
+            // `{ $null: true }` → IS NULL, `{ $null: false }` → IS NOT NULL.
+            // Also the SQL rendering of the AST `is_null`/`is_not_null` operators
+            // (spec `parseFilterAST` maps those to `$null`). Previously this fell
+            // to the equality default and compiled `field = true`, silently
+            // returning the wrong rows (issue #2704).
+            case '$null':
+              (builder as any)[opValue === false
+                ? (logicalOp === 'or' ? 'orWhereNotNull' : 'whereNotNull')
+                : (logicalOp === 'or' ? 'orWhereNull' : 'whereNull')](field);
+              break;
+            // Mongo `$exists`: a present field is a non-null column in SQL.
+            case '$exists':
+              (builder as any)[opValue === false
+                ? (logicalOp === 'or' ? 'orWhereNull' : 'whereNull')
+                : (logicalOp === 'or' ? 'orWhereNotNull' : 'whereNotNull')](field);
+              break;
             default:
-              (builder as any)[method](field, coerced);
+              throw new Error(
+                `[sql-driver] Unsupported filter operator "${op}" on field "${field}". Supported operators: ` +
+                  `$eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $between, $contains, $notContains, ` +
+                  `$startsWith, $endsWith, $regex, $null, $exists.`,
+              );
           }
         }
       } else {

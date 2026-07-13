@@ -356,7 +356,12 @@ export const VALID_AST_OPERATORS = new Set([
   'startswith', 'starts_with',
   'endswith', 'ends_with',
   'between',
+  // Null / empty predicates. `is_null` / `is_not_null` are canonical; `isnull`,
+  // `isnotnull`, `is_empty`, `is_not_empty` are the alias spellings the ObjectUI
+  // `data-objectstack` adapter emits and the driver-sql/#2704 fix accepts — kept
+  // in sync here so `parseFilterAST()` never treats them as an unknown operator.
   'is_null', 'is_not_null',
+  'isnull', 'isnotnull', 'is_empty', 'is_not_empty',
 ]);
 
 /**
@@ -434,6 +439,10 @@ const AST_OPERATOR_MAP: Record<string, string> = {
   'between': '$between',
   'is_null': '$null',
   'is_not_null': '$null',
+  'isnull': '$null',
+  'isnotnull': '$null',
+  'is_empty': '$null',
+  'is_not_empty': '$null',
 };
 
 /**
@@ -448,11 +457,13 @@ function convertComparison(node: [string, string, unknown]): FilterCondition {
     return { [field]: value } as FilterCondition;
   }
 
-  // Null check operators
-  if (op === 'is_null') {
+  // Null / empty predicates — direction comes from the operator NAME, not the
+  // (filler) value: the ObjectUI client sends a truthy placeholder value for
+  // both `isnull` and `isnotnull`, so keying off `value` would collapse them.
+  if (op === 'is_null' || op === 'isnull' || op === 'is_empty') {
     return { [field]: { $null: true } } as FilterCondition;
   }
-  if (op === 'is_not_null') {
+  if (op === 'is_not_null' || op === 'isnotnull' || op === 'is_not_empty') {
     return { [field]: { $null: false } } as FilterCondition;
   }
 
