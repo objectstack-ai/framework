@@ -32,7 +32,7 @@
     "@objectstack/driver-sql": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "knex": "^3.3.0",
-    "nanoid": "^5.1.16",
+    "nanoid": "^6.0.0",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
