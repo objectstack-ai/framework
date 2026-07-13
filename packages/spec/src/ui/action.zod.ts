@@ -66,6 +66,15 @@ export const ActionParamSchema = lazySchema(() => z.object({
    * context. Useful for edit dialogs that pre-fill from the selected row.
    */
   defaultFromRow: z.boolean().optional(),
+  /**
+   * Visibility predicate (CEL) — same scope as the action-level `visible`
+   * (`current_user` / `app` / `data` / `features`). When it evaluates false the
+   * dialog omits this param entirely. Use it to hide a param that the backend
+   * only accepts under an opt-in capability, e.g. the create-user `phoneNumber`
+   * param gated on `features.phoneNumber` so the form never offers a field the
+   * default backend rejects. Absent = always visible.
+   */
+  visible: ExpressionInputSchema.optional().describe('Param visibility predicate (CEL); omits the param when false.'),
 }).refine(
   (p) => Boolean(p.name) || Boolean(p.field),
   { message: 'ActionParam requires either "name" or "field"' },

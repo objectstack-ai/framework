@@ -153,6 +153,11 @@ export const SysUser = ObjectSchema.create({
           type: 'text',
           required: false,
           helpText: 'Sign-in phone number (E.164, e.g. +8613800000000). Required when no email is given.',
+          // Only offer phone when the opt-in phoneNumber auth plugin is loaded —
+          // otherwise the create-user endpoint rejects a phone with
+          // "Phone numbers require the phoneNumber auth plugin". `features.phoneNumber`
+          // is served in /api/v1/auth/config (getPublicConfig).
+          visible: 'features.phoneNumber == true',
         },
         { field: 'name', required: false },
         {
