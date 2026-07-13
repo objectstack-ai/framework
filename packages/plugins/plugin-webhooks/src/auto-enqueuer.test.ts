@@ -205,6 +205,42 @@ describe('AutoEnqueuer', () => {
         await ae.stop();
     });
 
+    it('parses triggers authored as a multi-select array', async () => {
+        // The `triggers` field is now a multi-select stored as an array; the
+        // parser must treat it identically to the legacy CSV form.
+        const engine = new FakeEngine({ sys_webhook: [webhook({ triggers: ['create'] })] });
+        const realtime = new FakeRealtime();
+        const { enqueue, calls } = makeRecorder();
+        const ae = new AutoEnqueuer(engine, realtime, enqueue, { refreshIntervalMs: 0 });
+        await ae.start();
+
+        await realtime.publish(event('created', 'contact', { id: 'c-1' }));
+        await realtime.publish(event('updated', 'contact', { id: 'c-1' }, '2026-05-24T00:00:01.000Z'));
+        await flush();
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0].label).toBe('data.record.created');
+        await ae.stop();
+    });
+
+    it('parses triggers stored as a JSON-encoded array string', async () => {
+        // Some drivers hand a JSON array column back as a string — accept it.
+        const engine = new FakeEngine({ sys_webhook: [webhook({ triggers: '["create","update"]' })] });
+        const realtime = new FakeRealtime();
+        const { enqueue, calls } = makeRecorder();
+        const ae = new AutoEnqueuer(engine, realtime, enqueue, { refreshIntervalMs: 0 });
+        await ae.start();
+
+        await realtime.publish(event('created', 'contact', { id: 'c-1' }));
+        await realtime.publish(event('deleted', 'contact', { id: 'c-1' }, '2026-05-24T00:00:02.000Z'));
+        await flush();
+
+        // create + update are subscribed; delete is not.
+        expect(calls).toHaveLength(1);
+        expect(calls[0].label).toBe('data.record.created');
+        await ae.stop();
+    });
+
     it('fans out to multiple matching webhooks', async () => {
         const engine = new FakeEngine({
             sys_webhook: [

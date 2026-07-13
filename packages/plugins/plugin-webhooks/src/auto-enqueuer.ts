@@ -205,11 +205,30 @@ export class AutoEnqueuer {
 
     private parseRow(row: any): CachedSubscription | null {
         if (!row?.id || !row?.url) return null;
-        const triggersField = (row.triggers ?? '') as string;
+        // `triggers` is now authored as a multi-select (stored as an array), but
+        // legacy rows stored a comma-separated string (and some drivers hand a
+        // JSON-encoded array back as a string). Accept all three shapes so a
+        // schema change never silently drops a subscription's events.
+        const rawTriggers = row.triggers;
+        let triggerList: string[];
+        if (Array.isArray(rawTriggers)) {
+            triggerList = rawTriggers.map((t) => String(t));
+        } else {
+            const s = String(rawTriggers ?? '').trim();
+            if (s.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(s);
+                    triggerList = Array.isArray(parsed) ? parsed.map((t) => String(t)) : [s];
+                } catch {
+                    triggerList = s.split(',');
+                }
+            } else {
+                triggerList = s.split(',');
+            }
+        }
         const triggers = new Set(
-            triggersField
-                .split(',')
-                .map((s: string) => s.trim().toLowerCase())
+            triggerList
+                .map((t) => t.trim().toLowerCase())
                 .filter(Boolean) as Array<'create' | 'update' | 'delete' | 'undelete'>,
         );
         if (triggers.size === 0) {
@@ -235,7 +254,11 @@ export class AutoEnqueuer {
             objectName: row.object_name ? String(row.object_name) : undefined,
             triggers,
             url: String(row.url),
-            method: row.method ?? defn.method ?? 'POST',
+            // Method is authored via a select whose option values are lowercased
+            // (get/post/…); upper-case here so delivery uses a canonical HTTP
+            // method regardless of whether the row was authored before or after
+            // the select change (legacy rows stored 'POST').
+            method: String(row.method ?? defn.method ?? 'POST').toUpperCase(),
             headers: defn.headers,
             secret: defn.secret,
             timeoutMs: defn.timeoutMs,

@@ -113,17 +113,26 @@ export const SysWebhook = ObjectSchema.create({
       label: 'Object',
       required: false,
       maxLength: 100,
+      // Object picker (same widget as sys_sharing_rule) instead of a free-text
+      // machine name. Falls back to a text input when the widget is unavailable.
+      widget: 'object-ref',
       description: 'Short object name whose events fire this webhook (blank = manual / API-triggered)',
       group: 'Definition',
     }),
 
-    triggers: Field.text({
-      label: 'Triggers',
-      required: false,
-      maxLength: 200,
-      description: 'Comma-separated event list: create,update,delete,undelete,api',
-      group: 'Definition',
-    }),
+    triggers: Field.select(
+      ['create', 'update', 'delete', 'undelete', 'api'],
+      {
+        label: 'Triggers',
+        required: false,
+        // Multi-select instead of a hand-typed comma-separated string. Stored as
+        // an array; the auto-enqueuer parser also tolerates the legacy
+        // comma-separated / JSON-string forms so existing rows keep working.
+        multiple: true,
+        description: 'Record events that fire this webhook (empty = manual / API-triggered)',
+        group: 'Definition',
+      },
+    ),
 
     url: Field.text({
       label: 'Target URL',
@@ -133,14 +142,20 @@ export const SysWebhook = ObjectSchema.create({
       group: 'Definition',
     }),
 
-    method: Field.text({
-      label: 'HTTP Method',
-      required: true,
-      defaultValue: 'POST',
-      maxLength: 10,
-      description: 'GET / POST / PUT / PATCH / DELETE',
-      group: 'Definition',
-    }),
+    method: Field.select(
+      ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      {
+        label: 'HTTP Method',
+        required: true,
+        // Select instead of free text. Option values are lowercased by the
+        // Field.select helper (get/post/…); the auto-enqueuer upper-cases the
+        // resolved method before delivery, so existing 'POST' rows and the
+        // lowercase option values both normalise correctly.
+        defaultValue: 'post',
+        description: 'HTTP method used for the callback request',
+        group: 'Definition',
+      },
+    ),
 
     description: Field.textarea({ label: 'Description', required: false, group: 'Definition' }),
 
