@@ -17,6 +17,8 @@ import {
   upsertEnvPermissionSet,
   projectPermissionMutation,
   registerPermissionSetProjection,
+  registerPermissionAuthoringGate,
+  assertEnvPermissionSaveAllowed,
   createPermissionSetWriteThrough,
   reconcilePermissionSetProjection,
 } from './permission-set-projection.js';
@@ -298,6 +300,50 @@ describe('registerPermissionSetProjection', () => {
     expect(ql.permRows.length).toBe(1);
     expect(registerPermissionSetProjection({}, { ql })).toBe(false);
     expect(registerPermissionSetProjection(null, { ql })).toBe(false);
+  });
+});
+
+// ── Authoring gate (ADR-0094 D5 / framework#2898) ───────────────────────────
+
+describe('assertEnvPermissionSaveAllowed', () => {
+  it('rejects an env-door save targeting a package-owned record', async () => {
+    const ql = makeQl();
+    ql.permRows.push({ id: 'ps_pkg', name: 'crm_rep', managed_by: 'package', package_id: 'com.example.crm' });
+    const r = await assertEnvPermissionSaveAllowed(ql, { name: 'crm_rep', packageId: null });
+    expect(r?.code).toBe('package_owned');
+    expect(r?.status).toBe(403);
+  });
+
+  it('allows the package door (save carries the owning packageId)', async () => {
+    const ql = makeQl();
+    ql.permRows.push({ id: 'ps_pkg', name: 'crm_rep', managed_by: 'package', package_id: 'com.example.crm' });
+    expect(await assertEnvPermissionSaveAllowed(ql, { name: 'crm_rep', packageId: 'com.example.crm' })).toBeNull();
+  });
+
+  it('allows an env-authored set and a brand-new name', async () => {
+    const ql = makeQl();
+    ql.permRows.push({ id: 'ps_env', name: 'my_custom', managed_by: 'user' });
+    expect(await assertEnvPermissionSaveAllowed(ql, { name: 'my_custom', packageId: null })).toBeNull();
+    expect(await assertEnvPermissionSaveAllowed(ql, { name: 'does_not_exist', packageId: null })).toBeNull();
+  });
+
+  it('registers the gate on a capable protocol and refuses the save through it', async () => {
+    const ql = makeQl();
+    ql.permRows.push({ id: 'ps_pkg', name: 'crm_rep', managed_by: 'package', package_id: 'com.example.crm' });
+    let gate: any = null;
+    const protocol = { registerAuthoringGate: (_t: string, fn: any) => { gate = fn; } };
+    expect(registerPermissionAuthoringGate(protocol, ql)).toBe(true);
+    expect(typeof gate).toBe('function');
+    const rej = await gate({ type: 'permission', name: 'crm_rep', item: {}, organizationId: null, packageId: null, mode: 'publish' });
+    expect(rej?.code).toBe('package_owned');
+    // env-owned name passes
+    ql.permRows.push({ id: 'ps_env', name: 'ok_set', managed_by: 'user' });
+    expect(await gate({ type: 'permission', name: 'ok_set', item: {}, organizationId: null, packageId: null, mode: 'publish' })).toBeNull();
+  });
+
+  it('returns false on a protocol without registerAuthoringGate', () => {
+    expect(registerPermissionAuthoringGate({}, makeQl())).toBe(false);
+    expect(registerPermissionAuthoringGate(null, makeQl())).toBe(false);
   });
 });
 

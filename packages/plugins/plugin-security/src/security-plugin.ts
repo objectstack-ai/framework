@@ -18,6 +18,7 @@ import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './boot
 import {
   createPermissionSetWriteThrough,
   registerPermissionSetProjection,
+  registerPermissionAuthoringGate,
   reconcilePermissionSetProjection,
 } from './permission-set-projection.js';
 import {
@@ -1217,6 +1218,9 @@ export class SecurityPlugin implements Plugin {
             envProjectionWired = registerPermissionSetProjection(protocol, {
               ql, metadata: this.metadata, logger: ctx.logger,
             });
+            // [ADR-0094 D5 / framework#2898] Reject env-door overlays of
+            // package-owned sets at authoring time (idempotent registration).
+            registerPermissionAuthoringGate(protocol, ql);
           }
           // [ADR-0094 D4] Converge record ↔ metadata: project env overlays
           // onto records (creating missing ones), backfill legacy data-door

@@ -422,6 +422,61 @@ export function registerPermissionSetProjection(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Authoring gate (ADR-0094 D5, framework#2898)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reject an ENVIRONMENT-door `permission` save whose target name is a
+ * package-owned `sys_permission_set` record. A package set's definition lives
+ * in its package (edited via the package door → publish); an env-scope overlay
+ * of it would persist a layered overlay that the projector refuses to apply
+ * (ADR-0086 D4) and the resolver never enforces as an override — the exact
+ * declared-but-inert surface ADR-0049 forbids. Rejecting at authoring time
+ * turns that silent no-op into an actionable error.
+ *
+ * Scoped to the ENV door precisely: a save carrying the owning `packageId`
+ * (the package door re-authoring its own set, draft→publish) is allowed, and
+ * so is any save for a name with no package-owned record (new env sets,
+ * env-authored sets, package sets being materialized by the system path —
+ * which never routes through here). Fail-open on lookup error: this closes an
+ * inert-metadata hole, not a hard boundary (the data-plane two-doors gate and
+ * the projector's refusal already protect the record).
+ */
+export async function assertEnvPermissionSaveAllowed(
+  ql: any,
+  args: { name: string; packageId: string | null; item?: unknown },
+): Promise<{ code: string; status: number; message: string } | null> {
+  // Package door — the package re-authoring its own metadata; not the env door.
+  if (args.packageId) return null;
+  if (!ql || typeof ql.find !== 'function' || !args.name) return null;
+  const existing = (await tryFind(ql, 'sys_permission_set', { name: args.name }, 1))[0];
+  if (existing?.managed_by === 'package') {
+    return {
+      code: 'package_owned',
+      status: 403,
+      message:
+        `[Security] '${args.name}' is a package-managed permission set (managed_by:'package') — ` +
+        `it cannot be customized through the environment door. Edit it in its package and re-publish, ` +
+        `or clone it to a new name to author an environment-owned set (ADR-0094 D5 / ADR-0086 two-doors).`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Register the `permission` authoring gate on the protocol (ADR-0094 D5).
+ * Returns `true` when wired, `false` on a protocol that predates
+ * `registerAuthoringGate`.
+ */
+export function registerPermissionAuthoringGate(protocol: any, ql: any): boolean {
+  if (!protocol || typeof protocol.registerAuthoringGate !== 'function') return false;
+  protocol.registerAuthoringGate('permission', async (a: any) =>
+    assertEnvPermissionSaveAllowed(ql, { name: a.name, packageId: a.packageId ?? null, item: a.item }),
+  );
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Data-door write-through (ADR-0094 D3)
 // ─────────────────────────────────────────────────────────────────────────────
 
