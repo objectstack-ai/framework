@@ -203,7 +203,11 @@ describe('SecurityPlugin', () => {
       context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
     };
     await harness.run(opCtx);
-    expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+    // [ADR-0095 D1] Layer 0 (the tenant wall) AND the fixture's own legacy
+    // tenant_isolation policy (Layer 1) — same rows. Production seeds no longer
+    // carry the Layer-1 tenant policy, so in production this is Layer 0's
+    // `{organization_id}` alone; this fixture keeps it to exercise composition.
+    expect(opCtx.ast.where).toEqual({ $and: [{ organization_id: 'org-1' }, { organization_id: 'org-1' }] });
   });
 
   // Regression: when a schema explicitly opts out of tenancy
@@ -414,7 +418,9 @@ describe('SecurityPlugin', () => {
       context: { userId: 'u1', tenantId: 'org-1', roles: ['owner'], permissions: [] },
     };
     await harness.run(opCtx);
-    expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+    // [ADR-0095 D1] Tenant scope is now guaranteed by Layer 0 regardless of which
+    // Layer-1 sets resolve; ANDed with the fixture's legacy tenant policy (same rows).
+    expect(opCtx.ast.where).toEqual({ $and: [{ organization_id: 'org-1' }, { organization_id: 'org-1' }] });
   });
 
   // -------------------------------------------------------------------------
@@ -556,8 +562,11 @@ describe('SecurityPlugin', () => {
         context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
       };
       await harness.run(opCtx);
-      // The member is still tenant-scoped — the managedBy bypass is admin-only.
-      expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+      // The member is still tenant-scoped — the managedBy superuser bypass is
+      // admin-only (Layer 0's exemption requires the platform-admin bit). Here
+      // the object HAS organization_id, so Layer 0 applies the wall; ANDed with
+      // the fixture's legacy tenant policy (Layer 1) — same rows, no leak.
+      expect(opCtx.ast.where).toEqual({ $and: [{ organization_id: 'org-1' }, { organization_id: 'org-1' }] });
     });
   });
 
@@ -666,7 +675,9 @@ describe('SecurityPlugin', () => {
       await plugin.start(harness.ctx);
       const ctx = { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] };
       const filter = await plugin.getReadFilter('task', ctx);
-      expect(filter).toEqual({ organization_id: 'org-1' });
+      // [ADR-0095 D1] Same Layer0-AND-Layer1 composition as the find path — the
+      // point of this test (getReadFilter parity) holds by construction.
+      expect(filter).toEqual({ $and: [{ organization_id: 'org-1' }, { organization_id: 'org-1' }] });
     });
 
     it('returns undefined (no scope) when tenant_isolation is stripped (org-scoping off)', async () => {
