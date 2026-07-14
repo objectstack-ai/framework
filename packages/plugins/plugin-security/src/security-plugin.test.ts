@@ -1215,6 +1215,188 @@ describe('SecurityPlugin', () => {
       ).resolves.toBeDefined();
     });
   });
+
+  // ── ADR-0066 / #2918 — built-in row-write guardrail (sys_position / sys_capability) ──
+  // Platform/application-managed asset rows are not the admin's to delete or
+  // rewrite. Unlike sys_permission_set these objects have no ADR-0094 overlay
+  // write-through, so the refusal must hold for update/delete at this gate.
+  // Matrix: non-admin/admin × managed/admin-authored × delete/update.
+  describe('system-row write gate (sys_position / sys_capability provenance)', () => {
+    const adminSet: PermissionSet = {
+      name: 'admin_full_access', label: 'Admin',
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true, modifyAllRecords: true } },
+    } as any;
+    const adminCtx = { userId: 'admin1', tenantId: 'org-1', positions: [], permissions: ['admin_full_access'] };
+
+    const runGate = async (opCtx: any, findOneImpl?: (q: any) => any) => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'admin_full_access' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [adminSet],
+        objectFields: ['id', 'name', 'label', 'managed_by'],
+        ...(findOneImpl ? { findOneImpl } : {}),
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      return harness.run(opCtx);
+    };
+
+    it('DENIES deleting a platform-managed position (sys_position managed_by:system)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { id: 'pos_admin' } }, context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES updating a package-declared position (sys_position managed_by:config)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'update',
+        data: { id: 'pos_sales', label: 'renamed' }, options: { where: { id: 'pos_sales' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_sales', name: 'sales_rep', managed_by: 'config' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES deleting a platform-owned capability (sys_capability managed_by:platform)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'delete',
+        options: { where: { id: 'cap_plat' } }, context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'cap_plat', name: 'manage_users', managed_by: 'platform' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES updating a package-owned capability (sys_capability managed_by:package)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'update',
+        data: { id: 'cap_pkg', label: 'renamed' }, options: { where: { id: 'cap_pkg' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'cap_pkg', name: 'crm.export', managed_by: 'package' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS deleting an admin-authored position (sys_position managed_by:user)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { id: 'pos_user' } }, context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_user', name: 'my_team', managed_by: 'user' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('ALLOWS updating an admin-authored position with NO managed_by (tenant-created)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'update',
+        data: { id: 'pos_user', label: 'renamed' }, options: { where: { id: 'pos_user' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_user', name: 'my_team', managed_by: null })),
+      ).resolves.toBeDefined();
+    });
+
+    it('ALLOWS updating an admin-authored capability (sys_capability managed_by:admin)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'update',
+        data: { id: 'cap_admin', label: 'renamed' }, options: { where: { id: 'cap_admin' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'cap_admin', name: 'my_cap', managed_by: 'admin' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('DENIES an admin-door insert that forges platform provenance (sys_position managed_by:system)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'insert',
+        data: { name: 'forged', managed_by: 'system' }, context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES a bulk/ARRAY insert that forges package provenance on any element (sys_capability)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'insert',
+        data: [
+          { name: 'ok_admin_cap' },
+          { name: 'forged', managed_by: 'package' },
+        ],
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an update that RE-BADGES an admin row as package-managed (update-to-forge)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'update',
+        data: { id: 'cap_admin', managed_by: 'package' }, options: { where: { id: 'cap_admin' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'cap_admin', name: 'my_cap', managed_by: 'admin' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a normal admin-door capability insert (no forged provenance)', async () => {
+      const opCtx: any = {
+        object: 'sys_capability', operation: 'insert',
+        data: { name: 'my_cap', label: 'Custom', managed_by: 'admin' },
+        context: adminCtx,
+      };
+      await expect(runGate(opCtx)).resolves.toBeDefined();
+    });
+
+    it('DENIES a filter DELETE whose filter matches a platform/package-managed row', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { active: false } }, // no single id → filter path
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_admin', managed_by: 'system' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('ALLOWS a filter delete that matches only admin-authored rows (probe finds none)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { managed_by: 'user' } },
+        context: adminCtx,
+      };
+      // The managed-row probe finds nothing → the write proceeds.
+      await expect(runGate(opCtx, () => null)).resolves.toBeDefined();
+    });
+
+    it('DENIES even a principal-less delete of a managed row (gate is before the fall-open)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { id: 'pos_admin' } },
+        context: {}, // no roles, no permissions, no userId, not isSystem
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('lets system/boot writes through (isSystem bypass) even on a platform-managed position', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'update',
+        data: { id: 'pos_admin', label: 'reseed' }, options: { where: { id: 'pos_admin' } },
+        context: { isSystem: true },
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+      ).resolves.toBeDefined();
+    });
+  });
 });
 // ---------------------------------------------------------------------------
 describe('PermissionEvaluator', () => {

@@ -76,6 +76,36 @@ const EMPTY_REQUIRED_PERMISSIONS: NormalizedRequiredPermissions = Object.freeze(
   all: [], read: [], create: [], update: [], delete: [],
 }) as NormalizedRequiredPermissions;
 
+/**
+ * [ADR-0066 / #2918] Provenance spec for the platform/application asset objects
+ * whose managed rows are write-protected by {@link SecurityPlugin.assertSystemRowWriteGate}.
+ *
+ * The two objects use DIFFERENT `managed_by` vocabularies but the same ownership
+ * idea — a row authored by the platform or an application package is not the
+ * admin's to delete or rewrite:
+ *   • sys_position.managed_by   — `system` (platform built-in) / `config`
+ *     (package declared) are managed; `user`/∅ (tenant-authored) are the admin's.
+ *   • sys_capability.managed_by — `platform` / `package` are managed; `admin`
+ *     (created in Setup) is the admin's.
+ * The map value for each managed `managed_by` is the human owner label used in
+ * the (business-message-only) deny text.
+ */
+const SYSTEM_ROW_PROVENANCE: Record<
+  string,
+  { noun: string; pluralNoun: string; managed: Record<string, string> }
+> = {
+  sys_position: {
+    noun: 'position',
+    pluralNoun: 'positions',
+    managed: { system: 'the platform', config: 'an application package' },
+  },
+  sys_capability: {
+    noun: 'capability',
+    pluralNoun: 'capabilities',
+    managed: { platform: 'the platform', package: 'an application package' },
+  },
+};
+
 /** Normalize a raw object `requiredPermissions` (string[] | per-op map) into buckets. */
 function normalizeRequiredPermissions(raw: unknown): NormalizedRequiredPermissions {
   if (Array.isArray(raw)) {
@@ -508,6 +538,20 @@ export class SecurityPlugin implements Plugin {
       // superuser with modifyAllRecords. System/boot writes carry `isSystem`
       // and already short-circuited the whole middleware above.
       await this.assertPackageManagedWriteGate(opCtx);
+
+      // [ADR-0066 / #2918] Built-in row-write guardrail for the platform/app
+      // ASSET objects sys_position / sys_capability. Like the package gate
+      // above, an unconditional data-layer boundary: a row authored by the
+      // platform or an application package (provenance recorded in
+      // `managed_by`) may not be deleted or rewritten through the admin door.
+      // Unlike sys_permission_set there is NO ADR-0094 overlay write-through
+      // for these objects, so the refusal must hold for update/delete here
+      // rather than deferring to a downstream translation. Runs BEFORE the
+      // empty-principal fall-open and the CRUD check so the boundary holds even
+      // for a principal-less context and a superuser with modifyAllRecords.
+      // System/boot writes carry `isSystem` and already short-circuited above,
+      // so the seeder and package publish are unaffected.
+      await this.assertSystemRowWriteGate(opCtx);
 
       // [ADR-0090 D5/D9] Audience-anchor binding guard — like the package
       // gate above, an unconditional data-layer boundary: a permission set
@@ -1697,6 +1741,114 @@ export class SecurityPlugin implements Plugin {
           recordId: targetId,
           packageId: (row.package_id as string | null) ?? null,
         },
+      );
+    }
+  }
+
+  /**
+   * [ADR-0066 / #2918] Built-in row-write guardrail for the platform/application
+   * ASSET objects `sys_position` and `sys_capability`.
+   *
+   * ADR-0066's asset-ownership model splits authoring from assignment: WHAT a
+   * position or capability *is* is defined by the platform or an application
+   * package developer; a customer admin only decides WHO it is assigned to (via
+   * the RBAC link tables, which are governed separately by the delegated-admin
+   * gate). The `managed_by` provenance column on each object already records
+   * that ownership, but until now nothing ENFORCED it at the data layer — an
+   * admin could delete or rewrite a platform/package-managed row and silently
+   * break that app's authorization baseline (ADR-0049: a provenance attribute
+   * that exists but is never enforced is exactly the gap to close).
+   *
+   * This gate is an unconditional data-layer boundary, mirroring the
+   * `sys_permission_set` two-doors gate above:
+   *   (a) The admin door may never FORGE managed provenance — stamping
+   *       `managed_by` to a platform/package value on insert OR update (single
+   *       object OR array) is refused; only the platform seeder / package
+   *       publish path (which carries `isSystem` and short-circuited the whole
+   *       middleware above) may author it. This also closes update-to-forge.
+   *   (b) delete / update / transfer / restore / purge on a row whose EXISTING
+   *       `managed_by` is platform/package-owned are refused — unlike
+   *       `sys_permission_set`, these objects have NO ADR-0094 overlay
+   *       write-through, so the mutation would otherwise go straight to the
+   *       driver.
+   *   (c) admin-authored rows (`managed_by` user/∅/admin) are untouched — the
+   *       admin fully owns those (incl. a delegate's rows in their own subtree).
+   * Fails CLOSED and never depends on the caller's grants, so a superuser with
+   * modifyAllRecords cannot delete a platform position either.
+   */
+  private async assertSystemRowWriteGate(opCtx: any): Promise<void> {
+    const spec = SYSTEM_ROW_PROVENANCE[opCtx?.object as string];
+    if (!spec) return;
+    const op = opCtx.operation;
+    if (!['insert', 'update', 'delete', 'transfer', 'restore', 'purge'].includes(op)) return;
+
+    const managedValues = Object.keys(spec.managed);
+
+    // (a) Reject any admin-door PAYLOAD that CLAIMS platform/package provenance,
+    //     on insert OR update, single object OR array. Only the seeder / publish
+    //     path (which carries `isSystem` and short-circuited above) may stamp it.
+    const payloadRows = Array.isArray(opCtx.data)
+      ? opCtx.data
+      : (opCtx.data && typeof opCtx.data === 'object' ? [opCtx.data] : []);
+    if (
+      payloadRows.some(
+        (r: unknown) =>
+          r &&
+          typeof r === 'object' &&
+          managedValues.includes(String((r as Record<string, unknown>).managed_by ?? '')),
+      )
+    ) {
+      throw new PermissionDeniedError(
+        `[Security] Access denied: cannot stamp a platform/package 'managed_by' value on a ${spec.noun} ` +
+          `through the admin door — ${spec.pluralNoun} provided by the platform or an application package are ` +
+          `authored there and land via seeding/publish, not through Setup (ADR-0066 asset ownership).`,
+        { operation: op, object: opCtx.object },
+      );
+    }
+    if (op === 'insert') return; // no existing row to protect
+
+    if (!this.ql) return;
+
+    const targetId = this.extractSingleId(opCtx);
+    if (targetId == null) {
+      // Multi-row / filter write with no single id. Deny ONLY if a managed row
+      // actually falls within the write's own filter — so a bulk edit that
+      // targets only admin-authored rows still succeeds (no over-broad block). A
+      // whole-table write (no filter) matches every managed row, so it is denied.
+      const writeWhere = opCtx?.options?.where;
+      const managedWhere =
+        writeWhere && typeof writeWhere === 'object'
+          ? { $and: [writeWhere, { managed_by: { $in: managedValues } }] }
+          : { managed_by: { $in: managedValues } };
+      const hitsManagedRow = await this.ql
+        .findOne(opCtx.object, { where: managedWhere, context: { isSystem: true } })
+        .catch(() => null);
+      if (hitsManagedRow) {
+        throw new PermissionDeniedError(
+          `[Security] Access denied: this '${op}' on '${opCtx.object}' targets one or more ${spec.pluralNoun} ` +
+            `provided by the platform or an application package — those cannot be deleted or modified through ` +
+            `the admin door (ADR-0066 asset ownership).`,
+          { operation: op, object: opCtx.object },
+        );
+      }
+      return;
+    }
+
+    const existing = await this.ql
+      .findOne(opCtx.object, { where: { id: targetId }, context: { isSystem: true } })
+      .catch(() => null);
+    const existingManagedBy = existing
+      ? String((existing as Record<string, unknown>).managed_by ?? '')
+      : '';
+    const ownerLabel = spec.managed[existingManagedBy];
+    if (existing && ownerLabel) {
+      const row = existing as Record<string, unknown>;
+      const source = ownerLabel === 'the platform' ? 'platform definition' : 'application package';
+      throw new PermissionDeniedError(
+        `[Security] Access denied: '${String(row.name ?? row.label ?? targetId)}' is a ${spec.noun} provided ` +
+          `by ${ownerLabel} — it cannot be deleted or modified through the admin door. Change it by editing ` +
+          `its ${source} and re-publishing (ADR-0066 asset ownership).`,
+        { operation: op, object: opCtx.object, recordId: targetId, managedBy: existingManagedBy },
       );
     }
   }
