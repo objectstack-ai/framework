@@ -116,10 +116,12 @@ Resolve it one of three ways:
 - **set `OS_ALLOW_DEGRADED_TENANCY=1`** to boot anyway in an explicitly degraded
   single-org state.
 
-When you opt into the degraded state, it is branded everywhere an operator
-looks — a boot warning, `features.degradedTenancy: true` in `/auth/config`, and
-the Setup system-overview surface — so degraded operation is always a visible,
-chosen state, never a silent one.
+When you opt into the degraded state, it is surfaced where an operator looks — a
+loud red **terminal boot warning** and `features.degradedTenancy: true` in
+`/auth/config` — so degraded operation is always a visible, chosen state, never a
+silent one. (The `/auth/config` flag is there for any tooling that wants to
+render its own warning; the framework itself does not ship a console banner for
+this extreme, opt-in-past-a-refusal case.)
 
 > **Upgrading?** A deployment that was *silently* degraded before this guard
 > existed will now fail to boot after upgrade. That is intentional — it was not
