@@ -200,6 +200,34 @@ bindings, and its pending audience-binding suggestions in the same request
 (no ghost grants); the uninstall response reports the revocation under
 `cleanups`. Environment-authored sets and other packages' rows survive.
 
+## One authoritative store — the record is a projection (ADR-0094)
+
+A permission-set **definition** has a single authoritative store: the metadata
+layer (packaged declarations plus the `sys_metadata` overlay). The queryable
+`sys_permission_set` record — what Setup lists and user assignment reads — is a
+**pure projection** of that definition, never independently authoritative.
+Every non-system write on the record (Setup CRUD, a bulk import, any API that
+goes through the data engine) is redirected into a metadata write and the
+record is re-derived by an awaited projector, so the two can never drift. This
+has three author-visible consequences:
+
+- **Editing a packaged (declared) set through Setup** becomes an environment
+  overlay of that definition — it now genuinely takes effect, where a
+  record-only edit previously displayed but never enforced.
+- **The API name is immutable after creation.** It is the definition's metadata
+  identity, so the create form accepts it but the edit form locks it, and a
+  rename through the data door is rejected. Clone the set to a new name instead.
+- **Deleting through the data door depends on where the definition lives.** A
+  set you created in this environment is removed. A set that ships with an
+  installed package/app cannot be removed from the environment — "delete"
+  **resets** it to the shipped definition (the customization overlay is
+  dropped), and the row remains. Uninstall the owning package to remove a
+  packaged set entirely.
+
+An environment-scope customization of a **package-owned** set is refused at
+authoring time (`package_owned`): edit it in its package and re-publish, or
+clone it to a new environment-owned name.
+
 ---
 
 ## See also
