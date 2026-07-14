@@ -752,7 +752,7 @@ interface FormSection {
   collapsible?: boolean;  // default false
   collapsed?: boolean;    // default false
   columns?: 1 | 2 | 3 | 4;  // default 1
-  visibleOn?: string;     // CEL visibility predicate; hides section when false
+  visibleWhen?: string;   // CEL visibility predicate; hides section when false
   fields: (string | FormField)[];
 }
 ```
@@ -772,7 +772,7 @@ interface FormField {
   readonly?: boolean;
   hidden?: boolean;
   widget?: string;     // custom widget override
-  visibleOn?: string;  // CEL visibility predicate
+  visibleWhen?: string;  // CEL visibility predicate
 }
 ```
 
@@ -794,17 +794,29 @@ interface ResponsiveColumns {
 ### Visibility Rule
 
 Visibility is a single **CEL expression** string, not a structured rule object.
-Page components expose it as `visibility` (`packages/spec/src/ui/page.zod.ts`);
-form sections and fields expose it as `visibleOn` (`packages/spec/src/ui/view.zod.ts`).
-The component is shown only when the expression evaluates truthy.
+Since [ADR-0089](/docs/adr) the one canonical key is **`visibleWhen`** across every
+layer — data fields, view form sections/fields, and page components — aligning with
+the `readonlyWhen` / `requiredWhen` family. The element is shown only when the
+expression evaluates truthy.
 
 ```typescript
 // e.g. on a PageComponent:
-visibility: "record.account_type == 'premium'"
+visibleWhen: "record.account_type == 'premium'"
 
 // e.g. on a FormSection / FormField:
-visibleOn: "record.status != 'closed' && user.hasRole('admin')"
+visibleWhen: "record.status != 'closed' && user.hasRole('admin')"
 ```
+
+The predicate's **binding root** is set by the layer, not the key:
+
+| Layer | Predicate binds |
+|---|---|
+| Runtime record forms & pages (`*.view.ts`, `*.page.ts`) | `record` + `current_user` (pages also expose `page.<var>`) |
+| Metadata-editing forms (`*.form.ts`) | `data` — the row under edit |
+
+The legacy spellings `visibleOn` (view) and `visibility` (page) are `@deprecated`
+aliases: still accepted and folded into `visibleWhen` at parse time, so existing
+metadata keeps working. Author new metadata with `visibleWhen`.
 
 Breakpoint-based show/hide is handled separately via the component's
 `responsive.hiddenOn` array (e.g. `hiddenOn: ['xs', 'sm']`), see

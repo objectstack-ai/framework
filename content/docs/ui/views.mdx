@@ -233,7 +233,7 @@ fields: [
     required: true,              // Override required
     colSpan: 2,                  // Span 2 grid columns
     widget: 'custom-editor',     // Custom widget component
-    visibleOn: "status != 'cancelled'",
+    visibleWhen: "status != 'cancelled'",
   },
 ]
 ```
@@ -250,7 +250,7 @@ fields: [
 | `colSpan` | `1-4` | Column span in grid layout |
 | `widget` | `string` | Custom widget/component name |
 | `dependsOn` | `string` | Parent field for cascading |
-| `visibleOn` | `string` | Visibility condition expression |
+| `visibleWhen` | `string` | Visibility condition expression (was `visibleOn`, ADR-0089) |
 
 ### Default Sort for Related Lists
 

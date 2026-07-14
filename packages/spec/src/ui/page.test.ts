@@ -35,12 +35,12 @@ describe('PageComponentSchema', () => {
         filterField: 'account_id',
         columns: ['name', 'email', 'phone'],
       },
-      visibility: 'record.type == "Customer"',
+      visibleWhen: 'record.type == "Customer"',
     });
 
     expect(component.id).toBe('related_contacts');
     expect(component.label).toBe('Related Contacts');
-    expect(component.visibility).toBeDefined();
+    expect(component.visibleWhen).toBeDefined();
   });
 
   it('should accept component with complex properties', () => {
@@ -990,5 +990,29 @@ describe('PageSchema - no cross-field requirements', () => {
     expect(() => PageSchema.parse({
       name: 'test_page', label: 'P', type: 'record', kind: 'slotted', regions: [],
     })).not.toThrow();
+  });
+});
+
+describe('ADR-0089 — visibleWhen unification (page component)', () => {
+  it('normalizes a deprecated `visibility` alias to `visibleWhen`', () => {
+    const parsed = PageComponentSchema.parse({
+      type: 'element:text',
+      visibility: "page.selectedId != ''",
+    });
+    expect(parsed.visibleWhen).toBeDefined();
+    expect((parsed as Record<string, unknown>).visibility).toBeUndefined();
+  });
+
+  it('keeps the canonical `visibleWhen` when both are present (canonical wins)', () => {
+    const parsed = PageComponentSchema.parse({
+      type: 'element:text',
+      visibleWhen: "page.a == 1",
+      visibility: "page.b == 2",
+    });
+    const src = typeof parsed.visibleWhen === 'string'
+      ? parsed.visibleWhen
+      : (parsed.visibleWhen as { source?: string }).source;
+    expect(src).toBe('page.a == 1');
+    expect((parsed as Record<string, unknown>).visibility).toBeUndefined();
   });
 });

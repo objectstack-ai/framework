@@ -21,7 +21,7 @@ import { ShowcaseApp } from '../src/ui/apps/index.js';
 type AnyComponent = {
   type: string;
   id?: string;
-  visibility?: unknown;
+  visibleWhen?: unknown;
   [k: string]: unknown;
 };
 
@@ -76,7 +76,7 @@ describe('Page Variables showcase — page-local state (ADR-0049)', () => {
 
   it('gates its detail panel on the variable — hidden until a project is picked, shown after', () => {
     const comps = allComponents(PageVariablesPage);
-    const gated = comps.filter((c) => c.visibility !== undefined);
+    const gated = comps.filter((c) => c.visibleWhen !== undefined);
     // Empty-hint + divider + heading + body — every gated node references the variable.
     expect(gated.length).toBeGreaterThanOrEqual(2);
 
@@ -86,7 +86,7 @@ describe('Page Variables showcase — page-local state (ADR-0049)', () => {
     let shownWhenEmpty = 0;
     let shownWhenPicked = 0;
     for (const c of gated) {
-      const src = predicateSource(c.visibility);
+      const src = predicateSource(c.visibleWhen);
       expect(src, `gated component ${c.id} must carry a predicate`).toBeTruthy();
       // Every gating predicate is about the page variable.
       expect(src).toContain('page.selectedProjectId');
@@ -102,7 +102,7 @@ describe('Page Variables showcase — page-local state (ADR-0049)', () => {
     // The empty-state predicate and the detail predicates are mutually exclusive:
     // no gated node is visible in BOTH states.
     for (const c of gated) {
-      const src = predicateSource(c.visibility)!;
+      const src = predicateSource(c.visibleWhen)!;
       const inEmpty = evalPredicate(src, empty.page);
       const inPicked = evalPredicate(src, picked.page);
       expect(inEmpty && inPicked, `component ${c.id} should not be visible in both states`).toBe(false);

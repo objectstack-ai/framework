@@ -114,8 +114,15 @@ export const EXPRESSION_SURFACE: ExprSurface[] = [
       // WITH an enforcement path.
       'ui/action.zod.ts:visible',
       'ui/app.zod.ts:visible',
+      // ADR-0089: `visibleWhen` is the canonical conditional-visibility key on
+      // page components and view form sections/fields; `visibility` (page) and
+      // `visibleOn` (view) stay accepted as deprecated aliases, normalized to
+      // `visibleWhen` at parse. Both spellings are live CEL surfaces until the
+      // aliases are removed in a future major, so both carry a ledger row.
+      'ui/page.zod.ts:visibleWhen',
       'ui/page.zod.ts:visibility',
       'ui/view.zod.ts:condition',
+      'ui/view.zod.ts:visibleWhen',
       'ui/view.zod.ts:visibleOn',
       'ui/component.zod.ts:onSubmit',
       'system/settings-manifest.zod.ts:visible',

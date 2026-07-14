@@ -5,6 +5,7 @@ import { ProtectionSchema } from '../shared/protection.zod';
 import { MetadataProtectionFields } from '../kernel/metadata-protection.zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { ExpressionInputSchema } from '../shared/expression.zod';
+import { normalizeVisibleWhen } from '../shared/visibility';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { SharingConfigSchema } from './sharing.zod';
 import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zod';
@@ -759,9 +760,17 @@ export const FormFieldSchema: z.ZodType<any> = lazySchema(() => z.object({
   }).optional().describe('Key column config for record-typed fields'),
 
   dependsOn: z.string().optional().describe('Parent field name for cascading'),
-  visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),
+  /**
+   * Conditional-visibility predicate (CEL) — the field is shown only when TRUE
+   * (ADR-0089, canonical `*When` name). Binding root depends on the surface:
+   * runtime record forms bind `record` + `current_user`; metadata-editing forms
+   * (`*.form.ts`) bind the row under edit as `data`.
+   */
+  visibleWhen: ExpressionInputSchema.optional().describe("Visibility predicate (CEL) — field shown only when TRUE. Root: `record`+`current_user` (runtime forms) or `data` (metadata forms). e.g. P`record.priority == 'urgent'`"),
+  /** @deprecated ADR-0089 — use `visibleWhen`. Accepted and normalized to `visibleWhen` at parse. */
+  visibleOn: ExpressionInputSchema.optional().describe('[DEPRECATED → `visibleWhen`] Visibility predicate (CEL). Normalized to `visibleWhen` at parse.'),
   disclosure: z.enum(['inline', 'popover']).optional().describe('Composite rendering: inline bordered box (default) or a summary line + gear popover (progressive disclosure).'),
-}));
+}).transform(normalizeVisibleWhen));
 
 /**
  * Form Layout Section
@@ -778,7 +787,15 @@ export const FormSectionSchema = lazySchema(() => z.object({
   description: z.string().optional().describe('Optional description rendered under the section header.'),
   collapsible: z.boolean().default(false),
   collapsed: z.boolean().default(false),
-  visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL). Hides the whole section when false.'),
+  /**
+   * Conditional-visibility predicate (CEL) — the whole section is shown only
+   * when TRUE (ADR-0089, canonical `*When` name). Same per-layer binding root as
+   * {@link FormFieldSchema.visibleWhen}: `record`+`current_user` in runtime
+   * forms, `data` in metadata-editing forms.
+   */
+  visibleWhen: ExpressionInputSchema.optional().describe('Visibility predicate (CEL) — section shown only when TRUE. Root: `record`+`current_user` (runtime forms) or `data` (metadata forms).'),
+  /** @deprecated ADR-0089 — use `visibleWhen`. Accepted and normalized to `visibleWhen` at parse. */
+  visibleOn: ExpressionInputSchema.optional().describe('[DEPRECATED → `visibleWhen`] Visibility predicate (CEL). Hides the whole section when false. Normalized to `visibleWhen` at parse.'),
   columns: z.union([
     z.enum(['1', '2', '3', '4']),
     z.literal(1),
@@ -790,7 +807,7 @@ export const FormSectionSchema = lazySchema(() => z.object({
     z.string(), // Legacy: simple field name
     FormFieldSchema, // Enhanced: detailed field config
   ])),
-}));
+}).transform(normalizeVisibleWhen));
 
 /**
  * Form View Schema

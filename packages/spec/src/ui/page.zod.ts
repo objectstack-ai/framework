@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { ExpressionInputSchema } from '../shared/expression.zod';
+import { normalizeVisibleWhen } from '../shared/visibility';
 import { SortItemSchema } from '../shared/enums.zod';
 import { FilterConditionSchema } from '../data/filter.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
@@ -105,8 +106,14 @@ export const PageComponentSchema = lazySchema(() => z.object({
   responsiveStyles: ResponsiveStylesSchema.optional()
     .describe('Per-breakpoint scoped style maps (ADR-0065)'),
 
-  /** Visibility Rule */
-  visibility: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),
+  /**
+   * Conditional-visibility predicate (CEL) — the component is rendered only when
+   * TRUE (ADR-0089, canonical `*When` name). Page predicates bind the live page
+   * surface: `record` + `current_user` plus page state as `page.<var>`.
+   */
+  visibleWhen: ExpressionInputSchema.optional().describe("Visibility predicate (CEL) — component rendered only when TRUE. Binds `record`, `current_user`, `page.<var>`. e.g. \"page.selectedProjectId != ''\""),
+  /** @deprecated ADR-0089 — use `visibleWhen`. Accepted and normalized to `visibleWhen` at parse. */
+  visibility: ExpressionInputSchema.optional().describe('[DEPRECATED → `visibleWhen`] Visibility predicate (CEL). Normalized to `visibleWhen` at parse.'),
 
   /** Per-element data binding, overrides page-level object context */
   dataSource: ElementDataSourceSchema.optional().describe('Per-element data binding for multi-object pages'),
@@ -116,7 +123,7 @@ export const PageComponentSchema = lazySchema(() => z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-}));
+}).transform(normalizeVisibleWhen));
 
 /**
  * Page Variable Schema

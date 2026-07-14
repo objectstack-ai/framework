@@ -239,13 +239,13 @@ export const TaskViews = defineView({
             { field: 'status', required: true },
             { field: 'priority' },
             { field: 'due_date' },
-            // View-level conditional visibility (FormField.visibleOn, CEL):
+            // View-level conditional visibility (FormField.visibleWhen, CEL):
             // the notes box only appears while the task is Urgent. Data-level
             // counterpart is `visibleWhen` on invoice.paid_on.
             // Width via the semantic `span` (#2578): 'full' = whole row at any
             // derived column count — the primary primitive; absolute colSpan
             // is legacy and lint-discouraged.
-            { field: 'notes', visibleOn: P`record.priority == 'urgent'`, span: 'full' },
+            { field: 'notes', visibleWhen: P`record.priority == 'urgent'`, span: 'full' },
           ],
         },
       ],

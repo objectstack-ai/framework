@@ -39,7 +39,7 @@ export const pageForm = defineForm({
         },
         // A list/interface page renders via InterfaceListPage and ignores the
         // region template, so hide it there (same rationale as Data Context / Layout).
-        { field: 'template', colSpan: 2, visibleOn: "data.type != 'list'", helpText: 'Layout template (e.g., "header-sidebar-main")' },
+        { field: 'template', colSpan: 2, visibleWhen: "data.type != 'list'", helpText: 'Layout template (e.g., "header-sidebar-main")' },
         { field: 'description', widget: 'textarea', colSpan: 2, helpText: 'Page description for navigation' },
       ],
     },
@@ -49,7 +49,7 @@ export const pageForm = defineForm({
       // Interface/list pages bind their data via the Interface section
       // (source/sourceView), not a page-level object — hide this to keep
       // the panel lean (the region/record machinery doesn't apply).
-      visibleOn: "data.type != 'list'",
+      visibleWhen: "data.type != 'list'",
       fields: [
         { field: 'object', widget: 'ref:object', helpText: 'Bound object (for Record pages)' },
         { field: 'variables', type: 'repeater', helpText: 'Local page state variables' },
@@ -60,7 +60,7 @@ export const pageForm = defineForm({
       description: 'Page regions and components placed within them.',
       // List pages render a curated list surface, not free-form regions —
       // the region designer is irrelevant here, so hide it for list pages.
-      visibleOn: "data.type != 'list'",
+      visibleWhen: "data.type != 'list'",
       fields: [
         // Not required: an empty full page falls back to the synthesized default
         // layout, slotted pages compose via `slots`, and list pages ignore regions
@@ -76,7 +76,7 @@ export const pageForm = defineForm({
       collapsible: true,
       // Primary content for a list page — open by default (still collapsible).
       collapsed: false,
-      visibleOn: "data.type == 'list'",
+      visibleWhen: "data.type == 'list'",
       fields: [
         {
           field: 'interfaceConfig',

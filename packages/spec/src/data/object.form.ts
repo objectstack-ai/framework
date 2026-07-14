@@ -115,21 +115,21 @@ export const objectForm = defineForm({
             { field: 'placeholder', type: 'text', helpText: 'Placeholder hint' },
 
             // Text constraints
-            { field: 'maxLength', type: 'number', helpText: 'Max characters', visibleOn: "type in ['text','textarea','email','url','phone','password','markdown','html','richtext']" },
-            { field: 'minLength', type: 'number', helpText: 'Min characters', visibleOn: "type in ['text','textarea','email','url','phone','password','markdown','html','richtext']" },
+            { field: 'maxLength', type: 'number', helpText: 'Max characters', visibleWhen: "type in ['text','textarea','email','url','phone','password','markdown','html','richtext']" },
+            { field: 'minLength', type: 'number', helpText: 'Min characters', visibleWhen: "type in ['text','textarea','email','url','phone','password','markdown','html','richtext']" },
 
             // Numeric constraints
-            { field: 'min', type: 'number', helpText: 'Minimum value', visibleOn: "type in ['number','currency','percent','rating','slider','progress']" },
-            { field: 'max', type: 'number', helpText: 'Maximum value', visibleOn: "type in ['number','currency','percent','rating','slider','progress']" },
-            { field: 'precision', type: 'number', helpText: 'Total digits', visibleOn: "type in ['number','currency','percent']" },
-            { field: 'scale', type: 'number', helpText: 'Decimal places', visibleOn: "type in ['number','currency','percent']" },
+            { field: 'min', type: 'number', helpText: 'Minimum value', visibleWhen: "type in ['number','currency','percent','rating','slider','progress']" },
+            { field: 'max', type: 'number', helpText: 'Maximum value', visibleWhen: "type in ['number','currency','percent','rating','slider','progress']" },
+            { field: 'precision', type: 'number', helpText: 'Total digits', visibleWhen: "type in ['number','currency','percent']" },
+            { field: 'scale', type: 'number', helpText: 'Decimal places', visibleWhen: "type in ['number','currency','percent']" },
 
             // Selection options
             {
               field: 'options',
               type: 'repeater',
               helpText: 'Available choices',
-              visibleOn: "type in ['select','multiselect','radio','checkboxes']",
+              visibleWhen: "type in ['select','multiselect','radio','checkboxes']",
               fields: [
                 { field: 'label', type: 'text', required: true },
                 { field: 'value', type: 'text', required: true },
@@ -140,29 +140,29 @@ export const objectForm = defineForm({
             },
 
             // Relational
-            { field: 'reference', type: 'text', helpText: 'Target object name', visibleOn: "type in ['lookup','master_detail','tree']" },
-            { field: 'referenceFilter', type: 'code', language: 'expression', helpText: 'CEL filter applied to the picker', visibleOn: "type in ['lookup','master_detail']" },
-            { field: 'cascadeDelete', type: 'boolean', helpText: 'Delete children when parent is deleted', visibleOn: "type == 'master_detail'" },
-            { field: 'multiple', type: 'boolean', helpText: 'Allow selecting multiple records', visibleOn: "type in ['lookup']" },
+            { field: 'reference', type: 'text', helpText: 'Target object name', visibleWhen: "type in ['lookup','master_detail','tree']" },
+            { field: 'referenceFilter', type: 'code', language: 'expression', helpText: 'CEL filter applied to the picker', visibleWhen: "type in ['lookup','master_detail']" },
+            { field: 'cascadeDelete', type: 'boolean', helpText: 'Delete children when parent is deleted', visibleWhen: "type == 'master_detail'" },
+            { field: 'multiple', type: 'boolean', helpText: 'Allow selecting multiple records', visibleWhen: "type in ['lookup']" },
 
             // Formula / summary
-            { field: 'formula', type: 'code', language: 'expression', helpText: 'CEL formula expression', visibleOn: "type == 'formula'" },
-            { field: 'returnType', type: 'select', helpText: 'Result type for formulas', visibleOn: "type == 'formula'", options: [
+            { field: 'formula', type: 'code', language: 'expression', helpText: 'CEL formula expression', visibleWhen: "type == 'formula'" },
+            { field: 'returnType', type: 'select', helpText: 'Result type for formulas', visibleWhen: "type == 'formula'", options: [
               { label: 'Text', value: 'text' }, { label: 'Number', value: 'number' }, { label: 'Boolean', value: 'boolean' },
               { label: 'Date', value: 'date' }, { label: 'Datetime', value: 'datetime' }, { label: 'Currency', value: 'currency' },
             ] },
-            { field: 'summaryType', type: 'select', helpText: 'Aggregation', visibleOn: "type == 'summary'", options: [
+            { field: 'summaryType', type: 'select', helpText: 'Aggregation', visibleWhen: "type == 'summary'", options: [
               { label: 'Count', value: 'count' }, { label: 'Sum', value: 'sum' }, { label: 'Avg', value: 'avg' },
               { label: 'Min', value: 'min' }, { label: 'Max', value: 'max' },
             ] },
-            { field: 'summaryField', type: 'text', helpText: 'Field on child object to aggregate', visibleOn: "type == 'summary'" },
+            { field: 'summaryField', type: 'text', helpText: 'Field on child object to aggregate', visibleWhen: "type == 'summary'" },
 
             // Autonumber
-            { field: 'displayFormat', type: 'text', helpText: 'e.g. "INV-{0000}"', visibleOn: "type == 'autonumber'" },
-            { field: 'startingNumber', type: 'number', helpText: 'Starting sequence value', visibleOn: "type == 'autonumber'" },
+            { field: 'displayFormat', type: 'text', helpText: 'e.g. "INV-{0000}"', visibleWhen: "type == 'autonumber'" },
+            { field: 'startingNumber', type: 'number', helpText: 'Starting sequence value', visibleWhen: "type == 'autonumber'" },
 
             // Code language
-            { field: 'language', type: 'text', helpText: 'Editor language (e.g. sql, javascript)', visibleOn: "type == 'code'" },
+            { field: 'language', type: 'text', helpText: 'Editor language (e.g. sql, javascript)', visibleWhen: "type == 'code'" },
 
             // Validation / governance
             { field: 'validation', type: 'code', language: 'expression', helpText: 'CEL predicate — must evaluate true' },

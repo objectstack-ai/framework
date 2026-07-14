@@ -94,7 +94,7 @@ export const ContactFormPage = definePage({
         {
           type: 'element:text',
           id: 'ready_hint',
-          visibility: "page.inquiryEmail != ''",
+          visibleWhen: "page.inquiryEmail != ''",
           properties: {
             content: '✓ Looks good — hit Submit to send your inquiry.',
             variant: 'caption',
