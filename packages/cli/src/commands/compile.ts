@@ -31,6 +31,7 @@ import {
   collectMetadataStats,
   printMetadataStats,
 } from '../utils/format.js';
+import { checkSpecVersionGap } from '../utils/spec-version.js';
 
 export default class Compile extends Command {
   static override description = 'Compile ObjectStack configuration to JSON artifact';
@@ -523,6 +524,10 @@ export default class Compile extends Command {
       const sizeKB = (jsonContent.length / 1024).toFixed(1);
       const stats = collectMetadataStats(config);
 
+      // Spec-version drift advisory (non-blocking): installed platform newer
+      // than the app declares → point at the migration guide.
+      const specGap = checkSpecVersionGap((config as { manifest?: { specVersion?: unknown } }).manifest);
+
       if (flags.json) {
         console.log(JSON.stringify({
           success: true,
@@ -532,6 +537,7 @@ export default class Compile extends Command {
           runtimeModule: runtimeBundle?.outputFileName ?? null,
           runtimeModuleSize: runtimeBundle?.size ?? 0,
           warnings: widgetWarnings,
+          specVersionGap: specGap,
           stats,
           duration: timer.elapsed(),
         }));
@@ -554,6 +560,11 @@ export default class Compile extends Command {
           'Runtime',
           `${path.join(path.dirname(output), runtimeBundle.outputFileName)} ${chalk.dim(`(${runtimeKB} KB, ${lowering.count} handler${lowering.count === 1 ? '' : 's'})`)}`,
         );
+      }
+      if (specGap) {
+        console.log('');
+        console.log(chalk.yellow(`  ⚠ ${specGap.message}`));
+        console.log(chalk.dim(`      → ${specGap.hint}`));
       }
       console.log('');
 

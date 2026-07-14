@@ -27,6 +27,7 @@ import {
   collectMetadataStats,
   printMetadataStats,
 } from '../utils/format.js';
+import { checkSpecVersionGap } from '../utils/spec-version.js';
 
 export default class Validate extends Command {
   static override description =
@@ -378,6 +379,10 @@ export default class Validate extends Command {
       // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
+      // Spec-version drift advisory (non-blocking): if the installed platform
+      // is a newer major than the app declares, point at the migration guide.
+      const specGap = checkSpecVersionGap(config.manifest);
+
       if (flags.json) {
         console.log(JSON.stringify({
           valid: true,
@@ -385,6 +390,7 @@ export default class Validate extends Command {
           stats,
           warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...securityAdvisories],
           conversions: conversionNotices,
+          specVersionGap: specGap,
           duration: timer.elapsed(),
         }, null, 2));
         return;
@@ -458,6 +464,13 @@ export default class Validate extends Command {
           printError('Strict mode: warnings treated as errors');
           this.exit(1);
         }
+      }
+
+      // Non-blocking upgrade advisory — never gated by --strict.
+      if (specGap) {
+        console.log('');
+        console.log(chalk.yellow(`  ⚠ ${specGap.message}`));
+        console.log(chalk.dim(`      → ${specGap.hint}`));
       }
 
       console.log('');

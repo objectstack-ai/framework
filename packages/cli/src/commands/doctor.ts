@@ -8,6 +8,7 @@ import path from 'path';
 import { normalizeStackInput } from '@objectstack/spec';
 import { printHeader, printSuccess, printWarning, printError, printStep, printInfo } from '../utils/format.js';
 import { loadConfig, configExists } from '../utils/config.js';
+import { checkSpecVersionGap } from '../utils/spec-version.js';
 import { validateWidgetBindings } from '@objectstack/lint';
 
 interface HealthCheckResult {
@@ -486,6 +487,17 @@ export default class Doctor extends Command {
       try {
         const { config: rawConfig } = await loadConfig();
         const config: any = normalizeStackInput(rawConfig as Record<string, unknown>);
+
+        // Spec-version drift: installed platform newer than the app declares.
+        printStep('Checking platform spec version...');
+        const specGap = checkSpecVersionGap(config.manifest);
+        if (specGap) {
+          hasWarnings = true;
+          printWarning(`Platform spec         ${specGap.message}`);
+          console.log(chalk.dim(`      → ${specGap.hint}`));
+        } else {
+          printSuccess('Platform spec         Declared specVersion is current with the installed platform');
+        }
 
         // Circular dependency detection
         if (Array.isArray(config.objects) && config.objects.length > 0) {
