@@ -61,6 +61,14 @@ function humanize(name: string): string {
 
 interface SeedOptions {
   logger?: { info?: (m: string, meta?: Record<string, any>) => void; warn?: (m: string, meta?: Record<string, any>) => void };
+  /**
+   * [ADR-0066 D1] Capability names that a package has EXPLICITLY declared via
+   * `defineCapability` (materialized by `bootstrapDeclaredCapabilities`). The
+   * implicit derived-defaults path SKIPS these so it never overwrites an
+   * authored capability's label/description/scope (or its package provenance)
+   * with a humanized placeholder. Curated platform capabilities are unaffected.
+   */
+  declaredCapabilityNames?: Iterable<string>;
 }
 
 export async function bootstrapSystemCapabilities(
@@ -72,13 +80,16 @@ export async function bootstrapSystemCapabilities(
     return { seeded: 0, updated: 0, total: 0 };
   }
 
+  const declared = new Set<string>(options.declaredCapabilityNames ?? []);
+
   // Build the full definition set: curated first, then any extra capability
-  // string referenced by the seeded permission sets (derived defaults).
+  // string referenced by the seeded permission sets (derived defaults) — EXCEPT
+  // ones a package explicitly declared, which the declared seeder owns.
   const byName = new Map<string, CapabilityDef>();
   for (const c of KNOWN_CAPABILITIES) byName.set(c.name, c);
   for (const ps of permissionSets) {
     for (const cap of ps?.systemPermissions ?? []) {
-      if (typeof cap === 'string' && cap && !byName.has(cap)) {
+      if (typeof cap === 'string' && cap && !byName.has(cap) && !declared.has(cap)) {
         byName.set(cap, { name: cap, label: humanize(cap), description: `Capability ${cap}.`, scope: 'platform' });
       }
     }

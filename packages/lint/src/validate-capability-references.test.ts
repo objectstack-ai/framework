@@ -14,6 +14,14 @@ describe('validateCapabilityReferences (ADR-0066 ⑨)', () => {
     expect(findings).toEqual([]);
   });
 
+  it('passes a reference to a capability the stack DECLARES via defineCapability', () => {
+    const findings = validateCapabilityReferences({
+      capabilities: [{ name: 'export_data', label: 'Export Data', scope: 'org' }],
+      objects: [{ name: 'inv_invoice', requiredPermissions: ['export_data'] }],
+    });
+    expect(findings).toEqual([]);
+  });
+
   it('passes a reference to a capability the stack grants via systemPermissions', () => {
     const findings = validateCapabilityReferences({
       permissions: [{ name: 'billing_admin', systemPermissions: ['manage_billing'] }],

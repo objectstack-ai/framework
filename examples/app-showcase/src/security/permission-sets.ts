@@ -187,7 +187,10 @@ export const OpsPermissionSet = definePermissionSet({
     showcase_inquiry: { allowRead: true, allowEdit: true, readScope: 'org', writeScope: 'org' },
     showcase_invoice: { allowRead: true },
   },
-  systemPermissions: ['setup.access'],
+  // `setup.access` is a platform capability; `showcase.export_data` is a
+  // PACKAGE capability this app DECLARES via defineCapability (see
+  // capabilities.ts) — the grant side of the ADR-0066 three-way separation.
+  systemPermissions: ['setup.access', 'showcase.export_data'],
 });
 
 // ── The `everyone` baseline suggestion (ADR-0090 D5) ───────────────────────

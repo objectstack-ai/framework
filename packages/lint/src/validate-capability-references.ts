@@ -14,10 +14,13 @@
  *
  * The author-time "known" set is:
  *   1. the built-in platform capabilities (`PLATFORM_CAPABILITY_NAMES`),
- *   2. every capability a permission set in this stack GRANTS via
- *      `systemPermissions` (granting a capability is what declares it — mirrors
+ *   2. every capability the stack DECLARES via `defineCapability`
+ *      (`stack.capabilities`) — the explicit, package-provenanced declaration
+ *      (ADR-0066 D1), materialized at boot by `bootstrapDeclaredCapabilities`,
+ *   3. every capability a permission set in this stack GRANTS via
+ *      `systemPermissions` (granting a capability also declares it — mirrors
  *      the runtime `bootstrapSystemCapabilities` derived-defaults rule), and
- *   3. any `sys_capability` row shipped as seed data.
+ *   4. any `sys_capability` row shipped as seed data.
  *
  * WARNING, not error: a single package's lint cannot see capabilities declared
  * by OTHER installed packages, and the reference fails closed at runtime anyway,
@@ -91,6 +94,10 @@ export function validateCapabilityReferences(stack: AnyRec): CapabilityRefFindin
 
   // ── Build the author-time "known capability" set ──
   const known = new Set<string>(PLATFORM_CAPABILITY_NAMES);
+  // [ADR-0066 D1] Capabilities the stack explicitly DECLARES via defineCapability.
+  for (const cap of asArray(stack.capabilities)) {
+    if (typeof cap.name === 'string' && cap.name.length > 0) known.add(cap.name);
+  }
   for (const ps of asArray(stack.permissions)) {
     for (const cap of asCapArray(ps.systemPermissions)) known.add(cap);
   }
@@ -103,9 +110,10 @@ export function validateCapabilityReferences(stack: AnyRec): CapabilityRefFindin
   }
 
   const hint =
-    'Fix the capability name, declare it on a permission set’s systemPermissions, ' +
-    'ship a sys_capability seed row, or ignore this if the capability is provided by ' +
-    'another installed package (references fail closed at runtime).';
+    'Fix the capability name, define it with defineCapability (stack.capabilities), ' +
+    'declare it on a permission set’s systemPermissions, ship a sys_capability seed row, ' +
+    'or ignore this if the capability is provided by another installed package ' +
+    '(references fail closed at runtime).';
 
   const flag = (cap: string, where: string, path: string) => {
     if (known.has(cap)) return;

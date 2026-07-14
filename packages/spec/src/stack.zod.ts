@@ -32,6 +32,7 @@ import { JobSchema } from './system/job.zod';
 // Security Protocol
 import { PositionSchema } from './identity/position.zod';
 import { PermissionSetSchema } from './security/permission.zod';
+import { CapabilityDeclarationSchema } from './security/capabilities';
 import { SharingRuleSchema } from './security/sharing.zod';
 
 import { ApiEndpointSchema } from './api/endpoint.zod';
@@ -234,6 +235,22 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    */
   positions: z.array(PositionSchema).optional().describe('Positions — flat capability-distribution groups (ADR-0090 D3)'),
   permissions: z.array(PermissionSetSchema).optional().describe('Permission Sets'),
+  /**
+   * [ADR-0066 D1] Authorization capabilities this package DEFINES.
+   *
+   * The formal, EXPLICIT declaration entry point (`defineCapability`) — the
+   * package-side counterpart of the curated platform capabilities. Each entry
+   * is seeded into `sys_capability` at boot with `managed_by:'package'` +
+   * `package_id` provenance, instead of being implicitly derived (untitled)
+   * from whatever a permission set references in `systemPermissions[]`.
+   *
+   * NOT to be confused with `requires` (platform SERVICE capabilities like
+   * `ai`/`automation`) nor the runtime `ObjectStackCapabilities` descriptor —
+   * these are authorization capabilities in the ADR-0066 sense (referenced by
+   * `requiredPermissions` / granted by `systemPermissions`).
+   */
+  capabilities: z.array(CapabilityDeclarationSchema).optional()
+    .describe('[ADR-0066 D1] Authorization capabilities this package defines (seeded with package provenance)'),
   sharingRules: z.array(SharingRuleSchema).optional().describe('Record Sharing Rules'),
 
   /**
@@ -1047,6 +1064,7 @@ const CONCAT_ARRAY_FIELDS = [
   'flows',
   'positions',
   'permissions',
+  'capabilities',
   'sharingRules',
   'apis',
   'webhooks',

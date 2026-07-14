@@ -31,6 +31,7 @@ import {
 import { cleanupPackagePermissions } from './cleanup-package-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
+import { bootstrapDeclaredCapabilities } from './bootstrap-declared-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { matchesFilterCondition } from '@objectstack/formula';
 import { FieldMasker } from './field-masker.js';
@@ -1254,10 +1255,25 @@ export class SecurityPlugin implements Plugin {
         } catch (e) {
           ctx.logger.warn('[security] audience-binding suggestion sync failed (non-fatal)', { error: (e as Error).message });
         }
-        // [ADR-0066 D1] Back-compat seed the capability registry (sys_capability)
-        // from the curated platform set + the default grants' systemPermissions.
+        // [ADR-0066 D1] Seed the capability registry (sys_capability) in two
+        // passes. FIRST the EXPLICIT package declarations (`defineCapability` /
+        // `stack.capabilities`) land with `managed_by:'package'` + package_id
+        // provenance — the formal replacement for the implicit derive-from-
+        // systemPermissions back-door. THEN the platform curated set + the
+        // back-compat derived defaults, SKIPPING any name a package already
+        // declared (so the placeholder never clobbers the authored capability).
+        let declaredCapabilityNames: string[] = [];
         try {
-          await bootstrapSystemCapabilities(ql, this.bootstrapPermissionSets, { logger: ctx.logger });
+          const capOutcome = await bootstrapDeclaredCapabilities(ql, this.metadata, { logger: ctx.logger });
+          declaredCapabilityNames = capOutcome.declaredNames;
+        } catch (e) {
+          ctx.logger.warn('[security] declared-capability seeding failed', { error: (e as Error).message });
+        }
+        try {
+          await bootstrapSystemCapabilities(ql, this.bootstrapPermissionSets, {
+            logger: ctx.logger,
+            declaredCapabilityNames,
+          });
         } catch (e) {
           ctx.logger.warn('[security] capability seeding failed', { error: (e as Error).message });
         }

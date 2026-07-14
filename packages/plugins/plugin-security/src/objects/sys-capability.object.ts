@@ -158,6 +158,20 @@ export const SysCapability = ObjectSchema.create({
       group: 'Classification',
     }),
 
+    // [ADR-0066 D1 / ADR-0086 D3] Owning package for a capability DECLARED by a
+    // package via `defineCapability` (absent = platform-curated or admin-created).
+    // Populated by bootstrapDeclaredCapabilities; makes package uninstall/upgrade
+    // of a capability well-defined and gives the derived-from-systemPermissions
+    // back-door an explicit, attributable replacement.
+    package_id: Field.text({
+      label: 'Owning Package',
+      required: false,
+      readonly: true,
+      maxLength: 255,
+      description: 'Package that ships this capability (absent = platform-curated or admin-created).',
+      group: 'Classification',
+    }),
+
     // ── Status ───────────────────────────────────────────────────
     active: Field.boolean({
       label: 'Active',
@@ -192,6 +206,8 @@ export const SysCapability = ObjectSchema.create({
     { fields: ['name'], unique: true },
     { fields: ['scope'] },
     { fields: ['active'] },
+    // [ADR-0086 D3] uninstall/upgrade query: "this package's own capabilities".
+    { fields: ['package_id'] },
   ],
 
   enable: {

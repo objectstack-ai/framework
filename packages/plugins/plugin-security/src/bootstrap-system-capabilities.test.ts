@@ -54,6 +54,17 @@ describe('bootstrapSystemCapabilities (ADR-0066 D1 back-compat seed)', () => {
     expect(ql.rows.find((x) => x.name === 'manage_org_users')?.scope).toBe('org');
   });
 
+  it('does NOT derive a placeholder for an explicitly-declared capability', async () => {
+    const ql = makeQl();
+    await bootstrapSystemCapabilities(ql, [{ systemPermissions: ['export_data', 'approve_invoice'] }], {
+      declaredCapabilityNames: ['export_data'],
+    });
+    // `export_data` is owned by the declared seeder — no platform placeholder.
+    expect(ql.rows.find((x: any) => x.name === 'export_data')).toBeUndefined();
+    // `approve_invoice` is still derived as before.
+    expect(ql.rows.find((x: any) => x.name === 'approve_invoice')).toBeDefined();
+  });
+
   it('marks manage_org_users as org-scoped and the rest platform', () => {
     const org = KNOWN_CAPABILITIES.find((c) => c.name === 'manage_org_users');
     expect(org?.scope).toBe('org');
