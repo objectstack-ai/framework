@@ -19,7 +19,7 @@ const BASE = process.env.PERM_BASE_URL || 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'permission-model.spec.ts',
+  testMatch: 'permission-model*.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,

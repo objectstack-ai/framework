@@ -139,4 +139,61 @@
 - agent 主体交集规则(需 MCP OAuth 通道;运行时已实施,showcase REST 无法直接构造)。
 - 层级深度 `own_and_reports/unit/unit_and_below`(企业版 hierarchy-security;开放版 fail-closed)。
 - 到期授权/职责分离/环境晋升(文档 §10 明确"planned")。
-- Access-matrix 快照门(已由 `os compile` 与仓库 CI 覆盖,见 access-matrix.json)。
+
+---
+
+# 第二轮:配置面测试(管理员配岗位 / 岗位映射权限集 / 开发者定义权限集)
+
+> 第一轮(A~L)测的是**运行时行为**:给定配置,权限层序是否按设计裁决。
+> 本轮(N~P)测的是**配置链路本身**:三种角色各自怎么把配置放进系统、配置如何生效。
+>
+> | 角色 | 配置面 | 通道 |
+> |---|---|---|
+> | 系统管理员 | 岗位、岗位↔权限集绑定、用户指派 | Setup 应用 UI(Access Control 组)/ REST `sys_*` |
+> | 应用开发者 | 权限集、岗位声明、共享规则 | 代码 `definePermissionSet`/`definePosition` → `defineStack` → 构建产物 |
+> | 引擎 | 声明→运行时投影 | `bootstrapDeclaredPositions` 种子;ADR-0094 write-through 投影 |
+
+## N. 管理员配置岗位(Setup UI,视觉实测)
+
+入口:`/_console/apps/setup/sys_position`(Setup 应用 → Access Control → Positions;应用级门 `setup.access`)。
+
+| # | 用例 | 步骤 | 预期(截图) |
+|---|---|---|---|
+| N1 | 岗位列表页 | admin 打开 Positions | 网格列 Display Name/API Name/Default Position/Updated At;视图 tabs Active/Default/Custom/All;New 按钮 + Edit inline;含 7 个 showcase 岗位 + 内置 platform_admin/org_* + everyone/guest 锚点行 |
+| N2 | 新建岗位表单 | 点 New | 弹窗字段:Display Name*、API Name*(机器名)、Description、Permissions(JSON,遗留)、Active、Default Position(自动指派新用户)、Delegatable(ADR-0091 D3 说明文字) |
+| N3 | UI 建岗位 | 填 qa_lead / QA Lead → Create | 列表出现 QA Lead;REST 查 `managed_by` 非 system |
+| N4 | 岗位详情 overlay | 点击 Contributor 行(`?recordId=…`) | overlay 含基本信息 + **Holders**(sys_user_position related list,Assign user 按钮)+ **Permission Sets**(sys_position_permission_set related list)两个 tab |
+| N5 | 非管理员负例 | ada(无 setup.access)访问 `/_console/apps/setup/sys_position` | 无 Setup 入口 / 页面拒绝(截图) |
+| N6 | 锚点行保护 | admin DELETE everyone 岗位行 | 拒绝(managed_by:system 不可删) |
+
+## O. 岗位→权限集映射 + 指派端到端(管理员配置生效链)
+
+绑定表 `sys_position_permission_set`(唯一键 position_id+permission_set_id,无独立导航,经岗位详情 related list 或 REST);指派表 `sys_user_position`(唯一键 user_id+position+organization_id,position 存**机器名**)。
+
+| # | 用例 | 步骤 | 预期(截图) |
+|---|---|---|---|
+| O1 | 前置对照 | newbie 登录 console 看询价列表 | 空(仅 everyone 基线,private OWD)——复用 L4 |
+| O2 | 建岗位+绑集 | admin POST sys_position{qa_lead} → POST sys_position_permission_set{qa_lead↔showcase_auditor} | 两行创建成功;岗位详情 Permission Sets tab 出现 Showcase Auditor |
+| O3 | 指派用户 | admin POST sys_user_position{newbie, position:'qa_lead'} | 创建成功;`/auth/me/permissions`(newbie)positions 含 qa_lead,permissionSets 含 showcase_auditor |
+| O4 | 能力即时生效(UI) | newbie 刷新询价列表 | **全量可见**(showcase_auditor 的 viewAllRecords 经新岗位到达)——与 O1 截图前后对比 |
+| O5 | VAMA 只读边界 | newbie PATCH 他人询价 | 仍拒绝(viewAllRecords ≠ modifyAllRecords) |
+| O6 | 重复绑定 | 再 POST 同一 qa_lead↔showcase_auditor | 唯一约束拒绝 |
+| O7 | 解除指派→回收 | admin DELETE sys_user_position 行 | newbie 询价列表回到空;`/auth/me/permissions` 不再含 qa_lead |
+| O8 | 锚点门(引用) | 绑 VAMA 集到 everyone → 403 | H3 已测,配置面视角复核 |
+| O9 | 清理 | 删绑定行、qa_lead 岗位 | 环境还原 |
+
+权限集详情页(`/_console/apps/setup/sys_permission_set?recordId=…`)预期:OWNING PACKAGE / MANAGED BY(package|user|system)、OBJECT/FIELD/SYSTEM/RLS/TAB 权限计数 +“Design in Studio”链接、**Assigned Users** related list(显示 `via position <name>` 的间接指派)。
+
+## P. 应用开发者配置权限集(代码 → 构建 → 运行时投影)
+
+authoring 面:`src/security/permission-sets.ts`(`definePermissionSet` from `@objectstack/spec`)、`src/security/positions.ts`(`definePosition`)、`objectstack.config.ts` 的 `positions:`/`permissions:`/`sharingRules:` 三键;构建产物 `dist/objectstack.json` 顶层 `positions[]`/`permissions[]`。
+
+| # | 用例 | 步骤 | 预期 |
+|---|---|---|---|
+| P1 | 声明结构走查 | 检查 showcase 8 集 7 岗位的 authoring 源码与 defineStack 接线 | 与设计文档 §3/§4 对齐(FLS/RLS/adminScope/isDefault 全形态覆盖) |
+| P2 | 构建产物 | `pnpm build` 后查 dist/objectstack.json | 顶层 positions/permissions 数组含全部声明 |
+| P3 | FLS 改动端到端 | 把 `showcase_project.spent` editable:false→true → build → 重启 → ada 打开编辑弹窗 | spent 从灰显变可编辑(截图前后对比);`/auth/me/permissions` fieldPermissions 同步变化;**测后恢复源码** |
+| P4 | access-matrix 快照门 | 给某集加对象能力(如 auditor+allowDelete)→ `objectstack compile` | 矩阵漂移 → 构建失败;`--update-access-matrix` 重新生成后通过;**测后恢复** |
+| P5 | ADR-0094 投影(package 集) | admin REST PATCH showcase_contributor(managed_by:package) | 环境门编辑被拒/被重置为声明体(package 所有权保护,ADR-0086/0094) |
+| P6 | ADR-0094 投影(runtime 集) | admin REST POST 新权限集 → PATCH → DELETE | write-through 到元数据层;行 managed_by:'user';删除即元数据删除 |
+| P7 | 声明种子幂等 | 重启 dev 服务器两次 | sys_position/sys_permission_set 行数不变、不重复 |
