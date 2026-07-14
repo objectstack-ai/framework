@@ -88,7 +88,10 @@ back by restoring the previous artifact.
 ## Option 2 — Docker
 
 The artifact model maps cleanly onto containers: the image contains Node, the
-CLI, and one JSON file.
+CLI, and one JSON file. The Dockerfile below (plus the compose stack in the
+next section and a `.dockerignore`) also ships ready-to-copy in
+[`examples/docker`](https://github.com/objectstack-ai/framework/tree/main/examples/docker)
+— drop the files into your scaffolded project.
 
 ```dockerfile title="Dockerfile"
 # ── Build stage: compile TypeScript metadata to the artifact ─────────
@@ -195,9 +198,54 @@ Every runtime exposes two probe endpoints — wire them into Docker
 | `GET /api/v1/health` | Process is up and serving HTTP | Liveness probe |
 | `GET /api/v1/ready` | Kernel booted, ready for traffic | Readiness probe |
 
-On Kubernetes, the same image works unchanged: mount the secrets as env vars,
-point `readinessProbe` at `/api/v1/ready`, and scale — but read the multi-node
-note below first.
+### Kubernetes
+
+The same image works unchanged. A minimal reference Deployment — secrets from
+a `Secret`, probes on the two endpoints above:
+
+```yaml title="deployment.yaml"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 1            # >1 requires OS_CLUSTER_DRIVER — see below
+  selector:
+    matchLabels: { app: my-app }
+  template:
+    metadata:
+      labels: { app: my-app }
+    spec:
+      containers:
+        - name: app
+          image: registry.example.com/my-app:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: my-app-secrets   # OS_DATABASE_URL, OS_AUTH_SECRET, OS_SECRET_KEY
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: 8080 }
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /api/v1/ready, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  selector: { app: my-app }
+  ports:
+    - port: 80
+      targetPort: 8080
+```
+
+`/api/v1/ready` returns 503 while the kernel is booting *and* during graceful
+shutdown, so rolling restarts drain cleanly. Before setting `replicas > 1`,
+read the multi-node note below.
 
 ## Reverse proxy & TLS
 
@@ -247,6 +295,7 @@ Disable with `OS_MCP_SERVER_ENABLED=false`. See
 
 ## Related
 
+- [Backup & Restore](/docs/deployment/backup-restore) — what to back up, and the restore drill
 - [Deployment Modes](/docs/deployment) — the map of local / standalone / Cloud
 - [`os start` reference](/docs/getting-started/cli#os-start) — every flag and env var
 - [Environment Variables](/docs/deployment/environment-variables) — the full catalog

@@ -112,11 +112,11 @@ export default defineStack({
     name: 'My App',
   },
   objects: Object.values(objects),
-  api: {
-    rest: { enabled: true, basePath: '/api' },
-  },
 });
 ```
+
+The REST API needs no configuration — it is on by default for every object
+with `apiEnabled`.
 
 **`src/objects/note.object.ts`** is a complete data model — schema, validation,
 API surface, and searchability in one typed definition:
@@ -132,9 +132,10 @@ export const Note = ObjectSchema.create({
 
   fields: {
     title: Field.text({ label: 'Title', required: true, searchable: true, maxLength: 200 }),
-    body: Field.longText({ label: 'Body' }),
+    body: Field.textarea({ label: 'Body' }),
   },
 
+  sharingModel: 'private',      // org-wide default — an explicit, authored decision
   enable: { apiEnabled: true, searchable: true },
 });
 ```
@@ -166,17 +167,24 @@ npx os dev --ui        # then open http://localhost:3000/_console/
 
 ## 4. Call your API
 
-The REST API is derived from the object metadata — you wrote no routes. With
-the dev server running:
+The REST API is derived from the object metadata — you wrote no routes. Data
+endpoints run under the same permission model as the UI, so first sign in as
+the dev admin the server seeds on an empty database
+(`admin@objectos.ai` / `admin123`):
 
 ```bash
+# Sign in once — stores the session cookie
+curl -c cookies.txt -X POST http://localhost:3000/api/v1/auth/sign-in/email \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@objectos.ai", "password": "admin123"}'
+
 # Create a record
-curl -X POST http://localhost:3000/api/v1/data/my_app_note \
+curl -b cookies.txt -X POST http://localhost:3000/api/v1/data/my_app_note \
   -H "Content-Type: application/json" \
   -d '{"title": "Hello ObjectStack", "body": "Created via the generated API"}'
 
 # Query records (filtering, sorting, pagination built in)
-curl "http://localhost:3000/api/v1/data/my_app_note?select=title&sort=-created_at&top=10"
+curl -b cookies.txt "http://localhost:3000/api/v1/data/my_app_note?select=title&sort=-created_at&top=10"
 ```
 
 See the [Data API](/docs/api/data-api) for the full CRUD, batch, and analytics
@@ -190,7 +198,7 @@ Add a field and a second object by hand — the same edit an agent would make.
 ```typescript title="src/objects/note.object.ts"
   fields: {
     title: Field.text({ label: 'Title', required: true, searchable: true, maxLength: 200 }),
-    body: Field.longText({ label: 'Body' }),
+    body: Field.textarea({ label: 'Body' }),
     status: Field.select({
       label: 'Status',
       options: [

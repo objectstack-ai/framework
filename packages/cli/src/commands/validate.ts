@@ -14,6 +14,7 @@ import { validateWidgetBindings } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
 import { validateJsxPages, validateReactPages, validateReactPageProps, validatePageSourceStyling } from '@objectstack/lint';
 import { validateCapabilityReferences } from '@objectstack/lint';
+import { validateSecurityPosture } from '@objectstack/lint';
 import {
   printHeader,
   printKV,
@@ -332,6 +333,40 @@ export default class Validate extends Command {
         }
       }
 
+      // 3f. [ADR-0090 D7] Security posture — the same gate `os compile`/`os build`
+      //     run. Without it here, `os validate` passed a stack (e.g. a custom
+      //     object with no explicit sharingModel) that the build then rejected,
+      //     breaking this command's contract of being the artifact-free run of
+      //     the same gates. Errors gate; advisories print dimmed.
+      if (!flags.json) printStep('Checking security posture (ADR-0090 D7)...');
+      const securityFindings = validateSecurityPosture(result.data as Record<string, unknown>);
+      const securityErrors = securityFindings.filter((f) => f.severity === 'error');
+      const securityAdvisories = securityFindings.filter((f) => f.severity !== 'error');
+      if (securityErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: securityErrors,
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Security posture check failed (${securityErrors.length} issue${securityErrors.length > 1 ? 's' : ''})`);
+        for (const f of securityErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+      if (!flags.json) {
+        for (const f of securityAdvisories.slice(0, 50)) {
+          console.log(chalk.yellow(`  ⚠ ${f.where}: ${f.message}`));
+          console.log(chalk.dim(`      ${f.hint}`));
+        }
+      }
+
       // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
@@ -340,7 +375,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings],
+          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...securityAdvisories],
           duration: timer.elapsed(),
         }, null, 2));
         return;
