@@ -3,6 +3,7 @@
   "defineAgent": "sha256:130533285b3deea4",
   "defineApp": "sha256:bef0d76d5076259a",
   "defineBook": "sha256:07a6e25c6be3f3bd",
+  "defineCapability": "sha256:b080cc5480782d6c",
   "defineConnector": "sha256:827b4a4bb56a83b5",
   "defineCube": "sha256:635855b04c960946",
   "defineDatasource": "sha256:e0ec3b5f9db26aca",
