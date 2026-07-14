@@ -32,6 +32,7 @@ import { cleanupPackagePermissions } from './cleanup-package-permissions.js';
 import { bootstrapBuiltinRoles } from './bootstrap-builtin-positions.js';
 import { bootstrapSystemCapabilities } from './bootstrap-system-capabilities.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
+import { computeTenantLayer0Filter, andComposeLayers } from './tenant-layer.js';
 import { matchesFilterCondition } from '@objectstack/formula';
 import { FieldMasker } from './field-masker.js';
 import { assertReadableQueryFields } from './predicate-guard.js';
@@ -1868,12 +1869,18 @@ export class SecurityPlugin implements Plugin {
   }
 
   /**
-   * Compile the applicable RLS policies for (object, operation) into a single
-   * `FilterCondition`, applying the field-existence safety net (wildcard
-   * policies targeting a column the object lacks fail-closed to the deny
-   * sentinel, unless the object explicitly opted out of tenancy). Shared by the
-   * engine middleware and {@link getReadFilter}. Returns `null` when no policy
-   * applies (caller adds no filter).
+   * [ADR-0095 D1] Compute the effective row filter for (object, operation) as
+   * `Layer0(tenant) AND Layer1(business RLS)`.
+   *
+   * - **Layer 0** (tenant isolation) is computed by {@link computeTenantLayer0Filter}
+   *   from the tenancy mode + the object's field set/posture — independent of the
+   *   RLS compiler, always first, unconditionally AND-composed.
+   * - **Layer 1** (business RLS) is the applicable per-policy compile (ownership,
+   *   depth, sharing, `_self` carve-outs), with the field-existence safety net and
+   *   the posture-gated superuser bypass — which now governs BUSINESS RLS only.
+   *
+   * Shared by the engine middleware (read + by-id write pre-image) and
+   * {@link getReadFilter}. Returns `null` when neither layer contributes.
    */
   private async computeRlsFilter(
     permissionSets: PermissionSet[],
@@ -1881,50 +1888,72 @@ export class SecurityPlugin implements Plugin {
     operation: string,
     context: any,
   ): Promise<Record<string, unknown> | null> {
-    // [ADR-0066 ①] Posture-gated super-user RLS bypass. On a `private` or
-    // platform-global object, a caller with the super-user bypass bit
-    // (viewAllRecords for reads, modifyAllRecords for writes) skips wildcard RLS
-    // entirely — so a platform admin (incl. one who is also an org admin whose
-    // tenant_isolation would otherwise narrow the result) sees all rows. The
-    // posture gate ensures this never grants cross-tenant visibility on ordinary
-    // tenant business objects.
+    // [ADR-0095 D1] Effective filter = Layer0(tenant) AND Layer1(business RLS).
+    // The two are computed independently and never share a compiler, a merge
+    // step, or a bypass bit (closes W1 by construction, W2 structurally).
     const meta = await this.getObjectSecurityMeta(object);
-    if (meta.isPrivate || meta.tenancyDisabled || meta.isBetterAuthManaged) {
-      const isWrite = operation === 'insert' || operation === 'update' || operation === 'delete';
-      const bypass = isWrite
-        ? this.permissionEvaluator.hasSuperuserWriteBypass(object, permissionSets, { isPrivate: meta.isPrivate })
-        : this.permissionEvaluator.hasSuperuserReadBypass(object, permissionSets, { isPrivate: meta.isPrivate });
-      if (bypass) return null;
-    }
-    const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation, (context?.positions ?? []) as string[]);
-    if (allRlsPolicies.length === 0) return null;
-    // Field-existence safety: wildcard policies (`object: '*'`) target fields
-    // like `organization_id` that may not exist on every object. Treat such a
-    // policy as a *deny* contribution (fail-closed) rather than dropping it —
-    // unless the object explicitly opted out of tenancy, where it's "not
-    // applicable" and skipped silently. When the schema lookup itself fails we
-    // keep all policies (drivers surface column errors clearly at compile time).
+    const isWrite = operation === 'insert' || operation === 'update' || operation === 'delete';
+    // Posture permits a platform admin to cross the tenant wall (ADR-0066 ①):
+    // private / platform-global / better-auth-managed objects. Public tenant
+    // business objects do NOT permit it, so a platform admin stays org-scoped.
+    const posturePermits = meta.isPrivate || meta.tenancyDisabled || meta.isBetterAuthManaged;
+    const platformAdminBypass = posturePermits
+      ? (isWrite
+          ? this.permissionEvaluator.hasSuperuserWriteBypass(object, permissionSets, { isPrivate: meta.isPrivate })
+          : this.permissionEvaluator.hasSuperuserReadBypass(object, permissionSets, { isPrivate: meta.isPrivate }))
+      : false;
+
+    // Field set drives BOTH the Layer 1 field-existence net and the Layer 0
+    // "is this a tenant object?" check.
     const objectFields = await this.getObjectFieldNames(this.metadata, object, this.ql);
-    const tenancyDisabled = this.tenancyDisabledCache.get(object) === true;
-    let dropped = 0;
-    const compilable = objectFields
-      ? allRlsPolicies.filter((p) => {
-          const targetField = this.extractTargetField(p.using);
-          if (!targetField) return true;
-          if (objectFields.has(targetField)) return true;
-          if (tenancyDisabled && targetField === 'organization_id') {
-            return false;
-          }
-          dropped++;
-          return false;
-        })
-      : allRlsPolicies;
-    let rlsFilter = this.rlsCompiler.compileFilter(compilable, context);
-    // Every applicable policy dropped for a missing field → deny sentinel.
-    if (rlsFilter == null && dropped > 0) {
-      rlsFilter = { ...RLS_DENY_FILTER };
+    const tenancyDisabled = this.tenancyDisabledCache.get(object) === true || meta.tenancyDisabled;
+
+    // ── Layer 1: business RLS (ownership / unit depth / sharing / _self carve-outs).
+    // The wildcard tenant policy has LEFT this layer (retired from the seeds), so
+    // this superuser short-circuit now governs BUSINESS RLS only — it can no
+    // longer skip the tenant wall (that is Layer 0's own exemption, below).
+    let layer1: Record<string, unknown> | null = null;
+    if (!(posturePermits && platformAdminBypass)) {
+      const allRlsPolicies = this.collectRLSPolicies(permissionSets, object, operation, (context?.positions ?? []) as string[]);
+      if (allRlsPolicies.length > 0) {
+        // Field-existence safety: a wildcard policy targeting a column the object
+        // lacks is a *deny* contribution (fail-closed), unless the object opted
+        // out of tenancy (skip). Schema-lookup failure keeps all policies.
+        let dropped = 0;
+        const compilable = objectFields
+          ? allRlsPolicies.filter((p) => {
+              const targetField = this.extractTargetField(p.using);
+              if (!targetField) return true;
+              if (objectFields.has(targetField)) return true;
+              if (tenancyDisabled && targetField === 'organization_id') {
+                return false;
+              }
+              dropped++;
+              return false;
+            })
+          : allRlsPolicies;
+        layer1 = this.rlsCompiler.compileFilter(compilable, context);
+        // Every applicable policy dropped for a missing field → deny sentinel.
+        if (layer1 == null && dropped > 0) {
+          layer1 = { ...RLS_DENY_FILTER };
+        }
+      }
     }
-    return rlsFilter;
+
+    // ── Layer 0: tenant isolation — independent, always-first, AND-composed.
+    // Decides "tenant object?" directly from the field set + tenancy posture (NOT
+    // via extractTargetField's `=`-only shape match), so a `tenancy.enabled:false`
+    // global object correctly contributes nothing (ADR-0095 delta c).
+    const layer0 = computeTenantLayer0Filter({
+      isolationActive: this.orgScopingEnabled,
+      organizationId: context?.tenantId,
+      objectHasOrgIdField: objectFields ? objectFields.has('organization_id') : undefined,
+      tenancyDisabled,
+      posturePermitsCrossTenant: posturePermits,
+      platformAdminBypass,
+    });
+
+    return andComposeLayers(layer0, layer1);
   }
 
   /**
@@ -2183,13 +2212,12 @@ export class SecurityPlugin implements Plugin {
       // (`managedBy: 'better-auth'`: sys_user, sys_account, sys_session,
       // sys_oauth_application, sys_sso_provider, …). Their rows are written by
       // better-auth's own adapter with no tenant context, so `organization_id`
-      // is never stamped and the wildcard `tenant_isolation` RLS denies them —
-      // making a platform admin's `viewAllRecords` see an empty list. Treat
-      // them like the private/non-tenant posture for the SUPERUSER BYPASS ONLY
-      // (so the platform super-admin sees all identity rows env-wide). This does
-      // NOT relax member RLS (members never trigger the bypass; their `_self`
-      // carve-outs / tenant_isolation still apply) and is NOT used for the
-      // wildcard-policy drop below, so it can never leak rows to non-admins.
+      // is never stamped (and most such tables have no such column at all).
+      // [ADR-0095 D1] `posturePermitsCrossTenant` uses this flag so a platform
+      // admin's Layer 0 exemption lets `viewAllRecords` see all identity rows
+      // env-wide. This does NOT relax member scoping (members never satisfy the
+      // exemption; their `_self` carve-outs are their Layer 1 scoping, and Layer
+      // 0 stays inert on a column-less table), so it can never leak to non-admins.
       isBetterAuthManaged: (obj as any)?.managedBy === 'better-auth',
       requiredPermissions: normalizeRequiredPermissions((obj as any)?.requiredPermissions),
       fieldRequiredPermissions,
