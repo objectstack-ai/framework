@@ -3337,7 +3337,12 @@ export class ObjectStackClient {
           ?? (typeof errorBody?.error === 'string' ? errorBody.error : undefined)
           ?? res.statusText;
         const errorCode = errorBody?.code || errorBody?.error?.code;
-        const error = new Error(`[ObjectStack] ${errorCode ? `${errorCode}: ` : ''}${errorMessage}`) as any;
+        // `.message` is what UIs (e.g. the console's error toast) show to end
+        // users verbatim, so keep it to the server's human-readable message —
+        // no `[ObjectStack]` branding and no `CODE:` prefix. The code stays
+        // available programmatically via `error.code`, and the full response
+        // body was already logged above for debugging.
+        const error = new Error(errorMessage) as any;
         
         // Attach error details for programmatic access
         error.code = errorCode;

@@ -121,8 +121,50 @@ export function mapDataError(error: any, object?: string): { status: number; bod
             },
         };
     }
+    // Sandboxed hook/action bodies (QuickJS) throw SandboxError whose
+    // `.message` carries a `<kind> '<name>' threw: <msg>` debug wrapper for
+    // server logs, with the original business message preserved on
+    // `.innerMessage` (see runtime/src/sandbox/quickjs-runner.ts). End users
+    // must see only the business message — a hook's `throw new Error('删除被
+    // 阻断…')` is a deliberate business rule, not a fault — the same unwrap
+    // the custom-action route performs in http-dispatcher's handleAction.
+    // The full wrapper still reaches server logs via the callers'
+    // "[REST] Unhandled error" logging and the BodyRunner's own error log.
+    // Deliberately NO `code` field: older @objectstack/client builds (still
+    // bundled in deployed consoles) prepend any `code` to the human-readable
+    // message, which would reintroduce the English noise this branch removes.
+    if (typeof error?.innerMessage === 'string' && error.innerMessage) {
+        return {
+            status: 400,
+            body: {
+                error: error.innerMessage,
+                ...(object ? { object } : {}),
+            },
+        };
+    }
+
     const raw = String(error?.message ?? error ?? '');
     const lower = raw.toLowerCase();
+
+    // Fallback for the same sandbox wrapper when the SandboxError instance
+    // (and its `innerMessage`) was lost crossing a rethrow/serialization
+    // boundary: strip the debug wrapper from the raw message. A leading
+    // default `Error: ` name is dropped; non-default names (`TypeError: …`)
+    // are kept — they signal a genuine script bug rather than a deliberately
+    // thrown business rule, which is useful context.
+    const sandboxWrapper = /^(?:hook|action) '[^']*' threw:\s*(.+)$/s.exec(raw);
+    if (sandboxWrapper) {
+        const msg = sandboxWrapper[1].startsWith('Error: ')
+            ? sandboxWrapper[1].slice('Error: '.length)
+            : sandboxWrapper[1];
+        return {
+            status: 400,
+            body: {
+                error: msg,
+                ...(object ? { object } : {}),
+            },
+        };
+    }
 
     // EnvironmentKernelFactory: project missing database_url/driver — typically
     // means provisioning is in flight or the project record was never

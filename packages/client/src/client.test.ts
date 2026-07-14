@@ -1143,3 +1143,39 @@ describe('Import-job namespace', () => {
         expect(res.restored).toBe(2);
     });
 });
+
+// ---------------------------------------------------------------------------
+// HTTP error shaping — `.message` is shown to end users verbatim (console
+// error toast), so it must carry only the server's human-readable message:
+// no `[ObjectStack]` branding, no `CODE:` prefix. Codes stay programmatic.
+// ---------------------------------------------------------------------------
+describe('HTTP error shaping', () => {
+    it('surfaces the server error message verbatim, with code/status attached programmatically', async () => {
+        const businessMsg = '制作基地被「项目主计划批次」引用(3 条),删除被阻断,请先解除引用';
+        const { client } = createMockClient({ error: businessMsg, code: 'SOME_CODE' }, 400);
+        let caught: any;
+        try {
+            await client.data.delete('pm_base', 'rec_1');
+        } catch (e) {
+            caught = e;
+        }
+        expect(caught).toBeDefined();
+        expect(caught.message).toBe(businessMsg);
+        expect(caught.message).not.toMatch(/\[ObjectStack\]|SOME_CODE/);
+        expect(caught.code).toBe('SOME_CODE');
+        expect(caught.httpStatus).toBe(400);
+    });
+
+    it('falls back to statusText when the body has no message', async () => {
+        const { client } = createMockClient({}, 500);
+        let caught: any;
+        try {
+            await client.data.delete('pm_base', 'rec_1');
+        } catch (e) {
+            caught = e;
+        }
+        expect(caught).toBeDefined();
+        expect(caught.message).toBe('Error');
+        expect(caught.httpStatus).toBe(500);
+    });
+});

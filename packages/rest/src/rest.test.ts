@@ -2193,6 +2193,49 @@ describe('mapDataError — schema/constraint envelopes', () => {
     expect(r.status).toBe(409);
     expect(r.body.code).toBe('UNIQUE_VIOLATION');
   });
+
+  // A sandboxed hook deliberately throwing a business rule (e.g. a
+  // referential-integrity guard blocking a delete) must surface only the
+  // business message to the client — never the sandbox's
+  // `hook '<name>' threw: Error: …` debug wrapper, which reads as English
+  // noise in the console's error toast. The wrapper stays in server logs.
+  it('unwraps SandboxError.innerMessage → 400 with only the business message', () => {
+    const err = Object.assign(
+      new Error("hook 'pm_ref_base' threw: Error: 制作基地被「项目主计划批次」引用(3 条),删除被阻断,请先解除引用"),
+      { name: 'SandboxError', innerMessage: '制作基地被「项目主计划批次」引用(3 条),删除被阻断,请先解除引用' },
+    );
+    const r = mapDataError(err, 'pm_base');
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('制作基地被「项目主计划批次」引用(3 条),删除被阻断,请先解除引用');
+    expect(r.body.object).toBe('pm_base');
+    // No `code`: older bundled clients prepend any code to the message,
+    // which would reintroduce the English noise this unwrap removes.
+    expect(r.body.code).toBeUndefined();
+  });
+
+  it('strips the sandbox debug wrapper from the raw message when innerMessage was lost', () => {
+    const r = mapDataError(new Error("hook 'pm_ref_base' threw: Error: 删除被阻断,请先解除引用"), 'pm_base');
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('删除被阻断,请先解除引用');
+    expect(r.body.code).toBeUndefined();
+  });
+
+  it('keeps non-default error names when stripping the wrapper (genuine script bugs stay identifiable)', () => {
+    const r = mapDataError(new Error("hook 'pm_ref_base' threw: TypeError: cannot read properties of undefined"), 'pm_base');
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('TypeError: cannot read properties of undefined');
+  });
+
+  it("unwraps an action body's wrapper the same way", () => {
+    const err = Object.assign(new Error("action 'approve' threw: Error: 线索信息不完整"), {
+      name: 'SandboxError',
+      innerMessage: '线索信息不完整',
+    });
+    const r = mapDataError(err);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('线索信息不完整');
+    expect(r.body.object).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
