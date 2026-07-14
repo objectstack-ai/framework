@@ -400,6 +400,89 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('batch insert triggers hooks per row (#2922)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: { title: { type: 'text' } } } as any);
+        });
+
+        it('fires beforeInsert/afterInsert once per row with the single-record context shape', async () => {
+            const beforeRows: any[] = [];
+            const afterResults: any[] = [];
+            engine.registerHook('beforeInsert', async (ctx: any) => {
+                beforeRows.push(ctx.input.data);
+                // Same mutation contract as single insert: write one row's field.
+                ctx.input.data.stamped = ctx.input.data.title.toUpperCase();
+            }, { object: 'task' });
+            engine.registerHook('afterInsert', async (ctx: any) => {
+                afterResults.push(ctx.result);
+            }, { object: 'task' });
+            (mockDriver.create as any).mockImplementation(async (_o: string, row: any) => ({ id: `id-${row.title}`, ...row }));
+
+            const result = await engine.insert('task', [{ title: 'a' }, { title: 'b' }]);
+
+            expect(beforeRows).toHaveLength(2);
+            expect(Array.isArray(beforeRows[0])).toBe(false);
+            expect(beforeRows[0]).toMatchObject({ title: 'a' });
+            expect(beforeRows[1]).toMatchObject({ title: 'b' });
+            // The per-row mutation reached the driver for each row.
+            expect((mockDriver.create as any).mock.calls[0][1]).toMatchObject({ title: 'a', stamped: 'A' });
+            expect((mockDriver.create as any).mock.calls[1][1]).toMatchObject({ title: 'b', stamped: 'B' });
+            // afterInsert sees one record per row, never the whole array.
+            expect(afterResults).toHaveLength(2);
+            expect(Array.isArray(afterResults[0])).toBe(false);
+            expect(afterResults[0]).toMatchObject({ id: 'id-a' });
+            expect(afterResults[1]).toMatchObject({ id: 'id-b' });
+            expect(result).toHaveLength(2);
+        });
+
+        it('pairs each afterInsert result with its own row when the driver bulk-creates', async () => {
+            (mockDriver as any).bulkCreate = vi.fn(async (_o: string, rows: any[]) =>
+                rows.map((r: any) => ({ id: `id-${r.title}`, ...r })));
+            const afterResults: any[] = [];
+            engine.registerHook('afterInsert', async (ctx: any) => { afterResults.push(ctx.result); }, { object: 'task' });
+
+            await engine.insert('task', [{ title: 'a' }, { title: 'b' }]);
+
+            expect((mockDriver as any).bulkCreate).toHaveBeenCalledTimes(1);
+            expect(afterResults.map((r) => r.id)).toEqual(['id-a', 'id-b']);
+        });
+    });
+
+    describe('skipAutomations suppresses metadata-bound hooks (#2922)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+        });
+
+        it('skips hooks bound from metadata but still runs code-registered system hooks', async () => {
+            const calls: string[] = [];
+            // Metadata-bound automation hook: `meta` present (bindHooksToEngine shape).
+            engine.registerHook('beforeInsert', async () => { calls.push('automation'); },
+                { object: 'task', meta: { name: 'auto_hook', events: ['beforeInsert'] } });
+            // Code-registered system hook (audit/security shape): no `meta`.
+            engine.registerHook('beforeInsert', async () => { calls.push('system'); }, { object: 'task' });
+
+            await engine.insert('task', { title: 'x' }, { context: { skipAutomations: true } as any });
+            expect(calls).toEqual(['system']);
+
+            calls.length = 0;
+            await engine.insert('task', { title: 'y' });
+            expect(calls.sort()).toEqual(['automation', 'system']);
+        });
+
+        it('implies skipTriggers on the hook session so flow dispatch is suppressed too', async () => {
+            let session: any;
+            engine.registerHook('afterInsert', async (ctx: any) => { session = ctx.session; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'x' }, { context: { userId: 'u1', skipAutomations: true } as any });
+
+            expect(session).toMatchObject({ skipAutomations: true, skipTriggers: true });
+        });
+    });
+
     describe('execution context via the trailing options arg (read methods)', () => {
         // Regression: reads took context inside the query while writes took it in
         // a trailing options arg — so `find(obj, q, { context })` silently dropped

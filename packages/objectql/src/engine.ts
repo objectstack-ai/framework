@@ -590,7 +590,16 @@ export class ObjectQL implements IDataEngine {
     }
 
     this.logger.debug('Triggering hooks', { event, count: entries.length });
-    
+
+    // `session.skipAutomations` (set from ExecutionContext.skipAutomations —
+    // import with "run automations & triggers" unchecked, import undo)
+    // suppresses hooks bound FROM METADATA (`bindHooksToEngine` stamps
+    // `entry.meta`). Hooks registered in code by plugins — audit, capability
+    // gates, sharing projection — have no `meta` and always run: the opt-out
+    // must never bypass security or audit (#2922).
+    const skipAutomations =
+      (context.session as { skipAutomations?: boolean } | undefined)?.skipAutomations === true;
+
     for (const entry of entries) {
       // Per-object matching
       if (entry.object) {
@@ -598,6 +607,10 @@ export class ObjectQL implements IDataEngine {
         if (!targets.includes('*') && !targets.includes(context.object)) {
           continue; // Skip non-matching hooks
         }
+      }
+      if (skipAutomations && entry.meta) {
+        this.logger.debug('Skipping metadata-bound hook (skipAutomations)', { event, hook: entry.hookName });
+        continue;
       }
       await entry.handler(context);
     }
@@ -692,8 +705,13 @@ export class ObjectQL implements IDataEngine {
       ...((execCtx as any).isSystem ? { isSystem: true } : {}),
       // Propagate the automation-suppression flag so the record-change trigger
       // can skip flow dispatch for seed/bulk writes (ADR: seed loads end-state
-      // data, not user events).
-      ...((execCtx as any).skipTriggers ? { skipTriggers: true } : {}),
+      // data, not user events). `skipAutomations` implies `skipTriggers` —
+      // suppressing metadata hooks while still dispatching flows would leave
+      // the "run automations & triggers" opt-out half-working (#2922).
+      ...((execCtx as any).skipTriggers || (execCtx as any).skipAutomations ? { skipTriggers: true } : {}),
+      // Propagate the full automation opt-out so `triggerHooks` can skip
+      // metadata-bound hooks (import with "run automations" unchecked, undo).
+      ...((execCtx as any).skipAutomations ? { skipAutomations: true } : {}),
     } as HookContext['session'];
   }
 
@@ -2175,28 +2193,45 @@ export class ObjectQL implements IDataEngine {
       // any defaulted field. `applyFieldDefaults` returns a fresh copy and only
       // fills fields left `undefined`, so client-supplied values are untouched.
       const nowSnap = new Date();
-      const defaultedData = Array.isArray(opCtx.data)
+      const isBatch = Array.isArray(opCtx.data);
+      const defaultedData = isBatch
         ? (opCtx.data as any[]).map((row) =>
             this.applyFieldDefaults(object, row as Record<string, unknown>, opCtx.context, nowSnap),
           )
         : this.applyFieldDefaults(object, opCtx.data as Record<string, unknown>, opCtx.context, nowSnap);
 
-      const hookContext: HookContext = {
+      // Batch inserts trigger beforeInsert/afterInsert PER ROW, each with the
+      // exact single-record context shape (`input.data` = one row, `result` =
+      // its returned record). A single array-shaped context broke every
+      // consumer built for the single shape — the flat-input proxy read
+      // `undefined`s, declarative `condition`s evaluated against an array,
+      // audit rows and flow-trigger contexts came out mangled (#2922).
+      const rowHookContexts: HookContext[] = (isBatch ? (defaultedData as any[]) : [defaultedData]).map(
+        (row) => ({
           object,
           event: 'beforeInsert',
-          input: { data: defaultedData, options: opCtx.options },
+          input: { data: row, options: opCtx.options },
           session: this.buildSession(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
-          ql: this
-      };
-      await this.triggerHooks('beforeInsert', hookContext);
+          ql: this,
+        }),
+      );
+      for (const rowCtx of rowHookContexts) {
+        await this.triggerHooks('beforeInsert', rowCtx);
+      }
       // Thread the open transaction (if any) into the driver-facing
       // options so that knex's `.transacting(trx)` is honoured. Without
       // this, calls inside a `engine.transaction(...)` block would deadlock
       // on SQLite's single-connection pool. Also propagates tenantId so
       // the driver can enforce per-tenant isolation.
-      hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+      // Base the merge on the first row context's options: hooks share the
+      // same underlying options object (in-place mutations are visible), and
+      // for single inserts this is exactly the pre-#2922 behaviour.
+      const driverOptions = this.buildDriverOptions(opCtx.context, rowHookContexts[0]?.input.options as any);
+      for (const rowCtx of rowHookContexts) {
+        rowCtx.input.options = driverOptions;
+      }
 
       try {
         let result;
@@ -2204,47 +2239,42 @@ export class ObjectQL implements IDataEngine {
         // When the driver generates autonumbers natively (persistent SQL
         // sequence), the engine defers to it — see #1603.
         const driverOwnsAutonumber = (driver as any)?.supports?.autonumber === true;
-        if (Array.isArray(hookContext.input.data)) {
-          // Defaults are already resolved above (pre-hook, #2703); the hook may
-          // have overridden or added fields — take its data as-is.
-          const rows = hookContext.input.data as Array<Record<string, unknown>>;
-          for (const r of rows) {
-            await this.applyAutonumbers(object, r as Record<string, unknown>, opCtx.context, driverOwnsAutonumber);
-          }
-          for (const r of rows) {
-            await this.encryptSecretFields(object, r, opCtx.context, hookContext.input.options);
-          }
-          for (const r of rows) {
-            normalizeMultiValueFields(schemaForValidation, r);
-            validateRecord(schemaForValidation, r, 'insert');
-            evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
-          }
+        // Defaults are already resolved above (pre-hook, #2703); a hook may
+        // have overridden fields or replaced `input.data` — take its data as-is.
+        const rows = rowHookContexts.map((rowCtx) => rowCtx.input.data as Record<string, unknown>);
+        for (const r of rows) {
+          await this.applyAutonumbers(object, r, opCtx.context, driverOwnsAutonumber);
+        }
+        for (const r of rows) {
+          await this.encryptSecretFields(object, r, opCtx.context, driverOptions);
+        }
+        for (const r of rows) {
+          normalizeMultiValueFields(schemaForValidation, r);
+          validateRecord(schemaForValidation, r, 'insert');
+          evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
+        }
+        if (isBatch) {
           if (driver.bulkCreate) {
-               result = await driver.bulkCreate(object, rows, hookContext.input.options as any);
+               result = await driver.bulkCreate(object, rows, driverOptions);
           } else {
                // Fallback loop
-               result = await Promise.all(rows.map((item) => driver.create(object, item, hookContext.input.options as any)));
+               result = await Promise.all(rows.map((item) => driver.create(object, item, driverOptions)));
           }
         } else {
-          // Defaults already resolved pre-hook (#2703); use the hook's data.
-          const row = hookContext.input.data as Record<string, unknown>;
-          await this.applyAutonumbers(object, row, opCtx.context, driverOwnsAutonumber);
-          await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
-          normalizeMultiValueFields(schemaForValidation, row);
-          validateRecord(schemaForValidation, row, 'insert');
-          evaluateValidationRules(schemaForValidation as any, row, 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
-          result = await driver.create(object, row, hookContext.input.options as any);
+          result = await driver.create(object, rows[0], driverOptions);
         }
 
-        hookContext.event = 'afterInsert';
         // Coerce `boolean` fields (SQLite/libsql return 0/1) to real booleans on
         // the after-hook view so flow trigger conditions (`record.is_escalated
         // != true`) and `{record.<bool>}` interpolation see JS booleans, not
         // ints. A shallow copy — the value returned to the caller is untouched.
-        hookContext.result = Array.isArray(result)
-          ? result.map((r) => coerceBooleanFields(schemaForValidation as any, r as any))
-          : coerceBooleanFields(schemaForValidation as any, result as any);
-        await this.triggerHooks('afterInsert', hookContext);
+        const resultRows: any[] = isBatch ? (Array.isArray(result) ? result : [result]) : [result];
+        for (let i = 0; i < rowHookContexts.length; i++) {
+          const rowCtx = rowHookContexts[i];
+          rowCtx.event = 'afterInsert';
+          rowCtx.result = coerceBooleanFields(schemaForValidation as any, resultRows[i] as any);
+          await this.triggerHooks('afterInsert', rowCtx);
+        }
 
         // Roll-up: recompute parent summary fields that aggregate this object.
         await this.recomputeSummaries(object, result, null, opCtx.context);
@@ -2285,7 +2315,9 @@ export class ObjectQL implements IDataEngine {
           }
         }
 
-        return hookContext.result;
+        // Return the (possibly hook-mutated) after-view: the array of per-row
+        // results for batch, the single record otherwise.
+        return isBatch ? rowHookContexts.map((rowCtx) => rowCtx.result) : rowHookContexts[0].result;
       } catch (e) {
         this.logger.error('Insert operation failed', e as Error, { object });
         throw e;

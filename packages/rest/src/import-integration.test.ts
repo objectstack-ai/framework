@@ -357,15 +357,19 @@ describe('import route — required-field dry-run fidelity', () => {
       { id: 'm1', member_name: 'Alice' },                  // status missing → must fail
       { id: 'm2', member_name: 'Bob', status: 'active' },  // complete → ok
     ];
+    // The pre-check only runs with automations OFF (a beforeInsert hook may
+    // populate a required field, so with automations on we defer to the
+    // engine's own validation). runAutomations defaults to true since #2922,
+    // so the opt-out is explicit here.
     // Dry run: no longer reports success for the row the insert will reject.
-    const dry = await imp({ format: 'json', dryRun: true, rows });
+    const dry = await imp({ format: 'json', dryRun: true, runAutomations: false, rows });
     expect(dry._json).toMatchObject({ dryRun: true, total: 2, ok: 1, errors: 1 });
     expect(dry._json.results.find((r: any) => !r.ok)).toMatchObject({ row: 1, field: 'status', code: 'required' });
     expect(await engine.findOne('member', { where: { id: 'm2' } })).toBeNull(); // dry run never writes
 
     // Real insert: SAME verdict (parity), and a readable `status is required`
     // instead of a raw `NOT NULL constraint failed: member.status`.
-    const real = await imp({ format: 'json', rows });
+    const real = await imp({ format: 'json', runAutomations: false, rows });
     expect(real._json).toMatchObject({ total: 2, ok: 1, errors: 1, created: 1 });
     expect(real._json.results.find((r: any) => !r.ok)).toMatchObject({ field: 'status', code: 'required', error: 'status is required' });
     expect((await engine.findOne('member', { where: { id: 'm2' } }))?.status).toBe('active');
@@ -382,7 +386,7 @@ describe('import route — required-field dry-run fidelity', () => {
   });
 
   it('flags a required text field too (not just selects); a blank cell counts as missing', async () => {
-    const res = await imp({ format: 'json', dryRun: true, rows: [
+    const res = await imp({ format: 'json', dryRun: true, runAutomations: false, rows: [
       { id: 'm4', status: 'active' },                     // member_name missing
       { id: 'm5', member_name: '   ', status: 'active' }, // member_name blank
     ] });

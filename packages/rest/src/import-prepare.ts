@@ -252,7 +252,10 @@ export async function prepareImportRequest(
     let matchFields: string[] = Array.isArray(body?.matchFields)
         ? body.matchFields.filter((f: any) => typeof f === 'string' && f.length > 0)
         : [];
-    const runAutomations = body?.runAutomations === true;
+    // Default ON: automations always ran historically (the engine ignored the
+    // flag until #2922), so opt-out must be explicit — matches platform
+    // convention (Salesforce runs triggers on import by default).
+    const runAutomations = body?.runAutomations !== false;
     const trimWhitespace = body?.trimWhitespace !== false;
     const nullValues: string[] | undefined = Array.isArray(body?.nullValues)
         ? body.nullValues.filter((v: any) => typeof v === 'string')

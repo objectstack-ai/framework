@@ -168,6 +168,19 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
   skipTriggers: z.boolean().optional(),
 
   /**
+   * Suppress metadata-bound AUTOMATION entirely for writes made under this
+   * context: lifecycle hooks bound from metadata (`bindHooksToEngine`) are
+   * skipped by the engine's `triggerHooks`, and record-change flow dispatch
+   * is suppressed too (implies {@link skipTriggers}). Hooks registered in
+   * code by plugins — audit, capability gates, sharing projection — carry no
+   * metadata binding and STILL run: this flag must never bypass security or
+   * audit. Set by the data-import runner when the user opts out of
+   * "run automations & triggers", and by import undo (reversing writes must
+   * not re-fire automation).
+   */
+  skipAutomations: z.boolean().optional(),
+
+  /**
    * OAuth 2.1 scopes granted to the access token that authenticated this
    * request, when the principal was resolved from an OAuth bearer token
    * (the MCP surface's human-client track, #2698). UNDEFINED for every

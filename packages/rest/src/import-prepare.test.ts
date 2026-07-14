@@ -99,3 +99,27 @@ describe('prepareImportRequest — locale-translated option synonyms', () => {
     expect(matchOption('Backlog', prep.prepared.metaMap.get('status')!.options!)).toBe('backlog');
   });
 });
+
+describe('prepareImportRequest — runAutomations default (#2922)', () => {
+  const prepWith = async (body: Record<string, unknown>) => {
+    const prep = await prepareImportRequest(
+      { format: 'json', rows: [{ title: 'a' }], ...body },
+      { p, objectName: 'task', maxRows: 10 },
+    );
+    expect(prep.ok).toBe(true);
+    return prep.ok ? prep.prepared.runAutomations : undefined;
+  };
+
+  it('defaults to true when the flag is omitted (automations always ran historically)', async () => {
+    expect(await prepWith({})).toBe(true);
+  });
+
+  it('honours an explicit opt-out', async () => {
+    expect(await prepWith({ runAutomations: false })).toBe(false);
+  });
+
+  it('treats any non-false value as true', async () => {
+    expect(await prepWith({ runAutomations: true })).toBe(true);
+    expect(await prepWith({ runAutomations: 'no' })).toBe(true);
+  });
+});
