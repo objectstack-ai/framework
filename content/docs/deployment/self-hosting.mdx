@@ -210,7 +210,7 @@ OS_TRUSTED_ORIGINS=https://app.example.com   # CORS allow-list
 OS_PORT=8080                                 # must match the proxy upstream
 ```
 
-```caddyfile title="Caddyfile"
+```text title="Caddyfile"
 app.example.com {
     reverse_proxy localhost:8080
 }
