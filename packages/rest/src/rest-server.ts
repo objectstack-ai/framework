@@ -3547,7 +3547,12 @@ export class RestServer {
                     // Parse + validate the payload (shared with the async job route).
                     // The synchronous path caps at 5k rows; larger files must use the
                     // async import-job endpoint.
-                    const prep = await prepareImportRequest(body, { p, objectName, environmentId, maxRows: 5000 });
+                    const prep = await prepareImportRequest(body, {
+                        p, objectName, environmentId, maxRows: 5000,
+                        // Accept locale-translated option labels (what the localized
+                        // export / import template contain) as select-cell synonyms.
+                        localizeSchema: (schema: any) => this.translateMetaItem(req, 'object', environmentId, schema),
+                    });
                     if (!prep.ok) {
                         if (prep.status === 413) prep.error += ' Use an async import job for larger files.';
                         res.status(prep.status).json({ code: prep.code, error: prep.error });
@@ -3611,7 +3616,11 @@ export class RestServer {
                     }
                     if (await this.enforceApiAccess(req, res, p, environmentId, 'import')) return;
 
-                    const prep = await prepareImportRequest(req.body ?? {}, { p, objectName, environmentId, maxRows: IMPORT_JOB_MAX_ROWS });
+                    const prep = await prepareImportRequest(req.body ?? {}, {
+                        p, objectName, environmentId, maxRows: IMPORT_JOB_MAX_ROWS,
+                        // Same round-trip i18n synonyms as the synchronous route.
+                        localizeSchema: (schema: any) => this.translateMetaItem(req, 'object', environmentId, schema),
+                    });
                     if (!prep.ok) {
                         if (prep.status === 413) prep.error += ` This is the async import ceiling; split the file into batches of ${IMPORT_JOB_MAX_ROWS}.`;
                         res.status(prep.status).json({ code: prep.code, error: prep.error });

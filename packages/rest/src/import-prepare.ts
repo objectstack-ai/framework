@@ -193,11 +193,58 @@ export type PrepareImportResult =
  * 50k async). Returns a discriminated result; the caller maps `!ok` to an HTTP
  * error using the returned status/code/error.
  */
+/**
+ * Fold a locale-translated schema's option labels into the authored metaMap as
+ * matching synonyms. The export route and the import-template both surface the
+ * *translated* option label (e.g. 待规划 for `backlog`), so a re-imported file
+ * carries those strings — but `matchOption` compares against the schema the
+ * registry serves, which only knows the authored label. Appending each
+ * translated label as an extra `{ label, value }` entry keeps the authored
+ * label and code working while also accepting what the localized UI displays.
+ */
+export function mergeLocalizedOptionSynonyms(
+    metaMap: Map<string, ExportFieldMeta>,
+    localized: Map<string, ExportFieldMeta>,
+): void {
+    for (const [name, meta] of metaMap) {
+        const loc = localized.get(name);
+        if (!meta.options?.length || !loc?.options?.length) continue;
+        const known = new Set(
+            meta.options
+                .map((o) => (typeof o?.label === 'string' ? o.label.trim().toLowerCase() : ''))
+                .filter(Boolean),
+        );
+        const synonyms = loc.options.filter(
+            (o) =>
+                o
+                && typeof o.label === 'string'
+                && o.label.trim().length > 0
+                && o.value !== undefined
+                && !known.has(o.label.trim().toLowerCase()),
+        );
+        if (synonyms.length > 0) {
+            meta.options = [...meta.options, ...synonyms.map((o) => ({ label: o.label, value: o.value }))];
+        }
+    }
+}
+
 export async function prepareImportRequest(
     body: any,
-    opts: { p: any; objectName: string; environmentId?: string; maxRows: number },
+    opts: {
+        p: any;
+        objectName: string;
+        environmentId?: string;
+        maxRows: number;
+        /**
+         * Optional hook applying the request locale to a schema document (the
+         * REST server passes `translateMetaItem` bound to the request). Used to
+         * accept locale-translated option labels — the strings the localized
+         * export / import template actually contain — as select-cell synonyms.
+         */
+        localizeSchema?: (schema: any) => Promise<any> | any;
+    },
 ): Promise<PrepareImportResult> {
-    const { p, objectName, environmentId, maxRows } = opts;
+    const { p, objectName, environmentId, maxRows, localizeSchema } = opts;
     const dryRun = body?.dryRun === true;
 
     let writeMode: 'insert' | 'update' | 'upsert' =
@@ -325,6 +372,17 @@ export async function prepareImportRequest(
             schema = await p.getObjectSchema(objectName, environmentId);
         }
         metaMap = buildFieldMetaMap(schema);
+        // Round-trip i18n: also accept the locale-translated option labels the
+        // localized export / import template display (merged as synonyms; the
+        // authored label and option code keep working).
+        if (schema && typeof localizeSchema === 'function') {
+            try {
+                const localized = await localizeSchema(schema);
+                if (localized && localized !== schema) {
+                    mergeLocalizedOptionSynonyms(metaMap, buildFieldMetaMap(localized));
+                }
+            } catch { /* authored-only option matching */ }
+        }
     } catch { /* pass-through coercion */ }
 
     return {
