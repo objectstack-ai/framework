@@ -12,6 +12,7 @@
 - **第二轮配置面测试(清单 N/O/P 节)全部通过**:管理员经 Setup UI 配岗位、岗位↔权限集映射端到端生效/回收、开发者代码定义→构建→运行时投影、access-matrix 快照门、ADR-0094 write-through。
 - 实测发现并修复 **2 个引擎级缺陷**(见 §3):写时 RLS check 漏判岗位适用域;`/auth/me/permissions` 身份解析漂移导致 console 假只读。修复后全套件复验通过。
 - 另有 8 项行为观察 / 测试注意事项(见 §5),均为符合设计或可解释的行为,记录备查。
+- **第三轮全量复测(2026-07-14,只测试不改代码)**:fresh DB 复跑 REST 49/49、Playwright 25/25 通过;暴露 2 个重大缺陷(锚点岗位可删、fresh 部署绑定静默降级)及多项未修问题,**全部问题及证据见 [permission-model-issues.md](./permission-model-issues.md)**。
 
 ## 2. 执行结果(按清单分节)
 
