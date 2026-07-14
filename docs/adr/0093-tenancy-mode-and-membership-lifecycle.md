@@ -42,13 +42,17 @@ Decision:
   heuristic from PR #2882 is retired.
 - **D4** — A **`tenancy` kernel service** becomes the single source of truth:
   `{ mode, isolationActive, requested, degraded, defaultOrgId() }`. plugin-auth
-  registers the baseline; `@objectstack/organizations` upgrades it. Every current
-  consumer (SecurityPlugin RLS stripping, SQL-driver tenant audit gate,
-  `/auth/config` features, CLI wiring) migrates to it.
+  registers the baseline; `@objectstack/organizations` upgrades it. The
+  service-layer consumers migrate to it (SecurityPlugin RLS stripping,
+  `/auth/config` features, the reconciler); the two sites that sit *beneath* or
+  *before* the service — the SQL driver's dev-warning gate and the `serve.ts`
+  boot guard — keep reading the env flag by design (see D4).
 - **D5** — The degraded middle state **fails fast**: `OS_MULTI_ORG_ENABLED=true`
   without a working `@objectstack/organizations` refuses to boot. The only escape
   hatch is an explicit `OS_ALLOW_DEGRADED_TENANCY=1`, which brands the deployment
-  `degraded: true` end-to-end (boot banner, `/auth/config`, Setup dashboard).
+  `degraded: true` on the surfaces that don't require shipping console UI: a loud
+  **terminal boot warning** and `features.degradedTenancy` in `/auth/config`.
+  (A Setup-dashboard banner was considered and **descoped** — see D5.)
 - **D6** — A bounded, idempotent **backfill** binds pre-existing member-less users
   to the default org on `kernel:ready` — single-org mode only.
 - **D7** — Edge-case ledger: existing memberships always win; platform-admin
@@ -248,14 +252,28 @@ interface TenancyService {
   registers before SecurityPlugin per the existing ordering contract), setting
   `isolationActive: true`. Presence-probing of `org-scoping` remains for one
   deprecation cycle, then SecurityPlugin consumes `tenancy.isolationActive`.
-- **Migration of consumers** (each currently re-derives the fact):
-  1. SecurityPlugin's RLS strip gate → `tenancy.isolationActive`;
-  2. SQL driver's tenant-audit gate → `tenancy.isolationActive`;
-  3. auth-manager `/auth/config` `features.multiOrgEnabled` → `tenancy.mode`;
-  4. `serve.ts` / dev / runtime wiring → `tenancy.requested`;
-  5. the D2 reconciler → `tenancy.mode` + `defaultOrgId()`.
+- **Migration of consumers** — status as implemented (PRs #2884 / #2887):
+  1. SecurityPlugin's RLS strip gate → `tenancy.isolationActive` — **done**
+     (keeps a direct `org-scoping` probe as fallback for lean embeddings);
+  2. auth-manager `/auth/config` `features.multiOrgEnabled` → `tenancy.mode`
+     (+ new `features.degradedTenancy` ← `tenancy.degraded`) — **done**;
+  3. the D2 reconciler → `tenancy.mode` + `defaultOrgId()` — **done**.
+- **Deliberately NOT migrated** (ratified after implementation, not oversights):
+  - *SQL driver's tenant-audit gate* keeps reading the env `requested` flag
+    (`resolveMultiOrgEnabled()`). The driver is a low-level component that holds
+    **no `PluginContext` / service-registry handle**, and the gate governs only a
+    *dev-time* "you passed no tenantId" warning — never the enforcement path
+    (`applyTenantScope`, which keys off `options.tenantId`). Threading a service
+    reference (or an `isolationActive` boolean) down into the driver purely to
+    fire a warning is the wrong coupling for the stakes; if ever migrated it
+    should be *pushed in* at wiring time, not *pulled* by the driver reaching up.
+  - *`serve.ts` boot guard* reads the env flag directly by necessity — it runs
+    **before** plugin-auth registers the `tenancy` service (it is the code that
+    decides whether to even load the org runtime). `requested` at boot IS the env
+    flag; there is nothing to consume yet.
 - `resolveMultiOrgEnabled()` remains the *input parser* for the env flag but
-  stops being a decision point anywhere outside the tenancy implementation.
+  stops being a decision point anywhere outside the tenancy implementation and
+  the two boot/driver sites above (which are upstream of, or beneath, the service).
 
 **Rejected alternative:** a kernel-built-in tenancy object. The kernel has no
 tenancy concept today and should not grow one for what is an auth/organizations
@@ -272,10 +290,19 @@ to load (missing, or its `init()` throws):
   must not serve traffic pretending otherwise — this is ADR-0049 applied to
   deployment configuration.
 - **Escape hatch:** `OS_ALLOW_DEGRADED_TENANCY=1` boots anyway, with
-  `tenancy.degraded = true` propagated everywhere an operator looks: a red
-  boot banner, `/auth/config` (`degradedTenancy: true`), and the Setup
-  system-overview dashboard. Degraded operation becomes a visible, chosen
-  state instead of a log line.
+  `tenancy.degraded = true` surfaced where operators actually look **without
+  shipping console UI**: a loud red **terminal boot warning** and
+  `/auth/config` (`degradedTenancy: true`) for any tooling that reads it.
+  Degraded operation becomes a visible, chosen state instead of one buried
+  log line.
+  - **Descoped: a Setup-dashboard banner.** The earlier draft also promised a
+    console banner. That was cut deliberately: it lives in objectui (a separate
+    repo/build), and this is an extreme misconfiguration a CE self-host reaches
+    only by explicitly opting past a boot-time refusal — the terminal warning
+    plus the API flag reach the operator who set the flag. The `degradedTenancy`
+    field stays in `/auth/config` (zero-cost, API-visible) so a console *can*
+    render a banner later without further framework work, but shipping that UI
+    is not part of this ADR.
 - **Rollout honesty:** some existing deployments are unknowingly degraded
   today; fail-fast will stop them on upgrade. That is the point — but the
   release notes must say so loudly, and the error message must make recovery
