@@ -34,19 +34,19 @@ export const fieldForm = defineForm({
       fields: [
         { field: 'defaultValue', helpText: 'Default value for new records' },
         // Text field options
-        { field: 'minLength', visibleOn: "data.type == 'text' || data.type == 'textarea' || data.type == 'email'", helpText: 'Minimum character length' },
-        { field: 'maxLength', visibleOn: "data.type == 'text' || data.type == 'textarea' || data.type == 'email'", helpText: 'Maximum character length' },
+        { field: 'minLength', visibleWhen: "data.type == 'text' || data.type == 'textarea' || data.type == 'email'", helpText: 'Minimum character length' },
+        { field: 'maxLength', visibleWhen: "data.type == 'text' || data.type == 'textarea' || data.type == 'email'", helpText: 'Maximum character length' },
         // Number field options
-        { field: 'min', visibleOn: "data.type == 'number' || data.type == 'currency'", helpText: 'Minimum value' },
-        { field: 'max', visibleOn: "data.type == 'number' || data.type == 'currency'", helpText: 'Maximum value' },
-        { field: 'precision', visibleOn: "data.type == 'currency' || data.type == 'number'", helpText: 'Decimal places (e.g., 2 for $10.50)' },
-        { field: 'scale', visibleOn: "data.type == 'number'", helpText: 'Number of decimal digits' },
+        { field: 'min', visibleWhen: "data.type == 'number' || data.type == 'currency'", helpText: 'Minimum value' },
+        { field: 'max', visibleWhen: "data.type == 'number' || data.type == 'currency'", helpText: 'Maximum value' },
+        { field: 'precision', visibleWhen: "data.type == 'currency' || data.type == 'number'", helpText: 'Decimal places (e.g., 2 for $10.50)' },
+        { field: 'scale', visibleWhen: "data.type == 'number'", helpText: 'Number of decimal digits' },
         // Select field options
-        { field: 'options', type: 'repeater', visibleOn: "data.type == 'select' || data.type == 'multiselect'", helpText: 'Available options (label/value pairs)' },
+        { field: 'options', type: 'repeater', visibleWhen: "data.type == 'select' || data.type == 'multiselect'", helpText: 'Available options (label/value pairs)' },
         // Reference field options
-        { field: 'reference', widget: 'ref:object', visibleOn: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Referenced object name' },
-        { field: 'referenceFilters', widget: 'string-tags', visibleOn: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Filter expressions (e.g., "active = true")' },
-        { field: 'deleteBehavior', visibleOn: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'What happens when referenced record is deleted' },
+        { field: 'reference', widget: 'ref:object', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Referenced object name' },
+        { field: 'referenceFilters', widget: 'string-tags', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Filter expressions (e.g., "active = true")' },
+        { field: 'deleteBehavior', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'What happens when referenced record is deleted' },
       ],
     },
     {

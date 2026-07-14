@@ -1103,7 +1103,7 @@ describe('FormFieldSchema', () => {
     const field: FormField = {
       field: 'state',
       dependsOn: 'country',
-      visibleOn: 'country === "USA"',
+      visibleWhen: 'country === "USA"',
     };
 
     expect(() => FormFieldSchema.parse(field)).not.toThrow();
@@ -1217,12 +1217,12 @@ describe('Enhanced FormSectionSchema', () => {
         { 
           field: 'state', 
           dependsOn: 'country',
-          visibleOn: 'country === "USA"',
+          visibleWhen: 'country === "USA"',
         },
         { 
           field: 'province', 
           dependsOn: 'country',
-          visibleOn: 'country === "Canada"',
+          visibleWhen: 'country === "Canada"',
         },
         'city',
         'postal_code',
@@ -1268,7 +1268,7 @@ describe('Enhanced FormViewSchema with Complex Fields', () => {
             { 
               field: 'state', 
               dependsOn: 'country',
-              visibleOn: 'country === "USA"',
+              visibleWhen: 'country === "USA"',
               widget: 'state-select',
             },
           ],
@@ -1350,7 +1350,7 @@ describe('Real-World Enhanced View Examples', () => {
               { 
                 field: 'billing_state', 
                 dependsOn: 'billing_country',
-                visibleOn: 'billing_country === "USA"',
+                visibleWhen: 'billing_country === "USA"',
               },
             ],
           },
@@ -2503,5 +2503,36 @@ describe('HttpMethodSchema/HttpRequestSchema backward compat', () => {
     expect(HttpMethodSchema.parse('GET')).toBe('GET');
     const result = HttpRequestSchema.parse({ url: '/api/test' });
     expect(result.method).toBe('GET');
+  });
+});
+
+describe('ADR-0089 — visibleWhen unification (view form)', () => {
+  it('normalizes a deprecated `visibleOn` alias to `visibleWhen` on a form field', () => {
+    const parsed = FormFieldSchema.parse({ field: 'state', visibleOn: "record.country == 'US'" });
+    expect(parsed.visibleWhen).toBeDefined();
+    expect(parsed.visibleOn).toBeUndefined();
+  });
+
+  it('normalizes a deprecated `visibleOn` alias to `visibleWhen` on a form section', () => {
+    const parsed = FormSectionSchema.parse({
+      label: 'Shipping',
+      visibleOn: "record.needs_shipping == true",
+      fields: ['address'],
+    });
+    expect(parsed.visibleWhen).toBeDefined();
+    expect((parsed as Record<string, unknown>).visibleOn).toBeUndefined();
+  });
+
+  it('keeps the canonical `visibleWhen` when both are present (canonical wins)', () => {
+    const parsed = FormFieldSchema.parse({
+      field: 'state',
+      visibleWhen: "record.a == 1",
+      visibleOn: "record.b == 2",
+    });
+    const src = typeof parsed.visibleWhen === 'string'
+      ? parsed.visibleWhen
+      : (parsed.visibleWhen as { source?: string }).source;
+    expect(src).toBe('record.a == 1');
+    expect(parsed.visibleOn).toBeUndefined();
   });
 });

@@ -301,10 +301,10 @@ to the envelope.
 | `Field` | `formula` (when `type: 'formula'`) | cel |
 | `Field` | `visibleWhen` / `readonlyWhen` / `requiredWhen` | cel |
 | `Field` | `conditionalRequired` (deprecated alias of `requiredWhen`) | cel |
-| `Field` | `visibleOn` | cel |
+| `View` / `Page` | `visibleWhen` (form section/field, page component) | cel |
 | `Field` | `defaultValue` (M9.9b) | cel |
 | `ConditionalValidation` | `when` | cel |
-| `View` | `visibleOn` | cel |
+| `View` / `Page` | `visibleOn` / `visibility` (deprecated aliases of `visibleWhen`, ADR-0089) | cel |
 | `View.criteria` | filter expression | cel |
 | `Action` | `disabled` | cel (or boolean) |
 | `Hook` | `condition` | cel |

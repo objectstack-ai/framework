@@ -28,12 +28,12 @@ export const actionForm = defineForm({
       label: 'Behavior',
       description: 'Configure what happens when the action is triggered.',
       fields: [
-        { field: 'target', visibleOn: "data.type != 'script'", helpText: 'URL, flow name, or API endpoint to call' },
-        { field: 'method', visibleOn: "data.type == 'api'", helpText: 'HTTP method (GET, POST, PUT, DELETE)' },
+        { field: 'target', visibleWhen: "data.type != 'script'", helpText: 'URL, flow name, or API endpoint to call' },
+        { field: 'method', visibleWhen: "data.type == 'api'", helpText: 'HTTP method (GET, POST, PUT, DELETE)' },
         {
           field: 'body',
           type: 'composite',
-          visibleOn: "data.type == 'script'",
+          visibleWhen: "data.type == 'script'",
           helpText: 'Either an L1 expression or an L2 sandboxed JS body',
           // Mirrors hook.form.ts: `body` is a discriminated union
           // (HookBodySchema) on `language`, not a bare string. A flat
@@ -78,9 +78,9 @@ export const actionForm = defineForm({
       fields: [
         { field: 'bulkEnabled', colSpan: 1, helpText: 'Allow applying to multiple selected records' },
         { field: 'ai', colSpan: 2, helpText: 'AI exposure (opt-in): set ai.exposed=true and write ai.description (≥40 chars) to make this callable by agents.' },
-        { field: 'recordIdParam', visibleOn: "data.type == 'api'", colSpan: 1, helpText: 'Body parameter name for record ID' },
-        { field: 'recordIdField', visibleOn: "data.type == 'api' && data.recordIdParam", colSpan: 1, helpText: 'Field to use as record ID (default: "id")' },
-        { field: 'bodyShape', visibleOn: "data.type == 'api'", colSpan: 2, helpText: 'Request body structure (flat or nested)' },
+        { field: 'recordIdParam', visibleWhen: "data.type == 'api'", colSpan: 1, helpText: 'Body parameter name for record ID' },
+        { field: 'recordIdField', visibleWhen: "data.type == 'api' && data.recordIdParam", colSpan: 1, helpText: 'Field to use as record ID (default: "id")' },
+        { field: 'bodyShape', visibleWhen: "data.type == 'api'", colSpan: 2, helpText: 'Request body structure (flat or nested)' },
       ],
     },
   ],

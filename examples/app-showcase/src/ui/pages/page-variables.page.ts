@@ -10,7 +10,7 @@ import { definePage } from '@objectstack/spec/ui';
  *      is `project_picker` (PageVariableSchema.source = that component id).
  *   2. `element:record_picker` (id: project_picker) writes the chosen project's
  *      id into that variable on selection.
- *   3. Sibling components gate on `page.selectedProjectId` via `visibility`:
+ *   3. Sibling components gate on `page.selectedProjectId` via `visibleWhen`:
  *      the empty-state hint shows while nothing is picked; the detail panel
  *      appears the moment a project is chosen — re-evaluated live, no reload.
  *
@@ -69,7 +69,7 @@ export const PageVariablesPage = definePage({
         {
           type: 'element:text',
           id: 'empty_hint',
-          visibility: "page.selectedProjectId == ''",
+          visibleWhen: "page.selectedProjectId == ''",
           properties: {
             content: '↑ Select a project above to reveal its detail panel.',
             variant: 'caption',
@@ -79,12 +79,12 @@ export const PageVariablesPage = definePage({
         {
           type: 'element:divider',
           id: 'detail_divider',
-          visibility: "page.selectedProjectId != ''",
+          visibleWhen: "page.selectedProjectId != ''",
         },
         {
           type: 'element:text',
           id: 'detail_heading',
-          visibility: "page.selectedProjectId != ''",
+          visibleWhen: "page.selectedProjectId != ''",
           properties: {
             content: '✓ Project selected',
             variant: 'subheading',
@@ -93,7 +93,7 @@ export const PageVariablesPage = definePage({
         {
           type: 'element:text',
           id: 'detail_body',
-          visibility: "page.selectedProjectId != ''",
+          visibleWhen: "page.selectedProjectId != ''",
           properties: {
             content:
               'This panel is gated on `page.selectedProjectId != ""`. It became visible the instant the picker wrote the variable — the same page-local state any other component (or its data filter) can read.',

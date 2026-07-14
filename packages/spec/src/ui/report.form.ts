@@ -34,20 +34,20 @@ export const reportForm = defineForm({
       label: 'Dataset binding',
       description: 'The semantic-layer dataset this report renders. Values are the dataset’s measures; rows are its dimensions.',
       // A `joined` report carries its data on `blocks` instead.
-      visibleOn: "data.type != 'joined'",
+      visibleWhen: "data.type != 'joined'",
       fields: [
         { field: 'dataset', widget: 'ref:dataset', helpText: 'Dataset to bind (measures/dimensions come from its semantic layer)' },
         { field: 'values', widget: 'string-tags', helpText: 'Measure names (from the dataset) to display' },
         { field: 'rows', widget: 'string-tags', helpText: 'Dimension names (from the dataset) to group rows by' },
         // CEL visibility — only Matrix reports pivot across a second dimension.
-        { field: 'columns', widget: 'string-tags', visibleOn: "data.type == 'matrix'", helpText: 'Dimension names across (matrix only)' },
+        { field: 'columns', widget: 'string-tags', visibleWhen: "data.type == 'matrix'", helpText: 'Dimension names across (matrix only)' },
         { field: 'drilldown', helpText: 'Click an aggregated row/cell to open the underlying records' },
       ],
     },
     {
       label: 'Joined blocks',
       description: 'Additional dataset-bound blocks stacked into a single report (joined reports only).',
-      visibleOn: "data.type == 'joined'",
+      visibleWhen: "data.type == 'joined'",
       fields: [
         { field: 'blocks', type: 'repeater', helpText: 'Dataset-bound sub-reports (joined report only)' },
       ],
