@@ -37,6 +37,42 @@ export interface ExportFieldMeta {
   hasDefault?: boolean;
 }
 
+/**
+ * Build the `Content-Disposition` header for an export download.
+ *
+ * The suggested filename is `<label>-<YYYYMMDD>-<HHMMSS>.<ext>` where the
+ * label is the object's (locale-translated) display label — so a browser
+ * saves e.g. `合同-20260714-153045.xlsx` instead of `contracts-2026-07-14.xlsx`.
+ * Non-ASCII labels ride the RFC 5987/6266 `filename*` parameter; the plain
+ * `filename` keeps an ASCII-safe fallback derived from the object API name
+ * for clients that don't understand `filename*`.
+ */
+export function exportContentDisposition(
+  objectName: string,
+  label: string | undefined,
+  ext: string,
+  now: Date = new Date(),
+): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const asciiBase = objectName.replace(/[^A-Za-z0-9_.-]/g, '_') || 'export';
+  // Keep unicode letters (CJK labels) but drop filesystem-hostile characters.
+  // eslint-disable-next-line no-control-regex
+  const utf8Base = String(label ?? '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_')
+    .replace(/^[\s._-]+|[\s._-]+$/g, '')
+    .slice(0, 80) || asciiBase;
+  const asciiName = `${asciiBase}-${stamp}.${ext}`;
+  const utf8Name = `${utf8Base}-${stamp}.${ext}`;
+  // RFC 5987 pct-encoding: encodeURIComponent leaves `'()*` unescaped but
+  // they are not attr-chars, so escape them explicitly.
+  const encoded = encodeURIComponent(utf8Name)
+    .replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
+}
+
 /** Field types whose stored value points at another record. */
 const REFERENCE_TYPES = new Set(['lookup', 'master_detail', 'user', 'reference', 'tree']);
 

@@ -8,7 +8,41 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { toArgb, cellFontColor, type ExportFieldMeta } from './export-format';
+import { toArgb, cellFontColor, exportContentDisposition, type ExportFieldMeta } from './export-format';
+
+describe('exportContentDisposition', () => {
+  const NOW = new Date(2026, 6, 14, 15, 30, 45); // 2026-07-14 15:30:45 local
+
+  it('uses the localized label in filename* and the API name as ASCII fallback', () => {
+    expect(exportContentDisposition('contracts', '合同', 'xlsx', NOW)).toBe(
+      `attachment; filename="contracts-20260714-153045.xlsx"; filename*=UTF-8''${encodeURIComponent('合同-20260714-153045.xlsx')}`,
+    );
+  });
+
+  it('falls back to the API name when no label is available', () => {
+    expect(exportContentDisposition('contracts', undefined, 'csv', NOW)).toBe(
+      `attachment; filename="contracts-20260714-153045.csv"; filename*=UTF-8''contracts-20260714-153045.csv`,
+    );
+  });
+
+  it('sanitizes hostile characters in both names', () => {
+    const header = exportContentDisposition('a/b', '合 同: v2?', 'csv', NOW);
+    expect(header).toContain('filename="a_b-20260714-153045.csv"');
+    expect(header).toContain(`filename*=UTF-8''${encodeURIComponent('合 同_ v2-20260714-153045.csv')}`);
+  });
+
+  it('percent-encodes RFC 5987 non-attr-chars that encodeURIComponent leaves alone', () => {
+    const header = exportContentDisposition('obj', "a'b(c)", 'csv', NOW);
+    expect(header).toContain("filename*=UTF-8''a%27b%28c%29-20260714-153045.csv");
+  });
+
+  it('zero-pads date and time parts', () => {
+    const early = new Date(2026, 0, 5, 9, 8, 7);
+    expect(exportContentDisposition('obj', undefined, 'json', early)).toContain(
+      'filename="obj-20260105-090807.json"',
+    );
+  });
+});
 
 describe('toArgb', () => {
   it('expands 3-digit hex to opaque ARGB', () => {

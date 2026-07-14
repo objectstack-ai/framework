@@ -71,7 +71,7 @@ export interface ResolveOptions {
  * Returns the matched bundle key, or `undefined` when nothing matches.
  */
 function resolveBundleLocale(
-  bundle: TranslationBundle,
+  bundle: Record<string, unknown>,
   requested: string,
 ): string | undefined {
   // 1. Exact match (fast path).
@@ -553,6 +553,46 @@ function lookupObjectFieldOption(
 }
 
 /**
+ * Built-in labels for the platform-injected system fields (the ObjectQL
+ * registry stamps `owner_id` / `created_*` / `updated_*` onto every object
+ * with English labels). Custom objects carry no per-object translation
+ * entries for these, so without a fallback every localized surface — list
+ * headers, export files, import templates — leaks the English default (e.g.
+ * an otherwise fully-Chinese import template with an `Owner` column).
+ *
+ * Wording matches the generated platform bundles (`*.objects.generated.ts`)
+ * so a system field reads the same on custom and platform objects.
+ */
+const SYSTEM_FIELD_LABELS: Record<string, Record<string, string>> = {
+  owner_id: { en: 'Owner', 'zh-CN': '所有者', 'ja-JP': '所有者', 'es-ES': 'Propietario' },
+  created_at: { en: 'Created At', 'zh-CN': '创建时间', 'ja-JP': '作成日時', 'es-ES': 'Creado el' },
+  created_by: { en: 'Created By', 'zh-CN': '创建人', 'ja-JP': '作成者', 'es-ES': 'Creado por' },
+  updated_at: { en: 'Last Modified At', 'zh-CN': '更新时间', 'ja-JP': '更新日時', 'es-ES': 'Actualizado el' },
+  updated_by: { en: 'Last Modified By', 'zh-CN': '更新人', 'ja-JP': '更新者', 'es-ES': 'Actualizado por' },
+};
+
+/**
+ * Fallback label for a platform-injected system field, honouring the same
+ * locale-matching rules as bundle lookup (exact → case-insensitive → base
+ * language → variant). Applied only when the field still carries its injected
+ * English default — an author's custom label is never overridden.
+ */
+function builtinSystemFieldLabel(
+  fieldName: string,
+  currentLabel: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  const entry = SYSTEM_FIELD_LABELS[fieldName];
+  if (!entry) return undefined;
+  if (currentLabel !== undefined && currentLabel !== entry.en) return undefined;
+  for (const code of localeChain(opts)) {
+    const resolved = resolveBundleLocale(entry, code);
+    if (resolved !== undefined) return entry[resolved];
+  }
+  return undefined;
+}
+
+/**
  * Apply the active locale to an object metadata document. Translates the
  * object's `label` / `pluralLabel` / `description` and walks each field to
  * translate its `label`, `help`, and per-option `label`s. The input document
@@ -570,7 +610,9 @@ export function translateObject<T extends ObjectLike>(
 ): T {
   if (!doc || typeof doc !== 'object') return doc;
   const objectName = doc.name;
-  if (!objectName || !bundle) return doc;
+  // Proceed even without a bundle: the built-in system-field labels below
+  // still apply (custom objects typically ship no translation entries).
+  if (!objectName) return doc;
 
   const label = lookupObjectField(bundle, objectName, 'label', opts) ?? doc.label;
   const pluralLabel =
@@ -580,7 +622,9 @@ export function translateObject<T extends ObjectLike>(
 
   const translateField = (name: string, def: ObjectFieldLike): ObjectFieldLike => {
     const next: ObjectFieldLike = { ...def };
-    const translatedLabel = lookupObjectFieldAttr(bundle, objectName, name, 'label', opts);
+    const translatedLabel =
+      lookupObjectFieldAttr(bundle, objectName, name, 'label', opts) ??
+      builtinSystemFieldLabel(name, def.label, opts);
     if (translatedLabel) next.label = translatedLabel;
     const translatedHelp = lookupObjectFieldAttr(bundle, objectName, name, 'help', opts);
     if (translatedHelp) next.help = translatedHelp;

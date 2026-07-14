@@ -438,7 +438,9 @@ export class ReportService implements IReportService {
               subject,
               text: `Attached: ${result.rowCount} row(s).`,
               attachments: [{
-                filename: `${(schedule.name ?? report.name).replace(/[^\w.-]+/g, '_')}-${ts.slice(0, 10)}.csv`,
+                // Keep unicode letters (CJK schedule names) — only strip
+                // filesystem-hostile characters, else 周报 becomes `__`.
+                filename: `${(schedule.name ?? report.name).replace(/[^\p{L}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '') || 'report'}-${ts.slice(0, 10)}.csv`,
                 content: result.body,
                 contentType: 'text/csv',
               }],

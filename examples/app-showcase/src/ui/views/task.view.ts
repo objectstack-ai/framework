@@ -66,6 +66,7 @@ export const TaskViews = defineView({
       data,
       columns: [{ field: 'title' }, { field: 'project' }, { field: 'assignee' }, { field: 'status' }, { field: 'priority' }, { field: 'due_date' }],
       filter: [{ field: 'status', operator: 'equals', value: 'in_progress' }],
+      exportOptions: ['csv', 'xlsx', 'json'],
     },
     urgent: {
       label: 'Urgent',

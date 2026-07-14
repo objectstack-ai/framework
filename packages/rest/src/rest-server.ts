@@ -12,6 +12,7 @@ import {
     formatRowCells,
     formatRowForJson,
     cellFontColor,
+    exportContentDisposition,
     type ExportFieldMeta,
 } from './export-format.js';
 import { runImport } from './import-runner.js';
@@ -1405,8 +1406,11 @@ export class RestServer {
         // locale-aware ETag) and passes it here so we don't repeat the
         // potentially registry-hitting lookup on every request.
         const i18n = i18nService !== undefined ? i18nService : await this.resolveI18nService(environmentId, req);
+        // A missing bundle is NOT a bail-out: `translateMetadataDocument`
+        // still applies built-in fallbacks (e.g. the injected system-field
+        // labels `owner_id`/`created_*`/`updated_*` on custom objects, which
+        // ship no per-object translation entries).
         const bundle = this.buildTranslationBundle(i18n);
-        if (!bundle) return item;
         const locale = this.extractLocale(req, i18n);
         if (!locale) return item;
         const { translateMetadataDocument } = await import('@objectstack/spec/system');
@@ -1436,8 +1440,8 @@ export class RestServer {
             : (items && typeof items === 'object' && Array.isArray(items.items) ? items.items : null);
         if (!arr) return items;
         const i18n = await this.resolveI18nService(environmentId, req);
+        // Missing bundle ≠ bail-out — see `translateMetaItem`.
         const bundle = this.buildTranslationBundle(i18n);
-        if (!bundle) return items;
         const locale = this.extractLocale(req, i18n);
         if (!locale) return items;
         const { translateMetadataDocument } = await import('@objectstack/spec/system');
@@ -3920,7 +3924,9 @@ export class RestServer {
         //
         // Streams the response so 50k-row exports do not buffer in memory; the
         // xlsx path pipes exceljs' streaming writer straight onto the response.
-        // Filename suggests `${object}-${YYYY-MM-DD}.${ext}` for browsers.
+        // Filename suggests `${objectLabel}-${YYYYMMDD}-${HHMMSS}.${ext}` for
+        // browsers (localized label via RFC 5987 `filename*`, ASCII fallback
+        // from the API name — see exportContentDisposition).
         //
         // xlsx only: select / radio cells are coloured with their option's
         // `color` as the font colour (white cell background) when the effective
@@ -4000,6 +4006,9 @@ export class RestServer {
                     // references. Best-effort: when the schema is unavailable the export
                     // falls back to raw values, byte-identical to the un-formatted path.
                     let metaMap = new Map<string, ExportFieldMeta>();
+                    // Localized object display label (e.g. 合同) — drives the
+                    // suggested download filename below.
+                    let objectLabel: string | undefined;
                     try {
                         // Field metadata comes from the same place `findData` resolves
                         // the object: `getMetaItem` is registry-first (DB fallback), so
@@ -4021,6 +4030,9 @@ export class RestServer {
                         // export header row matches the UI column headers instead of
                         // leaking the raw, untranslated `field.label` values.
                         schema = await this.translateMetaItem(req, 'object', environmentId, schema);
+                        if (typeof schema?.label === 'string' && schema.label.length > 0) {
+                            objectLabel = schema.label;
+                        }
                         metaMap = buildFieldMetaMap(schema);
                         if (!fields || fields.length === 0) {
                             const names = [...metaMap.keys()];
@@ -4033,18 +4045,14 @@ export class RestServer {
                     const expandFields = referenceFieldNames(metaMap);
 
                     // Prepare streaming response. Set headers BEFORE first write.
-                    const stamp = new Date().toISOString().slice(0, 10);
-                    const safeObj = objectName.replace(/[^A-Za-z0-9_.-]/g, '_');
                     if (format === 'csv') {
                         res.header('Content-Type', 'text/csv; charset=utf-8');
-                        res.header('Content-Disposition', `attachment; filename="${safeObj}-${stamp}.csv"`);
                     } else if (format === 'xlsx') {
                         res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                        res.header('Content-Disposition', `attachment; filename="${safeObj}-${stamp}.xlsx"`);
                     } else {
                         res.header('Content-Type', 'application/json; charset=utf-8');
-                        res.header('Content-Disposition', `attachment; filename="${safeObj}-${stamp}.json"`);
                     }
+                    res.header('Content-Disposition', exportContentDisposition(objectName, objectLabel, format));
                     res.header('X-Export-Format', format);
                     res.header('X-Export-Limit', String(limit));
                     // Signal whether select-option colours were applied. Only

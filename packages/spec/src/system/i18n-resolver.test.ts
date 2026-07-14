@@ -632,3 +632,82 @@ describe('translateDashboard', () => {
     expect(out.label).toBe('系统概览');
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// translateObject — built-in system-field label fallback
+// ────────────────────────────────────────────────────────────────────────────
+
+import { translateObject } from './i18n-resolver';
+
+describe('translateObject system-field label fallback', () => {
+  const contract = {
+    name: 'contracts',
+    label: 'Contract',
+    fields: {
+      title: { name: 'title', type: 'text', label: '合同名称' },
+      owner_id: { name: 'owner_id', type: 'lookup', label: 'Owner' },
+      created_at: { name: 'created_at', type: 'datetime', label: 'Created At' },
+      created_by: { name: 'created_by', type: 'lookup', label: 'Created By' },
+      updated_at: { name: 'updated_at', type: 'datetime', label: 'Last Modified At' },
+      updated_by: { name: 'updated_by', type: 'lookup', label: 'Last Modified By' },
+    },
+  };
+
+  it('localizes injected system-field labels even without a bundle', () => {
+    const out = translateObject(contract, undefined, { locale: 'zh-CN' });
+    const fields = out.fields as Record<string, any>;
+    expect(fields.owner_id.label).toBe('所有者');
+    expect(fields.created_at.label).toBe('创建时间');
+    expect(fields.created_by.label).toBe('创建人');
+    expect(fields.updated_at.label).toBe('更新时间');
+    expect(fields.updated_by.label).toBe('更新人');
+    // Authored labels stay untouched.
+    expect(fields.title.label).toBe('合同名称');
+    // Input not mutated.
+    expect((contract.fields as any).owner_id.label).toBe('Owner');
+  });
+
+  it('applies BCP-47 fallback for base-language and variant locales', () => {
+    const zh = translateObject(contract, undefined, { locale: 'zh' });
+    expect((zh.fields as any).owner_id.label).toBe('所有者');
+    const ja = translateObject(contract, undefined, { locale: 'ja' });
+    expect((ja.fields as any).created_by.label).toBe('作成者');
+  });
+
+  it('keeps English labels for en and unknown locales', () => {
+    const en = translateObject(contract, undefined, { locale: 'en' });
+    expect((en.fields as any).owner_id.label).toBe('Owner');
+    const fr = translateObject(contract, undefined, { locale: 'fr-FR', fallbackChain: [] });
+    expect((fr.fields as any).owner_id.label).toBe('Owner');
+  });
+
+  it('never overrides an author-customized system-field label', () => {
+    const custom = {
+      name: 'contracts',
+      fields: { owner_id: { name: 'owner_id', type: 'lookup', label: '负责人' } },
+    };
+    const out = translateObject(custom, undefined, { locale: 'zh-CN' });
+    expect((out.fields as any).owner_id.label).toBe('负责人');
+  });
+
+  it('prefers an explicit bundle entry over the built-in fallback', () => {
+    const withBundle: TranslationBundle = {
+      'zh-CN': {
+        objects: {
+          contracts: { fields: { owner_id: { label: '合同负责人' } } },
+        },
+      } as any,
+    };
+    const out = translateObject(contract, withBundle, { locale: 'zh-CN' });
+    expect((out.fields as any).owner_id.label).toBe('合同负责人');
+  });
+
+  it('handles the array field shape', () => {
+    const arrayDoc = {
+      name: 'contracts',
+      fields: [{ name: 'owner_id', type: 'lookup', label: 'Owner' }],
+    };
+    const out = translateObject(arrayDoc, undefined, { locale: 'zh-CN' });
+    expect((out.fields as any)[0].label).toBe('所有者');
+  });
+});

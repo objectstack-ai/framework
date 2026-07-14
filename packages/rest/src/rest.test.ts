@@ -997,7 +997,7 @@ describe('RestServer', () => {
       await route!.handler(req as any, res);
 
       expect(headers['Content-Type']).toBe('text/csv; charset=utf-8');
-      expect(headers['Content-Disposition']).toMatch(/attachment; filename="account-\d{4}-\d{2}-\d{2}\.csv"/);
+      expect(headers['Content-Disposition']).toMatch(/attachment; filename="account-\d{8}-\d{6}\.csv"; filename\*=UTF-8''/);
       const text = chunks.join('');
       expect(text.startsWith('id,name,note\r\n')).toBe(true);
       expect(text).toContain('1,"Acme, Inc.","line1\nline2"');
@@ -1179,7 +1179,7 @@ describe('RestServer', () => {
       await route!.handler({ params: { object: 'task' }, query: { format: 'xlsx' } } as any, res);
 
       expect(headers['Content-Type']).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      expect(headers['Content-Disposition']).toMatch(/attachment; filename="task-\d{4}-\d{2}-\d{2}\.xlsx"/);
+      expect(headers['Content-Disposition']).toMatch(/attachment; filename="task-\d{8}-\d{6}\.xlsx"; filename\*=UTF-8''/);
       expect(headers['X-Export-Format']).toBe('xlsx');
       expect(res.end).toHaveBeenCalled();
 
