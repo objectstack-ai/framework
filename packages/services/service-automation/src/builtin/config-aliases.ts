@@ -25,7 +25,15 @@
  * the canonical key. Removal of the alias paths is tracked as a follow-up and
  * happens once the window has elapsed and graph-lint has been enforcing.
  *
- * @see crud-nodes.ts for the first call sites (`objectName`, `filter`).
+ * The `filters` → `filter` alias has since been **retired from this shim** and
+ * promoted into the ADR-0087 D2 conversion layer (`@objectstack/spec` conversion
+ * `flow-node-crud-filter-alias`): it is rewritten to the canonical key **at
+ * load**, so the CRUD executors read `cfg.filter` directly. That is the PD #12
+ * retirement path the ADR prescribes — a scattered consumer-side fallback
+ * replaced by one declared, loud, tested, expiring conversion entry. The
+ * remaining `object` → `objectName` alias is the next candidate to graduate.
+ *
+ * @see crud-nodes.ts for the remaining call site (`objectName`).
  */
 
 /** One-time-warning ledger, keyed by `${nodeType}:${canonical}<-${alias}`. */
