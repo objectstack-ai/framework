@@ -40,7 +40,7 @@ Onboarding a tenant is four ordered steps — each depends on the previous one:
 
 1. **Build the organization** — create the business-unit tree.
 2. **Add people** — invite, create, or import users; place them in units.
-3. **Give people a role** — assign positions (the daily 90%).
+3. **Assign positions** — give each person their job function (the daily 90%).
 4. **Verify** — impersonate a user and ask the explain engine why access
    resolves the way it does.
 
@@ -97,7 +97,7 @@ through this membership, so don't skip it.
 Endpoint-level detail (payloads, password policies, phone-only accounts):
 [Authentication → Admin User Management](/docs/permissions/authentication#admin-user-management).
 
-## Step 3 — Give people a role (assign positions)
+## Step 3 — Assign positions
 
 This is the daily 90%. An assignment is one row: **User Position**
 (`sys_user_position`) = *user* + *position* + optionally the **business unit**
@@ -170,7 +170,7 @@ Full model: [Permission Sets](/docs/permissions/permission-sets).
 
 | I need to… | Do this |
 |:--|:--|
-| Onboard a new employee | Invite/Create the user → Business Unit Member row → assign their position ([2](#step-2--add-people-users)→[3](#step-3--give-people-a-role-assign-positions)) |
+| Onboard a new employee | Invite/Create the user → Business Unit Member row → assign their position ([2](#step-2--add-people-users)→[3](#step-3--assign-positions)) |
 | Offboard someone | **Ban User** (blocks sign-in immediately) — then remove assignments at leisure |
 | "I can't sign in" | User record → is it banned? locked? **Unlock Account** or **Set Password** (temporary, must-change) |
 | "Why can't I see X?" | Studio → Access → **Explain access** for that user + object |
