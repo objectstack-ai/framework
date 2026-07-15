@@ -87,6 +87,19 @@ export {
   type ResolveAuthzInput,
   type ResolveLocalizationInput,
 } from './resolve-authz-context.js';
+
+// ADR-0095 D2/D3 — the monotonic posture ladder: derivation from capability
+// grants + the rung→injection-rule mapping and its tested invariants.
+export {
+  POSTURE_LADDER,
+  POSTURE_RANK,
+  POSTURE_INJECTION_RULE,
+  derivePosture,
+  postureVisibleRows,
+  type PostureEvidence,
+  type LadderRow,
+  type LadderPrincipal,
+} from './posture-ladder.js';
 export { isAuthGateAllowlisted, evaluateAuthGate, type AuthGate } from './auth-gate.js';
 
 // ADR-0091 D1/D2 — grant validity windows, the shared resolution-time predicate.
