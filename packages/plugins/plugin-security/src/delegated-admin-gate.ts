@@ -259,7 +259,10 @@ export class DelegatedAdminGate {
    *     re-delegatable (chains are cut);
    *  5. the position is `delegatable: true`;
    *  6. the position distributes NO `adminScope`-carrying set (administration
-   *     is never self-delegated — that would bypass the D12 containment gate).
+   *     is never self-delegated — that would bypass the D12 containment gate);
+   *  7. [cloud#830 follow-up] if the delegation carries a `business_unit_id`
+   *     anchor, that anchor falls inside the delegator's OWN effective anchor
+   *     for the position — a delegation may NARROW visibility, never widen it.
    * The writer is stamped into `granted_by` (dual audit: `granted_by` = writer,
    * `delegated_from` = authority source).
    */
@@ -321,6 +324,36 @@ export class DelegatedAdminGate {
         deny(`you do not currently hold '${positionName}' — only a current holder may delegate it`, { position: positionName });
       }
 
+      // 4b. [cloud#830 follow-up] Anchor containment. `business_unit_id` is
+      //     visibility LOAD-BEARING (cloud#830 made it the readScope depth
+      //     anchor: a `unit`/`unit_and_below` holder sees the owner set rooted
+      //     at this BU). "Anchoring only narrows, never widens" must therefore
+      //     hold on THIS path too — otherwise a holder anchored at a low BU
+      //     could hand a co-conspirator an ANCESTOR BU and leak that whole
+      //     subtree's records, exceeding the delegator's own range (lateral
+      //     escalation). So a delegated anchor must fall inside the delegator's
+      //     OWN effective anchor for this position — same spirit as the D12
+      //     delegated-admin subtree check (assertAssignmentWrite). Fail-closed:
+      //     an anchor we cannot prove is inside the delegator's range is
+      //     refused. An unanchored delegation row keeps the prior behavior (the
+      //     delegate resolves to their own member BU — not a widening).
+      const rowAnchor =
+        row?.business_unit_id != null && row.business_unit_id !== '' ? String(row.business_unit_id) : null;
+      if (rowAnchor) {
+        const allowed = await this.delegatorAnchorSubtree(
+          String(ctx.userId),
+          holdings.filter((hd) => hd.direct),
+        );
+        if (!allowed.has(rowAnchor)) {
+          deny(
+            allowed.size === 0
+              ? `business unit anchor '${rowAnchor}' cannot be validated against your own '${positionName}' anchor — an anchor that cannot be proven within your own range is refused (cloud#830: anchoring only narrows)`
+              : `business unit anchor '${rowAnchor}' is outside your own effective anchor for '${positionName}' — a delegation may only narrow visibility, never widen it (cloud#830: anchoring only narrows)`,
+            { position: positionName, businessUnitId: rowAnchor },
+          );
+        }
+      }
+
       // 5. The position must opt in to delegation.
       if (!(await this.positionIsDelegatable(positionName))) {
         deny(`position '${positionName}' is not delegatable — set delegatable: true on the position to allow it`, { position: positionName });
@@ -341,12 +374,15 @@ export class DelegatedAdminGate {
 
   /** The actor's holdings of `positionName` that are inside their validity
    *  window, tagged `direct` when the holding itself did NOT arrive via
-   *  delegation (only a direct holding is re-delegatable). */
+   *  delegation (only a direct holding is re-delegatable) and carrying each
+   *  holding's own `businessUnitId` anchor (null = unanchored). The anchor of a
+   *  direct holding bounds what a self-delegation of that position may hand out
+   *  (cloud#830 — the anchor is visibility load-bearing). */
   private async activeHoldings(
     userId: string,
     positionName: string,
     now: number,
-  ): Promise<Array<{ direct: boolean }>> {
+  ): Promise<Array<{ direct: boolean; businessUnitId: string | null }>> {
     const ql = this.deps.ql;
     if (!ql?.find) return [];
     let rows: any[] = [];
@@ -361,7 +397,11 @@ export class DelegatedAdminGate {
     }
     return (Array.isArray(rows) ? rows : [])
       .filter((r) => isGrantActive(r, now))
-      .map((r) => ({ direct: r?.delegated_from == null || r.delegated_from === '' }));
+      .map((r) => ({
+        direct: r?.delegated_from == null || r.delegated_from === '',
+        businessUnitId:
+          r?.business_unit_id != null && r.business_unit_id !== '' ? String(r.business_unit_id) : null,
+      }));
   }
 
   private async positionIsDelegatable(positionName: string): Promise<boolean> {
@@ -690,18 +730,28 @@ export class DelegatedAdminGate {
 
   /** BU name → covered BU-id set (root + descendants when includeSubtree). */
   private async resolveSubtree(businessUnitName: string, includeSubtree: boolean): Promise<Set<string>> {
-    const ids = new Set<string>();
     const ql = this.deps.ql;
-    if (!ql?.find) return ids;
+    if (!ql?.find) return new Set<string>();
     let root: any = null;
     try {
       const roots = await ql.find('sys_business_unit', { where: { name: businessUnitName }, limit: 1, context: SYSTEM_CTX });
       root = Array.isArray(roots) && roots[0] ? roots[0] : null;
     } catch { root = null; }
-    if (!root?.id) return ids; // misconfigured scope → approves nothing (fail closed)
-    ids.add(String(root.id));
-    if (!includeSubtree) return ids;
-    let frontier: string[] = [String(root.id)];
+    if (!root?.id) return new Set<string>(); // misconfigured scope → approves nothing (fail closed)
+    if (!includeSubtree) return new Set<string>([String(root.id)]);
+    return this.resolveSubtreeById(String(root.id));
+  }
+
+  /** BU id → covered BU-id set (root id + all descendants). Subtree is always
+   *  walked: the delegator's readScope depth is not known on the delegation
+   *  path, so the whole subtree is the containment bound — matching the D12
+   *  admin subtree check. Fail-closed on unresolvable ids (empty set). */
+  private async resolveSubtreeById(rootId: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const ql = this.deps.ql;
+    if (!ql?.find || !rootId) return ids;
+    ids.add(String(rootId));
+    let frontier: string[] = [String(rootId)];
     for (let depth = 0; depth < MAX_TREE_DEPTH && frontier.length > 0; depth++) {
       let children: any[] = [];
       try {
@@ -719,6 +769,34 @@ export class DelegatedAdminGate {
       frontier = next;
     }
     return ids;
+  }
+
+  /** [cloud#830 follow-up] The union BU-subtree covered by the delegator's OWN
+   *  DIRECT holdings of a position: subtree(anchor) for each anchored holding,
+   *  plus subtree(member BU) for each unanchored holding (an unanchored holding
+   *  resolves the depth anchor to the holder's own membership). A self-delegated
+   *  `business_unit_id` anchor must fall inside this set. Fail-closed:
+   *  unresolvable holdings/memberships contribute nothing, so an anchor that
+   *  can't be proven inside the delegator's range is refused upstream. */
+  private async delegatorAnchorSubtree(
+    userId: string,
+    directHoldings: Array<{ businessUnitId: string | null }>,
+  ): Promise<Set<string>> {
+    const allowed = new Set<string>();
+    let memberSubtreeResolved = false;
+    for (const h of directHoldings) {
+      if (h.businessUnitId) {
+        for (const id of await this.resolveSubtreeById(h.businessUnitId)) allowed.add(id);
+      } else if (!memberSubtreeResolved) {
+        // An unanchored direct holding resolves to the delegator's own member
+        // BU(s); resolve those once (they don't vary by holding).
+        memberSubtreeResolved = true;
+        for (const bu of await this.businessUnitsOfUser(userId)) {
+          for (const id of await this.resolveSubtreeById(bu)) allowed.add(id);
+        }
+      }
+    }
+    return allowed;
   }
 
   /** Rows targeted by this write: `{ next, prev }` per row (prev = pre-image on update/delete). */

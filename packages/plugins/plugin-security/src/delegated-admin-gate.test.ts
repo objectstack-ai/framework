@@ -474,3 +474,136 @@ describe('DelegatedAdminGate — self-service delegation of duty (ADR-0091 D3)',
       .rejects.toThrow(/audience anchor/);
   });
 });
+
+// ── [cloud#830 follow-up] Self-delegation anchor containment ────────────────
+//
+// cloud#830 (C1 position-anchor) made sys_user_position.business_unit_id
+// visibility LOAD-BEARING: it is the readScope depth anchor, so a
+// `unit`/`unit_and_below` holder sees the owner set rooted at that BU (and, for
+// unit_and_below, its whole subtree). The self-delegation (D3) path stamped the
+// anchor without any subtree/source constraint, so a holder of a delegatable
+// non-admin position anchored at a LOW BU could delegate it to a co-conspirator
+// with an ANCESTOR/arbitrary-high anchor — leaking that BU's whole subtree,
+// beyond the delegator's own range (lateral visibility escalation). The fix
+// requires the delegated anchor to fall inside the delegator's OWN effective
+// anchor for the position (same spirit as the D12 delegated-admin subtree
+// check), fail-closed.
+//
+// Topology:
+//   hq (bu_hq)
+//   ├── east (bu_east)          ← u_boss's own approver anchor
+//   │   └── east_sales (bu_es)
+//   └── west (bu_west)
+function makeAnchoredDelegationHarness(nowMs = T0) {
+  const tables: Record<string, any[]> = {
+    sys_business_unit: [
+      { id: 'bu_hq', name: 'hq', parent_business_unit_id: null },
+      { id: 'bu_east', name: 'east', parent_business_unit_id: 'bu_hq' },
+      { id: 'bu_es', name: 'east_sales', parent_business_unit_id: 'bu_east' },
+      { id: 'bu_west', name: 'west', parent_business_unit_id: 'bu_hq' },
+    ],
+    sys_position: [{ id: 'p_appr', name: 'approver', delegatable: true }],
+    sys_permission_set: [{ id: 's_appr', name: 'approve_set' }],
+    sys_position_permission_set: [{ id: 'b_appr', position_id: 'p_appr', permission_set_id: 's_appr' }],
+    // u_boss holds approver DIRECTLY, anchored at east.
+    sys_user_position: [{ id: 'ha', user_id: 'u_boss', position: 'approver', business_unit_id: 'bu_east' }],
+    sys_business_unit_member: [{ id: 'm_boss', user_id: 'u_boss', business_unit_id: 'bu_es' }],
+    sys_user: [{ id: 'u_boss' }, { id: 'u_deleg' }],
+  };
+  const matches = (row: any, where: any): boolean =>
+    Object.entries(where ?? {}).every(([k, v]) => {
+      if (v && typeof v === 'object' && Array.isArray((v as any).$in)) return (v as any).$in.includes(row[k]);
+      return row[k] === v;
+    });
+  const ql = {
+    tables,
+    async find(object: string, opts: any) {
+      const rows = (tables[object] ?? []).filter((r) => matches(r, opts?.where));
+      return typeof opts?.limit === 'number' ? rows.slice(0, opts.limit) : rows;
+    },
+    async findOne(object: string, opts: any) {
+      return (tables[object] ?? []).filter((r) => matches(r, opts?.where))[0] ?? null;
+    },
+  } as any;
+  const gate = new DelegatedAdminGate({
+    ql,
+    resolveSets: async () => [{ name: 'member_default', objects: {} }],
+    now: () => nowMs,
+  });
+  const delegate = (userId: string, row: any) =>
+    gate.assert({ object: 'sys_user_position', operation: 'insert', data: row, context: { userId, positions: [] } });
+  const base = (extra: any) => ({
+    user_id: 'u_deleg', position: 'approver', delegated_from: 'u_boss',
+    valid_until: iso(nowMs + 5 * DAY), reason: 'coverage', ...extra,
+  });
+  return { gate, ql, tables, delegate, base };
+}
+
+describe('DelegatedAdminGate — self-delegation anchor containment (cloud#830 follow-up)', () => {
+  it('anchor equal to the delegator\'s own anchor (east) is allowed', async () => {
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_east' }))).resolves.toBeUndefined();
+  });
+
+  it('anchor inside the delegator\'s own subtree (east_sales) is allowed — narrowing', async () => {
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_es' }))).resolves.toBeUndefined();
+  });
+
+  it('anchor at an ANCESTOR BU (hq) is DENIED — a delegation may not widen visibility', async () => {
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_hq' })))
+      .rejects.toThrow(/only narrows|never widen/);
+  });
+
+  it('anchor at an UNRELATED sibling BU (west) is DENIED — outside your own effective anchor', async () => {
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_west' })))
+      .rejects.toThrow(/outside your own effective anchor/);
+  });
+
+  it('an unanchored delegation row keeps prior behavior (no anchor to widen)', async () => {
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({}))).resolves.toBeUndefined();
+  });
+
+  it('mutual delegation cannot cross ranges: neither direction may hand out the other\'s BU', async () => {
+    // u_boss anchored east may not delegate a west anchor…
+    const d = makeAnchoredDelegationHarness();
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_west' })))
+      .rejects.toThrow(/outside your own effective anchor/);
+    // …and a would-be west holder cannot reach east either (no east holding to source it).
+    d.tables.sys_user_position.push({ id: 'hb', user_id: 'u_deleg', position: 'approver', business_unit_id: 'bu_west' });
+    await expect(d.delegate('u_deleg', { user_id: 'u_boss', position: 'approver', delegated_from: 'u_deleg', valid_until: iso(T0 + 5 * DAY), reason: 'x', business_unit_id: 'bu_east' }))
+      .rejects.toThrow(/outside your own effective anchor/);
+  });
+
+  it('when the delegator holds the position UNANCHORED, the anchor is bounded by their MEMBER BU', async () => {
+    const d = makeAnchoredDelegationHarness();
+    // Drop the anchor on u_boss's own holding; boss is a member of east_sales.
+    d.tables.sys_user_position.find((r: any) => r.id === 'ha').business_unit_id = null;
+    // Member-BU (east_sales) or below is allowed…
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_es' }))).resolves.toBeUndefined();
+    // …but the parent (east) — above the member BU — is not.
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_east' })))
+      .rejects.toThrow(/outside your own effective anchor/);
+  });
+
+  it('fail-closed: an anchor that cannot be validated (delegator has no resolvable range) is refused', async () => {
+    const d = makeAnchoredDelegationHarness();
+    // Boss holds approver unanchored AND has no BU membership → no provable range.
+    d.tables.sys_user_position.find((r: any) => r.id === 'ha').business_unit_id = null;
+    d.tables.sys_business_unit_member.length = 0;
+    await expect(d.delegate('u_boss', d.base({ business_unit_id: 'bu_es' })))
+      .rejects.toThrow(/cannot be validated/);
+  });
+
+  it('a holding acquired VIA delegation cannot source an anchored re-delegation (chains stay cut)', async () => {
+    const d = makeAnchoredDelegationHarness();
+    // u_relay holds approver only via delegation, anchored east.
+    d.tables.sys_user.push({ id: 'u_relay' });
+    d.tables.sys_user_position.push({ id: 'hd', user_id: 'u_relay', position: 'approver', business_unit_id: 'bu_east', delegated_from: 'u_boss', valid_until: iso(T0 + 20 * DAY) });
+    await expect(d.delegate('u_relay', { user_id: 'u_deleg', position: 'approver', delegated_from: 'u_relay', valid_until: iso(T0 + 5 * DAY), reason: 'x', business_unit_id: 'bu_es' }))
+      .rejects.toThrow(/only via delegation/);
+  });
+});
