@@ -36,7 +36,12 @@ onlyBuiltDependencies:
 #   - @better-auth/oauth-provider: GHSA-p2fr-6hmx-4528 — same better-auth
 #     monorepo and same situation as @better-auth/scim above. `plugin-auth`
 #     depends on ^1.6.23; the fix first ships in the 1.7.0 pre-release line.
-#     Pin to 1.7.0-rc.1 for parity with @better-auth/scim.
+#     Pin to 1.7.0-rc.1. The 1.7 oauth-provider is exercised on the sign-in
+#     path and imports symbols (e.g. CLIENT_ASSERTION_TYPE) that only exist in
+#     @better-auth/core 1.7.x, so the ENTIRE better-auth family must move to
+#     1.7.0-rc.1 together — mixing a 1.7 plugin with 1.6.23 core 500s at
+#     runtime (dogfood sign-in). The full family is pinned below; revert all of
+#     them to a stable `^1.7.x` line the moment one ships.
 #   - uuid: GHSA-w5hq-g745-h8pq (high) — pulled 8.3.2 transitively; the fix
 #     first lands in 11.1.1. Pin to the ^11.1.1 LTS line (uuid `legacy-11`
 #     dist-tag) rather than the latest major to keep the jump conservative.
@@ -61,8 +66,18 @@ overrides:
   'tar@>=2.0.0 <7.5.11': '^7.5.11'
   'form-data@<4.0.6': '>=4.0.6'
   'undici@>=7.23.0 <7.28.0': '^7.28.0'
+  # better-auth family — kept on one line (see @better-auth/oauth-provider note).
+  'better-auth@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/core@<1.7.0-rc.1': '1.7.0-rc.1'
   '@better-auth/scim@<1.7.0-rc.1': '1.7.0-rc.1'
   '@better-auth/oauth-provider@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/sso@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/drizzle-adapter@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/kysely-adapter@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/memory-adapter@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/mongo-adapter@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/prisma-adapter@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/telemetry@<1.7.0-rc.1': '1.7.0-rc.1'
   'uuid@<11.1.1': '^11.1.1'
   'postcss@<8.5.10': '^8.5.10'
   'cookie@<0.7.0': '0.7.0'

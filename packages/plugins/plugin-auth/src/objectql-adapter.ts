@@ -334,6 +334,55 @@ export function createObjectQLAdapterFactory(rawDataEngine: IDataEngine) {
         }
         return records.length;
       },
+
+      // Atomic single-row consume (better-auth 1.7+). ObjectQL has no native
+      // `DELETE ... RETURNING`, so we find the single guarded row, delete it,
+      // and return the consumed record — a find-then-write mirror of `delete`.
+      consumeOne: async <T>(
+        { model, where }: { model: string; where: CleanedWhere[] },
+      ): Promise<T | null> => {
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
+
+        const record = await dataEngine.findOne(objectName, { where: filter });
+        if (!record) return null;
+        await dataEngine.delete(objectName, { where: { id: record.id } });
+        const norm = normaliseLegacyDates(model, record);
+        return (bridged ? remapKeys(norm, snakeToCamel) : norm) as T;
+      },
+
+      // Guarded counter mutation (better-auth 1.7+). ObjectQL has no native
+      // `SET n = n + $delta ... RETURNING`, so we read the guarded row, apply
+      // `field = field + delta` for each `increment` entry (negative deltas
+      // decrement) plus any absolute `set` values, and write it back. `where`
+      // is both selector and guard, so a non-matching guard returns null.
+      incrementOne: async <T>(
+        { model, where, increment, set }: {
+          model: string; where: CleanedWhere[];
+          increment: Record<string, number>; set?: Record<string, unknown>;
+        },
+      ): Promise<T | null> => {
+        const objectName = resolveProtocolName(model);
+        const bridged = objectName !== model;
+        const filter = convertWhere(bridged ? remapWhere(where) : where);
+
+        const record = await dataEngine.findOne(objectName, { where: filter });
+        if (!record) return null;
+
+        const patch: Record<string, any> = {};
+        for (const [field, delta] of Object.entries(increment)) {
+          const col = bridged ? camelToSnake(field) : field;
+          const current = Number((record as Record<string, any>)[col] ?? 0);
+          patch[col] = current + delta;
+        }
+        if (set) Object.assign(patch, bridged ? remapKeys(set, camelToSnake) : set);
+
+        const result = await dataEngine.update(objectName, { ...patch, id: record.id });
+        if (!result) return null;
+        const norm = normaliseLegacyDates(model, result);
+        return (bridged ? remapKeys(norm, snakeToCamel) : norm) as T;
+      },
     }),
   });
 }
