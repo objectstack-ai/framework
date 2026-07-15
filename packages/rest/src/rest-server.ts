@@ -1202,6 +1202,10 @@ export class RestServer {
                 permissions: authz.permissions,
                 systemPermissions: authz.systemPermissions,
                 ...(authz.tabPermissions ? { tabPermissions: authz.tabPermissions } : {}),
+                // [ADR-0095 D2 / #2947] Carry the derived posture rung so the
+                // enforcement side reads the SAME value the resolver computed,
+                // instead of dropping it here (the boundary this issue closes).
+                ...(authz.posture ? { posture: authz.posture } : {}),
                 isSystem: false,
                 org_user_ids: authz.org_user_ids,
                 ...(authGate ? { authGate } : {}),

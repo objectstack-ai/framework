@@ -203,6 +203,10 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
   if (authz.email) ctx.email = authz.email;
   if (authz.accessToken) ctx.accessToken = authz.accessToken;
   if (authz.tabPermissions) ctx.tabPermissions = authz.tabPermissions;
+  // [ADR-0095 D2 / #2947] Carry the derived posture rung down the runtime /
+  // MCP entry too, so this path and the REST path present enforcement the same
+  // value. Present only for an authenticated principal (guest → absent).
+  if (authz.posture) ctx.posture = authz.posture;
   (ctx as any).org_user_ids = authz.org_user_ids;
 
   // OAuth provenance: surface the token's granted scopes so the MCP

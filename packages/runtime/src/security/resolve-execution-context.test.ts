@@ -323,6 +323,9 @@ describe('resolveExecutionContext — platform-scoped (null-org) grants (ADR-006
     expect(ctx.tenantId).toBe('orgA');
     expect(ctx.permissions).toContain('admin_full_access');
     expect(ctx.systemPermissions).toContain('manage_platform_settings');
+    // [#2947] the derived posture rung is now CARRIED on the ctx (previously
+    // dropped at this entry). An unscoped admin_full_access grant → PLATFORM_ADMIN.
+    expect(ctx.posture).toBe('PLATFORM_ADMIN');
   });
 
   it('still drops a grant scoped to a DIFFERENT org', async () => {
@@ -331,6 +334,60 @@ describe('resolveExecutionContext — platform-scoped (null-org) grants (ADR-006
     expect(ctx.permissions).toContain('admin_full_access'); // global grant kept
     expect(ctx.permissions).not.toContain('other_org_set'); // foreign-org grant dropped
     expect(ctx.systemPermissions).not.toContain('should_not_appear');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [#2947 / ADR-0095 D2] The derived posture rung must be CARRIED down the HTTP /
+// MCP entry, not dropped. The rung itself is derived from CAPABILITY grants by
+// the shared authz resolver (asserted exhaustively in the posture-ladder tests);
+// here we only prove the value survives the ExecutionContext construction — i.e.
+// the enforcement side reads the SAME value the resolver computed.
+// ---------------------------------------------------------------------------
+describe('resolveExecutionContext — posture plumbing (#2947)', () => {
+  const RAW = 'osk_posture';
+  function makeQlFor(permissionSets: any[], userPermSets: any[]) {
+    const tables: Record<string, any[]> = {
+      sys_api_key: [{ id: 'k1', key: hashApiKey(RAW), revoked: false, user_id: 'u1', organization_id: 'orgA', expires_at: FUTURE }],
+      sys_member: [{ user_id: 'u1', organization_id: 'orgA', role: 'member' }],
+      sys_user_permission_set: userPermSets,
+      sys_permission_set: permissionSets,
+      sys_position: [], sys_position_permission_set: [], sys_user_position: [],
+    };
+    return {
+      async find(object: string, opts: any) {
+        const rows = tables[object] ?? [];
+        const where = opts?.where ?? {};
+        return rows.filter((row) => {
+          for (const [k, v] of Object.entries(where)) {
+            if (v !== null && typeof v === 'object') {
+              if (Array.isArray((v as any).$in) && !(v as any).$in.includes(row[k])) return false;
+              continue;
+            }
+            if ((v ?? null) !== (row[k] ?? null)) return false;
+          }
+          return true;
+        });
+      },
+    };
+  }
+  const opts = (ql: any) => ({ getService: async () => undefined, getQl: async () => ql, request: { headers: { 'x-api-key': RAW } } });
+
+  it('carries MEMBER for an ordinary principal (no admin / org-admin capability)', async () => {
+    const ql = makeQlFor(
+      [{ id: 'ps_basic', name: 'sales_rep', system_permissions: '[]', object_permissions: '{}' }],
+      [{ id: 'ups1', user_id: 'u1', permission_set_id: 'ps_basic', organization_id: null }],
+    );
+    const ctx = await resolveExecutionContext(opts(ql));
+    expect(ctx.userId).toBe('u1');
+    expect(ctx.permissions).not.toContain('admin_full_access');
+    expect(ctx.posture).toBe('MEMBER');
+  });
+
+  it('leaves posture UNSET for an anonymous (guest) request — no principal, no rung', async () => {
+    const ctx = await resolveExecutionContext(makeOpts([], {}));
+    expect(ctx.userId).toBeUndefined();
+    expect(ctx.posture).toBeUndefined();
   });
 });
 
