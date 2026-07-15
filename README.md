@@ -135,12 +135,8 @@ pnpm install
 # 2. Build all packages
 pnpm build
 
-# 3. Run tests
-pnpm test
-
-# 4. Start Documentation site
-pnpm docs:dev
-# → http://localhost:3000/docs
+# 4. Start ObjectStack Showcase
+pnpm dev
 ```
 
 ## Monorepo Scripts
