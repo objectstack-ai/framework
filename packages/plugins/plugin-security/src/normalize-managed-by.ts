@@ -17,10 +17,12 @@
  * `'config'` / `'user'`. Built-in position rows and declared package sets
  * self-heal on their own bootstrap upsert, so this only mops up the rest.
  *
- * Safe by construction: NO runtime path branches on the legacy values (every
- * read keys on `'package'` or `'platform'`, both unchanged by the rename), so
- * this is a pure display-vocabulary migration — it never changes an access
- * decision. Idempotent: canonical rows are skipped, so a re-run is a no-op.
+ * NOT purely cosmetic: the system-row write gate's provenance map
+ * (SYSTEM_ROW_PROVENANCE in security-plugin.ts) branches on `managed_by`
+ * values, so it must recognize BOTH the canonical and the legacy vocabulary —
+ * renaming a stored value without updating that map silently disarms the gate
+ * (#2926 ①). Keep the two in lockstep whenever this vocabulary changes.
+ * Idempotent: canonical rows are skipped, so a re-run is a no-op.
  * Best-effort and non-fatal, like the sibling boot reconcilers.
  *
  * Runs on `kernel:ready` after the seeders, as `isSystem` (the field is

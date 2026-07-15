@@ -113,13 +113,18 @@ const EMPTY_REQUIRED_PERMISSIONS: NormalizedRequiredPermissions = Object.freeze(
  * [ADR-0066 / #2918] Provenance spec for the platform/application asset objects
  * whose managed rows are write-protected by {@link SecurityPlugin.assertSystemRowWriteGate}.
  *
- * The two objects use DIFFERENT `managed_by` vocabularies but the same ownership
- * idea — a row authored by the platform or an application package is not the
- * admin's to delete or rewrite:
- *   • sys_position.managed_by   — `system` (platform built-in) / `config`
- *     (package declared) are managed; `user`/∅ (tenant-authored) are the admin's.
- *   • sys_capability.managed_by — `platform` / `package` are managed; `admin`
- *     (created in Setup) is the admin's.
+ * Both objects share the unified A4 (#2920) `managed_by` vocabulary — a row
+ * authored by the platform or an application package is not the admin's to
+ * delete or rewrite:
+ *   • `platform` / `package` are managed; `admin`/∅ (tenant-authored) rows are
+ *     the admin's.
+ *   • sys_position additionally keeps its LEGACY values `system` (→ platform)
+ *     and `config` (→ package) in the managed map: the boot normalizer
+ *     (normalize-managed-by.ts) heals stored rows to the canonical vocabulary,
+ *     but rows written before the normalizer runs — or in a store it has not
+ *     touched yet — must not lose protection in the interim. Dropping the
+ *     legacy keys here is what silently disarmed this gate for sys_position
+ *     after the A4 rename (#2926 ①).
  * The map value for each managed `managed_by` is the human owner label used in
  * the (business-message-only) deny text.
  */
@@ -130,7 +135,13 @@ const SYSTEM_ROW_PROVENANCE: Record<
   sys_position: {
     noun: 'position',
     pluralNoun: 'positions',
-    managed: { system: 'the platform', config: 'an application package' },
+    managed: {
+      platform: 'the platform',
+      package: 'an application package',
+      // Legacy pre-A4 values — keep guarded until every store is normalized.
+      system: 'the platform',
+      config: 'an application package',
+    },
   },
   sys_capability: {
     noun: 'capability',

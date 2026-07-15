@@ -224,9 +224,10 @@ export const SysPosition = ObjectSchema.create({
     // built-in identity position (seeded by bootstrapBuiltinRoles, read-only);
     // `package` = stack/package-declared; `admin` = tenant-created in Setup.
     // Back-compat: legacy rows may carry system (== platform) / config (== package)
-    // / user (== admin); no runtime path branches on those (every read keys on
-    // 'package' / 'platform'), and the boot normalizer heals them to the canonical
-    // vocab. Built-in (`platform`) rows self-heal on the next bootstrap upsert.
+    // / user (== admin); the boot normalizer heals them to the canonical vocab, and
+    // the system-row write gate (SYSTEM_ROW_PROVENANCE, security-plugin.ts) guards
+    // both vocabularies — keep it in lockstep with any change here (#2926 ①).
+    // Built-in (`platform`) rows self-heal on the next bootstrap upsert.
     managed_by: Field.select({
       label: 'Managed By',
       readonly: true,

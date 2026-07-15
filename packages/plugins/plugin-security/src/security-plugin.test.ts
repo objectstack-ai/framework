@@ -1428,24 +1428,48 @@ describe('SecurityPlugin', () => {
       return harness.run(opCtx);
     };
 
-    it('DENIES deleting a platform-managed position (sys_position managed_by:system)', async () => {
+    it('DENIES deleting a platform-managed position (sys_position managed_by:platform)', async () => {
       const opCtx: any = {
         object: 'sys_position', operation: 'delete',
         options: { where: { id: 'pos_admin' } }, context: adminCtx,
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'platform' })),
       ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
-    it('DENIES updating a package-declared position (sys_position managed_by:config)', async () => {
+    it('DENIES updating a package-declared position (sys_position managed_by:package)', async () => {
       const opCtx: any = {
         object: 'sys_position', operation: 'update',
         data: { id: 'pos_sales', label: 'renamed' }, options: { where: { id: 'pos_sales' } },
         context: adminCtx,
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_sales', name: 'sales_rep', managed_by: 'config' })),
+        runGate(opCtx, () => ({ id: 'pos_sales', name: 'sales_rep', managed_by: 'package' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    // [#2926 ①] Regression: the A4 rename (system→platform, config→package) once
+    // disarmed this gate because the provenance map only knew the legacy values.
+    // Rows the boot normalizer has not healed yet must STAY protected too.
+    it('KEEPS denying legacy-vocab managed positions (managed_by:system, pre-normalizer rows)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { id: 'pos_legacy' } }, context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_legacy', name: 'everyone', managed_by: 'system' })),
+      ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('KEEPS denying legacy-vocab managed positions (managed_by:config, pre-normalizer rows)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'update',
+        data: { id: 'pos_legacy2', label: 'renamed' }, options: { where: { id: 'pos_legacy2' } },
+        context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_legacy2', name: 'sales_rep', managed_by: 'config' })),
       ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
@@ -1470,13 +1494,23 @@ describe('SecurityPlugin', () => {
       ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
-    it('ALLOWS deleting an admin-authored position (sys_position managed_by:user)', async () => {
+    it('ALLOWS deleting an admin-authored position (sys_position managed_by:admin)', async () => {
       const opCtx: any = {
         object: 'sys_position', operation: 'delete',
         options: { where: { id: 'pos_user' } }, context: adminCtx,
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_user', name: 'my_team', managed_by: 'user' })),
+        runGate(opCtx, () => ({ id: 'pos_user', name: 'my_team', managed_by: 'admin' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('ALLOWS deleting a legacy admin-authored position (managed_by:user, pre-normalizer)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'delete',
+        options: { where: { id: 'pos_user_legacy' } }, context: adminCtx,
+      };
+      await expect(
+        runGate(opCtx, () => ({ id: 'pos_user_legacy', name: 'my_team', managed_by: 'user' })),
       ).resolves.toBeDefined();
     });
 
@@ -1502,10 +1536,18 @@ describe('SecurityPlugin', () => {
       ).resolves.toBeDefined();
     });
 
-    it('DENIES an admin-door insert that forges platform provenance (sys_position managed_by:system)', async () => {
+    it('DENIES an admin-door insert that forges platform provenance (sys_position managed_by:platform)', async () => {
       const opCtx: any = {
         object: 'sys_position', operation: 'insert',
-        data: { name: 'forged', managed_by: 'system' }, context: adminCtx,
+        data: { name: 'forged', managed_by: 'platform' }, context: adminCtx,
+      };
+      await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('DENIES an admin-door insert that forges LEGACY platform provenance (managed_by:system)', async () => {
+      const opCtx: any = {
+        object: 'sys_position', operation: 'insert',
+        data: { name: 'forged_legacy', managed_by: 'system' }, context: adminCtx,
       };
       await expect(runGate(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
@@ -1549,14 +1591,14 @@ describe('SecurityPlugin', () => {
         context: adminCtx,
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_admin', managed_by: 'system' })),
+        runGate(opCtx, () => ({ id: 'pos_admin', managed_by: 'platform' })),
       ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
     it('ALLOWS a filter delete that matches only admin-authored rows (probe finds none)', async () => {
       const opCtx: any = {
         object: 'sys_position', operation: 'delete',
-        options: { where: { managed_by: 'user' } },
+        options: { where: { managed_by: 'admin' } },
         context: adminCtx,
       };
       // The managed-row probe finds nothing → the write proceeds.
@@ -1570,7 +1612,7 @@ describe('SecurityPlugin', () => {
         context: {}, // no roles, no permissions, no userId, not isSystem
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'platform' })),
       ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
@@ -1581,7 +1623,7 @@ describe('SecurityPlugin', () => {
         context: { isSystem: true },
       };
       await expect(
-        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'system' })),
+        runGate(opCtx, () => ({ id: 'pos_admin', name: 'platform_admin', managed_by: 'platform' })),
       ).resolves.toBeDefined();
     });
   });
