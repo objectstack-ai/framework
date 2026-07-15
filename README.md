@@ -12,7 +12,7 @@ ObjectStack (this repo)  →  for builders — the open-source protocol, toolkit
 ObjectOS                 →  for end users — the commercial runtime environment (Cloud & Enterprise)
 ```
 
-This repo is the **framework**: the protocol, kernel, SDK, CLI, and production runtime you build — and ship — with. `os start` or the official Docker image [`ghcr.io/objectstack-ai/objectstack`](./docker) runs your compiled app in production, Console and governance included, entirely on open source. For a managed, organization-scale runtime environment (multi-environment control plane, provisioning, marketplace), deploy to **[ObjectOS](https://docs.objectos.ai)** — the commercial Cloud & Enterprise product. · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
+This repo is the **framework**: the protocol, kernel, SDK, CLI, and production runtime you build — and ship — with. `os start` or the official Docker image [`ghcr.io/objectstack-ai/objectstack`](./docker) runs your compiled app in production, Console and governance included, entirely on open source.  · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
 
 <p align="center">
   <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents, governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
