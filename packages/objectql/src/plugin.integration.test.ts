@@ -1262,4 +1262,64 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(row.tenant_id).toBe('org-7');
     });
   });
+
+  // #2948 — static `readonly:true` fields must not be writable via a
+  // NON-system UPDATE. The strip is caller-supplied-only, so server stamps
+  // (updated_by) written by the audit hook survive; system context is exempt.
+  describe('Static readonly write enforcement on UPDATE (#2948)', () => {
+    async function bootWithCapture() {
+      const updates: Record<string, any>[] = [];
+      const mockDriver = {
+        name: 'ro-capture', version: '1.0.0',
+        connect: async () => {}, disconnect: async () => {},
+        find: async () => [], findOne: async () => null,
+        create: async (_o: string, d: any) => ({ id: 'rec-1', ...d }),
+        update: async (_o: string, _i: any, d: any) => { updates.push({ ...d }); return { id: _i, ...d }; },
+        delete: async () => true, syncSchema: async () => {},
+      };
+      await kernel.use({
+        name: 'ro-capture-plugin', type: 'driver', version: '1.0.0',
+        init: async (ctx) => { ctx.registerService('driver.ro-capture', mockDriver); },
+      });
+      await kernel.use(new ObjectQLPlugin());
+      await kernel.bootstrap();
+      const objectql = kernel.getService('objectql') as any;
+      const obj: ObjectSchema = {
+        name: 'ro_obj', label: 'RO Obj', datasource: 'ro-capture',
+        fields: {
+          name: { name: 'name', label: 'Name', type: 'text' },
+          // a statically read-only business column (e.g. a provenance stamp)
+          locked: { name: 'locked', label: 'Locked', type: 'text', readonly: true } as any,
+          updated_by: { name: 'updated_by', label: 'Updated By', type: 'text', readonly: true } as any,
+        },
+      };
+      objectql.registry.registerObject(obj, 'test', 'test');
+      return { objectql, updates };
+    }
+
+    it('drops a user-context write to a static readonly field, but keeps the server updated_by stamp', async () => {
+      const { objectql, updates } = await bootWithCapture();
+      await objectql.update(
+        'ro_obj',
+        { id: 'rec-1', name: 'new-name', locked: 'attacker-value' },
+        { context: { userId: 'user-9', tenantId: 'org-1' } },
+      );
+      expect(updates.length).toBe(1);
+      const data = updates[0];
+      expect(data.name).toBe('new-name');           // editable field written
+      expect(data).not.toHaveProperty('locked');    // readonly forge stripped
+      expect(data.updated_by).toBe('user-9');        // server stamp survived
+    });
+
+    it('ALLOWS a system-context write to the same static readonly field', async () => {
+      const { objectql, updates } = await bootWithCapture();
+      await objectql.update(
+        'ro_obj',
+        { id: 'rec-1', locked: 'legitimate-migration-value' },
+        { context: { isSystem: true } },
+      );
+      expect(updates.length).toBe(1);
+      expect(updates[0].locked).toBe('legitimate-migration-value');
+    });
+  });
 });

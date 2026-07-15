@@ -6,6 +6,7 @@ import {
   needsPriorRecord,
   legalNextStates,
   stripReadonlyWhenFields,
+  stripReadonlyFields,
 } from './rule-validator.js';
 import { ValidationError } from './record-validator.js';
 
@@ -53,6 +54,46 @@ describe('stripReadonlyWhenFields (B2)', () => {
   it('returns the same object when no readonlyWhen fields are touched', () => {
     const d = { x: 1 };
     expect(stripReadonlyWhenFields({ fields: { x: { type: 'number' } } }, d, null)).toBe(d);
+  });
+});
+
+// #2948 — static `readonly:true` write enforcement (caller-supplied only).
+const stampedFields = {
+  fields: {
+    title: { type: 'text' },
+    created_by: { type: 'lookup', readonly: true },
+    updated_by: { type: 'lookup', readonly: true },
+  },
+};
+
+describe('stripReadonlyFields (#2948)', () => {
+  it('drops a caller-supplied write to a static readonly field', () => {
+    const supplied = new Set(['title', 'created_by']);
+    const out = stripReadonlyFields(stampedFields, { title: 'x', created_by: 'attacker' }, supplied);
+    expect(out).toEqual({ title: 'x' });
+  });
+
+  it('KEEPS a readonly field the caller did NOT supply (server stamp survives)', () => {
+    // `updated_by` was written into `data` by the audit-stamp hook, not the
+    // caller — it must not be stripped.
+    const supplied = new Set(['title']);
+    const out = stripReadonlyFields(stampedFields, { title: 'x', updated_by: 'u1' }, supplied);
+    expect(out).toEqual({ title: 'x', updated_by: 'u1' });
+  });
+
+  it('returns the SAME object when nothing is stripped', () => {
+    const d = { title: 'x' };
+    expect(stripReadonlyFields(stampedFields, d, new Set(['title']))).toBe(d);
+  });
+
+  it('drops a caller-forged readonly field even when it also carries a server stamp key', () => {
+    const supplied = new Set(['title', 'created_by']);
+    const out = stripReadonlyFields(
+      stampedFields,
+      { title: 'x', created_by: 'attacker', updated_by: 'u1' },
+      supplied,
+    );
+    expect(out).toEqual({ title: 'x', updated_by: 'u1' });
   });
 });
 

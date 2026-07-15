@@ -31,7 +31,7 @@ import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
 import { validateRecord, normalizeMultiValueFields, coerceBooleanFields } from './validation/record-validator.js';
-import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields } from './validation/rule-validator.js';
+import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields, stripReadonlyFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
 interface FormulaPlanEntry { name: string; expression: Expression; }
@@ -2357,6 +2357,14 @@ export class ObjectQL implements IDataEngine {
        context: options?.context,
      };
 
+     // [#2948] Snapshot the keys the CALLER supplied, BEFORE any middleware /
+     // beforeUpdate hook stamps server-managed columns (owner/tenant stamp,
+     // `updated_by`/`updated_at`). The static-`readonly` strip below drops only
+     // caller-supplied read-only writes, so hook/middleware stamps survive.
+     const suppliedKeys: ReadonlySet<string> = new Set(
+       Object.keys((opCtx.data ?? {}) as Record<string, unknown>),
+     );
+
      await this.executeWithMiddleware(opCtx, async () => {
        const hookContext: HookContext = {
           object,
@@ -2395,6 +2403,14 @@ export class ObjectQL implements IDataEngine {
                // field is read-only for this record's state, so the incoming
                // change is ignored (the persisted value is kept).
                hookContext.input.data = stripReadonlyWhenFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, priorRecord, this.logger) as any;
+               // [#2948] Enforce STATIC `readonly` on the write path for
+               // non-system callers (system writes legitimately set read-only
+               // columns and are exempt). Runs AFTER hooks/middleware stamped
+               // their columns; `suppliedKeys` ensures only caller-forged
+               // read-only writes are dropped, never the server stamps.
+               if (!opCtx.context?.isSystem) {
+                   hookContext.input.data = stripReadonlyFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, suppliedKeys, this.logger) as any;
+               }
                evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous: priorRecord, logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
@@ -2406,6 +2422,13 @@ export class ObjectQL implements IDataEngine {
                // cross_field rules are skipped here; warn so the gap is visible.
                if (needsPriorRecord(updateSchema as any)) {
                    this.logger.warn('Object-level validation rules (state_machine/cross_field/script) are not enforced on multi-row updates', { object });
+               }
+               // [#2948] Same static-`readonly` write guard on the bulk path —
+               // a forged read-only column in a multi-row update is dropped for
+               // non-system callers (a foreign `organization_id` is additionally
+               // rejected upstream by the tenant write wall, #2946).
+               if (!opCtx.context?.isSystem) {
+                   hookContext.input.data = stripReadonlyFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, suppliedKeys, this.logger) as any;
                }
                const ast: QueryAST = { object, where: options.where };
                result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
