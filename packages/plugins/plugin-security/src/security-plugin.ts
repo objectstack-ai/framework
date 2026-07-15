@@ -1362,44 +1362,9 @@ export class SecurityPlugin implements Plugin {
           ctx.logger.warn('[security] declared-permission seeding failed', { error: (e as Error).message });
         }
 
-        // [ADR-0090 D5] Bind the configured baseline set to the `everyone`
-        // audience anchor (idempotent). This makes the CLI/dev fallback
-        // (`fallbackPermissionSet` — the app's `isDefault` suggestion) visible
-        // as an ordinary position binding: same table, same audit path, same
-        // explain surface as any admin-authored default grant. The binding is
-        // validated with the SAME high-privilege predicate the write gate
-        // enforces — a dangerous baseline is refused loudly, never seeded.
-        try {
-          if (this.fallbackPermissionSet) {
-            const boot = this.bootstrapPermissionSets.find((p) => p.name === this.fallbackPermissionSet);
-            const offending = boot ? describeHighPrivilegeBits(boot) : null;
-            if (offending) {
-              ctx.logger.warn('[security] refusing to bind fallback set to everyone — high-privilege bits', {
-                set: this.fallbackPermissionSet, offending,
-              });
-            } else {
-              const everyoneRows = await ql.find('sys_position', { where: { name: 'everyone' }, limit: 1, context: { isSystem: true } });
-              const everyone: any = Array.isArray(everyoneRows) && everyoneRows[0] ? everyoneRows[0] : null;
-              const setRows = await ql.find('sys_permission_set', { where: { name: this.fallbackPermissionSet }, limit: 1, context: { isSystem: true } });
-              const set: any = Array.isArray(setRows) && setRows[0] ? setRows[0] : null;
-              if (everyone?.id && set?.id) {
-                const existing = await ql.find('sys_position_permission_set', {
-                  where: { position_id: everyone.id, permission_set_id: set.id }, limit: 1, context: { isSystem: true },
-                });
-                if (!(Array.isArray(existing) && existing[0])) {
-                  await ql.insert('sys_position_permission_set', {
-                    id: `pps_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
-                    position_id: everyone.id,
-                    permission_set_id: set.id,
-                  }, { context: { isSystem: true } });
-                  ctx.logger.info('[security] baseline set bound to everyone anchor (ADR-0090 D5)', { set: this.fallbackPermissionSet });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          ctx.logger.warn('[security] everyone-anchor baseline binding failed (non-fatal)', { error: (e as Error).message });
-        }
+        // [ADR-0090 D5] The baseline→`everyone` binding runs LATER — after
+        // `bootstrapBuiltinRoles` seeds the `everyone` anchor (the anchor must
+        // exist before it can be bound). See `bindFallbackToEveryone` below.
         // [ADR-0086 P2 — 块1] Register the publish-time materializer so a
         // permission set authored/edited through the PACKAGE door (saved as a
         // `permission` draft, then published) lands in sys_permission_set with
@@ -1492,6 +1457,47 @@ export class SecurityPlugin implements Plugin {
           await bootstrapBuiltinRoles(ql, { logger: ctx.logger });
         } catch (e) {
           ctx.logger.warn('[security] built-in role seeding failed', { error: (e as Error).message });
+        }
+        // [ADR-0090 D5] Bind the configured baseline set to the `everyone`
+        // audience anchor (idempotent). This makes the CLI/dev fallback
+        // (`fallbackPermissionSet` — the app's `isDefault` set) visible as an
+        // ordinary position binding: same table, same audit path, same explain
+        // surface as any admin-authored default grant. The binding is validated
+        // with the SAME high-privilege predicate the write gate enforces — a
+        // dangerous baseline is refused loudly, never seeded. MUST run after
+        // `bootstrapBuiltinRoles` (which seeds the `everyone` anchor) and before
+        // `syncAudienceBindingSuggestions` (so the app's own fallback set is
+        // already bound and never generates a redundant pending suggestion).
+        try {
+          if (this.fallbackPermissionSet) {
+            const boot = this.bootstrapPermissionSets.find((p) => p.name === this.fallbackPermissionSet);
+            const offending = boot ? describeHighPrivilegeBits(boot) : null;
+            if (offending) {
+              ctx.logger.warn('[security] refusing to bind fallback set to everyone — high-privilege bits', {
+                set: this.fallbackPermissionSet, offending,
+              });
+            } else {
+              const everyoneRows = await ql.find('sys_position', { where: { name: 'everyone' }, limit: 1, context: { isSystem: true } });
+              const everyone: any = Array.isArray(everyoneRows) && everyoneRows[0] ? everyoneRows[0] : null;
+              const setRows = await ql.find('sys_permission_set', { where: { name: this.fallbackPermissionSet }, limit: 1, context: { isSystem: true } });
+              const set: any = Array.isArray(setRows) && setRows[0] ? setRows[0] : null;
+              if (everyone?.id && set?.id) {
+                const existing = await ql.find('sys_position_permission_set', {
+                  where: { position_id: everyone.id, permission_set_id: set.id }, limit: 1, context: { isSystem: true },
+                });
+                if (!(Array.isArray(existing) && existing[0])) {
+                  await ql.insert('sys_position_permission_set', {
+                    id: `pps_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+                    position_id: everyone.id,
+                    permission_set_id: set.id,
+                  }, { context: { isSystem: true } });
+                  ctx.logger.info('[security] baseline set bound to everyone anchor (ADR-0090 D5)', { set: this.fallbackPermissionSet });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          ctx.logger.warn('[security] everyone-anchor baseline binding failed (non-fatal)', { error: (e as Error).message });
         }
         // [ADR-0090 D5/D9] Reconcile the suggested-audience-binding surface:
         // every declared `isDefault: true` set that is not already bound to
