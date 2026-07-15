@@ -47,7 +47,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_DATABASE_URL` | url | — | Database connection string (e.g. `file:./data.sqlite`, `postgres://…`, `mongodb://…`, `memory://`). `libsql://` (Turso) is not dispatched by the open-core runtime — that driver ships separately in the ObjectStack Cloud distribution. |
+| `OS_DATABASE_URL` | url | — | Database connection string (e.g. `file:./data.sqlite`, `postgres://…`, `mongodb://…`, `memory://`). `libsql://` (Turso) is not dispatched by the open-core runtime — that driver ships separately in the commercial ObjectOS distribution. |
 | `OS_DATABASE_DRIVER` | enum | inferred | Force a specific driver when the URL is ambiguous. `memory` \| `sqlite` \| `sqlite-wasm` \| `postgres` \| `mongodb`. |
 | `OS_STORAGE_ROOT` | path | `./.objectstack/data/uploads` | Root directory for the local file storage adapter, relative to the process cwd (used by `os serve`'s default `storage` capability wiring). |
 | `OS_ARTIFACT_PATH` | path | — | Path or `http(s)://` URL to a compiled `objectstack.json` artifact to boot the kernel from. |
@@ -249,7 +249,7 @@ OS_MCP_SERVER_ENABLED=true os start     # additionally auto-start the stdio tran
 ## Multi-tenant / Cloud control plane
 
 These variables are only meaningful when running in `OS_MODE=cloud` or against
-the hosted ObjectStack Cloud control plane.
+the hosted ObjectOS Cloud control plane.
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
