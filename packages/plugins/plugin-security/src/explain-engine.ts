@@ -49,30 +49,56 @@ function kernelTierOf(layer: ExplainLayer['layer']): 'layer_0_tenant' | 'layer_1
   return layer === 'tenant_isolation' ? 'layer_0_tenant' : 'layer_1_business';
 }
 
+const AUTHZ_POSTURES: ReadonlySet<string> = new Set<AuthzPosture>([
+  'PLATFORM_ADMIN',
+  'TENANT_ADMIN',
+  'MEMBER',
+  'EXTERNAL',
+]);
+function isAuthzPosture(v: unknown): v is AuthzPosture {
+  return typeof v === 'string' && AUTHZ_POSTURES.has(v);
+}
+
 /**
- * [C2 / ADR-0095 D2/D3] Resolve the principal's posture rung. The
- * PLATFORM_ADMIN / TENANT_ADMIN / MEMBER tiers delegate to the single core
- * derivation ({@link deriveAdminPosture}, `@objectstack/core`) so the admin-tier
- * logic has ONE source of truth (B4/D3 — derived from held capability grants,
- * never a better-auth role, closing the #2836 dual-track by construction).
+ * [C2 / ADR-0095 D2/D3] Resolve the principal's posture rung, using the SAME
+ * evidence enforcement uses so the explain panel's tier can never sit HIGHER
+ * than the runtime's (label-drift elimination — security review low-severity).
  *
- * Explain layers one thing on top the enforcement resolver deliberately does
- * NOT: an anonymous / guest principal is represented as EXTERNAL for the
- * debugger. The enforcement posture resolver's floor is MEMBER (no external
- * principal type exists yet — ADR-0095 D2), so this guest→EXTERNAL mapping lives
- * here, in the explanation surface, rather than in `resolveAuthzContext`.
+ * Order of preference:
+ *
+ *  1. **guest / anonymous → EXTERNAL.** Explain layers one thing on top the
+ *     enforcement resolver deliberately does NOT: a guest principal is EXTERNAL
+ *     for the debugger. The enforcement floor is MEMBER (no external principal
+ *     type exists yet — ADR-0095 D2), so this mapping lives here, and it wins
+ *     first.
+ *  2. **Reuse `ctx.posture` verbatim when present.** A principal resolved through
+ *     the full `resolveAuthzContext` already carries the enforcement-derived
+ *     rung; consuming it directly makes drift structurally impossible.
+ *  3. **Fallback — re-derive from capability-grant evidence.** The explain API's
+ *     `buildContextForUser` builds a context WITHOUT running the full
+ *     `resolveAuthzContext`, so no `posture` is attached. We then derive from the
+ *     SAME evidence `resolveAuthzContext` uses — NOT the previous loose
+ *     permission-set-NAME match:
+ *       - `PLATFORM_ADMIN` ← the **unscoped `admin_full_access` USER grant**
+ *         (`hasPlatformAdminGrant`, computed by `buildContextForUser` byte-for-
+ *         byte as `resolveAuthzContext` computes it), OR the `platform_admin`
+ *         built-in position (which is itself only ever PROJECTED from that same
+ *         grant — ADR-0068 D2). A merely-SCOPED `admin_full_access` grant (name
+ *         present in `permissions`, not held unscoped) no longer over-labels.
+ *       - `TENANT_ADMIN` ← the `organization_admin` **capability** grant, exactly
+ *         like enforcement (ADR-0095 D3). The better-auth `org_owner`/`org_admin`
+ *         role positions are a provisioning source only and are no longer read
+ *         as posture evidence — closing the same #2836 dual-track explain-side.
  */
 function derivePosture(context: any): AuthzPosture {
+  if (!context?.userId || context?.principalKind === 'guest') return 'EXTERNAL';
+  if (isAuthzPosture(context?.posture)) return context.posture;
   const positions: string[] = Array.isArray(context?.positions) ? context.positions : [];
   const permissions: string[] = Array.isArray(context?.permissions) ? context.permissions : [];
-  if (!context?.userId || context?.principalKind === 'guest') return 'EXTERNAL';
   return deriveAdminPosture({
     isPlatformAdmin:
-      positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN) || permissions.includes(ADMIN_FULL_ACCESS),
-    isTenantAdmin:
-      positions.includes('org_owner') ||
-      positions.includes('org_admin') ||
-      permissions.includes(ORGANIZATION_ADMIN),
+      context?.hasPlatformAdminGrant === true || positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN),
+    isTenantAdmin: permissions.includes(ORGANIZATION_ADMIN),
   });
 }
 
@@ -206,11 +232,25 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
       }
     }
   } catch { /* table unavailable → positions stay empty */ }
+  // [ADR-0095 D3 / ADR-0068 D2] platform_admin posture is DERIVED from an
+  // UNSCOPED (`organization_id == null`) `admin_full_access` USER grant — the
+  // single source of truth enforcement (`resolveAuthzContext.hasPlatformAdminGrant`)
+  // trusts. We compute it here with the IDENTICAL rule so the explain panel's
+  // posture cannot sit higher than enforcement's: a merely org-SCOPED
+  // admin_full_access grant must NOT confer platform_admin.
+  let hasPlatformAdminGrant = false;
   try {
     const grants = await ql.find('sys_user_permission_set', { where: { user_id: userId }, limit: 500, context: SYSTEM_CTX });
     const grantRows = (Array.isArray(grants) ? grants : []) as any[];
     const activeRows = grantRows.filter((g) => isGrantActive(g, nowMs));
     const expiredRows = grantRows.filter((g) => !isGrantActive(g, nowMs) && isGrantExpired(g, nowMs));
+    // permission-set-ids held via an UNSCOPED active user grant (org == null).
+    const unscopedActiveIds = new Set<string>(
+      activeRows
+        .filter((g) => ((g?.organization_id ?? g?.organizationId) ?? null) === null)
+        .map((g: any) => String(g?.permission_set_id ?? g?.permissionSetId ?? ''))
+        .filter(Boolean),
+    );
     const ids = [...activeRows, ...expiredRows].map((g: any) => g?.permission_set_id).filter(Boolean);
     if (ids.length > 0) {
       const sets = await ql.find('sys_permission_set', { where: { id: { $in: ids } }, limit: ids.length, context: SYSTEM_CTX });
@@ -219,8 +259,12 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
         if ((s as any)?.id && (s as any)?.name) nameById.set(String((s as any).id), String((s as any).name));
       }
       for (const g of activeRows) {
-        const n = nameById.get(String(g?.permission_set_id ?? ''));
+        const id = String(g?.permission_set_id ?? '');
+        const n = nameById.get(id);
         if (n && !permissions.includes(n)) permissions.push(n);
+        // Same predicate as resolveAuthzContext: name is admin_full_access AND
+        // the granting row is an unscoped user grant.
+        if (n === ADMIN_FULL_ACCESS && unscopedActiveIds.has(id)) hasPlatformAdminGrant = true;
       }
       for (const g of expiredRows) {
         const n = nameById.get(String(g?.permission_set_id ?? ''));
@@ -230,7 +274,7 @@ export async function buildContextForUser(ql: any, userId: string, nowMs: number
   } catch { /* ignore */ }
   // [ADR-0090 D5] Authenticated principals implicitly hold the everyone anchor.
   if (!positions.includes('everyone')) positions.push('everyone');
-  return { userId, positions, permissions, expiredGrants, delegatedPositions };
+  return { userId, positions, permissions, expiredGrants, delegatedPositions, hasPlatformAdminGrant };
 }
 
 /**

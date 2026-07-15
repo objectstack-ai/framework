@@ -304,6 +304,60 @@ describe('explainAccess — record-grained (C2 / ADR-0095)', () => {
   });
 });
 
+describe('posture derivation aligns with enforcement (label-drift elimination)', () => {
+  // posture is surfaced whenever a recordId is supplied; the record-grained deps
+  // are irrelevant to the posture value, so the base object-level deps suffice.
+  const postureOf = async (context: any): Promise<string | undefined> => {
+    const d = await explainAccess(makeDeps({ sets: [ADMIN] }), {
+      object: 'leave_request',
+      operation: 'read',
+      context,
+      recordId: 'r1',
+    });
+    return d.principal.posture;
+  };
+
+  it('reuses ctx.posture verbatim when enforcement already resolved it', async () => {
+    // A principal resolved through resolveAuthzContext carries ctx.posture — the
+    // explain panel must echo it, never re-derive a different tier.
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: [], posture: 'PLATFORM_ADMIN' })).toBe('PLATFORM_ADMIN');
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: [], posture: 'TENANT_ADMIN' })).toBe('TENANT_ADMIN');
+    // Explicit posture wins over what the loose fallback would have guessed.
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: ['admin_full_access'], posture: 'MEMBER' })).toBe('MEMBER');
+  });
+
+  it('a merely-SCOPED admin_full_access grant no longer over-labels as PLATFORM_ADMIN', async () => {
+    // Name present in `permissions` but NOT held as an unscoped grant and NOT the
+    // projected platform_admin position → MEMBER, matching enforcement (which
+    // requires hasPlatformAdminGrant = unscoped admin_full_access user grant).
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: ['admin_full_access'] })).toBe('MEMBER');
+  });
+
+  it('the unscoped-grant flag (hasPlatformAdminGrant) DOES yield PLATFORM_ADMIN', async () => {
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: ['admin_full_access'], hasPlatformAdminGrant: true })).toBe('PLATFORM_ADMIN');
+  });
+
+  it('the projected platform_admin built-in position still yields PLATFORM_ADMIN', async () => {
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['platform_admin', 'everyone'], permissions: [] })).toBe('PLATFORM_ADMIN');
+  });
+
+  it('org_owner / org_admin better-auth role positions no longer confer TENANT_ADMIN (ADR-0095 D3)', async () => {
+    // The role is a provisioning source, not posture evidence. Absent the
+    // organization_admin CAPABILITY these resolve to MEMBER, as enforcement does.
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['org_admin', 'everyone'], permissions: [] })).toBe('MEMBER');
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['org_owner', 'everyone'], permissions: [] })).toBe('MEMBER');
+  });
+
+  it('the organization_admin capability grant yields TENANT_ADMIN', async () => {
+    expect(await postureOf({ userId: 'a1', tenantId: 'org1', positions: ['everyone'], permissions: ['organization_admin'] })).toBe('TENANT_ADMIN');
+  });
+
+  it('guest / anonymous → EXTERNAL floor wins even over an attached posture', async () => {
+    expect(await postureOf({ userId: 'a1', principalKind: 'guest', positions: [], permissions: [], posture: 'PLATFORM_ADMIN' })).toBe('EXTERNAL');
+    expect(await postureOf({ userId: null, positions: [], permissions: [] })).toBe('EXTERNAL');
+  });
+});
+
 describe('buildContextForUser', () => {
   const ql = {
     async find(object: string, opts: any) {
@@ -314,6 +368,34 @@ describe('buildContextForUser', () => {
     },
   };
 
+  it('derives hasPlatformAdminGrant from an UNSCOPED admin_full_access user grant (matches resolveAuthzContext)', async () => {
+    const qlUnscoped = {
+      async find(object: string, _opts: any) {
+        if (object === 'sys_user_permission_set') return [{ user_id: 'u2', permission_set_id: 'psAdmin' /* organization_id absent → unscoped */ }];
+        if (object === 'sys_permission_set') return [{ id: 'psAdmin', name: 'admin_full_access' }];
+        return [];
+      },
+    };
+    const ctx = await buildContextForUser(qlUnscoped, 'u2');
+    expect(ctx.hasPlatformAdminGrant).toBe(true);
+    expect(ctx.permissions).toContain('admin_full_access');
+  });
+
+  it('a SCOPED (org-specific) admin_full_access user grant does NOT set hasPlatformAdminGrant', async () => {
+    const qlScoped = {
+      async find(object: string, _opts: any) {
+        if (object === 'sys_user_permission_set') return [{ user_id: 'u2', permission_set_id: 'psAdmin', organization_id: 'org1' }];
+        if (object === 'sys_permission_set') return [{ id: 'psAdmin', name: 'admin_full_access' }];
+        return [];
+      },
+    };
+    const ctx = await buildContextForUser(qlScoped, 'u2');
+    expect(ctx.hasPlatformAdminGrant).toBe(false);
+    // The name is still resolved into permissions (it grants object CRUD), but it
+    // no longer confers platform_admin posture — the drift this closes.
+    expect(ctx.permissions).toContain('admin_full_access');
+  });
+
   it('reconstructs positions + direct grants + the everyone anchor', async () => {
     const ctx = await buildContextForUser(ql, 'u2');
     expect(ctx).toEqual({
@@ -322,6 +404,7 @@ describe('buildContextForUser', () => {
       permissions: ['payroll_reader'],
       expiredGrants: [],
       delegatedPositions: [],
+      hasPlatformAdminGrant: false,
     });
   });
 
