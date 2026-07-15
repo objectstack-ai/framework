@@ -459,6 +459,80 @@ describe('SecurityPlugin', () => {
       await expect(harness.run(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
     });
 
+    // ── [#2850] $expand RLS/FLS bypass — sub-read gate relaxation ────────────
+    // The engine's expand path re-enters `find` for the referenced object with
+    // a server-set `__expandRead` marker. For a PUBLIC referenced object the
+    // object-level CRUD / requiredPermissions gate is waived (the row is already
+    // broadly readable, so applying it would over-block a common status/owner
+    // lookup) — but RLS + FLS still run. A PRIVATE referenced object keeps the
+    // full gate: expansion may reveal only rows the caller could read directly.
+    it('[#2850] __expandRead WAIVES the CRUD gate for a PUBLIC referenced object', async () => {
+      const noGrantSet: PermissionSet = {
+        name: 'member_default', label: 'Member', objects: {},
+      } as any;
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [noGrantSet],
+        objectFields: ['id', 'organization_id', 'name'],
+        orgScoping: true,
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const base = (): any => ({
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [] },
+      });
+      // Control: a DIRECT read with no grant on the object is denied.
+      await expect(harness.run(base())).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+      // The SAME read tagged as an expand sub-read is allowed — the gate is waived
+      // for the (public) referenced object.
+      const expandCtx = base();
+      expandCtx.context.__expandRead = true;
+      await expect(harness.run(expandCtx)).resolves.toBeDefined();
+    });
+
+    it('[#2850] __expandRead does NOT waive the gate for a PRIVATE referenced object', async () => {
+      // Same shape as "DENIES a non-admin on a private object", but as an expand
+      // sub-read: private objects stay strict — expand may not reveal a row the
+      // caller could not have queried directly.
+      const plainWildcard: PermissionSet = {
+        name: 'member_default', label: 'Member',
+        objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+      } as any;
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [plainWildcard],
+        objectFields: ['id', 'organization_id', 'signed_token'],
+        schemaExtra: { access: { default: 'private' } },
+        orgScoping: true,
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [], __expandRead: true },
+      };
+      await expect(harness.run(opCtx)).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+    });
+
+    it('[#2850] __expandRead still injects RLS on the expand sub-read (only the CRUD gate is waived)', async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({
+        permissionSets: [tenantPolicySet],
+        orgScoping: true,
+      });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const opCtx: any = {
+        object: 'task', operation: 'find', ast: { where: undefined },
+        context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: [], __expandRead: true },
+      };
+      await harness.run(opCtx);
+      // The tenant wall is still AND-injected — waiving the CRUD gate on an
+      // expand sub-read does NOT waive row-level scoping on the referenced object.
+      expect(opCtx.ast.where).toEqual({ $and: [{ organization_id: 'org-1' }, { organization_id: 'org-1' }] });
+    });
+
     it('DENIES a caller missing the required capability (D3 AND-gate)', async () => {
       const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
       const harness = makeMiddlewareCtx({

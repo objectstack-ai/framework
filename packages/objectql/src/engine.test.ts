@@ -642,7 +642,9 @@ describe('ObjectQL Engine', () => {
             expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
             expect(result[1].assignee).toEqual({ id: 'u2', name: 'Bob' });
 
-            // Verify the expand query used $in
+            // Verify the expand query used $in. The expand sub-read now routes
+            // through the secured `find` path ([#2850]), so the referenced
+            // read carries the `__expandRead` marker in its context.
             expect(mockDriver.find).toHaveBeenCalledTimes(2);
             expect(mockDriver.find).toHaveBeenLastCalledWith(
                 'user',
@@ -650,7 +652,7 @@ describe('ObjectQL Engine', () => {
                     object: 'user',
                     where: { id: { $in: ['u1', 'u2'] } },
                 }),
-                undefined,
+                expect.objectContaining({ context: { __expandRead: true } }),
             );
         });
 
@@ -686,7 +688,7 @@ describe('ObjectQL Engine', () => {
             expect(mockDriver.find).toHaveBeenLastCalledWith(
                 'sys_user',
                 expect.objectContaining({ where: { id: { $in: ['u1'] } } }),
-                undefined,
+                expect.objectContaining({ context: { __expandRead: true } }),
             );
         });
 
@@ -867,6 +869,45 @@ describe('ObjectQL Engine', () => {
             expect(mockDriver.find).toHaveBeenCalledTimes(1);
         });
 
+        it('[#2850] routes the expand sub-read through the middleware for the referenced object (RLS/FLS can apply), tagged __expandRead', async () => {
+            // Regression: expand used to call the driver directly for the
+            // referenced object, so the REFERENCED object's security middleware
+            // (RLS/FLS/CRUD) never ran — a caller could read masked/owner-hidden
+            // related records via `?expand=`. The sub-read now re-enters
+            // `this.find`, so any registered middleware sees it.
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'task') return {
+                    name: 'task',
+                    fields: { assignee: { type: 'lookup', reference: 'user' }, title: { type: 'text' } },
+                } as any;
+                if (name === 'user') return { name: 'user', fields: { name: { type: 'text' } } } as any;
+                return undefined;
+            });
+
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([{ id: 't1', title: 'Task 1', assignee: 'u1' }])
+                .mockResolvedValueOnce([{ id: 'u1', name: 'Alice' }]);
+
+            const seen: Array<{ object: string; operation: string; expandRead: boolean }> = [];
+            engine.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
+                seen.push({
+                    object: opCtx.object,
+                    operation: opCtx.operation,
+                    expandRead: opCtx.context?.__expandRead === true,
+                });
+                await next();
+            });
+
+            await engine.find('task', { expand: { assignee: { object: 'user' } } });
+
+            // The base read runs through the middleware WITHOUT the marker…
+            expect(seen).toContainEqual({ object: 'task', operation: 'find', expandRead: false });
+            // …and the referenced object's expand sub-read runs through it WITH
+            // the __expandRead marker set — this is the hook the security plugin
+            // uses to apply the referenced object's RLS + FLS.
+            expect(seen).toContainEqual({ object: 'user', operation: 'find', expandRead: true });
+        });
+
         it('should drop formula fields from driver projection and evaluate them after fetch', async () => {
             // Regression: planFormulaProjection used to add ALL schema fields
             // (including the formula fields themselves) back to projected,
@@ -1028,7 +1069,7 @@ describe('ObjectQL Engine', () => {
                 expect.objectContaining({
                     where: { id: { $in: ['u1', 'u2'] } },
                 }),
-                undefined,
+                expect.objectContaining({ context: { __expandRead: true } }),
             );
             expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
             expect(result[1].assignee).toEqual({ id: 'u1', name: 'Alice' });

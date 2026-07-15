@@ -1905,25 +1905,36 @@ export class ObjectQL implements IDataEngine {
           ? { $and: [idFilter, nestedAST.where] }
           : idFilter;
 
-        const relatedQuery: QueryAST = {
-          object: referenceObject,
-          where,
-          ...(nestedAST.fields ? { fields: nestedAST.fields } : {}),
-          ...(nestedAST.orderBy ? { orderBy: nestedAST.orderBy } : {}),
-          // NOTE: nestedAST.limit/offset are intentionally NOT forwarded here.
-          // This path batch-loads every parent's related records in a single
-          // $in query, so a *per-parent* limit/offset can't be expressed — a
-          // global cap on the batch would silently drop records other parents
-          // need. Paginate by querying the related object directly instead.
-        };
-
-        const driver = this.getDriver(referenceObject);
-        // Propagate tenantId so cross-object expansion respects isolation —
-        // e.g. a contact expansion only resolves IDs visible to the caller's
-        // tenant. Without this the driver returns the raw FK target which
-        // would let a maliciously crafted FK reach across tenants.
-        const expandOpts = this.buildDriverOptions(execCtx);
-        const relatedRecords = await driver.find(referenceObject, relatedQuery, expandOpts) ?? [];
+        // [#2850] Resolve the referenced object through the engine's own read
+        // path (`this.find`) rather than the raw driver, so the security
+        // middleware applies the REFERENCED object's RLS + FLS to the expanded
+        // batch — not merely tenant isolation. A single `find` over the
+        // collected `id $in [...]` batch re-enters the middleware exactly once
+        // (no N+1), preserving the batched load. `nestedAST.limit/offset` are
+        // still intentionally NOT forwarded: this path batch-loads every
+        // parent's related records in one query, so a *per-parent* limit/offset
+        // can't be expressed — a global cap would silently drop records other
+        // parents need. Paginate by querying the related object directly.
+        //
+        // The `__expandRead` marker (set here, never from client input —
+        // `executionContext` is server-built) tells the security layer this is
+        // an expansion sub-read: it waives ONLY the object-level CRUD /
+        // requiredPermissions gate for PUBLIC referenced objects (already
+        // broadly readable, so a common status/owner lookup isn't over-blocked),
+        // while PRIVATE referenced objects keep the full RLS + CRUD treatment
+        // (you may expand only rows you could read directly). FLS masking
+        // applies to both. `expand` is intentionally omitted from this query so
+        // `find` does not re-expand — nested relations recurse below under the
+        // depth guard.
+        const relatedRecords = await this.find(
+          referenceObject,
+          {
+            where,
+            ...(nestedAST.fields ? { fields: nestedAST.fields as any } : {}),
+            ...(nestedAST.orderBy ? { orderBy: nestedAST.orderBy as any } : {}),
+            context: { ...(execCtx ?? {}), __expandRead: true } as ExecutionContext,
+          },
+        ) ?? [];
 
         // Build a lookup map: id → record
         const recordMap = new Map<string, any>();

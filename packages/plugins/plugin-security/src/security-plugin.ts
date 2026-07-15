@@ -697,12 +697,29 @@ export class SecurityPlugin implements Plugin {
           ? await this.getObjectSecurityMeta(opCtx.object)
           : { isPrivate: false, tenancyDisabled: false, isBetterAuthManaged: false, requiredPermissions: EMPTY_REQUIRED_PERMISSIONS, fieldRequiredPermissions: {} as Record<string, string[]> };
 
+      // [#2850] $expand sub-read gate relaxation. The engine's expand path
+      // re-enters `find` for a referenced object carrying `__expandRead` (a
+      // server-set marker; `executionContext` is never client-built). For a
+      // PUBLIC referenced object — covered by the '*' wildcard grant and thus
+      // already broadly readable — applying the object-level CRUD /
+      // requiredPermissions gate to the EXPANSION would only surface "never
+      // designed for expand" modeling gaps (over-blocking a legitimate
+      // status/owner lookup) without adding protection, since the row is
+      // already visible. So waive those two throw-gates for PUBLIC expand
+      // sub-reads only. RLS injection (step 3) and FLS masking (step 4) still
+      // run, and a PRIVATE referenced object keeps the FULL gate — expansion
+      // may reveal only rows the caller could have read directly.
+      const expandSkipCrud =
+        opCtx.operation === 'find' &&
+        opCtx.context?.__expandRead === true &&
+        !secMeta.isPrivate;
+
       // 1.5. [ADR-0066 D3/⑤] requiredPermissions AND-gate — a capability
       //      prerequisite checked BEFORE the CRUD grant (ADR §Precedence): a
       //      caller missing any required capability is denied regardless of how
       //      permissive their grants are. Per-operation (⑤): only the caps for
       //      THIS operation's CRUD class (plus any all-operations caps) apply.
-      if (permissionSets.length > 0) {
+      if (permissionSets.length > 0 && !expandSkipCrud) {
         const required = requiredCapsForOperation(secMeta.requiredPermissions, opCtx.operation);
         if (required.length > 0) {
           const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
@@ -730,7 +747,7 @@ export class SecurityPlugin implements Plugin {
       }
 
       // 2. CRUD permission check
-      if (permissionSets.length > 0) {
+      if (permissionSets.length > 0 && !expandSkipCrud) {
         const allowed = this.permissionEvaluator.checkObjectPermission(
           opCtx.operation,
           opCtx.object,
