@@ -1,8 +1,13 @@
 ---
-'@objectstack/spec': major
+'@objectstack/spec': minor
 ---
 
 feat(spec)!: remove `tenancy.strategy` + `tenancy.crossTenantAccess`; tenancy block is now strict (#2763)
+
+> ⚠️ RELEASE NOTE — promote to `major` in the v16 release PR (the #2950 v15
+> precedent: land as minor, promote at release). This IS a breaking change;
+> do not ship a 15.x minor while it is pending, and carry it in
+> `content/docs/releases/v16.mdx`.
 
 BREAKING CHANGE: `TenancyConfigSchema` drops its two zero-consumer fields, and
 the `tenancy` block is now `.strict()` — an unknown key is a loud parse error
