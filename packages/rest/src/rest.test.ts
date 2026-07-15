@@ -2140,6 +2140,70 @@ describe('mapDataError — schema/constraint envelopes', () => {
     expect(r.body.object).toBe('crm_lead');
   });
 
+  // #2926 ⑦: plugin-sharing's record-scope denial throws with an explicit
+  // status 403 + code FORBIDDEN, but the generic data routes bypass
+  // sendError's `.status` passthrough — mapDataError must honor the
+  // explicit status itself or the 403 degrades to the catch-all 400.
+  it('passes through an explicit 4xx status + code (sharing FORBIDDEN → 403)', () => {
+    const r = mapDataError(
+      Object.assign(new Error('FORBIDDEN: insufficient privileges to update showcase_inquiry rec1'), {
+        code: 'FORBIDDEN',
+        status: 403,
+      }),
+      'showcase_inquiry',
+    );
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('FORBIDDEN');
+    expect(r.body.object).toBe('showcase_inquiry');
+    expect(r.body.error).toContain('insufficient privileges');
+  });
+
+  it('does NOT pass through an explicit 5xx status (message stays sanitized)', () => {
+    const r = mapDataError(
+      Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:5432 (internal pool)'), { status: 502 }),
+    );
+    // 5xx bypasses the passthrough and falls into the sanitizing heuristics.
+    expect(r.status).not.toBe(502);
+    expect(r.body.code).not.toBe('FORBIDDEN');
+  });
+
+  it('guards the passthrough message length (oversized → generic text)', () => {
+    const r = mapDataError(Object.assign(new Error('x'.repeat(600)), { status: 403, code: 'FORBIDDEN' }));
+    expect(r.status).toBe(403);
+    expect(r.body.error).toBe('Request failed');
+  });
+
+  it('keeps CONCURRENT_UPDATE 409 structured fields despite its own status property', () => {
+    const r = mapDataError(
+      Object.assign(new Error('Record was modified'), {
+        code: 'CONCURRENT_UPDATE',
+        status: 409,
+        currentVersion: 7,
+        currentRecord: { id: 'r1' },
+      }),
+      'sys_task',
+    );
+    expect(r.status).toBe(409);
+    expect(r.body.code).toBe('CONCURRENT_UPDATE');
+    expect(r.body.currentVersion).toBe(7);
+    expect(r.body.currentRecord).toEqual({ id: 'r1' });
+  });
+
+  it('keeps DELETE_RESTRICTED 409 structured fields despite its own status property', () => {
+    const r = mapDataError(
+      Object.assign(new Error('Cannot delete sys_position (p1): 1 dependent record'), {
+        code: 'DELETE_RESTRICTED',
+        status: 409,
+        dependentObject: 'sys_position_permission_set',
+        dependentCount: 1,
+      }),
+      'sys_position',
+    );
+    expect(r.status).toBe(409);
+    expect(r.body.code).toBe('DELETE_RESTRICTED');
+    expect(r.body.dependentCount).toBe(1);
+  });
+
   it('maps SQLite "has no column named" → 400 INVALID_FIELD with the field', () => {
     const r = mapDataError(
       sqliteError(

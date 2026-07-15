@@ -157,6 +157,27 @@ export function mapDataError(error: any, object?: string): { status: number; bod
             },
         };
     }
+    // Generic passthrough for domain errors that already carry an explicit
+    // HTTP status (e.g. plugin-sharing's record-scope denial: status 403 +
+    // code FORBIDDEN) — mirrors sendError's `.status` handling, which the
+    // generic data routes bypass by calling mapDataError directly (#2926 ⑦).
+    // Placed AFTER the structured-code branches above (409s carry rich
+    // fields this envelope would drop) and deliberately limited to 4xx:
+    // 5xx messages keep going through the sanitizing heuristics below so
+    // internal/SQL details never reach the client verbatim.
+    if (typeof error?.status === 'number' && error.status >= 400 && error.status < 500) {
+        const msg = typeof error?.message === 'string' && error.message.length > 0 && error.message.length < 500
+            ? error.message
+            : 'Request failed';
+        return {
+            status: error.status,
+            body: {
+                error: msg,
+                ...(typeof error?.code === 'string' && error.code ? { code: error.code } : {}),
+                ...(object ? { object } : {}),
+            },
+        };
+    }
 
     const raw = String(error?.message ?? error ?? '');
     const lower = raw.toLowerCase();
@@ -3259,7 +3280,7 @@ export class RestServer {
                         res.json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
-                        if (mapped.status === 404 || mapped.status === 503 || mapped.status === 502) {
+                        if (isExpectedDataStatus(mapped.status) || mapped.body?.code === 'UNSUPPORTED_QUERY_PARAM') {
                             res.status(mapped.status).json(mapped.body);
                         } else {
                             logError("[REST] Unhandled error:", error);
