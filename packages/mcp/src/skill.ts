@@ -137,14 +137,16 @@ create/update payload.
 - **update_record({ objectName, recordId, data })** — change fields on a record.
 - **delete_record({ objectName, recordId })** — delete a record (destructive —
   confirm with the user first).
-- **list_actions()** — list the business actions you are permitted to run, with
-  each action's declared parameters, whether it operates on a record, and
-  whether it is flagged destructive.
+- **list_actions()** — list the business actions available to you (only those
+  the app author exposed to AI and you are permitted to run), with each
+  action's declared parameters, whether it operates on a record, and whether
+  it is flagged destructive.
 - **run_action({ actionName, objectName?, recordId?, params? })** — invoke a
-  business action by name. This executes the app's registered logic (can
-  mutate data or trigger flows) under your permissions and RLS. Pass
-  \`recordId\` for record-scoped actions and \`params\` for declared inputs;
-  \`objectName\` only disambiguates a name shared by multiple objects.
+  business action by name. Invocation is permission-gated, but the action body
+  executes the app's registered logic as trusted code (it can mutate data or
+  trigger flows with the app's own authority). Pass \`recordId\` for
+  record-scoped actions and \`params\` for declared inputs; \`objectName\` only
+  disambiguates a name shared by multiple objects.
 
 ## Conventions & gotchas
 
