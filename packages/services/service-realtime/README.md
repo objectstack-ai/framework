@@ -435,4 +435,4 @@ Apache-2.0. See [LICENSING.md](../../../LICENSING.md).
 - [WebSocket API Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 - [@objectstack/client](../../client/)
 - [@objectstack/client-react](../../client-react/)
-- [Realtime Features Guide](/content/docs/protocol/objectos/realtime-protocol.mdx)
+- [Realtime Features Guide](/content/docs/protocol/kernel/realtime-protocol.mdx)

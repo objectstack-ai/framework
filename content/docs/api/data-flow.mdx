@@ -212,7 +212,7 @@ flowchart LR
 How data changes propagate to connected clients in real time.
 
 <Callout type="warn">
-**Implementation status:** This diagram (and the `emit(...)` → `EB->>WS` broadcast step in the Write Flow diagram above) shows the target design. The realtime service that ships today is an **in-memory pub/sub adapter** (`InMemoryRealtimeAdapter` in `@objectstack/service-realtime`), delivered to JS clients via **long-polling** (`RealtimeAPI` in `@objectstack/client`) — no WebSocket transport is wired up yet. The adapter also only matches subscriptions by `object` and `eventTypes`; per-field `filter` conditions (e.g. `{ project: 'prj_1' }`) are accepted in the request shape but are not yet enforced server-side. See [Real-Time Protocols](/docs/protocol/objectos/realtime-protocol) for the full implementation-status breakdown.
+**Implementation status:** This diagram (and the `emit(...)` → `EB->>WS` broadcast step in the Write Flow diagram above) shows the target design. The realtime service that ships today is an **in-memory pub/sub adapter** (`InMemoryRealtimeAdapter` in `@objectstack/service-realtime`), delivered to JS clients via **long-polling** (`RealtimeAPI` in `@objectstack/client`) — no WebSocket transport is wired up yet. The adapter also only matches subscriptions by `object` and `eventTypes`; per-field `filter` conditions (e.g. `{ project: 'prj_1' }`) are accepted in the request shape but are not yet enforced server-side. See [Real-Time Protocols](/docs/protocol/kernel/realtime-protocol) for the full implementation-status breakdown.
 </Callout>
 
 ```mermaid

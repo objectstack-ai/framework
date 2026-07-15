@@ -109,6 +109,9 @@ export const docsRedirects = [
   // folder moves (wildcards — keep after exact entries)
   ['/docs/guides/runtime-services/:path*', '/docs/kernel/runtime-services/:path*'],
   ['/docs/guides/contracts/:path*', '/docs/kernel/contracts/:path*'],
+  // ObjectOS layer-name retirement: the System Protocol section is now "kernel"
+  // (:path* matches zero or more segments, so this also covers the bare URL)
+  ['/docs/protocol/objectos/:path*', '/docs/protocol/kernel/:path*'],
   // safety net for anything else under retired sections — keep last
   ['/docs/guides/:path*', '/docs'],
 ];
