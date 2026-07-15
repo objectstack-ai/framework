@@ -33,6 +33,7 @@ import { allApis } from './src/system/apis/index.js';
 import {
   allPositions,
   allPermissionSets,
+  allCapabilities,
   allSharingRules,
 } from './src/security/index.js';
 import { allThemes } from './src/ui/themes/index.js';
@@ -194,6 +195,9 @@ export default defineStack({
   // Security
   positions: allPositions,
   permissions: allPermissionSets,
+  // [ADR-0066 D1] Package-declared authorization capabilities — seeded into
+  // sys_capability with package provenance (managed_by:'package').
+  capabilities: allCapabilities,
   sharingRules: allSharingRules,
 
   // Seed data

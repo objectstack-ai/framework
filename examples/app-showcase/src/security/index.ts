@@ -46,6 +46,11 @@ export {
 } from './permission-sets.js';
 
 export {
+  ExportDataCapability,
+  allCapabilities,
+} from './capabilities.js';
+
+export {
   RedProjectSharingRule,
   HighValueRedProjectRule,
   NewInquiryFieldOpsRule,

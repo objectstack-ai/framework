@@ -418,6 +418,10 @@ export class AppPlugin implements Plugin {
                 const SECURITY_FIELDS: Array<[string, string]> = [
                     ['positions', 'position'],
                     ['permissions', 'permission'],
+                    // [ADR-0066 D1] Package-declared authorization capabilities —
+                    // read back by bootstrapDeclaredCapabilities to seed
+                    // sys_capability with package provenance.
+                    ['capabilities', 'capability'],
                     ['sharingRules', 'sharing_rule'],
                     ['policies', 'policy'],
                 ];
