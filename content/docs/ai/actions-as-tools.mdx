@@ -14,16 +14,32 @@ reached by an LLM as a callable tool. On the **open edition** this happens
 through [`@objectstack/mcp`](/docs/ai): your own AI (Claude, Cursor, any MCP
 client, or a local model) connects over the Model Context Protocol, and the
 server exposes two business-action tools — `list_actions` and `run_action` —
-bound to the caller's principal. The agent operates the app the same way the
-Console toolbar does, under the same row-level security and permissions. No
-cloud service and no ObjectOS runtime are required.
+bound to the caller's principal. The agent invokes actions the same way the
+Console toolbar does — but only actions the author explicitly exposed to AI, and
+only ones the caller is permitted to run. No cloud service and no ObjectOS
+runtime are required.
+
+<Callout type="warn">
+**Action bodies run as trusted code (#2849).** Unlike the object CRUD tools —
+where every read/write is bounded by the caller's row-level security — a
+`script`/`body` action's handler executes with the app's **full data
+authority**: its internal `engine.insert/update/delete/find` calls carry no
+caller context, so they bypass RLS/FLS (the SECURITY-DEFINER model many actions
+rely on for cross-object writes like convert-lead). The boundary is therefore at
+**invoke time**, not inside the body: `ai.exposed` (author opt-in) +
+`requiredPermissions` (ADR-0066) decide what an agent may trigger. Expose an
+action to AI only when its body is safe to run on behalf of anyone the gate lets
+through. Flow actions differ — they honour the flow's `runAs` (ADR-0049) with
+the caller's identity forwarded.
+</Callout>
 
 <Callout type="info">
 **ObjectOS** layers an in-product chat *runtime*
-on top of these same actions: it generates one `action_<name>` tool per action,
-gates them behind an `ai.exposed` opt-in, and adds a server-side approval queue.
-Those pieces are called out below. The open path — the same Action reachable as
-an MCP tool by your own AI — is the default.
+on top of these same actions: it generates one `action_<name>` tool per action
+and adds a server-side approval queue. Both the open MCP path and the ObjectOS
+runtime gate on the same `ai.exposed` opt-in. Those pieces are called out below.
+The open path — the same Action reachable as an MCP tool by your own AI — is the
+default.
 </Callout>
 
 ## The open path: Actions over MCP
@@ -34,16 +50,18 @@ bound to the caller's principal (the API key acts as the user):
 
 | Tool | What it does |
 |:---|:---|
-| `list_actions` | Enumerates the invokable business actions the caller is permitted to run — name, target object, description, whether it needs a `recordId`, whether it is destructive, and its declared params. |
-| `run_action` | Invokes an action by name with `{ recordId, params }`. Runs the app's registered business logic under the caller's permissions and RLS. |
+| `list_actions` | Enumerates the business actions that are **AI-exposed** (`ai.exposed: true`) **and** the caller is permitted to run — name, target object, description, whether it needs a `recordId`, whether it is destructive, and its declared params. |
+| `run_action` | Invokes an action by name with `{ recordId, params }`. Invocation is gated (author opt-in + capabilities); the action body then runs the app's registered logic as trusted code. |
 
 `run_action` resolves the action and dispatches it through the framework's own
 action mechanism — `IDataEngine.executeAction` for `script` / inline-`body`
 actions, or the automation flow runner for `type:'flow'` — exactly the path the
-REST `/actions/...` route uses. Because the bridge is bound to the caller's
-`ExecutionContext`, a BYO-AI client (Claude Code, Cursor, …) can trigger real
-business logic — "complete this task", "convert this lead" — under the same
-guardrails as the UI.
+REST `/actions/...` route uses. Invocation is bound to the caller's
+`ExecutionContext` for the gate checks and subject-record load, so a BYO-AI
+client (Claude Code, Cursor, …) can trigger real business logic — "complete this
+task", "convert this lead". Note the body itself runs trusted (see the warning
+above); the caller context bounds *whether* the action fires and what record it
+loads, not what the handler does internally.
 
 ### Describing an action for the LLM
 
@@ -69,32 +87,35 @@ export const triageCaseAction = {
 ```
 
 <Callout type="info">
-**ObjectOS** — the `ai.exposed` flag is a governance gate for the
-in-product chat *runtime*: the ObjectOS bridge registers
-an `action_<name>` tool **only** when `ai.exposed === true` (and then
-`ai.description` is required, ≥ 40 chars). The open MCP path does **not** use
-`ai.exposed` — it filters by permission, returning every action the caller is
-allowed to run. Set `ai.description` regardless: both paths read it.
+The `ai.exposed` flag is a governance gate for the **whole AI surface**. Both
+the open MCP path (`list_actions` / `run_action`) and the ObjectOS in-product
+chat runtime register an action as an AI tool **only** when `ai.exposed === true`
+(and then `ai.description` is required, ≥ 40 chars). An action left un-exposed is
+invisible to agents and fail-closed at invocation, even for a caller who holds
+every required capability — because the body runs trusted, author opt-in, not a
+data-layer backstop, is the boundary (#2849).
 </Callout>
 
 ## What gets exposed
 
 The bridge walks every registered object's `actions[]` and offers only actions
-that have a headless dispatch path **and** that the caller is permitted to run.
-System objects (`sys_*`) are held back fail-closed.
+that are **AI-exposed** (`ai.exposed: true`), have a headless dispatch path,
+**and** that the caller is permitted to run. System objects (`sys_*`) are held
+back fail-closed.
 
 | `action.type` | Dispatch path | Available where |
 |:---|:---|:---|
 | `script` | `IDataEngine.executeAction(object, target, ctx)` — the same call Studio makes | open (MCP) + ObjectOS |
-| `flow` | automation flow runner — `execute(target, { triggerData })` | open (MCP) + ObjectOS; needs the `automation` service registered |
+| `flow` | automation flow runner — `execute(target, automationContext)` (caller identity forwarded so `runAs` engages) | open (MCP) + ObjectOS; needs the `automation` service registered |
 | `api` | HTTP call to `action.target` via a configured `apiClient` | **ObjectOS** runtime only |
 
 Console-only types (`url`, `modal`, `form`) are always skipped.
 
-Permission filtering is single-sourced with the REST route: an action's declared
-`requiredPermissions` (ADR-0066) are enforced as the caller, so
-`list_actions` hides — and `run_action` refuses — anything the user could not
-invoke through the API. Destructive actions (`confirmText`, `mode: 'delete'`,
+Two gates are single-sourced with the REST route and applied at invoke time: the
+`ai.exposed` opt-in (#2849) and an action's declared `requiredPermissions`
+(ADR-0066), enforced as the caller — so `list_actions` hides, and `run_action`
+refuses, anything the author did not expose to AI or the user could not invoke
+through the API. Destructive actions (`confirmText`, `mode: 'delete'`,
 `variant: 'danger'`, or `ai.requiresConfirmation: true`) are reported with
 `requiresConfirmation: true` so the client can ask the human before calling. To
 assert that a destructive-looking action is safe for autonomous execution, set
@@ -116,7 +137,8 @@ await kernel.bootstrap();
 
 `type:'flow'` actions are picked up automatically when the `automation` service
 is registered. Point your MCP client at the server; the caller's API key acts as
-the user, so every `run_action` runs under that principal's RLS.
+the user for the invoke-time gates and the subject-record load. (Flow bodies then
+honour `runAs`; `script`/`body` handlers run trusted — see the warning above.)
 
 <Callout type="info">
 **ObjectOS** — the in-product runtime wires actions through its own bridge
@@ -137,7 +159,7 @@ A BYO-AI client invokes `run_action` the same way it calls any MCP tool:
   "recordId": "case_42",
   "params": { "priority": "high" }
 }
-// → dispatches case_triage as the caller, under RLS; returns the flow result
+// → invoke-gated as the caller; case_triage is a flow, so it honours runAs. Returns the flow result.
 ```
 
 ## Human-in-the-loop approval
@@ -148,7 +170,8 @@ lives at the protocol boundary: `run_action` is annotated `destructiveHint: true
 and each action's per-call risk is surfaced through `requiresConfirmation` in
 `list_actions`, so the MCP client (Claude Desktop, Cursor, …) prompts the
 operator to approve the call before it runs. The human stays in the loop at the
-point of invocation, and the action still executes under the caller's RLS.
+point of invocation — the meaningful control point, since the body then runs
+with the app's own authority.
 
 <Callout type="info">
 **ObjectOS** — the in-product chat runtime adds a *server-side*
@@ -164,27 +187,38 @@ process, and operators expect single-click yes/no. See the
 queue API.
 </Callout>
 
-## Permission-aware execution (RLS for agents)
+## Permission model (invoke-time gate + trusted body)
 
-Every action an agent runs executes under the **end-user's** `ExecutionContext`,
-so the same row-level-security rules that protect the REST API automatically
-scope what the agent can see and do. There is no separate "agent permission"
-surface to maintain — if a user cannot read account `acc_42` through ObjectQL,
-neither can an LLM acting on their behalf.
+Two different boundaries apply, and it matters which:
 
-On the open MCP path this is automatic:
+- **Object CRUD tools** (`query_records` / `get_record` / `create_record` / …)
+  execute under the **end-user's** `ExecutionContext`, so row-level security
+  scopes what the agent can see and do — if a user cannot read account `acc_42`
+  through ObjectQL, neither can an LLM acting on their behalf. This is automatic
+  and needs no separate "agent permission" surface.
+- **Business actions** are gated at **invoke time**, then run trusted. The
+  caller context decides *whether* an action fires and which record it loads, but
+  a `script`/`body` handler's own reads/writes are **not** RLS-bounded (#2849).
+
+On the open MCP path the action gate works like this:
 
 1. The server binds each session to the caller's principal — the API key acts as
    the user, resolving to the same `ExecutionContext` a plain ObjectQL request
    from that user would get.
-2. The action bridge threads that context into every `executeAction` / flow
-   dispatch and every subject-record load, so RLS engages exactly as it does for
-   a hand-rolled API endpoint.
+2. `list_actions` / `run_action` fail-closed on the author's `ai.exposed` opt-in,
+   so an action never meant for AI is invisible and uninvokable — regardless of
+   the caller's capabilities.
 3. Declared `requiredPermissions` are enforced against the caller — the same
    declaration the REST `/actions/...` route checks — so `list_actions` hides and
    `run_action` refuses anything the user cannot invoke.
-4. Action audit logs attribute the dispatch to the real user instead of a generic
-   "AI Assistant" principal.
+4. The subject record (for record-context actions) is loaded under the caller's
+   RLS, so an action over a record the user cannot see reads as not-found.
+5. The action body then executes with the app's full data authority (flows honour
+   `runAs`), and the dispatch is audit-logged against the real user.
+
+Because the body is trusted, **`ai.exposed` is the security decision**: opt an
+action into AI only when its logic is safe to run on behalf of anyone the
+capability gate admits.
 
 <Callout type="info">
 **ObjectOS** — the in-product chat routes
