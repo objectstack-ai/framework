@@ -65,6 +65,29 @@ describe('bootstrapSystemCapabilities (ADR-0066 D1 back-compat seed)', () => {
     expect(ql.rows.find((x: any) => x.name === 'approve_invoice')).toBeDefined();
   });
 
+  // [#2909 T3] `scope` is an admin-editable classification face — seed-once.
+  it('does NOT clobber an admin-edited scope on re-seed (label/description still refresh)', async () => {
+    const ql = makeQl();
+    await bootstrapSystemCapabilities(ql, []);
+    const cap = KNOWN_CAPABILITIES[0];
+    const row = ql.rows.find((x) => x.name === cap.name)!;
+    // Admin reclassifies the capability and tweaks nothing else.
+    row.scope = row.scope === 'org' ? 'platform' : 'org';
+    const adminScope = row.scope;
+    row.label = 'stale label';
+    await bootstrapSystemCapabilities(ql, []);
+    expect(row.scope).toBe(adminScope); // admin's edit survives the boot
+    expect(row.label).toBe(cap.label); // platform display fields refreshed
+  });
+
+  it('still writes scope on first insert', async () => {
+    const ql = makeQl();
+    await bootstrapSystemCapabilities(ql, []);
+    for (const cap of KNOWN_CAPABILITIES) {
+      expect(ql.rows.find((x) => x.name === cap.name)?.scope).toBe(cap.scope);
+    }
+  });
+
   it('marks manage_org_users as org-scoped and the rest platform', () => {
     const org = KNOWN_CAPABILITIES.find((c) => c.name === 'manage_org_users');
     expect(org?.scope).toBe('org');

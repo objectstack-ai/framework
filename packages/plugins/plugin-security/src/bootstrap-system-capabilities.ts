@@ -100,9 +100,13 @@ export async function bootstrapSystemCapabilities(
   for (const def of byName.values()) {
     const existing = await tryFind(ql, 'sys_capability', { name: def.name }, 1);
     if (existing[0]?.id) {
-      // Keep label/description/scope fresh, but do NOT clobber admin edits to
-      // managed_by/active — only platform-owned fields are reconciled.
-      if (await tryUpdate(ql, 'sys_capability', { id: existing[0].id, label: def.label, description: def.description, scope: def.scope })) {
+      // Keep label/description fresh, but do NOT clobber admin edits — only
+      // platform-owned display fields are reconciled. `scope` is an
+      // admin-editable classification face (plain select on sys_capability),
+      // so it is seed-once: written on insert, never refreshed (#2909 T3).
+      // A curated scope change in a new platform version needs a data
+      // migration — recorded in the ADR-0094 addendum.
+      if (await tryUpdate(ql, 'sys_capability', { id: existing[0].id, label: def.label, description: def.description })) {
         updated += 1;
       }
     } else {
