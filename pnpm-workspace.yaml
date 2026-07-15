@@ -33,6 +33,28 @@ onlyBuiltDependencies:
 #     the advisory is patched only in >=1.7.0-beta.4 — there is NO stable
 #     patched release yet. Pin to the newest pre-release (1.7.0-rc.1) to clear
 #     the CI audit gate; revert to a stable `^1.7.x` line the moment one ships.
+#   - @better-auth/oauth-provider: GHSA-p2fr-6hmx-4528 — same better-auth
+#     monorepo and same situation as @better-auth/scim above. `plugin-auth`
+#     depends on ^1.6.23; the fix first ships in the 1.7.0 pre-release line.
+#     Pin to 1.7.0-rc.1 for parity with @better-auth/scim.
+#   - uuid: GHSA-w5hq-g745-h8pq (high) — pulled 8.3.2 transitively; the fix
+#     first lands in 11.1.1. Pin to the ^11.1.1 LTS line (uuid `legacy-11`
+#     dist-tag) rather than the latest major to keep the jump conservative.
+#   - postcss: GHSA-qx2v-qp2m-jg93 — a transitive path still resolves 8.4.31
+#     (the direct `apps/docs` dep already tracks ^8.5.x); force the patched
+#     ^8.5.10 line so the transitive copy is deduped onto it.
+#   - cookie: GHSA-pxg6-pf52-xh8x — pulled 0.6.0 transitively; force the
+#     patched 0.7.0 line (drop-in compatible).
+#   - svelte: GHSA-9rmh-mm8f-r9h6, GHSA-f3cj-j4f6-wq85, GHSA-pr6f-5x2q-rwfp,
+#     GHSA-rcqx-6q8c-2c42 — auto-installed (auto-install-peers) as an *optional*
+#     peer-of-a-peer via better-auth > @sveltejs/kit at 5.55.3. An `overrides`
+#     entry alone can't rewrite this resolution (pnpm rewrites the peer range
+#     but leaves the locked 5.55.3), so the patched line is pinned by BOTH this
+#     override AND a `svelte: ^5.55.7` devDependency in the root (private)
+#     package.json, which gives the peer a concrete version to dedupe onto.
+#     Keep both in sync; removing the root devDependency reintroduces 5.55.3.
+#   - @tootallnate/once: GHSA-vpq2-c234-7xj6 (low) — pulled 1.1.2 through a
+#     legacy agent chain; force the patched 2.0.1 line.
 overrides:
   esbuild: '>=0.28.1'
   'minimatch@<10.2.3': '10.2.3'
@@ -40,3 +62,9 @@ overrides:
   'form-data@<4.0.6': '>=4.0.6'
   'undici@>=7.23.0 <7.28.0': '^7.28.0'
   '@better-auth/scim@<1.7.0-rc.1': '1.7.0-rc.1'
+  '@better-auth/oauth-provider@<1.7.0-rc.1': '1.7.0-rc.1'
+  'uuid@<11.1.1': '^11.1.1'
+  'postcss@<8.5.10': '^8.5.10'
+  'cookie@<0.7.0': '0.7.0'
+  svelte: '^5.55.7'
+  '@tootallnate/once@<2.0.1': '2.0.1'
