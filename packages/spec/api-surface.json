@@ -4457,6 +4457,7 @@
     "resilientFetch (function)",
     "safeParsePretty (function)",
     "singularToPlural (function)",
+    "strictVisibilityError (const)",
     "suggestFieldType (function)",
     "tmpl (function)"
   ]
