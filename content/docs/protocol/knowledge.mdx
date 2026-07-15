@@ -89,7 +89,7 @@ delegates the rest to plugins.
               │ consumes
               │
 ┌─────────────┴────────────────────────┐
-│  @objectstack/service-ai             │
+│  ObjectOS in-product AI runtime      │
 │                                      │
 │  • search_knowledge tool             │
 │  • Threads ToolExecutionContext      │
@@ -99,7 +99,7 @@ delegates the rest to plugins.
 
 Every box above is independently versioned. **Adding a new backend is
 one plugin package — zero changes to `spec`, `service-knowledge`, or
-`service-ai`.**
+any AI consumer.**
 
 ---
 
@@ -142,7 +142,7 @@ caller's `ExecutionContext` and drops hits the user is not allowed to
 read. **A hit that the user could not have queried directly is never
 returned.**
 
-### 3.3 `IKnowledgeService` (consumed by `service-ai`, REST, Console)
+### 3.3 `IKnowledgeService` (consumed by the ObjectOS AI runtime, REST, Console)
 
 ```ts
 interface IKnowledgeService {

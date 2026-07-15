@@ -151,19 +151,17 @@ operator to approve the call before it runs. The human stays in the loop at the
 point of invocation, and the action still executes under the caller's RLS.
 
 <Callout type="info">
-**Cloud / Enterprise** — the in-product chat runtime adds a *server-side*
-approval queue for its own `action_<name>` tools. Enable it with
-`new AIServicePlugin({ enableActionApproval: true })`: a gated tool call persists
-an `ai_pending_actions` row (`status: 'pending'`) and returns
-`{ status: 'pending_approval', pendingActionId }` to the model instead of
-executing. An operator resolves it from the **AI Pending Actions** Studio inbox —
-`POST /api/v1/ai/pending-actions/:id/approve` (`ai:approve` permission) re-runs
-the same dispatcher, or `.../reject` with a reason. The queue is also available
-programmatically via
-`IAIService.{proposePendingAction, approvePendingAction, rejectPendingAction, listPendingActions}`.
+**ObjectOS** — the in-product chat runtime adds a *server-side*
+approval queue for its own `action_<name>` tools: a gated tool call is
+persisted as pending and returned to the model as
+`{ status: 'pending_approval', … }` instead of executing, and an operator
+resolves it from the **AI Pending Actions** Studio inbox (approve re-runs the
+same dispatcher; reject records a reason).
 A dedicated queue (rather than the multi-step `IApprovalService`) fits AI
 tool-call HITL: the subject is the proposed *call*, there is no predefined
-process, and operators expect single-click yes/no.
+process, and operators expect single-click yes/no. See the
+[ObjectOS docs](https://docs.objectos.app/docs/ai) for configuration and the
+queue API.
 </Callout>
 
 ## Permission-aware execution (RLS for agents)
@@ -189,7 +187,7 @@ On the open MCP path this is automatic:
    "AI Assistant" principal.
 
 <Callout type="info">
-**Cloud / Enterprise** — the in-product chat routes
+**ObjectOS** — the in-product chat routes
 (`/api/v1/ai/assistant/chat`, `/api/v1/ai/agents/:agentName/chat`) resolve the
 authenticated principal from `req.user` — both cookie session
 (`better-auth.session_token`) and Bearer token are handled — and forward it to
