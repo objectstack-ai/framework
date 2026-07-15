@@ -35,6 +35,19 @@ export const PageTabsProps = z.object({
   items: z.array(z.object({
     label: I18nLabelSchema,
     icon: z.string().optional(),
+    /**
+     * Conditional tab (CEL, #2606): when the predicate evaluates FALSE the
+     * whole tab — header *and* panel — is omitted from the strip. This is the
+     * item-level complement to a child component's own `visibleWhen`, which
+     * hides only the panel content and would leave an empty tab header behind.
+     * Binds the same environment as page-component `visibleWhen`: `record` +
+     * `current_user`, plus page state as `page.<var>` (re-evaluated live).
+     * Canonical `*When` name per ADR-0089 — this key is new, so the deprecated
+     * `visibility` / `visibleOn` aliases are NOT accepted on tab items.
+     */
+    visibleWhen: ExpressionInputSchema.optional().describe(
+      'Visibility predicate (CEL) — the whole tab (header + panel) is omitted when FALSE; the renderer falls back to the first visible tab when the active one is hidden. Binds `record`, `current_user`, `page.<var>`. ADR-0089 canonical name (`visibility`/`visibleOn` aliases are not accepted here).',
+    ),
     children: z.array(z.unknown()).describe('Child components')
   })),
   /** ARIA accessibility */

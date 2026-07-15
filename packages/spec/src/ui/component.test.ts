@@ -75,6 +75,46 @@ describe('PageTabsProps', () => {
   it('should reject tabs without items', () => {
     expect(() => PageTabsProps.parse({})).toThrow();
   });
+
+  // Conditional tabs (#2606) — item-level `visibleWhen` (ADR-0089 canonical name).
+  it('should accept an item-level visibleWhen predicate (bare CEL string → envelope)', () => {
+    const result = PageTabsProps.parse({
+      items: [
+        { label: 'Contracts', visibleWhen: 'record.status == "customer"', children: [] },
+        { label: 'Details', children: [] },
+      ],
+    });
+    expect(result.items[0].visibleWhen).toEqual({
+      dialect: 'cel',
+      source: 'record.status == "customer"',
+    });
+    // Items without the predicate are untouched — additive, back-compatible.
+    expect(result.items[1].visibleWhen).toBeUndefined();
+  });
+
+  it('should accept an item-level visibleWhen Expression envelope', () => {
+    const result = PageTabsProps.parse({
+      items: [
+        {
+          label: 'Contracts',
+          visibleWhen: { dialect: 'cel', source: "page.mode != ''" },
+          children: [],
+        },
+      ],
+    });
+    expect(result.items[0].visibleWhen).toEqual({ dialect: 'cel', source: "page.mode != ''" });
+  });
+
+  it('does NOT accept the deprecated `visibility` alias on tab items (new surface, canonical key only)', () => {
+    // ADR-0089 D2 aliases exist for keys with legacy metadata; tab items never
+    // had a visibility key, so only canonical `visibleWhen` is declared. The
+    // alias is not folded — it is dropped by parse like any unknown key.
+    const result = PageTabsProps.parse({
+      items: [{ label: 'Contracts', visibility: 'record.status == "customer"', children: [] }],
+    });
+    expect(result.items[0].visibleWhen).toBeUndefined();
+    expect('visibility' in result.items[0]).toBe(false);
+  });
 });
 
 describe('PageCardProps', () => {
