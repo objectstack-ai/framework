@@ -305,10 +305,10 @@ target: /api/v1/auth/admin/ban-user
 requiresFeature: admin
 
 # Composes with a residual row predicate:
-# (record.role != 'owner') && features.organization != false
-name: transfer_ownership
-visible: "record.role != 'owner'"
-requiresFeature: organization
+# (!record.disabled) && features.oidcProvider != false
+name: disable_oauth_application
+visible: "!record.disabled"
+requiresFeature: oidcProvider
 ```
 
 This is how the platform keeps "form follows plugin" (#2874): the UI never advertises an input the default backend would reject.

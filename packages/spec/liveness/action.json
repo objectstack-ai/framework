@@ -89,6 +89,11 @@
       "status": "live",
       "note": "objectui — CEL, fail-closed."
     },
+    "requiresFeature": {
+      "status": "live",
+      "evidence": "packages/spec/src/kernel/public-auth-features.ts (lowerRequiresFeature), wired as a .transform() in packages/spec/src/ui/action.zod.ts",
+      "note": "Author-facing sugar, consumed AT PARSE TIME: lowered into the (already-live) `visible` predicate per the PUBLIC_AUTH_FEATURES registry semantics and stripped from the output, so no downstream consumer ever sees it. Guarded by the #2874 drift + completeness tests (plugin-auth public-feature-registry.test.ts, platform-objects feature-gate-guard.test.ts)."
+    },
     "requiredPermissions": {
       "status": "live",
       "evidence": "packages/runtime/src/http-dispatcher.ts",
