@@ -8,7 +8,7 @@
 
 **Premise**: pre-launch (ADR-0049 idiom) — specify the end-state invariant now, land only the non-speculative slice, and gate every runtime phase on evidence (audit telemetry), not on dates.
 
-> **Trigger**: #2849 (fixed in #2964 at the invoke-time boundary) found that business-action bodies dispatch through an engine facade whose `insert/update/delete/find` carry **no `ExecutionContext`**. A context-less call hits the SecurityPlugin's empty-principal skip and runs with **ambient full authority** — no RLS, no FLS, no CRUD, no tenant scoping, no ADR-0090 D10 agent intersection. #2308 had already found the *same shape* on schedule-triggered flows (`runAs:'user'` with no user → UNSCOPED). Two independent surfaces, one root cause. This ADR is about the class, not the instances.
+> **Trigger**: #2849 (fixed in #2964 at the invoke-time boundary) found that business-action bodies dispatch through an engine facade whose `insert/update/delete/find` carry **no `ExecutionContext`**. A context-less call hits the SecurityPlugin's empty-principal skip and runs with **ambient full authority** — no RLS, no FLS, no CRUD, no tenant scoping, no ADR-0090 D10 agent intersection. #2308 had already found the *same shape* on schedule-triggered flows (`runAs:'user'` with no user → UNSCOPED). Two independent surfaces, one root cause. A subsequent four-axis sweep (see **Evidence**) confirmed the class is broadly populated — a replicated fall-open predicate, several trusted-implicit surfaces (three confirmed exploitable: #2980, #2981, #2982), and structural middleware-bypass paths. This ADR is about the class, not the instances.
 
 ---
 
@@ -140,6 +140,8 @@ A surface earns admission only if ALL three hold:
 
 **The meta-test**: a conformance test enumerates engine-reaching surfaces (mechanically: the modules invoking the identity-required entry points from D3, plus a maintained allowlist during transition) and **fails CI if a surface is not registered**. This is the piece that protects the *future*: the next engineer adding a surface gets a red build with a checklist, not a silent fall-open and an adversarial-review finding two months later.
 
+The **Evidence** section below enumerates the surfaces found by the initial sweep — those become the matrix's seed rows in their honest current states (BOUNDED / TRUSTED-EXPLICIT / TRUSTED-IMPLICIT / UNKNOWN).
+
 ### D5 — Strict mode: fail-closed, staged by evidence
 
 A kernel-level mode (`security.identityStrict`):
@@ -164,14 +166,65 @@ Rollout is gated on evidence, not dates (ADR-0049/0073 idiom):
 
 ---
 
+## Evidence: the class, enumerated
+
+The invariant above is not motivated by a single bug. A four-axis sweep of every data-engine-reaching path (context-less calls, elevation literals, fall-open seams, execution-surface identity) found the class is already populated — **two instances were previously found by adversarial review; the sweep found the rest sitting in the open.** This is the concrete case for a *mechanism* over per-surface patches, and it seeds the D4 matrix. Instances are grouped by how they relate to the invariant.
+
+### E1 — Missing-identity fall-open (the #2849 predicate, replicated)
+
+All trace to the same `positions==0 && permissions==0 && !userId → skip` predicate; fixing #2849 at one site does **not** close the others.
+
+| Site | Surface | Note |
+|:---|:---|:---|
+| `plugin-security/security-plugin.ts:626` | find/write middleware | the original seam (#2849) |
+| `plugin-security/security-plugin.ts:1689` | `getReadFilter` (analytics / reports / raw-SQL RLS compile) | returns `undefined` = *no filter*; the analytics mirror of :626 |
+| `objectql/engine.ts` Layer-0 + `driver-sql` `applyTenantScope` (opt-in on `tenantId`) | tenant scoping | Layer-0 is computed **after** the :626 skip, and the driver scope is opt-in → a principal-less context gets **no tenant filter at either layer** (cross-tenant read/write) |
+| `rest/rest-server.ts:4317` (+ lookup `:4744`) | guest / public-form routes | bypass `enforceAuth`; fall open when `guest_portal` unregistered (partly mitigated by the `publicFormGrant`) |
+| `runtime/http-dispatcher.ts:4231,4236,4240` | custom `object_operation` API endpoints | **accidental** — `callData` invoked with no `executionContext` (every sibling threads it) |
+| `runtime/sandbox/body-runner.ts:155` | authored action/hook **body** interior facade | the inside of #2849 — only the *invoke* is gated (#2964); the body's `api.object().find/insert/...` run context-less |
+| `mcp/mcp-server-runtime.ts:335` | MCP resource `…/records/{id}` | record read with no session identity |
+| `service-messaging/messaging-service.ts` (+ recipient resolver) | notification read/write + recipient-role lookup | unscoped reads of `sys_notification*` and `sys_user`/`sys_member` |
+| minor: `http-dispatcher.ts:1322` (env-member), `plugin-webhooks/auto-enqueuer.ts:175`, `objectql/engine.ts:722` (`visibleWhen`) | system plumbing | rely on the *implicit* fall-open; should carry an **explicit** grant so they survive the D5 flip |
+
+### E2 — Trusted-implicit surfaces (ignore the caller / fall back to system) — confirmed exploitable, spun out
+
+| Instance | Verdict | Issue |
+|:---|:---|:---|
+| Reports `getReport`/`deleteReport`/`listReports` discard the caller and query with `SYSTEM_CTX`; routes only `enforceAuth` → cross-user/cross-tenant IDOR (read+delete any report) | CONFIRMED exploitable | #2980 |
+| Scheduled reports (`report-service.ts:425` `dispatchDue`) run `executeReport(..., {isSystem:true})` → a member-owned schedule emails the target object's **entire** table, RLS bypassed | CONFIRMED exploitable | #2980 |
+| Knowledge/RAG `applyPermissionFilter` (`knowledge-service.ts:312`) returns **all** hits when `ctx` is missing/system; `chatWithTools`'s `ToolExecutionContext.actor` is optional with a system fallback → agent retrieval escapes the data ceiling | CONFIRMED (framework); exposure gated on cloud impl | #2981 |
+
+These are *not* the :626 fall-open (they use an unconditional `SYSTEM_CTX`), but they are exactly what a D4 conformance row (`caller-scoped?` proof) + the D2 audit would have flagged. Fixed independently of the mechanism, tracked as the mechanism's motivating evidence.
+
+### E3 — Structural: paths that never enter the security middleware (Class B)
+
+| Site | Note |
+|:---|:---|
+| `objectql/engine.ts:641` `executeAction` | handler invoked **directly**, not via `executeWithMiddleware` — an action touching the driver gets no RLS/FLS/CRUD/tenant |
+| `objectql/engine.ts:2793` `engine.execute()` / `driver-sql:1371` `driver.execute()` | raw SQL, documented tenant-bypass; caller trusted to inline the filter |
+| `objectql/engine.ts:2956/2991` `getDriverByName`/`getDriverForObject` | hand out the raw driver — middleware-free read/write |
+| bulk `update({multi:true})`/`deleteMany` on pure-OWD `private` objects (`sharing-plugin.ts:391`, `security-plugin.ts:821`) | single-id owner check not applied to multi-writes → members modify peers' rows | (#2982)
+
+### E4 — Unknown seams (identity not visibly threaded — investigate, then register)
+
+`runtime/http-dispatcher.ts:1488` **GraphQL** (passes only `{request}`, not the resolved `ec`); `service-realtime` **websocket** delivery (no per-subscriber RLS re-check); attachment **blob-level** RLS; the `chatWithTools` contract's optional actor. Each becomes a D4 matrix row in state `experimental`/`UNKNOWN` with a follow-up.
+
+### E5 — The D2 migration is large but has a prototype
+
+~300 elevation call sites resolve to ~50 hand-rolled `SYSTEM_CTX`/`isSystem` constructors across ~25 files (heaviest: `plugin-approvals` ~64, `plugin-security` ~58, `plugin-sharing` ~52, `plugin-auth` ~44 with 13 in one file). **None are audited today.** The canonical shape already exists — `service-automation/runtime-identity.ts` `resolveRunDataContext` (the sole `runAs:'system'→context` mapper) — which `systemContext(reason)` generalizes. This sizes D2 honestly: a mechanical but wide migration, front-loaded on four packages.
+
+---
+
 ## What lands now (the non-speculative slice)
 
 Per ADR-0049's staging discipline, v1 of this ADR builds only what has a consumer today:
 
 1. **This decision record** — the invariant, the admission test, the staging plan.
 2. **`systemContext(reason)` + `SystemGrant`** in the engine contract package, with audit emission; migrate the *known* elevation literals (boot/seeding, the action facades' trusted dispatch, report scheduler's `SYSTEM_CTX`) as the proof-of-idiom.
-3. **Matrix rows** for today's surfaces (REST/MCP CRUD, actions, flows, triggers) in their *honest current states* — actions register as `surface: trusted-body, gated at invoke (ai.exposed + capability)` per #2964 — plus the meta-test skeleton with the transition allowlist.
+3. **Matrix rows** for the surfaces the Evidence section enumerated, in their *honest current states* — actions register as `trusted-body, gated at invoke (ai.exposed + capability)` per #2964 — plus the meta-test skeleton with the transition allowlist.
 4. **The authoring lint** from D6.3 (`ai.exposed` + trusted body ⇒ warn).
+
+The confirmed-exploitable instances the sweep surfaced (E2) are **not** waiting on this mechanism — they are fixed independently and tracked at #2980 (reports IDOR + scheduled-report RLS bypass), #2981 (knowledge/RAG retrieval fall-open), #2982 (bulk-write OWD gap). Their existence is this ADR's motivating evidence, not its deliverable.
 
 Everything else — the D3 signature migration, strict-mode-ON-in-CI per package, the D5 default flip, D6's `runAs` field — is explicitly **M2+, gated on the prior step's evidence**, tracked as separate issues under #2849.
 
@@ -215,6 +268,7 @@ Everything else — the D3 signature migration, strict-mode-ON-in-CI per package
 - framework#2964 — the landed invoke-time hardening (ai.exposed gate, flow context forwarding, trusted-dispatch audit) — v1's audit substrate
 - framework#2308 / #1888 — the flow instance of the same class; the lint idiom D3/D6 reuse
 - framework#2845 / #2843 — the agent action surface whose safety framing this ADR makes true by construction
-- `packages/plugins/plugin-security/src/security-plugin.ts` — the empty-principal seam (D5's target)
+- framework#2980 / #2981 / #2982 — the confirmed-exploitable instances the Evidence sweep surfaced (reports IDOR + scheduled-report RLS bypass; knowledge/RAG retrieval fall-open; bulk-write OWD gap) — fixed independently; this ADR's motivating evidence
+- `packages/plugins/plugin-security/src/security-plugin.ts` — the empty-principal seam (`:626` middleware, `:1689` getReadFilter) (D5's target)
 - `packages/runtime/src/http-dispatcher.ts` — `buildActionEngineFacade` (both facades), `invokeBusinessAction`
 - `packages/dogfood/test/authz-conformance.matrix.ts` — the ADR-0056 D10 matrix D4 extends
