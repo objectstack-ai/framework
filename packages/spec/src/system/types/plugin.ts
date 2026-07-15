@@ -2,7 +2,7 @@
 
 /**
  * Runtime interfaces for ObjectStack plugins.
- * These define the contract that every plugin must implement to be loaded by ObjectOS.
+ * These define the contract that every plugin must implement to be loaded by the ObjectStack runtime.
  */
 
 /**
@@ -42,10 +42,10 @@ export interface ObjectQLClient {
 }
 
 /**
- * ObjectOS Kernel interface.
+ * Kernel interface.
  * Provides access to core operating system services.
  */
-export interface ObjectOSKernel {
+export interface IKernel {
   /**
    * Get a reference to another installed plugin by its ID.
    * @param pluginId - The unique identifier of the plugin
@@ -69,6 +69,10 @@ export interface ObjectOSKernel {
   on(event: string, handler: (data: any) => void): () => void;
 }
 
+/** @deprecated Renamed — use {@link IKernel}. The "ObjectOS" layer name is retired; ObjectOS now names the commercial runtime environment. Kept as an empty interface extension (not a type alias) so declaration merging and the published API surface stay interface-compatible. */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface ObjectOSKernel extends IKernel {}
+
 /**
  * Plugin Context provided to plugin lifecycle methods.
  * This context gives plugins access to the ObjectStack runtime environment.
@@ -81,10 +85,10 @@ export interface PluginContext {
   ql: ObjectQLClient;
   
   /**
-   * ObjectOS kernel for system-level operations.
+   * Kernel for system-level operations.
    * Use this to interact with other plugins and system services.
    */
-  os: ObjectOSKernel;
+  os: IKernel;
   
   /**
    * Logger instance for structured logging.
