@@ -118,4 +118,19 @@ export const SystemUploadSession = ObjectSchema.create({
       label: 'Updated At',
     }),
   },
+
+  // ADR-0057 (#2970 item 4): an upload session is ephemeral state, never
+  // business truth — completed, failed, expired, and abandoned in-progress
+  // sessions would otherwise accumulate forever (the sys_file reaper in
+  // #2755 covers files, not sessions). The TTL reaps any row 1d past its own
+  // `expires_at` (abandoned in-progress sessions included); the retention
+  // backstop reaps terminal-status rows by age even if `expires_at` was
+  // never set. NOTE: this reaps the session ROW only — a reap guard that
+  // aborts the backend multipart upload for partial S3 sessions is a filed
+  // follow-up (row reap is the declared scope of this item).
+  lifecycle: {
+    class: 'transient',
+    ttl: { field: 'expires_at', expireAfter: '1d' },
+    retention: { maxAge: '7d', onlyWhen: { status: { $in: ['completed', 'failed', 'expired'] } } },
+  },
 });

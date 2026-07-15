@@ -199,6 +199,31 @@ describe('attachments permission matrix (#2755)', () => {
     expect(allowed.status).toBeLessThan(300);
   });
 
+  // ── (item 3) edit-on-parent: read is not enough to attach ────────────
+  it('(item 3) a member who can READ but not EDIT the parent cannot attach — yet can still list its attachments', async () => {
+    // att_readonly is public_read: every member reads it, only the owner edits.
+    const ro = await ql.insert('att_readonly', { name: 'ro', owner_id: adminId }, { context: { ...SYS } });
+
+    // memberA can READ the record…
+    const canRead = await stack.apiAs(memberATok, 'GET', `/data/att_readonly/${ro.id}`);
+    expect(canRead.status).toBe(200);
+
+    // …but attaching requires EDIT (Salesforce parity) → 403.
+    const file = await uploadFile(stack, memberATok);
+    const denied = await attach(memberATok, 'att_readonly', ro.id, file);
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as any).code).toBe('ATTACHMENT_PARENT_ACCESS');
+
+    // The owner (admin) can attach, and memberA — who can read the parent —
+    // then sees that attachment in the list (read-visibility, item 1).
+    const adminFile = await uploadFile(stack, adminTok);
+    const attached = await attach(adminTok, 'att_readonly', ro.id, adminFile);
+    expect(attached.status).toBeLessThan(300);
+    const list = await stack.apiAs(memberATok, 'GET', '/data/sys_attachment');
+    const rows = ((await list.json()) as any).records ?? [];
+    expect(rows.some((r: any) => r.file_id === adminFile)).toBe(true);
+  });
+
   // ── (a) delete gate ──────────────────────────────────────────────────
   it('(a, DOGFOOD FINDING pin) the everyone baseline carries NO delete bit: an ungranted member cannot delete even their OWN attachment (403 PERMISSION_DENIED)', async () => {
     // ADR-0090 D5 / #2753: `member_default` is the anchor-bound baseline and
@@ -449,6 +474,31 @@ describe('attachments permission matrix (#2755)', () => {
       const report = await lifecycle.sweep();
       expect(report.errors, JSON.stringify(report.errors)).toEqual([]);
       expect(await ql.findOne('sys_file', { where: { id: data.fileId }, context: SYS })).toBeNull();
+    });
+
+    it('(item 4) abandoned sys_upload_session rows are reaped past their expiry window', async () => {
+      // Initiate a chunked upload (creates a sys_upload_session) but never
+      // complete it.
+      const init = await stack.api('/storage/upload/chunked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${memberATok}` },
+        body: JSON.stringify({ filename: 'big.bin', mimeType: 'application/octet-stream', totalSize: 10_485_760 }),
+      });
+      expect(init.status).toBe(200);
+      const { uploadId } = ((await init.json()) as any).data;
+      const session = await ql.findOne('sys_upload_session', { where: { id: uploadId }, context: SYS });
+      expect(session?.id, 'session row created').toBeTruthy();
+
+      // Backdate expires_at past the 1d TTL grace.
+      await ql.update(
+        'sys_upload_session',
+        { id: uploadId, expires_at: new Date(Date.now() - 2 * DAY_MS) },
+        { context: { ...SYS } },
+      );
+
+      const report = await lifecycle.sweep();
+      expect(report.errors, JSON.stringify(report.errors)).toEqual([]);
+      expect(await ql.findOne('sys_upload_session', { where: { id: uploadId }, context: SYS })).toBeNull();
     });
   });
 });

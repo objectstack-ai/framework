@@ -60,6 +60,20 @@ export const AttNoFiles = ObjectSchema.create({
   },
 });
 
+export const AttReadonly = ObjectSchema.create({
+  name: 'att_readonly',
+  label: 'Attachment Readonly',
+  pluralLabel: 'Attachment Readonlys',
+  // public_read: every member can READ, only the owner can EDIT — the case
+  // that distinguishes edit-on-parent (#2970 item 3) from read visibility.
+  sharingModel: 'public_read',
+  enable: { files: true },
+  fields: {
+    name: Field.text({ label: 'Name', required: true }),
+    owner_id: Field.text({ label: 'Owner' }),
+  },
+});
+
 /**
  * The domain grant a real app ships when it turns the attachments panel on
  * for members: `member_default` (the `everyone` anchor baseline) carries NO
@@ -93,5 +107,5 @@ export const attachmentsFixtureStack = defineStack({
     description:
       'Three-object app exercising the #2755 attachment permission matrix: parent visibility, uploader/editor delete, enable.files gate.',
   },
-  objects: [AttCase, AttSecret, AttNoFiles],
+  objects: [AttCase, AttSecret, AttNoFiles, AttReadonly],
 });

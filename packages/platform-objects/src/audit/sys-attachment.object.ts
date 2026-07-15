@@ -132,7 +132,12 @@ export const SysAttachment = ObjectSchema.create({
     trackHistory: false,
     searchable: true,
     apiEnabled: true,
-    trash: true,
+    // [#2970 item 5 / ADR-0049] `trash` is `dead` in the liveness ledger (no
+    // engine soft-delete reader) and attachment deletes ARE hard (#2755): the
+    // reap guard reclaims a file's bytes once its last join row is gone, so a
+    // "restore" would dangle. Declare `false` — the honest state — rather than
+    // claim a restore capability the runtime does not provide.
+    trash: false,
     mru: false,
     clone: false,
   },

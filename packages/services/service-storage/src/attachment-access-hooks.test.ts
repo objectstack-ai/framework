@@ -99,6 +99,31 @@ describe('attachment access — beforeInsert (parent visibility + provenance)', 
     ).resolves.toBeUndefined();
     await expect(beforeInsert(insertCtx({ parent_object: 'x', parent_id: 'r' }, {}))).resolves.toBeUndefined();
   });
+
+  // #2970 item 3 — with a sharing service present, attach requires EDIT
+  // (canEdit), not merely read visibility.
+  it('with sharing: rejects attaching when the caller cannot EDIT the parent (even if readable)', async () => {
+    const canEdit = vi.fn(async () => false);
+    const { beforeInsert } = install({ sharing: { canEdit } });
+    const ctx = insertCtx(
+      { parent_object: 'att_readonly', parent_id: 'r1', file_id: 'f1' },
+      { userId: 'u1', visible: ['att_readonly/r1'] }, // readable, but canEdit=false
+    );
+    await expect(beforeInsert(ctx)).rejects.toMatchObject({
+      code: 'ATTACHMENT_PARENT_ACCESS',
+      status: 403,
+    });
+    expect(canEdit).toHaveBeenCalledWith('att_readonly', 'r1', expect.objectContaining({ userId: 'u1' }));
+  });
+
+  it('with sharing: allows attaching when the caller CAN edit the parent', async () => {
+    const { beforeInsert } = install({ sharing: { canEdit: async () => true } });
+    const ctx = insertCtx(
+      { parent_object: 'att_case', parent_id: 'r1', file_id: 'f1' },
+      { userId: 'u1', visible: [] }, // not readable via api, but canEdit=true governs
+    );
+    await expect(beforeInsert(ctx)).resolves.toBeUndefined();
+  });
 });
 
 describe('attachment access — beforeDelete (uploader or parent editor)', () => {

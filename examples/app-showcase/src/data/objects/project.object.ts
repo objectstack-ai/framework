@@ -19,6 +19,12 @@ export const Project = ObjectSchema.create({
   icon: 'folder-kanban',
   description: 'A delivery project for an account.',
 
+  // [#2727 / #2970] Opt in to the generic Attachments panel on the record
+  // detail page — projects carry briefs, SOWs, and deliverable files. This is
+  // the showcase's files-enabled object for browser-dogfooding the attachments
+  // surface (upload / list / download / delete + parent-derived access).
+  enable: { files: true },
+
   fields: {
     name: Field.text({ label: 'Project Name', required: true, searchable: true, maxLength: 200 }),
     // `relatedList*` is the read-side mirror of inline editing: the Account's
