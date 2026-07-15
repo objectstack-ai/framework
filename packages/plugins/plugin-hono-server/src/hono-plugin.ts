@@ -1,6 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Plugin, PluginContext, IHttpServer, IDataEngine } from '@objectstack/core';
+import {
+    Plugin, PluginContext, IHttpServer, IDataEngine,
+    shouldDenyAnonymous, ANONYMOUS_DENY_BODY, ANONYMOUS_DENY_STATUS,
+} from '@objectstack/core';
 import {
     RestServerConfig,
 } from '@objectstack/spec/api';
@@ -555,19 +558,14 @@ export class HonoServerPlugin implements Plugin {
             );
         }
         // Returns a 401 Response when the caller is anonymous under the deny
-        // posture, else null (caller proceeds). `isSystem` is never set on
-        // inbound HTTP (internal-only), so it cannot be forged to bypass this.
-        const denyAnonymous = (c: any, execCtx: any): Response | null => {
-            if (!requireAuth) return null;
-            if (execCtx?.userId || execCtx?.isSystem) return null;
-            return c.json(
-                {
-                    error: 'unauthenticated',
-                    message: 'Authentication is required to access this endpoint.',
-                },
-                401,
-            );
-        };
+        // posture, else null (caller proceeds). Delegates the decision to the
+        // shared `shouldDenyAnonymous` (#2567) so every HTTP seam stays in
+        // lockstep. `isSystem` is never set on inbound HTTP (internal-only), so
+        // it cannot be forged to bypass this.
+        const denyAnonymous = (c: any, execCtx: any): Response | null =>
+            shouldDenyAnonymous({ requireAuth, userId: execCtx?.userId, isSystem: execCtx?.isSystem })
+                ? c.json(ANONYMOUS_DENY_BODY, ANONYMOUS_DENY_STATUS)
+                : null;
 
         // Basic CRUD data endpoints — delegate to ObjectQL service directly
         const getObjectQL = () => ctx.getService<IDataEngine>('objectql');

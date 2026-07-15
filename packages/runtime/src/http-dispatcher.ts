@@ -1,6 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ObjectKernel, getEnv, resolveLocale, evaluateAuthGate, isAuthGateAllowlisted } from '@objectstack/core';
+import {
+    ObjectKernel, getEnv, resolveLocale, evaluateAuthGate, isAuthGateAllowlisted,
+    shouldDenyAnonymous, ANONYMOUS_DENY_STATUS, ANONYMOUS_DENY_CODE, ANONYMOUS_DENY_MESSAGE,
+} from '@objectstack/core';
 import { isMcpServerEnabled } from '@objectstack/types';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
@@ -1629,19 +1632,20 @@ export class HttpDispatcher {
         // The dispatcher-plugin's direct `/graphql` route calls us WITHOUT
         // resolving identity first (unlike `dispatch()`, which populates
         // `context.executionContext`), so resolve it here when absent.
-        if (this.requireAuth) {
-            let ec: any = context.executionContext;
-            if (!ec) {
-                ec = await this.resolveRequestExecutionContext(context);
-                if (ec) context.executionContext = ec;
-            }
-            if (!ec?.userId && !ec?.isSystem) {
-                throw {
-                    statusCode: 401,
-                    message: 'Authentication is required to access this endpoint.',
-                    code: 'unauthenticated',
-                };
-            }
+        let ec: any = context.executionContext;
+        if (this.requireAuth && !ec) {
+            ec = await this.resolveRequestExecutionContext(context);
+            if (ec) context.executionContext = ec;
+        }
+        // Body-routed seam: no meaningful request path, so pass none — the
+        // shared decision then denies anonymous unconditionally (see the
+        // `undefined`-path trap guard in `shouldDenyAnonymous`).
+        if (shouldDenyAnonymous({ requireAuth: this.requireAuth, userId: ec?.userId, isSystem: ec?.isSystem })) {
+            throw {
+                statusCode: ANONYMOUS_DENY_STATUS,
+                message: ANONYMOUS_DENY_MESSAGE,
+                code: ANONYMOUS_DENY_CODE,
+            };
         }
 
         if (typeof this.kernel.graphql !== 'function') {
@@ -1772,12 +1776,12 @@ export class HttpDispatcher {
         // the cloud runtime). Object/field schemas — SYSTEM-object schemas on a
         // tenant-less host — must not be readable by anonymous callers when the
         // deployment requires auth. No-op when `requireAuth` is off.
-        if (this.requireAuth) {
+        {
             const ec: any = _context.executionContext;
-            if (!ec?.userId && !ec?.isSystem) {
+            if (shouldDenyAnonymous({ requireAuth: this.requireAuth, userId: ec?.userId, isSystem: ec?.isSystem })) {
                 return {
                     handled: true,
-                    response: this.error('Authentication is required to access this endpoint.', 401, { code: 'unauthenticated' }),
+                    response: this.error(ANONYMOUS_DENY_MESSAGE, ANONYMOUS_DENY_STATUS, { code: ANONYMOUS_DENY_CODE }),
                 };
             }
         }
@@ -3864,12 +3868,14 @@ export class HttpDispatcher {
             // adapter/model config back. Gate when the deployment requires
             // auth; an authenticated user (or an internal system context)
             // passes, matching the REST `enforceAuth` seam. Off → unchanged.
-            if (this.requireAuth && route.auth !== false) {
+            if (route.auth !== false) {
                 const gec: any = context.executionContext;
-                if (!gec?.userId && !gec?.isSystem) {
+                // `requireAuth && route.auth !== false` is the AI-route contract;
+                // the shared function owns the anonymous decision itself.
+                if (shouldDenyAnonymous({ requireAuth: this.requireAuth, userId: gec?.userId, isSystem: gec?.isSystem })) {
                     return {
                         handled: true,
-                        response: this.error('Authentication is required to access this endpoint.', 401, { code: 'unauthenticated' }),
+                        response: this.error(ANONYMOUS_DENY_MESSAGE, ANONYMOUS_DENY_STATUS, { code: ANONYMOUS_DENY_CODE }),
                     };
                 }
             }

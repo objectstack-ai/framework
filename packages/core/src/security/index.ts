@@ -102,5 +102,15 @@ export {
 } from './posture-ladder.js';
 export { isAuthGateAllowlisted, evaluateAuthGate, type AuthGate } from './auth-gate.js';
 
+// #2567 — the single anonymous-deny decision shared by every HTTP seam.
+export {
+  shouldDenyAnonymous,
+  ANONYMOUS_DENY_BODY,
+  ANONYMOUS_DENY_STATUS,
+  ANONYMOUS_DENY_CODE,
+  ANONYMOUS_DENY_MESSAGE,
+  type AnonymousDenyInput,
+} from './anonymous-deny.js';
+
 // ADR-0091 D1/D2 — grant validity windows, the shared resolution-time predicate.
 export { isGrantActive, isGrantExpired, type GrantValidityWindow } from './grant-validity.js';
