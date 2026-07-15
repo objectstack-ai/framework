@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { resolveAuthzContext } from '@objectstack/core';
 import type { IHttpServer, IDataEngine, IStorageService } from '@objectstack/spec/contracts';
 import {
   OBSERVABILITY_METRICS_SERVICE,
@@ -12,7 +13,9 @@ import type { LocalStorageAdapterOptions } from './local-storage-adapter.js';
 import { S3StorageAdapter } from './s3-storage-adapter.js';
 import type { S3StorageAdapterOptions } from './s3-storage-adapter.js';
 import { StorageMetadataStore } from './metadata-store.js';
+import type { FileRecord } from './metadata-store.js';
 import { registerStorageRoutes } from './storage-routes.js';
+import type { FileReadVerdict } from './storage-routes.js';
 import { installAttachmentLifecycleHooks, createSysFileReapGuard } from './attachment-lifecycle.js';
 import { installAttachmentAccessHooks, installAttachmentReadVisibility } from './attachment-access-hooks.js';
 import { SystemFile, SystemUploadSession } from './objects/index.js';
@@ -251,6 +254,7 @@ export class StorageServicePlugin implements Plugin {
             presignedTtl: this.options.presignedTtl,
             sessionTtl: this.options.sessionTtl,
             resolveSession: buildAuthSessionResolver(ctx),
+            authorizeFileRead: buildFileReadAuthorizer(ctx, engine),
             logger: ctx.logger,
           });
 
@@ -372,51 +376,121 @@ function resolveMetrics(
   return new NoopMetricsRegistry();
 }
 
-/**
- * Bridge the kernel's `auth` service (better-auth) into the storage routes'
- * upload gate (#2755). Returns `undefined` when no auth service is present —
- * the routes then stay open (bare kernels/tests, logged once there).
- *
- * Normalization mirrors rest-server's session resolution: the service may be
- * the AuthManager wrapper (`getApi()`) or the raw better-auth instance
- * (`.api`), and `getSession` needs a Web `Headers` instance.
- */
-function buildAuthSessionResolver(
-  ctx: PluginContext,
-): ((req: { headers?: unknown }) => Promise<{ userId?: string } | null>) | undefined {
+/** Normalize adapter request headers to a Web `Headers` (better-auth needs it). */
+function toWebHeaders(req: { headers?: unknown }): any | null {
+  const rawHeaders: any = req?.headers;
+  if (rawHeaders && typeof rawHeaders.get === 'function') return rawHeaders;
+  if (rawHeaders && typeof rawHeaders === 'object') {
+    const headers = new (globalThis as any).Headers();
+    for (const [k, v] of Object.entries(rawHeaders)) {
+      if (Array.isArray(v)) v.forEach((x) => headers.append(k, String(x)));
+      else if (v != null) headers.set(k, String(v));
+    }
+    return headers;
+  }
+  return null;
+}
+
+/** A `getSession(headers)` bound to the kernel's `auth` service, or null. */
+function buildGetSession(ctx: PluginContext): ((headers: any) => Promise<any>) | null {
   let authService: any;
   try {
     authService = ctx.getService<any>('auth');
   } catch {
-    return undefined;
+    return null;
   }
-  if (!authService) return undefined;
+  if (!authService) return null;
+  return async (headers: any) => {
+    let api: any = authService.api;
+    if (!api && typeof authService.getApi === 'function') api = await authService.getApi();
+    if (!api?.getSession) return undefined;
+    return api.getSession({ headers });
+  };
+}
 
+/**
+ * Bridge the kernel's `auth` service (better-auth) into the storage routes'
+ * upload gate (#2755). Returns `undefined` when no auth service is present —
+ * the routes then stay open (bare kernels/tests, logged once there).
+ */
+function buildAuthSessionResolver(
+  ctx: PluginContext,
+): ((req: { headers?: unknown }) => Promise<{ userId?: string } | null>) | undefined {
+  const getSession = buildGetSession(ctx);
+  if (!getSession) return undefined;
   return async (req) => {
     try {
-      let api: any = authService.api;
-      if (!api && typeof authService.getApi === 'function') api = await authService.getApi();
-      if (!api?.getSession) return null;
-
-      const rawHeaders: any = req?.headers;
-      let headers: any;
-      if (rawHeaders && typeof rawHeaders.get === 'function') {
-        headers = rawHeaders;
-      } else if (rawHeaders && typeof rawHeaders === 'object') {
-        headers = new (globalThis as any).Headers();
-        for (const [k, v] of Object.entries(rawHeaders)) {
-          if (Array.isArray(v)) v.forEach((x) => headers.append(k, String(x)));
-          else if (v != null) headers.set(k, String(v));
-        }
-      } else {
-        return null;
-      }
-
-      const session: any = await api.getSession({ headers });
+      const headers = toWebHeaders(req);
+      if (!headers) return null;
+      const session: any = await getSession(headers);
       const userId = session?.user?.id;
       return userId ? { userId: String(userId) } : null;
     } catch {
       return null;
+    }
+  };
+}
+
+/**
+ * Authorize an `attachments`-scope download (#2970 item 2). Builds the FULL
+ * caller ExecutionContext via `resolveAuthzContext` (the same shared resolver
+ * rest-server uses — a bare `{ userId }` would lack the resolved permissions
+ * the parent RLS needs), then allows when the caller is the file's owner or
+ * can READ a record the file is attached to. Returns `undefined` (routes stay
+ * open) when the auth service or engine is absent.
+ */
+function buildFileReadAuthorizer(
+  ctx: PluginContext,
+  engine: IDataEngine | null,
+): ((file: FileRecord, req: { headers?: unknown }) => Promise<FileReadVerdict>) | undefined {
+  const getSession = buildGetSession(ctx);
+  if (!getSession || !engine || typeof (engine as any).find !== 'function') return undefined;
+
+  return async (file, req) => {
+    try {
+      const headers = toWebHeaders(req);
+      if (!headers) return 'unauthenticated';
+      const authz = await resolveAuthzContext({ ql: engine, headers, getSession });
+      if (!authz.userId) return 'unauthenticated';
+
+      // Uploader / owner may always download.
+      if (file.owner_id && String(file.owner_id) === String(authz.userId)) return 'allow';
+
+      // Otherwise: readable via any parent record this file is attached to.
+      const links = (await (engine as any).find('sys_attachment', {
+        where: { file_id: file.id },
+        fields: ['parent_object', 'parent_id'],
+        limit: 500,
+        context: { isSystem: true },
+      })) as Array<Record<string, unknown>>;
+
+      const byObject = new Map<string, Set<string>>();
+      for (const link of links) {
+        const po = link.parent_object;
+        const pid = link.parent_id;
+        if (typeof po !== 'string' || !po || po === 'sys_attachment') continue;
+        if (pid === undefined || pid === null || pid === '') continue;
+        let ids = byObject.get(po);
+        if (!ids) byObject.set(po, (ids = new Set()));
+        ids.add(String(pid));
+      }
+      for (const [parentObject, idSet] of byObject) {
+        const ids = [...idSet];
+        try {
+          const visible = (await (engine as any).find(parentObject, {
+            where: { id: { $in: ids } },
+            fields: ['id'],
+            limit: ids.length,
+            context: authz,
+          })) as Array<Record<string, unknown>>;
+          if (visible.length) return 'allow';
+        } catch {
+          // unknown/failing parent object — try the next
+        }
+      }
+      return 'deny';
+    } catch {
+      return 'deny'; // fail closed
     }
   };
 }

@@ -284,13 +284,41 @@ describe('attachments permission matrix (#2755)', () => {
     expect(okRows.some((r: any) => r.file_id === okFile)).toBe(true);
   });
 
-  // ── (e-read) known gap: anonymous downloads ──────────────────────────
-  it('(e-read, KNOWN GAP pin) anonymous download of a committed file id succeeds (capability URL)', async () => {
-    const fileId = await uploadFile(stack, memberATok);
-    const res = await stack.api(`/storage/files/${fileId}/url`);
-    // Anyone holding a fileId can mint a download URL without a session.
-    // Authenticated downloads / signed-link gating is a filed follow-up.
-    expect(res.status).toBe(200);
+  // ── (e-read) attachment downloads inherit parent visibility (#2970 item 2) ──
+  it('(e-read) attachments download requires auth AND read access to a parent record', async () => {
+    // A file attached to the admin-owned, private att_secret record.
+    const adminFile = await uploadFile(stack, adminTok);
+    const linked = await attach(adminTok, 'att_secret', secretId, adminFile);
+    expect(linked.status).toBeLessThan(300);
+
+    // Anonymous → 401 (was a 200 capability URL before #2970).
+    const anon = await stack.api(`/storage/files/${adminFile}/url`);
+    expect(anon.status).toBe(401);
+    expect(((await anon.json()) as any).code).toBe('AUTH_REQUIRED');
+
+    // memberB is authenticated but cannot read att_secret and is not the
+    // owner → 403.
+    const denied = await stack.apiAs(memberBTok, 'GET', `/storage/files/${adminFile}/url`);
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as any).code).toBe('ATTACHMENT_DOWNLOAD_DENIED');
+
+    // The owner (admin) → 200 with a signed URL.
+    const owner = await stack.apiAs(adminTok, 'GET', `/storage/files/${adminFile}/url`);
+    expect(owner.status).toBe(200);
+    expect(((await owner.json()) as any).url).toBeTruthy();
+
+    // Parent-inherited read: a file on the PUBLIC att_case record is
+    // downloadable by any member who can read that record — even a
+    // non-uploader (memberB downloads memberA's attachment).
+    const caseFile = await uploadFile(stack, memberATok);
+    const caseLink = await attach(memberATok, 'att_case', caseAId, caseFile);
+    expect(caseLink.status).toBeLessThan(300);
+    const inherited = await stack.apiAs(memberBTok, 'GET', `/storage/files/${caseFile}/url`);
+    expect(inherited.status).toBe(200);
+
+    // The stable 302 endpoint is gated the same way (anon → 401).
+    const anon302 = await stack.api(`/storage/files/${adminFile}`);
+    expect(anon302.status).toBe(401);
   });
 
   // ── Part 1: sys_file orphan lifecycle, end to end ─────────────────────

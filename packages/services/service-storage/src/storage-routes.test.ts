@@ -250,6 +250,89 @@ describe('Storage REST Routes', () => {
     });
   });
 
+  describe('attachments download gate (#2970 item 2)', () => {
+    const commit = async (s: StorageMetadataStore, rec: Partial<import('./metadata-store').FileRecord>) =>
+      s.createFile({
+        id: rec.id ?? 'f-dl',
+        key: rec.key ?? `attachments/${rec.id ?? 'f-dl'}.bin`,
+        name: 'x.bin',
+        status: 'committed',
+        acl: rec.acl ?? 'private',
+        scope: rec.scope ?? 'attachments',
+        owner_id: rec.owner_id,
+        ...rec,
+      } as any);
+
+    function serverWith(verdict: import('./storage-routes').FileReadVerdict | 'skip', extra: any = {}) {
+      const server = createMockHttpServer();
+      const s = new StorageMetadataStore(null);
+      const authorizeFileRead =
+        verdict === 'skip' ? undefined : vi.fn(async () => verdict as any);
+      registerStorageRoutes(server as any, adapter, s, {
+        basePath: '/api/v1/storage',
+        authorizeFileRead,
+        ...extra,
+      });
+      return { server, store: s, authorizeFileRead };
+    }
+
+    const hit = async (server: any, path: string, fileId: string) => {
+      const res = createMockRes();
+      await server._getHandler('GET', path)!(createMockReq({ params: { fileId } }), res);
+      return res;
+    };
+
+    it('401s an unauthenticated download of an attachments file (both endpoints)', async () => {
+      const { server, store: s } = serverWith('unauthenticated');
+      await commit(s, { id: 'a1' });
+      for (const p of ['/api/v1/storage/files/:fileId/url', '/api/v1/storage/files/:fileId']) {
+        const res = await hit(server, p, 'a1');
+        expect(res._status, p).toBe(401);
+        expect(res._json?.code, p).toBe('AUTH_REQUIRED');
+      }
+    });
+
+    it('403s when the caller cannot read any parent record', async () => {
+      const { server, store: s } = serverWith('deny');
+      await commit(s, { id: 'a2' });
+      const res = await hit(server, '/api/v1/storage/files/:fileId/url', 'a2');
+      expect(res._status).toBe(403);
+      expect(res._json?.code).toBe('ATTACHMENT_DOWNLOAD_DENIED');
+    });
+
+    it('allows the download when authorized, minting a short-lived signed URL', async () => {
+      const { server, store: s, authorizeFileRead } = serverWith('allow', { downloadTtl: 120 });
+      await commit(s, { id: 'a3' });
+      const res = await hit(server, '/api/v1/storage/files/:fileId/url', 'a3');
+      expect(res._status).toBe(200);
+      expect(res._json.url).toContain('/_local/raw/');
+      expect(authorizeFileRead).toHaveBeenCalledOnce();
+    });
+
+    it('never gates a public_read attachments file (authorizer not consulted)', async () => {
+      const { server, store: s, authorizeFileRead } = serverWith('deny');
+      await commit(s, { id: 'a4', acl: 'public_read' });
+      const res = await hit(server, '/api/v1/storage/files/:fileId/url', 'a4');
+      expect(res._status).toBe(200);
+      expect(authorizeFileRead).not.toHaveBeenCalled();
+    });
+
+    it('never gates a non-attachments file (avatars / field files stay open)', async () => {
+      const { server, store: s, authorizeFileRead } = serverWith('deny');
+      await commit(s, { id: 'a5', scope: 'user', key: 'user/a5.png' });
+      const res = await hit(server, '/api/v1/storage/files/:fileId', 'a5');
+      expect(res._status).toBe(302);
+      expect(authorizeFileRead).not.toHaveBeenCalled();
+    });
+
+    it('stays open when no authorizer is wired (back-compat)', async () => {
+      const { server, store: s } = serverWith('skip');
+      await commit(s, { id: 'a6' });
+      const res = await hit(server, '/api/v1/storage/files/:fileId/url', 'a6');
+      expect(res._status).toBe(200);
+    });
+  });
+
   describe('PUT/GET /_local/raw/:token', () => {
     it('should accept raw upload with valid token and serve download', async () => {
       // Generate a presigned upload

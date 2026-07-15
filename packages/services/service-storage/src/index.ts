@@ -10,7 +10,7 @@ export type { S3StorageAdapterOptions } from './s3-storage-adapter.js';
 export { StorageMetadataStore } from './metadata-store.js';
 export type { FileRecord, UploadSessionRecord } from './metadata-store.js';
 export { registerStorageRoutes } from './storage-routes.js';
-export type { StorageRoutesOptions } from './storage-routes.js';
+export type { StorageRoutesOptions, FileReadVerdict } from './storage-routes.js';
 export { SystemFile, SystemUploadSession } from './objects/index.js';
 export { installAttachmentLifecycleHooks, createSysFileReapGuard } from './attachment-lifecycle.js';
 export type { AttachmentLifecycleEngine, AttachmentLifecycleLogger } from './attachment-lifecycle.js';

@@ -2,8 +2,11 @@
 
 import { randomUUID } from 'node:crypto';
 import type { IHttpServer, IHttpRequest, IHttpResponse, IStorageService } from '@objectstack/spec/contracts';
-import type { StorageMetadataStore } from './metadata-store.js';
+import type { StorageMetadataStore, FileRecord } from './metadata-store.js';
 import type { LocalStorageAdapter } from './local-storage-adapter.js';
+
+/** Authorization verdict for an attachments-scope download (#2970 item 2). */
+export type FileReadVerdict = 'allow' | 'deny' | 'unauthenticated';
 
 /**
  * Options for the storage route registration helper.
@@ -24,6 +27,26 @@ export interface StorageRoutesOptions {
    * is a tracked follow-up needing cookie sessions or signed links).
    */
   resolveSession?: (req: IHttpRequest) => Promise<{ userId?: string } | null | undefined>;
+  /**
+   * Authorize a DOWNLOAD of an `attachments`-scope file (#2970 item 2). When
+   * wired, the download endpoints (`/files/:fileId` and `/files/:fileId/url`)
+   * consult this for `scope==='attachments'`, non-`public_read` files only:
+   *   - `unauthenticated` → 401 (no session)
+   *   - `deny` → 403 (session, but cannot read a parent record the file is
+   *     attached to and is not the owner)
+   *   - `allow` → a short-lived signed URL is issued
+   * Non-attachments files (field files, avatars, org logos) keep the stable
+   * anonymous capability URL — they are embedded in `<img src>` which cannot
+   * carry a bearer token, and are out of scope for the attachments leak.
+   * When absent (bare kernels, tests), all downloads stay open (back-compat).
+   */
+  authorizeFileRead?: (file: FileRecord, req: IHttpRequest) => Promise<FileReadVerdict>;
+  /**
+   * TTL (seconds) for the signed URL minted on a GATED attachments download.
+   * Short by design — the link is followed immediately after an explicit
+   * click. Default 300 (5 min). Non-gated downloads keep `presignedTtl`.
+   */
+  downloadTtl?: number;
   /** Optional logger for the one-time open-mode notice. */
   logger?: { info(msg: string): void; warn(msg: string): void };
 }
@@ -55,6 +78,40 @@ export function registerStorageRoutes(
   const basePath = opts.basePath ?? '/api/v1/storage';
   const presignedTtl = opts.presignedTtl ?? 3600;
   const sessionTtl = opts.sessionTtl ?? 86400;
+  const downloadTtl = opts.downloadTtl ?? 300;
+
+  // ── Download authorization gate (#2970 item 2) ───────────────────────
+  // Only `attachments`-scope, non-public files are gated; everything else
+  // keeps the stable anonymous capability URL (image/avatar embedding).
+  // Returns the signed-URL TTL to use, or `false` if a response was already
+  // sent (401/403) and the handler must stop.
+  const authorizeDownload = async (
+    file: FileRecord,
+    req: IHttpRequest,
+    res: IHttpResponse,
+  ): Promise<number | false> => {
+    if (file.scope !== 'attachments' || file.acl === 'public_read' || !opts.authorizeFileRead) {
+      return presignedTtl;
+    }
+    let verdict: FileReadVerdict;
+    try {
+      verdict = await opts.authorizeFileRead(file, req);
+    } catch {
+      verdict = 'deny'; // a failed authz check must never fall open
+    }
+    if (verdict === 'unauthenticated') {
+      res.status(401).json({ error: 'Authentication required to download this file', code: 'AUTH_REQUIRED' });
+      return false;
+    }
+    if (verdict === 'deny') {
+      res.status(403).json({
+        error: 'You do not have access to a record this file is attached to',
+        code: 'ATTACHMENT_DOWNLOAD_DENIED',
+      });
+      return false;
+    }
+    return downloadTtl;
+  };
 
   // ── Upload auth gate (#2755) ─────────────────────────────────────────
   // `false` ⇒ the 401 was already sent and the handler must stop.
@@ -431,12 +488,15 @@ export function registerStorageRoutes(
         return;
       }
 
+      const ttl = await authorizeDownload(file, req, res);
+      if (ttl === false) return;
+
       let url: string;
       if (storage.getPresignedDownload) {
-        const desc = await storage.getPresignedDownload(file.key, presignedTtl);
+        const desc = await storage.getPresignedDownload(file.key, ttl);
         url = desc.downloadUrl;
       } else if (storage.getSignedUrl) {
-        url = await storage.getSignedUrl(file.key, presignedTtl);
+        url = await storage.getSignedUrl(file.key, ttl);
       } else {
         url = `${basePath}/_local/file/${encodeURIComponent(file.key)}`;
       }
@@ -467,12 +527,15 @@ export function registerStorageRoutes(
         return;
       }
 
+      const ttl = await authorizeDownload(file, req, res);
+      if (ttl === false) return;
+
       let url: string;
       if (storage.getPresignedDownload) {
-        const desc = await storage.getPresignedDownload(file.key, presignedTtl);
+        const desc = await storage.getPresignedDownload(file.key, ttl);
         url = desc.downloadUrl;
       } else if (storage.getSignedUrl) {
-        url = await storage.getSignedUrl(file.key, presignedTtl);
+        url = await storage.getSignedUrl(file.key, ttl);
       } else {
         url = `${basePath}/_local/file/${encodeURIComponent(file.key)}`;
       }
