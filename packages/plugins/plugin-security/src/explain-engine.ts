@@ -19,9 +19,9 @@
  * the SEMANTIC impact of a grant change instead of a JSON diff.
  */
 
-import { isGrantActive, isGrantExpired } from '@objectstack/core';
+import { isGrantActive, isGrantExpired, derivePosture as deriveAdminPosture } from '@objectstack/core';
 import { matchesFilterCondition } from '@objectstack/formula';
-import { BUILTIN_IDENTITY_PLATFORM_ADMIN, ADMIN_FULL_ACCESS } from '@objectstack/spec';
+import { BUILTIN_IDENTITY_PLATFORM_ADMIN, ADMIN_FULL_ACCESS, ORGANIZATION_ADMIN } from '@objectstack/spec';
 import type { PermissionSet } from '@objectstack/spec/security';
 import type {
   AuthzPosture,
@@ -50,25 +50,30 @@ function kernelTierOf(layer: ExplainLayer['layer']): 'layer_0_tenant' | 'layer_1
 }
 
 /**
- * [C2 / ADR-0095 D2] Resolve the principal's posture rung. This is the B2
- * stand-in derivation the task calls for — until the full posture resolver lands
- * it is derived from the SAME evidence enforcement already trusts: the derived
- * `platform_admin` built-in / an unscoped `admin_full_access` grant (PLATFORM_ADMIN),
- * the org-admin/owner roles projected by `resolveAuthzContext` (TENANT_ADMIN), an
- * authenticated user (MEMBER), or an anonymous / guest principal (EXTERNAL).
+ * [C2 / ADR-0095 D2/D3] Resolve the principal's posture rung. The
+ * PLATFORM_ADMIN / TENANT_ADMIN / MEMBER tiers delegate to the single core
+ * derivation ({@link deriveAdminPosture}, `@objectstack/core`) so the admin-tier
+ * logic has ONE source of truth (B4/D3 — derived from held capability grants,
+ * never a better-auth role, closing the #2836 dual-track by construction).
  *
- * TODO(B2): replace with the monotonic posture resolved once in
- * `resolveAuthzContext` when it merges; the rung values are already stable.
+ * Explain layers one thing on top the enforcement resolver deliberately does
+ * NOT: an anonymous / guest principal is represented as EXTERNAL for the
+ * debugger. The enforcement posture resolver's floor is MEMBER (no external
+ * principal type exists yet — ADR-0095 D2), so this guest→EXTERNAL mapping lives
+ * here, in the explanation surface, rather than in `resolveAuthzContext`.
  */
 function derivePosture(context: any): AuthzPosture {
   const positions: string[] = Array.isArray(context?.positions) ? context.positions : [];
   const permissions: string[] = Array.isArray(context?.permissions) ? context.permissions : [];
   if (!context?.userId || context?.principalKind === 'guest') return 'EXTERNAL';
-  if (positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN) || permissions.includes(ADMIN_FULL_ACCESS)) {
-    return 'PLATFORM_ADMIN';
-  }
-  if (positions.includes('org_owner') || positions.includes('org_admin')) return 'TENANT_ADMIN';
-  return 'MEMBER';
+  return deriveAdminPosture({
+    isPlatformAdmin:
+      positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN) || permissions.includes(ADMIN_FULL_ACCESS),
+    isTenantAdmin:
+      positions.includes('org_owner') ||
+      positions.includes('org_admin') ||
+      permissions.includes(ORGANIZATION_ADMIN),
+  });
 }
 
 /** True iff a composed filter is the zero-rows deny sentinel. */
