@@ -12,16 +12,16 @@ import { Zap, Power, Package, RefreshCw, ArrowLeft, CheckCircle, XCircle, AlertT
 shutdown described below reflect the current `@objectstack/core` and CLI
 behaviour. The plugin upgrade flow (`objectstack upgrade @vendor/pkg
 --strategy blue-green`, multi-instance rolling upgrades, automatic backup &
-rollback) describes the **target** lifecycle for hosted ObjectOS — today it is
+rollback) describes the **target** lifecycle for hosted ObjectStack — today it is
 partially implemented in the control plane and exposed only on hosted plans.
 Treat those command snippets as design intent.
 </Callout>
 
-ObjectOS manages the complete **lifecycle** of the platform runtime—from initial boot to plugin installation, upgrades, and rollbacks. Every operation is **declarative**, **idempotent**, and **auditable**.
+ObjectStack manages the complete **lifecycle** of the platform runtime—from initial boot to plugin installation, upgrades, and rollbacks. Every operation is **declarative**, **idempotent**, and **auditable**.
 
 ## Boot Sequence
 
-The ObjectOS boot process follows a **strict order** to ensure dependencies are satisfied before services start.
+The ObjectStack boot process follows a **strict order** to ensure dependencies are satisfied before services start.
 
 ### Boot Phases
 
@@ -114,7 +114,7 @@ await kernel.bootstrap();
 ### Boot Logs (Example)
 
 ```
-[2024-01-15T10:23:01.234Z] INFO  ObjectOS starting...
+[2024-01-15T10:23:01.234Z] INFO  ObjectStack starting...
 [2024-01-15T10:23:01.250Z] INFO  Phase 1: Initialize
 [2024-01-15T10:23:01.251Z] INFO    ✓ Node.js v20.10.0
 [2024-01-15T10:23:01.252Z] INFO    ✓ Memory: 2048 MB available
@@ -137,7 +137,7 @@ await kernel.bootstrap();
 [2024-01-15T10:23:01.900Z] INFO    ✓ Job scheduler started (5 jobs loaded)
 [2024-01-15T10:23:01.950Z] INFO    ✓ HTTP server listening on :3000
 [2024-01-15T10:23:02.000Z] INFO  Phase 7: Ready
-[2024-01-15T10:23:02.001Z] INFO  ObjectOS ready in 766ms
+[2024-01-15T10:23:02.001Z] INFO  ObjectStack ready in 766ms
 ```
 
 ### Error Handling During Boot
@@ -387,7 +387,7 @@ Next steps:
 
 ## Upgrades
 
-ObjectOS supports **zero-downtime upgrades** with automatic rollback on failure.
+ObjectStack supports **zero-downtime upgrades** with automatic rollback on failure.
 
 ### Upgrade Strategies
 
@@ -505,7 +505,7 @@ export async function down(db: any): Promise<void> {
 }
 ```
 
-Run migrations through your existing Knex / driver tooling — ObjectOS does not
+Run migrations through your existing Knex / driver tooling — ObjectStack does not
 ship its own migration runner. The intent of `os generate migration` is to give
 you a hand-off file you can commit, review, and execute via the database tools
 your team already uses.
@@ -522,7 +522,7 @@ migrations:
 
 ### Upgrade Rollback
 
-If upgrade fails, ObjectOS **automatically rolls back** to previous version.
+If upgrade fails, ObjectStack **automatically rolls back** to previous version.
 
 #### Rollback Scenarios
 
@@ -565,7 +565,7 @@ whatever Knex / driver tooling your team uses to apply the `up()`.
 The behaviour around backups, rollback, and health checks during an
 `objectstack upgrade` is controlled by the host runtime / hosting platform —
 not by a top-level `defineStack` key today. Hosted ObjectStack and self-hosted
-ObjectOS expose this through environment-specific configuration:
+ObjectStack expose this through environment-specific configuration:
 
 | Concern | Hosted control plane | Self-hosted |
 | :--- | :--- | :--- |
@@ -579,7 +579,7 @@ policy, not a property of the application.
 
 ## Health Checks
 
-ObjectOS includes **built-in health monitoring** to validate system state.
+ObjectStack includes **built-in health monitoring** to validate system state.
 
 ### Health Check Endpoints
 
@@ -785,7 +785,7 @@ Plugin authors must document breaking changes in CHANGELOG.md.
 
 ## Summary
 
-ObjectOS lifecycle management provides:
+ObjectStack lifecycle management provides:
 - **Deterministic Boot:** 7-phase boot sequence with clear error handling
 - **Atomic Installations:** Transactions ensure all-or-nothing plugin installs
 - **Zero-Downtime Upgrades:** Blue-green and rolling strategies for production

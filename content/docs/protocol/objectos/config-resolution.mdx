@@ -8,7 +8,7 @@ import { Settings, Layers, Lock, Users, FileCode, Shield } from 'lucide-react';
 # Configuration Resolution
 
 <Callout type="warn">
-**Protocol spec, partial implementation.** This page describes ObjectOS's target
+**Protocol spec, partial implementation.** This page describes ObjectStack's target
 configuration model: hierarchical sources, tenant isolation, secret stores.
 The merge / precedence logic is implemented; the richer nested shapes shown in
 code samples below (e.g. `database`, `http`, `secrets.provider`) are
@@ -17,7 +17,7 @@ and the `datasources` / `plugins` keys on `defineStack`. Treat the snippets
 as design intent, not paste-ready code.
 </Callout>
 
-ObjectOS uses a **hierarchical configuration system** that merges settings from multiple sources with clear **precedence rules**. This enables environment-specific overrides, tenant isolation, and user preferences—all from a single unified API.
+ObjectStack uses a **hierarchical configuration system** that merges settings from multiple sources with clear **precedence rules**. This enables environment-specific overrides, tenant isolation, and user preferences—all from a single unified API.
 
 ## The Configuration Problem
 
@@ -41,7 +41,7 @@ const apiKey =
 
 ## Configuration Sources
 
-ObjectOS defines **six configuration sources** with strict precedence:
+ObjectStack defines **six configuration sources** with strict precedence:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -256,7 +256,7 @@ raw string.
 
 #### File Locations
 
-ObjectOS loads config files in this order:
+ObjectStack loads config files in this order:
 
 ```
 1. objectstack.config.ts          (TypeScript, recommended)
@@ -404,7 +404,7 @@ const maxAccounts = config.get('crm.maxAccountsPerUser');
 
 ## Merge Strategies
 
-When multiple sources define the same key, ObjectOS uses **deep merge** for objects and **replace** for primitives.
+When multiple sources define the same key, ObjectStack uses **deep merge** for objects and **replace** for primitives.
 
 ### Replace (Primitives)
 
@@ -578,7 +578,7 @@ CREATE TABLE objectstack_secrets (
 ```typescript
 // Secrets are automatically decrypted when accessed
 const apiKey = config.get('stripe.apiKey');
-// ObjectOS decrypts value transparently
+// ObjectStack decrypts value transparently
 
 // Secrets are redacted in logs
 logger.info('Config loaded', { config: config.getAll() });
@@ -587,7 +587,7 @@ logger.info('Config loaded', { config: config.getAll() });
 
 ### External Secret Stores
 
-ObjectOS integrates with external secret managers:
+ObjectStack integrates with external secret managers:
 
 ```typescript
 // objectstack.config.ts
@@ -605,7 +605,7 @@ export default defineStack({
 
 // Access works the same
 const apiKey = config.get('stripe.apiKey');
-// ObjectOS fetches from AWS Secrets Manager transparently
+// ObjectStack fetches from AWS Secrets Manager transparently
 ```
 
 **Supported Providers:**
@@ -617,7 +617,7 @@ const apiKey = config.get('stripe.apiKey');
 
 ## Configuration Validation
 
-ObjectOS validates configuration against **Zod schemas** at boot.
+ObjectStack validates configuration against **Zod schemas** at boot.
 
 ### Schema Definition
 
@@ -645,11 +645,11 @@ export const configSchema = z.object({
 ### Boot-Time Validation
 
 ```typescript
-// ObjectOS validates config during boot
+// ObjectStack validates config during boot
 export async function onBoot({ context }) {
   // Get and validate config
   const config = context.config.get('crm', configSchema);
-  // If config is invalid, ObjectOS throws ZodError with details
+  // If config is invalid, ObjectStack throws ZodError with details
 }
 ```
 
@@ -890,7 +890,7 @@ export const configSchema = z.object({
 
 ## Summary
 
-ObjectOS configuration resolution:
+ObjectStack configuration resolution:
 - **Six sources** with clear precedence (runtime > environment > tenant > user > file > defaults)
 - **Deep merge** for objects, **replace** for primitives
 - **Tenant isolation** for multi-tenant SaaS

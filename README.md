@@ -32,13 +32,11 @@ Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScr
 
 The goal is not to be another low-code UI builder. ObjectStack is the structured *definition* layer for AI-native business software — agent-ready, versioned, and analyzable; permissions and audit are enforced by the runtime.
 
-ObjectStack is built around three protocol layers:
+ObjectStack is built around three layers:
 
 - **ObjectQL** (Data Layer) — Objects, fields, queries, relations, validation, and data access.
-- **ObjectOS** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
+- **Kernel** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
 - **ObjectUI** (View Layer) — Apps, views, dashboards, actions, and presentation metadata.
-
-> Naming note: **ObjectOS** above names the control-layer *protocol*. The commercial [ObjectOS](https://docs.objectos.ai) runtime environment is the official product built on that layer.
 
 All core definitions start with **Zod schemas** (1,600+ exported schemas across 200 schema files). TypeScript types, JSON Schemas, REST routes, UI metadata, and agent tools are derived from the same source of truth.
 
@@ -290,10 +288,10 @@ For the browser, the typed client SDK and React hooks (`useQuery` / `useMutation
 
 ## Architecture
 
-ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three protocol layers sit above the kernel:
+ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three layers sit above the microkernel:
 
 <p align="center">
-  <img src="docs/screenshots/layers.png" width="900" alt="ObjectStack layered architecture: the ObjectQL data layer, ObjectOS control layer, and ObjectUI view layer sit on a microkernel (plugin lifecycle, service registry / DI, event bus); every capability — drivers, server, auth, security, automation, AI — is a plugin">
+  <img src="docs/screenshots/layers.png" width="900" alt="ObjectStack layered architecture: the ObjectQL data layer, the kernel control layer, and the ObjectUI view layer sit on a microkernel (plugin lifecycle, service registry / DI, event bus); every capability — drivers, server, auth, security, automation, AI — is a plugin">
 </p>
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete design documentation including the plugin lifecycle state machine, dependency graph, and design decisions.

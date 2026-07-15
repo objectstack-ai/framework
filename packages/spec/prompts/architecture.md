@@ -33,7 +33,7 @@ Reflects the strategy: Technology (Platform) vs. Service (Enterprise).
 Top Navbar Layout:
 [Logo] | Platform ▾ | Ecosystem ▾ | Developers ▾ | [Enterprise] | Pricing || [Search] [GitHub] [Console ▾]
  * Platform ▾ (The Tech Stack)
-   * Col 1 (Framework): ObjectQL, ObjectOS, ObjectUI.
+   * Col 1 (Framework): ObjectQL, Kernel, ObjectUI.
    * Col 2 (Tools): Object Studio (Highlight: Local-First IDE), ObjectCloud, CLI.
    * Footer: "Community vs. Enterprise Edition →"
  * Ecosystem ▾ (The Connections)

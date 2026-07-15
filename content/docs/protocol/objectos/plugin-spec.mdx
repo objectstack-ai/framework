@@ -33,7 +33,7 @@ my-plugin/
   plugin.manifest.json   ← JSON (alternative)
 ```
 
-**Recommendation:** Use TypeScript manifest for **type safety** and **validation**. ObjectOS auto-generates JSON schema from TypeScript.
+**Recommendation:** Use TypeScript manifest for **type safety** and **validation**. ObjectStack auto-generates JSON schema from TypeScript.
 
 ### Manifest Schema
 
@@ -442,7 +442,7 @@ Use for large dependencies (React, Vue) that should be shared across plugins.
 
 ### Version Constraints
 
-ObjectOS uses **semantic versioning (semver)** with these operators:
+ObjectStack uses **semantic versioning (semver)** with these operators:
 
 ```typescript
 dependencies: {
@@ -465,7 +465,7 @@ dependencies: {
 
 ### Dependency Resolution
 
-ObjectOS builds a **dependency graph** and loads plugins in **topological order**:
+ObjectStack builds a **dependency graph** and loads plugins in **topological order**:
 
 ```
 @objectstack/core (no deps)
@@ -561,7 +561,7 @@ export async function onUpgrade({ context, fromVersion, toVersion, transaction }
 
 // src/lifecycle/boot.ts
 export async function onBoot({ context }) {
-  // Runs every time ObjectOS boots (after plugin is loaded)
+  // Runs every time ObjectStack boots (after plugin is loaded)
   
   // Example: Validate configuration
   const config = context.config.get('crm');
@@ -600,7 +600,7 @@ During **boot**:
 
 ## Permissions
 
-Plugins must **declare permissions** they require. ObjectOS enforces these at runtime.
+Plugins must **declare permissions** they require. ObjectStack enforces these at runtime.
 
 ### System Permissions
 
@@ -628,7 +628,7 @@ permissions: {
 }
 ```
 
-If plugin attempts operation without permission, ObjectOS throws error:
+If plugin attempts operation without permission, ObjectStack throws error:
 
 ```javascript
 // Plugin tries to make HTTP request without permission
@@ -654,7 +654,7 @@ permissions: {
 }
 ```
 
-ObjectOS uses this for:
+ObjectStack uses this for:
 - **Dependency tracking:** Can't uninstall plugin if other plugins reference its objects
 - **Security:** Plugin can only modify its own objects (not objects from other plugins)
 - **Cleanup:** Uninstalling plugin can optionally remove its objects
@@ -945,7 +945,7 @@ export async function onUninstall({ context, transaction }) {
 
 ## Summary
 
-Plugin packages in ObjectOS:
+Plugin packages in ObjectStack:
 - **Manifest-driven:** `plugin.manifest.ts` is the source of truth
 - **Self-contained:** Bundle objects, views, logic, and config
 - **Dependency-managed:** Semantic versioning with conflict detection

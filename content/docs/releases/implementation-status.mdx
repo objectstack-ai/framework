@@ -25,7 +25,7 @@ This matrix is generated from actual codebase analysis and represents the curren
 
 ---
 
-## Core Infrastructure (ObjectOS)
+## Core Infrastructure (Kernel)
 
 ### Runtime & Kernel
 
@@ -65,12 +65,12 @@ This matrix is generated from actual codebase analysis and represents the curren
 ### Metadata Framework
 
 <Callout type="info">
-**Runtime Boundary** — ObjectOS metadata is file/artifact-backed and read-only at boot. Database-backed metadata persistence exists for explicitly configured control-plane services, not as an automatic ObjectOS project-DB bridge.
+**Runtime Boundary** — runtime metadata is file/artifact-backed and read-only at boot. Database-backed metadata persistence exists for explicitly configured control-plane services, not as an automatic runtime project-DB bridge.
 </Callout>
 
 - Metadata API (list types, list items, get item) is fully functional
 - Metadata is loaded from config files or `dist/objectstack.json` at startup and held in memory
-- `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` into ObjectOS or auto-bridges ObjectQL to `DatabaseLoader`
+- `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` into the runtime or auto-bridges ObjectQL to `DatabaseLoader`
 - Future: production Artifact API loader and durable local artifact cache
 
 ### System Services

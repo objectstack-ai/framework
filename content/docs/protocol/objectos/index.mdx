@@ -1,11 +1,11 @@
 ---
-title: "ObjectOS: The System Protocol"
+title: "Kernel: The System Protocol"
 description: The runtime orchestration layer - Lifecycle, plugins, configuration, and system services
 ---
 
 import { Server, Cog, Package, Zap, Shield, Globe, Network, Box, Layers } from 'lucide-react';
 
-**ObjectOS** is ObjectStack's runtime orchestration layer that manages the complete lifecycle of the platform. It provides the "operating system" services that coordinate ObjectQL (data) and ObjectUI (interface) into a cohesive application runtime.
+**Kernel** is ObjectStack's runtime orchestration layer that manages the complete lifecycle of the platform. It provides the "operating system" services that coordinate ObjectQL (data) and ObjectUI (interface) into a cohesive application runtime.
 
 ## The Core Problem
 
@@ -19,13 +19,13 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
 
 **Result:** DevOps teams spend 60% of their time on deployment mechanics instead of building features. Configuration errors cause 80% of production incidents.
 
-## The ObjectOS Solution
+## The Kernel Solution
 
 <Cards>
   <Card
     icon={<Server />}
     title="Declarative Lifecycle"
-    description="Define system state in manifests. ObjectOS ensures runtime matches declaration—no manual runbooks."
+    description="Define system state in manifests. Kernel ensures runtime matches declaration—no manual runbooks."
   />
   <Card
     icon={<Package />}
@@ -53,7 +53,7 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
 └─────────────────────────┬────────────────────────────────────────┘
                           │
 ┌─────────────────────────▼────────────────────────────────────────┐
-│                        ObjectOS                                   │
+│                        Kernel                                    │
 │  ┌────────────────┐  ┌────────────────┐  ┌──────────────────┐   │
 │  │ Lifecycle Mgmt │  │ Plugin Registry │  │ Config Resolver  │   │
 │  │  Boot/Install  │  │  Dependencies   │  │  Merge Strategy  │   │
@@ -77,7 +77,7 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
         └──────────────┘    └──────────────┘
 ```
 
-**Key Insight:** ObjectOS is the **control plane**. ObjectQL and ObjectUI are the **data plane**. Separating concerns allows independent evolution.
+**Key Insight:** Kernel is the **control plane**. ObjectQL and ObjectUI are the **data plane**. Separating concerns allows independent evolution.
 
 ## Core Components
 
@@ -108,7 +108,7 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
   />
 </Cards>
 
-## Why ObjectOS Exists
+## Why the Kernel Exists
 
 ### Problem: Deployment Complexity Kills Agility
 
@@ -124,7 +124,7 @@ Traditional enterprise platforms tightly couple infrastructure concerns with bus
 47. Pray to the demo gods
 ```
 
-**ObjectOS Approach:**
+**Kernel Approach:**
 ```bash
 # Publish a compiled artifact as a versioned package to ObjectOS Cloud
 os package publish dist/objectstack.json --env <environment-id> --install
@@ -149,7 +149,7 @@ os package publish dist/objectstack.json --env <environment-id> --install
 }
 ```
 
-**ObjectOS Approach:**
+**Kernel Approach:**
 ```yaml
 # plugin.manifest.yml
 name: @mycompany/billing
@@ -158,7 +158,7 @@ dependencies:
   '@objectstack/core': '^2.0.0'
   'com.stripe.plugin': '>=10.0.0 <11.0.0'
 ```
-ObjectOS validates the **entire dependency graph** at install time. Incompatible plugins fail installation with clear error messages, not runtime crashes.
+Kernel validates the **entire dependency graph** at install time. Incompatible plugins fail installation with clear error messages, not runtime crashes.
 
 **Business Value:** A marketplace with 200+ plugins has zero "it works on my machine" issues. Dependency conflicts are caught before customers hit "Install."
 
@@ -174,17 +174,17 @@ const apiKey =
   'fallback-key';                     // 💀 Hardcoded default
 ```
 
-**ObjectOS Approach:**
+**Kernel Approach:**
 ```typescript
 // Declarative merge strategy
 const config = context.config.resolve('stripe.apiKey', {
   sources: ['environment', 'tenant', 'plugin', 'default'],
   required: true
 });
-// ObjectOS merges in precedence order, validates, throws clear error if missing
+// Kernel merges in precedence order, validates, throws clear error if missing
 ```
 
-**Business Value:** Configuration errors dropped 90% after adopting ObjectOS. New engineers can understand config logic in 5 minutes instead of 5 hours.
+**Business Value:** Configuration errors dropped 90% after adopting Kernel. New engineers can understand config logic in 5 minutes instead of 5 hours.
 
 ## Real-World Use Cases
 
@@ -196,7 +196,7 @@ const config = context.config.resolve('stripe.apiKey', {
 - Integrations (Customer A uses Salesforce, Customer B uses HubSpot)
 - Language (Customer A is US English, Customer B is German)
 
-**ObjectOS Solution:**
+**Kernel Solution:**
 - **Tenant Isolation:** Each customer is a "tenant" with scoped configuration
 - **Config Merging:** Global defaults → Tenant overrides → User preferences
 - **Plugin System:** Each integration is a plugin; tenants enable only what they need
@@ -211,7 +211,7 @@ const config = context.config.resolve('stripe.apiKey', {
 
 **Challenge:** Build a plugin marketplace like Salesforce AppExchange where third-party developers sell integrations.
 
-**ObjectOS Solution:**
+**Kernel Solution:**
 - **Plugin Manifest:** Standardized `plugin.manifest.yml` declares what plugin provides and needs
 - **Dependency Resolution:** Automatic validation that plugin versions are compatible with core platform
 - **Lifecycle Hooks:** `onInstall`, `onEnable`, `onDisable` hooks for setup/teardown
@@ -230,7 +230,7 @@ const config = context.config.resolve('stripe.apiKey', {
 - Regional compliance (GDPR in EU, LGPD in Brazil)
 - Local integrations (EU uses SEPA payments, US uses ACH)
 
-**ObjectOS Solution:**
+**Kernel Solution:**
 - **i18n Standard:** Translation bundles with fallback chains (`de-AT` → `de` → `en`)
 - **Region Config:** Configuration profiles per region (defaults + region overrides)
 - **Plugin System:** Regional plugins (SEPA plugin for EU, ACH plugin for US)
@@ -241,9 +241,9 @@ const config = context.config.resolve('stripe.apiKey', {
 - Zero code changes for new languages (just upload translation files)
 - 95% translation coverage on day one (tooling validates translation completeness)
 
-## How ObjectOS Orchestrates ObjectQL and ObjectUI
+## How Kernel Orchestrates ObjectQL and ObjectUI
 
-ObjectOS is the **runtime coordinator** that makes ObjectQL and ObjectUI work together:
+Kernel is the **runtime coordinator** that makes ObjectQL and ObjectUI work together:
 
 ### 1. Boot Sequence
 ```typescript
@@ -279,28 +279,28 @@ hooks in order, and exposes the resulting services through DI.
 ```typescript
 // Incoming API request: GET /api/accounts/123
 async function handleRequest(req) {
-  // ObjectOS provides context
-  const context = await ObjectOS.createContext({
+  // Kernel provides context
+  const context = await Kernel.createContext({
     tenantId: req.headers['x-tenant-id'],
     userId: req.user.id,
     locale: req.headers['accept-language'],
   });
   
-  // ObjectOS resolves configuration
+  // Kernel resolves configuration
   const config = context.config.resolve();
   
   // ObjectQL executes query
   const account = await ObjectQL.findById('account', '123', {
-    context,  // ObjectOS injects permissions, audit, etc.
+    context,  // Kernel injects permissions, audit, etc.
   });
   
   // ObjectUI renders response
   const view = await ObjectUI.render('account_detail', {
     record: account,
-    locale: context.locale,  // ObjectOS provides i18n
+    locale: context.locale,  // Kernel provides i18n
   });
   
-  // ObjectOS logs audit trail
+  // Kernel logs audit trail
   context.audit.log('account.view', { accountId: '123' });
   
   return view;
@@ -310,7 +310,7 @@ async function handleRequest(req) {
 ### 3. Plugin Installation
 ```typescript
 // Install a package: os package install @vendor/salesforce-sync
-await ObjectOS.installPlugin({
+await Kernel.installPlugin({
   source: '@vendor/salesforce-sync@1.5.0',
   
   // Step 1: Validate dependencies
@@ -340,7 +340,7 @@ await ObjectOS.installPlugin({
 
 ## Philosophy: Infrastructure as Code
 
-ObjectOS embodies **"Infrastructure as Code"** principles:
+Kernel embodies **"Infrastructure as Code"** principles:
 
 ### Declarative, Not Imperative
 **Bad (Imperative):**
@@ -364,7 +364,7 @@ permissions:
   - role: admin
     object: account
     access: read
-# ObjectOS ensures runtime matches manifest
+# Kernel ensures runtime matches manifest
 ```
 
 ### Idempotent Operations
@@ -411,7 +411,7 @@ export const configSchema = z.object({
 
 // Access in plugin code
 const config = context.config.get('slack', configSchema);
-// ObjectOS validates against schema, throws clear error if invalid
+// Kernel validates against schema, throws clear error if invalid
 ```
 
 ### Internationalization
@@ -431,7 +431,7 @@ const config = context.config.get('slack', configSchema);
 
 // Use in code
 const message = context.i18n.t('slack.button.send');
-// ObjectOS automatically uses user's locale
+// Kernel automatically uses user's locale
 ```
 
 ## Best Practices
@@ -441,7 +441,7 @@ const message = context.i18n.t('slack.button.send');
 
 **Why:** Keeps core stable. Plugins evolve independently. Customers pay for only what they use.
 
-**Example:** Don't build email sending into ObjectOS core. Create `@objectstack/email` plugin. Customers who don't send emails don't load the plugin (smaller memory footprint, faster boot).
+**Example:** Don't build email sending into Kernel core. Create `@objectstack/email` plugin. Customers who don't send emails don't load the plugin (smaller memory footprint, faster boot).
 
 ### 2. Configuration Over Code
 **Principle:** Behavior should be configurable without code changes.
@@ -469,11 +469,11 @@ const message = context.i18n.t('slack.button.send');
 
 **Why:** Catch errors before customers see them.
 
-**Example:** Plugin requires `apiKey` config. If missing, ObjectOS throws error during boot with clear message: "Plugin @vendor/slack requires config key 'slack.apiKey' (not found in environment, tenant, or default config)".
+**Example:** Plugin requires `apiKey` config. If missing, Kernel throws error during boot with clear message: "Plugin @vendor/slack requires config key 'slack.apiKey' (not found in environment, tenant, or default config)".
 
-## Comparison: ObjectOS vs Alternatives
+## Comparison: Kernel vs Alternatives
 
-| Feature | ObjectOS | Kubernetes | CloudFoundry | Heroku |
+| Feature | Kernel | Kubernetes | CloudFoundry | Heroku |
 |---------|----------|------------|--------------|--------|
 | **Plugin System** | Built-in manifest-based | Helm charts (external) | Buildpacks | Add-ons marketplace |
 | **Config Management** | Hierarchical merge | ConfigMaps/Secrets | Environment vars | Config vars |
@@ -483,7 +483,7 @@ const message = context.i18n.t('slack.button.send');
 | **Zero-Downtime Upgrades** | Declarative | Rolling updates | Blue-green | Git push |
 | **Developer UX** | `os package publish` | `kubectl apply` | `cf push` | `git push heroku` |
 
-**Key Differentiator:** ObjectOS is **application-aware**. Kubernetes knows about containers, not plugins. ObjectOS knows about ObjectQL objects, ObjectUI views, and business logic dependencies.
+**Key Differentiator:** Kernel is **application-aware**. Kubernetes knows about containers, not plugins. Kernel knows about ObjectQL objects, ObjectUI views, and business logic dependencies.
 
 ## Next Steps
 
@@ -516,7 +516,7 @@ const message = context.i18n.t('slack.button.send');
 
 ## Summary
 
-ObjectOS is the **control plane** that orchestrates ObjectStack:
+Kernel is the **control plane** that orchestrates ObjectStack:
 - **Lifecycle Management:** Declarative deployment, zero-downtime upgrades, rollback safety
 - **Plugin System:** Microkernel architecture with dependency resolution and sandboxing
 - **Configuration:** Unified config with merge strategies and tenant isolation
@@ -525,6 +525,6 @@ ObjectOS is the **control plane** that orchestrates ObjectStack:
 Think of it this way:
 - **ObjectQL** is the database driver (handles data CRUD)
 - **ObjectUI** is the rendering engine (handles presentation)
-- **ObjectOS** is the operating system (handles coordination, configuration, lifecycle)
+- **Kernel** is the operating system (handles coordination, configuration, lifecycle)
 
-Without ObjectOS, you'd manually wire ObjectQL and ObjectUI together, manage deployments with runbooks, and fight configuration drift. With ObjectOS, the platform handles the "plumbing" so you focus on business logic.
+Without Kernel, you'd manually wire ObjectQL and ObjectUI together, manage deployments with runbooks, and fight configuration drift. With Kernel, the platform handles the "plumbing" so you focus on business logic.

@@ -121,7 +121,7 @@ ObjectStack is organized as a **monorepo** with distinct package layers:
 **Location**: `packages/spec/`  
 **Role**: Protocol Definitions (The "Constitution")
 
-- Zod schemas for all protocols (ObjectQL, ObjectOS, ObjectUI)
+- Zod schemas for all protocols (ObjectQL, Kernel/System, ObjectUI)
 - TypeScript type definitions
 - JSON Schema generation
 - Constants and enums
@@ -131,7 +131,7 @@ ObjectStack is organized as a **monorepo** with distinct package layers:
 // packages/spec/src/
 ├── data/           # ObjectQL schemas (Object, Field, Query, etc.)
 ├── ui/             # ObjectUI schemas (App, View, Dashboard, etc.)
-├── system/         # ObjectOS schemas (Manifest, Driver, Plugin, etc.)
+├── system/         # System schemas (Manifest, Driver, Plugin, etc.)
 ├── automation/     # Workflow, Flow, Trigger schemas
 ├── ai/             # Agent, RAG, Model schemas
 ├── api/            # API contract schemas
@@ -306,7 +306,7 @@ ObjectStack follows a **Three-Layer Protocol Stack**:
 └────────────────┬─────────────────────────────────┘
                  │ REST API / GraphQL
 ┌────────────────▼─────────────────────────────────┐
-│         Layer 2: ObjectOS (Control)              │
+│         Layer 2: Kernel (Control)                │
 │  ┌────────────────────────────────────────────┐  │
 │  │  Auth, Permissions, Workflows, Events      │  │
 │  │  "Who can do what, when?"                  │  │
@@ -338,7 +338,7 @@ Foundation:
 | Layer | Knows About | Doesn't Know About |
 |-------|-------------|-------------------|
 | **ObjectQL** | Schema, fields, queries, drivers | Users, permissions, UI |
-| **ObjectOS** | Auth, workflows, events | Data structure, UI layout |
+| **Kernel** | Auth, workflows, events | Data structure, UI layout |
 | **ObjectUI** | Layout, navigation, actions | Business logic, storage |
 
 ---

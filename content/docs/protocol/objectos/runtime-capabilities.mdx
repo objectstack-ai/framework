@@ -1,6 +1,6 @@
 ---
 title: Runtime Capabilities
-description: Understanding ObjectStack's subsystem capabilities (ObjectQL, ObjectUI, ObjectOS)
+description: Understanding ObjectStack's subsystem capabilities (ObjectQL, ObjectUI, ObjectStack)
 ---
 
 # Runtime Capabilities
@@ -27,7 +27,7 @@ ObjectStack capabilities are organized into three subsystems that correspond to 
                          ▲
                          │
 ┌─────────────────────────────────────────────────────────┐
-│  ObjectOS Capabilities (System/Runtime Layer)           │
+│  ObjectStack Capabilities (System/Runtime Layer)           │
 │  • API protocols (REST, GraphQL, OData)                │
 │  • Real-time (WebSockets, SSE, Event Bus)              │
 │  • Security (Authentication, RBAC, RLS, FLS)           │
@@ -52,7 +52,7 @@ import type { ObjectStackCapabilities } from '@objectstack/spec';
 const capabilities: ObjectStackCapabilities = {
   data: { /* ObjectQL capabilities */ },
   ui: { /* ObjectUI capabilities */ },
-  system: { /* ObjectOS capabilities */ },
+  system: { /* ObjectStack capabilities */ },
 };
 ```
 
@@ -161,7 +161,7 @@ The **User Interface Layer** capabilities define what UI components and views ar
 
 ---
 
-## ObjectOS Capabilities
+## ObjectStack Capabilities
 
 The **System Layer** capabilities define runtime, API, security, and platform service features.
 
@@ -169,7 +169,7 @@ The **System Layer** capabilities define runtime, API, security, and platform se
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `version` | ✅ | ObjectOS kernel version (e.g., `"1.0.0"`) |
+| `version` | ✅ | ObjectStack kernel version (e.g., `"1.0.0"`) |
 | `environment` | ✅ | Runtime environment (`development`, `test`, `staging`, `production`) |
 
 ### API Surface
@@ -529,6 +529,6 @@ export function SemanticSearch() { /* ... */ }
 
 - [ObjectQL Reference](/docs/protocol/objectql)
 - [ObjectUI Reference](/docs/protocol/objectui)
-- [ObjectOS Reference](/docs/protocol/objectos)
+- [ObjectStack Reference](/docs/protocol/objectos)
 - [API Discovery](/docs/references/api/discovery)
 - [Driver Capabilities](/docs/references/data/driver)
