@@ -301,14 +301,38 @@ only a seed-not-clobber discipline.
 | Type | Enforcement reads | Class | Decision |
 | :-- | :-- | :-- | :-- |
 | `sys_permission_set` | metadata (`PermissionEvaluator.resolvePermissionSets` → `metadata.list('permission')`, DB row only as fallback) | metadata-authoritative | **Record is a projection — done** (this ADR). |
-| `sys_sharing_rule` | the record, live (`sharing-plugin.ts` "rule evaluation reads `sys_sharing_rule` live"; `sharing-rule-service` `engine.find`) | **record-authoritative** | Declared rules are a **boot seed**; the record is the authority. Do **not** project. Audit that `bootstrapDeclaredSharingRules` preserves env-edited rows (seed-not-clobber) and that the metadata overlay is not read as a live override. |
-| `sys_position` | mixed — position→permission-set resolution is metadata-first for the *sets*, but the `sys_position` **record** (incl. its `permissions` field, bindings, `delegatable`, `admin` gating) is read live by the anchor gate and `DelegatedAdminGate` | **needs the seed-vs-authority audit** against the criterion above; likely record-authoritative for bindings with metadata seeding identity | Classify precisely, then either project (if the position *definition* is enforced from metadata) or make declared positions seed-only. |
-| `sys_capability` | the record (curated registry read for capability existence) | record-authoritative (registry) | Seed-only; low authoring surface. Audit seed-not-clobber. |
+| `sys_sharing_rule` | the record, live (`sharing-plugin.ts` "rule evaluation reads `sys_sharing_rule` live"; `sharing-rule-service` `engine.find`) | **record-authoritative** | **Resolved (#2909 P0/T1)**: declared rules are a **boot seed**; the record is the authority; not projected. Rows carry readonly `managed_by` (unified A4 tri-state) + `customized` provenance; the seeder (`defineRule` in seed mode, `managedBy:'package'`) adopts pristine/legacy rows and keeps updating them, but **never overwrites admin-authored or `customized` rows** — an admin's `active:false` on an over-sharing rule survives redeploys. A `beforeUpdate` hook stamps `customized` on any non-system edit of a seeded row. |
+| `sys_position` | mixed — position→permission-set resolution is metadata-first for the *sets*, but the `sys_position` **record** (incl. its `permissions` field, bindings, `delegatable`, `admin` gating) is read live by the anchor gate and `DelegatedAdminGate` | **record-authoritative** (bindings and lifecycle), with metadata seeding **identity + display only** | **Resolved (#2909 T2)**: declared positions are seed-only — `bootstrapDeclaredPositions` refreshes `label`/`description` and nothing else; bindings/`active`/`is_default`/`delegatable`/`managed_by` belong to the runtime/admin. Locked by `bootstrap-declared-positions.test.ts`. |
+| `sys_capability` | the record (curated registry read for capability existence) | record-authoritative (registry) | **Resolved (#2909 T3)**: seed-not-clobber holds — `label`/`description` are platform-owned and refresh each boot; `managed_by`/`active` were already preserved; `scope` is an admin-editable classification face and is now **seed-once** (insert only). Locked by `bootstrap-system-capabilities.test.ts`. |
 
 Only `sys_permission_set` was both metadata-authoritative **and** carried a
 harmful, actively-drifting split-brain, which is why it was fixed first and in
-full. The others are recorded here with their class so the follow-up work is
-scoped, not rediscovered — tracked in framework#2909.
+full. The follow-up work above landed via framework#2909.
+
+#### Recorded tradeoffs (#2909)
+
+- **Why `sys_sharing_rule` chose seed-not-clobber over a write gate
+  (projection-lite).** A self-consistent alternative existed: gate
+  package-managed rows against admin writes (as #2918 does for
+  `sys_position`/`sys_capability`), making the boot overwrite harmless. It was
+  rejected because sharing rules are a first-class admin authoring *and
+  tuning* surface in Setup — including narrowing or deactivating a seeded
+  rule that turned out to over-share. Locking package rows would amputate
+  that product capability, and the classification criterion (enforcement
+  reads the record) already points at record authority. Admin edits are
+  therefore *remembered* (`customized`), not blocked. Only the two provenance
+  columns themselves are `readonly` (engine-stripped from non-system
+  payloads), so provenance cannot be forged or cleared through the data door.
+- **Known boundaries of the `customized` stamp**: multi-row updates (no
+  single `input.id`) are not stamped — every rule-editing UI path updates by
+  id; an admin who *deletes* a package rule gets it back pristine on the next
+  boot (delete ≠ customize; deactivation is the supported way to retire a
+  seeded rule); a "reset to package default" affordance (system-context clear
+  of `customized`) is future work.
+- **`sys_capability.scope` is seed-once**: a curated scope change shipped in
+  a new platform version no longer propagates to existing rows and needs a
+  data migration. Accepted — silently reverting an admin's reclassification
+  every boot was the worse failure mode.
 
 ### Why an addendum, not a new ADR
 
