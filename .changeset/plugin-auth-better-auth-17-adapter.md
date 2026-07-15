@@ -1,8 +1,9 @@
 ---
 '@objectstack/plugin-auth': patch
+'@objectstack/platform-objects': patch
 ---
 
-fix(auth): align the better-auth family on 1.7.0-rc.1 and implement the new adapter methods (#2974)
+fix(auth): align the better-auth family on 1.7.0-rc.1, implement the new adapter methods, and add the new sys_jwks columns (#2974)
 
 Remediating GHSA-p2fr-6hmx-4528 (`@better-auth/oauth-provider`) requires the
 1.7 plugin line, which imports `CLIENT_ASSERTION_TYPE` and other symbols that
@@ -21,3 +22,10 @@ new methods, which the ObjectQL adapter now implements:
 Both are find-then-write mirrors of the existing `delete` / `update` methods
 (ObjectQL exposes no native atomic primitive) and honour the same core/plugin
 field-name bridging.
+
+better-auth 1.7 also extends its `jwks` model with two new optional columns,
+`alg` (signing algorithm, e.g. `EdDSA`) and `crv` (curve, e.g. `Ed25519`), and
+writes them when minting signing keys. The `sys_jwks` platform object gains the
+matching fields — without them every JWKS write failed (`table sys_jwks has no
+column named alg`), 500ing token signing and breaking session validation
+(sign-in succeeded but every authenticated request 401'd).

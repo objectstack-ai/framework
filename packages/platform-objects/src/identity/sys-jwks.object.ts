@@ -59,6 +59,23 @@ export const SysJwks = ObjectSchema.create({
       description: 'JSON-serialized JWK private key (encrypted at rest)',
     }),
 
+    // better-auth 1.7 records the key's signing algorithm and (for EdDSA/EC
+    // keys) its curve alongside the key material, so tokens can advertise the
+    // correct `alg`/`crv` in the JWKS response. Both are optional — legacy rows
+    // minted before 1.7 leave them null and better-auth falls back to the
+    // configured `keyPairConfig.alg` (default `EdDSA`).
+    alg: Field.text({
+      label: 'Algorithm',
+      required: false,
+      description: 'JWK signing algorithm, e.g. `EdDSA` (better-auth 1.7+)',
+    }),
+
+    crv: Field.text({
+      label: 'Curve',
+      required: false,
+      description: 'JWK curve for EdDSA/EC keys, e.g. `Ed25519` (better-auth 1.7+)',
+    }),
+
     created_at: Field.datetime({
       label: 'Created At',
       required: true,
