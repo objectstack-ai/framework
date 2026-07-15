@@ -170,6 +170,20 @@ function renderSubject(template: string | undefined, vars: Record<string, string
 
 // ─── Service ──────────────────────────────────────────────────────
 
+/**
+ * Resolves a saved report's owner (`owner_id`) into a real, RLS-bearing
+ * `ExecutionContext` so a **scheduled** report executes under the owner's
+ * authority — the same rows the owner would see interactively — instead of
+ * bypassing RLS with a system context. Returns `null` when the owner cannot
+ * be resolved (unknown/disabled user), in which case the scheduler fails the
+ * run closed rather than running elevated (#2849 / #2980). Supplying this
+ * resolver is the reports-surface consumer of ADR-0073's user-less identity
+ * resolution.
+ */
+export type OwnerContextResolver = (
+  ownerId: string,
+) => Promise<SharingExecutionContext | null>;
+
 export interface ReportServiceOptions {
   engine: ReportEngine;
   email?: ReportEmail;
@@ -177,6 +191,12 @@ export interface ReportServiceOptions {
   logger?: { info?: (msg: any, ...rest: any[]) => void; warn?: (msg: any, ...rest: any[]) => void; error?: (msg: any, ...rest: any[]) => void };
   /** Cap rows per report to protect both DB and email size. */
   maxRows?: number;
+  /**
+   * Resolves a report owner into an RLS-bearing context for scheduled runs
+   * (see {@link OwnerContextResolver}). When omitted, scheduled reports fail
+   * closed instead of running with RLS bypassed (#2980).
+   */
+  resolveOwnerContext?: OwnerContextResolver;
 }
 
 export class ReportService implements IReportService {
@@ -185,6 +205,7 @@ export class ReportService implements IReportService {
   private readonly clock: ReportClock;
   private readonly logger: NonNullable<ReportServiceOptions['logger']>;
   private readonly maxRows: number;
+  private readonly resolveOwnerContext?: OwnerContextResolver;
 
   constructor(opts: ReportServiceOptions) {
     this.engine = opts.engine;
@@ -192,6 +213,33 @@ export class ReportService implements IReportService {
     this.clock = opts.clock ?? { now: () => new Date() };
     this.logger = opts.logger ?? {};
     this.maxRows = Math.max(1, opts.maxRows ?? 5000);
+    this.resolveOwnerContext = opts.resolveOwnerContext;
+  }
+
+  // ── Access control ─────────────────────────────────────────────
+
+  /**
+   * Authorization for a saved-report row. `sys_saved_report` is a
+   * protection-locked system object, so its rows are *read* with
+   * `SYSTEM_CTX`; the caller's right to see/mutate a specific report is
+   * enforced HERE, by owner match, not by the metadata read's own RLS —
+   * otherwise any authenticated caller could read/delete/overwrite any
+   * report by id (#2980). An explicit elevated context (`isSystem`) — the
+   * scheduler / server tooling — sees everything.
+   */
+  private canAccessReport(row: { owner_id?: unknown } | null | undefined, context: SharingExecutionContext | undefined): boolean {
+    if (!row) return false;
+    if (context?.isSystem) return true;
+    const userId = context?.userId;
+    return !!userId && row.owner_id === userId;
+  }
+
+  /** Raw metadata read of a saved report by id (no authz — callers gate). */
+  private async loadReportRow(reportId: string): Promise<any | null> {
+    const rows = await this.engine.find('sys_saved_report', {
+      filter: { id: reportId }, limit: 1, context: SYSTEM_CTX,
+    });
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
   }
 
   // ── Report CRUD ────────────────────────────────────────────────
@@ -202,23 +250,33 @@ export class ReportService implements IReportService {
     if (!input.query) throw new Error('VALIDATION_FAILED: query is required');
 
     const now = this.clock.now().toISOString();
+    // A non-system caller always owns what they create — a caller-supplied
+    // ownerId cannot assign the report to someone else (#2980). Only an
+    // explicit elevated context (server tooling / import) may set it.
+    const ownerId = context.isSystem ? (input.ownerId ?? context.userId ?? null) : (context.userId ?? null);
     const payload: any = {
       name: input.name,
       description: input.description ?? null,
       object_name: input.object,
       query_json: JSON.stringify(input.query ?? {}),
       format: input.format ?? DEFAULT_FORMAT,
-      owner_id: input.ownerId ?? context.userId ?? null,
+      owner_id: ownerId,
       updated_at: now,
     };
 
     if (input.id) {
-      const existing = await this.engine.find('sys_saved_report', {
-        filter: { id: input.id }, limit: 1, context: SYSTEM_CTX,
-      });
-      if (Array.isArray(existing) && existing[0]) {
+      const existing = await this.loadReportRow(input.id);
+      if (existing) {
+        // An update to an existing report is a mutation — a caller may only
+        // overwrite a report they own (#2980). Not-found for others so the
+        // response doesn't leak that the id exists.
+        if (!this.canAccessReport(existing, context)) {
+          throw new Error(`REPORT_NOT_FOUND: ${input.id}`);
+        }
+        // Never let a non-system caller reassign ownership away from the row.
+        if (!context.isSystem) payload.owner_id = existing.owner_id ?? payload.owner_id;
         await this.engine.update('sys_saved_report', { id: input.id, ...payload }, { context: SYSTEM_CTX });
-        return rowFromSaved({ ...existing[0], ...payload, id: input.id });
+        return rowFromSaved({ ...existing, ...payload, id: input.id });
       }
     }
 
@@ -230,26 +288,43 @@ export class ReportService implements IReportService {
 
   async listReports(
     filter: { object?: string; ownerId?: string } | undefined,
-    _context: SharingExecutionContext,
+    context: SharingExecutionContext,
   ): Promise<SavedReport[]> {
     const f: any = {};
     if (filter?.object) f.object_name = filter.object;
-    if (filter?.ownerId) f.owner_id = filter.ownerId;
+    // Owner scoping (#2980): a non-system caller sees ONLY their own reports —
+    // a caller-supplied ownerId can never widen past their own id. A caller
+    // with no identity sees nothing (fail closed). System/tooling sees all,
+    // honouring an explicit ownerId narrow.
+    if (context?.isSystem) {
+      if (filter?.ownerId) f.owner_id = filter.ownerId;
+    } else {
+      if (!context?.userId) return [];
+      if (filter?.ownerId && filter.ownerId !== context.userId) return [];
+      f.owner_id = context.userId;
+    }
     const rows = await this.engine.find('sys_saved_report', {
       filter: f, limit: 500, orderBy: [{ field: 'updated_at', order: 'desc' }], context: SYSTEM_CTX,
     });
     return Array.isArray(rows) ? rows.map(rowFromSaved) : [];
   }
 
-  async getReport(reportId: string, _context: SharingExecutionContext): Promise<SavedReport | null> {
-    const rows = await this.engine.find('sys_saved_report', {
-      filter: { id: reportId }, limit: 1, context: SYSTEM_CTX,
-    });
-    return Array.isArray(rows) && rows[0] ? rowFromSaved(rows[0]) : null;
+  async getReport(reportId: string, context: SharingExecutionContext): Promise<SavedReport | null> {
+    const row = await this.loadReportRow(reportId);
+    // Unauthorized reads are indistinguishable from a genuine miss (#2980).
+    if (!this.canAccessReport(row, context)) return null;
+    return rowFromSaved(row);
   }
 
-  async deleteReport(reportId: string, _context: SharingExecutionContext): Promise<void> {
+  async deleteReport(reportId: string, context: SharingExecutionContext): Promise<void> {
     if (!reportId) throw new Error('VALIDATION_FAILED: reportId is required');
+    const row = await this.loadReportRow(reportId);
+    if (!row) return; // idempotent — nothing to drop
+    // A caller may only delete a report they own (#2980); others get a
+    // not-found so the delete neither fires nor reveals the report's existence.
+    if (!this.canAccessReport(row, context)) {
+      throw new Error(`REPORT_NOT_FOUND: ${reportId}`);
+    }
     // Cascade — drop attached schedules first.
     const schedules = await this.engine.find('sys_report_schedule', {
       filter: { report_id: reportId }, limit: 500, context: SYSTEM_CTX,
@@ -410,8 +485,8 @@ export class ReportService implements IReportService {
     let fired = 0, failed = 0, skipped = 0;
     for (const schedule of list) {
       try {
-        const report = await this.getReport(schedule.report_id, { isSystem: true });
-        if (!report) {
+        const row = await this.loadReportRow(schedule.report_id);
+        if (!row) {
           skipped++;
           await this.markSchedule(schedule.id, {
             last_status: 'skipped',
@@ -419,10 +494,36 @@ export class ReportService implements IReportService {
           });
           continue;
         }
+        const report = rowFromSaved(row);
+
+        // Run the report under the OWNER's authority, not system (#2980).
+        // A scheduled run must not read rows the report's owner cannot see —
+        // that was a silent RLS bypass (a member's scheduled report emailed
+        // the target object's entire table). Resolve the owner to a real
+        // RLS-bearing context; if we can't (no resolver wired, or unknown/
+        // disabled owner), FAIL CLOSED rather than run elevated.
+        const ownerId = report.owner_id;
+        const runContext = ownerId && this.resolveOwnerContext
+          ? await this.resolveOwnerContext(ownerId).catch((err) => {
+              this.logger.warn?.('ReportService.dispatchDue: owner context resolution failed', err);
+              return null;
+            })
+          : null;
+        if (!runContext) {
+          failed++;
+          await this.markSchedule(schedule.id, {
+            last_status: 'failed',
+            last_error: ownerId
+              ? `owner '${ownerId}' context unavailable — refusing to run scheduled report with RLS bypassed (#2849/#2980)`
+              : 'report has no owner — refusing to run scheduled report with RLS bypassed (#2849/#2980)',
+          });
+          continue;
+        }
+
         // Force the schedule's own format so the recipient gets what
         // the admin configured (CSV attachment vs inline HTML table).
         const fmt: ReportFormat = (schedule.format ?? 'html_table') as ReportFormat;
-        const result = await this.executeReport({ ...report, format: fmt }, { isSystem: true }, false);
+        const result = await this.executeReport({ ...report, format: fmt }, runContext, false);
 
         const recipients = schedule.recipients.split(',').map(s => s.trim()).filter(Boolean);
         const subject = renderSubject(schedule.subject_template, {

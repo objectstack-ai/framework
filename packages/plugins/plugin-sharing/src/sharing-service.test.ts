@@ -445,4 +445,96 @@ describe('buildSharingMiddleware (engine integration)', () => {
     await mw(ctx, async () => {});
     expect(ctx.ast.where).toEqual({ $and: [{ name: 'Acme' }, { owner_id: 'alice' }] });
   });
+
+  // ─── Bulk (multi) write owner scoping (#2982) ───────────────────
+  it('bulk update: injects the editable-rows filter so a non-owner cannot touch peers', async () => {
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'account',
+      operation: 'update',
+      options: { multi: true, where: { name: 'X' } },
+      ast: { where: { name: 'X' } },
+      data: { status: 'archived' },
+      context: { userId: 'bob' },
+    };
+    let nextCalled = false;
+    await mw(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+    // bob's bulk update is constrained to rows bob owns.
+    expect(ctx.ast.where).toEqual({ $and: [{ name: 'X' }, { owner_id: 'bob' }] });
+  });
+
+  it('bulk delete: injects the owner filter (no single id to canEdit-gate)', async () => {
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'account',
+      operation: 'delete',
+      options: { multi: true, where: {} },
+      ast: {},
+      context: { userId: 'bob' },
+    };
+    await mw(ctx, async () => {});
+    expect(ctx.ast.where).toEqual({ owner_id: 'bob' });
+  });
+
+  it('bulk update: edit-shared records widen the editable set', async () => {
+    await svc.grant({ object: 'account', recordId: 'a1', recipientId: 'bob', accessLevel: 'edit' }, { userId: 'admin' });
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'account',
+      operation: 'update',
+      options: { multi: true, where: {} },
+      ast: {},
+      data: { status: 'x' },
+      context: { userId: 'bob' },
+    };
+    await mw(ctx, async () => {});
+    expect(ctx.ast.where).toEqual({ $or: [{ owner_id: 'bob' }, { id: { $in: ['a1'] } }] });
+  });
+
+  it('bulk update on a public_read (read) object is STILL owner-write-scoped', async () => {
+    // The crux of #2982: reads are open on a public_read object (buildReadFilter
+    // returns null), but writes remain owner-scoped — a distinction the old
+    // single-id-only gate missed for multi writes.
+    engine._tables.lead = [{ id: 'l1', owner_id: 'alice' }];
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'lead',
+      operation: 'update',
+      options: { multi: true, where: {} },
+      ast: {},
+      data: { status: 'x' },
+      context: { userId: 'bob' },
+    };
+    await mw(ctx, async () => {});
+    expect(ctx.ast.where).toEqual({ owner_id: 'bob' });
+  });
+
+  it('bulk update: system context is unrestricted', async () => {
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'account',
+      operation: 'update',
+      options: { multi: true, where: {} },
+      ast: {},
+      data: { status: 'x' },
+      context: { isSystem: true },
+    };
+    await mw(ctx, async () => {});
+    expect(ctx.ast.where).toBeUndefined();
+  });
+
+  it('bulk update on a fully public object: no owner filter', async () => {
+    const mw = buildSharingMiddleware(svc);
+    const ctx: any = {
+      object: 'task', // EXPLICIT_PUBLIC_SCHEMA
+      operation: 'update',
+      options: { multi: true, where: {} },
+      ast: {},
+      data: { status: 'x' },
+      context: { userId: 'bob' },
+    };
+    await mw(ctx, async () => {});
+    expect(ctx.ast.where).toBeUndefined();
+  });
 });

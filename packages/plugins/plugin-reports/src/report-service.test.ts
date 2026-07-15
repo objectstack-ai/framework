@@ -119,6 +119,11 @@ describe('ReportService', () => {
       email,
       clock: { now: () => now },
       maxRows: 5000,
+      // Scheduled runs execute under the owner's resolved context (#2980).
+      // The fake engine ignores context, so this just lets dispatch proceed
+      // under a non-elevated identity instead of failing closed.
+      resolveOwnerContext: async (ownerId: string) =>
+        ownerId ? { userId: ownerId, tenantId: 't1', positions: [], permissions: [] } : null,
     });
     // seed the underlying object the report will query.
     engine._tables['lead'] = [
@@ -170,9 +175,9 @@ describe('ReportService', () => {
     // Regression: the query sorted with the non-canonical `direction: 'desc'`
     // key, which SortNode strips — so it sorted ascending (oldest first).
     engine._tables['sys_saved_report'] = [
-      { id: 'r_old', name: 'Old', object_name: 'lead', query_json: '{}', updated_at: '2026-01-01T00:00:00Z' },
-      { id: 'r_new', name: 'New', object_name: 'lead', query_json: '{}', updated_at: '2026-03-01T00:00:00Z' },
-      { id: 'r_mid', name: 'Mid', object_name: 'lead', query_json: '{}', updated_at: '2026-02-01T00:00:00Z' },
+      { id: 'r_old', name: 'Old', object_name: 'lead', query_json: '{}', owner_id: 'u1', updated_at: '2026-01-01T00:00:00Z' },
+      { id: 'r_new', name: 'New', object_name: 'lead', query_json: '{}', owner_id: 'u1', updated_at: '2026-03-01T00:00:00Z' },
+      { id: 'r_mid', name: 'Mid', object_name: 'lead', query_json: '{}', owner_id: 'u1', updated_at: '2026-02-01T00:00:00Z' },
     ];
     const rows = await svc.listReports({ object: 'lead' }, CTX);
     expect(rows.map(r => r.id)).toEqual(['r_new', 'r_mid', 'r_old']);
@@ -368,7 +373,11 @@ describe('ReportService', () => {
   });
 
   it('dispatchDue: still runs (no mail) when email service absent', async () => {
-    const svcNoMail = new ReportService({ engine: engine as any, clock: { now: () => now } });
+    const svcNoMail = new ReportService({
+      engine: engine as any,
+      clock: { now: () => now },
+      resolveOwnerContext: async (ownerId: string) => ({ userId: ownerId, positions: [], permissions: [] }),
+    });
     const r = await svcNoMail.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
     await svcNoMail.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
     engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
@@ -376,5 +385,91 @@ describe('ReportService', () => {
     const result = await svcNoMail.dispatchDue();
     expect(result.fired).toBe(1);
     expect(engine._tables['sys_report_schedule'][0].last_status).toBe('ok');
+  });
+
+  // ─── Authorization (#2980) ──────────────────────────────────────
+  describe('access control', () => {
+    const OTHER = { userId: 'u2', tenantId: 't1', positions: [], permissions: [] };
+
+    it('getReport: a non-owner cannot read another user\'s report (not-found)', async () => {
+      const r = await svc.saveReport({ name: 'Mine', object: 'lead', query: {} }, CTX);
+      expect(await svc.getReport(r.id, CTX)).not.toBeNull();     // owner sees it
+      expect(await svc.getReport(r.id, OTHER)).toBeNull();       // stranger cannot
+    });
+
+    it('deleteReport: a non-owner cannot delete another user\'s report', async () => {
+      const r = await svc.saveReport({ name: 'Mine', object: 'lead', query: {} }, CTX);
+      await expect(svc.deleteReport(r.id, OTHER)).rejects.toThrow(/REPORT_NOT_FOUND/);
+      expect(engine._tables['sys_saved_report'].length).toBe(1); // still there
+      await svc.deleteReport(r.id, CTX);                          // owner can
+      expect(engine._tables['sys_saved_report'].length).toBe(0);
+    });
+
+    it('saveReport: a non-owner cannot overwrite another user\'s report by id', async () => {
+      const r = await svc.saveReport({ name: 'Mine', object: 'lead', query: {} }, CTX);
+      await expect(
+        svc.saveReport({ id: r.id, name: 'Hijacked', object: 'lead', query: {} }, OTHER),
+      ).rejects.toThrow(/REPORT_NOT_FOUND/);
+      expect(engine._tables['sys_saved_report'][0].name).toBe('Mine');
+    });
+
+    it('saveReport: a caller cannot assign ownership to someone else on create', async () => {
+      const r = await svc.saveReport(
+        { name: 'X', object: 'lead', query: {}, ownerId: 'victim' } as any,
+        CTX,
+      );
+      expect(r.owner_id).toBe('u1');
+    });
+
+    it('listReports: only the caller\'s own reports are returned', async () => {
+      await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);   // u1
+      await svc.saveReport({ name: 'B', object: 'lead', query: {} }, OTHER); // u2
+      const mine = await svc.listReports({}, CTX);
+      expect(mine.map(r => r.name)).toEqual(['A']);
+      const theirs = await svc.listReports({}, OTHER);
+      expect(theirs.map(r => r.name)).toEqual(['B']);
+    });
+
+    it('listReports: a caller-supplied ownerId cannot widen past the caller', async () => {
+      await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+      await svc.saveReport({ name: 'B', object: 'lead', query: {} }, OTHER);
+      expect(await svc.listReports({ ownerId: 'u2' }, CTX)).toEqual([]); // u1 asking for u2 ⇒ nothing
+    });
+
+    it('system context sees all reports (scheduler / tooling path)', async () => {
+      await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+      await svc.saveReport({ name: 'B', object: 'lead', query: {} }, OTHER);
+      const all = await svc.listReports({}, { isSystem: true } as any);
+      expect(all.length).toBe(2);
+    });
+
+    it('dispatchDue: fails closed (no RLS bypass) when no owner resolver is configured', async () => {
+      const noResolver = new ReportService({ engine: engine as any, email, clock: { now: () => now } });
+      const r = await noResolver.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+      await noResolver.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
+      engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+
+      const result = await noResolver.dispatchDue();
+      expect(result.fired).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(email._sent.length).toBe(0); // nothing emailed — no elevated run
+      expect(engine._tables['sys_report_schedule'][0].last_status).toBe('failed');
+      expect(engine._tables['sys_report_schedule'][0].last_error).toMatch(/RLS bypassed/);
+    });
+
+    it('dispatchDue: runs under the owner context the resolver returns', async () => {
+      const seen: Array<string | undefined> = [];
+      const spySvc = new ReportService({
+        engine: engine as any, email, clock: { now: () => now },
+        resolveOwnerContext: async (ownerId) => { seen.push(ownerId); return { userId: ownerId, positions: [], permissions: [] }; },
+      });
+      const r = await spySvc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+      await spySvc.scheduleReport({ reportId: r.id, recipients: ['x@t'], format: 'csv' }, CTX);
+      engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+
+      const result = await spySvc.dispatchDue();
+      expect(result.fired).toBe(1);
+      expect(seen).toEqual(['u1']); // resolved the owner, not a system context
+    });
   });
 });

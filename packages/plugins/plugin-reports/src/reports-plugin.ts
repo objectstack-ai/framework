@@ -87,6 +87,13 @@ export class ReportsServicePlugin implements Plugin {
         email,
         logger: ctx.logger,
         maxRows: this.options.maxRows,
+        // Scheduled reports run under the owner's resolved RLS context, not a
+        // system bypass (#2980). No owner-context resolver is wired yet — that
+        // is the reports-surface consumer of ADR-0073's user-less identity
+        // resolution (M2) — so until it lands, scheduled runs FAIL CLOSED
+        // (skipped + marked failed) rather than exfiltrate. Interactive runs
+        // (run/runAdHoc) are unaffected: they carry the caller's context.
+        resolveOwnerContext: undefined,
       });
       ctx.registerService('reports', this.service);
 

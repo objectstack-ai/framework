@@ -408,6 +408,31 @@ export function buildSharingMiddleware(service: SharingService): EngineMiddlewar
           err.status = 403;
           throw err;
         }
+        return next();
+      }
+
+      // Bulk (multi) write — no single id to canEdit-gate (#2982). AND the
+      // editable-rows filter into the AST so the update/delete only touches
+      // rows the caller may edit, exactly as the read path scopes finds. The
+      // engine honours ast.where operation-agnostically (same seam the RLS
+      // write filter uses). Without this, a `multi:true` write on an
+      // owner-scoped object would hit every matching row, including peers'.
+      let writeFilter = await service.buildWriteFilter(ctx.object, exec ?? {});
+      // [ADR-0090 D10] Intersect the delegator's editable set for on-behalf-of.
+      if (exec?.onBehalfOf?.userId) {
+        const delFilter = await service.buildWriteFilter(ctx.object, {
+          ...exec,
+          userId: exec.onBehalfOf.userId,
+          onBehalfOf: undefined,
+          __writeScope: exec.__delegatorWriteScope,
+        });
+        writeFilter = composeAnd(writeFilter, delFilter);
+      }
+      if (writeFilter) {
+        const ast: any = ctx.ast ?? {};
+        ast.where = composeAnd(ast.where, writeFilter);
+        ast.filter = composeAnd(ast.filter, writeFilter);
+        ctx.ast = ast;
       }
       return next();
     }

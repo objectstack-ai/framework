@@ -98,15 +98,29 @@ describe('KnowledgeService — permission-aware search', () => {
     return { svc, adapter, findSpy };
   }
 
-  it('passes through every hit when no executionContext is provided', async () => {
+  it('fails closed on object-source hits when no executionContext is provided (#2981)', async () => {
+    // A missing identity is NOT a grant of authority: object-backed hits are
+    // dropped rather than returned unfiltered (the agent/RAG fall-open).
     const hits: KnowledgeHit[] = [
       { chunkId: 'c1', documentId: 'd1', sourceId: 's1', sourceRecordId: 'rec_1', score: 0.9, snippet: '' },
       { chunkId: 'c2', documentId: 'd2', sourceId: 's1', sourceRecordId: 'rec_2', score: 0.8, snippet: '' },
     ];
     const { svc, findSpy } = buildSetup(hits);
     const out = await svc.search('q');
-    expect(out).toHaveLength(2);
-    expect(findSpy).not.toHaveBeenCalled();
+    expect(out).toHaveLength(0);            // object-backed hits withheld
+    expect(findSpy).not.toHaveBeenCalled(); // dropped without a lookup
+  });
+
+  it('keeps file/http hits but drops object hits when no executionContext (#2981)', async () => {
+    // The fail-closed drop is scoped to record-backed hits; ACL-less
+    // file/http hits still flow (their adapter owns any enforcement).
+    const hits: KnowledgeHit[] = [
+      { chunkId: 'c1', documentId: 'd1', sourceId: 's1', sourceRecordId: 'rec_1', score: 0.9, snippet: '' },
+      { chunkId: 'c2', documentId: 'd2', sourceId: 'http_src', score: 0.5, snippet: 'web' },
+    ];
+    const { svc } = buildSetup(hits);
+    const out = await svc.search('q');
+    expect(out.map((h) => h.documentId)).toEqual(['d2']);
   });
 
   it('passes through every hit when context is isSystem:true', async () => {
