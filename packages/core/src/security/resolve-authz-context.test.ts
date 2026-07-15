@@ -2,6 +2,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { resolveAuthzContext, resolveLocalizationContext } from './resolve-authz-context.js';
+import { POSTURE_RANK } from './posture-ladder.js';
+import type { AuthzPosture } from '@objectstack/spec/security';
 
 /**
  * Contract test for the SINGLE authorization resolver. Every authorization
@@ -261,6 +263,115 @@ describe('audience anchors in the resolver (ADR-0090 D5)', () => {
     const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: async () => undefined });
     expect(ctx.positions).not.toContain('everyone');
     expect(ctx.userId).toBeUndefined();
+  });
+});
+
+/**
+ * [ADR-0095 D2/D3] Posture-ladder resolution. A `principal × grants → posture`
+ * matrix asserting the rung is DERIVED from held capability grants
+ * (`admin_full_access` → PLATFORM_ADMIN; `organization_admin` → TENANT_ADMIN;
+ * otherwise MEMBER), never from a better-auth role, plus the strict-nesting
+ * ordering (PLATFORM_ADMIN > TENANT_ADMIN > MEMBER). `EXTERNAL` is never
+ * resolved — no external principal type exists yet.
+ */
+describe('resolveAuthzContext — posture ladder (ADR-0095 D2/D3)', () => {
+  // Each fixture returns the ql tables + the session getter for one principal.
+  const FIXTURES: Record<string, { ql: any; getSession: any }> = {
+    // Unscoped admin_full_access grant → the platform-admin capability.
+    platform_admin: {
+      ql: makeQl({
+        sys_user: [{ id: 'pa' }],
+        sys_member: [],
+        sys_user_position: [],
+        sys_user_permission_set: [{ user_id: 'pa', permission_set_id: 'psA', organization_id: null }],
+        sys_permission_set: [{ id: 'psA', name: 'admin_full_access' }],
+      }),
+      getSession: session('pa'),
+    },
+    // Org-scoped organization_admin grant (auto-provisioned from role=admin).
+    tenant_admin: {
+      ql: makeQl({
+        sys_user: [{ id: 'ta' }],
+        sys_member: [{ user_id: 'ta', role: 'admin', organization_id: 'o1' }],
+        sys_user_position: [],
+        sys_user_permission_set: [{ user_id: 'ta', permission_set_id: 'psO', organization_id: 'o1' }],
+        sys_permission_set: [{ id: 'psO', name: 'organization_admin' }],
+      }),
+      getSession: session('ta', { org: 'o1' }),
+    },
+    // Ordinary member — no admin capability grant.
+    member: {
+      ql: makeQl({
+        sys_user: [{ id: 'm' }],
+        sys_member: [{ user_id: 'm', role: 'member', organization_id: 'o1' }],
+        sys_user_position: [],
+        sys_user_permission_set: [],
+        sys_permission_set: [],
+      }),
+      getSession: session('m', { org: 'o1' }),
+    },
+    // Authenticated but no active org — still the MEMBER floor, not EXTERNAL.
+    no_org_member: {
+      ql: makeQl({
+        sys_user: [{ id: 'n' }],
+        sys_member: [],
+        sys_user_position: [],
+        sys_user_permission_set: [],
+      }),
+      getSession: session('n'),
+    },
+  };
+
+  const EXPECTED_POSTURE: Record<string, AuthzPosture> = {
+    platform_admin: 'PLATFORM_ADMIN',
+    tenant_admin: 'TENANT_ADMIN',
+    member: 'MEMBER',
+    no_org_member: 'MEMBER',
+  };
+
+  it('resolves the principal × grants → posture matrix', async () => {
+    const actual: Record<string, AuthzPosture | undefined> = {};
+    for (const [name, fx] of Object.entries(FIXTURES)) {
+      const ctx = await resolveAuthzContext({ ql: fx.ql, headers: H(), getSession: fx.getSession });
+      actual[name] = ctx.posture;
+    }
+    expect(actual).toEqual(EXPECTED_POSTURE);
+  });
+
+  it('posture is strictly nested: PLATFORM_ADMIN > TENANT_ADMIN > MEMBER', async () => {
+    const rank = async (name: string) => {
+      const fx = FIXTURES[name];
+      const ctx = await resolveAuthzContext({ ql: fx.ql, headers: H(), getSession: fx.getSession });
+      return POSTURE_RANK[ctx.posture!];
+    };
+    expect(await rank('platform_admin')).toBeGreaterThan(await rank('tenant_admin'));
+    expect(await rank('tenant_admin')).toBeGreaterThan(await rank('member'));
+  });
+
+  it('platform-admin grant wins over a co-held org-admin grant (capability, not role)', async () => {
+    // A principal who is BOTH an org admin (role) AND holds the unscoped
+    // platform grant resolves PLATFORM_ADMIN — derivation reads the capability,
+    // so the higher rung wins regardless of the better-auth role.
+    const ql = makeQl({
+      sys_user: [{ id: 'both' }],
+      sys_member: [{ user_id: 'both', role: 'admin', organization_id: 'o1' }],
+      sys_user_position: [],
+      sys_user_permission_set: [
+        { user_id: 'both', permission_set_id: 'psA', organization_id: null },
+        { user_id: 'both', permission_set_id: 'psO', organization_id: 'o1' },
+      ],
+      sys_permission_set: [
+        { id: 'psA', name: 'admin_full_access' },
+        { id: 'psO', name: 'organization_admin' },
+      ],
+    });
+    const ctx = await resolveAuthzContext({ ql, headers: H(), getSession: session('both', { org: 'o1' }) });
+    expect(ctx.posture).toBe('PLATFORM_ADMIN');
+  });
+
+  it('anonymous principal carries no posture rung', async () => {
+    const ctx = await resolveAuthzContext({ ql: makeQl({}), headers: H(), getSession: async () => undefined });
+    expect(ctx.posture).toBeUndefined();
   });
 });
 

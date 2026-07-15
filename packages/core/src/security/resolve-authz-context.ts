@@ -29,10 +29,13 @@ import {
   mapMembershipRole,
   BUILTIN_IDENTITY_PLATFORM_ADMIN,
   ADMIN_FULL_ACCESS,
+  ORGANIZATION_ADMIN,
 } from '@objectstack/spec';
+import type { AuthzPosture } from '@objectstack/spec/security';
 
 import { resolveApiKeyPrincipal } from './api-key.js';
 import { isGrantActive } from './grant-validity.js';
+import { derivePosture } from './posture-ladder.js';
 
 /** The transport-agnostic authorization envelope produced from a request. */
 export interface ResolvedAuthzContext {
@@ -46,6 +49,16 @@ export interface ResolvedAuthzContext {
   tabPermissions?: Record<string, 'visible' | 'hidden' | 'default_on' | 'default_off'>;
   /** Fellow-org user IDs for RLS scoping of identity tables (`id IN (...)`). */
   org_user_ids: string[];
+  /**
+   * [ADR-0095 D2/D3] The monotonic posture rung this principal resolves to,
+   * DERIVED once here from held capability grants (never a better-auth role):
+   * `PLATFORM_ADMIN` (unscoped `admin_full_access`) > `TENANT_ADMIN`
+   * (`organization_admin`) > `MEMBER` (the authenticated floor). `EXTERNAL` is
+   * defined/test-locked but never resolved yet (no external principal type —
+   * see `posture-ladder.ts`). Present only for an authenticated principal;
+   * anonymous requests carry no rung.
+   */
+  posture?: AuthzPosture;
 }
 
 export interface ResolveAuthzInput {
@@ -146,6 +159,11 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
 
   // 3. Organization-administration roles via sys_member (better-auth), normalized
   //    to the canonical built-in names (owner→org_owner, admin→org_admin, …).
+  //    [ADR-0095 D3] This is the ONE PROVISIONING boundary where a better-auth
+  //    role is read: it is projected into `positions` here, and separately drives
+  //    the `organization_admin` capability grant (auto-org-admin-grant.ts). No
+  //    enforcement code path reads the raw role — posture/adjudication run off
+  //    the resulting capability grants, so the #2836 dual-track cannot recur.
   const memberWhere: any = tenantId
     ? { user_id: userId, organization_id: tenantId }
     : { user_id: userId };
@@ -271,6 +289,21 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   if (hasPlatformAdminGrant && !ctx.positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN)) {
     ctx.positions.unshift(BUILTIN_IDENTITY_PLATFORM_ADMIN);
   }
+
+  // 6d. [ADR-0095 D2/D3] Resolve the posture rung ONCE, from held CAPABILITY
+  //     grants — never from a better-auth role. `PLATFORM_ADMIN` from the
+  //     unscoped `admin_full_access` grant (the same `viewAllRecords`/
+  //     `modifyAllRecords` evidence the superuser bypass trusts); `TENANT_ADMIN`
+  //     from the `organization_admin` grant (auto-provisioned from the better-
+  //     auth owner/admin role at §3 above — a provisioning source, not an
+  //     enforcement input, closing the #2836 dual-track class). Enforcement
+  //     behavior is unchanged: the per-object Layer 0 exemption + per-side
+  //     superuser bypass still gate access; posture is the carried, explainable
+  //     tier. `EXTERNAL` is never derived (no external principal type yet).
+  ctx.posture = derivePosture({
+    isPlatformAdmin: hasPlatformAdminGrant,
+    isTenantAdmin: ctx.permissions.includes(ORGANIZATION_ADMIN),
+  });
 
   // 7. [ADR-0024] Env-side AI seat: synthesize the `ai_seat` capability from the
   //    boolean sys_user.ai_access (sqlite returns 1/0; memory returns boolean).

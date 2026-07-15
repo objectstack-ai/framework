@@ -36,8 +36,12 @@
  * `admin_full_access`.
  */
 
+import { ORGANIZATION_ADMIN } from '@objectstack/spec';
+
 const SYSTEM_CTX = { isSystem: true } as const;
-const PERMISSION_SET_NAME = 'organization_admin';
+// [ADR-0095 D3] Single source of truth for the org-admin capability grant name —
+// the same constant the TENANT_ADMIN posture rung derives from.
+const PERMISSION_SET_NAME = ORGANIZATION_ADMIN;
 
 interface MaybeLogger {
   info?: (message: string, meta?: Record<string, any>) => void;

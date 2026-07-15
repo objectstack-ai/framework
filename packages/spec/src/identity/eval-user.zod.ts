@@ -53,9 +53,21 @@ export type BuiltinIdentityName = (typeof BUILTIN_IDENTITY_NAMES)[number];
 
 /**
  * Permission-set name whose unscoped grant is the source of truth for
- * `platform_admin` (ADR-0068 D2).
+ * `platform_admin` (ADR-0068 D2). Under ADR-0095 D3 this is also the capability
+ * grant the `PLATFORM_ADMIN` posture rung derives from (it carries
+ * `viewAllRecords`/`modifyAllRecords`).
  */
 export const ADMIN_FULL_ACCESS = 'admin_full_access';
+
+/**
+ * Permission-set name whose grant is the source of truth for the `TENANT_ADMIN`
+ * posture rung (ADR-0095 D3). Auto-granted (org-scoped) to every `sys_member`
+ * whose better-auth role contains `owner`/`admin` by
+ * `plugin-security/src/auto-org-admin-grant.ts` — so the better-auth role is a
+ * *provisioning source* of this capability grant, never an enforcement input.
+ * It carries `viewAllRecords`/`modifyAllRecords` but is tenant-scoped by Layer 0.
+ */
+export const ORGANIZATION_ADMIN = 'organization_admin';
 
 /** Human-readable metadata for the built-in identity names (seeded into `sys_position`; AI grounding). */
 export const BUILTIN_IDENTITY_METADATA: Record<BuiltinIdentityName, { label: string; description: string }> = {
