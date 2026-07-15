@@ -179,12 +179,24 @@ export const PermissionSetSchema = lazySchema(() => z.object({
     .describe('[ADR-0086 D3] Record provenance: package (upgrade-owned metadata) vs platform/user (env config)'),
 
   /**
-   * [ADR-0090 D5] Package SUGGESTION: on install the admin is prompted to bind
-   * this set to the built-in `everyone` position (default grants for
-   * authenticated users). Never auto-bound; carries no runtime semantics of
-   * its own. (The former `isProfile` flag was removed by ADR-0090 D2.)
+   * [ADR-0090 D5] Marks this set as the app's baseline for the built-in
+   * `everyone` position (default grants for authenticated users). Two tracks
+   * consume it (#2926 ②):
+   *
+   *  - **App-level** (the set is declared by the served app itself): the CLI
+   *    resolves the first `isDefault` set as the SecurityPlugin's
+   *    `fallbackPermissionSet`, and the plugin IDEMPOTENTLY AUTO-BINDS it to
+   *    `everyone` at boot — after a high-privilege-bits check refuses
+   *    dangerous sets. Without this a fresh deploy boots with zero bindings
+   *    and every persona silently degrades.
+   *  - **Package-level** (the set ships in an installed package with a
+   *    `packageId`): never auto-bound — it materializes a pending
+   *    `sys_audience_binding_suggestion` row that an admin confirms in Setup.
+   *
+   * Carries no runtime semantics of its own beyond these boot-time effects.
+   * (The former `isProfile` flag was removed by ADR-0090 D2.)
    */
-  isDefault: z.boolean().default(false).describe('[ADR-0090 D5] Install-time suggestion to bind this set to the everyone position (admin confirms; never auto-bound)'),
+  isDefault: z.boolean().default(false).describe('[ADR-0090 D5] App baseline for the everyone position: app-level sets are auto-bound at boot (guarded, idempotent); package-level sets become install-time suggestions an admin confirms'),
   
   /** Object Permissions Map: <entity_name> -> permissions */
   objects: z.record(z.string(), ObjectPermissionSchema).describe('Entity permissions'),

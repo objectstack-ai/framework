@@ -16,6 +16,7 @@ import { ShowcaseExternalDatasource } from './src/system/datasources/showcase-ex
 import { ExternalCustomer, ExternalOrder } from './src/data/objects/external/index.js';
 import { setupShowcaseExternalDatasource } from './src/system/datasources/external-fixture.js';
 import { registerRecalcEndpoint } from './src/system/server/recalc-endpoint.js';
+import { registerShowcasePositionBindings } from './src/security/bind-position-sets.js';
 import { TaskViews, ProjectViews, InquiryViews, BusinessUnitViews } from './src/ui/views/index.js';
 import { ShowcaseApp } from './src/ui/apps/index.js';
 import { ChartGalleryDashboard, OpsDashboard } from './src/ui/dashboards/index.js';
@@ -218,4 +219,7 @@ export const onEnable = async (ctx: unknown): Promise<void> => {
   await setupShowcaseExternalDatasource(ctx as Parameters<typeof setupShowcaseExternalDatasource>[0]);
   // Mount the custom REST endpoint behind the `showcase_recalc_estimate` api action.
   registerRecalcEndpoint(ctx as Parameters<typeof registerRecalcEndpoint>[0]);
+  // [#2926 ②] Ensure the persona position↔permission-set bindings exist after
+  // the security bootstraps (cannot be a seed — see bind-position-sets.ts).
+  registerShowcasePositionBindings(ctx as Parameters<typeof registerShowcasePositionBindings>[0]);
 };

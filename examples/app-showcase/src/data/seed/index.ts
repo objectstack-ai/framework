@@ -13,6 +13,7 @@ import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
 import { Contact } from '../objects/contact.object.js';
 import { Inquiry } from '../objects/inquiry.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
+import { Announcement } from '../objects/announcement.object.js';
 
 /**
  * Seed data sized to "feed every view": every Kanban column is populated,
@@ -161,6 +162,13 @@ const orgUnits = SeedSchema.parse({
   ],
 });
 
+// [#2926 ②] Position ↔ permission-set bindings are NOT seeded here: the seed
+// loader runs before the security bootstrap creates the sys_position /
+// sys_permission_set rows, so the required name references cannot resolve.
+// They are ensured imperatively on kernel:listening instead (after every
+// kernel:ready handler, incl. the security bootstrap, has settled) — see
+// `src/security/bind-position-sets.ts` (wired via `onEnable`).
+
 const teams = defineSeed(Team, {
   mode: 'upsert',
   externalId: 'name',
@@ -286,4 +294,20 @@ const preferences = defineSeed(Preference, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences];
+/**
+ * [#2926 ⑤] Announcements — the read-visibility demo object finally ships
+ * with data, so its assertions stop dry-running on a fresh DB. The object has
+ * NO `name` field (display name derives from `title`); `owner_id` stays
+ * unset — users can't be seeded, and creation rights are deliberately narrow
+ * (only `showcase_ops` may create; everyone else is read-only by design).
+ */
+const announcements = defineSeed(Announcement, {
+  mode: 'upsert',
+  externalId: 'title',
+  records: [
+    { title: 'Welcome to the Showcase workspace', body: 'This demo org exercises the full permission model: positions, permission sets, sharing rules and field-level security. Log in as different personas to compare what each can see and edit.' },
+    { title: 'Q3 field-ops rollout', body: 'Field Operations onboards the new inquiry intake flow this quarter. New public inquiries are shared automatically with the Field Ops subtree.' },
+  ],
+});
+
+export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences, announcements];
