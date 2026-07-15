@@ -1,0 +1,319 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import type { z } from 'zod';
+
+/**
+ * # Public auth feature-flag registry (#2874)
+ *
+ * Classification registry for the **public `/api/v1/auth/config` `features`
+ * contract** produced by plugin-auth's `getPublicConfig()`. Every boolean flag
+ * served there MUST be classified here — a drift guard in plugin-auth
+ * (`public-feature-registry.test.ts`) asserts the served key set ≡ this
+ * registry's key set, so a new flag that ships unclassified turns CI red.
+ *
+ * Why: the create-user `phoneNumber` bug (#2871 / objectui#2406) was one
+ * instance of a broader class — *the UI advertises a capability the runtime
+ * doesn't have because the plugin behind it is off*. Manual per-site gating
+ * discipline inevitably leaves silent gaps; this registry is the single place
+ * where each flag's consumption surface, default semantics, and gated spec
+ * inputs (or exemption rationale) are recorded and CI-enforced.
+ *
+ * NOT to be confused with `kernel/feature.zod.ts` (`FeatureFlagSchema`) —
+ * that schema models tenant-scoped runtime rollout toggles (strategies,
+ * expiry, conditions). This registry classifies the fixed, deployment-level
+ * capability flags that plugin-auth advertises to anonymous clients.
+ *
+ * Consumers:
+ * - `ui/action.zod.ts` — `requiresFeature` sugar on actions/params is lowered
+ *   at parse time (see {@link lowerRequiresFeature}) into the canonical
+ *   `visible` CEL predicate using {@link featureGatePredicate}.
+ * - plugin-auth drift guard (key-set equivalence with `getPublicConfig()`).
+ * - platform-objects completeness guard (`feature-gate-guard.test.ts`) —
+ *   every path in `gatedInputs` must carry the matching predicate, and every
+ *   `features.*` reference in a `visible` predicate must be booked here.
+ *
+ * This module is deliberately **import-free** (type-only zod import aside) so
+ * schema modules can depend on it file-directly without cycle risk, and it
+ * contains constants plus pure lowering helpers only (Prime Directive #2).
+ */
+
+/**
+ * Where a flag is consumed:
+ * - `crud`  — admin/CRUD surface: action/param `visible` predicates rendered
+ *   through objectui's `filterVisibleParams` chain. The surface this registry
+ *   actively guards.
+ * - `login` — objectui login/auth UI reads the flag straight off
+ *   `/auth/config` (no spec metadata in between).
+ * - `status` — operational status indicator, not a capability gate.
+ */
+export type PublicAuthFeatureSurface = 'crud' | 'login' | 'status';
+
+/**
+ * Default semantics of the flag, which decide the lowered predicate:
+ * - `opt-in`     — default `false`; gate with `features.X == true`.
+ * - `default-on` — default `true`; gate with `features.X != false` so a
+ *   missing/undefined flag (e.g. config not yet fetched) keeps the input
+ *   visible.
+ */
+export type PublicAuthFeatureSemantics = 'opt-in' | 'default-on';
+
+export type PublicAuthFeatureEntry = {
+  surface: PublicAuthFeatureSurface;
+  semantics: PublicAuthFeatureSemantics;
+  /**
+   * Spec inputs gated on this flag. Path grammar:
+   * `<object>.actions.<action>` or `<object>.actions.<action>.params.<name|field>`.
+   * The platform-objects completeness guard resolves each path and asserts the
+   * target's `visible` predicate matches {@link featureGatePredicate}.
+   * Mutually exclusive with `exempt`.
+   */
+  gatedInputs?: readonly string[];
+  /** Required when `gatedInputs` is absent — why no spec input needs gating. */
+  exempt?: { reason: string };
+  /** Audit notes: login-surface consumption sites, known gaps, follow-ups. */
+  notes?: string;
+};
+
+/**
+ * The registry. Keys mirror the boolean flags assembled in plugin-auth's
+ * `getPublicConfig()` (auth-manager.ts, `features` literal) — see the drift
+ * guard. Login-surface consumption sites below were audited against objectui
+ * on 2026-07-15 (#2874 P2②).
+ */
+export const PUBLIC_AUTH_FEATURES = {
+  twoFactor: {
+    surface: 'crud',
+    semantics: 'opt-in',
+    gatedInputs: [
+      'sys_user.actions.enable_two_factor',
+      'sys_user.actions.disable_two_factor',
+      'sys_user.actions.generate_backup_codes',
+      'sys_two_factor.actions.enable_two_factor',
+      'sys_two_factor.actions.disable_two_factor',
+      'sys_two_factor.actions.regenerate_backup_codes',
+    ],
+    notes:
+      'Login-surface 2FA challenge is server-driven remediation (ADR-0069), ' +
+      'so the flag is intentionally unread by objectui LoginForm.',
+  },
+  passkeys: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'No spec input to gate. Typed in objectui (auth/src/types.ts) but no ' +
+        'passkey UI exists yet — advertised-but-unconsumed gap tracked in a ' +
+        'follow-up objectui issue (#2874 P2②).',
+    },
+  },
+  magicLink: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'No spec input to gate. Typed in objectui (auth/src/types.ts) but no ' +
+        'magic-link UI exists yet — advertised-but-unconsumed gap tracked in ' +
+        'a follow-up objectui issue (#2874 P2②).',
+    },
+  },
+  organization: {
+    surface: 'crud',
+    semantics: 'default-on',
+    gatedInputs: [
+      'sys_user.actions.invite_user',
+      'sys_member.actions.add_member',
+      'sys_member.actions.update_member_role',
+      'sys_member.actions.remove_member',
+      'sys_member.actions.transfer_ownership',
+      'sys_invitation.actions.invite_user',
+      'sys_invitation.actions.cancel_invitation',
+      'sys_invitation.actions.resend_invitation',
+      'sys_team.actions.create_team',
+      'sys_team.actions.update_team',
+      'sys_team.actions.remove_team',
+      'sys_team_member.actions.add_team_member',
+      'sys_team_member.actions.remove_team_member',
+    ],
+    notes: 'Org CAPABILITY gate, not multi-org (ADR-0081 D1).',
+  },
+  multiOrgEnabled: {
+    surface: 'crud',
+    semantics: 'default-on',
+    gatedInputs: [
+      'sys_organization.actions.create_organization',
+      'sys_organization.actions.update_organization',
+      'sys_organization.actions.delete_organization',
+      'sys_organization.actions.set_active_organization',
+      'sys_organization.actions.leave_organization',
+      'sys_organization.actions.change_slug',
+    ],
+    notes:
+      'Reflects ACTUAL multi-tenancy capability (tenancy.mode === "multi", ' +
+      'ADR-0093 D4), not just the requested mode.',
+  },
+  degradedTenancy: {
+    surface: 'status',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'Operator status banner (ADR-0093 D5) — signals degraded tenant ' +
+        'isolation, not an input capability gate.',
+    },
+  },
+  oidcProvider: {
+    surface: 'crud',
+    semantics: 'default-on',
+    gatedInputs: [
+      'sys_oauth_application.actions.create_oauth_application',
+      'sys_oauth_application.actions.disable_oauth_application',
+      'sys_oauth_application.actions.enable_oauth_application',
+      'sys_oauth_application.actions.rotate_client_secret',
+    ],
+    notes:
+      'Default-ON: the embedded OIDC authorization server follows the ' +
+      'default-on MCP surface (resolveOidcProviderEnabled). Login surface ' +
+      'consumes the socialProviders[] array (per-provider enabled), not this ' +
+      'flag.',
+  },
+  sso: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'Deliberately ungated on the CRUD surface: the served value is ' +
+        'refined to "usable" (≥1 provider configured) via isSsoUsable() at ' +
+        '/auth/config, so gating sys_sso_provider registration actions on it ' +
+        'would deadlock first-provider setup. Login consumption verified: ' +
+        'objectui LoginForm gates the "Sign in with SSO" button.',
+    },
+  },
+  ssoEnforced: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'Login-surface only: objectui LoginForm hides the password form and ' +
+        'self-registration (break-glass link remains). No spec input to gate.',
+    },
+  },
+  deviceAuthorization: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'No spec input (sys_device_code declares no actions). Known gap: ' +
+        'objectui DeviceAuthPage hits the device-auth endpoints without ' +
+        'checking this flag (absent from its client type) — tracked in a ' +
+        'follow-up objectui issue (#2874 P2②).',
+    },
+  },
+  admin: {
+    surface: 'crud',
+    semantics: 'opt-in',
+    gatedInputs: [
+      'sys_user.actions.create_user',
+      'sys_user.actions.ban_user',
+      'sys_user.actions.unban_user',
+      'sys_user.actions.unlock_user',
+      'sys_user.actions.set_user_password',
+      'sys_user.actions.set_user_role',
+      'sys_user.actions.impersonate_user',
+    ],
+    notes: 'SCIM forces the admin plugin (and this flag) on — ADR-0071.',
+  },
+  phoneNumber: {
+    surface: 'crud',
+    semantics: 'opt-in',
+    gatedInputs: ['sys_user.actions.create_user.params.phoneNumber'],
+    notes:
+      'The original #2871 fix. Also read by objectui LoginForm for the ' +
+      'phone+password sign-in mode.',
+  },
+  phoneNumberOtp: {
+    surface: 'login',
+    semantics: 'opt-in',
+    exempt: {
+      reason:
+        'Login-surface only: gates the "sign in with verification code" link ' +
+        '(LoginForm) and the phone branch of forgot-password. Only advertised ' +
+        'when SMS is actually deliverable (#2780).',
+    },
+  },
+} as const satisfies Record<string, PublicAuthFeatureEntry>;
+
+export type PublicAuthFeatureName = keyof typeof PUBLIC_AUTH_FEATURES;
+
+/** Tuple of registry keys — feeds `z.enum(...)` for the `requiresFeature` sugar. */
+export const PUBLIC_AUTH_FEATURE_NAMES = Object.keys(PUBLIC_AUTH_FEATURES) as [
+  PublicAuthFeatureName,
+  ...PublicAuthFeatureName[],
+];
+
+/**
+ * Non-boolean keys `getPublicConfig()` may conditionally spread into
+ * `features` (legal-link URLs). Exempt from flag classification; the drift
+ * guard asserts no OTHER non-boolean key sneaks in.
+ */
+export const PUBLIC_AUTH_CONFIG_NON_FLAG_KEYS = ['termsUrl', 'privacyUrl'] as const;
+
+/**
+ * The canonical CEL gate for a flag, per its default semantics:
+ * `opt-in` → `features.X == true`; `default-on` → `features.X != false`
+ * (so an absent flag — e.g. config not yet fetched — fails open).
+ */
+export function featureGatePredicate(name: PublicAuthFeatureName): string {
+  const op = PUBLIC_AUTH_FEATURES[name].semantics === 'opt-in' ? '== true' : '!= false';
+  return `features.${name} ${op}`;
+}
+
+/** Object shape the lowering transform operates on (post field-level parse). */
+type WithRequiresFeature = {
+  requiresFeature?: PublicAuthFeatureName;
+  /** Already normalized by ExpressionInputSchema to the `{dialect, source}` envelope. */
+  visible?: { dialect?: unknown; source?: unknown } & Record<string, unknown>;
+};
+
+/**
+ * Lower the declarative `requiresFeature: '<flag>'` sugar into the canonical
+ * `visible` CEL predicate and strip the sugar key from the output — mirroring
+ * `normalizeVisibleWhen` (ADR-0089): persisted artifacts, lint, runtime, and
+ * objectui only ever see the canonical envelope.
+ *
+ * - No existing `visible` → `{ dialect: 'cel', source: <gate> }`, string-equal
+ *   to the hand-written gates it replaces.
+ * - Existing CEL `visible` with a `source` → composed as
+ *   `(<existing>) && <gate>` (existing predicate first, gate last — the
+ *   hand-written convention).
+ * - Existing `visible` that is non-CEL or AST-only → loud parse error
+ *   (ADR-0078 no-silently-inert); write the combined predicate by hand.
+ *
+ * Designed as a zod `.transform((v, ctx) => lowerRequiresFeature(v, ctx))`
+ * appended after the schema's refinements.
+ */
+export function lowerRequiresFeature<T extends WithRequiresFeature>(
+  input: T,
+  ctx: z.core.$RefinementCtx,
+): Omit<T, 'requiresFeature'> {
+  const { requiresFeature, ...rest } = input;
+  if (requiresFeature === undefined) return rest as Omit<T, 'requiresFeature'>;
+
+  const gate = featureGatePredicate(requiresFeature);
+  const existing = rest.visible;
+  if (existing === undefined) {
+    return { ...rest, visible: { dialect: 'cel', source: gate } } as Omit<T, 'requiresFeature'>;
+  }
+  if (existing.dialect !== 'cel' || typeof existing.source !== 'string') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['requiresFeature'],
+      message:
+        '`requiresFeature` composes only with a CEL `visible` carrying a `source` string; ' +
+        'this expression is AST-only or non-CEL — write the combined predicate by hand.',
+    });
+    return rest as Omit<T, 'requiresFeature'>;
+  }
+  return {
+    ...rest,
+    visible: { ...existing, source: `(${existing.source}) && ${gate}` },
+  } as Omit<T, 'requiresFeature'>;
+}

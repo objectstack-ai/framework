@@ -28,6 +28,7 @@ export * from './plugin-validator.zod';
 export * from './plugin-versioning.zod';
 export * from './protocol-version';
 export * from './plugin.zod';
+export * from './public-auth-features';
 export * from './service-registry.zod';
 export * from './startup-orchestrator.zod';
 export * from './plugin-registry.zod';
