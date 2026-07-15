@@ -1,5 +1,32 @@
 # @objectstack/objectql
 
+## 15.0.0
+
+### Patch Changes
+
+- 31d04d4: Fix the data-import automation chain (#2922). Batch `engine.insert` now fires
+  `beforeInsert`/`afterInsert` once **per row** with single-record hook contexts,
+  so flat-input proxies, declarative hook conditions, audit writers, and
+  record-change triggers see real records instead of arrays. A new
+  `ExecutionContext.skipAutomations` flag (mirrored into `HookContext.session`)
+  lets callers suppress metadata-bound automation hooks and flow dispatch while
+  code-registered system hooks (audit, security, sharing) still run — making the
+  import wizard's "run automations & triggers" checkbox and import undo actually
+  effective. The REST import default flips to running automations unless the
+  request explicitly opts out (`runAutomations: false`), matching historical
+  behavior.
+- Updated dependencies [28b7c28]
+- Updated dependencies [13749ec]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [31d04d4]
+  - @objectstack/spec@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/formula@15.0.0
+  - @objectstack/metadata-core@15.0.0
+  - @objectstack/metadata-protocol@15.0.0
+  - @objectstack/types@15.0.0
+
 ## 14.8.0
 
 ### Patch Changes

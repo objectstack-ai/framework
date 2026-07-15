@@ -1,5 +1,130 @@
 # @objectstack/spec
 
+## 15.0.0
+
+### Major Changes
+
+- 28b7c28: ADR-0089 D3a: flip `.strict()` on the view form + page component schemas so a mis-layered or stale conditional-visibility key is a **loud parse error** instead of a silent strip.
+
+  `FormFieldSchema`, `FormSectionSchema` (`view.zod.ts`) and `PageComponentSchema` (`page.zod.ts`) now reject unknown keys. Previously zod's default strip mode discarded any key these schemas did not declare — including a `visibleWhen` typo, a page-only `visibility` pasted onto a view field (or vice-versa), or a key surviving past its deprecation window — with no diagnostic, shipping inert metadata (ADR-0049 enforce-or-remove, ADR-0078 no-silently-inert).
+
+  - **Breaking:** metadata carrying a key not declared by these three schemas now fails validation at parse. A monorepo + examples sweep found a single offender (a test fixture using `id`/`title` on a form section instead of the canonical `name`/`label`); all first-party apps and platform metadata parse clean.
+  - The deprecated `visibleOn` (view form) / `visibility` (page component) aliases are **declared** keys, so they keep parsing and normalizing to `visibleWhen` — unchanged.
+  - Rejection messages name the offending key(s) and, when a key looks like the visibility predicate, point the author at the canonical `visibleWhen` (new `strictVisibilityError` zod error map, exported from `shared/visibility`).
+
+### Minor Changes
+
+- 13749ec: ADR-0095 D2/D3: the authorization kernel now resolves an explicit **posture
+  ladder** — a monotonic principal tier `PLATFORM_ADMIN > TENANT_ADMIN > MEMBER >
+EXTERNAL` — once, in `resolveAuthzContext`, and carries it on
+  `ResolvedAuthzContext.posture`.
+
+  - **D2 — the ladder.** New `@objectstack/core/security` module `posture-ladder.ts`
+    reuses the spec `AuthzPosture` enum and pins the rung → row-visibility
+    injection-rule mapping (exactly one rule per rung) plus its two ADR-required
+    invariants as unit-tested properties: strict nesting (rung _n_'s visible set ⊇
+    rung _n−1_'s) and the `EXTERNAL` deny-by-default semantics (explicitly shared
+    rows only — OWD baselines and sharing rules never widen it). `EXTERNAL` is
+    defined and test-locked now but never resolved: no external principal type
+    exists yet (portal/ADR-0093), so the resolver's floor is `MEMBER`.
+  - **D3 — capability-derived, single track.** The rung derives from held
+    **capability grants**, never a better-auth role: `PLATFORM_ADMIN` from the
+    unscoped `admin_full_access` grant (the same `viewAllRecords`/`modifyAllRecords`
+    evidence the superuser bypass trusts), `TENANT_ADMIN` from the
+    `organization_admin` grant. The better-auth `role='admin'` remains only a
+    _provisioning source_ of those grants (`auto-org-admin-grant.ts`,
+    `mapMembershipRole`); no enforcement path reads the raw role, closing the
+    #2836 dual-track adjudication class by construction.
+  - New spec export `ORGANIZATION_ADMIN` (the org-admin capability-grant name),
+    alongside the existing `ADMIN_FULL_ACCESS`.
+
+  **Behavior-preserving.** Enforcement is unchanged — the per-object Layer 0
+  exemption and per-side superuser bypass still gate access exactly as before;
+  `posture` is an additive, derived, explainable field. The `authz-matrix-gate`
+  unit snapshot and the dogfood authz-conformance matrix stay green. No migration
+  required.
+
+- e62c233: feat(spec,plugin-security): package-level capability declaration API (ADR-0066 D1)
+
+  Packages can now DEFINE their own authorization capabilities explicitly via the
+  new `defineCapability` factory and a stack's `capabilities` array, instead of
+  relying on the implicit "derive an untitled capability from whatever a permission
+  set references in `systemPermissions[]`" back-door.
+
+  - `@objectstack/spec`: new `defineCapability` / `CapabilityDeclarationSchema`
+    (`{ name, label?, description?, scope, packageId? }`) and a `capabilities`
+    field on the stack definition.
+  - `@objectstack/plugin-security`: new `bootstrapDeclaredCapabilities` seeds
+    declared capabilities into `sys_capability` with `managed_by:'package'` +
+    `package_id` provenance (new `package_id` field on the object). Idempotent,
+    upgrade-aware; refuses to hijack curated platform capabilities or another
+    package's rows, never clobbers admin-authored rows, and CLAIMS a pre-existing
+    derived placeholder (upgrading it to package provenance). The implicit
+    derive-from-`systemPermissions` path still runs for back-compat but now skips
+    any explicitly-declared name so it can't clobber authored metadata.
+  - `@objectstack/runtime`: stack-declared `capabilities` are registered into the
+    metadata registry (type `capability`) so the boot seeder can read them.
+  - `@objectstack/lint`: `validateCapabilityReferences` treats
+    `stack.capabilities` names as a known capability source.
+
+  A capability is not a contract: DEFINE it (`defineCapability`), GRANT it
+  (`systemPermissions`), REQUIRE it (`requiredPermissions`) — no `inputs`.
+  Aligns with ADR-0094 D5 (retire implicit `managed_by`-guessing back-doors).
+
+- ed61c9b: feat(spec): C2-α — extend the `explain` contract to record granularity (#2920)
+
+  The access-explanation contract (ADR-0090 D6) now carries the schema for
+  record-level authorization explanations, so the β-phase engine
+  (`plugin-security` + `plugin-sharing`) and the Studio/Setup "view as" UI can be
+  built against a stable wire shape. Contract-only: no engine or UI changes ship
+  here.
+
+  Request side:
+
+  - `ExplainRequest.recordId` (optional) — explain one concrete record at row
+    granularity. Omitted = the pre-C2 object-level question, answered identically
+    (backward compatible).
+
+  Response side (row-level attribution, present only for record-grained requests):
+
+  - New `ExplainMatchedRule` — a concrete share / sharing rule / ownership fact /
+    team / territory / RLS policy / Layer 0 tenant filter that admitted or
+    excluded the record at a layer, with its access level (`grants`), how it
+    reached the principal (`via`), the row predicate (`predicate`), and its
+    `effect` on the record.
+  - New `ExplainRecordAttribution` — a layer's per-record determination
+    (`outcome`, effective `rowFilter`, `matchesRecord`, matched `rules`), attached
+    as the optional `ExplainLayer.record`.
+  - New top-level `ExplainDecision.record` — the row-level bottom line
+    (`recordId`, `visible`, `decidedBy`).
+
+  Reserved for the ADR-0095 kernel chain (β fills these; optional, backward
+  compatible):
+
+  - New `tenant_isolation` layer id (Layer 0, the always-first tenant wall).
+  - New `ExplainLayer.kernelTier` (`layer_0_tenant` | `layer_1_business`) so a
+    consumer can tell the tenant wall from business RLS without hard-coding ids.
+  - New `AuthzPosture` enum (`PLATFORM_ADMIN` > `TENANT_ADMIN` > `MEMBER` >
+    `EXTERNAL`) exposed as the optional `ExplainDecision.principal.posture`.
+
+  Backward compatibility: every new field is optional or additive; existing
+  object-level requests and reports parse unchanged. The contract test locks the
+  new field shapes alongside the existing ones.
+
+### Patch Changes
+
+- 31d04d4: Fix the data-import automation chain (#2922). Batch `engine.insert` now fires
+  `beforeInsert`/`afterInsert` once **per row** with single-record hook contexts,
+  so flat-input proxies, declarative hook conditions, audit writers, and
+  record-change triggers see real records instead of arrays. A new
+  `ExecutionContext.skipAutomations` flag (mirrored into `HookContext.session`)
+  lets callers suppress metadata-bound automation hooks and flow dispatch while
+  code-registered system hooks (audit, security, sharing) still run — making the
+  import wizard's "run automations & triggers" checkbox and import undo actually
+  effective. The REST import default flips to running automations unless the
+  request explicitly opts out (`runAutomations: false`), matching historical
+  behavior.
+
 ## 14.8.0
 
 ### Minor Changes

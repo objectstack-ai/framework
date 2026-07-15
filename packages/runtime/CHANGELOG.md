@@ -1,5 +1,69 @@
 # @objectstack/runtime
 
+## 15.0.0
+
+### Minor Changes
+
+- e62c233: feat(spec,plugin-security): package-level capability declaration API (ADR-0066 D1)
+
+  Packages can now DEFINE their own authorization capabilities explicitly via the
+  new `defineCapability` factory and a stack's `capabilities` array, instead of
+  relying on the implicit "derive an untitled capability from whatever a permission
+  set references in `systemPermissions[]`" back-door.
+
+  - `@objectstack/spec`: new `defineCapability` / `CapabilityDeclarationSchema`
+    (`{ name, label?, description?, scope, packageId? }`) and a `capabilities`
+    field on the stack definition.
+  - `@objectstack/plugin-security`: new `bootstrapDeclaredCapabilities` seeds
+    declared capabilities into `sys_capability` with `managed_by:'package'` +
+    `package_id` provenance (new `package_id` field on the object). Idempotent,
+    upgrade-aware; refuses to hijack curated platform capabilities or another
+    package's rows, never clobbers admin-authored rows, and CLAIMS a pre-existing
+    derived placeholder (upgrading it to package provenance). The implicit
+    derive-from-`systemPermissions` path still runs for back-compat but now skips
+    any explicitly-declared name so it can't clobber authored metadata.
+  - `@objectstack/runtime`: stack-declared `capabilities` are registered into the
+    metadata registry (type `capability`) so the boot seeder can read them.
+  - `@objectstack/lint`: `validateCapabilityReferences` treats
+    `stack.capabilities` names as a known capability source.
+
+  A capability is not a contract: DEFINE it (`defineCapability`), GRANT it
+  (`systemPermissions`), REQUIRE it (`requiredPermissions`) — no `inputs`.
+  Aligns with ADR-0094 D5 (retire implicit `managed_by`-guessing back-doors).
+
+### Patch Changes
+
+- Updated dependencies [28b7c28]
+- Updated dependencies [0fcef9b]
+- Updated dependencies [13749ec]
+- Updated dependencies [ca2b2f6]
+- Updated dependencies [2ae78c6]
+- Updated dependencies [5febe3f]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [698454e]
+- Updated dependencies [29a4c90]
+- Updated dependencies [ef70521]
+- Updated dependencies [a581a65]
+- Updated dependencies [31d04d4]
+- Updated dependencies [5774a75]
+  - @objectstack/spec@15.0.0
+  - @objectstack/plugin-security@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/rest@15.0.0
+  - @objectstack/objectql@15.0.0
+  - @objectstack/metadata@15.0.0
+  - @objectstack/plugin-auth@15.0.0
+  - @objectstack/formula@15.0.0
+  - @objectstack/observability@15.0.0
+  - @objectstack/driver-memory@15.0.0
+  - @objectstack/driver-sql@15.0.0
+  - @objectstack/driver-sqlite-wasm@15.0.0
+  - @objectstack/service-cluster@15.0.0
+  - @objectstack/service-datasource@15.0.0
+  - @objectstack/service-i18n@15.0.0
+  - @objectstack/types@15.0.0
+
 ## 14.8.0
 
 ### Patch Changes
