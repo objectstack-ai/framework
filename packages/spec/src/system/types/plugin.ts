@@ -69,8 +69,9 @@ export interface IKernel {
   on(event: string, handler: (data: any) => void): () => void;
 }
 
-/** @deprecated Renamed — use {@link IKernel}. The "ObjectOS" layer name is retired; ObjectOS now names the commercial runtime environment. */
-export type ObjectOSKernel = IKernel;
+/** @deprecated Renamed — use {@link IKernel}. The "ObjectOS" layer name is retired; ObjectOS now names the commercial runtime environment. Kept as an empty interface extension (not a type alias) so declaration merging and the published API surface stay interface-compatible. */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface ObjectOSKernel extends IKernel {}
 
 /**
  * Plugin Context provided to plugin lifecycle methods.
