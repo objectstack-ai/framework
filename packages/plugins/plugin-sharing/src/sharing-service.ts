@@ -180,6 +180,61 @@ export class SharingService implements ISharingService {
   }
 
   /**
+   * Build a `FilterCondition` restricting a **bulk** (multi-row) write to the
+   * records the caller may edit — the write analogue of {@link buildReadFilter}.
+   * Single-id writes are gated by {@link canEdit}; a `update({multi:true})` /
+   * `deleteMany` has no single id, so without this filter it would touch every
+   * matching row regardless of ownership (#2982). Returns `null` when no
+   * restriction applies (system/bypass, public objects, no owner field).
+   *
+   * Editable-set = owner-match (widened by write DEPTH) OR records shared to
+   * the caller at `edit`/`full`. Unlike reads, this applies to BOTH `private`
+   * and `read` (public_read) models — public_read is read-open but write-owned;
+   * only a fully `public` object is write-open.
+   */
+  async buildWriteFilter(
+    object: string,
+    context: SharingExecutionContext,
+  ): Promise<unknown | null> {
+    if (this.shouldBypass(object, context)) return null;
+
+    const schema = this.engine.getSchema?.(object);
+    if (!schema) return null;
+    if (effectiveSharingModel(schema) === 'public') return null;
+    if (!hasOwnerField(schema)) return null;
+    if (!context.userId) {
+      // Authenticated but principal-less → edit nothing (fail closed),
+      // mirroring buildReadFilter's degenerate-context handling.
+      return { id: '__deny_all__' };
+    }
+
+    const writeScope = (context as any).__writeScope as ('own' | 'own_and_reports' | 'unit' | 'unit_and_below' | 'org' | undefined);
+    if (writeScope === 'org') return null;
+    const ownerIds = await this.resolveOwnerScopeIds(context, writeScope);
+    const ownerMatch: Record<string, unknown> = ownerIds.length === 1
+      ? { [OWNER_FIELD]: ownerIds[0] }
+      : { [OWNER_FIELD]: { $in: ownerIds } };
+
+    const grants = await this.engine.find('sys_record_share', {
+      where: {
+        object_name: object,
+        recipient_type: 'user',
+        recipient_id: context.userId,
+        access_level: { $in: ['edit', 'full'] },
+      },
+      fields: ['record_id'],
+      limit: 5000,
+      context: SYSTEM_CTX,
+    });
+    const grantedIds: string[] = Array.isArray(grants)
+      ? grants.map((g: any) => String(g.record_id)).filter(Boolean)
+      : [];
+
+    if (grantedIds.length === 0) return ownerMatch;
+    return { $or: [ownerMatch, { id: { $in: grantedIds } }] };
+  }
+
+  /**
    * Return `true` if the caller may edit `(object, recordId)`. Always
    * `true` for system context, public objects, and objects without an
    * owner field.

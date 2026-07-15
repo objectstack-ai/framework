@@ -301,15 +301,29 @@ export class KnowledgeService implements IKnowledgeService {
    * For hits without a `sourceRecordId` (file/http sources) we keep
    * them — adapter is responsible for any ACL enforcement there.
    *
-   * When the caller's context is `isSystem: true` or no context is
-   * supplied, every hit passes through — preserves today's behaviour
-   * for cron jobs / tests.
+   * Identity handling (#2981): an **explicit** `isSystem` context (indexing /
+   * trusted server jobs) passes every hit through — it is a deliberate,
+   * authored elevation. A **missing** context, however, is NOT a grant of
+   * authority: with no identity we cannot prove the caller may read the
+   * object-backed rows, so we FAIL CLOSED and drop object-source hits (the
+   * same conservative posture as a missing data engine). This closes the
+   * agent/RAG fall-open where an omitted `ToolExecutionContext.actor` used to
+   * return unfiltered semantic search over the whole corpus.
    */
   private async applyPermissionFilter(
     hits: KnowledgeHit[],
     ctx: ExecutionContext | undefined,
   ): Promise<KnowledgeHit[]> {
-    if (!ctx || ctx.isSystem) return hits;
+    // Explicit elevation → pass through (indexing / trusted jobs).
+    if (ctx?.isSystem) return hits;
+    // No identity → fail closed on object-backed hits (keep file/http hits).
+    if (!ctx) {
+      this.options.logger?.warn?.(
+        '[knowledge] retrieval with no ExecutionContext — dropping object-source hits to stay safe (#2981). ' +
+          'Pass the caller identity (or an explicit system context) to retrieve object-backed knowledge.',
+      );
+      return hits.filter((h) => !h.sourceRecordId);
+    }
     if (!this.options.dataEngine) {
       this.options.logger?.warn?.(
         '[knowledge] no IDataEngine bound — dropping object-source hits to stay safe.',
