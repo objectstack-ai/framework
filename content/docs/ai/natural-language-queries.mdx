@@ -1,6 +1,6 @@
 ---
 title: Natural Language Queries
-description: How agents query live data through the open MCP data tools (query_records, get_record) under RLS
+description: How agents query live data through the open MCP data tools (query_records, get_record, aggregate_records) under RLS
 ---
 
 # Natural Language Queries
@@ -15,19 +15,23 @@ back this are part of the open framework — no ObjectOS runtime and no
 cloud Studio are required.
 
 Your AI queries your data through the open MCP **data tools** — `query_records`
-(filter, field selection, sort, pagination) and `get_record`, plus the
-discovery tools `list_objects` and `describe_object` — which the model calls
-with structured arguments. These run as ordinary [ObjectQL](/docs/protocol/objectql) queries over
+(filter, field selection, sort, pagination), `get_record`, and `aggregate_records`
+(group-by count/sum/avg/min/max/count_distinct, with optional date bucketing),
+plus the discovery tools `list_objects` and `describe_object` — which the model
+calls with structured arguments. These run as ordinary [ObjectQL](/docs/protocol/objectql) queries over
 your objects (ObjectStack uses ObjectQL, not SOQL), and they execute under the
 caller's `ExecutionContext`, so row-level security applies exactly as it does
 for the REST API.
 
 <Callout type="info">
-**Aggregation is a cloud data tool.** The open MCP surface reads and filters
-rows; it does not ship a server-side `aggregate_data` (group-by / roll-up)
-tool — `query_records` has no aggregation arguments. A BYO agent aggregates by
-fetching the rows it's allowed to see and summing client-side; the built-in
-`aggregate_data` tool is part of the cloud in-product chat runtime (below).
+**Server-side aggregation is open too.** `aggregate_records` runs a single-object
+GROUP BY (count/sum/avg/min/max/count_distinct, optional date bucketing and
+filter) through the same ObjectQL engine read path — so totals and breakdowns
+come back in one call under row-level **and** field-level security, instead of
+the agent paging every visible row and summing client-side. It does not join
+across objects or read datasets/cubes: the cross-object, dataset-level
+`aggregate_data` roll-up tool remains part of the cloud in-product chat runtime
+(below).
 </Callout>
 
 The open MCP server plugin exposes these tools automatically — it bridges the
@@ -45,7 +49,7 @@ await kernel.bootstrap();
 
 Point any MCP client at the server and ask questions in natural language: the
 model discovers `list_objects` / `describe_object` / `query_records` /
-`get_record` and calls them under RLS as the authenticated caller.
+`get_record` / `aggregate_records` and calls them under RLS as the authenticated caller.
 
 There is no separate natural-language-to-query metadata type to author — the
 model is prompted with the available objects and translates the user's question
@@ -55,7 +59,7 @@ into `query_records` calls at runtime.
 **ObjectOS — bundled in-product chat.** ObjectOS ships an in-UI
 AI runtime — the `ask` data-query assistant
 and the `/api/v1/ai/*` chat endpoints — that registers these same data tools,
-plus the group-by/roll-up `aggregate_data` tool, into its own chat loop. That
+plus the dataset-level (cross-object) `aggregate_data` roll-up tool, into its own chat loop. That
 runtime is not part of the open framework and is documented separately in the
 [ObjectOS docs](https://docs.objectos.app/docs/ai); this page covers the open path
 only. On the open-source framework, use
