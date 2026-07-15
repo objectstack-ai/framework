@@ -417,6 +417,24 @@ describe('ObjectKernel', () => {
             expect(kernel.getState()).toBe('stopped');
         });
 
+        it('fires kernel:ready → kernel:bootstrapped → kernel:listening in order', async () => {
+            const order: string[] = [];
+            const plugin: Plugin = {
+                name: 'lifecycle-order-plugin',
+                version: '1.0.0',
+                init: async (ctx) => {
+                    ctx.hook('kernel:listening', async () => { order.push('kernel:listening'); });
+                    ctx.hook('kernel:bootstrapped', async () => { order.push('kernel:bootstrapped'); });
+                    ctx.hook('kernel:ready', async () => { order.push('kernel:ready'); });
+                },
+            };
+
+            await kernel.use(plugin);
+            await kernel.bootstrap();
+
+            expect(order).toEqual(['kernel:ready', 'kernel:bootstrapped', 'kernel:listening']);
+        });
+
         it('should trigger shutdown hook', async () => {
             let hookCalled = false;
 

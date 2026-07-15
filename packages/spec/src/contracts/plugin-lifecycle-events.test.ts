@@ -6,9 +6,11 @@ describe('Plugin Lifecycle Events Contract', () => {
     it('should define all kernel event types', () => {
       // Compile-time check: verify the event map type is correctly shaped
       const events: Record<keyof Pick<IPluginLifecycleEvents,
-        'kernel:ready' | 'kernel:shutdown' | 'kernel:before-init' | 'kernel:after-init'
+        'kernel:ready' | 'kernel:bootstrapped' | 'kernel:listening' | 'kernel:shutdown' | 'kernel:before-init' | 'kernel:after-init'
       >, any> = {
         'kernel:ready': [],
+        'kernel:bootstrapped': [],
+        'kernel:listening': [],
         'kernel:shutdown': [],
         'kernel:before-init': [],
         'kernel:after-init': [150],

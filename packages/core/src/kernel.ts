@@ -363,6 +363,15 @@ export class ObjectKernel {
             this.logger.debug('Triggering kernel:ready hook');
             await this.context.trigger('kernel:ready');
 
+            // Phase 3.5: Trigger kernel:bootstrapped AFTER every kernel:ready
+            // handler has settled — the "all bootstrap + seed data is ready"
+            // anchor. Reconcile/backfill work that consumes data produced by a
+            // later-starting plugin's kernel:ready handler belongs here, not in
+            // kernel:ready (where handler order would race the data). See
+            // packages/spec/src/contracts/plugin-lifecycle-events.ts.
+            this.logger.debug('Triggering kernel:bootstrapped hook');
+            await this.context.trigger('kernel:bootstrapped');
+
             // Phase 4: Trigger kernel:listening hook AFTER all kernel:ready
             // handlers have completed. This is the cue for HTTP server
             // plugins to actually open the listening socket — by now every
