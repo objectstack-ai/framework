@@ -63,7 +63,7 @@ export const SysUser = ObjectSchema.create({
       // "add a teammate" affordance — the Users list is always reachable —
       // and every add flows through better-auth invitations, never bespoke
       // sys_user CRUD.
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       successMessage: 'Invitation sent',
       refreshAfter: true,
       params: [
@@ -140,7 +140,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       target: '/api/v1/auth/admin/create-user',
-      visible: 'features.admin == true',
+      requiresFeature: 'admin',
       successMessage: 'User created',
       refreshAfter: true,
       params: [
@@ -157,7 +157,7 @@ export const SysUser = ObjectSchema.create({
           // otherwise the create-user endpoint rejects a phone with
           // "Phone numbers require the phoneNumber auth plugin". `features.phoneNumber`
           // is served in /api/v1/auth/config (getPublicConfig).
-          visible: 'features.phoneNumber == true',
+          requiresFeature: 'phoneNumber',
         },
         { field: 'name', required: false },
         {

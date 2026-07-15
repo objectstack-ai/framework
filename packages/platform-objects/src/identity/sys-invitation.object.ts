@@ -50,7 +50,7 @@ export const SysInvitation = ObjectSchema.create({
       // sys_organization.create_organization). The recipient-side
       // accept/reject actions below stay record-gated — they are
       // unreachable in single-org anyway (no invitation rows exist).
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       successMessage: 'Invitation sent',
       refreshAfter: true,
       params: [
@@ -68,7 +68,7 @@ export const SysInvitation = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/cancel-invitation',
       recordIdParam: 'invitationId',
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       confirmText: 'Cancel this invitation? The recipient will no longer be able to accept it.',
       successMessage: 'Invitation canceled',
       refreshAfter: true,
@@ -82,7 +82,7 @@ export const SysInvitation = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/invite-member',
       bodyExtra: { resend: true },
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       successMessage: 'Invitation resent',
       refreshAfter: true,
       params: [

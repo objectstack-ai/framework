@@ -278,3 +278,62 @@ describe('@objectstack/platform-objects', () => {
     });
   });
 });
+
+// #2874 P2a — behavior-equivalence lock for the requiresFeature migration.
+// Every hand-written `visible: 'features.*'` gate was replaced by the
+// declarative `requiresFeature` sugar; these rows pin the LOWERED predicate
+// to the exact CEL string that was previously hand-written, so the migration
+// is provably behavior-neutral. (transfer_ownership composes a residual row
+// predicate with the gate — parenthesized but operand/order-identical to the
+// old `record.role != 'owner' && features.organization != false`.)
+describe('feature-gate lowering matrix (#2874)', () => {
+  const ORG = 'features.organization != false';
+  const MULTI_ORG = 'features.multiOrgEnabled != false';
+
+  const rows: Array<[string, { actions?: readonly { name?: string; visible?: unknown; params?: readonly unknown[] }[] }, string, string]> = [
+    ['SysOrganization', SysOrganization, 'create_organization', MULTI_ORG],
+    ['SysOrganization', SysOrganization, 'update_organization', MULTI_ORG],
+    ['SysOrganization', SysOrganization, 'delete_organization', MULTI_ORG],
+    ['SysOrganization', SysOrganization, 'set_active_organization', MULTI_ORG],
+    ['SysOrganization', SysOrganization, 'leave_organization', MULTI_ORG],
+    ['SysOrganization', SysOrganization, 'change_slug', MULTI_ORG],
+    ['SysUser', SysUser, 'invite_user', ORG],
+    ['SysUser', SysUser, 'create_user', 'features.admin == true'],
+    ['SysMember', SysMember, 'add_member', ORG],
+    ['SysMember', SysMember, 'update_member_role', ORG],
+    ['SysMember', SysMember, 'remove_member', ORG],
+    ['SysMember', SysMember, 'transfer_ownership', `(record.role != 'owner') && ${ORG}`],
+    ['SysInvitation', SysInvitation, 'invite_user', ORG],
+    ['SysInvitation', SysInvitation, 'cancel_invitation', ORG],
+    ['SysInvitation', SysInvitation, 'resend_invitation', ORG],
+    ['SysTeam', SysTeam, 'create_team', ORG],
+    ['SysTeam', SysTeam, 'update_team', ORG],
+    ['SysTeam', SysTeam, 'remove_team', ORG],
+    ['SysTeamMember', SysTeamMember, 'add_team_member', ORG],
+    ['SysTeamMember', SysTeamMember, 'remove_team_member', ORG],
+  ];
+
+  it.each(rows)('%s.%s#%s lowers to the previous hand-written predicate', (_export, object, actionName, expected) => {
+    const action = (object.actions ?? []).find((a) => a.name === actionName);
+    expect(action, `${actionName} exists`).toBeDefined();
+    expect((action?.visible as { source?: string })?.source).toBe(expected);
+  });
+
+  it('SysUser.create_user#phoneNumber param lowers to the previous hand-written predicate', () => {
+    const create = (SysUser.actions ?? []).find((a) => a.name === 'create_user');
+    const phone = (create?.params ?? []).find((p) => (p as { name?: string }).name === 'phoneNumber');
+    expect(phone).toBeDefined();
+    expect(((phone as { visible?: { source?: string } }).visible)?.source).toBe('features.phoneNumber == true');
+  });
+
+  it('the requiresFeature sugar never survives into parsed objects', () => {
+    for (const [, object] of systemObjects) {
+      for (const action of object.actions ?? []) {
+        expect(action).not.toHaveProperty('requiresFeature');
+        for (const param of (action as { params?: readonly unknown[] }).params ?? []) {
+          expect(param).not.toHaveProperty('requiresFeature');
+        }
+      }
+    }
+  });
+});

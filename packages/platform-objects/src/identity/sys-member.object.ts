@@ -55,7 +55,7 @@ export const SysMember = ObjectSchema.create({
       // better-auth endpoints resolve the session's active org, which
       // single-org mode now guarantees via plugin-auth's default-org
       // bootstrap. Same gate on every membership mutation below.
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       successMessage: 'Member added',
       refreshAfter: true,
       params: [
@@ -73,7 +73,7 @@ export const SysMember = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/update-member-role',
       recordIdParam: 'memberId',
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       successMessage: 'Member role updated',
       refreshAfter: true,
       params: [
@@ -90,7 +90,7 @@ export const SysMember = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/remove-member',
       recordIdParam: 'memberIdOrEmail',
-      visible: 'features.organization != false',
+      requiresFeature: 'organization',
       confirmText: 'Remove this member from the organization? They will lose access to all org resources.',
       successMessage: 'Member removed',
       refreshAfter: true,
@@ -112,7 +112,10 @@ export const SysMember = ObjectSchema.create({
       target: '/api/v1/auth/organization/update-member-role',
       recordIdParam: 'memberId',
       bodyExtra: { role: 'owner' },
-      visible: "record.role != 'owner' && features.organization != false",
+      // The residual row predicate stays hand-written; the feature gate is
+      // AND-composed onto it by the requiresFeature lowering.
+      visible: "record.role != 'owner'",
+      requiresFeature: 'organization',
       confirmText: 'Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.',
       successMessage: 'Ownership transferred',
       refreshAfter: true,

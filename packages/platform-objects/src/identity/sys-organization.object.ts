@@ -49,7 +49,7 @@ export const SysOrganization = ObjectSchema.create({
       // populated by the console/account shells from `/auth/config`;
       // we default to visible when the flag is undefined so we don't
       // accidentally hide the button while auth config is still loading.
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       params: [
         { field: 'name', required: true },
         { field: 'slug', required: true },
@@ -70,7 +70,7 @@ export const SysOrganization = ObjectSchema.create({
       // Org-admin actions are multi-org-only; hide them in single-org for
       // consistency with `create_organization` (the org list is empty there,
       // but this also guards direct record-URL access).
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       successMessage: 'Organization updated',
       refreshAfter: true,
       params: [
@@ -89,7 +89,7 @@ export const SysOrganization = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/delete',
       recordIdParam: 'organizationId',
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       confirmText: 'Delete this organization? All members will lose access immediately. This cannot be undone.',
       successMessage: 'Organization deleted',
       refreshAfter: true,
@@ -108,7 +108,7 @@ export const SysOrganization = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/set-active',
       recordIdParam: 'organizationId',
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       successMessage: 'Active organization switched',
       refreshAfter: true,
     },
@@ -125,7 +125,7 @@ export const SysOrganization = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/organization/leave',
       recordIdParam: 'organizationId',
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       confirmText: 'Leave this organization? You will lose access to all of its resources.',
       successMessage: 'You have left the organization',
       refreshAfter: true,
@@ -147,7 +147,7 @@ export const SysOrganization = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/cloud/organizations/{id}/change-slug',
       method: 'POST',
-      visible: 'features.multiOrgEnabled != false',
+      requiresFeature: 'multiOrgEnabled',
       confirmText: 'Renaming the slug rewrites every platform subdomain for this org and parks the old slug for 90 days. Continue?',
       successMessage: 'Organization slug changed',
       refreshAfter: true,
