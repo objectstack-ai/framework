@@ -23,7 +23,7 @@ import { defineConnector, type Connector } from '@objectstack/spec/integration';
  * connectors at boot — are the planned upgrade of this collection, tracked in
  * https://github.com/objectstack-ai/framework/issues/2977 (ADR-0096).
  */
-export const ErpCatalogConnector: Connector = defineConnector({
+export const ErpCatalogConnector = defineConnector({
   name: 'showcase_erp_catalog',
   label: 'ERP Integration (Catalog Descriptor)',
   type: 'saas',
