@@ -18,6 +18,7 @@ import { z } from 'zod';
  *   engine.find('account', { context: { userId: '...', tenantId: '...' } })
  */
 import { lazySchema } from '../shared/lazy-schema';
+import { AuthzPostureSchema } from '../security/explain.zod';
 export const ExecutionContextSchema = lazySchema(() => z.object({
   /** Current user ID (resolved from session) */
   userId: z.string().optional(),
@@ -91,6 +92,19 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
    * 'internal'.
    */
   audience: z.enum(['internal', 'external']).optional(),
+
+  /**
+   * [ADR-0095 D2/B2 — posture ladder] The monotonic authorization rung the
+   * principal evaluated at (`PLATFORM_ADMIN > TENANT_ADMIN > MEMBER > EXTERNAL`),
+   * derived once by the shared authz resolver from capability grants — never a
+   * better-auth role. Carried here so enforcement/explain read the SAME derived
+   * value instead of each re-deriving it (the divergence #2949 patched at the
+   * explain boundary; #2947 closes the enforcement-boundary drop). Additive and
+   * behavior-preserving: no enforcement decision consumes it yet — whether the
+   * hot path evaluates BY posture is a larger ADR-level decision. Absent for
+   * contexts resolved before the ladder existed or where no principal resolved.
+   */
+  posture: AuthzPostureSchema.optional(),
 
   /**
    * [ADR-0090 D10 — P1 shape] Delegation link for agent/service principals
