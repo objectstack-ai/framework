@@ -40,6 +40,81 @@ describe('ActionParamSchema', () => {
   });
 });
 
+// #2874 P1 — declarative `requiresFeature` sugar, lowered at parse time into
+// the canonical `visible` CEL predicate (semantics per the
+// PUBLIC_AUTH_FEATURES registry) and stripped from the output.
+describe('requiresFeature lowering', () => {
+  it('lowers an opt-in flag to == true on a param', () => {
+    const result = ActionParamSchema.parse({ name: 'phoneNumber', requiresFeature: 'phoneNumber' });
+    expect(result.visible).toEqual({ dialect: 'cel', source: 'features.phoneNumber == true' });
+    expect(result).not.toHaveProperty('requiresFeature');
+  });
+
+  it('lowers a default-on flag to != false on an action', () => {
+    const result = ActionSchema.parse({
+      name: 'invite_user',
+      label: 'Invite',
+      type: 'api',
+      target: '/api/v1/auth/organization/invite-member',
+      requiresFeature: 'organization',
+    });
+    expect(result.visible).toEqual({ dialect: 'cel', source: 'features.organization != false' });
+    expect(result).not.toHaveProperty('requiresFeature');
+  });
+
+  it('AND-composes with an explicit string visible — existing first, gate last', () => {
+    const result = ActionSchema.parse({
+      name: 'transfer_ownership',
+      label: 'Transfer Ownership',
+      type: 'api',
+      target: '/api/v1/auth/organization/update-member-role',
+      visible: "record.role != 'owner'",
+      requiresFeature: 'organization',
+    });
+    expect(result.visible).toEqual({
+      dialect: 'cel',
+      source: "(record.role != 'owner') && features.organization != false",
+    });
+  });
+
+  it('AND-composes with an explicit envelope visible, preserving meta', () => {
+    const result = ActionParamSchema.parse({
+      name: 'x',
+      visible: { dialect: 'cel', source: 'record.a == 1', meta: { rationale: 'why' } },
+      requiresFeature: 'admin',
+    });
+    expect(result.visible).toEqual({
+      dialect: 'cel',
+      source: '(record.a == 1) && features.admin == true',
+      meta: { rationale: 'why' },
+    });
+  });
+
+  it('rejects an unknown flag name at parse time', () => {
+    expect(() => ActionParamSchema.parse({ name: 'x', requiresFeature: 'phoneNumbr' })).toThrow();
+  });
+
+  it('rejects composition with an AST-only visible loudly (ADR-0078)', () => {
+    const result = ActionParamSchema.safeParse({
+      name: 'x',
+      visible: { dialect: 'cel', ast: { kind: 'literal' } },
+      requiresFeature: 'admin',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes('requiresFeature'))).toBe(true);
+    }
+  });
+
+  it('leaves sugar-free inputs untouched', () => {
+    const result = ActionParamSchema.parse({ name: 'x', visible: 'features.phoneNumber == true' });
+    expect(result.visible).toEqual({ dialect: 'cel', source: 'features.phoneNumber == true' });
+    const bare = ActionParamSchema.parse({ name: 'y' });
+    expect(bare.visible).toBeUndefined();
+    expect(bare).not.toHaveProperty('requiresFeature');
+  });
+});
+
 describe('ActionSchema', () => {
   describe('Basic Action Properties', () => {
     it('should accept minimal action', () => {

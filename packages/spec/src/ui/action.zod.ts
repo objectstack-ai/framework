@@ -6,6 +6,9 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { ExpressionInputSchema } from '../shared/expression.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { HookBodySchema } from '../data/hook-body.zod';
+// Imported file-directly (not via the kernel barrel): the module is
+// deliberately import-free, so this cannot introduce a cycle.
+import { PUBLIC_AUTH_FEATURE_NAMES, lowerRequiresFeature } from '../kernel/public-auth-features';
 
 /**
  * Action Parameter Schema
@@ -75,10 +78,21 @@ export const ActionParamSchema = lazySchema(() => z.object({
    * default backend rejects. Absent = always visible.
    */
   visible: ExpressionInputSchema.optional().describe('Param visibility predicate (CEL); omits the param when false.'),
+  /**
+   * Declarative capability gate (#2874): name a public auth feature flag
+   * (see `PUBLIC_AUTH_FEATURES` in `@objectstack/spec/kernel`) and the schema
+   * lowers it at parse time into the canonical `visible` predicate —
+   * `features.X == true` (opt-in flag) or `features.X != false` (default-on),
+   * AND-composed with any explicit `visible`. The sugar key is stripped from
+   * the parsed output, so renderers/lint only ever see `visible`. Prefer this
+   * over a hand-written `features.*` predicate: the flag name is
+   * enum-checked and the gate/registry stay in lockstep.
+   */
+  requiresFeature: z.enum(PUBLIC_AUTH_FEATURE_NAMES).optional().describe('Public auth feature flag gating this param; lowered into `visible` at parse time.'),
 }).refine(
   (p) => Boolean(p.name) || Boolean(p.field),
   { message: 'ActionParam requires either "name" or "field"' },
-));
+).transform((p, ctx) => lowerRequiresFeature(p, ctx)));
 
 /**
  * Action type enum values.
@@ -419,6 +433,14 @@ export const ActionSchema = lazySchema(() => z.object({
   
   /** Access */
   visible: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),
+  /**
+   * Declarative capability gate (#2874) — action-level twin of the param
+   * `requiresFeature`. Lowered at parse time into `visible` (`== true` for
+   * opt-in flags, `!= false` for default-on; AND-composed with an explicit
+   * `visible`) and stripped from the output. See `PUBLIC_AUTH_FEATURES` in
+   * `@objectstack/spec/kernel`.
+   */
+  requiresFeature: z.enum(PUBLIC_AUTH_FEATURE_NAMES).optional().describe('Public auth feature flag gating this action; lowered into `visible` at parse time.'),
   disabled: z.union([z.boolean(), ExpressionInputSchema]).optional().describe('Boolean or predicate (CEL) — action is disabled when TRUE.'),
 
   /**
@@ -563,7 +585,7 @@ export const ActionSchema = lazySchema(() => z.object({
 }, {
   message: 'ai.paramHints keys must match a declared param name (or "recordId").',
   path: ['ai', 'paramHints'],
-}));
+}).transform((data, ctx) => lowerRequiresFeature(data, ctx)));
 
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionParam = z.infer<typeof ActionParamSchema>;
