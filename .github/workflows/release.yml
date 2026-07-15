@@ -14,6 +14,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      cli-version: ${{ steps.cli-version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -94,3 +97,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Extract published @objectstack/cli version
+        id: cli-version
+        if: steps.changesets.outputs.published == 'true'
+        # The fixed group bumps every public package in lockstep, so the CLI
+        # is always in publishedPackages when a publish happened. Passed via
+        # env (not inline interpolation) to avoid shell-quoting the JSON.
+        env:
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(jq -r '.[] | select(.name=="@objectstack/cli") | .version' <<<"$PUBLISHED")
+          if [ -z "$version" ]; then
+            echo "::error::publish succeeded but @objectstack/cli is missing from publishedPackages"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  docker:
+    name: Docker image
+    needs: release
+    # Publish the official runtime image (ghcr.io/objectstack-ai/objectstack)
+    # for every npm release. Called as a reusable workflow so the same build
+    # can be re-run manually via workflow_dispatch (e.g. base-image CVE
+    # rebuilds) — see docker-publish.yml.
+    if: needs.release.outputs.published == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      version: ${{ needs.release.outputs.cli-version }}

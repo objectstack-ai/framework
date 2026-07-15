@@ -27,10 +27,19 @@ How it works, what the required variables mean, reverse-proxy wiring, and the
 multi-node caveats are documented in
 [Self-Hosted Deployment](https://docs.objectstack.ai/docs/deployment/self-hosting).
 
-Two properties worth knowing:
+Three properties worth knowing:
 
-- The runtime image contains only Node, `@objectstack/cli`, and your compiled
-  `objectstack.json` — the build stage's TypeScript toolchain never ships.
+- The runtime is the **official image** `ghcr.io/objectstack-ai/objectstack`
+  (see [`docker/README.md`](../../docker/README.md)): Node, `@objectstack/cli`,
+  non-root user, and health check — your final image adds only the compiled
+  `objectstack.json`. The build stage's TypeScript toolchain never ships.
+- Pin the runtime tag to the `@objectstack/cli` version in your
+  `package.json` (image tags mirror CLI versions); `latest` is fine for a
+  first spin, wrong for production.
 - `OS_SECRET_KEY` must be provided at runtime. On a container's ephemeral
   filesystem the auto-minted dev key is lost on restart, which makes
   previously-encrypted secrets undecryptable.
+
+Don't need an image build at all? The official runtime image can run a
+mounted or remote artifact directly — see
+[`docker/README.md`](../../docker/README.md).
