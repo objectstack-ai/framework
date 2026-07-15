@@ -191,6 +191,8 @@ describe('Plugin Lifecycle Events Protocol', () => {
     it('should validate all event types', () => {
       const eventTypes = [
         'kernel:ready',
+        'kernel:bootstrapped',
+        'kernel:listening',
         'kernel:shutdown',
         'kernel:before-init',
         'kernel:after-init',

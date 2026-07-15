@@ -18,21 +18,18 @@
  * registration order (`kernel.ts` `trigger`). The showcase AppPlugin starts
  * BEFORE the Security plugin, so an app hook on `kernel:ready` runs *before*
  * the security bootstrap has created the position/set rows — the rows never
- * appear from inside that hook. We therefore bind on **`kernel:listening`**,
- * the phase the kernel fires only AFTER every `kernel:ready` handler has
- * completed (`kernel.ts` Phase 4 / `lite-kernel.ts`), so the bootstrap rows are
+ * appear from inside that hook. We therefore bind on **`kernel:bootstrapped`**,
+ * the anchor the kernel fires only AFTER every `kernel:ready` handler has
+ * settled (`kernel.ts` Phase 3.5 / `lite-kernel.ts`), so the bootstrap rows are
  * guaranteed present.
  *
- * `everyone → showcase_member_default` IS bound here. The security plugin only
- * auto-binds an app's `isDefault` set to `everyone` when that set is
- * application-owned; the showcase ships as a package, so its default lands in
- * `sys_audience_binding_suggestion` (pending admin confirmation) and is NOT
- * live until confirmed. Binding it here keeps the demo's baseline working out
- * of the box, idempotently and alongside the suggestion.
+ * `everyone → showcase_member_default` is NOT bound here: the security plugin
+ * auto-binds the app's `isDefault` set (resolved as its `fallbackPermissionSet`)
+ * to `everyone` at boot. This list only carries the persona → set bindings the
+ * framework cannot infer.
  */
 
 const BINDINGS: ReadonlyArray<readonly [position: string, permissionSet: string]> = [
-  ['everyone', 'showcase_member_default'],
   ['contributor', 'showcase_contributor'],
   ['manager', 'showcase_manager'],
   ['exec', 'showcase_executive'],
@@ -106,12 +103,12 @@ export function registerShowcasePositionBindings(ctx: BindHostContext): void {
     ctx.logger?.info?.('[showcase] position bindings ensured', { created, total: BINDINGS.length });
   };
 
-  // Bind on `kernel:listening` — the phase that fires only after every
+  // Bind on `kernel:bootstrapped` — the anchor that fires only after every
   // `kernel:ready` handler (incl. the security bootstrap that seeds the
-  // position/set rows) has completed. Fall back to a deferred immediate run
+  // position/set rows) has settled. Fall back to a deferred immediate run
   // if the host context somehow omits the hook registrar.
   if (typeof ctx.hook === 'function') {
-    ctx.hook('kernel:listening', run);
+    ctx.hook('kernel:bootstrapped', run);
   } else {
     setTimeout(() => void run(), 0);
   }

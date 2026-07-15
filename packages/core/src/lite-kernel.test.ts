@@ -251,4 +251,24 @@ describe('LiteKernel with Configurable Logger', () => {
             await kernel.shutdown();
         });
     });
+
+    describe('Lifecycle event ordering', () => {
+        it('fires kernel:ready → kernel:bootstrapped → kernel:listening in order', async () => {
+            const order: string[] = [];
+            const plugin: Plugin = {
+                name: 'lifecycle-order-plugin',
+                init: async (ctx) => {
+                    ctx.hook('kernel:listening', async () => { order.push('kernel:listening'); });
+                    ctx.hook('kernel:bootstrapped', async () => { order.push('kernel:bootstrapped'); });
+                    ctx.hook('kernel:ready', async () => { order.push('kernel:ready'); });
+                },
+            };
+
+            kernel.use(plugin);
+            await kernel.bootstrap();
+            await kernel.shutdown();
+
+            expect(order).toEqual(['kernel:ready', 'kernel:bootstrapped', 'kernel:listening']);
+        });
+    });
 });

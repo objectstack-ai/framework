@@ -308,10 +308,10 @@ export class SharingServicePlugin implements Plugin {
             bindRuleProvenanceStamp(engine, ctx.logger as any);
 
             // [#2926 ③] Reconciling existing rows against every rule is
-            // deferred to `kernel:listening` (below): seed data is loaded on
+            // deferred to `kernel:bootstrapped` (below): seed data is loaded on
             // `kernel:ready` (raced against a budget, and the AppPlugin's seed
             // hook is a *different* kernel:ready handler), so a backfill here
-            // would race the very records it must materialize. `kernel:listening`
+            // would race the very records it must materialize. `kernel:bootstrapped`
             // fires only after every kernel:ready handler has settled.
           } else {
             ctx.logger.warn('SharingServicePlugin: engine has no hook API — sharing rule auto-evaluation disabled');
@@ -397,17 +397,17 @@ export class SharingServicePlugin implements Plugin {
     // [#2926 ③] Materialize sharing grants for rows already present at boot —
     // notably SeedLoader-inserted seed records, whose write goes through the
     // isSystem short-circuit in the rule hooks and therefore never produces a
-    // `sys_record_share`. Runs on `kernel:listening` (Phase 4), after every
-    // `kernel:ready` handler — including the AppPlugin seed loader — has
-    // completed, so the reconcile sees the seeded rows. Idempotent: a runtime
+    // `sys_record_share`. Runs on `kernel:bootstrapped` — the anchor that fires
+    // after every `kernel:ready` handler (including the AppPlugin seed loader)
+    // has settled — so the reconcile sees the seeded rows. Idempotent: a runtime
     // write that already materialized a grant is reconciled to the same state.
-    ctx.hook('kernel:listening', async () => {
+    ctx.hook('kernel:bootstrapped', async () => {
       if (!this.ruleService) return;
       try {
         const rules = await this.ruleService.listRules({ activeOnly: true }, { isSystem: true } as any);
         await backfillRuleGrants(this.ruleService, rules, ctx.logger as any);
       } catch (err: any) {
-        ctx.logger.warn('SharingServicePlugin: boot rule backfill (kernel:listening) failed', { error: err?.message });
+        ctx.logger.warn('SharingServicePlugin: boot rule backfill (kernel:bootstrapped) failed', { error: err?.message });
       }
     });
   }

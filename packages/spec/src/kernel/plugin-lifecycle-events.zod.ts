@@ -321,6 +321,7 @@ export type KernelShutdownEvent = z.infer<typeof KernelShutdownEventSchema>;
  */
 export const PluginLifecycleEventType = z.enum([
   'kernel:ready',
+  'kernel:bootstrapped',
   'kernel:listening',
   'kernel:shutdown',
   'kernel:before-init',

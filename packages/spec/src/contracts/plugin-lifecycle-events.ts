@@ -20,7 +20,26 @@ export interface IPluginLifecycleEvents {
     'kernel:ready': [];
 
     /**
-     * Emitted AFTER all `kernel:ready` handlers have completed.
+     * Emitted AFTER every `kernel:ready` handler has completed, but BEFORE
+     * `kernel:listening` (so before any HTTP socket opens).
+     *
+     * This is the "all bootstrap + seed data has settled" anchor. Because
+     * `kernel:ready` handlers run sequentially in plugin-registration order,
+     * a handler cannot rely on data produced by a plugin that starts later
+     * (e.g. the security bootstrap seeds `sys_position`, the app plugin's
+     * seed loader inserts records) — reconcile/backfill work that consumes
+     * that data would race the very rows it needs. Do such work here instead:
+     * every producer's `kernel:ready` handler has finished by the time this
+     * fires. HTTP `listen()` is deliberately deferred one more phase to
+     * `kernel:listening` so late route registration still lands.
+     *
+     * Payload: []
+     */
+    'kernel:bootstrapped': [];
+
+    /**
+     * Emitted AFTER all `kernel:ready` and `kernel:bootstrapped` handlers
+     * have completed.
      *
      * Use this hook for actions that must happen *strictly after* every
      * other plugin has had a chance to register routes / services /
