@@ -20,6 +20,7 @@ on:
     paths:
       - 'packages/create-objectstack/**'
       - 'examples/docker/**'
+      - 'docker/**'
       - '.github/workflows/scaffold-e2e.yml'
   schedule:
     - cron: '23 3 * * *'
@@ -114,13 +115,24 @@ jobs:
           curl -fsS http://localhost:8080/api/v1/ready
           kill "$SERVER_PID"
 
+      - name: Build official runtime image from this checkout
+        # examples/docker builds FROM ghcr.io/objectstack-ai/objectstack.
+        # Build that base HERE from docker/Dockerfile instead of pulling, so
+        # (a) PRs exercise the official runtime Dockerfile itself, and
+        # (b) the e2e stays hermetic — no dependency on a prior release
+        # having published the tag (chicken-and-egg on the very first one).
+        run: |
+          docker build -t ghcr.io/objectstack-ai/objectstack:latest \
+            --build-arg OS_CLI_VERSION=latest \
+            "$GITHUB_WORKSPACE/docker"
+
       - name: Docker build and run (examples/docker)
         run: |
           cd "$RUNNER_TEMP/e2e-app"
           cp "$GITHUB_WORKSPACE"/examples/docker/Dockerfile \
              "$GITHUB_WORKSPACE"/examples/docker/docker-compose.yml \
              "$GITHUB_WORKSPACE"/examples/docker/.dockerignore .
-          docker build -t e2e-app .
+          docker build --pull=false -t e2e-app .
           docker run -d --name e2e -p 18080:8080 \
             -e OS_SECRET_KEY="$(openssl rand -hex 32)" \
             -e OS_AUTH_SECRET="$(openssl rand -hex 32)" \

@@ -19,21 +19,14 @@ RUN npm ci
 COPY . .
 RUN npx os build              # → dist/objectstack.json
 
-# ── Runtime stage: CLI + artifact only ───────────────────────────────
-FROM node:22-slim
-WORKDIR /srv/app
-RUN npm install -g @objectstack/cli
-COPY --from=build /app/dist/objectstack.json ./objectstack.json
-
-ENV NODE_ENV=production \
-    OS_ARTIFACT_PATH=/srv/app/objectstack.json \
-    OS_PORT=8080
-EXPOSE 8080
-
-# Liveness: /api/v1/health. For orchestrated readiness use /api/v1/ready.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s \
-  CMD node -e "fetch('http://localhost:8080/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+# ── Runtime: the official ObjectStack runtime image ──────────────────
+# Ships Node + @objectstack/cli with `os start`, a non-root user, the
+# /api/v1/health HEALTHCHECK, and OS_ARTIFACT_PATH/OS_PORT preset (port 8080)
+# — see docker/README.md in the framework repo. Pin the tag to the
+# @objectstack/cli version in your package.json so the runtime matches the
+# CLI that built the artifact.
+FROM ghcr.io/objectstack-ai/objectstack:latest
+COPY --from=build --chown=node:node /app/dist/objectstack.json /srv/app/objectstack.json
 
 # OS_DATABASE_URL, OS_AUTH_SECRET, and OS_SECRET_KEY are injected at runtime —
 # never bake them into the image.
-CMD ["os", "start"]

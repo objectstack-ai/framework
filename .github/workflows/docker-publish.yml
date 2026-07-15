@@ -1,0 +1,104 @@
+name: Docker Publish
+
+# Builds and pushes the official runtime image
+# ghcr.io/objectstack-ai/objectstack from docker/Dockerfile.
+#
+# Two entry points:
+#   - workflow_call: invoked by release.yml right after a successful
+#     `changeset publish`, with the just-published @objectstack/cli version.
+#     (A plain `on: push: tags:` trigger would never fire — the release
+#     workflow pushes its tags with GITHUB_TOKEN, and GitHub suppresses
+#     workflow triggers from GITHUB_TOKEN-pushed refs.)
+#   - workflow_dispatch: manual backfill / rebuild of an already-published
+#     version, e.g. to pick up node:22-slim base-image CVE patches between
+#     framework releases.
+#
+# The image tag always equals the @objectstack/cli version baked inside.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Published @objectstack/cli version to package (e.g. 14.8.0)'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '@objectstack/cli version to package (e.g. 14.8.0) — must already be on npm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build & push ghcr.io/objectstack-ai/objectstack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/objectstack-ai/objectstack
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate version input
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$VERSION' is not a valid semver version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # Tag = CLI version. Rolling minor/major/latest tags move with every
+          # publish; prereleases (x.y.z-rc.1) get only their exact tag.
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(steps.version.outputs.version, '-') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            OS_CLI_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Smoke-test the pushed image (amd64)
+        # `os --version` proves the CLI resolved, installed, and runs on the
+        # pushed image; a boot test needs an artifact + DB and belongs to the
+        # examples/e2e suites, not here.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker pull "$IMAGE:$VERSION"
+          docker run --rm "$IMAGE:$VERSION" os --version
