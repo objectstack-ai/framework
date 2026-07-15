@@ -56,11 +56,24 @@ jobs:
       - name: Verify Changesets "fixed" group covers every public package
         run: node scripts/check-changeset-fixed.mjs
           
-      - name: Check for dependency issues
-        run: |
-          # Fail the workflow if high-severity vulnerabilities are found
-          # This enforces security compliance before merging
-          pnpm audit --audit-level=high
+      # Fail the workflow if known vulnerabilities are found — enforces
+      # security compliance before merging.
+      #
+      # Previously this ran `pnpm audit --audit-level=high`, but npm retired the
+      # audit endpoint (HTTP 410, "This endpoint is being retired. Use the bulk
+      # advisory endpoint instead.") and pnpm has not migrated, so `pnpm audit`
+      # now fails unconditionally on every branch (see issue #2974). OSV-Scanner
+      # reads pnpm-lock.yaml directly against the OSV database and exits non-zero
+      # when any advisory matches, restoring a working blocking gate.
+      #
+      # Note: OSV-Scanner blocks on any severity, not just high/critical. To
+      # accept a specific advisory, add an osv-scanner.toml `[[IgnoredVulns]]`
+      # entry rather than lowering the gate.
+      - name: Audit dependencies for known vulnerabilities (OSV-Scanner)
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
 
       - name: List outdated packages
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

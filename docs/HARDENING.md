@@ -223,7 +223,8 @@ Run the production hardening checklist before each release:
 - [ ] `revokeSessionsOnPasswordReset: true`
 - [ ] CORS origin list is explicit, not `*`
 - [ ] `enforceProjectMembership: true` on scoped routes
-- [ ] `pnpm audit` clean (no `high`/`critical`)
+- [ ] `osv-scanner --lockfile=pnpm-lock.yaml` clean (npm retired the
+      `pnpm audit` endpoint — see issue #2974; CI enforces this via OSV-Scanner)
 - [ ] `pnpm outdated` reviewed
 - [ ] Backups: restore tested in the last 30 days
 - [ ] Audit log: `sys_audit_log` is append-only at the DB level
