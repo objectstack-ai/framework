@@ -48,10 +48,8 @@ Drivers can be selected in two ways:
 | _(unset, dev mode)_ | SQLite (native, falling back to WASM, then in-memory) | `@objectstack/driver-sql` / `-sqlite-wasm` / `-memory` |
 
 <Callout type="info">
-Turso / libSQL (`libsql://`, `*.turso.io`) is **not** bundled with the open-core
-framework. The `@objectstack/driver-turso` driver ships separately in the
-commercial ObjectOS distribution, which registers it via its own stack
-composition. The open-core runtime does not dispatch `libsql://` URLs.
+Turso / libSQL (`libsql://`, `*.turso.io`) is **not** supported by the
+open-source framework — no bundled driver dispatches `libsql://` URLs.
 </Callout>
 
 ## Supported Drivers

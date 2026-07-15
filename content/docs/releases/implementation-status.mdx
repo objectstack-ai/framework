@@ -295,12 +295,11 @@ The `auth` service in `CoreServiceName` covers both **authentication** (identity
 ## AI Layer
 
 <Callout type="warning">
-The in-UI AI **runtime** below (`@objectstack/service-ai`) moved to the **cloud /
-Enterprise** distribution — see cloud ADR-0025 (`service-ai → cloud; open =
-MCP-only`). The agent / skill / tool **schemas** stay open in `@objectstack/spec/ai`;
-the **open edition** exposes AI via [`@objectstack/mcp`](/docs/ai)
-(BYO-AI). The Implementation / Status columns describe the runtime as it ships in
-cloud / EE.
+The in-UI AI **runtime** below (`@objectstack/service-ai`) is not part of the
+open-source framework. The agent / skill / tool **schemas** stay open in
+`@objectstack/spec/ai`; the **open-source framework** exposes AI via
+[`@objectstack/mcp`](/docs/ai) (BYO-AI). The Implementation / Status columns
+describe that separate runtime.
 </Callout>
 
 | Protocol | @objectstack/spec | Implementation | Status |
