@@ -21,7 +21,7 @@ This repo is the **framework**: the protocol, kernel, SDK, CLI, and production r
 
 ## What is ObjectStack?
 
-ObjectStack is an **open-source** (Apache-2.0) metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools — plus the production runtime that serves them. AI operates your app under your permissions through the built-in MCP server. **[ObjectOS](https://docs.objectos.ai)** is the separate, commercial runtime environment that operates ObjectStack apps for end-user organizations (Cloud & Enterprise editions).
+ObjectStack is an **open-source** (Apache-2.0) metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools — plus the production runtime that serves them. AI operates your app under your permissions through the built-in MCP server.
 
 Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScript strings, ObjectStack makes the business system explicit:
 
