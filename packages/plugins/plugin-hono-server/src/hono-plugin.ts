@@ -529,6 +529,46 @@ export class HonoServerPlugin implements Plugin {
 
         ctx.logger.info('Registered discovery endpoints', { prefix });
 
+        // ── Anonymous-deny gate (ADR-0056 D2, #2567) ──────────────────────────
+        // These raw `/data/:object` routes delegate straight to ObjectQL. They
+        // are only *shadowed* by the REST plugin's gated `/data` routes when
+        // that plugin registers the same paths FIRST — so before this gate the
+        // platform's anonymous posture depended on plugin registration order: a
+        // load-order change silently reopened anonymous data access with no test
+        // failing. Gating here makes the deny decision a property of THIS entry
+        // point too, so security no longer depends on who registered first.
+        //
+        // Secure-by-default: `requireAuth` mirrors `rest-server.ts`'s `?? true`
+        // (ADR-0056 D2). A deployment that intentionally serves data publicly
+        // sets `restConfig.api.requireAuth = false` (a boot warning is logged, as
+        // in the REST plugin). No-op in that case — the previously-public surface
+        // is unchanged. An authenticated / system caller always passes.
+        //
+        // `requireAuth` is not in the typed `api` shape (rest-server.ts reads it
+        // via the same `as any` cast), so widen locally.
+        const requireAuth =
+            (this.options.restConfig?.api as { requireAuth?: boolean } | undefined)?.requireAuth ?? true;
+        if (!requireAuth) {
+            ctx.logger.warn(
+                'Hono standard /data endpoints: requireAuth is OFF — anonymous callers can read/write object data. ' +
+                'This is a deliberate opt-out; set restConfig.requireAuth=true to deny anonymous access (ADR-0056 D2, #2567).',
+            );
+        }
+        // Returns a 401 Response when the caller is anonymous under the deny
+        // posture, else null (caller proceeds). `isSystem` is never set on
+        // inbound HTTP (internal-only), so it cannot be forged to bypass this.
+        const denyAnonymous = (c: any, execCtx: any): Response | null => {
+            if (!requireAuth) return null;
+            if (execCtx?.userId || execCtx?.isSystem) return null;
+            return c.json(
+                {
+                    error: 'unauthenticated',
+                    message: 'Authentication is required to access this endpoint.',
+                },
+                401,
+            );
+        };
+
         // Basic CRUD data endpoints — delegate to ObjectQL service directly
         const getObjectQL = () => ctx.getService<IDataEngine>('objectql');
 
@@ -675,6 +715,8 @@ export class HonoServerPlugin implements Plugin {
             const object = c.req.param('object');
             const data = await c.req.json().catch(() => ({}));
             const execCtx = await resolveCtx(c);
+            const denied = denyAnonymous(c, execCtx);
+            if (denied) return denied;
             try {
                 const res = await ql.insert(object, data, { context: execCtx } as any);
                 const record = { ...data, ...res };
@@ -694,6 +736,8 @@ export class HonoServerPlugin implements Plugin {
             const object = c.req.param('object');
             const id = c.req.param('id');
             const execCtx = await resolveCtx(c);
+            const denied = denyAnonymous(c, execCtx);
+            if (denied) return denied;
             try {
                 let all = await ql.find(object, { context: execCtx } as any);
                 if (!all) all = [];
@@ -713,6 +757,8 @@ export class HonoServerPlugin implements Plugin {
             if (!ql) return c.json({ error: 'Data service not available' }, 503);
             const object = c.req.param('object');
             const execCtx = await resolveCtx(c);
+            const denied = denyAnonymous(c, execCtx);
+            if (denied) return denied;
             try {
                 let all = await ql.find(object, { context: execCtx } as any);
                 if (!Array.isArray(all) && all && (all as any).value) all = (all as any).value;

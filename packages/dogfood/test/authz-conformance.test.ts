@@ -18,7 +18,12 @@ describe('ADR-0056 D10 — authorization conformance matrix', () => {
   it('is a sound conformance ledger (ADR-0060 checkLedger)', () => {
     const problems = checkLedger(AUTHZ_CONFORMANCE, {
       proofRoot: HERE, // proofs are dogfood test files alongside this one
-      highRisk: ['owd-private', 'owd-public-read', 'controlled-by-parent', 'anonymous-deny', 'default-profile'],
+      highRisk: [
+        'owd-private', 'owd-public-read', 'controlled-by-parent', 'anonymous-deny', 'default-profile',
+        // #2567 — every anonymous-deny HTTP surface is high-risk: it guards the
+        // same object data as REST `/data` through a sibling entry point.
+        'anonymous-deny-meta', 'anonymous-deny-graphql', 'anonymous-deny-hono-data',
+      ],
     });
     expect(problems, problems.join('\n')).toEqual([]);
   });

@@ -50,6 +50,21 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     note: 'An organization_admin holds the superuser bit via its `*` wildcard, so it used to also get the Layer 0 exemption and read/write EVERY tenant\'s rows on private tenant objects. The exemption now requires a platform-exclusive capability (manage_metadata/manage_platform_settings/studio.access/manage_users), which org_admin deliberately lacks — a SECURITY NARROWING: org admin is walled to its own org, a true platform admin still crosses, the better-auth carve-out is untouched. Unit-proven in plugin-security/authz-matrix-gate.test.ts ([Finding 2 / #2937] Layer 0 cross-tenant exemption requires the platform posture).' },
   { id: 'anonymous-deny', summary: 'secure-by-default anonymous posture (capability)', state: 'enforced',
     enforcement: 'rest/rest-server.ts enforceAuth (requireAuth)', proof: 'showcase-anonymous-deny.dogfood.test.ts' },
+  // ── #2567 — the anonymous-deny posture is UNIFORM across HTTP surfaces, not
+  // just REST `/data`. Each sibling surface that reaches ObjectQL now consults
+  // the same `requireAuth` gate; these rows pin every entry point so a new
+  // ungated surface (or a silent regression) fails CI, not review.
+  { id: 'anonymous-deny-meta', summary: 'anonymous-deny on the metadata endpoints (#2567 surface 1)', state: 'enforced',
+    enforcement: 'rest/rest-server.ts registerMetadataEndpoints guarded registrar (enforceAuth) — every /meta route inherits the gate; runtime/http-dispatcher.ts handleMetadata mirrors it for the dispatcher metadata catch-all',
+    proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts' },
+  { id: 'anonymous-deny-graphql', summary: 'anonymous-deny on the dispatcher GraphQL endpoint (#2567 surface 2)', state: 'enforced',
+    enforcement: 'runtime/http-dispatcher.ts handleGraphQL (requireAuth gate, resolves identity for the direct /graphql route) + runtime/dispatcher-plugin.ts requireAuth default(true), mirroring rest-server.ts',
+    proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
+    note: 'GraphQL reaches the same object data as /data through kernel.graphql, whose security middleware falls OPEN for an anonymous context. Unit-proven in runtime/http-dispatcher.requireauth.test.ts (GraphQL block); e2e on the platform default in the surfaces proof.' },
+  { id: 'anonymous-deny-hono-data', summary: 'anonymous-deny on the raw-hono standard /data routes (#2567 surface 3)', state: 'enforced',
+    enforcement: 'plugin-hono-server/hono-plugin.ts denyAnonymous gate on the standard /data routes (requireAuth ?? true, mirroring rest-server.ts)',
+    proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
+    note: 'These routes delegate straight to ObjectQL and were only shadowed when the REST plugin registered the same paths FIRST — so the posture depended on plugin registration order (a load-order change silently reopened it, no test failing). Gating each route makes the deny decision a property of this entry point too. Handler-level proof in plugin-hono-server/hono-anonymous-deny.test.ts.' },
   { id: 'default-profile', summary: 'app-declared default profile (isDefault)', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },
 

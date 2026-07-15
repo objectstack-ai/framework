@@ -66,6 +66,40 @@ describe('HttpDispatcher requireAuth gate — AI routes (handleAI)', () => {
     });
 });
 
+describe('HttpDispatcher requireAuth gate — GraphQL (handleGraphQL)', () => {
+    // A valid-enough body so the missing-query 400 branch isn't hit first.
+    const gqlBody = { query: '{ __typename }' };
+
+    it('401s an anonymous caller when requireAuth is on (#2567)', async () => {
+        const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });
+        await expect(d.handleGraphQL(gqlBody, anon)).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('lets an authenticated caller PAST the gate', async () => {
+        const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });
+        // The mock kernel has no graphql service, so a caller that clears the
+        // gate hits 501 — which PROVES the gate passed (an anonymous caller
+        // throws 401 before this point).
+        await expect(d.handleGraphQL(gqlBody, authed)).rejects.toMatchObject({ statusCode: 501 });
+    });
+
+    it('lets an internal system context past the gate', async () => {
+        const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });
+        await expect(d.handleGraphQL(gqlBody, system)).rejects.toMatchObject({ statusCode: 501 });
+    });
+
+    it('serves anonymously when requireAuth is off (unchanged legacy behaviour)', async () => {
+        const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: false });
+        // Gate is a no-op → reaches the (absent) graphql service → 501, NOT 401.
+        await expect(d.handleGraphQL(gqlBody, anon)).rejects.toMatchObject({ statusCode: 501 });
+    });
+
+    it('400s a missing query before the auth gate is consulted', async () => {
+        const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });
+        await expect(d.handleGraphQL({} as any, anon)).rejects.toMatchObject({ statusCode: 400 });
+    });
+});
+
 describe('HttpDispatcher requireAuth gate — metadata catch-all (handleMetadata)', () => {
     it('401s an anonymous caller when requireAuth is on', async () => {
         const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });

@@ -1489,14 +1489,74 @@ export class HttpDispatcher {
         if (!body || !body.query) {
              throw { statusCode: 400, message: 'Missing query in request body' };
         }
-        
+
+        // Anonymous-deny gate — the same `requireAuth` posture the REST `/data`
+        // and `/meta` surfaces enforce. GraphQL reaches ObjectQL through
+        // `kernel.graphql`, whose security middleware falls OPEN for an
+        // anonymous context (no userId/roles → next()), so without this gate an
+        // anonymous query could read exactly the object data the sibling
+        // `/data/*` 401 denies (#2567). Mirrors {@link handleMetadata}: no-op
+        // when `requireAuth` is off (demo / single-tenant), an authenticated or
+        // system caller passes exactly as on `/data`.
+        //
+        // The dispatcher-plugin's direct `/graphql` route calls us WITHOUT
+        // resolving identity first (unlike `dispatch()`, which populates
+        // `context.executionContext`), so resolve it here when absent.
+        if (this.requireAuth) {
+            let ec: any = context.executionContext;
+            if (!ec) {
+                ec = await this.resolveRequestExecutionContext(context);
+                if (ec) context.executionContext = ec;
+            }
+            if (!ec?.userId && !ec?.isSystem) {
+                throw {
+                    statusCode: 401,
+                    message: 'Authentication is required to access this endpoint.',
+                    code: 'unauthenticated',
+                };
+            }
+        }
+
         if (typeof this.kernel.graphql !== 'function') {
             throw { statusCode: 501, message: 'GraphQL service not available' };
         }
 
-        return this.kernel.graphql(body.query, body.variables, { 
-            request: context.request 
+        return this.kernel.graphql(body.query, body.variables, {
+            request: context.request
         });
+    }
+
+    /**
+     * Resolve the RBAC/RLS execution context for a request that did NOT flow
+     * through {@link dispatch} (which resolves and caches it on
+     * `context.executionContext`). The dispatcher-plugin's direct `/graphql`
+     * route is the current caller. Mirrors the identity resolution `dispatch()`
+     * performs so an anonymous-deny gate can tell an authenticated caller from
+     * an anonymous one. Best-effort: returns `undefined` on failure (treated as
+     * anonymous, i.e. denied under `requireAuth`).
+     */
+    private async resolveRequestExecutionContext(
+        context: HttpProtocolContext,
+    ): Promise<ExecutionContext | undefined> {
+        try {
+            return await resolveExecutionContext({
+                getService: (n: string) => this.resolveService(n, context.environmentId),
+                getQl: async () => {
+                    const k: any = this.kernel;
+                    if (k && typeof k.getServiceAsync === 'function') {
+                        const ql = await k.getServiceAsync('objectql').catch(() => undefined);
+                        if (ql && (ql.registry || typeof ql.find === 'function')) return ql;
+                    }
+                    return this.getObjectQLService(context.environmentId);
+                },
+                request: context.request,
+                // OAuth access tokens are honoured only on the MCP surface
+                // (#2698); GraphQL enforces no per-scope tool gating.
+                acceptOAuthAccessToken: false,
+            });
+        } catch {
+            return undefined;
+        }
     }
 
     /**

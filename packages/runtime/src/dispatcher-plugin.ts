@@ -49,16 +49,19 @@ export interface DispatcherPluginConfig {
     enforceProjectMembership?: boolean;
 
     /**
-     * Reject anonymous requests to `auth: true` service routes (AI, etc.) with
-     * HTTP 401, mirroring the REST API's `requireAuth` gate. Must match the
-     * REST plugin's `api.requireAuth` so `/ai` and `/meta` stay in lockstep
-     * with `/data` — otherwise the AI routes' declared `auth: true` contract is
-     * never enforced and anonymous callers reach adapter/model status routes.
+     * Reject anonymous requests to `auth: true` service routes (AI, etc.), the
+     * `/graphql` endpoint and the `/meta` catch-all with HTTP 401, mirroring the
+     * REST API's `requireAuth` gate. Must match the REST plugin's
+     * `api.requireAuth` so `/ai`, `/graphql` and `/meta` stay in lockstep with
+     * `/data` — otherwise the AI routes' declared `auth: true` contract is never
+     * enforced and anonymous callers reach adapter/model status routes or read
+     * object data over GraphQL that `/data/*` 401s (#2567).
      *
-     * Defaults to `false` (backward-compatible: previously nothing enforced
-     * `RouteDefinition.auth` here). Hosts pass their `api.requireAuth` through —
-     * the framework `serve` command and the cloud apps do so from the same
-     * stack `api` config the REST plugin reads.
+     * Defaults to `true` — secure-by-default, matching the REST plugin's
+     * `api.requireAuth` default (ADR-0056 D2). Hosts pass their `api.requireAuth`
+     * through (the framework `serve` command and the cloud apps do so from the
+     * same stack `api` config the REST plugin reads); a deployment that serves
+     * these surfaces publicly sets `requireAuth: false` explicitly.
      */
     requireAuth?: boolean;
 
@@ -417,9 +420,25 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // Secure-by-default alignment with the REST plugin's `requireAuth`.
             // The cloud apps pass the whole stack `api` block as `scoping`
             // (which carries `requireAuth`), so honour it there too; an explicit
-            // top-level `requireAuth` wins. Off → unchanged (routes stay open).
+            // top-level `requireAuth` wins.
+            //
+            // Defaults to `true` — matching `rest-server.ts`'s `?? true`
+            // (ADR-0056 D2). The dispatcher gates the same object data as REST
+            // through sibling surfaces (`/graphql`, `/ai`, the `/meta`
+            // catch-all, service routes); defaulting it OFF while REST defaults
+            // ON is exactly the by-surface inconsistency #2567 closes — a bare
+            // host would deny anonymous `/data` yet serve the same rows over
+            // `/graphql`. A deployment that intentionally serves these surfaces
+            // publicly opts out with an explicit `requireAuth: false` (a
+            // boot warning is logged, mirroring the REST plugin).
             const requireAuth =
-                config.requireAuth ?? (config.scoping as { requireAuth?: boolean } | undefined)?.requireAuth ?? false;
+                config.requireAuth ?? (config.scoping as { requireAuth?: boolean } | undefined)?.requireAuth ?? true;
+            if (!requireAuth) {
+                ctx.logger?.warn?.(
+                    '[dispatcher] requireAuth is OFF — /graphql, /ai and the /meta catch-all serve anonymous callers. ' +
+                    'This is a deliberate opt-out; set api.requireAuth=true to deny anonymous access (ADR-0056 D2, #2567).',
+                );
+            }
             const dispatcher = new HttpDispatcher(kernel, undefined, {
                 enforceProjectMembership: enforceMembership,
                 requireAuth,
