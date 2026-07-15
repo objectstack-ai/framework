@@ -51,6 +51,7 @@ const READ_ONLY_TOOLS = new Set([
   'describe_object',
   'query_records',
   'get_record',
+  'aggregate_records',
   'aggregate_data',
 ]);
 

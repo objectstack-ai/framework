@@ -41,6 +41,15 @@ describe('checkApiExposure (#1889)', () => {
       expect(checkApiExposure(ro, 'find').allowed).toBe(true); // find → list
     });
 
+    it('gates aggregate as a list-class read', () => {
+      // An object whose whitelist excludes `list` must not leak row
+      // statistics through GROUP BY either.
+      expect(checkApiExposure({ apiMethods: ['list'] }, 'aggregate').allowed).toBe(true);
+      const d = checkApiExposure({ apiMethods: ['get'] }, 'aggregate');
+      expect(d.allowed).toBe(false);
+      expect(d.status).toBe(405);
+    });
+
     it('an empty whitelist is treated as no restriction', () => {
       expect(checkApiExposure({ apiMethods: [] }, 'create').allowed).toBe(true);
     });
