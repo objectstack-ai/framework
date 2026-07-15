@@ -776,6 +776,42 @@ describe('SecurityPlugin', () => {
       expect(filter).toEqual(RLS_DENY_FILTER);
     });
 
+    it('[#2852] fail-closed on an on-behalf-of (delegated) context — no D10 intersection on this path', async () => {
+      // getReadFilter resolves only the CALLER's ceiling; the delegator RLS
+      // intersection the engine middleware applies is absent here. A delegated
+      // read must DENY rather than silently return the agent's (wider) own
+      // scope. Latent today (no agent surface reaches analytics) but the
+      // invariant is enforced regardless.
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet], orgScoping: true });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const filter = await plugin.getReadFilter('task', {
+        userId: 'agent-1',
+        tenantId: 'org-1',
+        positions: [],
+        permissions: ['member_default'],
+        onBehalfOf: { userId: 'user-1' },
+      });
+      expect(filter).toEqual(RLS_DENY_FILTER);
+      expect(harness.ctx.logger.error).toHaveBeenCalled();
+    });
+
+    it('[#2852] a system on-behalf-of context bypasses before the deny sentinel', async () => {
+      // isSystem short-circuits to `undefined` (no scope) ahead of the
+      // on-behalf-of guard — engine self-invocation must not be denied.
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet], orgScoping: true });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      const filter = await plugin.getReadFilter('task', {
+        isSystem: true,
+        userId: 'agent-1',
+        onBehalfOf: { userId: 'user-1' },
+      });
+      expect(filter).toBeUndefined();
+    });
+
     it('[#2936] fail-closed on a CANONICAL `==` wildcard policy targeting a missing column → deny sentinel', async () => {
       // The `=`-form twin above is the L692 test. This is its canonical-CEL
       // sibling: pre-#2936 `extractTargetField` did not recognize `==`, so the

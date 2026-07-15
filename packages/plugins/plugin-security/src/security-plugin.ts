@@ -1769,6 +1769,27 @@ export class SecurityPlugin implements Plugin {
     if (positions.length === 0 && explicit.length === 0 && !context?.userId) {
       return undefined;
     }
+    // [#2852] D10 delegator intersection is NOT implemented on this path.
+    // The engine middleware (find/count/aggregate) intersects an on-behalf-of
+    // read with the DELEGATOR's own RLS (resolveDelegatorContext, ~L689), but
+    // getReadFilter — the read-scope provider bound by the analytics/raw-SQL
+    // path — resolves only the CALLER's ceiling. Computing a filter here for a
+    // delegated (agent) context would therefore SILENTLY WIDEN the read past
+    // the delegator's scope (the confused-deputy widening D10 prevents on the
+    // CRUD path). Until the intersection is threaded through computeRlsFilter
+    // (tracked with #2920 B1 / ADR-0095 D1), FAIL CLOSED: a delegated read on
+    // this path denies rather than under-scopes. System on-behalf-of already
+    // returned above; today no agent surface reaches analytics, so this is a
+    // latent-invariant guard, not a live-traffic change.
+    if (context?.onBehalfOf?.userId) {
+      this.logger.error?.(
+        `[security] getReadFilter received an on-behalf-of context for object ` +
+          `'${object}' (agent ${context?.userId ?? 'unknown'} on behalf of ` +
+          `${context.onBehalfOf.userId}) — the D10 delegator intersection is not ` +
+          `implemented on the read-scope path; denying (fail-closed, #2852)`,
+      );
+      return { ...RLS_DENY_FILTER };
+    }
     try {
       const permissionSets = await this.resolvePermissionSetsForContext(context);
       const filter = await this.computeRlsFilter(permissionSets, object, 'find', context);
