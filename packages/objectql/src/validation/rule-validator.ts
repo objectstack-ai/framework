@@ -201,6 +201,49 @@ export function stripReadonlyWhenFields(
 }
 
 /**
+ * Strip CALLER-SUPPLIED writes to statically `readonly: true` fields from an
+ * UPDATE payload (#2948). Unlike `readonlyWhen` (conditional, handled above), a
+ * static `readonly` field was never enforced on the server write path: the
+ * record validator only SKIPS it from validation, so a user-context update
+ * could overwrite audit stamps, provenance, or any other read-only column. We
+ * STRIP the change (symmetric with `readonlyWhen`) rather than reject it, for
+ * compatibility.
+ *
+ * Two guards keep every legitimate write intact:
+ *  - `suppliedKeys` — only keys the CALLER sent are candidates. Server stamps
+ *    applied by beforeUpdate hooks or write middleware (e.g. `updated_by` /
+ *    `updated_at`, plugin.ts) land in `data` but are NOT in `suppliedKeys`, so
+ *    they survive. A caller that *explicitly* forges e.g. `updated_by` simply
+ *    has it dropped for that request (the last-modified stamp is left unchanged
+ *    — safe).
+ *  - system context — the caller passes this strip only for NON-system writes;
+ *    system-context writes (import, seed replay, approvals, lifecycle hooks —
+ *    all `isSystem: true`) legitimately set read-only columns and skip it.
+ *
+ * Returns the same object when nothing is stripped, else a shallow copy with the
+ * offending keys removed.
+ */
+export function stripReadonlyFields(
+  objectSchema: { fields?: Record<string, ConditionalFieldDef> } | undefined | null,
+  data: Record<string, unknown> | undefined | null,
+  suppliedKeys: ReadonlySet<string>,
+  logger?: EvaluateRulesOptions['logger'],
+): Record<string, unknown> | undefined | null {
+  const fields = objectSchema?.fields;
+  if (!fields || !data) return data;
+  let result = data;
+  for (const [name, def] of Object.entries(fields)) {
+    if (!def?.readonly) continue;
+    if (!(name in (result as Record<string, unknown>))) continue;
+    if (!suppliedKeys.has(name)) continue; // server-stamped, not caller-supplied — keep
+    if (result === data) result = { ...data };
+    delete (result as Record<string, unknown>)[name];
+    logger?.warn?.(`Field '${name}' is read-only — ignoring incoming change (#2948)`);
+  }
+  return result;
+}
+
+/**
  * A rule needs the prior record if it reasons about the transition or compares
  * against unchanged fields (`state_machine` / `cross_field` / `script`), or if
  * it is a `conditional` whose branches (or `when`) recursively do. `format` and
@@ -233,6 +276,8 @@ interface ConditionalFieldDef {
   requiredWhen?: string | Expression;
   conditionalRequired?: string | Expression; // back-compat alias of requiredWhen
   readonlyWhen?: string | Expression;
+  /** Static, unconditional read-only flag (`field.readonly`). #2948. */
+  readonly?: boolean;
   /** Field type — scopes per-option `visibleWhen` enforcement to choice fields. */
   type?: string;
   /** Select/multiselect/radio options; an option may gate itself with `visibleWhen`. */
