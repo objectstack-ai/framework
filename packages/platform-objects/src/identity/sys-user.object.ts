@@ -75,9 +75,11 @@ export const SysUser = ObjectSchema.create({
     // ── Platform admin operations (require better-auth `admin` plugin) ─
     //
     // These actions hit /api/v1/auth/admin/* endpoints that are only
-    // wired when `auth.plugins.admin` is enabled. When the plugin is
-    // disabled the actions still render (schema is static) but server
-    // returns 404. UI surfaces them under the row menu AND the
+    // wired when `auth.plugins.admin` is enabled, so each one is gated on
+    // `requiresFeature: 'admin'` (#2874) — when the plugin is off the UI
+    // hides them instead of rendering buttons that 404. SCIM deployments
+    // keep them: SCIM forces the admin plugin (and `features.admin`) on
+    // (ADR-0071). UI surfaces them under the row menu AND the
     // record-detail header (`record_header`, overflowing into the ⋯
     // "More" menu) so platform admins can manage an account from either
     // the Users list or an open user record — without dropping to SQL or
@@ -90,6 +92,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/ban-user',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'User banned',
       refreshAfter: true,
@@ -106,6 +109,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/unban-user',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'User unbanned',
       refreshAfter: true,
@@ -121,6 +125,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/unlock-user',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'Account unlocked',
       refreshAfter: true,
@@ -200,6 +205,7 @@ export const SysUser = ObjectSchema.create({
       // legacy role scalar), can mint a temporary password, and stamps
       // must_change_password.
       target: '/api/v1/auth/admin/set-user-password',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'Password updated',
       refreshAfter: false,
@@ -238,6 +244,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/set-role',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'Role updated',
       refreshAfter: true,
@@ -253,6 +260,7 @@ export const SysUser = ObjectSchema.create({
       locations: ['list_item', 'record_header'],
       type: 'api',
       target: '/api/v1/auth/admin/impersonate-user',
+      requiresFeature: 'admin',
       recordIdParam: 'userId',
       successMessage: 'Now impersonating user',
       refreshAfter: true,
@@ -371,6 +379,7 @@ export const SysUser = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/two-factor/enable',
       visible: 'record.id == ctx.user.id && record.two_factor_enabled != true',
+      requiresFeature: 'twoFactor',
       successMessage: 'Two-factor authentication enabled. Scan the QR code or paste the otpauth URI into your authenticator app, then verify a code to complete setup.',
       refreshAfter: true,
       params: [
@@ -386,6 +395,7 @@ export const SysUser = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/two-factor/disable',
       visible: 'record.id == ctx.user.id && record.two_factor_enabled == true',
+      requiresFeature: 'twoFactor',
       confirmText: 'Turn off two-factor authentication? Your account will be less secure.',
       successMessage: 'Two-factor authentication disabled.',
       refreshAfter: true,
@@ -402,6 +412,7 @@ export const SysUser = ObjectSchema.create({
       type: 'api',
       target: '/api/v1/auth/two-factor/generate-backup-codes',
       visible: 'record.id == ctx.user.id && record.two_factor_enabled == true',
+      requiresFeature: 'twoFactor',
       confirmText: 'Generate a new set of backup codes? Any previously generated codes will stop working.',
       successMessage: 'New backup codes generated — save them somewhere safe.',
       refreshAfter: false,

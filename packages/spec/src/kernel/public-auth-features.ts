@@ -102,8 +102,8 @@ export const PUBLIC_AUTH_FEATURES = {
     exempt: {
       reason:
         'No spec input to gate. Typed in objectui (auth/src/types.ts) but no ' +
-        'passkey UI exists yet — advertised-but-unconsumed gap tracked in a ' +
-        'follow-up objectui issue (#2874 P2②).',
+        'passkey UI exists yet — advertised-but-unconsumed gap tracked in ' +
+        'objectui#2514 (#2874 P2②).',
     },
   },
   magicLink: {
@@ -113,7 +113,7 @@ export const PUBLIC_AUTH_FEATURES = {
       reason:
         'No spec input to gate. Typed in objectui (auth/src/types.ts) but no ' +
         'magic-link UI exists yet — advertised-but-unconsumed gap tracked in ' +
-        'a follow-up objectui issue (#2874 P2②).',
+        'objectui#2514 (#2874 P2②).',
     },
   },
   organization: {
@@ -165,6 +165,7 @@ export const PUBLIC_AUTH_FEATURES = {
     semantics: 'default-on',
     gatedInputs: [
       'sys_oauth_application.actions.create_oauth_application',
+      'sys_oauth_application.actions.delete_oauth_application',
       'sys_oauth_application.actions.disable_oauth_application',
       'sys_oauth_application.actions.enable_oauth_application',
       'sys_oauth_application.actions.rotate_client_secret',
@@ -203,8 +204,8 @@ export const PUBLIC_AUTH_FEATURES = {
       reason:
         'No spec input (sys_device_code declares no actions). Known gap: ' +
         'objectui DeviceAuthPage hits the device-auth endpoints without ' +
-        'checking this flag (absent from its client type) — tracked in a ' +
-        'follow-up objectui issue (#2874 P2②).',
+        'checking this flag (absent from its client type) — tracked in ' +
+        'objectui#2513 (#2874 P2②).',
     },
   },
   admin: {

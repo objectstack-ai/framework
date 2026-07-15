@@ -160,10 +160,10 @@ describe('@objectstack/platform-objects', () => {
       // predicate, so exactly one is active at any time.
       expect(disable?.target).toBe('/api/v1/auth/admin/oauth2/toggle-disabled');
       expect(disable?.bodyExtra).toEqual({ disabled: true });
-      expect((disable?.visible as any)?.source).toBe('!record.disabled');
+      expect((disable?.visible as any)?.source).toBe('(!record.disabled) && features.oidcProvider != false');
       expect(enable?.target).toBe('/api/v1/auth/admin/oauth2/toggle-disabled');
       expect(enable?.bodyExtra).toEqual({ disabled: false });
-      expect((enable?.visible as any)?.source).toBe('record.disabled');
+      expect((enable?.visible as any)?.source).toBe('(record.disabled) && features.oidcProvider != false');
 
       // Generic CRUD must NOT expose mutating methods — all writes are
       // reserved for better-auth wrappers above so OAuth-specific
@@ -311,6 +311,25 @@ describe('feature-gate lowering matrix (#2874)', () => {
     ['SysTeam', SysTeam, 'remove_team', ORG],
     ['SysTeamMember', SysTeamMember, 'add_team_member', ORG],
     ['SysTeamMember', SysTeamMember, 'remove_team_member', ORG],
+    // #2874 P2b — audit gates: capability-dependent actions that previously
+    // shipped UNGATED (rendered even with the backing plugin off, then 404'd).
+    ['SysUser', SysUser, 'ban_user', 'features.admin == true'],
+    ['SysUser', SysUser, 'unban_user', 'features.admin == true'],
+    ['SysUser', SysUser, 'unlock_user', 'features.admin == true'],
+    ['SysUser', SysUser, 'set_user_password', 'features.admin == true'],
+    ['SysUser', SysUser, 'set_user_role', 'features.admin == true'],
+    ['SysUser', SysUser, 'impersonate_user', 'features.admin == true'],
+    ['SysUser', SysUser, 'enable_two_factor', '(record.id == ctx.user.id && record.two_factor_enabled != true) && features.twoFactor == true'],
+    ['SysUser', SysUser, 'disable_two_factor', '(record.id == ctx.user.id && record.two_factor_enabled == true) && features.twoFactor == true'],
+    ['SysUser', SysUser, 'generate_backup_codes', '(record.id == ctx.user.id && record.two_factor_enabled == true) && features.twoFactor == true'],
+    ['SysTwoFactor', SysTwoFactor, 'enable_two_factor', 'features.twoFactor == true'],
+    ['SysTwoFactor', SysTwoFactor, 'disable_two_factor', 'features.twoFactor == true'],
+    ['SysTwoFactor', SysTwoFactor, 'regenerate_backup_codes', 'features.twoFactor == true'],
+    ['SysOauthApplication', SysOauthApplication, 'create_oauth_application', 'features.oidcProvider != false'],
+    ['SysOauthApplication', SysOauthApplication, 'delete_oauth_application', 'features.oidcProvider != false'],
+    ['SysOauthApplication', SysOauthApplication, 'disable_oauth_application', '(!record.disabled) && features.oidcProvider != false'],
+    ['SysOauthApplication', SysOauthApplication, 'enable_oauth_application', '(record.disabled) && features.oidcProvider != false'],
+    ['SysOauthApplication', SysOauthApplication, 'rotate_client_secret', 'features.oidcProvider != false'],
   ];
 
   it.each(rows)('%s.%s#%s lowers to the previous hand-written predicate', (_export, object, actionName, expected) => {

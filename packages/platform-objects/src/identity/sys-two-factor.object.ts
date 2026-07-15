@@ -66,6 +66,7 @@ export const SysTwoFactor = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       target: '/api/v1/auth/two-factor/enable',
+      requiresFeature: 'twoFactor',
       refreshAfter: true,
       params: [
         { name: 'password', label: 'Current Password', type: 'text', required: true },
@@ -88,6 +89,7 @@ export const SysTwoFactor = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       target: '/api/v1/auth/two-factor/disable',
+      requiresFeature: 'twoFactor',
       confirmText: 'Disable two-factor authentication on your account?',
       successMessage: '2FA disabled',
       refreshAfter: true,
@@ -103,6 +105,7 @@ export const SysTwoFactor = ObjectSchema.create({
       locations: ['list_toolbar', 'list_item'],
       type: 'api',
       target: '/api/v1/auth/two-factor/generate-backup-codes',
+      requiresFeature: 'twoFactor',
       confirmText: 'Regenerate backup codes? All previous backup codes will stop working immediately.',
       refreshAfter: true,
       params: [
