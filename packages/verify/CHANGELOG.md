@@ -1,5 +1,38 @@
 # @objectstack/verify
 
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [28b7c28]
+- Updated dependencies [0fcef9b]
+- Updated dependencies [13749ec]
+- Updated dependencies [ca2b2f6]
+- Updated dependencies [2ae78c6]
+- Updated dependencies [5febe3f]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [698454e]
+- Updated dependencies [29a4c90]
+- Updated dependencies [ef70521]
+- Updated dependencies [a581a65]
+- Updated dependencies [31d04d4]
+- Updated dependencies [5774a75]
+  - @objectstack/spec@15.0.0
+  - @objectstack/plugin-security@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/runtime@15.0.0
+  - @objectstack/rest@15.0.0
+  - @objectstack/objectql@15.0.0
+  - @objectstack/plugin-auth@15.0.0
+  - @objectstack/plugin-sharing@15.0.0
+  - @objectstack/service-settings@15.0.0
+  - @objectstack/driver-sqlite-wasm@15.0.0
+  - @objectstack/plugin-hono-server@15.0.0
+  - @objectstack/service-analytics@15.0.0
+  - @objectstack/service-automation@15.0.0
+  - @objectstack/service-datasource@15.0.0
+
 ## 14.8.0
 
 ### Patch Changes

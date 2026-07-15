@@ -1,5 +1,73 @@
 # @objectstack/cli
 
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [02a014b]
+- Updated dependencies [28b7c28]
+- Updated dependencies [891ea81]
+- Updated dependencies [0fcef9b]
+- Updated dependencies [13749ec]
+- Updated dependencies [ca2b2f6]
+- Updated dependencies [2ae78c6]
+- Updated dependencies [5febe3f]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [698454e]
+- Updated dependencies [29a4c90]
+- Updated dependencies [ef70521]
+- Updated dependencies [a581a65]
+- Updated dependencies [56e42a6]
+- Updated dependencies [31d04d4]
+- Updated dependencies [5774a75]
+  - @objectstack/platform-objects@15.0.0
+  - @objectstack/spec@15.0.0
+  - @objectstack/lint@15.0.0
+  - @objectstack/plugin-security@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/runtime@15.0.0
+  - @objectstack/rest@15.0.0
+  - @objectstack/console@15.0.0
+  - @objectstack/objectql@15.0.0
+  - @objectstack/account@15.0.0
+  - @objectstack/setup@15.0.0
+  - @objectstack/metadata@15.0.0
+  - @objectstack/plugin-approvals@15.0.0
+  - @objectstack/plugin-audit@15.0.0
+  - @objectstack/plugin-auth@15.0.0
+  - @objectstack/plugin-email@15.0.0
+  - @objectstack/plugin-reports@15.0.0
+  - @objectstack/plugin-sharing@15.0.0
+  - @objectstack/service-job@15.0.0
+  - @objectstack/service-queue@15.0.0
+  - @objectstack/service-realtime@15.0.0
+  - @objectstack/service-settings@15.0.0
+  - @objectstack/service-storage@15.0.0
+  - @objectstack/client@15.0.0
+  - @objectstack/cloud-connection@15.0.0
+  - @objectstack/formula@15.0.0
+  - @objectstack/mcp@15.0.0
+  - @objectstack/observability@15.0.0
+  - @objectstack/driver-memory@15.0.0
+  - @objectstack/driver-mongodb@15.0.0
+  - @objectstack/driver-sql@15.0.0
+  - @objectstack/driver-sqlite-wasm@15.0.0
+  - @objectstack/plugin-hono-server@15.0.0
+  - @objectstack/plugin-webhooks@15.0.0
+  - @objectstack/service-analytics@15.0.0
+  - @objectstack/service-automation@15.0.0
+  - @objectstack/service-cache@15.0.0
+  - @objectstack/service-datasource@15.0.0
+  - @objectstack/service-messaging@15.0.0
+  - @objectstack/service-package@15.0.0
+  - @objectstack/service-sms@15.0.0
+  - @objectstack/trigger-api@15.0.0
+  - @objectstack/trigger-record-change@15.0.0
+  - @objectstack/trigger-schedule@15.0.0
+  - @objectstack/types@15.0.0
+  - @objectstack/verify@15.0.0
+
 ## 14.8.0
 
 ### Minor Changes
