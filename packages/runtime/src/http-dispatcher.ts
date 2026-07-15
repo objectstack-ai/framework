@@ -2316,6 +2316,25 @@ export class HttpDispatcher {
             // registry write only when the protocol service/method is unavailable.
             if (parts.length === 0 && m === 'POST') {
                 const manifest = body.manifest || body;
+                const pkgId = typeof manifest?.id === 'string' ? manifest.id.trim() : '';
+                // A package id is mandatory — without one the install cannot be keyed.
+                if (!pkgId) {
+                    return { handled: true, response: this.error('Package id is required', 400) };
+                }
+                // Duplicate-detection: POST /packages CREATES a package. If one with
+                // this id already exists, silently overwriting it destroys the existing
+                // manifest (name/version/…) with no warning — a data-loss footgun
+                // surfaced in Studio package-create dogfooding. Reject with 409 Conflict
+                // instead. Intentional upgrade / re-install flows opt back in with
+                // `overwrite: true` (body) or `?overwrite=true`.
+                const overwrite =
+                    body?.overwrite === true || query?.overwrite === 'true' || query?.overwrite === true;
+                if (!overwrite && registry.getPackage(pkgId)) {
+                    return {
+                        handled: true,
+                        response: this.error(`Package '${pkgId}' already exists`, 409),
+                    };
+                }
                 let pkg: any;
                 const protocolSvc: any = await this.resolveService('protocol').catch(() => null);
                 if (protocolSvc && typeof protocolSvc.installPackage === 'function') {

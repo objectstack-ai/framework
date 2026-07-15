@@ -1119,6 +1119,103 @@ describe('HttpDispatcher', () => {
             expect(updatePackage).toHaveBeenCalledWith({ packageId: 'a.b', patch: { description: 'hi' } });
         });
 
+        it('POST /packages creates a new package (201) after checking the id is free', async () => {
+            const installPackage = vi
+                .fn()
+                .mockReturnValue({ manifest: { id: 'com.acme.new', name: 'New', version: '0.1.0' } });
+            const mockRegistry = {
+                getPackage: vi.fn().mockReturnValue(undefined),
+                installPackage,
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null; // no protocol service → fall back to registry.installPackage
+            });
+
+            const result = await dispatcher.handlePackages(
+                '',
+                'POST',
+                { manifest: { id: 'com.acme.new', name: 'New', version: '0.1.0', type: 'app' } },
+                {},
+                { request: {} },
+            );
+            expect(result.response?.status).toBe(201);
+            expect(mockRegistry.getPackage).toHaveBeenCalledWith('com.acme.new');
+            expect(installPackage).toHaveBeenCalled();
+        });
+
+        it('POST /packages rejects a duplicate id with 409 instead of silently overwriting', async () => {
+            const installPackage = vi.fn();
+            const mockRegistry = {
+                getPackage: vi.fn().mockReturnValue({ manifest: { id: 'com.acme.crm', name: 'Existing' } }),
+                installPackage,
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages(
+                '',
+                'POST',
+                { manifest: { id: 'com.acme.crm', name: 'Clobber', version: '9.9.9' } },
+                {},
+                { request: {} },
+            );
+            expect(result.response?.status).toBe(409);
+            // The existing manifest must NOT be overwritten.
+            expect(installPackage).not.toHaveBeenCalled();
+        });
+
+        it('POST /packages?overwrite=true allows intentional overwrite of an existing id', async () => {
+            const installPackage = vi
+                .fn()
+                .mockReturnValue({ manifest: { id: 'com.acme.crm', name: 'Upgraded', version: '2.0.0' } });
+            const mockRegistry = {
+                getPackage: vi.fn().mockReturnValue({ manifest: { id: 'com.acme.crm' } }),
+                installPackage,
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages(
+                '',
+                'POST',
+                { manifest: { id: 'com.acme.crm', name: 'Upgraded', version: '2.0.0' } },
+                { overwrite: 'true' },
+                { request: {} },
+            );
+            expect(result.response?.status).toBe(201);
+            expect(installPackage).toHaveBeenCalled();
+        });
+
+        it('POST /packages rejects a missing id with 400', async () => {
+            const mockRegistry = {
+                getPackage: vi.fn(),
+                installPackage: vi.fn(),
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages(
+                '',
+                'POST',
+                { manifest: { name: 'No Id' } },
+                {},
+                { request: {} },
+            );
+            expect(result.response?.status).toBe(400);
+            expect(mockRegistry.installPackage).not.toHaveBeenCalled();
+        });
+
         it('PATCH /packages/:id rejects an empty patch with 400', async () => {
             (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'objectql') return Promise.resolve({ registry: { getAllPackages: vi.fn().mockReturnValue([]) } });
@@ -1409,7 +1506,11 @@ describe('HttpDispatcher', () => {
                 package: { manifest: { id: 'app.demo' }, status: 'installed' },
                 message: 'Installed package: app.demo',
             });
-            const mockRegistry = { installPackage: vi.fn(), getAllPackages: vi.fn().mockReturnValue([]) };
+            const mockRegistry = {
+                installPackage: vi.fn(),
+                getPackage: vi.fn().mockReturnValue(undefined),
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
             (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'protocol') return Promise.resolve({ installPackage });
                 if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
@@ -1429,6 +1530,7 @@ describe('HttpDispatcher', () => {
         it('falls back to registry.installPackage when the protocol lacks the method', async () => {
             const mockRegistry = {
                 installPackage: vi.fn().mockReturnValue({ manifest: { id: 'app.fb' }, status: 'installed' }),
+                getPackage: vi.fn().mockReturnValue(undefined),
                 getAllPackages: vi.fn().mockReturnValue([]),
             };
             (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
