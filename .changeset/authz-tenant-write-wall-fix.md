@@ -1,5 +1,5 @@
 ---
-'@objectstack/plugin-security': minor
+'@objectstack/plugin-security': major
 ---
 
 fix(plugin-security): 堵跨租户 UPDATE 写 + org_admin 越 private 租户对象墙（security）

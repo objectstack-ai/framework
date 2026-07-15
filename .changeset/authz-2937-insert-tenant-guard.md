@@ -1,5 +1,5 @@
 ---
-'@objectstack/plugin-security': minor
+'@objectstack/plugin-security': major
 ---
 
 fix(plugin-security): #2937 — Layer 0 insert post-image 租户检查（伪造 organization_id 的用户 insert 现被拒）

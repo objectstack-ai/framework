@@ -1,5 +1,5 @@
 ---
-"@objectstack/plugin-security": minor
+"@objectstack/plugin-security": major
 ---
 
 ADR-0095 D1: tenant isolation is now **Layer 0** — an independent, always-first,
