@@ -1,5 +1,48 @@
 # @objectstack/lint
 
+## 15.0.0
+
+### Minor Changes
+
+- 891ea81: ADR-0089 D3b: make the `visibility-root-mislayered` lint check bidirectional. `validateVisibilityPredicates` now accepts an optional `{ layer }` option — `'runtime'` (default, unchanged) flags a `data.`-rooted predicate on a `*.view.ts` / `*.page.ts` surface, and `'metadata'` flags a `record.`-rooted predicate on a `*.form.ts` metadata-editing form. Both directions of the ADR's binding-root rule are now covered. Adds the `VisibilityLayer` / `VisibilityOptions` exported types. Fully back-compat: existing single-argument callers keep the runtime behavior.
+- e62c233: feat(spec,plugin-security): package-level capability declaration API (ADR-0066 D1)
+
+  Packages can now DEFINE their own authorization capabilities explicitly via the
+  new `defineCapability` factory and a stack's `capabilities` array, instead of
+  relying on the implicit "derive an untitled capability from whatever a permission
+  set references in `systemPermissions[]`" back-door.
+
+  - `@objectstack/spec`: new `defineCapability` / `CapabilityDeclarationSchema`
+    (`{ name, label?, description?, scope, packageId? }`) and a `capabilities`
+    field on the stack definition.
+  - `@objectstack/plugin-security`: new `bootstrapDeclaredCapabilities` seeds
+    declared capabilities into `sys_capability` with `managed_by:'package'` +
+    `package_id` provenance (new `package_id` field on the object). Idempotent,
+    upgrade-aware; refuses to hijack curated platform capabilities or another
+    package's rows, never clobbers admin-authored rows, and CLAIMS a pre-existing
+    derived placeholder (upgrading it to package provenance). The implicit
+    derive-from-`systemPermissions` path still runs for back-compat but now skips
+    any explicitly-declared name so it can't clobber authored metadata.
+  - `@objectstack/runtime`: stack-declared `capabilities` are registered into the
+    metadata registry (type `capability`) so the boot seeder can read them.
+  - `@objectstack/lint`: `validateCapabilityReferences` treats
+    `stack.capabilities` names as a known capability source.
+
+  A capability is not a contract: DEFINE it (`defineCapability`), GRANT it
+  (`systemPermissions`), REQUIRE it (`requiredPermissions`) — no `inputs`.
+  Aligns with ADR-0094 D5 (retire implicit `managed_by`-guessing back-doors).
+
+### Patch Changes
+
+- Updated dependencies [28b7c28]
+- Updated dependencies [13749ec]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [31d04d4]
+  - @objectstack/spec@15.0.0
+  - @objectstack/formula@15.0.0
+  - @objectstack/sdui-parser@15.0.0
+
 ## 14.8.0
 
 ### Minor Changes

@@ -1,5 +1,265 @@
 # @objectstack/plugin-security
 
+## 15.0.0
+
+### Major Changes
+
+- 0fcef9b: ADR-0095 D1: tenant isolation is now **Layer 0** — an independent, always-first,
+  AND-composed filter (`tenant-layer.ts`), no longer a wildcard `tenant_isolation`
+  RLS policy OR-merged with business RLS. The effective row filter is
+  `Layer0(tenant) AND Layer1(business RLS)`; the two share no compiler, merge step,
+  or bypass bit. The superuser bypass now exempts the tenant wall only as a Layer 0
+  rule (platform-admin posture + object posture permits: private / platform-global
+  / better-auth-managed), never via a business-RLS short-circuit.
+
+  **BREAKING (multi-org `tenancy.mode = 'multi'` deployments only; `single` mode is
+  inert and unchanged).** Retiring the OR-merged tenant policy resolves four
+  behavior deltas, all toward stronger/correcter isolation:
+
+  - **(a) Cross-tenant read leak closed.** A permissive business RLS policy (e.g.
+    `status == 'public'`) no longer OR-widens tenant scope; a foreign-org row it
+    matched is now invisible.
+  - **(b) Member by-id writes narrow to owner-only.** The OR-merge silently widened
+    `owner_only_writes` (`created_by == me`) back to org-wide, so a member could
+    by-id update/delete _any_ record in their org. Writes are now owner-scoped as
+    authored. **Migration:** if your deployment intentionally relied on members
+    editing each other's records org-wide, grant an explicit per-object edit
+    permission set (position-distributed) where that is wanted — the baseline
+    `member_default` no longer permits it.
+  - **(c) Global-catalog objects visible to members.** On a `tenancy.enabled:false`
+    object, members were scoped by a phantom `organization_id` filter (a column
+    such objects lack); Layer 0 correctly treats them as non-tenant, so the global
+    catalog is visible.
+  - **(e) No-active-org writes fail closed.** A write by a principal with no active
+    organization on a tenant object is now denied (was owner-scoped only).
+
+  `tenant_isolation` is retired from the seeded `organization_admin` /
+  `member_default` / `viewer_readonly` sets; the `_self` / `_org` identity-table
+  carve-outs and `owner_only_writes/deletes` are unchanged. Customized seeded sets
+  keep their overlays (ADR-0094). The driver-level `applyTenantScope` seam is
+  untouched. See ADR-0095 and framework#2936 (the `extractTargetField` `==` blind
+  spot this exposes, tracked separately).
+
+- 2ae78c6: fix(plugin-security): #2937 — Layer 0 insert post-image 租户检查（伪造 organization_id 的用户 insert 现被拒）
+
+  **安全修复 + 行为变更（release-notes callout）。** 多组织模式(`tenancy.mode='multi'` +
+  `@objectstack/organizations`)下，一个普通用户此前可以 `insert` 一条**伪造 `organization_id`**
+  (指向别的租户)的业务记录并使其落进受害租户 —— Layer 0 的租户墙 AND-composed 到读 +
+  update/delete 的 pre-image，但 insert 没有 pre-image、也不带 AST，从未被门控(ADR-0095 D1
+  读侧 W1 的写侧未竟部分)。
+
+  新增 SecurityPlugin 中间件步骤 3.7:对 insert 的 **post-image** 复用读侧同一套 Layer 0 决策
+  (`computeInsertTenantCheckFilter` → `computeLayeredRlsFilter` 的 `layer0`)做校验 ——
+  一个**显式提供**的 `organization_id` 必须等于调用者的活动组织,否则 fail-closed 拒绝。规则与
+  读侧完全一致:单组织/隔离未激活、非租户对象(无 `organization_id` 列或 `tenancy.enabled:false`)、
+  platform-admin 姿态豁免的对象均不适用;无活动组织的用户提供任意 org_id → 拒(deny sentinel)。
+
+  **行为 delta(需注意):** 此前能成功的「带跨租户 `organization_id` 的用户级 insert」现被拒绝。
+  **缺省(不提供 `organization_id`)的 insert 不受影响** —— 补全仍由 `@objectstack/organizations`
+  的 auto-stamp 负责(职责分离,因此本检查与 auto-stamp 中间件的注册顺序无关)。系统上下文
+  (`isSystem`,含 import 引擎 / 迁移 / 每-org seed replay·clone·orphan-claim 的 `SYSTEM_CTX`)
+  在中间件入口即短路,合法的「代客设置 org_id」写路径**完全不受影响**。
+
+  矩阵门:`authz-matrix-gate.test.ts` 新增 `[#2937] Layer 0 insert post-image tenant guard`
+  八格(伪造异租户 → 拒、同租户 → 通过、缺省 → 放行、无活动组织 → 拒、platform-admin 私有对象豁免、
+  public 业务对象不豁免、tenancy-disabled 对象不适用、单组织模式不检查)。授权一致性 ledger
+  新增 `multi-tenant-insert-postimage` 行。配套 cloud `@objectstack/organizations` 的 auto-stamp
+  权威覆盖(纵深防御)。Closes objectstack-ai/framework#2937。
+
+- ef70521: fix(plugin-security): 堵跨租户 UPDATE 写 + org_admin 越 private 租户对象墙（security）
+
+  **安全修复 + 行为变更（release-notes callout）。** 修复 security review 确认的两个租户墙授权漏洞，两者同在 `security-plugin.ts` / `tenant-layer.ts` 的写侧热路径。多组织模式（`tenancy.mode='multi'` + `@objectstack/organizations`）下生效。
+
+  **Finding 1 [BLOCKER] — 经 UPDATE 重指 `organization_id` 的跨租户写。** #2937 的 Layer 0 insert post-image 检查（中间件 step 3.7）只管 insert。对称的 update 路径无人管：成员拥有 org A 的记录 R，对 R 发 by-id 或 bulk `update` 带 `{organization_id: 受害者 org B}`，即可把行**移动进任意租户**——auto-stamp（insert-only）、FLS、服务端未强制的 `readonly`、Layer 0 pre-image（只校验旧 org）、显式 RLS check 全部漏过。修法（Option B，最小面 + 与 insert 对称）：把 step 3.7 的 Layer 0 post-image 检查扩到 update，复用**同一套** Layer 0 决策（`computeWriteTenantCheckFilter` → `computeLayeredRlsFilter` 的 `layer0`）。一个**显式提供**的 `organization_id` 必须过 Layer 0（== 调用者活动组织），否则 fail-closed 拒绝——这令非平台用户上下文里 `organization_id` **事实不可变**（只有活动组织值能过，而 pre-image 已把目标锁在活动组织内，故重指到任何**其他**租户被拒）。缺省（不碰 org_id）的 update 不受影响；bulk update 的跨租户 change-set 也被堵。
+
+  **Finding 2 [HIGH] — org_admin 在 private 租户对象上越租户墙。** Layer 0 跨租户豁免门此前用「持有 `viewAllRecords`/`modifyAllRecords`」判定。`organization_admin`（自动授给每个 org owner/admin）经其 `'*'` 通配持有这两个超级位，于是在 `access.default:'private'` 的**租户业务对象**上触发豁免 → 零过滤 → 读写所有租户的行。修法：把 Layer 0 豁免门从「超级位」收窄为**真正的平台管理员判定**（`hasPlatformAdminPosture`：持有平台专属能力 `manage_metadata`/`manage_platform_settings`/`studio.access`/`manage_users`，即 `admin_full_access` 携带而 `organization_admin` 刻意不给的那组）。超级位继续只驱动 Layer 1 业务 RLS 短路（TENANT_ADMIN 组织内见全行、无所有权收窄）。因新豁免是旧门的严格子集，只会**收窄**、绝不放宽（fail-safe）。
+
+  **行为收窄（预期的安全收窄，需注意）：** org admin 不再在 private/platform-global/better-auth 的**租户**对象上越租户墙——它现在被 Layer 0 墙到自己的 org。真·平台管理员（`admin_full_access` + 平台 systemPermissions）仍豁免；better-auth 托管身份表 carve-out 不受影响（无 `organization_id` 列，Layer 0 本就 inert）。系统上下文（`isSystem`，含 import/迁移/seed 的合法跨组织移动）在中间件入口即短路，完全不受影响。
+
+  **为何不用 `ctx.posture` 作豁免门：** B2 已把 `PLATFORM_ADMIN` posture 落进 `resolve-authz-context.ts` 的 `ctx.posture`，但该字段**未被 plumb 进** enforcement 中间件收到的 ExecutionContext（rest-server 与 runtime dispatcher 都丢弃了它），直接消费会静默 no-op。改用平台专属能力探针，读的是 enforcement 已用的同一套 permission sets，覆盖所有入口，且天然 fail-safe。
+
+  矩阵门：`authz-matrix-gate.test.ts` 更新 `private_obj.org_admin` 格（read `null` → `{organization_id:'org-1'}`）并新增 `[Finding 1 …]`（8 格：成员重指异租户 → 拒、同租户 → 通过、不碰 org_id→ 放行、无活动组织 → 拒、org_admin 重指 → 拒、platform-admin private 对象 → 放行、public 对象 → 拒、单组织 → 不检查）与 `[Finding 2 …]`（5 格：org_admin private 对象读/写墙到本租户、真平台管理员仍豁免、org_admin public 对象回归、better-auth carve-out 不受影响）。授权一致性 ledger 更新 `multi-tenant-write-postimage`（覆盖 insert+update）并新增 `multi-tenant-exemption-posture`。关联 objectstack-ai/framework#2920。
+
+### Minor Changes
+
+- 5febe3f: feat(plugin-security): A4 — managed_by tri-state unification + listView exposure (#2920)
+
+  Unifies the record-level provenance vocabulary across the three RBAC catalogs
+  (`sys_capability`, `sys_permission_set`, `sys_position`) onto a single tri-state
+  — **platform / package / admin** — so an administrator reads one vocabulary for
+  "who owns this" everywhere.
+
+  - **`sys_permission_set.managed_by`** and **`sys_position.managed_by`** converted
+    from free `text` to a constrained `select` matching `sys_capability` (options
+    `platform` / `package` / `admin`, `defaultValue: 'admin'`, `readonly`).
+  - **Writers re-stamped to canonical vocab:** built-in identity/anchor positions
+    now seed `managed_by: 'platform'` (was `'system'`); env/Studio-authored
+    permission sets project as `managed_by: 'admin'` (was `'user'`). Declared
+    package sets (`'package'`) and platform capabilities (`'platform'`) were
+    already canonical.
+  - **`sys_position` list views** (`active` / `default_positions` / `custom` /
+    `all_positions`) now surface the `managed_by` column, matching the capability
+    and permission-set views.
+  - **Back-compat, no destructive migration.** No runtime path branches on the
+    legacy values — every access decision keys on `'package'` / `'platform'`
+    (both unchanged) — so the rename never changes an authorization outcome.
+    Built-in positions and declared sets self-heal on their next bootstrap upsert;
+    a new idempotent `kernel:ready` reconciler (`normalizeManagedByVocab`) rewrites
+    the residual legacy values (`system`→`platform`, `config`→`package`,
+    `user`→`admin`) on existing `sys_position` / `sys_permission_set` rows.
+  - **i18n:** `managed_by` field + option labels (`platform` / `package` / `admin`)
+    added for `sys_capability` / `sys_permission_set` / `sys_position` across
+    en / zh-CN / ja-JP / es-ES.
+
+  Pairs with objectui `feat(app-shell): A4 — provenance tri-state badge`
+  (framework#2920).
+
+- e62c233: feat(spec,plugin-security): package-level capability declaration API (ADR-0066 D1)
+
+  Packages can now DEFINE their own authorization capabilities explicitly via the
+  new `defineCapability` factory and a stack's `capabilities` array, instead of
+  relying on the implicit "derive an untitled capability from whatever a permission
+  set references in `systemPermissions[]`" back-door.
+
+  - `@objectstack/spec`: new `defineCapability` / `CapabilityDeclarationSchema`
+    (`{ name, label?, description?, scope, packageId? }`) and a `capabilities`
+    field on the stack definition.
+  - `@objectstack/plugin-security`: new `bootstrapDeclaredCapabilities` seeds
+    declared capabilities into `sys_capability` with `managed_by:'package'` +
+    `package_id` provenance (new `package_id` field on the object). Idempotent,
+    upgrade-aware; refuses to hijack curated platform capabilities or another
+    package's rows, never clobbers admin-authored rows, and CLAIMS a pre-existing
+    derived placeholder (upgrading it to package provenance). The implicit
+    derive-from-`systemPermissions` path still runs for back-compat but now skips
+    any explicitly-declared name so it can't clobber authored metadata.
+  - `@objectstack/runtime`: stack-declared `capabilities` are registered into the
+    metadata registry (type `capability`) so the boot seeder can read them.
+  - `@objectstack/lint`: `validateCapabilityReferences` treats
+    `stack.capabilities` names as a known capability source.
+
+  A capability is not a contract: DEFINE it (`defineCapability`), GRANT it
+  (`systemPermissions`), REQUIRE it (`requiredPermissions`) — no `inputs`.
+  Aligns with ADR-0094 D5 (retire implicit `managed_by`-guessing back-doors).
+
+- a581a65: feat(plugin-security): C2-β — explain 引擎 record 粒度行级归因 (#2920)
+
+  `explain(principal, object, operation, recordId?)` 现支持记录级解释。透传 `recordId` 时，引擎在对象级流水线之上叠加**行级归因**，全部复用 enforcement 同一批函数（explained-by-construction）：
+
+  - **`tenant_isolation` Layer 0**：作为永远最先的层被 prepend；每层打上 `kernelTier`（`layer_0_tenant` vs `layer_1_business`），可区分「租户墙挡的」还是「业务 RLS 挡的」。
+  - **每层 `record` 归因**（tenant / owd_baseline / sharing / rls）：`outcome`（admitted/excluded/not_evaluated）、有效 `rowFilter`、`matchesRecord`（用 `@objectstack/formula` 的 `matchesFilterCondition` 对同一条 FilterCondition 求值)、命中的 `rules[]`（tenant_filter/owd_baseline/ownership/record_share/sharing_rule/team/rls_policy，含 grants/via/effect）。
+  - **顶层 `record` 判定**：`visible` + `decidedBy` 决定性层。读走复合行过滤匹配，写走 sharing service 的 `canEdit`（均为 enforcement 原语）。
+  - **`principal.posture`**：ADR-0095 D2 档位（PLATFORM_ADMIN/TENANT_ADMIN/MEMBER/EXTERNAL）的 B2 stand-in 派生（复用 `resolveAuthzContext` 已投影的 platform_admin / org 角色证据），待 B2 合并后替换。
+  - `computeRlsFilter` 重构为 `computeLayeredRlsFilter`（暴露 `{ layer0, layer1 }` 拆分）+ 薄 andCompose 包装，单一代码路径，行级归因不会与执行漂移。
+  - REST `security.explain`（GET/POST）接受可选 `recordId`。
+
+  **向后兼容**:无 `recordId` 的对象级请求输出 **byte-identical**——无 `tenant_isolation` 层、无 `kernelTier`、无 `posture`、无 `record`。
+
+### Patch Changes
+
+- ca2b2f6: fix(plugin-security): #2936 — RLS field-existence / tenancy-disabled safety nets now recognize canonical `==`
+
+  `extractTargetField` (the lightweight left-hand-field parser feeding the Layer 1
+  **field-existence** net and the **tenancy-disabled** skip net in
+  `computeLayeredRlsFilter`) only matched the legacy single-`=` / `IN` shape. It
+  returned `null` for canonical CEL `==` (`field == …`), which is how real seeds
+  and business policies author equality. A `null` target field means "keep the
+  policy", so both safety nets were **inert** for every `==` policy: a wildcard
+  policy targeting a column the object lacks was NOT failed closed, and a
+  `==`-form `organization_id` policy on a `tenancy.enabled:false` object was NOT
+  skipped. The regex now recognizes `==` (listed before `=` so the ordered
+  alternation does not mis-match the first `=`), alongside the existing `=`/`IN`.
+  Recognition is only **extended** — the net semantics are unchanged, and
+  `!=`/`>`/`<`/`>=`/`<=` still return `null` (conservative keep), matching prior
+  behavior for any unmatched shape.
+
+  Behavior delta (fail-closed strengthening, same effective visibility): the
+  wildcard `owner_only_writes` / `owner_only_deletes` seed policies
+  (`created_by == current_user.id`) now correctly fail closed on an object that
+  lacks a `created_by` column (platform-global / system tables). Previously they
+  slipped the net and compiled to a phantom `{ created_by: … }` filter against a
+  missing column — a driver-dependent, effectively-deny result; now the net drops
+  the sole applicable write policy and yields the deny sentinel. A member could not
+  by-id write such a column-less object either way, so the visible/writable row set
+  is unchanged; only the mechanism is now an explicit fail-closed deny. All ordinary
+  tenant/business objects carry `created_by`, so they are unaffected (proven green by
+  the dogfood authz-conformance + RLS matrices). The tenancy-disabled skip net has no
+  effect on any current seed (no `==` seed policy targets `organization_id` on a
+  tenancy-disabled object). The tenant wall itself is Layer 0 (`tenant-layer.ts`),
+  which never used this parser, so tenant isolation is unaffected (ADR-0095 D1).
+
+- 698454e: Security fix: constrain self-delegation (D3) position anchor to prevent lateral
+  visibility escalation (cloud#830 follow-up).
+
+  cloud#830 (C1 position-anchor) made `sys_user_position.business_unit_id`
+  visibility **load-bearing** — it is the readScope depth anchor, so a
+  `unit`/`unit_and_below` holder sees the owner set rooted at that BU (and, for
+  `unit_and_below`, its whole subtree). The delegated-admin gate's self-service
+  delegation path (`assertSelfDelegation`) stamped this anchor with **no
+  subtree/source constraint**: a holder of a delegatable, non-admin-scope position
+  anchored at a LOW business unit could delegate it to a co-conspirator with an
+  **ancestor / arbitrary-high** anchor, leaking that BU's whole subtree of member
+  records — visibility beyond the delegator's own range. Mutual delegation could
+  grant it both ways.
+
+  The gate now requires a self-delegated `business_unit_id` to fall inside the
+  delegator's **own effective anchor** for that position (the subtree of their own
+  direct holding's anchor, or of their member BU when the holding is unanchored) —
+  the same "assignments must target your subtree" spirit as the D12
+  delegated-admin boundary. Fail-closed: an anchor that cannot be proven inside the
+  delegator's range is rejected. Unanchored delegation rows keep prior behavior
+  (the delegate resolves to their own member BU — not a widening). The
+  "anchoring only narrows, never widens" invariant now holds on the D3 path too.
+
+- 29a4c90: fix(plugin-security): explain posture 证据对齐 enforcement 派生（消除标签漂移）
+
+  Security review 低危项。explain-engine 的 `derivePosture(context)` 之前用**松名字匹配**作
+  posture 证据——`permissions.includes(ADMIN_FULL_ACCESS)`（不校验非作用域）+ `positions.includes(
+'org_owner'/'org_admin')`（读 better-auth 角色），比 enforcement（`resolve-authz-context.ts` 的
+  `hasPlatformAdminGrant`：要求**非作用域 admin_full_access user grant**；TENANT_ADMIN 用
+  `organization_admin` **能力**而非角色）更松，可能让 explain 面板给运维显示**偏高**的 posture 标签
+  （作用域 org-admin grant 被误标 PLATFORM/TENANT_ADMIN）。
+
+  修法——让 explain 的 posture 走 enforcement 已用的同一份证据：
+
+  - **优先直接消费 `ctx.posture`**：principal 经完整 `resolveAuthzContext` 时已带 enforcement 派生的
+    rung，逐字返回 → 结构上不可能漂移。
+  - **回退（explain 用 `buildContextForUser` 自建 context，不经完整 resolveAuthzContext）**：复制
+    enforcement 的非作用域 grant 判定——`buildContextForUser` 现按与 `hasPlatformAdminGrant` 逐字节
+    一致的规则（`admin_full_access` 且 `organization_id == null` 的 active user grant）计算并挂出
+    `hasPlatformAdminGrant`；`derivePosture` 以此 + 投影出的 `platform_admin` 内建岗位判 PLATFORM_ADMIN，
+    以 `organization_admin` **能力**判 TENANT_ADMIN，**不再**读 `org_owner`/`org_admin` 角色岗位
+    （ADR-0095 D3：角色只是 provisioning 来源，非裁决输入 — explain 侧同样闭合 #2836 dual-track）。
+  - 保留 explain 特有的 **guest → EXTERNAL** 底（enforcement floor 是 MEMBER），且置于最前。
+
+  只改 explain 的 **posture 标签**证据，不改 explain 的 allow/deny verdict（来自复用的 enforcement
+  filter），不改 enforcement。#2947 跟踪的「posture 未 plumb 进 enforcement context」更广缺口不在本
+  任务范围。关联 #2920。
+
+- 5774a75: 内置行写护栏：`sys_position` / `sys_capability` 的平台/应用托管行不再可被客户管理员删改。
+
+  `sys_permission_set` 早有两道门写护栏（`assertPackageManagedWriteGate`）拦截对 package 托管行的写入，但 `sys_position` / `sys_capability` 缺失对应保护——平台/应用发布的系统岗位与能力（provenance 记录在 `managed_by`）可被管理员直接 delete / update 直达驱动，静默破坏应用的授权基线（ADR-0049：provenance 字段存在却无强制 = 正是要补的 enforcement gap）。
+
+  新增 **`assertSystemRowWriteGate`**（`packages/plugins/plugin-security/src/security-plugin.ts`，data-write hook 接线与 package 门同处），对这两个对象的托管行施加一道无条件的数据层边界：
+
+  - **禁止伪造托管来源**：管理员门的 insert / update 载荷（单对象或数组）不得把 `managed_by` 盖成平台/应用值——只有携带 `isSystem` 的平台 seeder / 包发布路径可写；同时封堵 update-to-forge（把自建行改 badge 成托管行）。
+  - **拒绝改删托管行**：对 `managed_by` 已是平台/应用值的行，`delete` / `update` / `transfer` / `restore` / `purge` 一律拒绝。与 `sys_permission_set` 不同，这两个对象没有 ADR-0094 overlay write-through，故写护栏必须在此层直接拒绝，而非下放给下游翻译。
+  - **管理员自建行不受限**：`managed_by` 为 `user`/∅（sys_position）或 `admin`（sys_capability）的行完全归管理员所有（含委派管理员在自己 subtree 内的自建行）。
+
+  护栏 fail-closed 且不依赖调用方授权——持 `modifyAllRecords` 的超管也无法删除平台岗位。两对象的 `managed_by` 词表不同（sys_position：`system`/`config` 托管，`user`/∅ 自建；sys_capability：`platform`/`package` 托管，`admin` 自建），网关按对象分别判定。错误信息仅含业务文案（"此岗位/能力由 平台|应用包 提供，不可删除/修改"）。
+
+  与 delegated-admin 边界不冲突：`GOVERNED_OBJECTS` 本就不含这两个对象，委派管理仍治理 RBAC 链接表而非定义对象。
+
+- Updated dependencies [02a014b]
+- Updated dependencies [28b7c28]
+- Updated dependencies [13749ec]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [31d04d4]
+  - @objectstack/platform-objects@15.0.0
+  - @objectstack/spec@15.0.0
+  - @objectstack/core@15.0.0
+  - @objectstack/formula@15.0.0
+
 ## 14.8.0
 
 ### Minor Changes

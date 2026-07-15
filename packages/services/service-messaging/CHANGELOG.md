@@ -1,5 +1,17 @@
 # @objectstack/service-messaging
 
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [28b7c28]
+- Updated dependencies [13749ec]
+- Updated dependencies [e62c233]
+- Updated dependencies [ed61c9b]
+- Updated dependencies [31d04d4]
+  - @objectstack/spec@15.0.0
+  - @objectstack/core@15.0.0
+
 ## 14.8.0
 
 ### Minor Changes
