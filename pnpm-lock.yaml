@@ -748,12 +748,18 @@ importers:
       '@objectstack/objectql':
         specifier: workspace:*
         version: link:../objectql
+      '@objectstack/plugin-audit':
+        specifier: workspace:*
+        version: link:../plugins/plugin-audit
       '@objectstack/plugin-auth':
         specifier: workspace:*
         version: link:../plugins/plugin-auth
       '@objectstack/plugin-security':
         specifier: workspace:*
         version: link:../plugins/plugin-security
+      '@objectstack/service-storage':
+        specifier: workspace:*
+        version: link:../services/service-storage
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec

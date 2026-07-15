@@ -93,6 +93,15 @@ export interface BootOptions {
    * default boot stays lean for apps that don't exercise flows. Default `false`.
    */
   automation?: boolean;
+  /**
+   * Extra plugins to register between the app/service pairs and the
+   * SecurityPlugin — the slot where `objectstack dev` auto-loads optional
+   * service pairs the lean harness omits (e.g. `StorageServicePlugin` +
+   * `AuditPlugin` for the attachments surface). The caller instantiates the
+   * plugins so `@objectstack/verify` gains no new dependencies. Registered in
+   * array order. Default `[]`.
+   */
+  extraPlugins?: unknown[];
 }
 
 /**
@@ -187,6 +196,13 @@ export async function bootStack(
   if (opts.automation) {
     const { AutomationServicePlugin } = await import('@objectstack/service-automation');
     await kernel.use(new AutomationServicePlugin({ suspendedRunStore: 'memory' }));
+  }
+
+  // Caller-supplied optional service pairs (see BootOptions.extraPlugins).
+  // Before SecurityPlugin, mirroring the CLI's ordering for service pairs.
+  for (const plugin of opts.extraPlugins ?? []) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await kernel.use(plugin as any);
   }
 
   await kernel.use(opts.security ?? new SecurityPlugin());

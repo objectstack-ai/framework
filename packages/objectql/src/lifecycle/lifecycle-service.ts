@@ -710,14 +710,17 @@ export class LifecycleService {
       });
       if (!rows?.length) break;
       const confirmed = (await guard(object, rows)).filter((id) => id !== null && id !== undefined);
-      if (confirmed.length > 0) {
+      // Per-id deletes (NOT a `{$in}` filter): the engine's delete path reads
+      // `where.id` as a scalar target, and by-id deletes get referential
+      // cascade handling a filter-delete would bypass.
+      for (const id of confirmed) {
         await engine.delete(object, {
-          where: { id: { $in: confirmed } },
+          where: { id },
           multi: true,
           context: { ...SYSTEM_CTX },
         });
-        total += confirmed.length;
       }
+      total += confirmed.length;
       if (confirmed.length < rows.length || rows.length < REAP_GUARD_BATCH_SIZE) break;
     }
     return total;

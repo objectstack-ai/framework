@@ -321,7 +321,7 @@ describe('LifecycleService.sweep — reap guard', () => {
     { name: 'sys_file', lifecycle: { class: 'transient', ttl: { field: 'deleted_at', expireAfter: '30d' } } },
   ];
 
-  it('deletes only guard-confirmed ids, by $in, after fetching candidates with the cutoff filter', async () => {
+  it('deletes only guard-confirmed ids, per id, after fetching candidates with the cutoff filter', async () => {
     const rows = [
       { id: 'f1', deleted_at: '2020-01-01T00:00:00Z' },
       { id: 'f2', deleted_at: '2020-01-02T00:00:00Z' },
@@ -338,9 +338,9 @@ describe('LifecycleService.sweep — reap guard', () => {
     expect(finds[0].where).toEqual({ deleted_at: { $lt: isoCutoff('30d') } });
     expect(finds[0].context).toEqual({ isSystem: true, positions: [], permissions: [] });
     expect(guard).toHaveBeenCalledWith('sys_file', rows);
-    expect(deletes).toHaveLength(1);
-    expect(deletes[0].where).toEqual({ id: { $in: ['f1', 'f3'] } });
-    expect(deletes[0].multi).toBe(true);
+    // Per-id deletes — the engine's delete path reads `where.id` as a scalar
+    // target; a `{$in}` there would be bound as an object by the driver.
+    expect(deletes.map((d) => d.where)).toEqual([{ id: 'f1' }, { id: 'f3' }]);
     expect(report.swept).toEqual([
       { object: 'sys_file', class: 'transient', policy: 'ttl', cutoff: isoCutoff('30d'), deleted: 2 },
     ]);
@@ -410,9 +410,7 @@ describe('LifecycleService.sweep — reap guard', () => {
     const report = await svc.sweep();
 
     expect(finds).toHaveLength(2);
-    expect(deletes).toHaveLength(2);
-    expect((deletes[0].where.id.$in as string[]).length).toBe(500);
-    expect((deletes[1].where.id.$in as string[]).length).toBe(10);
+    expect(deletes).toHaveLength(510); // 500 confirmed from page 1 + 10 from page 2, per id
     expect(report.swept[0].deleted).toBe(510);
   });
 });
