@@ -2,6 +2,7 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { createHash } from 'node:crypto';
+import { checkProtocolCompat } from '@objectstack/metadata-core';
 import type { ObjectStackManifest } from '@objectstack/spec/kernel';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 
@@ -210,6 +211,35 @@ export class PackageServicePlugin implements Plugin {
         for (const rec of await packageService.list()) {
           const id = rec?.manifest?.id;
           if (id && !registry.getPackage(id)) {
+            // ADR-0087 D1 — protocol handshake on the boot-time rehydration
+            // path (the LOAD seam; the install seam already checks in
+            // metadata-protocol). A durable package persisted under an older
+            // runtime whose declared `engines.protocol` excludes this runtime's
+            // major is REFUSED here with the structured diagnostic — skipped,
+            // never loaded — instead of resurfacing later as a deep schema or
+            // renderer crash. Boot itself continues: one stale package must not
+            // brick the environment. Absent/unparsable ranges are admitted
+            // (grandfathering; never a false rejection).
+            const compat = checkProtocolCompat(rec.manifest);
+            if (compat.status === 'incompatible') {
+              logger.error(
+                `[protocol] refusing to rehydrate package '${id}' from sys_packages: ` +
+                  `${compat.diagnostic.message} ` +
+                  JSON.stringify(compat.diagnostic),
+              );
+              continue;
+            }
+            if (compat.status === 'no-range') {
+              logger.warn(
+                `[protocol] package '${id}' declares no engines.protocol range; ` +
+                  `rehydrating without a compatibility check (ADR-0087).`,
+              );
+            } else if (compat.status === 'unparsed-range') {
+              logger.warn(
+                `[protocol] package '${id}' declares an unrecognized ${compat.source} range ` +
+                  `'${compat.requiredRange}'; skipping the protocol handshake (ADR-0087).`,
+              );
+            }
             registry.installPackage(rec.manifest);
             hydrated++;
           }

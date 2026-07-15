@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Plugin, PluginContext, wireAuthoredTranslationSync } from '@objectstack/core';
+import { assertProtocolCompat } from '@objectstack/metadata-core';
 import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { SeedLoaderService } from './seed-loader.js';
 import { loadDisabledPackageIds } from './package-state-store.js';
@@ -136,10 +137,19 @@ export class AppPlugin implements Plugin {
         const sys = this.bundle.manifest || this.bundle;
         const appId = sys.id || sys.name;
 
-        ctx.logger.info('Registering App Service', { 
-            appId, 
+        // ADR-0087 D1 — protocol handshake on the code-defined-stack LOAD seam,
+        // BEFORE the manifest is decomposed into the registry. A bundle whose
+        // declared `engines.protocol` excludes this runtime's major fails boot
+        // fast with the structured OS_PROTOCOL_INCOMPATIBLE diagnostic (naming
+        // the `migrate meta` command) instead of crashing later in a schema
+        // `.parse()` or renderer contract. Absent/unparsable ranges are admitted
+        // with a warning (grandfathering; never a false rejection).
+        assertProtocolCompat(sys, undefined, (m) => ctx.logger.warn(`[AppPlugin] ${m}`));
+
+        ctx.logger.info('Registering App Service', {
+            appId,
             pluginName: this.name,
-            version: this.version 
+            version: this.version
         });
         
         // Register the app manifest directly via the manifest service.

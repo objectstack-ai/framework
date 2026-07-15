@@ -28,6 +28,13 @@ export interface ApplyConversionsOptions {
    */
   onNotice?: (notice: ConversionNotice) => void;
   /**
+   * Also apply conversions marked `retiredFromLoadPath` (default `false`).
+   * The load seam never sets this — a retired entry is chain history, not a
+   * live window. The migration chain and the fixture CI set it so graduated
+   * transforms stay replayable forever (ADR-0087 D3).
+   */
+  includeRetired?: boolean;
+  /**
    * Sink for each structured **conflict** — a rename refused because its old
    * token is a live name in this environment (see {@link ConversionContext}).
    * Populated by the runtime load seam; absent on the build/validate seam.
@@ -53,10 +60,14 @@ export function applyConversions(
   stack: Record<string, unknown>,
   options: ApplyConversionsOptions = {},
 ): Record<string, unknown> {
-  const { onNotice, onConflict, reservedNodeTypes } = options;
+  const { onNotice, onConflict, reservedNodeTypes, includeRetired = false } = options;
   let current = stack;
 
   for (const conversion of ALL_CONVERSIONS) {
+    // A retired entry is graduated chain history (ADR-0087 D2 window, second
+    // half): the loader no longer accepts its old shape — only `migrate meta`
+    // (and the fixture CI) replays it, via `includeRetired`.
+    if (conversion.retiredFromLoadPath && !includeRetired) continue;
     const retiresIn = conversion.toMajor + 1;
     const context: ConversionContext = {
       reservedNodeTypes,
@@ -122,11 +133,14 @@ export function applyConversionsToFlow<T>(flow: T, options: ApplyConversionsOpti
  * Collect the notices a stack would emit without needing an external sink —
  * convenience for `validate` / `lint` / the future MCP `spec_deprecations` tool.
  */
-export function collectConversionNotices(stack: Record<string, unknown>): {
+export function collectConversionNotices(
+  stack: Record<string, unknown>,
+  options: Omit<ApplyConversionsOptions, 'onNotice'> = {},
+): {
   stack: Record<string, unknown>;
   notices: ConversionNotice[];
 } {
   const notices: ConversionNotice[] = [];
-  const converted = applyConversions(stack, { onNotice: (n) => notices.push(n) });
+  const converted = applyConversions(stack, { ...options, onNotice: (n) => notices.push(n) });
   return { stack: converted, notices };
 }

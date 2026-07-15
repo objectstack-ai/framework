@@ -4,6 +4,7 @@ import { Args, Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { normalizeStackInput } from '@objectstack/spec';
+import { PROTOCOL_MAJOR } from '@objectstack/spec/kernel';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
@@ -278,6 +279,33 @@ export function lintConfig(config: any): LintIssue[] {
           `is an optional convention, not a collision-avoidance requirement.`,
         path: `${key}[${i}].name`,
         ...(suggestion ? { fix: suggestion } : {}),
+      });
+    }
+  }
+
+  // ── Protocol compatibility range (ADR-0087 D1) ──
+  // The `engines.protocol` handshake is only as good as its coverage: a package
+  // that declares no range is grandfathered at install/load (warn-only), so the
+  // mismatch it would have caught surfaces as a deep crash instead. This nudge
+  // is the ratchet that closes grandfathering — scaffolds stamp the range for
+  // new packages; lint flags existing ones that never declared it.
+  // Scoped to configs that declare a manifest — a bare metadata fragment (no
+  // package identity) has nowhere to hang an engines range.
+  {
+    const manifest = config.manifest as Record<string, any> | undefined;
+    const hasRange =
+      typeof manifest?.engines?.protocol === 'string' ||
+      typeof manifest?.engines?.platform === 'string' ||
+      typeof manifest?.engine?.objectstack === 'string';
+    if (manifest && !hasRange) {
+      issues.push({
+        severity: 'warning',
+        rule: 'protocol/missing-engines-range',
+        message:
+          'Package declares no `engines.protocol` range — a protocol-incompatible runtime ' +
+          'cannot refuse it at the boundary (ADR-0087 D1) and it loads unchecked (grandfathered).',
+        path: 'manifest.engines.protocol',
+        fix: `engines: { protocol: '^${PROTOCOL_MAJOR}' }`,
       });
     }
   }

@@ -1,6 +1,6 @@
 # ADR-0087: Metadata protocol upgrades for AI consumers — conversion over notification, executable migrations, machine-verifiable upgrades
 
-**Status**: Proposed (2026-07-04)
+**Status**: Accepted (2026-07-04, #2582) · trued up to as-built 2026-07-15 (see Addendum)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0059](./0059-third-party-backward-compatibility-gates.md) (layered backward-compat gates — this ADR is its consumer-facing sequel), [ADR-0078](./0078-no-silently-inert-metadata.md) (no declarable-but-unenforced metadata — the un-checked `engines.protocol` is exactly this class), [ADR-0025](./0025-plugin-package-distribution.md) (§3.2 `engines.protocol` / `engines.platform` compatibility ranges, §3.10 #3 protocol-first check order), [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (the authoring population this ADR designs for), [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove), [ADR-0054](./0054-runtime-proof-for-authorable-surface.md) (prove-it-runs), AGENTS.md Prime Directive #12 (contract-first, no consumer-side dialect fallbacks — §"Why the conversion layer does not violate PD #12" draws the line)
 **Consumers**: `@objectstack/spec` (protocol version constant, conversion layer, deprecation/change registries), `@objectstack/cli` (`validate`, `doctor`, `migrate meta`), the runtime metadata loader (handshake + conversion), `@objectstack/mcp` (the AI-native change/migration surface), `@objectstack/create-objectstack`, the Release workflow, and every third-party consumer — whose maintainer is assumed to be an **AI agent**
@@ -312,3 +312,72 @@ scaling framework-side execution when the consumers can execute themselves.
   consumer still gets strictly more than the pre-ADR world (fail-fast, a generated
   guide, runnable migrations) — the bet has no downside for them, only a smaller
   upside.
+
+---
+
+## Addendum (2026-07-15) — as-built true-up
+
+### Phase status
+
+- **P0 — handshake (D1): shipped.** `PROTOCOL_VERSION` + the pure handshake core
+  landed in #2650 (install seam). The **load seams** followed: the boot-time
+  durable-package rehydration path (`@objectstack/service-package`) refuses an
+  incompatible `sys_packages` row with the structured diagnostic and continues
+  booting; `AppPlugin` (code-defined stacks) fails fast before the manifest is
+  decomposed. The grandfathering ratchet is closed from both ends:
+  `objectstack lint` warns on a manifest with no range
+  (`protocol/missing-engines-range`), and the `create-objectstack` template
+  stamps `engines: { protocol: '^<major>' }` (re-stamped at version time by
+  `scripts/sync-template-versions.mjs`).
+- **P1 — conversion layer (D2): shipped** in #2897, seeded with the retroactive
+  protocol-11 table; the PD #12 retirement path was proven on the CRUD
+  `filters` fallback.
+- **P2 — chain + manifest + guide (D3/D4): shipped.** #2897 landed the chain and
+  `composeSpecChanges`; this true-up adds the release side: `spec-changes.json`
+  is generated from the registries (`gen:spec-changes`, drift-checked in CI),
+  ships inside the npm artifact together with `api-surface.json`, and is
+  attached to each `@objectstack/spec` GitHub Release with the `added[]`/
+  `removed[]` arrays filled from the api-surface diff against the previously
+  *published* release (`scripts/release-spec-changes.sh`). The upgrade guide is
+  now literally a projection: `docs/protocol-upgrade-guide.md` is generated
+  from the registries (`gen:upgrade-guide`) and drift-checked in CI.
+- **P3 — MCP tools + RC discipline (D6): deferred, evidence-gated** (as the ADR
+  Boundaries intended): built when external-consumer demand justifies the
+  operational surface. Nothing else in this ADR depends on it.
+
+### The load-window's second half is now mechanical
+
+`MetadataConversion.retiredFromLoadPath` implements "retired from the load path
+in N+1 — but never deleted": a retired entry is skipped by the loader
+(`applyConversions`) and replayed only by the chain (`migrate meta`) and the
+fixture CI. Live-window entries (currently the protocol-15 ADR-0089 visibility
+aliases) stay load-active until they graduate.
+
+### Ratified: the pre-launch launch-window exemption (majors 12–15)
+
+Majors 12–14 shipped breaks as **pre-launch one-step changes with no alias
+window** (ADR-0090 D3/D4 explicitly superseded the alias discipline;
+`BookAudience` in 14.0.0 states "launch-window discipline"). That was a
+deliberate policy while the platform had no external consumers — but it was
+never written down, and it left the chain empty above step 11. This true-up
+does both halves:
+
+- **The policy, stated:** until GA, a metadata-facing break MAY ship one-step
+  without a load window. The exemption covers the *window* only — never the
+  *chain*: every such break must land as a chain step (a `retiredFromLoadPath`
+  conversion when lossless, a semantic TODO when not) in the same release.
+  After GA the full D2 ladder applies: lossless breaks ship a live conversion
+  entry or they do not ship.
+- **The chain, backfilled:** steps 12–15 now exist. 12: the `api.requireAuth`
+  default flip (semantic). 13: the ADR-0090 wave — `roles:`→`positions:`, the
+  two unambiguous OWD aliases, and recipient `role`→`position` as retired
+  conversions; profiles, hierarchy re-homing, `current_user.roles` CEL
+  rewrites, the `'full'` alias, and the sharing-model secure default as
+  semantic TODOs. 14: the `BookAudience` rename (retired conversion). 15: the
+  ADR-0089 visibility aliases (live conversions) plus the `.strict()` flip
+  (semantic). `migrate meta --from 10` therefore reaches protocol 15 with
+  every mechanical rewrite applied and every judgment surfaced — the "arrive
+  whenever" promise holds across the pre-launch era too.
+- **Backfilled history joins the registry, not the loader:** the protocol-11
+  `compactLayout`→`highlightFields` rename (retired at authoring in 11.9.1,
+  pre-dating this ADR) is also preserved as a retired step-11 conversion.

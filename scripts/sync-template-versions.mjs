@@ -49,3 +49,27 @@ if (changed === 0) {
   writeFileSync(templatePkgPath, JSON.stringify(templatePkg, null, 2) + '\n');
   console.log(`✓ blank template: ${changed} @objectstack/* range(s) → ${range} (lockstep with create-objectstack@${version})`);
 }
+
+// Also re-stamp the manifest's `engines.protocol` range in the template stack
+// config (ADR-0087 D1 — scaffolds populate the handshake field by default, the
+// ratchet that closes grandfathering). Same lockstep rationale as above.
+const templateConfigPath = join(
+  root,
+  'packages/create-objectstack/src/templates/blank/objectstack.config.ts',
+);
+const major = String(version).split('.')[0];
+const config = readFileSync(templateConfigPath, 'utf8');
+const stamped = config.replace(
+  /engines:\s*\{\s*protocol:\s*'[^']*'\s*\}/,
+  `engines: { protocol: '^${major}' }`,
+);
+if (stamped === config) {
+  if (!config.includes(`engines: { protocol: '^${major}' }`)) {
+    console.error('✗ sync-template-versions: template objectstack.config.ts has no engines.protocol stamp to sync');
+    process.exit(1);
+  }
+  console.log(`✓ blank template manifest already stamps engines.protocol '^${major}'`);
+} else {
+  writeFileSync(templateConfigPath, stamped);
+  console.log(`✓ blank template manifest: engines.protocol → '^${major}'`);
+}

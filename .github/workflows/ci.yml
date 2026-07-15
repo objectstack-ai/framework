@@ -389,3 +389,9 @@ jobs:
 
       - name: Check skill docs are generated from SKILL.md frontmatter
         run: pnpm --filter @objectstack/spec check:skill-docs
+
+      - name: Check spec-changes.json is regenerated with the ADR-0087 registries
+        run: pnpm --filter @objectstack/spec check:spec-changes
+
+      - name: Check the protocol upgrade guide is regenerated with the ADR-0087 registries
+        run: pnpm --filter @objectstack/spec check:upgrade-guide

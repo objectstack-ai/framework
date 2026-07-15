@@ -12,11 +12,11 @@ import { PackageServicePlugin } from './index.js';
  */
 const SEEDED = { id: 'app.seed', name: 'Seed', version: '1.0.0', type: 'application' };
 
-function sysPackagesRow() {
+function sysPackagesRow(manifest: Record<string, unknown> = SEEDED) {
   return {
-    id: SEEDED.id,
-    version: SEEDED.version,
-    manifest: JSON.stringify(SEEDED),
+    id: manifest.id,
+    version: manifest.version,
+    manifest: JSON.stringify(manifest),
     metadata: '{}',
     hash: 'h',
     created_at: 't',
@@ -24,10 +24,13 @@ function sysPackagesRow() {
   };
 }
 
-function makeCtx(registry: { installPackage: ReturnType<typeof vi.fn>; getPackage: ReturnType<typeof vi.fn> }) {
+function makeCtx(
+  registry: { installPackage: ReturnType<typeof vi.fn>; getPackage: ReturnType<typeof vi.fn> },
+  manifest: Record<string, unknown> = SEEDED,
+) {
   const execute = vi.fn(async ({ sql }: { sql: string }) => {
     // The latest-per-id list query backs packageService.list() used by hydration.
-    if (/SELECT \* FROM sys_packages/i.test(sql)) return { rows: [sysPackagesRow()] };
+    if (/SELECT \* FROM sys_packages/i.test(sql)) return { rows: [sysPackagesRow(manifest)] };
     return { rows: [] }; // CREATE TABLE / INDEX / others
   });
   const engine = { execute, registry } as never;
@@ -68,5 +71,41 @@ describe('PackageServicePlugin boot hydration (ADR-0033 consolidation)', () => {
 
     expect(registry.getPackage).toHaveBeenCalledWith('app.seed');
     expect(registry.installPackage).not.toHaveBeenCalled();
+  });
+
+  // ADR-0087 D1 — the boot-time rehydration path is a LOAD seam: a durable
+  // package whose declared engines.protocol excludes this runtime's major is
+  // refused with the structured diagnostic (and boot continues), instead of
+  // loading and crashing later deep in a schema parse.
+  it('refuses to rehydrate a protocol-incompatible package, with the structured diagnostic', async () => {
+    const stale = { ...SEEDED, id: 'app.stale', engines: { protocol: '^10' } };
+    const registry = {
+      installPackage: vi.fn(),
+      getPackage: vi.fn(() => undefined),
+    };
+    const { ctx } = makeCtx(registry, stale);
+
+    await new PackageServicePlugin().start(ctx);
+
+    expect(registry.installPackage).not.toHaveBeenCalled();
+    const errors = (ctx as any).logger.error.mock.calls.map((c: unknown[]) => String(c[0]));
+    const refusal = errors.find((e: string) => e.includes('OS_PROTOCOL_INCOMPATIBLE'));
+    expect(refusal).toBeDefined();
+    expect(refusal).toContain('app.stale');
+    expect(refusal).toContain('objectstack migrate meta --from 10');
+  });
+
+  it('rehydrates a package with no engines range (grandfathered) with a protocol warning', async () => {
+    const registry = {
+      installPackage: vi.fn(),
+      getPackage: vi.fn(() => undefined),
+    };
+    const { ctx } = makeCtx(registry); // SEEDED declares no engines range
+
+    await new PackageServicePlugin().start(ctx);
+
+    expect(registry.installPackage).toHaveBeenCalledTimes(1);
+    const warnings = (ctx as any).logger.warn.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(warnings.filter((w: string) => w.includes('[protocol]'))).toHaveLength(1);
   });
 });

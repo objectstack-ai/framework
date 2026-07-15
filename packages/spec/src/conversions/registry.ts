@@ -16,7 +16,7 @@
  */
 
 import type { MetadataConversion } from './types.js';
-import { mapFlowNodes, mapPages, renameConfigKey } from './walk.js';
+import { mapCollection, mapFlowNodes, mapPages, renameConfigKey, renameKey } from './walk.js';
 
 /**
  * Flow callout node type rename (protocol 11.0).
@@ -180,11 +180,442 @@ const flowNodeFilterAlias: MetadataConversion = {
 };
 
 /**
+ * Object `compactLayout` → `highlightFields` (spec 11.7.0, ADR-0085; alias
+ * retired at authoring in 11.9.1, #2536).
+ *
+ * A pure key rename — the value (ordered field-name list) is unchanged.
+ * **Retired from the load path**: the schema tombstones `compactLayout` with a
+ * fix-it error, so the loader must NOT quietly accept it; the entry exists so
+ * `migrate meta --from 10|11` rewrites old *sources* (backfilled per the
+ * ADR-0087 true-up — the rename shipped before the conversion layer existed).
+ */
+const objectCompactLayoutRename: MetadataConversion = {
+  id: 'object-compactLayout-to-highlightFields',
+  toMajor: 11,
+  retiredFromLoadPath: true,
+  surface: 'object.compactLayout',
+  summary: "object key 'compactLayout' → 'highlightFields' (ADR-0085 semantic roles)",
+  apply(stack, emit) {
+    return mapCollection(stack, 'objects', (obj, path) => {
+      const renamed = renameKey(obj, 'compactLayout', 'highlightFields');
+      if (!renamed) return obj;
+      emit({ from: 'compactLayout', to: 'highlightFields', path: `${path}.highlightFields` });
+      return renamed;
+    });
+  },
+  fixture: {
+    before: {
+      objects: [{ name: 'crm_lead', label: 'Lead', compactLayout: ['name', 'status'] }],
+    },
+    after: {
+      objects: [{ name: 'crm_lead', label: 'Lead', highlightFields: ['name', 'status'] }],
+    },
+    expectedNotices: 1,
+  },
+};
+
+/**
+ * Stack collection `roles:` → `positions:` (protocol 13, ADR-0090 D3).
+ *
+ * The distribution concept was renamed Role → Position across the platform;
+ * the stack-definition collection key renamed with it. A pure key move — the
+ * item shapes migrate separately (`position.parent` removal is semantic, see
+ * the step-13 TODOs). **Retired from the load path**: ADR-0090 shipped this as
+ * a pre-launch one-step rename with no alias window; the entry preserves it as
+ * replayable chain history.
+ */
+const stackRolesToPositions: MetadataConversion = {
+  id: 'stack-roles-to-positions',
+  toMajor: 13,
+  retiredFromLoadPath: true,
+  surface: 'stack.roles',
+  summary: "stack collection key 'roles' → 'positions' (ADR-0090 D3)",
+  apply(stack, emit) {
+    const renamed = renameKey(stack, 'roles', 'positions');
+    if (!renamed) return stack;
+    emit({ from: 'roles', to: 'positions', path: 'positions' });
+    return renamed;
+  },
+  fixture: {
+    before: {
+      roles: [{ name: 'sales_rep', label: 'Sales Rep' }],
+    },
+    after: {
+      positions: [{ name: 'sales_rep', label: 'Sales Rep' }],
+    },
+    expectedNotices: 1,
+  },
+};
+
+/**
+ * OWD legacy aliases `read` / `read_write` → canonical (protocol 13,
+ * ADR-0090 D4).
+ *
+ * The two aliases with an unambiguous canonical spelling convert mechanically;
+ * the third legacy alias `'full'` has NO lossless target (full access includes
+ * transfer/delete — wider than `public_read_write`) and is delegated to the
+ * step-13 semantic TODO instead (D2 scope guard: lossless only). Handles both
+ * `object.sharingModel` and the nested `object.security.sharingModel` spot.
+ * **Retired from the load path** (one-step removal; authoring rejects with a
+ * fix-it).
+ */
+const owdLegacyReadAliases: MetadataConversion = {
+  id: 'owd-legacy-read-aliases',
+  toMajor: 13,
+  retiredFromLoadPath: true,
+  surface: 'object.sharingModel',
+  summary: "object sharingModel 'read' → 'public_read', 'read_write' → 'public_read_write' (ADR-0090 D4)",
+  apply(stack, emit) {
+    const CANONICAL: Record<string, string> = {
+      read: 'public_read',
+      read_write: 'public_read_write',
+    };
+    return mapCollection(stack, 'objects', (obj, path) => {
+      let next = obj;
+      const direct = next.sharingModel;
+      if (typeof direct === 'string' && CANONICAL[direct]) {
+        emit({ from: direct, to: CANONICAL[direct]!, path: `${path}.sharingModel` });
+        next = { ...next, sharingModel: CANONICAL[direct] };
+      }
+      const security = next.security;
+      if (security && typeof security === 'object' && !Array.isArray(security)) {
+        const nested = (security as Record<string, unknown>).sharingModel;
+        if (typeof nested === 'string' && CANONICAL[nested]) {
+          emit({ from: nested, to: CANONICAL[nested]!, path: `${path}.security.sharingModel` });
+          next = { ...next, security: { ...(security as Record<string, unknown>), sharingModel: CANONICAL[nested] } };
+        }
+      }
+      return next;
+    });
+  },
+  fixture: {
+    before: {
+      objects: [
+        { name: 'crm_deal', label: 'Deal', sharingModel: 'read' },
+        { name: 'crm_note', label: 'Note', security: { sharingModel: 'read_write' } },
+      ],
+    },
+    after: {
+      objects: [
+        { name: 'crm_deal', label: 'Deal', sharingModel: 'public_read' },
+        { name: 'crm_note', label: 'Note', security: { sharingModel: 'public_read_write' } },
+      ],
+    },
+    expectedNotices: 2,
+  },
+};
+
+/**
+ * Sharing-rule recipient type `'role'` → `'position'` (protocol 13,
+ * ADR-0090 D3).
+ *
+ * Applies to both `sharedWith.type` and the owner-rule `ownedBy.type`. The
+ * removed `'role_and_subordinates'` recipient is NOT converted — its v2
+ * replacement (`unit_and_subordinates`) expands a *different* tree (business
+ * units, not the retired role hierarchy), so it is a step-13 semantic TODO.
+ * **Retired from the load path** (one-step rename, no alias window).
+ */
+const sharingRecipientRoleToPosition: MetadataConversion = {
+  id: 'sharing-recipient-role-to-position',
+  toMajor: 13,
+  retiredFromLoadPath: true,
+  surface: 'sharingRule.sharedWith.type',
+  summary: "sharing-rule recipient type 'role' → 'position' (ADR-0090 D3)",
+  apply(stack, emit) {
+    const renameRecipient = (rule: Record<string, unknown>, key: string, path: string) => {
+      const recipient = rule[key];
+      if (!recipient || typeof recipient !== 'object' || Array.isArray(recipient)) return rule;
+      const dict = recipient as Record<string, unknown>;
+      if (dict.type !== 'role') return rule;
+      emit({ from: 'role', to: 'position', path: `${path}.${key}.type` });
+      return { ...rule, [key]: { ...dict, type: 'position' } };
+    };
+    return mapCollection(stack, 'sharingRules', (rule, path) => {
+      let next = renameRecipient(rule, 'sharedWith', path);
+      next = renameRecipient(next, 'ownedBy', path);
+      return next;
+    });
+  },
+  fixture: {
+    before: {
+      sharingRules: [
+        {
+          name: 'share_sales',
+          type: 'owner',
+          object: 'crm_deal',
+          sharedWith: { type: 'role', value: 'sales_mgr' },
+          ownedBy: { type: 'role', value: 'sales_rep' },
+        },
+      ],
+    },
+    after: {
+      sharingRules: [
+        {
+          name: 'share_sales',
+          type: 'owner',
+          object: 'crm_deal',
+          sharedWith: { type: 'position', value: 'sales_mgr' },
+          ownedBy: { type: 'position', value: 'sales_rep' },
+        },
+      ],
+    },
+    expectedNotices: 2,
+  },
+};
+
+/**
+ * Book audience gated arm `{ profile }` → `{ permissionSet }` (protocol 14,
+ * ADR-0090 D2 fallout; shipped in 14.0.0 as a pre-launch one-step rename).
+ *
+ * Packages own permission sets but never positions (ADR-0090 D9), so the
+ * gate is a capability reference. Value carried over 1:1. **Retired from the
+ * load path** — the zod union rejects `{ profile }` at parse; this entry is
+ * the replayable chain history the one-step ship skipped.
+ */
+const bookAudienceProfileToPermissionSet: MetadataConversion = {
+  id: 'book-audience-profile-to-permission-set',
+  toMajor: 14,
+  retiredFromLoadPath: true,
+  surface: 'book.audience',
+  summary: "book audience gated arm '{ profile }' → '{ permissionSet }' (ADR-0090 D2/D9)",
+  apply(stack, emit) {
+    return mapCollection(stack, 'books', (book, path) => {
+      const audience = book.audience;
+      if (!audience || typeof audience !== 'object' || Array.isArray(audience)) return book;
+      const dict = audience as Record<string, unknown>;
+      if (typeof dict.profile !== 'string' || dict.permissionSet != null) return book;
+      emit({ from: 'profile', to: 'permissionSet', path: `${path}.audience.permissionSet` });
+      const { profile, ...rest } = dict;
+      return { ...book, audience: { ...rest, permissionSet: profile } };
+    });
+  },
+  fixture: {
+    before: {
+      books: [{ name: 'crm_admin_guide', audience: { profile: 'crm_admin' } }],
+    },
+    after: {
+      books: [{ name: 'crm_admin_guide', audience: { permissionSet: 'crm_admin' } }],
+    },
+    expectedNotices: 1,
+  },
+};
+
+/** Rename a visibility alias key on a dict, emitting with the given path. */
+function renameVisibilityAlias(
+  dict: Record<string, unknown>,
+  alias: string,
+  path: string,
+  emit: (detail: { from: string; to: string; path: string }) => void,
+): Record<string, unknown> {
+  const renamed = renameKey(dict, alias, 'visibleWhen');
+  if (!renamed) return dict;
+  emit({ from: alias, to: 'visibleWhen', path: `${path}.visibleWhen` });
+  return renamed;
+}
+
+/**
+ * View form `visibleOn` → `visibleWhen` (protocol 15, ADR-0089 D2).
+ *
+ * The conditional-visibility predicate is unified under the canonical
+ * `visibleWhen` across all layers. Applies to form sections and (recursively
+ * nested) form fields in every `views[].form` / `views[].formViews.*`
+ * container. **Live window**: the protocol-15 loader accepts the deprecated
+ * key (the zod schemas also normalize it at parse — this entry makes the
+ * acceptance *declared, loud, and expiring* per ADR-0087 D2, and will
+ * graduate into the step-16 chain when the alias is removed).
+ */
+const viewVisibleOnToVisibleWhen: MetadataConversion = {
+  id: 'view-visibleOn-to-visibleWhen',
+  toMajor: 15,
+  surface: 'view.form.visibleOn',
+  summary: "view form section/field key 'visibleOn' → 'visibleWhen' (ADR-0089)",
+  apply(stack, emit) {
+    const mapFields = (fields: unknown, path: string): unknown => {
+      if (!Array.isArray(fields)) return fields;
+      let changed = false;
+      const next = fields.map((field, i) => {
+        if (!field || typeof field !== 'object' || Array.isArray(field)) return field;
+        let dict = field as Record<string, unknown>;
+        dict = renameVisibilityAlias(dict, 'visibleOn', `${path}[${i}]`, emit);
+        const nested = mapFields(dict.fields, `${path}[${i}].fields`);
+        if (nested !== dict.fields) dict = { ...dict, fields: nested };
+        if (dict !== field) changed = true;
+        return dict;
+      });
+      return changed ? next : fields;
+    };
+
+    const mapSections = (sections: unknown, path: string): unknown => {
+      if (!Array.isArray(sections)) return sections;
+      let changed = false;
+      const next = sections.map((section, i) => {
+        if (!section || typeof section !== 'object' || Array.isArray(section)) return section;
+        let dict = section as Record<string, unknown>;
+        dict = renameVisibilityAlias(dict, 'visibleOn', `${path}[${i}]`, emit);
+        const fields = mapFields(dict.fields, `${path}[${i}].fields`);
+        if (fields !== dict.fields) dict = { ...dict, fields };
+        if (dict !== section) changed = true;
+        return dict;
+      });
+      return changed ? next : sections;
+    };
+
+    const mapForm = (form: unknown, path: string): unknown => {
+      if (!form || typeof form !== 'object' || Array.isArray(form)) return form;
+      let dict = form as Record<string, unknown>;
+      for (const key of ['sections', 'groups'] as const) {
+        const mapped = mapSections(dict[key], `${path}.${key}`);
+        if (mapped !== dict[key]) dict = { ...dict, [key]: mapped };
+      }
+      const fields = mapFields(dict.fields, `${path}.fields`);
+      if (fields !== dict.fields) dict = { ...dict, fields };
+      return dict;
+    };
+
+    return mapCollection(stack, 'views', (view, path) => {
+      let next = view;
+      const form = mapForm(next.form, `${path}.form`);
+      if (form !== next.form) next = { ...next, form };
+      const formViews = next.formViews;
+      if (formViews && typeof formViews === 'object' && !Array.isArray(formViews)) {
+        let fvChanged = false;
+        const nextViews: Record<string, unknown> = {};
+        for (const [name, fv] of Object.entries(formViews as Record<string, unknown>)) {
+          const mapped = mapForm(fv, `${path}.formViews.${name}`);
+          if (mapped !== fv) fvChanged = true;
+          nextViews[name] = mapped;
+        }
+        if (fvChanged) next = { ...next, formViews: nextViews };
+      }
+      return next;
+    });
+  },
+  fixture: {
+    before: {
+      views: [
+        {
+          object: 'crm_lead',
+          form: {
+            sections: [
+              {
+                label: 'Details',
+                visibleOn: "record.status == 'open'",
+                fields: ['name', { field: 'priority', visibleOn: "record.priority != ''" }],
+              },
+            ],
+          },
+        },
+      ],
+    },
+    after: {
+      views: [
+        {
+          object: 'crm_lead',
+          form: {
+            sections: [
+              {
+                label: 'Details',
+                visibleWhen: "record.status == 'open'",
+                fields: ['name', { field: 'priority', visibleWhen: "record.priority != ''" }],
+              },
+            ],
+          },
+        },
+      ],
+    },
+    expectedNotices: 2,
+  },
+};
+
+/**
+ * Page component `visibility` → `visibleWhen` (protocol 15, ADR-0089 D2).
+ *
+ * The page-component spelling of the same predicate. Applies to
+ * `pages[].regions[].components[]`. **Live window**, same terms as
+ * {@link viewVisibleOnToVisibleWhen}. (An AI agent's `visibility` property is
+ * a different, unrelated surface and is not touched.)
+ */
+const pageComponentVisibilityToVisibleWhen: MetadataConversion = {
+  id: 'page-component-visibility-to-visibleWhen',
+  toMajor: 15,
+  surface: 'page.component.visibility',
+  summary: "page component key 'visibility' → 'visibleWhen' (ADR-0089)",
+  apply(stack, emit) {
+    return mapPages(stack, (page, path) => {
+      const regions = page.regions;
+      if (!Array.isArray(regions)) return page;
+      let regionsChanged = false;
+      const nextRegions = regions.map((region, ri) => {
+        if (!region || typeof region !== 'object' || Array.isArray(region)) return region;
+        const dict = region as Record<string, unknown>;
+        const components = dict.components;
+        if (!Array.isArray(components)) return region;
+        let componentsChanged = false;
+        const nextComponents = components.map((component, ci) => {
+          if (!component || typeof component !== 'object' || Array.isArray(component)) return component;
+          const mapped = renameVisibilityAlias(
+            component as Record<string, unknown>,
+            'visibility',
+            `${path}.regions[${ri}].components[${ci}]`,
+            emit,
+          );
+          if (mapped !== component) componentsChanged = true;
+          return mapped;
+        });
+        if (!componentsChanged) return region;
+        regionsChanged = true;
+        return { ...dict, components: nextComponents };
+      });
+      if (!regionsChanged) return page;
+      return { ...page, regions: nextRegions };
+    });
+  },
+  fixture: {
+    before: {
+      pages: [
+        {
+          name: 'crm_home',
+          regions: [
+            {
+              name: 'main',
+              components: [
+                { type: 'record:list', visibility: "page.selectedId != ''" },
+                { type: 'element:divider' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    after: {
+      pages: [
+        {
+          name: 'crm_home',
+          regions: [
+            {
+              name: 'main',
+              components: [
+                { type: 'record:list', visibleWhen: "page.selectedId != ''" },
+                { type: 'element:divider' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    expectedNotices: 1,
+  },
+};
+
+/**
  * All conversions, keyed by the protocol major that introduced the canonical
  * shape. Newest majors last; ordering within a major is application order.
  */
 export const CONVERSIONS_BY_MAJOR: Readonly<Record<number, readonly MetadataConversion[]>> = {
-  11: [flowNodeHttpRename, pageKindJsxToHtml, flowNodeFilterAlias],
+  11: [flowNodeHttpRename, pageKindJsxToHtml, flowNodeFilterAlias, objectCompactLayoutRename],
+  13: [stackRolesToPositions, owdLegacyReadAliases, sharingRecipientRoleToPosition],
+  14: [bookAudienceProfileToPermissionSet],
+  15: [viewVisibleOnToVisibleWhen, pageComponentVisibilityToVisibleWhen],
 };
 
 /** Flattened, deterministic list of every conversion the loader knows about. */

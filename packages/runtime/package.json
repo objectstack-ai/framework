@@ -36,7 +36,8 @@
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "quickjs-emscripten": "^0.32.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@objectstack/metadata-core": "workspace:*"
   },
   "optionalDependencies": {
     "@objectstack/driver-mongodb": "workspace:*"

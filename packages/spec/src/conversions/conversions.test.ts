@@ -11,8 +11,11 @@ describe('conversion layer (ADR-0087 D2)', () => {
   describe('fixture pairs — every entry converts old shape → canonical', () => {
     for (const conversion of ALL_CONVERSIONS) {
       it(`${conversion.id}: before → after, emits ${conversion.fixture.expectedNotices} notice(s)`, () => {
+        // `includeRetired` so graduated (load-retired) entries stay fixture-tested
+        // forever — the chain replays them even though the loader no longer does.
         const { stack, notices } = collectConversionNotices(
           structuredClone(conversion.fixture.before),
+          { includeRetired: true },
         );
         // The whole table runs, but fixtures are disjoint, so the result must
         // equal exactly this entry's `after`.
@@ -146,6 +149,37 @@ describe('conversion layer (ADR-0087 D2)', () => {
       const node = (stack.flows as any[])[0].nodes[0];
       expect(node.config.filter).toEqual({ keep: true });
       expect(notices).toHaveLength(0); // canonical present → no conversion
+    });
+  });
+
+  describe('load-path retirement (ADR-0087 D2 window, second half)', () => {
+    it('a retired conversion does NOT apply on the default load path', () => {
+      const retired = ALL_CONVERSIONS.filter((c) => c.retiredFromLoadPath);
+      expect(retired.length).toBeGreaterThan(0);
+      for (const conversion of retired) {
+        const before = structuredClone(conversion.fixture.before);
+        const { stack, notices } = collectConversionNotices(structuredClone(before));
+        // Old shape passes through untouched — the schema layer (tombstone /
+        // rejection) owns the refusal now; only `migrate meta` replays these.
+        expect(stack).toEqual(before);
+        expect(notices).toHaveLength(0);
+      }
+    });
+
+    it('a live-window conversion still applies at load (protocol-15 aliases)', () => {
+      const { stack, notices } = collectConversionNotices({
+        pages: [
+          {
+            name: 'p',
+            regions: [{ name: 'main', components: [{ type: 'record:list', visibility: 'true' }] }],
+          },
+        ],
+      });
+      const component = (stack.pages as any[])[0].regions[0].components[0];
+      expect(component.visibleWhen).toBe('true');
+      expect(component.visibility).toBeUndefined();
+      expect(notices).toHaveLength(1);
+      expect(notices[0]!.conversionId).toBe('page-component-visibility-to-visibleWhen');
     });
   });
 

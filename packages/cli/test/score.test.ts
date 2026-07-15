@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { PROTOCOL_MAJOR } from '@objectstack/spec/kernel';
 import { scoreMetadata } from '../src/lint/score';
 
 /** A clean, convention-following invoice + line-item model. */
 const GOOD_STACK = {
-  manifest: { id: 'demo', namespace: 'demo_app', version: '1.0.0', name: 'Demo', type: 'app' as const },
+  manifest: { id: 'demo', namespace: 'demo_app', version: '1.0.0', name: 'Demo', type: 'app' as const, engines: { protocol: `^${PROTOCOL_MAJOR}` } },
   objects: [
     {
       name: 'invoice',

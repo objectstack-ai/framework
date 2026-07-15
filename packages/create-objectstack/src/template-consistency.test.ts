@@ -54,6 +54,22 @@ describe('blank template package.json', () => {
   });
 });
 
+describe('blank template manifest engines.protocol (ADR-0087 D1)', () => {
+  it('stamps the current protocol major so the handshake covers fresh scaffolds', () => {
+    const config = fs.readFileSync(
+      path.join(pkgRoot, 'src', 'templates', 'blank', 'objectstack.config.ts'),
+      'utf8',
+    );
+    const match = /engines:\s*\{\s*protocol:\s*'\^(\d+)'\s*\}/.exec(config);
+    expect(match, 'template manifest must stamp engines.protocol (ADR-0087 D1)').not.toBeNull();
+    expect(
+      Number(match![1]),
+      `template stamps engines.protocol '^${match![1]}' but create-objectstack is v${ownMajor} — ` +
+        'scripts/sync-template-versions.mjs re-stamps this at version time; keep them in lockstep',
+    ).toBe(ownMajor);
+  });
+});
+
 describe('README template table', () => {
   it('lists exactly the templates in the TEMPLATES registry', () => {
     const readme = fs.readFileSync(path.join(pkgRoot, 'README.md'), 'utf8');

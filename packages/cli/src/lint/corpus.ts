@@ -15,6 +15,7 @@
  * worked examples of the conventions the AI generator should target.
  */
 
+import { PROTOCOL_MAJOR } from '@objectstack/spec/kernel';
 import type { MetadataEvalCase } from './metadata-eval.js';
 
 const manifest = (id: string, namespace: string, name: string) => ({
@@ -23,6 +24,9 @@ const manifest = (id: string, namespace: string, name: string) => ({
   version: '1.0.0',
   name,
   type: 'app' as const,
+  // The golden corpus models best practice: declare the protocol range so the
+  // ADR-0087 handshake can refuse an incompatible runtime at the boundary.
+  engines: { protocol: `^${PROTOCOL_MAJOR}` },
 });
 
 export const DEFAULT_METADATA_EVAL_CORPUS: MetadataEvalCase[] = [

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppPlugin } from './app-plugin';
 import { PluginContext } from '@objectstack/core';
+import { PROTOCOL_MAJOR } from '@objectstack/spec/kernel';
 
 describe('AppPlugin', () => {
     let mockContext: PluginContext;
@@ -319,6 +320,63 @@ describe('AppPlugin', () => {
     // ═══════════════════════════════════════════════════════════════
     // Default hook body runner (#2588)
     // ═══════════════════════════════════════════════════════════════
+
+    describe('protocol handshake on the code-defined-stack load seam (ADR-0087 D1)', () => {
+        let mockManifest: any;
+
+        beforeEach(() => {
+            mockManifest = { register: vi.fn() };
+            vi.mocked(mockContext.getService).mockImplementation(((name: string) => {
+                if (name === 'manifest') return mockManifest;
+                throw new Error(`service '${name}' not found`);
+            }) as any);
+        });
+
+        it('refuses an incompatible engines.protocol range BEFORE registering the manifest', async () => {
+            const plugin = new AppPlugin({
+                manifest: {
+                    id: 'com.test.stale',
+                    version: '1.0.0',
+                    engines: { protocol: `^${PROTOCOL_MAJOR - 5}` },
+                },
+                objects: [],
+            });
+            await expect(plugin.init(mockContext)).rejects.toMatchObject({
+                code: 'OS_PROTOCOL_INCOMPATIBLE',
+                diagnostic: expect.objectContaining({
+                    packageId: 'com.test.stale',
+                    migrateCommand: `objectstack migrate meta --from ${PROTOCOL_MAJOR - 5}`,
+                }),
+            });
+            expect(mockManifest.register).not.toHaveBeenCalled();
+        });
+
+        it('loads a compatible range without warnings', async () => {
+            const plugin = new AppPlugin({
+                manifest: {
+                    id: 'com.test.current',
+                    version: '1.0.0',
+                    engines: { protocol: `^${PROTOCOL_MAJOR}` },
+                },
+                objects: [],
+            });
+            await plugin.init(mockContext);
+            expect(mockManifest.register).toHaveBeenCalledTimes(1);
+            const warnings = vi.mocked(mockContext.logger.warn).mock.calls.map((c) => String(c[0]));
+            expect(warnings.filter((w) => w.includes('[protocol]'))).toHaveLength(0);
+        });
+
+        it('grandfathers a bundle with no range — loads with exactly one warning', async () => {
+            const plugin = new AppPlugin({
+                manifest: { id: 'com.test.unversioned', version: '1.0.0' },
+                objects: [],
+            });
+            await plugin.init(mockContext);
+            expect(mockManifest.register).toHaveBeenCalledTimes(1);
+            const warnings = vi.mocked(mockContext.logger.warn).mock.calls.map((c) => String(c[0]));
+            expect(warnings.filter((w) => w.includes('[protocol]'))).toHaveLength(1);
+        });
+    });
 
     describe('default hook body runner install', () => {
         let mockQL: any;

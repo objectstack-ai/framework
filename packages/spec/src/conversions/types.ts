@@ -141,6 +141,16 @@ export interface MetadataConversion {
   id: string;
   /** The protocol major that introduced the canonical shape. */
   toMajor: number;
+  /**
+   * When `true`, this conversion is **retired from the load path**: the loader
+   * no longer accepts the old shape (the schema rejects or tombstones it), and
+   * the entry exists purely as graduated migration-chain history — replayed by
+   * `objectstack migrate meta` against *source* metadata, never at load. This
+   * is the ADR-0087 D2 window's second half ("retired in N+1 — but never
+   * deleted"), and it is also how a pre-launch one-step rename (which never had
+   * a load window at all) is preserved in the chain.
+   */
+  retiredFromLoadPath?: boolean;
   /** Dotted surface, e.g. `flow.node.type`, `page.kind`, `flow.node.config`. */
   surface: string;
   /** One-line human summary of the rename/move (the load-bearing prose, kept to one field). */

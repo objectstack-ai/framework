@@ -76,6 +76,49 @@ export function mapPages(stack: Dict, mapper: (page: Dict, path: string) => Dict
   return { ...stack, pages: nextPages };
 }
 
+/**
+ * Immutably map every dict item of a top-level array collection
+ * (`stack[key][]`) — the generic form of {@link mapPages}, for conversions
+ * targeting `objects`, `books`, `sharingRules`, `views`, ….
+ *
+ * `mapper` receives each item dict and its path (`<key>[i]`) and returns the
+ * same reference (no change) or a new dict. Non-array collections and
+ * non-dict items pass through untouched.
+ */
+export function mapCollection(
+  stack: Dict,
+  key: string,
+  mapper: (item: Dict, path: string) => Dict,
+): Dict {
+  const items = stack[key];
+  if (!Array.isArray(items)) return stack;
+
+  let changed = false;
+  const next = items.map((item, i) => {
+    if (!isDict(item)) return item;
+    const mapped = mapper(item, `${key}[${i}]`);
+    if (mapped !== item) changed = true;
+    return mapped;
+  });
+
+  if (!changed) return stack;
+  return { ...stack, [key]: next };
+}
+
+/**
+ * Rename `dict[from]` → `dict[to]`, immutably, only when `from` is present
+ * (non-null) and the canonical `to` is absent. Returns `null` when there is
+ * nothing to do — the caller keeps the original reference.
+ */
+export function renameKey(dict: Dict, from: string, to: string): Dict | null {
+  if (!(from in dict) || dict[from] == null) return null;
+  if (dict[to] != null) return null; // canonical already wins — nothing to do
+  const next: Dict = { ...dict };
+  next[to] = next[from];
+  delete next[from];
+  return next;
+}
+
 /** Rename `config[from]` → `config[to]` on a node dict, immutably, only if `to` is absent. */
 export function renameConfigKey(node: Dict, from: string, to: string): Dict | null {
   const config = node.config;
