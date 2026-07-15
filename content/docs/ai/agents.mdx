@@ -17,25 +17,24 @@ Claude Code authors them from the `objectstack-ai` [skill](/docs/ai/skills); you
 ([the loop](/docs/getting-started/build-with-claude-code)).
 
 <Callout type="info">
-**Cloud / Enterprise — the in-product chat runtime.** The authoring format on
+**ObjectOS — the in-product chat runtime.** The authoring format on
 this page is open. The *in-product chat runtime* that runs agents for end users —
 the two platform agents `ask` and `build`, all in-product chat, and the
-`/api/v1/ai/*` chat endpoints — ships only in the cloud / Enterprise distribution
-(`@objectstack/service-ai`, cloud ADR-0025). The open edition uses
-`@objectstack/mcp` (BYO-AI) instead. The next two sections describe that cloud /
-Enterprise runtime.
+`/api/v1/ai/*` chat endpoints — ships in **ObjectOS**, not in the open-source
+framework, which uses `@objectstack/mcp` (BYO-AI) instead. The next two sections
+describe that ObjectOS runtime.
 </Callout>
 
 Per [ADR-0063](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0063-two-kernel-agents-skills-are-the-extension-primitive.md)
-the cloud / Enterprise runtime ships **exactly two** platform agents, bound by the
+the ObjectOS runtime ships **exactly two** platform agents, bound by the
 *surface* the user is in — the user never picks from a roster:
 
 | Agent | Surface | Does | Edition |
 |---|---|---|---|
-| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | cloud · Enterprise |
-| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | cloud · Enterprise |
+| **`ask`** | data console | Read / query / explore records + run the business **actions** the app exposes. RLS-bounded. | ObjectOS |
+| **`build`** | Studio | Author *metadata* (objects, fields, views, flows) via plan → draft → verify → publish. | ObjectOS |
 
-Within this cloud / Enterprise runtime there is no per-turn intent classifier and
+Within the ObjectOS runtime there is no per-turn intent classifier and
 no agent dropdown: the surface binds the agent (data console → `ask`, Studio →
 `build`). A `build`-shaped request that reaches `ask` is declined and redirected to
 the Builder, never silently re-routed. (For data query and source-mode authoring,
@@ -108,8 +107,8 @@ surface-compatible skills' tools** — there is no global fall-through, so a ski
 reaches an agent only when their surfaces match
 ([ADR-0064](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
 Both `surface:'ask'` and `surface:'build'` skills run only where the in-UI AI
-runtime exists — the **cloud / Enterprise** distribution. On the open framework
-there is no in-product agent to attach them to (cloud ADR-0025); author capability
+runtime exists — **ObjectOS**. On the open framework
+there is no in-product agent to attach them to; author capability
 as Actions / Flows and reach it through `@objectstack/mcp` instead.
 
 ## The shape of an agent
@@ -131,8 +130,8 @@ own `ask` / `build` records use exactly these fields):
 There is no `type` field and no fixed agent "type" taxonomy — behaviour comes from
 persona, instructions, skills, and tools. There are no `triggers` / `schedule`
 fields on an agent; drive agents from [Flows/Workflows](/docs/automation), or — on
-the **cloud / Enterprise** runtime — via the in-product chat endpoint
-(`/api/v1/ai/*`). In the open edition, invoke the underlying Actions/Flows through
+the **ObjectOS** runtime — via the in-product chat endpoint
+(`/api/v1/ai/*`). On the open-source framework, invoke the underlying Actions/Flows through
 `@objectstack/mcp`.
 
 <Callout type="info">

@@ -258,7 +258,7 @@ export default defineStack({ ... }, { strict: false });
 
 ### Compile Artifact and Runtime Metadata Boundary
 
-ObjectOS runtime metadata must come from source files during local development or
+ObjectStack runtime metadata must come from source files during local development or
 from a compiled artifact. Do not configure a project runtime to read or write
 metadata through its business database.
 
@@ -274,7 +274,7 @@ Runtime rule of thumb:
 | Context | Metadata source | Database role |
 |:--------|:----------------|:--------------|
 | Local dev | TS files or `dist/objectstack.json` | Business rows only |
-| Production ObjectOS | Artifact API response | Business rows only |
+| Production runtime | Artifact API response | Business rows only |
 | Control plane | Published JSON in metadata storage | Project revisions, history, overlays |
 
 When generating `objectstack.config.ts`, keep object names short and
@@ -973,10 +973,10 @@ describe('AuditPlugin', () => {
 
 ## MetadataPlugin Runtime Boundary
 
-`MetadataPlugin` is the `IMetadataService` provider for ObjectOS, but runtime
+`MetadataPlugin` is the `IMetadataService` provider for the ObjectStack runtime, but runtime
 metadata is read-only and artifact/file backed:
 
-- Do **not** register `sys_metadata` or `sys_metadata_history` from an ObjectOS
+- Do **not** register `sys_metadata` or `sys_metadata_history` from an ObjectStack
   runtime plugin. Those persistence tables belong to the control plane.
   (Exception, #1826: an *isolated project kernel* may opt into `sys_metadata`
   hydration from its own DB — the general boundary otherwise stands.)

@@ -8,11 +8,11 @@
 > **A metadata protocol and TypeScript toolkit for AI-native business apps.** Describe your objects, permissions, workflows, APIs, UI, and AI tools once as typed, version-controlled Zod metadata — and ObjectStack derives the TypeScript types, REST API, client SDK, UI, and MCP tools from that single definition.
 
 ```
-ObjectStack (this repo)  →  how a business app is described — the protocol + toolkit
-ObjectOS                 →  where it runs, and where AI plugs in — the runtime
+ObjectStack (this repo)  →  for builders — the open-source protocol, toolkit, and production runtime
+ObjectOS                 →  for end users — the commercial runtime environment (Cloud & Enterprise)
 ```
 
-This repo is the **framework**: the protocol, kernel, SDK, and CLI you build with. To *run* apps and let AI operate them under your permissions, deploy on **[ObjectOS](https://github.com/objectstack-ai/objectos)**. · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
+This repo is the **framework**: the protocol, kernel, SDK, CLI, and production runtime you build — and ship — with. `os start` or the official Docker image [`ghcr.io/objectstack-ai/objectstack`](./docker) runs your compiled app in production, Console and governance included, entirely on open source. For a managed, organization-scale runtime environment (multi-environment control plane, provisioning, marketplace), deploy to **[ObjectOS](https://docs.objectos.ai)** — the commercial Cloud & Enterprise product. · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
 
 <p align="center">
   <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents, governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
@@ -21,7 +21,7 @@ This repo is the **framework**: the protocol, kernel, SDK, and CLI you build wit
 
 ## What is ObjectStack?
 
-ObjectStack is an **open-source** metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools. Apps run, and AI operates them under your permissions, on the [ObjectOS](https://github.com/objectstack-ai/objectos) runtime.
+ObjectStack is an **open-source** (Apache-2.0) metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools — plus the production runtime that serves them. AI operates your app under your permissions through the built-in MCP server. **[ObjectOS](https://docs.objectos.ai)** is the separate, commercial runtime environment that operates ObjectStack apps for end-user organizations (Cloud & Enterprise editions).
 
 Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScript strings, ObjectStack makes the business system explicit:
 
@@ -30,12 +30,12 @@ Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScr
 - **Business logic** is represented as analyzable metadata: flows, conditions, policies, and artifacts.
 - **Business runtime** is a microkernel that loads plugins, drivers, services, and compiled environment artifacts.
 
-The goal is not to be another low-code UI builder. ObjectStack is the structured *definition* layer for AI-native business software — agent-ready, versioned, and analyzable; permissions and audit are enforced at runtime by ObjectOS.
+The goal is not to be another low-code UI builder. ObjectStack is the structured *definition* layer for AI-native business software — agent-ready, versioned, and analyzable; permissions and audit are enforced by the runtime.
 
-ObjectStack is built around three protocol layers:
+ObjectStack is built around three layers:
 
 - **ObjectQL** (Data Layer) — Objects, fields, queries, relations, validation, and data access.
-- **ObjectOS** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
+- **Kernel** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
 - **ObjectUI** (View Layer) — Apps, views, dashboards, actions, and presentation metadata.
 
 All core definitions start with **Zod schemas** (1,600+ exported schemas across 200 schema files). TypeScript types, JSON Schemas, REST routes, UI metadata, and agent tools are derived from the same source of truth.
@@ -77,7 +77,7 @@ Prefer clicking? Author the same metadata visually in **Studio** — objects, re
 </p>
 <p align="center"><sub><b>Model</b> objects as typed metadata &nbsp;·&nbsp; <b>Automate</b> with visual flows — both produce the same analyzable metadata.</sub></p>
 
-> **Want to see it running?** Deploy on **[ObjectOS](https://github.com/objectstack-ai/objectos)** for the live Console — dashboards, boards, calendars, records, and AI working your data under your permissions.
+> **Want to see it running?** `os dev` serves the live Console locally, and `os start` (or the official Docker image) ships the same Console to production — dashboards, boards, calendars, records, and AI working your data under your permissions.
 
 ## Key Features
 
@@ -105,7 +105,7 @@ The point isn't lines of code. The point is **fit in an agent's context window.*
 | AI maintainability | Agents must crawl sprawling app code | Whole app fits in an agent's context window |
 | Governance | App-level conventions | Auth, RBAC, RLS, FLS, audit, and versioned artifacts |
 
-Described in ObjectStack and deployed on [ObjectOS](https://github.com/objectstack-ai/objectos), this is the substrate for AI-native business apps — CRM, support, operations, and workflow agents acting on real business data without bypassing permissions or audit.
+Described in ObjectStack and served by its runtime, this is the substrate for AI-native business apps — CRM, support, operations, and workflow agents acting on real business data without bypassing permissions or audit.
 
 ## Quick Start
 
@@ -288,10 +288,10 @@ For the browser, the typed client SDK and React hooks (`useQuery` / `useMutation
 
 ## Architecture
 
-ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three protocol layers sit above the kernel:
+ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three layers sit above the microkernel:
 
 <p align="center">
-  <img src="docs/screenshots/layers.png" width="900" alt="ObjectStack layered architecture: the ObjectQL data layer, ObjectOS control layer, and ObjectUI view layer sit on a microkernel (plugin lifecycle, service registry / DI, event bus); every capability — drivers, server, auth, security, automation, AI — is a plugin">
+  <img src="docs/screenshots/layers.png" width="900" alt="ObjectStack layered architecture: the ObjectQL data layer, the kernel control layer, and the ObjectUI view layer sit on a microkernel (plugin lifecycle, service registry / DI, event bus); every capability — drivers, server, auth, security, automation, AI — is a plugin">
 </p>
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete design documentation including the plugin lifecycle state machine, dependency graph, and design decisions.

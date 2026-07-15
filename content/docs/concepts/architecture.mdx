@@ -13,7 +13,7 @@ The architecture is built on foundational protocols that work together as a unif
 **This is the engine-level view.** When you *build*, you work by area — data,
 automation, interface, access, AI (see [What you build](/docs/getting-started/quick-start#what-you-build)).
 This page zooms one level down, into the runtime engines that implement those areas:
-**ObjectQL** (data), **ObjectOS** (control — automation, access, governance), and
+**ObjectQL** (data), **Kernel** (control — automation, access, governance), and
 **ObjectUI** (interface). You rarely think in these three while building; they're the
 machinery underneath.
 </Callout>
@@ -32,7 +32,7 @@ machinery underneath.
   <Card
     icon={<Cpu />}
     title="System Protocol"
-    description="ObjectOS: Control, runtime, and governance."
+    description="Kernel: Control, runtime, and governance."
   />
   <Card
     icon={<Workflow />}
@@ -133,7 +133,7 @@ This definition is **pure metadata**. It doesn't know:
 
 That's the job of the other layers.
 
-## Layer 2: ObjectOS (Control Protocol)
+## Layer 2: Kernel (Control Protocol)
 
 **Role:** Manage the **Lifecycle** and **Governance** of requests.
 
@@ -144,7 +144,7 @@ That's the job of the other layers.
 - Event processing (audit logs, notifications)
 - Multi-tenancy and data isolation
 
-**Key Principle:** ObjectOS acts as the **Gateway**. No layer can directly access the database; all requests must pass through the OS Kernel.
+**Key Principle:** Kernel acts as the **Gateway**. No layer can directly access the database; all requests must pass through the Kernel.
 
 ### Example: Permission Rules
 
@@ -204,7 +204,7 @@ export const HighValueCustomerFlow = defineFlow({
 
 See the [Flow Metadata reference](/docs/automation/flows) for the full Flow node and edge reference.
 
-ObjectOS **orchestrates** these rules at runtime, independent of the data structure or UI.
+Kernel **orchestrates** these rules at runtime, independent of the data structure or UI.
 
 ## Layer 3: ObjectUI (View Protocol)
 
@@ -301,7 +301,7 @@ User clicks "Save"
 ### Step 2: UI Layer Sends Request
 
 ```typescript
-// ObjectUI dispatches an action to ObjectOS
+// ObjectUI dispatches an action to Kernel
 const request = {
   action: 'create',
   object: 'customer',
@@ -314,7 +314,7 @@ const request = {
 };
 ```
 
-### Step 3: ObjectOS Validates Permissions
+### Step 3: Kernel Validates Permissions
 
 ```typescript
 // Kernel checks: Does this user have permission?
@@ -330,7 +330,7 @@ if (!canCreate) {
 }
 ```
 
-### Step 4: ObjectOS Validates Data
+### Step 4: Kernel Validates Data
 
 ```typescript
 // Kernel asks ObjectQL: Is this data valid?
@@ -355,7 +355,7 @@ const result = await driver.insert('customer', {
 });
 ```
 
-### Step 6: ObjectOS Triggers Workflows
+### Step 6: Kernel Triggers Workflows
 
 ```typescript
 // Kernel checks: Are there any workflows for this event?
@@ -424,7 +424,7 @@ export const Opportunity = ObjectSchema.create({
 });
 ```
 
-### 2. ObjectOS: Define Business Rules
+### 2. Kernel: Define Business Rules
 
 ```typescript
 import { defineFlow } from '@objectstack/spec';
@@ -478,10 +478,10 @@ export const OpportunityKanbanView = defineView({
 When a user **drags an opportunity card** from "Proposal" to "Closed Won":
 
 1. **ObjectUI** captures the drag-drop event
-2. **ObjectOS** checks if the user has permission to update the `stage` field
+2. **Kernel** checks if the user has permission to update the `stage` field
 3. **ObjectQL** validates that `"closed_won"` is a valid option
 4. **ObjectQL** writes the update to the database
-5. **ObjectOS** triggers the workflow (create invoice, send notification)
+5. **Kernel** triggers the workflow (create invoice, send notification)
 6. **ObjectUI** updates the kanban board to reflect the new state
 
 **All from metadata. Zero hardcoded logic.**
@@ -499,7 +499,7 @@ Same Metadata Definitions
 ObjectQL: │         │
 Postgres  │    MongoDB
           │
-ObjectOS: │
+Kernel:   │
 Node.js   │    Python
           │
 ObjectUI: │
@@ -511,7 +511,7 @@ React     │    Flutter
 Teams can work independently on each layer:
 
 - **Data Team:** Define objects in ObjectQL
-- **Backend Team:** Build workflows in ObjectOS
+- **Backend Team:** Build workflows in Kernel
 - **Frontend Team:** Create views in ObjectUI
 
 All communicate through **protocol contracts**, not code dependencies.
@@ -521,7 +521,7 @@ All communicate through **protocol contracts**, not code dependencies.
 Adopt ObjectStack gradually:
 
 - **Phase 1:** Use ObjectQL as an ORM replacement
-- **Phase 2:** Add ObjectOS for permissions and workflows
+- **Phase 2:** Add Kernel for permissions and workflows
 - **Phase 3:** Build ObjectUI views to replace custom forms
 
 Each layer is independently useful.
@@ -531,14 +531,14 @@ Each layer is independently useful.
 Mock any layer for testing:
 
 ```typescript
-// Test ObjectOS workflows without a real database
+// Test Kernel workflows without a real database
 const mockObjectQL = {
   getSchema: () => CustomerSchema,
   insert: jest.fn(),
 };
 
 // Test ObjectUI rendering without a real backend
-const mockObjectOS = {
+const mockKernel = {
   checkPermission: () => true,
   executeQuery: () => mockData,
 };
@@ -549,7 +549,7 @@ const mockObjectOS = {
 | Layer | Role | Knows About | Doesn't Know About |
 | :--- | :--- | :--- | :--- |
 | **ObjectQL** | Data structure & queries | Schema, fields, drivers | Users, permissions, UI |
-| **ObjectOS** | Runtime & governance | Auth, workflows, events | Data structure, UI layout |
+| **Kernel** | Runtime & governance | Auth, workflows, events | Data structure, UI layout |
 | **ObjectUI** | Presentation & interaction | Layout, navigation, actions | Business logic, data storage |
 
 The three protocols are **loosely coupled** but **tightly integrated**:
@@ -561,7 +561,7 @@ The three protocols are **loosely coupled** but **tightly integrated**:
 
 - [ObjectQL: Data Protocol](/docs/protocol/objectql) - Full data protocol specification
 - [ObjectUI: UI Protocol](/docs/protocol/objectui) - Full view protocol specification
-- [ObjectOS: System Protocol](/docs/protocol/objectos) - Full control protocol specification
+- [Kernel: System Protocol](/docs/protocol/objectos) - Full control protocol specification
 - [Developer Guide](/docs/getting-started/quick-start) - Build your first ObjectStack application
 
 ---
@@ -599,7 +599,7 @@ View Protocol (uses Object, Query)
               └→ Action Protocol (UI interactions)
 ```
 
-### System Layer (ObjectOS)
+### System Layer (Kernel)
 
 ```
 Data Driver Contracts (Database Abstraction)

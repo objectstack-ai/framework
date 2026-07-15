@@ -17,15 +17,15 @@ A logical grouping of related schemas and types defined with Zod. ObjectStack ha
 
 ## The Three Architectural Layers
 
-The 15 namespaces collapse into three top-level layers that match the public product vocabulary:
+The 15 namespaces collapse into three top-level layers:
 
 | Layer | Also called | Namespaces it includes | Purpose |
 | :--- | :--- | :--- | :--- |
 | **ObjectQL** | Data Layer | Data | Objects, fields, queries, relations, validation, data access |
-| **ObjectOS** | Control Layer / System Layer | Kernel, System, Automation, AI, API, Identity, Security, Cloud, Integration, Studio, QA, Contracts, Shared | Runtime, permissions, automation, plugins, tenants, agent tools, artifact loading |
+| **Kernel** | Control Layer / System Layer (formerly named "ObjectOS") | Kernel, System, Automation, AI, API, Identity, Security, Cloud, Integration, Studio, QA, Contracts, Shared | Runtime, permissions, automation, plugins, tenants, agent tools, artifact loading |
 | **ObjectUI** | View Layer | UI | Apps, views, dashboards, actions, presentation metadata |
 
-When external docs or talks refer to ObjectOS as the "Control Layer", they mean the same runtime described by the System/Kernel/AI/API protocol namespaces below.
+Older docs and talks used **ObjectOS** as the name of this control layer. That name now refers exclusively to the commercial ObjectOS runtime environment ([docs.objectos.ai](https://docs.objectos.ai)); the open control layer is called the **Kernel**, described by the System/Kernel/AI/API protocol namespaces below.
 
 ---
 
@@ -41,7 +41,7 @@ Server-Driven UI specification for building user interfaces. Includes App struct
 Infrastructure services including Event Bus, Job Scheduling, Translation (i18n), and Audit Logging. Manages system-level concerns.
 
 ### Kernel Protocol
-Plugin system and runtime management. Includes Plugin lifecycle, Manifest definition, Logger configuration, and Runtime Context. The core of ObjectOS.
+Plugin system and runtime management. Includes Plugin lifecycle, Manifest definition, Logger configuration, and Runtime Context. The core of the control layer.
 
 ### AI Protocol
 Artificial intelligence capabilities including AI Agents, RAG pipelines, Natural Language Query (NLQ), Predictive models, Cost tracking, and Orchestration.

@@ -5,7 +5,7 @@ description: The unified engine for loading, saving, and managing configuration 
 
 import { Database, FileCode, Layers, RefreshCw, Save } from 'lucide-react';
 
-The **Metadata Service** is the backbone of ObjectOS configuration management. It decouples the *definition* of metadata (Objects, Views, Flows) from its runtime delivery path: local development reads files or `dist/objectstack.json`, while production ObjectOS reads an immutable artifact from the control plane. Project databases store business rows only.
+The **Metadata Service** is the backbone of ObjectStack configuration management. It decouples the *definition* of metadata (Objects, Views, Flows) from its runtime delivery path: local development reads files or `dist/objectstack.json`, while production ObjectStack reads an immutable artifact from the control plane. Project databases store business rows only.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ The Metadata Service uses a **Provider/Loader** architecture. The core `Metadata
   <Card
     icon={<Layers />}
     title="Registry Pattern"
-    description="The Manager accepts any number of Loaders. Runtime ObjectOS uses file/artifact loaders; control-plane services can opt into database loaders explicitly."
+    description="The Manager accepts any number of Loaders. Runtime ObjectStack uses file/artifact loaders; control-plane services can opt into database loaders explicitly."
   />
   <Card
     icon={<FileCode />}
@@ -63,7 +63,7 @@ Loaders adapt different storage backends to a common interface.
 | :--- | :--- | :--- |
 | **FilesystemLoader** | `filesystem` | Reads/Writes `.json`, `.yaml`, `.ts` files from disk. Primary for development. |
 | **MemoryLoader** | `memory` | Hydrates compiled artifact items into the runtime metadata registry. |
-| **DatabaseLoader** | `database` | Stores metadata revisions in control-plane services that explicitly configure it. Not auto-enabled by ObjectOS. |
+| **DatabaseLoader** | `database` | Stores metadata revisions in control-plane services that explicitly configure it. Not auto-enabled by ObjectStack. |
 | **RemoteLoader** | `http` | Fetches metadata from a remote API or git repository. |
 
 ### 3. Granular Capabilities
@@ -86,7 +86,7 @@ export interface MetadataLoaderContract {
 
 ## Internal Persistence API
 
-The Metadata Service supports full CRUD operations for authoring tools and control-plane services. Runtime ObjectOS treats metadata as read-only after artifact/file hydration; `MetadataPlugin` does not automatically bridge ObjectQL to `DatabaseLoader`.
+The Metadata Service supports full CRUD operations for authoring tools and control-plane services. Runtime ObjectStack treats metadata as read-only after artifact/file hydration; `MetadataPlugin` does not automatically bridge ObjectQL to `DatabaseLoader`.
 
 ### Saving Metadata (Node.js)
 
@@ -109,7 +109,7 @@ await manager.save('object', 'workflow_config', data, {
 
 ### Loading Strategy
 
-When `load()` is called, the Manager iterates through registered loaders. In ObjectOS runtime boot this means "artifact/file first"; database-backed metadata is reserved for explicitly configured control-plane services.
+When `load()` is called, the Manager iterates through registered loaders. In ObjectStack runtime boot this means "artifact/file first"; database-backed metadata is reserved for explicitly configured control-plane services.
 
 ```mermaid
 graph LR
@@ -137,7 +137,7 @@ const unsubscribe = manager.subscribe('object', (event) => {
 ## Remote API Access
 
 <Callout type="info">
-  ObjectOS metadata is artifact-backed at runtime. Read/write metadata APIs belong to authoring tools and the control plane.
+  ObjectStack metadata is artifact-backed at runtime. Read/write metadata APIs belong to authoring tools and the control plane.
 </Callout>
 
 The system provides standard REST and TypeScript APIs for interacting with metadata, including **full read/write support**.
@@ -236,4 +236,4 @@ The Metadata Service is designed to power the CLI.
 
 - **`objectstack compile`**: Validates TypeScript metadata and emits `dist/objectstack.json`.
 - **`objectstack publish`**: Uploads compiled JSON to the control plane, which creates a metadata revision and artifact.
-- **`objectstack dev`**: Boots ObjectOS from local files or the compiled artifact without a control-plane connection.
+- **`objectstack dev`**: Boots ObjectStack from local files or the compiled artifact without a control-plane connection.

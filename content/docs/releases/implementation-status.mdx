@@ -25,7 +25,7 @@ This matrix is generated from actual codebase analysis and represents the curren
 
 ---
 
-## Core Infrastructure (ObjectOS)
+## Core Infrastructure (Kernel)
 
 ### Runtime & Kernel
 
@@ -65,12 +65,12 @@ This matrix is generated from actual codebase analysis and represents the curren
 ### Metadata Framework
 
 <Callout type="info">
-**Runtime Boundary** — ObjectOS metadata is file/artifact-backed and read-only at boot. Database-backed metadata persistence exists for explicitly configured control-plane services, not as an automatic ObjectOS project-DB bridge.
+**Runtime Boundary** — runtime metadata is file/artifact-backed and read-only at boot. Database-backed metadata persistence exists for explicitly configured control-plane services, not as an automatic runtime project-DB bridge.
 </Callout>
 
 - Metadata API (list types, list items, get item) is fully functional
 - Metadata is loaded from config files or `dist/objectstack.json` at startup and held in memory
-- `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` into ObjectOS or auto-bridges ObjectQL to `DatabaseLoader`
+- `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` into the runtime or auto-bridges ObjectQL to `DatabaseLoader`
 - Future: production Artifact API loader and durable local artifact cache
 
 ### System Services
@@ -295,32 +295,31 @@ The `auth` service in `CoreServiceName` covers both **authentication** (identity
 ## AI Layer
 
 <Callout type="warning">
-The in-UI AI **runtime** below (`@objectstack/service-ai`) moved to the **cloud /
-Enterprise** distribution — see cloud ADR-0025 (`service-ai → cloud; open =
-MCP-only`). The agent / skill / tool **schemas** stay open in `@objectstack/spec/ai`;
-the **open edition** exposes AI via [`@objectstack/mcp`](/docs/ai)
-(BYO-AI). The Implementation / Status columns describe the runtime as it ships in
-cloud / EE.
+The in-UI AI **runtime** below ships in **ObjectOS**, not in the
+open-source framework. The agent / skill / tool **schemas** stay open in
+`@objectstack/spec/ai`; the **open-source framework** exposes AI via
+[`@objectstack/mcp`](/docs/ai) (BYO-AI). The Implementation / Status columns
+describe that separate runtime.
 </Callout>
 
 | Protocol | @objectstack/spec | Implementation | Status |
 |:---------|:-----------------:|:-------------:|:------:|
-| **Agent** | ✅ | @objectstack/service-ai | ✅ Agent runtime (`agent-runtime.ts`, `agents/`) |
-| **Model Registry** | ✅ | @objectstack/service-ai | ✅ `model-registry.ts` |
+| **Agent** | ✅ | ObjectOS runtime | ✅ Agent runtime |
+| **Model Registry** | ✅ | ObjectOS runtime | ✅ Model registry |
 | **RAG Pipeline** | ✅ | @objectstack/service-knowledge | ⚠️ Knowledge service + `knowledge-memory` / `knowledge-ragflow` / `embedder-openai` plugins |
-| **NLQ** | ✅ | @objectstack/service-ai | ⚠️ `tools/query-data`, `schema-retriever.ts` |
-| **Conversation** | ✅ | @objectstack/service-ai | ✅ In-memory + ObjectQL conversation services (`conversation/`) |
-| **Agent Action** | ✅ | @objectstack/service-ai | ⚠️ Action/data/knowledge tools (`tools/`) |
+| **NLQ** | ✅ | ObjectOS runtime | ⚠️ Data-query tools |
+| **Conversation** | ✅ | ObjectOS runtime | ✅ In-memory + ObjectQL conversation services |
+| **Agent Action** | ✅ | ObjectOS runtime | ⚠️ Action/data/knowledge tools |
 | **Cost** | ✅ | ❌ | ❌ Spec only |
 | **Predictive** | ✅ | ❌ | ❌ Spec only |
-| **Orchestration** | ✅ | @objectstack/service-ai | ⚠️ Agent tool orchestration |
-| **Feedback Loop** | ✅ | @objectstack/service-ai | ⚠️ Eval harness (`eval/`) |
+| **Orchestration** | ✅ | ObjectOS runtime | ⚠️ Agent tool orchestration |
+| **Feedback Loop** | ✅ | ObjectOS runtime | ⚠️ Eval harness |
 | **DevOps Agent** | ✅ | ❌ | ❌ Spec only |
 
 **Notes:**
 - Complete AI protocol suite defined
-- `@objectstack/service-ai` ships agents, model registry, conversation, tools, skills, and an eval harness
-- RAG/embedding is provided by `@objectstack/service-knowledge` plus the `knowledge-memory`, `knowledge-ragflow`, and `embedder-openai` plugins
+- The ObjectOS runtime ships agents, model registry, conversation, tools, skills, and an eval harness
+- RAG/embedding is provided by `@objectstack/service-knowledge` plus the `knowledge-memory`, `knowledge-ragflow`, and `embedder-openai` plugins (all open)
 - Cost tracking, predictive, and the DevOps agent protocols remain spec-only
 
 ---
@@ -454,7 +453,7 @@ cloud / EE.
 | **System** | 39 | Logging, audit, job, translation, metrics, notification implemented; several governance services pending |
 | **Auth** (plugin) | 10 | Permission + RLS live (`plugin-security`); identity/sharing/territory still plugin-pending |
 | **Automation** (plugin) | 7 | Flow, workflow, approval, webhook, and triggers implemented; ETL/Sync pending |
-| **AI** | 12 | Agents, model registry, conversation, tools, RAG implemented (`service-ai` + knowledge plugins); cost/predictive/DevOps-agent pending |
+| **AI** | 12 | Agents, model registry, conversation, tools, RAG implemented (ObjectOS runtime + open knowledge plugins); cost/predictive/DevOps-agent pending |
 | **Integration** | 7 | REST/OpenAPI/MCP/Slack connectors, file storage, and queue implemented; GitHub/Vercel connectors pending |
 | **QA** | 1 | Fully implemented |
 
@@ -477,7 +476,7 @@ Implementation spans every layer of the platform. Core infrastructure, data mode
 | **UI Rendering** | ❌ | No |
 | **Workflows** | ✅ | Yes (plugin: `service-automation`) |
 | **Security** | ⚠️ | Partial (Phase-1 RBAC/RLS via `plugin-security`) |
-| **AI Features** | ⚠️ | Partial (`service-ai` + knowledge plugins) |
+| **AI Features** | ⚠️ | Partial (ObjectOS runtime + open knowledge plugins) |
 
 ---
 

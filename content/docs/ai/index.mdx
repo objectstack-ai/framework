@@ -14,13 +14,13 @@ AI in ObjectStack is a **cross-protocol capability layer**: agents, tools, and k
 </Callout>
 
 <Callout type="info">
-**The open framework does AI bring-your-own-AI** — your keys, your models, zero platform AI cost. Everything on this page is part of the open edition unless a section is explicitly marked **cloud / Enterprise**:
+**The open framework does AI bring-your-own-AI** — your keys, your models, zero platform AI cost. Everything on this page is part of the open-source framework unless a section is explicitly marked **ObjectOS**:
 
 - **Data & actions → `@objectstack/mcp`** (BYO-AI). Point your own AI — Claude, Cursor, any MCP client, or a local model — at the app's objects, queries, and business **actions**, governed by the same RLS. With a local model, data *and* inference stay inside your boundary.
 - **Knowledge & RAG → the Knowledge Protocol + adapter plugins** (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) — permission-aware retrieval over your own objects.
 - **Agents, tools, skills → typed metadata** (`defineAgent` / `defineTool` / `defineSkill`) plus the Model Registry. Author them as source (`*.agent.ts`, `*.tool.ts`, …) with your own AI coding agent (Claude Code, Cursor), aided by the ObjectStack [skills](/docs/ai/skills-reference) and MCP introspection.
 
-The **cloud / Enterprise** tier adds an in-product chat *runtime* on top of these same primitives — the `ask` data-query assistant, the `build` Studio authoring assistant, and the `/api/v1/ai/*` chat endpoints (`@objectstack/service-ai`, cloud [ADR-0025](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md)). The open edition has no built-in in-product chat — that runtime is documented in the [cloud AI & Agents docs](https://docs.objectos.app/docs/ai).
+**ObjectOS** adds an in-product chat *runtime* on top of these same primitives — the `ask` data-query assistant, the `build` Studio authoring assistant, and the `/api/v1/ai/*` chat endpoints. The open-source framework has no built-in in-product chat — that runtime is documented in the [ObjectOS AI & Agents docs](https://docs.objectos.app/docs/ai).
 </Callout>
 
 ## What's in this module
@@ -138,10 +138,10 @@ those same tools over MCP (`@objectstack/mcp`), and you drive them on a trigger
 or schedule from a [Flow or Workflow](/docs/automation).
 
 <Callout type="info">
-**Cloud / Enterprise runtime.** The in-product chat invocation shown below — the
+**ObjectOS runtime.** The in-product chat invocation shown below — the
 REST chat endpoint (`/api/v1/ai/agents/:agentName/chat`) and the server-side
-`aiService.chatWithTools(...)` — is the `@objectstack/service-ai` chat runtime,
-which ships in the **cloud / Enterprise** tier. The agent, tool, and skill
+`aiService.chatWithTools(...)` — is the in-product chat runtime,
+which ships in **ObjectOS**. The agent, tool, and skill
 *metadata* it consumes is open; only this in-product chat runtime is not.
 </Callout>
 

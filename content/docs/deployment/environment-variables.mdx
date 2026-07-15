@@ -47,7 +47,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_DATABASE_URL` | url | — | Database connection string (e.g. `file:./data.sqlite`, `postgres://…`, `mongodb://…`, `memory://`). `libsql://` (Turso) is not dispatched by the open-core runtime — that driver ships separately in the ObjectStack Cloud distribution. |
+| `OS_DATABASE_URL` | url | — | Database connection string (e.g. `file:./data.sqlite`, `postgres://…`, `mongodb://…`, `memory://`). `libsql://` (Turso) is not supported. |
 | `OS_DATABASE_DRIVER` | enum | inferred | Force a specific driver when the URL is ambiguous. `memory` \| `sqlite` \| `sqlite-wasm` \| `postgres` \| `mongodb`. |
 | `OS_STORAGE_ROOT` | path | `./.objectstack/data/uploads` | Root directory for the local file storage adapter, relative to the process cwd (used by `os serve`'s default `storage` capability wiring). |
 | `OS_ARTIFACT_PATH` | path | — | Path or `http(s)://` URL to a compiled `objectstack.json` artifact to boot the kernel from. |
@@ -60,7 +60,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 |:---|:---|:---|:---|
 | `OS_SECRET_KEY` | string | — | 32-byte master key (64 hex chars or base64) for `sys_secret` encryption — encrypted settings, `secret` fields, datasource credentials. **Required** for containerized or multi-node deployments; on a single durable host `os start` mints and persists a dev key instead. See [Deployment Modes](/docs/deployment#environment-variables). |
 | `OS_DEV_CRYPTO_KEY` | string | — | Development convenience crypto key, consulted after `OS_SECRET_KEY`. Do not use in production. |
-| `OS_CLUSTER_DRIVER` | string | `memory` | Cluster coordination driver id. When set to anything other than `memory`, the runtime treats the deployment as multi-node (and requires `OS_SECRET_KEY`). Non-memory drivers (e.g. `redis`) ship in the EE distribution. |
+| `OS_CLUSTER_DRIVER` | string | `memory` | Cluster coordination driver id. When set to anything other than `memory`, the runtime treats the deployment as multi-node (and requires `OS_SECRET_KEY`). Non-memory drivers are opt-in sibling packages (e.g. `redis` via `@objectstack/service-cluster-redis`) — see [Cluster](/docs/kernel/cluster). |
 | `OS_REDIS_URL` | url | — | Connection URL passed to a non-memory cluster driver (e.g. `OS_CLUSTER_DRIVER=redis`). |
 
 ---
@@ -137,9 +137,8 @@ Auth settings precedence:
 ## AI
 
 <Callout type="warning">
-These variables configure the **cloud / Enterprise** in-UI AI runtime
-(`@objectstack/service-ai`), which moved out of the open framework — see cloud
-ADR-0025 (`service-ai → cloud; open = MCP-only`). The **open edition** has no
+These variables configure the **ObjectOS** in-product AI runtime, which is not
+part of the open-source framework. The **open-source framework** has no
 in-UI AI runtime to configure: it exposes AI through `@objectstack/mcp` (BYO-AI),
 where the model and provider are configured in your own MCP client (Claude,
 Cursor, a local model, …). See the [AI Capabilities guide](/docs/ai).
@@ -176,7 +175,7 @@ The boot-time LLM adapter priority is:
 5. `GOOGLE_GENERATIVE_AI_API_KEY` using `@ai-sdk/google`.
 6. `MemoryLLMAdapter` echo mode when no real provider is configured.
 
-After boot, if the Settings service is mounted, `@objectstack/service-ai`
+After boot, if the Settings service is mounted, the ObjectOS AI runtime
 reads the `ai` Settings namespace and swaps the adapter when the provider
 comes from env or a stored Settings UI value. The manifest default
 `provider=memory` is ignored so it does not mask boot-time auto-detection;
@@ -249,7 +248,7 @@ OS_MCP_SERVER_ENABLED=true os start     # additionally auto-start the stdio tran
 ## Multi-tenant / Cloud control plane
 
 These variables are only meaningful when running in `OS_MODE=cloud` or against
-the hosted ObjectStack Cloud control plane.
+the hosted ObjectOS Cloud control plane.
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|

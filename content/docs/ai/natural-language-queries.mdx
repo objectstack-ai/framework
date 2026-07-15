@@ -11,8 +11,8 @@ Natural-language querying is **open**. Point your own AI — Claude, Cursor, any
 MCP client, or a local model — at your app through `@objectstack/mcp`, and it
 turns questions into ObjectQL against your objects, governed by the same
 row-level security as the REST API. The data tools and the ObjectQL engine that
-back this are part of the open framework — no `@objectstack/service-ai` and no
-cloud studio are required.
+back this are part of the open framework — no ObjectOS runtime and no
+cloud Studio are required.
 
 Your AI queries your data through the open MCP **data tools** — `query_records`
 (filter, field selection, sort, pagination) and `get_record`, plus the
@@ -52,13 +52,13 @@ model is prompted with the available objects and translates the user's question
 into `query_records` calls at runtime.
 
 <Callout type="info">
-**Cloud / Enterprise — bundled in-product chat.** The cloud tier ships an in-UI
-AI runtime (`@objectstack/service-ai`, closed) — the `ask` data-query assistant
+**ObjectOS — bundled in-product chat.** ObjectOS ships an in-UI
+AI runtime — the `ask` data-query assistant
 and the `/api/v1/ai/*` chat endpoints — that registers these same data tools,
 plus the group-by/roll-up `aggregate_data` tool, into its own chat loop. That
-package is not part of the open framework and is documented separately in the
-[cloud docs](https://docs.objectos.app/docs/ai); this page covers the open path
-only. On the open edition, use
+runtime is not part of the open framework and is documented separately in the
+[ObjectOS docs](https://docs.objectos.app/docs/ai); this page covers the open path
+only. On the open-source framework, use
 `@objectstack/mcp` above to get the same natural-language querying with your
 own AI.
 </Callout>

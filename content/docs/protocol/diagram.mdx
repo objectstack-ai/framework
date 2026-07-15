@@ -19,7 +19,7 @@ ObjectStack is composed of seven protocol layers that work together to form a co
 |:---|:---|:---|
 | **Data (ObjectQL)** | `src/data/` | Objects, Fields, Queries, Hooks, State Machines |
 | **UI (ObjectUI)** | `src/ui/` | Views, Apps, Dashboards, Reports, Actions |
-| **System (ObjectOS)** | `src/system/` | Manifest, Datasources, Plugins, Kernel |
+| **System (Kernel)** | `src/system/` | Manifest, Datasources, Plugins, Kernel |
 | **Automation** | `src/automation/` | Flows, Workflows, Triggers, Approvals |
 | **AI** | `src/ai/` | Agents, RAG Pipelines, Model Registry |
 | **API** | `src/api/` | REST, GraphQL, WebSocket, Realtime |
@@ -70,7 +70,7 @@ graph TB
         MODELS[Model Registry]
     end
 
-    subgraph "System Layer (ObjectOS)"
+    subgraph "System Layer (Kernel)"
         MANIFEST[Manifest]
         KERNEL[Kernel]
         PLUGINS[Plugins]

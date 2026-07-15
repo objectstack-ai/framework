@@ -20,7 +20,7 @@ auto-translate hooks) describe **target behaviour** and are not yet implemented.
 Treat those snippets as design intent.
 </Callout>
 
-ObjectOS provides **built-in internationalization** that enables applications to support multiple languages, locales, and regional formats without external libraries or complex configuration.
+ObjectStack provides **built-in internationalization** that enables applications to support multiple languages, locales, and regional formats without external libraries or complex configuration.
 
 ## The i18n Problem
 
@@ -42,9 +42,9 @@ pluralize('item', 5);
 
 **Result:** 500KB+ of dependencies, inconsistent APIs, and hours of configuration.
 
-## ObjectOS i18n Solution
+## ObjectStack i18n Solution
 
-ObjectOS provides a **unified i18n API** with batteries included:
+ObjectStack provides a **unified i18n API** with batteries included:
 
 ```typescript
 // Today: translation + interpolation via the II18nService contract
@@ -67,7 +67,7 @@ i18n.t('messages.welcome', 'en', { name: 'John' }); // Translation + interpolati
 
 ## Locale Resolution
 
-ObjectOS automatically determines the user's locale using a **fallback chain**:
+ObjectStack automatically determines the user's locale using a **fallback chain**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -117,7 +117,7 @@ Examples:
 
 ### Locale Fallback
 
-If exact locale not found, ObjectOS falls back to **language-only** locale:
+If exact locale not found, ObjectStack falls back to **language-only** locale:
 
 ```
 User requests: de-AT (German, Austria)
@@ -147,7 +147,7 @@ Translations are stored in **JSON files** organized by locale and namespace.
 
 ### Object-First Convention (Recommended)
 
-ObjectOS uses an **object-first** convention where all translatable metadata
+ObjectStack uses an **object-first** convention where all translatable metadata
 for an object is aggregated under `o.{object_name}`. Global (non-object-bound)
 translations remain in dedicated top-level groups. This aligns with Salesforce DX
 and Dynamics conventions, enabling efficient translation workbench editing
@@ -764,7 +764,7 @@ Output:
 
 ### Translation Service Integration
 
-ObjectOS integrates with professional translation services:
+ObjectStack integrates with professional translation services:
 
 ```typescript
 // objectstack.config.ts
@@ -904,7 +904,7 @@ export default defineStack({
 
 ## Summary
 
-ObjectOS i18n provides:
+ObjectStack i18n provides:
 - **Translation bundles** in JSON format with object-first namespaces
 - **Fallback-locale resolution** for missing keys
 - **`{{param}}` interpolation** via `t(key, locale, params)`
