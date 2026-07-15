@@ -818,6 +818,13 @@ The legacy spellings `visibleOn` (view) and `visibility` (page) are `@deprecated
 aliases: still accepted and folded into `visibleWhen` at parse time, so existing
 metadata keeps working. Author new metadata with `visibleWhen`.
 
+Since `@objectstack/spec` 15 (ADR-0089 D3a) the form field/section and page
+component schemas are **strict**: a key they do not declare — a `visibleWhen`
+typo, a page-only `visibility` pasted onto a view field (or vice-versa), or a
+stale key — is now a **loud parse error** instead of being silently dropped. The
+error names the offending key and, when it looks like a visibility predicate,
+points you back at `visibleWhen`.
+
 Breakpoint-based show/hide is handled separately via the component's
 `responsive.hiddenOn` array (e.g. `hiddenOn: ['xs', 'sm']`), see
 `packages/spec/src/ui/responsive.zod.ts`.

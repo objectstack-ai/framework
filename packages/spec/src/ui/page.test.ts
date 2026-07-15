@@ -1016,3 +1016,30 @@ describe('ADR-0089 — visibleWhen unification (page component)', () => {
     expect((parsed as Record<string, unknown>).visibility).toBeUndefined();
   });
 });
+
+describe('ADR-0089 D3a — strict page component schema (loud mis-layered keys)', () => {
+  it('rejects an unknown key on a page component instead of silently stripping it', () => {
+    const res = PageComponentSchema.safeParse({ type: 'element:text', notARealKey: 1 });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].code).toBe('unrecognized_keys');
+    }
+  });
+
+  it('a visibility-ish typo is rejected AND the message points at `visibleWhen`', () => {
+    const res = PageComponentSchema.safeParse({ type: 'element:text', visibilty: "page.a == 1" });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].message).toContain('visibleWhen');
+    }
+  });
+
+  it('the deprecated `visibility` alias is still accepted under strict (declared key)', () => {
+    expect(() => PageComponentSchema.parse({ type: 'element:text', visibility: "page.a == 1" })).not.toThrow();
+  });
+
+  it('rejects a stale `visibleOn` key on a page component (that is the view-form alias, not a page one)', () => {
+    const res = PageComponentSchema.safeParse({ type: 'element:text', visibleOn: "page.a == 1" });
+    expect(res.success).toBe(false);
+  });
+});

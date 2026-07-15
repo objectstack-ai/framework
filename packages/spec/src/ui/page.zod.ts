@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { ExpressionInputSchema } from '../shared/expression.zod';
-import { normalizeVisibleWhen } from '../shared/visibility';
+import { normalizeVisibleWhen, strictVisibilityError } from '../shared/visibility';
 import { SortItemSchema } from '../shared/enums.zod';
 import { FilterConditionSchema } from '../data/filter.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
@@ -123,7 +123,7 @@ export const PageComponentSchema = lazySchema(() => z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-}).transform(normalizeVisibleWhen));
+}, { error: strictVisibilityError }).strict().transform(normalizeVisibleWhen));
 
 /**
  * Page Variable Schema

@@ -1,5 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import type { z } from 'zod';
+
 /**
  * # Conditional-visibility predicate normalization (ADR-0089)
  *
@@ -64,3 +66,46 @@ export function normalizeVisibleWhen<T extends WithVisibilityAliases>(
   }
   return { ...rest, visibleWhen: canonical } as Omit<T, 'visibleOn' | 'visibility'>;
 }
+
+/** A key that is (or is a likely mis-spelling of) the visibility predicate. */
+function looksLikeVisibilityKey(key: string): boolean {
+  return /vis|conceal|hidden|show.?when/i.test(key);
+}
+
+/**
+ * Custom zod `error` for the `.strict()` view/page schemas (ADR-0089 D3a).
+ *
+ * With `.strict()`, a key these schemas do not declare — a stale `visibleOn` past
+ * removal, a `visibleWhen` typo, or a wrong-layer paste — is now a **loud parse
+ * error** instead of a silent strip (ADR-0049 enforce-or-remove, ADR-0078
+ * no-silently-inert). This error map turns that rejection into a *fixable* one: it
+ * always names the offending key(s), and when a key looks like the
+ * conditional-visibility predicate it points the author at the canonical
+ * `visibleWhen`. Every other issue code defers to zod's default (`undefined`).
+ *
+ * Wire it as the object's `error` alongside `.strict()`:
+ *
+ * ```ts
+ * z.object({ ..., visibleWhen: Expr.optional() }, { error: strictVisibilityError })
+ *   .strict()
+ *   .transform(normalizeVisibleWhen)
+ * ```
+ */
+export const strictVisibilityError: z.core.$ZodErrorMap = (issue) => {
+  if (issue.code !== 'unrecognized_keys') return undefined;
+  const keys = (issue as { keys?: readonly string[] }).keys ?? [];
+  const list = keys.map((k) => `\`${k}\``).join(', ');
+  const base =
+    `Unrecognized key(s) on this view/page schema: ${list}. ` +
+    `Before ADR-0089 D3a these were dropped silently, shipping inert metadata; ` +
+    `a mis-layered or stale key is now a loud parse error.`;
+  if (keys.some(looksLikeVisibilityKey)) {
+    return (
+      base +
+      ' If this is the conditional-visibility predicate, the canonical key is ' +
+      '`visibleWhen` (ADR-0089) — `visibleOn` (view form) and `visibility` (page ' +
+      'component) are still accepted as deprecated aliases.'
+    );
+  }
+  return base;
+};

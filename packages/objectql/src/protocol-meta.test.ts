@@ -408,7 +408,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
                     form: {
                         type: 'tabbed',
                         data: { provider: 'object', object: 'lead' },
-                        sections: [{ id: 'main', title: 'Main', fields: [{ field: 'first_name' }] }],
+                        sections: [{ name: 'main', label: 'Main', fields: [{ field: 'first_name' }] }],
                     },
                 };
                 await expect(

@@ -5,7 +5,7 @@ import { ProtectionSchema } from '../shared/protection.zod';
 import { MetadataProtectionFields } from '../kernel/metadata-protection.zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { ExpressionInputSchema } from '../shared/expression.zod';
-import { normalizeVisibleWhen } from '../shared/visibility';
+import { normalizeVisibleWhen, strictVisibilityError } from '../shared/visibility';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { SharingConfigSchema } from './sharing.zod';
 import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zod';
@@ -770,7 +770,7 @@ export const FormFieldSchema: z.ZodType<any> = lazySchema(() => z.object({
   /** @deprecated ADR-0089 — use `visibleWhen`. Accepted and normalized to `visibleWhen` at parse. */
   visibleOn: ExpressionInputSchema.optional().describe('[DEPRECATED → `visibleWhen`] Visibility predicate (CEL). Normalized to `visibleWhen` at parse.'),
   disclosure: z.enum(['inline', 'popover']).optional().describe('Composite rendering: inline bordered box (default) or a summary line + gear popover (progressive disclosure).'),
-}).transform(normalizeVisibleWhen));
+}, { error: strictVisibilityError }).strict().transform(normalizeVisibleWhen));
 
 /**
  * Form Layout Section
@@ -807,7 +807,7 @@ export const FormSectionSchema = lazySchema(() => z.object({
     z.string(), // Legacy: simple field name
     FormFieldSchema, // Enhanced: detailed field config
   ])),
-}).transform(normalizeVisibleWhen));
+}, { error: strictVisibilityError }).strict().transform(normalizeVisibleWhen));
 
 /**
  * Form View Schema

@@ -2536,3 +2536,44 @@ describe('ADR-0089 — visibleWhen unification (view form)', () => {
     expect(parsed.visibleOn).toBeUndefined();
   });
 });
+
+describe('ADR-0089 D3a — strict view form schemas (loud mis-layered keys)', () => {
+  it('rejects an unknown key on a form field instead of silently stripping it', () => {
+    const res = FormFieldSchema.safeParse({ field: 'state', notARealKey: 1 });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].code).toBe('unrecognized_keys');
+    }
+  });
+
+  it('a visibility-ish typo is rejected AND the message points at `visibleWhen`', () => {
+    const res = FormFieldSchema.safeParse({ field: 'state', visibleWhenn: "record.a == 1" });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].message).toContain('visibleWhen');
+    }
+  });
+
+  it('the deprecated `visibleOn` alias is still accepted under strict (declared key)', () => {
+    expect(() => FormFieldSchema.parse({ field: 'state', visibleOn: "record.a == 1" })).not.toThrow();
+  });
+
+  it('rejects a stale `visibility` key on a form field (that is the page-component alias, not a view one)', () => {
+    const res = FormFieldSchema.safeParse({ field: 'state', visibility: "record.a == 1" });
+    expect(res.success).toBe(false);
+  });
+
+  it('a non-visibility unknown key is rejected without the visibleWhen hint', () => {
+    const res = FormSectionSchema.safeParse({ label: 'S', fields: [], bogusKey: true });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0].message).not.toContain('visibleWhen');
+      expect(res.error.issues[0].message).toContain('bogusKey');
+    }
+  });
+
+  it('a strict form section still accepts canonical + alias keys', () => {
+    expect(() => FormSectionSchema.parse({ label: 'S', visibleWhen: 'record.a == 1', fields: [] })).not.toThrow();
+    expect(() => FormSectionSchema.parse({ label: 'S', visibleOn: 'record.a == 1', fields: [] })).not.toThrow();
+  });
+});
