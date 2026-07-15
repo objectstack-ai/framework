@@ -958,6 +958,58 @@ export class SecurityPlugin implements Plugin {
         }
       }
 
+      // 2.5b. Field-Level Security READ enforcement for aggregate inputs.
+      //
+      // The read path relies on RESULT masking (step 4) to hide FLS-protected
+      // fields, but step 4 only covers find/findOne/insert/update — and an
+      // aggregate's output rows carry only aliases, so masking could never
+      // recover which source field fed `sum(salary) AS total`. Without an
+      // input-side gate a caller may read a protected field's statistics
+      // (sum/avg/min/max reveal the value outright on a single-row group).
+      // Enforce on the INPUT: any groupBy / aggregation reference to an
+      // FLS-unreadable field is rejected fail-closed with the offending names
+      // (mirrors the write gate in 2.5). `where`-filter probing is a
+      // platform-wide class shared with find() and is not widened here.
+      if (opCtx.operation === 'aggregate' && permissionSets.length > 0) {
+        let fieldPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, permissionSets);
+        // [ADR-0066 D3] AND-gate field-level requiredPermissions into the map.
+        fieldPerms = this.foldFieldRequiredPermissions(fieldPerms, secMeta.fieldRequiredPermissions, permissionSets);
+        // [ADR-0090 D10] Intersect with the delegator's field perms — a field
+        // the agent may read but the delegator may not stays forbidden.
+        if (delegatorSets) {
+          let delFieldPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, delegatorSets);
+          delFieldPerms = this.foldFieldRequiredPermissions(delFieldPerms, secMeta.fieldRequiredPermissions, delegatorSets);
+          fieldPerms = intersectFieldMasks(fieldPerms, delFieldPerms);
+        }
+        if (Object.keys(fieldPerms).length > 0) {
+          const ast: any = opCtx.ast ?? {};
+          const referenced = new Set<string>();
+          for (const g of Array.isArray(ast.groupBy) ? ast.groupBy : []) {
+            const f = typeof g === 'string' ? g : g?.field;
+            if (typeof f === 'string' && f) referenced.add(f);
+          }
+          for (const a of Array.isArray(ast.aggregations) ? ast.aggregations : []) {
+            if (typeof a?.field === 'string' && a.field) referenced.add(a.field);
+          }
+          const forbidden = [...referenced].filter(
+            (f) => fieldPerms[f] && fieldPerms[f].readable === false,
+          );
+          if (forbidden.length > 0) {
+            throw new PermissionDeniedError(
+              `[Security] Field read denied: not permitted to aggregate ` +
+                `[${forbidden.join(', ')}] on '${opCtx.object}'`,
+              {
+                operation: opCtx.operation,
+                object: opCtx.object,
+                positions,
+                permissionSets: explicitPermissionSets,
+                forbiddenFields: forbidden,
+              },
+            );
+          }
+        }
+      }
+
       // 3.5. Auto-inject `owner_id` on insert from the
       // ExecutionContext. Without this, the row has `owner_id = NULL`
       // and the default `owner_only_writes` RLS policy hides it from

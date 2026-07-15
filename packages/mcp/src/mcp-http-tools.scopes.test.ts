@@ -22,7 +22,7 @@ import {
 import { MCPServerRuntime } from './mcp-server-runtime.js';
 import type { McpActionBridge, McpDataBridge } from './mcp-http-tools.js';
 
-const READ_TOOLS = ['list_objects', 'describe_object', 'query_records', 'get_record'];
+const READ_TOOLS = ['list_objects', 'describe_object', 'query_records', 'get_record', 'aggregate_records'];
 const WRITE_TOOLS = ['create_record', 'update_record', 'delete_record'];
 const ACTION_TOOLS = ['list_actions', 'run_action'];
 
@@ -34,6 +34,7 @@ function makeBridge(): McpDataBridge & McpActionBridge & { calls: any[] } {
     async describeObject(name: string) { calls.push(['describeObject', name]); return { name }; },
     async query(object: string, opts: any) { calls.push(['query', object, opts]); return { object, records: [] }; },
     async get(object: string, id: string) { calls.push(['get', object, id]); return { id }; },
+    async aggregate(object: string, opts: any) { calls.push(['aggregate', object, opts]); return []; },
     async create(object: string, data: any) { calls.push(['create', object, data]); return { object, id: 'n1' }; },
     async update(object: string, id: string, data: any) { calls.push(['update', object, id, data]); return { object, id }; },
     async remove(object: string, id: string) { calls.push(['remove', object, id]); return { object, id, deleted: true }; },

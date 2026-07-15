@@ -42,6 +42,9 @@ const ACTION_TO_API_METHOD: Record<string, string> = {
   delete: 'delete',
   query: 'list',
   find: 'list',
+  // Aggregation is a list-class read: an object whose whitelist excludes
+  // `list` must not leak row statistics through GROUP BY either.
+  aggregate: 'list',
   batch: 'bulk',
 };
 

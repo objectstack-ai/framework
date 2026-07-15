@@ -223,3 +223,164 @@ describe('MCPServerRuntime.handleHttpRequest (Streamable HTTP)', () => {
     expect(json.result.content[0].text).toContain('RLS: not permitted');
   });
 });
+
+describe('aggregate_records (GROUP BY aggregation tool)', () => {
+  let runtime: MCPServerRuntime;
+
+  /** Bridge WITH the optional aggregate seam implemented. */
+  function makeAggBridge(rows: unknown[] = [{ status: 'open', n: 2 }]) {
+    const base = makeBridge();
+    const calls = base.calls;
+    return {
+      ...base,
+      calls,
+      async aggregate(object: string, opts: any) {
+        calls.push(['aggregate', object, opts]);
+        return rows;
+      },
+    };
+  }
+
+  beforeEach(() => {
+    runtime = new MCPServerRuntime({ name: 'objectstack-test', version: '9.9.9' });
+  });
+
+  it('registers only when the bridge implements aggregate (graceful degradation)', async () => {
+    const without = await call(runtime, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, makeBridge());
+    expect(without.json.result.tools.map((t: any) => t.name)).not.toContain('aggregate_records');
+
+    const runtime2 = new MCPServerRuntime({ name: 'objectstack-test', version: '9.9.9' });
+    const withAgg = await call(runtime2, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, makeAggBridge());
+    const byName = Object.fromEntries(withAgg.json.result.tools.map((t: any) => [t.name, t]));
+    expect(byName.aggregate_records).toBeDefined();
+    expect(byName.aggregate_records.annotations.readOnlyHint).toBe(true);
+  });
+
+  it('delegates groupBy/aggregations/where to the bridge and returns rows', async () => {
+    const bridge = makeAggBridge([{ status: 'open', n: 2 }, { status: 'done', n: 5 }]);
+    const { json } = await call(
+      runtime,
+      {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'aggregate_records',
+          arguments: {
+            objectName: 'task',
+            groupBy: ['status', { field: 'created_at', dateGranularity: 'month' }],
+            aggregations: [{ function: 'count', alias: 'n' }],
+            where: { active: true },
+          },
+        },
+      },
+      bridge,
+    );
+    expect(json.result.isError).toBeFalsy();
+    const payload = JSON.parse(json.result.content[0].text);
+    expect(payload.rows).toHaveLength(2);
+    expect(payload.totalGroups).toBe(2);
+    expect(payload.truncated).toBeUndefined();
+    const aggCall = bridge.calls.find((c: any[]) => c[0] === 'aggregate');
+    expect(aggCall[1]).toBe('task');
+    expect(aggCall[2].groupBy).toEqual(['status', { field: 'created_at', dateGranularity: 'month' }]);
+    expect(aggCall[2].aggregations).toEqual([{ function: 'count', alias: 'n' }]);
+    expect(aggCall[2].where).toEqual({ active: true });
+  });
+
+  it('rejects system objects fail-closed without consulting the bridge', async () => {
+    const bridge = makeAggBridge();
+    const { json } = await call(
+      runtime,
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'aggregate_records',
+          arguments: {
+            objectName: 'sys_user',
+            aggregations: [{ function: 'count', alias: 'n' }],
+          },
+        },
+      },
+      bridge,
+    );
+    expect(json.result.isError).toBe(true);
+    expect(json.result.content[0].text).toMatch(/system object/i);
+    expect(bridge.calls.find((c: any[]) => c[0] === 'aggregate')).toBeUndefined();
+  });
+
+  it('rejects an empty aggregations array (schema min(1))', async () => {
+    const bridge = makeAggBridge();
+    const { json } = await call(
+      runtime,
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'aggregate_records',
+          arguments: { objectName: 'task', aggregations: [] },
+        },
+      },
+      bridge,
+    );
+    // Zod input validation fails before the handler runs — surfaced as a
+    // tool error or JSON-RPC error depending on SDK version; both are fine,
+    // the invariant is that the bridge is never reached.
+    expect(json.result?.isError === true || json.error != null).toBe(true);
+    expect(bridge.calls.find((c: any[]) => c[0] === 'aggregate')).toBeUndefined();
+  });
+
+  it('caps the returned group rows at the query limit with a truncated flag', async () => {
+    const manyGroups = Array.from({ length: 60 }, (_, i) => ({ k: `g${i}`, n: i }));
+    const bridge = makeAggBridge(manyGroups);
+    const { json } = await call(
+      runtime,
+      {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: {
+          name: 'aggregate_records',
+          arguments: {
+            objectName: 'task',
+            groupBy: ['k'],
+            aggregations: [{ function: 'count', alias: 'n' }],
+          },
+        },
+      },
+      bridge,
+    );
+    const payload = JSON.parse(json.result.content[0].text);
+    expect(payload.rows).toHaveLength(50); // DEFAULT_MAX_LIMIT
+    expect(payload.totalGroups).toBe(60);
+    expect(payload.truncated).toBe(true);
+  });
+
+  it('surfaces bridge errors (e.g. FLS denial) as tool errors', async () => {
+    const bridge = makeAggBridge();
+    bridge.aggregate = async () => {
+      throw new Error('[Security] Field read denied: not permitted to aggregate [salary]');
+    };
+    const { json } = await call(
+      runtime,
+      {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: {
+          name: 'aggregate_records',
+          arguments: {
+            objectName: 'employee',
+            aggregations: [{ function: 'sum', field: 'salary', alias: 'total' }],
+          },
+        },
+      },
+      bridge,
+    );
+    expect(json.result.isError).toBe(true);
+    expect(json.result.content[0].text).toContain('Field read denied');
+  });
+});

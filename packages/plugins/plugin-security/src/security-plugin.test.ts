@@ -878,6 +878,81 @@ describe('SecurityPlugin', () => {
     expect(opCtx.result.salary).toBe(100);
   });
 
+  // FLS aggregate-input gate (2.5b): result masking never runs for `aggregate`
+  // (output rows carry only aliases), so a protected field's statistics would
+  // leak straight through `sum(ssn) AS x` — the gate rejects on the INPUT.
+  it('FLS aggregate — aggregating an unreadable field is denied fail-closed', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [flsPolicySet],
+      objectFields: ['id', 'owner_id', 'name', 'salary', 'ssn'],
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task',
+      operation: 'aggregate',
+      ast: {
+        object: 'task',
+        aggregations: [{ function: 'count_distinct', field: 'ssn', alias: 'n' }],
+      },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
+    };
+    await expect(harness.run(opCtx)).rejects.toThrow(/Field read denied/);
+    await expect(harness.run(opCtx)).rejects.toMatchObject({
+      details: { forbiddenFields: ['ssn'] },
+    });
+  });
+
+  it('FLS aggregate — grouping BY an unreadable field is denied (group keys reveal values)', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [flsPolicySet],
+      objectFields: ['id', 'owner_id', 'name', 'salary', 'ssn'],
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task',
+      operation: 'aggregate',
+      ast: {
+        object: 'task',
+        // Structured groupBy item — the gate must see through {field} objects.
+        groupBy: [{ field: 'ssn', dateGranularity: undefined }],
+        aggregations: [{ function: 'count', alias: 'n' }],
+      },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
+    };
+    await expect(harness.run(opCtx)).rejects.toMatchObject({
+      details: { forbiddenFields: ['ssn'] },
+    });
+  });
+
+  it('FLS aggregate — readable fields aggregate fine (and count(*) needs no field)', async () => {
+    const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [flsPolicySet],
+      objectFields: ['id', 'owner_id', 'name', 'salary', 'ssn'],
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task',
+      operation: 'aggregate',
+      ast: {
+        object: 'task',
+        groupBy: ['name'],
+        // salary is readable:true (only editable:false) → aggregating it is a READ, allowed.
+        aggregations: [
+          { function: 'sum', field: 'salary', alias: 'total' },
+          { function: 'count', alias: 'n' },
+        ],
+      },
+      context: { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] },
+    };
+    await expect(harness.run(opCtx)).resolves.toBeDefined();
+  });
+
   it('fails CLOSED when permission resolution throws — denies, never bypasses (P0-2)', async () => {
     const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
     const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });

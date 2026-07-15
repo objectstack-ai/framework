@@ -412,6 +412,39 @@ export class HttpDispatcher {
             throw { statusCode: 503, message: 'Data service not available' };
         }
 
+        if (action === 'aggregate') {
+            // Aggregate MUST run through the ObjectQL ENGINE (never the raw
+            // `dataDriver` the MCP bridge threads through for the other verbs):
+            // only the engine's middleware chain injects RLS/tenant scoping and
+            // the FLS aggregate-input gate. A raw driver.aggregate() would
+            // evaluate the query verbatim over every row.
+            //
+            // At least one aggregation is REQUIRED: with neither aggregations
+            // nor groupBy the engine's in-memory path degrades to raw rows,
+            // and the FLS result masker does not cover the `aggregate` op —
+            // grouped/aggregated output must stay the only thing this action
+            // can ever return.
+            if (!Array.isArray(params.aggregations) || params.aggregations.length === 0) {
+                throw { statusCode: 400, message: 'aggregate requires at least one aggregation' };
+            }
+            const engine = (await this.getObjectQLService(scopeId))
+                ?? await this.resolveService('objectql', scopeId).catch(() => null);
+            if (engine && typeof engine.aggregate === 'function') {
+                const rows = await engine.aggregate(
+                    params.object,
+                    {
+                        ...(params.where ? { where: params.where } : {}),
+                        ...(params.groupBy ? { groupBy: params.groupBy } : {}),
+                        ...(params.aggregations ? { aggregations: params.aggregations } : {}),
+                        ...(params.timezone ? { timezone: params.timezone } : {}),
+                        ...(executionContext ? { context: executionContext } : {}),
+                    },
+                );
+                return { object: params.object, rows: rows ?? [] };
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
+        }
+
         if (action === 'batch') {
             // Batch operations — not yet supported via direct service dispatch
             return { object: params.object, results: [] };
@@ -738,6 +771,26 @@ export class HttpDispatcher {
             get: async (object: string, id: string) => {
                 const res: any = await callData('get', { object, id }, driver, envId, ec);
                 return res?.record ?? res ?? null;
+            },
+            aggregate: async (object: string, o: any) => {
+                // NOTE: `driver` (the raw per-env db driver) is deliberately NOT
+                // passed — callData's aggregate branch resolves the ObjectQL
+                // engine itself so the security middleware (RLS + FLS aggregate
+                // gate) always runs. See the branch comment in callData.
+                const res: any = await callData(
+                    'aggregate',
+                    {
+                        object,
+                        where: o?.where,
+                        groupBy: o?.groupBy,
+                        aggregations: o?.aggregations,
+                        timezone: o?.timezone,
+                    },
+                    undefined,
+                    envId,
+                    ec,
+                );
+                return res?.rows ?? [];
             },
             create: async (object: string, data: any) =>
                 await callData('create', { object, data }, driver, envId, ec),

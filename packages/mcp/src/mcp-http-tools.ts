@@ -56,6 +56,22 @@ export interface McpDataBridge {
   create(object: string, data: Record<string, unknown>): Promise<unknown>;
   update(object: string, id: string, data: Record<string, unknown>): Promise<unknown>;
   remove(object: string, id: string): Promise<unknown>;
+  /**
+   * GROUP BY aggregation through the ObjectQL engine's read path (RLS + the
+   * FLS aggregate-input gate). OPTIONAL: a runtime that cannot route
+   * aggregation through the engine simply omits it and the
+   * `aggregate_records` tool is not registered (graceful degradation, same
+   * contract as {@link McpActionBridge}).
+   */
+  aggregate?(
+    object: string,
+    opts: {
+      where?: Record<string, unknown>;
+      groupBy?: Array<string | { field: string; dateGranularity?: string; alias?: string }>;
+      aggregations: Array<{ function: string; field?: string; alias: string; distinct?: boolean }>;
+      timezone?: string;
+    },
+  ): Promise<unknown[]>;
 }
 
 export interface RegisterObjectToolsOptions {
@@ -281,6 +297,82 @@ export function registerObjectTools(
         }
       },
     );
+
+    if (typeof bridge.aggregate === 'function') {
+      const aggregateFn = bridge.aggregate.bind(bridge);
+      server.registerTool(
+        'aggregate_records',
+        {
+          description:
+            'Aggregate records with GROUP BY: count/sum/avg/min/max/count_distinct over an object, ' +
+            'optionally grouped by fields (dates can be bucketed by day/week/month/quarter/year). ' +
+            'Use this instead of paging query_records when a question needs totals or breakdowns. ' +
+            'Runs under the caller\'s permissions, row-level security and field-level security.',
+          inputSchema: {
+            objectName: z.string().describe('The object/table name'),
+            aggregations: z
+              .array(
+                z.object({
+                  function: z
+                    .enum(['count', 'sum', 'avg', 'min', 'max', 'count_distinct'])
+                    .describe('Aggregation function'),
+                  field: z.string().optional().describe('Field to aggregate (omit for count(*))'),
+                  alias: z.string().describe('Result column name'),
+                }),
+              )
+              .min(1)
+              .describe('Metrics to compute, e.g. [{"function":"sum","field":"amount","alias":"total"}]'),
+            groupBy: z
+              .array(
+                z.union([
+                  z.string(),
+                  z.object({
+                    field: z.string().describe('Field to group by'),
+                    dateGranularity: z
+                      .enum(['day', 'week', 'month', 'quarter', 'year'])
+                      .optional()
+                      .describe('Bucket a date field into uniform periods'),
+                    alias: z.string().optional().describe('Alias for the projected group value'),
+                  }),
+                ]),
+              )
+              .optional()
+              .describe('Grouping fields; omit for a single overall row'),
+            where: z
+              .record(z.string(), z.unknown())
+              .optional()
+              .describe('Filter conditions applied before aggregation, e.g. {"status":"open"}'),
+            timezone: z
+              .string()
+              .optional()
+              .describe('IANA timezone for date bucketing (defaults to UTC)'),
+          },
+          annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        },
+        async ({ objectName, aggregations, groupBy, where, timezone }) => {
+          const bad = guard(objectName);
+          if (bad) return errorResult(bad);
+          try {
+            const rows = (await aggregateFn(objectName, {
+              where,
+              groupBy,
+              aggregations,
+              timezone,
+            })) ?? [];
+            // Group count is unbounded (a high-cardinality groupBy can return
+            // thousands of rows) — cap the tool output like query_records does.
+            const truncated = rows.length > maxLimit;
+            return textResult({
+              rows: truncated ? rows.slice(0, maxLimit) : rows,
+              totalGroups: rows.length,
+              ...(truncated ? { truncated: true } : {}),
+            });
+          } catch (err) {
+            return errorResult(messageOf(err));
+          }
+        },
+      );
+    }
 
     server.registerTool(
       'get_record',
