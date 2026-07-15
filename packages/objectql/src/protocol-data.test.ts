@@ -38,6 +38,40 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
             expect(opts.where?.searchFields).toBeUndefined();
         });
 
+        // [#2926 ⑩] Unknown `$`-prefixed params must fail loudly instead of
+        // silently matching zero rows via the implicit-filter bucket (or —
+        // pre-$filter alias — being dropped and returning the unfiltered page).
+        it('rejects an unknown $-prefixed query param with 400 UNSUPPORTED_QUERY_PARAM', async () => {
+            await expect(
+                protocol.findData({ object: 'task', query: { $foo: '1' } }),
+            ).rejects.toMatchObject({ status: 400, code: 'UNSUPPORTED_QUERY_PARAM' });
+            expect(mockEngine.find).not.toHaveBeenCalled();
+        });
+
+        it('names the offending params and the supported list in the rejection message', async () => {
+            await expect(
+                protocol.findData({ object: 'task', query: { $inlinecount: 'allpages', $format: 'json' } }),
+            ).rejects.toThrow(/\$inlinecount.*\$format|\$format.*\$inlinecount/s);
+        });
+
+        it('still accepts every supported $ alias after the unknown-$ guard', async () => {
+            await protocol.findData({
+                object: 'task',
+                query: { $top: 5, $skip: 2, $orderby: 'name', $select: 'id,name', $search: 'x', $filter: { status: 'open' } },
+            });
+            expect(mockEngine.find).toHaveBeenCalledTimes(1);
+            const opts = mockEngine.find.mock.calls[0][1];
+            expect(opts.limit).toBe(5);
+            expect(opts.offset).toBe(2);
+            expect(opts.where).toEqual({ status: 'open' });
+        });
+
+        it('keeps bare unknown params as implicit field-equality filters (unchanged behavior)', async () => {
+            await protocol.findData({ object: 'task', query: { status: 'open' } });
+            const opts = mockEngine.find.mock.calls[0][1];
+            expect(opts.where).toEqual({ status: 'open' });
+        });
+
         it('should normalize $expand (OData) string to expand Record', async () => {
             await protocol.findData({ object: 'order_item', query: { $expand: 'order,product' } });
 

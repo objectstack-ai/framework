@@ -2404,7 +2404,26 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             if (options[key] === 'true') options[key] = true;
             else if (options[key] === 'false') options[key] = false;
         }
-        
+
+        // [#2926 ⑩] Every supported OData-style `$` alias has been consumed and
+        // deleted above ($top/$skip/$orderby/$select/$count/$search/
+        // $searchFields/$filter/$expand). A `$`-prefixed key can never be a
+        // field name, so anything left is an unsupported query parameter —
+        // fail loudly instead of letting it fall into the implicit-filter
+        // bucket below, where it silently matched zero rows (or, before the
+        // $filter alias existed, was dropped entirely and returned the
+        // UNFILTERED page — a footgun for scripts resolving ids by name).
+        const unsupportedDollarParams = Object.keys(options).filter((k) => k.startsWith('$'));
+        if (unsupportedDollarParams.length > 0) {
+            const err: any = new Error(
+                `Unsupported query parameter(s): ${unsupportedDollarParams.join(', ')}. ` +
+                'Supported $-prefixed parameters: $top, $skip, $orderby, $select, $count, $search, $searchFields, $filter, $expand.',
+            );
+            err.status = 400;
+            err.code = 'UNSUPPORTED_QUERY_PARAM';
+            throw err;
+        }
+
         // Flat field filters: REST-style query params like ?id=abc&status=open
         // After extracting all known query parameters, any remaining keys are
         // treated as implicit field-level equality filters merged into `where`.
