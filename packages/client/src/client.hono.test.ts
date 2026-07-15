@@ -15,9 +15,17 @@ describe('ObjectStackClient (with Hono Server)', () => {
         kernel.use(new ObjectQLPlugin());
         
         // 2. Setup Hono Plugin
-        const honoPlugin = new HonoServerPlugin({ 
+        // This suite exercises the CLIENT's data operations over the raw-hono
+        // standard endpoints; it wires no auth service. Opt out of the
+        // secure-by-default anonymous-deny posture (#2567) so the anonymous
+        // data CRUD under test stays reachable — the same explicit
+        // `requireAuth: false` a deployment that intentionally serves data
+        // publicly would set. The gate itself is proven in
+        // plugin-hono-server/hono-anonymous-deny.test.ts.
+        const honoPlugin = new HonoServerPlugin({
             port: 0,
-            registerStandardEndpoints: true
+            registerStandardEndpoints: true,
+            restConfig: { api: { requireAuth: false } } as any,
         });
         kernel.use(honoPlugin);
         
