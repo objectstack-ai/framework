@@ -16,11 +16,10 @@ client, or a local model) connects over the Model Context Protocol, and the
 server exposes two business-action tools — `list_actions` and `run_action` —
 bound to the caller's principal. The agent operates the app the same way the
 Console toolbar does, under the same row-level security and permissions. No
-cloud service and no `@objectstack/service-ai` are required.
+cloud service and no ObjectOS runtime are required.
 
 <Callout type="info">
-**Cloud / Enterprise** layers an in-product chat *runtime*
-(`@objectstack/service-ai`, cloud [ADR-0025](https://github.com/objectstack-ai/cloud/blob/main/docs/adr/0025-service-ai-to-cloud-open-mcp-only.md))
+**ObjectOS** layers an in-product chat *runtime*
 on top of these same actions: it generates one `action_<name>` tool per action,
 gates them behind an `ai.exposed` opt-in, and adds a server-side approval queue.
 Those pieces are called out below. The open path — the same Action reachable as
@@ -70,8 +69,8 @@ export const triageCaseAction = {
 ```
 
 <Callout type="info">
-**Cloud / Enterprise** — the `ai.exposed` flag is a governance gate for the
-in-product chat *runtime*: the cloud `@objectstack/service-ai` bridge registers
+**ObjectOS** — the `ai.exposed` flag is a governance gate for the
+in-product chat *runtime*: the ObjectOS bridge registers
 an `action_<name>` tool **only** when `ai.exposed === true` (and then
 `ai.description` is required, ≥ 40 chars). The open MCP path does **not** use
 `ai.exposed` — it filters by permission, returning every action the caller is
@@ -86,9 +85,9 @@ System objects (`sys_*`) are held back fail-closed.
 
 | `action.type` | Dispatch path | Available where |
 |:---|:---|:---|
-| `script` | `IDataEngine.executeAction(object, target, ctx)` — the same call Studio makes | open (MCP) + cloud |
-| `flow` | automation flow runner — `execute(target, { triggerData })` | open (MCP) + cloud; needs the `automation` service registered |
-| `api` | HTTP call to `action.target` via a configured `apiClient` | **cloud / Enterprise** runtime only |
+| `script` | `IDataEngine.executeAction(object, target, ctx)` — the same call Studio makes | open (MCP) + ObjectOS |
+| `flow` | automation flow runner — `execute(target, { triggerData })` | open (MCP) + ObjectOS; needs the `automation` service registered |
+| `api` | HTTP call to `action.target` via a configured `apiClient` | **ObjectOS** runtime only |
 
 Console-only types (`url`, `modal`, `form`) are always skipped.
 
@@ -120,14 +119,11 @@ is registered. Point your MCP client at the server; the caller's API key acts as
 the user, so every `run_action` runs under that principal's RLS.
 
 <Callout type="info">
-**Cloud / Enterprise** — the in-product runtime wires actions through
-`@objectstack/service-ai` instead, e.g.
-`new AIServicePlugin({ apiActionBaseUrl, apiActionHeaders })`. `apiActionBaseUrl`
-enables `type:'api'` dispatch (relative `/api/v1/...` targets resolve against it)
-and `apiActionHeaders` are forwarded on every api-action call. The plugin's
-`registerActionsAsTools()` returns `{ registered, skipped, warnings }` with
-reasons like `"not AI-exposed"` or `"requires confirmation … wire HITL approval"`
-so authors can see whether an action is LLM-callable.
+**ObjectOS** — the in-product runtime wires actions through its own bridge
+(including `type:'api'` dispatch), and reports per-action registration results
+with reasons like `"not AI-exposed"` or `"requires confirmation … wire HITL
+approval"` so authors can see whether an action is LLM-callable. See the
+[ObjectOS docs](https://docs.objectos.app/docs/ai) for its configuration.
 </Callout>
 
 ### Example

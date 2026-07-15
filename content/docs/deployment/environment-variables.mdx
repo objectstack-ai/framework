@@ -137,9 +137,8 @@ Auth settings precedence:
 ## AI
 
 <Callout type="warning">
-These variables configure the **cloud / Enterprise** in-UI AI runtime
-(`@objectstack/service-ai`), which moved out of the open framework — see cloud
-ADR-0025 (`service-ai → cloud; open = MCP-only`). The **open edition** has no
+These variables configure the **ObjectOS** in-product AI runtime, which is not
+part of the open-source framework. The **open-source framework** has no
 in-UI AI runtime to configure: it exposes AI through `@objectstack/mcp` (BYO-AI),
 where the model and provider are configured in your own MCP client (Claude,
 Cursor, a local model, …). See the [AI Capabilities guide](/docs/ai).
