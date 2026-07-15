@@ -124,6 +124,25 @@ async function writeFilter(cell: any, roleCtx: any): Promise<unknown> {
   return h.findOne.mock.calls[0][1].where.$and.slice(1);
 }
 
+/**
+ * [#2937] Effective INSERT outcome for a supplied `organization_id`. Drives the
+ * REAL insert path through the security CRUD middleware and reports either the
+ * denial marker or the post-image `organization_id` the row would land with.
+ * `CRUD_DENY:*` = blocked (CRUD gate or the Layer 0 tenant post-image check).
+ */
+async function insertOrg(cell: any, roleCtx: any, orgId: unknown): Promise<unknown> {
+  const plugin = new SecurityPlugin();
+  const h = makeHarness({ ...cell, orgScoping: cell.orgScoping ?? true });
+  await plugin.init(h.ctx); await plugin.start(h.ctx);
+  const opCtx: any = {
+    object: cell.objectName, operation: 'insert',
+    data: { name: 'x', ...(orgId === undefined ? {} : { organization_id: orgId }) },
+    context: roleCtx,
+  };
+  try { await h.run(opCtx); } catch (e: any) { return `CRUD_DENY:${e?.name ?? 'err'}`; }
+  return 'organization_id' in opCtx.data ? opCtx.data.organization_id : '<<absent>>';
+}
+
 // ── Axes ─────────────────────────────────────────────────────────────────────
 const OBJECTS = {
   // Ordinary tenant business object: has organization_id, public posture.
@@ -268,6 +287,47 @@ describe('authz Layer-0 matrix gate — ADR-0095 D1 (post-extraction)', () => {
   // ── Fail-closed: an authenticated user with no active org sees no tenant rows ─
   it('[fail-closed] no active organization → tenant read denies via the sentinel', async () => {
     expect(await readFilter(OBJECTS.task, ROLES.no_org_member)).toEqual({ id: DENY });
+  });
+
+  // ── #2937: Layer 0 INSERT post-image tenant check ─────────────────────────
+  // insert has no pre-image, so the tenant wall never reached it: a member could
+  // `insert` a row with a FORGED organization_id and land it in another tenant.
+  // The Layer 0 insert post-image check closes this — a SUPPLIED organization_id
+  // must equal the caller's active org; an absent value is left to the
+  // enterprise auto-stamp (organizations plugin), and system/platform-admin/
+  // single-mode paths are exempt exactly as on the read side.
+  describe('[#2937] Layer 0 insert post-image tenant guard', () => {
+    it('member inserting a FORGED cross-tenant organization_id is DENIED', async () => {
+      expect(await insertOrg(OBJECTS.task, ROLES.member, 'org-2')).toBe('CRUD_DENY:PermissionDeniedError');
+    });
+    it('member inserting the SAME-tenant organization_id is allowed (row keeps it)', async () => {
+      expect(await insertOrg(OBJECTS.task, ROLES.member, 'org-1')).toBe('org-1');
+    });
+    it('member inserting with NO organization_id passes the wall (auto-stamp territory)', async () => {
+      // plugin-security does not stamp; an absent value is the organizations
+      // plugin's job. The Layer 0 check must NOT deny it (ordering-independent).
+      expect(await insertOrg(OBJECTS.task, ROLES.member, undefined)).toBe('<<absent>>');
+    });
+    it('member with NO active org supplying ANY organization_id is fail-closed DENIED', async () => {
+      expect(await insertOrg(OBJECTS.task, ROLES.no_org_member, 'org-1')).toBe('CRUD_DENY:PermissionDeniedError');
+    });
+    it('platform admin may insert a cross-org row on a PRIVATE object (posture exemption)', async () => {
+      // private posture permits the platform-admin superuser bypass → Layer 0 null.
+      expect(await insertOrg(OBJECTS.private_obj, ROLES.platform_admin, 'org-2')).toBe('org-2');
+    });
+    it('platform admin stays org-scoped on a PUBLIC business object (no exemption)', async () => {
+      // public tenant business object → posture gate withholds the bypass → the
+      // forged cross-org insert is DENIED even for a platform admin.
+      expect(await insertOrg(OBJECTS.task, ROLES.platform_admin, 'org-2')).toBe('CRUD_DENY:PermissionDeniedError');
+    });
+    it('platform-global (tenancy-disabled) object: supplied org value is untouched', async () => {
+      // non-tenant object → Layer 0 contributes nothing → no insert check.
+      expect(await insertOrg(OBJECTS.platform_global, ROLES.member, 'org-2')).toBe('org-2');
+    });
+    it('single-org mode: Layer 0 inert, a supplied organization_id is NOT checked', async () => {
+      const single = { ...OBJECTS.task, orgScoping: false };
+      expect(await insertOrg(single, ROLES.member, 'org-2')).toBe('org-2');
+    });
   });
 
   // ── Single-org mode: Layer 0 is inert; tenant policy stripped (parity today) ─

@@ -1024,6 +1024,65 @@ export class SecurityPlugin implements Plugin {
         }
       }
 
+      // 3.7. [ADR-0095 D1 / #2937] Layer 0 tenant post-image check for INSERT.
+      //
+      // The tenant wall (Layer 0) is AND-composed onto reads and onto the
+      // update/delete PRE-image, but an insert has no pre-image and carries no
+      // AST, so the wall never reached it: a member could `insert` a row bearing
+      // a FORGED `organization_id` (pointing at another org) and land it in the
+      // victim tenant — the enterprise auto-stamp only fills a MISSING value, it
+      // never overwrites a supplied one. Close it here by validating the insert
+      // post-image against the SAME Layer 0 filter the read side uses (identical
+      // rule: isolation active, tenant object, platform-admin posture exemption,
+      // fail-closed on a missing active org).
+      //
+      // Scope: only a SUPPLIED (non-empty) `organization_id` is validated — an
+      // ABSENT value is the organizations-plugin auto-stamp's responsibility
+      // (separation of concerns; plugin-security no longer stamps org ids), and a
+      // pure plugin-security deployment has no isolation active (Layer 0 → null),
+      // so this is ordering-independent w.r.t. the auto-stamp middleware. System /
+      // boot writes carry `isSystem` and short-circuited the whole middleware
+      // above, so legitimate on-behalf `organization_id` writes (import engine,
+      // migrations, plugin SYSTEM_CTX) are unaffected.
+      if (
+        opCtx.operation === 'insert' &&
+        opCtx.data &&
+        typeof opCtx.data === 'object' &&
+        !Array.isArray(opCtx.data) &&
+        !!opCtx.context?.userId
+      ) {
+        const data = opCtx.data as Record<string, unknown>;
+        const suppliedOrg = data.organization_id;
+        if (suppliedOrg != null && suppliedOrg !== '') {
+          const tenantCheck = await this.computeInsertTenantCheckFilter(
+            permissionSets,
+            opCtx.object,
+            opCtx.context,
+          );
+          // [ADR-0090 D10] The post-image must also satisfy the delegator's tenant
+          // wall — an on-behalf-of insert may not land a row in a tenant the
+          // delegator itself could not reach.
+          const delTenantCheck = delegatorSets
+            ? await this.computeInsertTenantCheckFilter(delegatorSets, opCtx.object, delegatorContext)
+            : null;
+          const tenantParts = [tenantCheck, delTenantCheck].filter(Boolean) as Record<string, unknown>[];
+          if (
+            tenantParts.length > 0 &&
+            !tenantParts.every((f) => matchesFilterCondition(data as any, f as any))
+          ) {
+            this.logger.warn?.(
+              `[Security] Layer 0 tenant CHECK FAILED on insert '${opCtx.object}' — write denied ` +
+                `(fail-closed); a supplied organization_id does not match the active organization`,
+            );
+            throw new PermissionDeniedError(
+              `[Security] Access denied: the insert would place '${opCtx.object}' in another tenant ` +
+                `(organization_id does not match the active organization)`,
+              { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
+            );
+          }
+        }
+      }
+
       // 2.9. Field-level predicate guard (anti filter-oracle, objectui#2251).
       // FieldMasker (step 4) only strips hidden fields from RESULTS — a
       // caller could still probe a hidden field's value by filtering /
@@ -2066,6 +2125,26 @@ export class SecurityPlugin implements Plugin {
     );
     if (withCheck.length === 0) return null;
     return this.rlsCompiler.compileFilter(withCheck, context, 'check');
+  }
+
+  /**
+   * [ADR-0095 D1 / #2937] Compute the Layer 0 (tenant) filter that an INSERT
+   * post-image must satisfy — the write-side twin of the read/update Layer 0
+   * wall. Reuses {@link computeLayeredRlsFilter} so the tenant decision is
+   * DERIVED FROM ONE PLACE and can never drift from the read side: same
+   * isolation probe, same "is this a tenant object?" field/posture test, same
+   * platform-admin posture exemption, same fail-closed deny sentinel when the
+   * context has no active organization. Only `layer0` is returned — business RLS
+   * (`layer1`) is NOT applied to the insert post-image (that path is governed by
+   * explicit `check` clauses via {@link computeWriteCheckFilter}).
+   */
+  private async computeInsertTenantCheckFilter(
+    permissionSets: PermissionSet[],
+    object: string,
+    context: any,
+  ): Promise<Record<string, unknown> | null> {
+    const { layer0 } = await this.computeLayeredRlsFilter(permissionSets, object, 'insert', context);
+    return layer0;
   }
 
   /**
