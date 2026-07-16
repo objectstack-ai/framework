@@ -43,8 +43,18 @@ export interface GraphQLResponse {
 export interface IGraphQLService {
     /**
      * Execute a GraphQL query or mutation
+     *
+     * ⚠️ Identity admission (ADR-0096 D1, #2992): `context` carries the
+     * caller's resolved `ExecutionContext`. An implementation that resolves
+     * objects through the data engine (ObjectQL) MUST forward it on every
+     * engine call as `options.context` — the security middleware falls OPEN
+     * on a missing principal, so executing resolvers context-less silently
+     * grants full authority (no RLS/FLS/CRUD/tenant scoping). The dispatcher's
+     * `/graphql` entry point threads the caller identity for exactly this
+     * purpose; dropping it here is a defect, never an authorization.
+     *
      * @param request - The GraphQL request
-     * @param context - Optional execution context (e.g. auth user)
+     * @param context - The caller's execution context (auth user / principal)
      * @returns GraphQL response with data and/or errors
      */
     execute(request: GraphQLRequest, context?: Record<string, unknown>): Promise<GraphQLResponse>;
