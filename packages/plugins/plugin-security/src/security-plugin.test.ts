@@ -369,6 +369,19 @@ describe('SecurityPlugin', () => {
       const opCtx: any = { object: 'task', operation: 'update', data, context: memberCtx() };
       await harness.run(opCtx); // must not throw — owner_id is not an own property
     });
+
+    it('[#3023] an engine referential FK clear (__referentialFieldClear) is exempt — owner_id:null cascade is allowed for a plain member', async () => {
+      // cascadeDeleteRelations nulls owner_id on dependents when the referenced
+      // sys_user is deleted; that integrity write must not be blocked by the
+      // disown guard. The same payload WITHOUT the marker is denied (covered
+      // by the disown test above).
+      const harness = await boot([memberSet], () => ({ id: 't1', owner_id: 'someone' }));
+      const opCtx: any = {
+        object: 'task', operation: 'update', data: { id: 't1', owner_id: null },
+        context: memberCtx({ __referentialFieldClear: true }),
+      };
+      await harness.run(opCtx); // must not throw — engine-internal referential clear
+    });
   });
 
   it('without org-scoping plugin — strips tenant_isolation RLS so find applies no tenant where', async () => {

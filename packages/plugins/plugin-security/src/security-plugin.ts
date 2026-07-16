@@ -1099,10 +1099,20 @@ export class SecurityPlugin implements Plugin {
       //
       // `organization_id` auto-injection has moved to
       // `@objectstack/organizations`; its forge guard is step 3.7 below.
+      //
+      // [#3023] EXEMPTION — the engine's referential-integrity FK clear. When a
+      // referenced record is deleted, `cascadeDeleteRelations` nulls the FK on
+      // every dependent (owner_id included). That `owner_id = null` is an
+      // integrity-mandated consequence of an already-authorized parent delete,
+      // NOT a user disown, so the transfer guard must not fire and abort the
+      // cascade. The marker rides a server-DERIVED context (never client-built —
+      // same trust model as `__expandRead`), so it cannot be forged from a
+      // request to slip an ordinary ownership write past the guard.
       if (
         (opCtx.operation === 'insert' || opCtx.operation === 'update') &&
         opCtx.data &&
-        typeof opCtx.data === 'object'
+        typeof opCtx.data === 'object' &&
+        !opCtx.context?.__referentialFieldClear
       ) {
         const isInsert = opCtx.operation === 'insert';
         const rows = (Array.isArray(opCtx.data) ? opCtx.data : [opCtx.data]) as Record<string, unknown>[];
