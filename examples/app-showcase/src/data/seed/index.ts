@@ -47,6 +47,10 @@ const accounts = defineSeed(Account, {
     { name: 'Initech', industry: 'finance', annual_revenue: 5_400_000, website: 'https://initech.example', status: 'active', hq: { lat: 30.2672, lng: -97.7431 }, tax_id: '74-2233110', billing_email: 'ap@initech.example' },
     { name: 'Globex', industry: 'technology', annual_revenue: 42_000_000, website: 'https://globex.example', status: 'active', hq: { lat: 34.0522, lng: -118.2437 }, tax_id: '95-8841200', billing_email: 'billing@globex.example' },
     { name: 'Stark Industries', industry: 'technology', annual_revenue: 180_000_000, website: 'https://stark.example', status: 'active', hq: { lat: 40.7580, lng: -73.9855 }, tax_id: '13-5567421', billing_email: 'ap@stark.example' },
+    // CJK-named account so pinyin search recall (#2486) is demonstrable out of
+    // the box: with the zh-CN locale configured, `$search=huaning` / `hnkj`
+    // must find 华宁科技 in the record picker and list quick-search.
+    { name: '华宁科技', industry: 'technology', annual_revenue: 36_000_000, website: 'https://huaning.example', status: 'active', hq: { lat: 31.2304, lng: 121.4737 }, tax_id: '91-3100001', billing_email: 'billing@huaning.example' },
     { name: 'Wayne Enterprises', industry: 'finance', annual_revenue: 210_000_000, website: 'https://wayne.example', status: 'active', hq: { lat: 40.7128, lng: -74.0060 }, tax_id: '22-9087733', billing_email: 'billing@wayne.example' },
     { name: 'Acme Retail', industry: 'retail', annual_revenue: 3_200_000, website: 'https://acme.example', status: 'prospect', hq: { lat: 41.8781, lng: -87.6298 }, tax_id: '36-4471209', billing_email: 'accounts@acme.example' },
     { name: 'Soylent Foods', industry: 'healthcare', annual_revenue: 9_900_000, website: 'https://soylent.example', status: 'prospect', hq: { lat: 37.3382, lng: -121.8863 }, tax_id: '77-1029384', billing_email: 'ap@soylent.example' },
@@ -69,6 +73,12 @@ const contacts = defineSeed(Contact, {
     { name: 'Cara Ito', email: 'cara@contoso.example', phone: '+1 555 020 1111', company: 'Contoso', title: 'IT Director', account: 'Contoso', stage: 'new' },
     { name: 'Carl Fox', email: 'carl@contoso.example', phone: '+1 555 020 2222', company: 'Contoso', title: 'Data Lead', account: 'Contoso', stage: 'qualified' },
     { name: 'Faye Lin', email: 'faye@fabrikam.example', phone: '+1 555 030 1111', company: 'Fabrikam', title: 'Compliance Officer', account: 'Fabrikam', stage: 'new' },
+    // CJK-named contacts so pinyin search recall (#2486) is demonstrable out
+    // of the box: `$search=zhangwei` (full pinyin), `zw` (initials) and `张`
+    // (CJK) must all find 张伟 in the people picker / list quick-search.
+    { name: '张伟', email: 'zhangwei@huaning.example', phone: '+86 21 5550 1111', company: '华宁科技', title: 'Engineering Manager', account: '华宁科技', stage: 'qualified' },
+    { name: '王芳', email: 'wangfang@huaning.example', phone: '+86 21 5550 2222', company: '华宁科技', title: 'Procurement Director', account: '华宁科技', stage: 'working' },
+    { name: '李雷', email: 'lilei@huaning.example', phone: '+86 21 5550 3333', company: '华宁科技', title: 'IT Specialist', account: '华宁科技', stage: 'new' },
   ],
 });
 

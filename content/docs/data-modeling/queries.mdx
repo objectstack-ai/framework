@@ -367,6 +367,19 @@ Only `query` and `fields` are implemented. The engine expands `search` into a dr
 are always AND-ed regardless of `operator`.
 </Callout>
 
+### Pinyin recall (Chinese deployments)
+
+When pinyin search is enabled (`OS_SEARCH_PINYIN_ENABLED` — auto-on when the stack's
+i18n config lists any `zh-*` locale, see
+[Environment Variables → Search](/docs/deployment/environment-variables#search)), records
+with CJK names are also found by typing their **full pinyin** or **initials**: searching
+`zhangwei` or `zw` matches a record named `张伟`, alongside the normal CJK and latin
+matching. This is transparent to queries and clients — the platform maintains a hidden
+`__search` companion column derived from each object's display/name field and ORs it into
+the expanded filter; `fields` semantics, `searchableFields`, and drivers are unchanged
+(ADR-0097). Relevance ranking and typo tolerance remain Tier-2 (native FTS) and are not
+part of this.
+
 ---
 
 ## Window Functions
