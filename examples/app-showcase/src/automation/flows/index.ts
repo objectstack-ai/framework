@@ -446,6 +446,55 @@ export const ShowcaseDeclarativeConnectorPingFlow = defineFlow({
 });
 
 /**
+ * MCP Connector Echo (ADR-0097 / #3056) — dispatches through the DECLARATIVE
+ * MCP instance `showcase_mcp_tools` (src/system/connectors/index.ts), which the
+ * `mcp` provider materialized at boot from the in-repo stdio fixture server:
+ * its `tools/list` became the action list, and this `connector_action` invokes
+ * the `echo_upper` tool via `tools/call`. The run's captured output
+ * (`structuredContent.upper === 'OBJECTSTACK'`) proves the full chain —
+ * metadata entry → provider factory → MCP handshake → flow dispatch — with no
+ * external dependency. Completes the `provider: 'mcp'` acceptance demo from
+ * ADR-0097 §6, deferred at #3017.
+ */
+export const ShowcaseMcpConnectorEchoFlow = defineFlow({
+  name: 'showcase_mcp_connector_echo',
+  label: 'MCP Connector Echo (ADR-0097)',
+  description:
+    'Dispatches the echo_upper tool of showcase_mcp_tools — a declarative MCP connector instance materialized ' +
+    'at boot from the in-repo stdio fixture (scripts/mcp-fixture.mjs).',
+  type: 'autolaunched',
+  // Surface the tool result on the run output, so the flow run view (and the
+  // dogfood proof) can assert the MCP round-trip observably.
+  variables: [{ name: 'echo.structuredContent', type: 'json', isOutput: true }],
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Created',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-create',
+      },
+    },
+    {
+      id: 'echo',
+      type: 'connector_action',
+      label: 'echo_upper via MCP (declarative)',
+      connectorConfig: {
+        connectorId: 'showcase_mcp_tools',
+        actionId: 'echo_upper',
+        input: { text: 'objectstack' },
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'echo' },
+    { id: 'e2', source: 'echo', target: 'end' },
+  ],
+});
+
+/**
  * Task Follow-up Reminder — the worked `wait` (durable timer) example.
  *
  * When a task is created, the flow pauses at a `wait` node for a fixed delay,
@@ -1327,6 +1376,7 @@ export const allFlows = [
   ScheduledDigestFlow,
   TaskCompletedRestPingFlow,
   ShowcaseDeclarativeConnectorPingFlow,
+  ShowcaseMcpConnectorEchoFlow,
   TaskFollowUpFlow,
   NotifyOwnerSubflow,
   TaskDoneNotifyOwnerFlow,

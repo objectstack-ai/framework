@@ -22,7 +22,9 @@
     "test:smoke": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@objectstack/cloud-connection": "workspace:*",
+    "@objectstack/connector-mcp": "workspace:*",
     "@objectstack/connector-openapi": "workspace:*",
     "@objectstack/connector-rest": "workspace:*",
     "@objectstack/connector-slack": "workspace:*",

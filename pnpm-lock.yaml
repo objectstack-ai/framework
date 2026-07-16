@@ -153,9 +153,15 @@ importers:
 
   examples/app-showcase:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
       '@objectstack/cloud-connection':
         specifier: workspace:*
         version: link:../../packages/cloud-connection
+      '@objectstack/connector-mcp':
+        specifier: workspace:*
+        version: link:../../packages/connectors/connector-mcp
       '@objectstack/connector-openapi':
         specifier: workspace:*
         version: link:../../packages/connectors/connector-openapi
@@ -763,6 +769,15 @@ importers:
 
   packages/dogfood:
     dependencies:
+      '@objectstack/connector-mcp':
+        specifier: workspace:*
+        version: link:../connectors/connector-mcp
+      '@objectstack/connector-openapi':
+        specifier: workspace:*
+        version: link:../connectors/connector-openapi
+      '@objectstack/connector-rest':
+        specifier: workspace:*
+        version: link:../connectors/connector-rest
       '@objectstack/example-crm':
         specifier: workspace:*
         version: link:../../examples/app-crm
