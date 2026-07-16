@@ -1,5 +1,55 @@
 # @objectstack/lint
 
+## 15.1.0
+
+### Patch Changes
+
+- f531a26: ADR-0085 #2548 follow-ups surfaced by the real-backend browser pass:
+
+  - **lint**: new `field-group-shadowed` warning in `validate-semantic-roles` — a
+    declared fieldGroup whose every visible member is hoisted into the detail
+    highlight strip (or is the record title) renders on forms but silently never
+    on detail pages (detail bodies hide the first 4 highlightFields). Warning
+    tier, same as the other semantic-role rules.
+  - **plugin-audit**: feed/audit summaries ("Created … / Deleted … / Updated …")
+    now name the object by its display label ("Semantic Zoo") instead of its API
+    name ("showcase_semantic_zoo") — these strings render verbatim in the record
+    Discussion feed and Setup dashboards. Falls back to the API name when the
+    object definition isn't resolvable. Existing stored rows are unchanged.
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/sdui-parser@15.1.0
+
 ## 15.0.0
 
 ### Minor Changes

@@ -1,5 +1,47 @@
 # @objectstack/example-crm
 
+## 4.0.88
+
+### Patch Changes
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+
 ## 4.0.87
 
 ### Patch Changes

@@ -1,5 +1,55 @@
 # @objectstack/example-showcase
 
+## 0.3.10
+
+### Patch Changes
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+  - @objectstack/connector-rest@15.1.0
+  - @objectstack/connector-openapi@15.1.0
+  - @objectstack/connector-mcp@15.1.0
+  - @objectstack/cloud-connection@15.1.0
+  - @objectstack/connector-slack@15.1.0
+  - @objectstack/driver-sql@15.1.0
+  - @objectstack/service-datasource@15.1.0
+
 ## 0.3.9
 
 ### Patch Changes

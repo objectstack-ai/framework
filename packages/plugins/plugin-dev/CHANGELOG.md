@@ -1,5 +1,77 @@
 # @objectstack/plugin-dev
 
+## 15.1.0
+
+### Patch Changes
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [d75c7ac]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/rest@15.1.0
+  - @objectstack/plugin-hono-server@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/plugin-security@15.1.0
+  - @objectstack/plugin-auth@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/account@15.1.0
+  - @objectstack/setup@15.1.0
+  - @objectstack/driver-memory@15.1.0
+  - @objectstack/service-i18n@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

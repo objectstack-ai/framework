@@ -1,5 +1,35 @@
 # @objectstack/hono
 
+## 15.1.0
+
+### Patch Changes
+
+- f531a26: CORS default `allowHeaders` now includes `If-Match`. The REST record update
+  accepts the OCC token as an `If-Match` header (objectui's record-level inline
+  edit sends it on every save), but the preflight allow-list omitted it — so on
+  any split-origin deployment (console dev server against a backend on another
+  origin) the browser failed the preflight and every inline-edit save died with
+  "Failed to fetch". Found live while dogfooding objectui#2572; same
+  split-origin failure class as the #2548 Bearer fixes. Explicit user-supplied
+  `allowHeaders` still win unchanged.
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+  - @objectstack/runtime@15.1.0
+  - @objectstack/plugin-hono-server@15.1.0
+  - @objectstack/types@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

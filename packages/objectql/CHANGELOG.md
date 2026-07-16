@@ -1,5 +1,268 @@
 # @objectstack/objectql
 
+## 15.1.0
+
+### Minor Changes
+
+- f531a26: feat(attachments): sys_file orphan lifecycle + parent-derived attachment access (#2755)
+
+  **Orphan lifecycle (ADR-0057).** Deleting a `sys_attachment` join row used to
+  orphan the backing `sys_file` row and its storage bytes forever. `sys_file`
+  now declares a lifecycle (`ttl 30d` on a new `deleted_at` tombstone for
+  orphans; `retention 7d onlyWhen status=pending` for abandoned uploads), the
+  storage plugin's new hooks tombstone a file when its LAST join row is deleted
+  (attachments scope only — `Field.file`/`Field.image`/avatar scopes are never
+  touched) and un-tombstone on re-attach, and a new LifecycleService **reap
+  guard** seam (`registerReapGuard`) re-verifies zero references at sweep time
+  and deletes the storage bytes before confirming each row reap. A guarded
+  object is never blind-deleted; an erroring guard fails safe (rows retained).
+
+  **Attachment access (ADR-0049, Salesforce parent-derived semantics).**
+  `sys_attachment` create now requires caller READ visibility of the parent
+  record (403 `ATTACHMENT_PARENT_ACCESS`) and server-stamps `uploaded_by` from
+  the session (client value ignored); delete requires uploader-or-parent-editor
+  (403 `ATTACHMENT_DELETE_DENIED`). The storage upload routes require an
+  authenticated session when an auth service is wired (401 `AUTH_REQUIRED`;
+  bare kernels stay open) and stamp `owner_id` on new files.
+
+  **REMOVED — `sys_attachment.share_type` / `sys_attachment.visibility`.**
+  Both fields were modeled in v1 with zero runtime consumers (ADR-0049
+  parsed-but-unenforced). There is no replacement key: attachment access is
+  derived from the parent record by the hooks above. Writers of these fields
+  should simply stop sending them (unknown-field validation will reject them);
+  existing DB columns are left as unmanaged leftovers, no migration needed.
+
+  `@objectstack/verify` gains `BootOptions.extraPlugins` for booting optional
+  service pairs (e.g. storage + audit) in dogfood fixtures.
+
+- f531a26: fix(security): enforce static `readonly` fields on the UPDATE write path (#2948)
+
+  A field's static `readonly: true` was never enforced server-side on update: the
+  record validator only _skipped_ read-only columns from validation, and only the
+  conditional `readonlyWhen` variant was stripped from the write payload. A
+  non-system (user-context) update could therefore overwrite any `readonly`
+  column — audit stamps, provenance (`managed_by`), or other system-computed
+  values — unless a field-level permission happened to guard it. (The
+  cross-tenant `organization_id` face was already closed by #2946; this is the
+  broader in-tenant integrity face.)
+
+  `engine.update` now strips **caller-supplied** writes to statically-`readonly`
+  fields for non-system contexts, on both the single-id and multi-row paths
+  (symmetric with `readonlyWhen` — it strips, does not reject). Two guards keep
+  every legitimate write intact:
+
+  - **caller-supplied only** — the strip runs against a snapshot of the keys the
+    caller sent _before_ hooks/middleware ran, so server stamps applied by the
+    audit hook (`updated_by`/`updated_at`) and write middleware survive; only a
+    client that explicitly forged a read-only field has it dropped.
+  - **system-context exempt** — `isSystem` writes (import, seed replay, approvals,
+    lifecycle hooks) legitimately set read-only columns and skip the strip.
+
+  No change for single-org or any write that does not forge a read-only column.
+
+- f531a26: Generic pinyin search recall (#2486, ADR-0098): a locale-gated
+  `OS_SEARCH_PINYIN_ENABLED` switch (auto-on when the stack configures any
+  `zh-*` locale) provisions a hidden `__search` companion column for each
+  object's display/name field at compile time, the new
+  `@objectstack/plugin-pinyin-search` fills it with full pinyin + initials
+  ("张伟" → "zhangwei zw") on before-save (plus boot backfill and a
+  `rebuildSearchCompanion` reconcile entry), and `$search` ORs the column in at
+  query time — so lookup pickers, list quick-search and ⌘K transparently match
+  `zhangwei` / `zw` against CJK names. Purely additive: `resolveSearchFields`,
+  `searchableFields`, drivers and non-Chinese deployments are untouched; FLS
+  restricted / secret / PII fields never feed the companion.
+- d75c7ac: Package-draft publishing is now turn-atomic (ADR-0067 Decision-2, #3066). `publishPackageDrafts` runs every draft promotion AND the `sys_metadata_commit` record inside ONE engine transaction — a mid-batch failure rolls back the whole batch (`publishedCount: 0`; the causal item carries its real error, the rest report `batch_aborted`). Side effects (registry refresh, table DDL, seed apply, materializers, ADR-0094 projections, events) run after the metadata commits and are surfaced-not-swallowed on failure. `@objectstack/objectql`'s `engine.transaction()` now JOINS an already-open ambient transaction instead of opening a nested driver transaction (deadlock on single-connection pools; escaped the outer rollback). BREAKING (behavioral): API consumers that relied on partial batch publishes ("2 of 3 landed") now get all-or-nothing; engines without `transaction()` (memory driver, minimal stubs) keep the previous sequential behavior.
+
+### Patch Changes
+
+- f531a26: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- f531a26: fix(security): enforce `readonlyWhen` on the multi-row UPDATE path (#3042)
+
+  Conditional `readonlyWhen` field locks were stripped only on the single-id
+  UPDATE path; the bulk `update({ multi: true, where })` path enforced static
+  `readonly` (#2948) but never `readonlyWhen`. A programmatic/embedded caller (or
+  a plugin) issuing a multi-row update in a user context could therefore write a
+  field its own `readonlyWhen` predicate should have locked — the conditional
+  lock held for a `PATCH /data/:object/:id` but not for a bulk where-predicate
+  update. (The external REST/SDK `updateMany` endpoint was unaffected: it loops
+  single-id `engine.update` calls, which already strip `readonlyWhen`.)
+
+  `engine.update` now, on the multi-row path and only when the payload actually
+  writes a `readonlyWhen` field, reads the row-scoped match set with the same
+  composed AST the write binds (one query) and drops any field whose predicate is
+  TRUE for at least one matched row — a single bulk payload cannot keep a field
+  for some rows and drop it for others, so a field locked in any target row is
+  fail-safe-dropped for the batch (narrow the `where` to reach the rows where it
+  is unlocked). A conditional field NO matched row locks is written normally, so a
+  legitimate bulk edit is unaffected. Symmetric with the single-id
+  `stripReadonlyWhenFields` and with the static-`readonly` bulk strip; INSERT
+  stays exempt. No change for any single-id update or any object without
+  `readonlyWhen` fields.
+
+- f531a26: fix(security): exempt engine referential FK clears from the owner_id transfer guard (#3023)
+
+  Follow-up to the #3004 ownership-anchor guard. `owner_id` is a lookup to `sys_user`
+  with the default `deleteBehavior: 'set_null'`, so deleting a `sys_user` makes
+  `cascadeDeleteRelations` null `owner_id` on every dependent row. That cascade write
+  re-entered the write middleware under the deleter's context, where the #3004 guard
+  read the `owner_id = null` as a user-initiated disown and denied it — aborting the
+  cascade mid-way (no transaction, so partial state) for any deleter without the
+  transfer grant on the child object (e.g. a member clearing a `public_read_write`
+  child that RLS would otherwise have allowed).
+
+  The cascade FK clear is engine-mandated referential integrity consequent to an
+  already-authorized parent delete, not a user ownership change. `cascadeDeleteRelations`
+  now tags the `set_null` write with a server-derived `__referentialFieldClear` context
+  marker (set by the engine, never built from a request — same trust model as
+  `__expandRead`), and the ownership-anchor guard skips when that marker is present.
+  Ordinary user writes are unaffected; the marker cannot be forged from client input,
+  so it can never slip a real ownership transfer past the guard.
+
+- f531a26: fix(security): guard the `owner_id` ownership anchor and scope bulk writes to owner-visible rows (#3004, #2982)
+
+  Two write-path holes on the row-ownership anchor (`owner_id`), the column OWD
+  row-level scoping keys off to decide who may update/delete a record.
+
+  - **#3004 — client-writable, unguarded `owner_id`.** The anchor is deliberately
+    not `readonly` (ownership is transferable), so the static-readonly strip never
+    covered it and FLS doesn't gate it by default. A non-privileged writer could
+    therefore `insert` a record under someone else's name (forge) or `update` one
+    to a new owner (transfer / disown), evading the owner gate that governs
+    update/delete. The security middleware (plugin-security step 3.5) now treats
+    `owner_id` as system-managed for non-privileged writers: on insert an empty
+    value is auto-stamped to the acting user (batch rows too — previously only the
+    single-record path stamped, leaving bulk-inserted rows NULL-owned and
+    invisible to their creator), and a supplied foreign owner is denied; on update
+    a supplied `owner_id` is a transfer/disown and is denied — the unchanged no-op
+    echo of a form save is tolerated via a pre-image compare, and a bulk
+    change-set carrying `owner_id` fails closed. A non-scalar `owner_id`
+    (array/object) is rejected outright rather than string-coerced, and the
+    change-set membership test uses own-property semantics so a polluted
+    prototype cannot spoof an ownership write. Both require the transfer grant
+    (`allowTransfer`, or `modifyAllRecords` which implies it) to proceed. System
+    context (`ctx.isSystem`) stays fully exempt (OAuth provisioning / cron
+    snapshots / seed claims / migrations), and under delegation both principals
+    must hold the grant (ADR-0090 D10 intersection). Note a REST **import** runs
+    under the importer's own context (not `isSystem`), so a non-privileged user
+    importing a CSV whose `owner_id` column names other users is correctly denied
+    unless they hold the transfer grant — administrators (who carry
+    `modifyAllRecords`) are unaffected.
+
+  - **#2982 — bulk writes skipped owner scoping on OWD-`private` objects.** A
+    `update({ multi: true })` / bulk delete rebuilt the driver AST from
+    `options.where` AFTER the middleware chain, discarding the owner/RLS write
+    filter that plugin-sharing (`buildWriteFilter`) and plugin-security compose
+    onto `opCtx.ast` — so a member's bulk write hit every matching row, including
+    peers'. The engine now seeds `opCtx.ast` from the caller's predicate BEFORE the
+    chain (the same seam reads use) and hands the middleware-composed AST to
+    `driver.updateMany` / `driver.deleteMany`, so bulk writes are constrained to the
+    rows the caller may edit — matching single-id write behavior. `delete` now
+    applies the same scalar-`id` guard `update` already had, so an id-list bulk
+    delete (`where: { id: { $in: […] } }, multi: true`) is owner-scoped too, and
+    both multi branches fail CLOSED (throw) rather than silently rebuilding an
+    unscoped predicate if the row-scoping AST is ever absent.
+
+    Consequences of routing bulk writes through the AST: the anti-oracle
+    predicate guard now also applies to bulk `update`/`delete` (a bulk write
+    filtering on an FLS-unreadable field is rejected, as reads already are), and a
+    principal-less (no-`userId`, non-system) bulk write on an owner-scoped object
+    now correctly affects zero rows instead of all of them.
+
+  Proven end-to-end on the real showcase app
+  (`packages/qa/dogfood/test/owner-anchor-and-bulk-writes.dogfood.test.ts`) and pinned
+  in the ADR-0096 authz-conformance ledger (`ownership-anchor-guard`,
+  `bulk-write-owner-scoping`).
+
+- f531a26: fix(security): enforce referenced-object RLS/FLS on $expand (#2850)
+
+  `expandRelatedRecords` resolved lookup/master_detail/user references via the
+  driver directly, so the referenced object's row- and field-level security never
+  ran — any API/session caller who could read a base row could `?expand=` a
+  foreign key and receive RLS-hidden rows and FLS-masked fields (tenant isolation
+  was the only surviving boundary).
+
+  The expand batch now routes through the engine's own `find`, so the security
+  middleware applies the referenced object's RLS + FLS to the `id $in [...]` batch
+  (one query per level, no N+1). The sub-read carries a server-set `__expandRead`
+  marker: the middleware waives only the object-level CRUD / requiredPermissions
+  gate for PUBLIC referenced objects (already broadly readable — avoids
+  over-blocking common status/owner lookups), while PRIVATE referenced objects
+  keep the full gate. Covers the list and single-record REST/protocol surfaces.
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [d75c7ac]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/metadata-protocol@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/metadata-core@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes
