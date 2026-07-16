@@ -855,16 +855,41 @@ export class AppPlugin implements Plugin {
              const budget = new Promise<'budget'>((resolve) => {
                  timer = setTimeout(() => resolve('budget'), seedBudgetMs);
              });
+             // Signal seed settle so reconcilers that read seeded rows can
+             // re-run past this point. plugin-auth's ADR-0093 D6 membership
+             // backfill runs once on `kernel:ready`, but seeded users are raw
+             // `engine.insert` into `sys_user` (bypassing better-auth's
+             // `user.create.after` reconciler). If this seed overruns the
+             // budget below and finishes in the background — AFTER
+             // `kernel:ready` — those users would stay member-less until the
+             // next restart. Emitting on settle lets the backfill re-run (#2996).
+             const emitSeedSettled = (overBudget: boolean) => {
+                 const trigger = (ctx as any).trigger;
+                 if (typeof trigger !== 'function') return;
+                 try {
+                     const p = trigger.call(ctx, 'app:seeded', { appId, overBudget });
+                     if (p && typeof p.catch === 'function') {
+                         p.catch((err: any) => ctx.logger.debug('[Seeder] app:seeded trigger failed', { appId, error: err?.message ?? String(err) }));
+                     }
+                 } catch (err: any) {
+                     ctx.logger.debug('[Seeder] app:seeded trigger failed', { appId, error: err?.message ?? String(err) });
+                 }
+             };
              const winner = await Promise.race([seedPromise.then(() => 'done' as const), budget]);
              if (timer) clearTimeout(timer);
              if (winner === 'budget') {
                  ctx.logger.warn(
                      `[Seeder] Inline seed exceeded ${seedBudgetMs}ms budget for ${appId}; continuing in background to avoid blocking kernel start.`,
                  );
-                 // Don't leave the promise unobserved.
-                 seedPromise.catch((err: any) => {
-                     ctx.logger.warn('[Seeder] Background seed failed after budget', { appId, error: err?.message ?? String(err) });
-                 });
+                 // Don't leave the promise unobserved; emit the settle signal
+                 // once the background seed finishes (fires past kernel:ready).
+                 seedPromise
+                     .catch((err: any) => {
+                         ctx.logger.warn('[Seeder] Background seed failed after budget', { appId, error: err?.message ?? String(err) });
+                     })
+                     .then(() => emitSeedSettled(true));
+             } else {
+                 emitSeedSettled(false);
              }
              }
         }

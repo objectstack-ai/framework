@@ -342,6 +342,16 @@ On `kernel:ready`, **single mode + `membershipPolicy: 'auto'` only**:
 - opt-out: `OS_SKIP_MEMBERSHIP_BACKFILL=1` for operators who curate
   memberships manually.
 
+The backfill **also re-runs on the app plugin's `app:seeded` hook** (#2996).
+App seeds insert `sys_user` via a raw `engine.insert`, bypassing the
+`user.create.after` reconciler, so seeded users depend on this backfill as
+their only net. A seed bundle that overruns its inline budget
+(`OS_INLINE_SEED_BUDGET_MS`) finishes in the background *after* `kernel:ready`,
+so the one-shot `kernel:ready` pass would miss its users until the next
+restart. Re-running when seeding settles closes that window. The re-run keeps
+every property above — idempotent, self-guarding (no-op under `invite-only` /
+multi-org), and disabled by the same `OS_SKIP_MEMBERSHIP_BACKFILL=1` opt-out.
+
 Multi-org backfill is **refused by design** — there is no correct guess, and a
 wrong org assignment in a tenant-isolated deployment is a data-exposure bug,
 not a convenience. Multi-org operators repair membership through the existing

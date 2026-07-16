@@ -601,28 +601,43 @@ export class AuthPlugin implements Plugin {
     // Opt out entirely via OS_SKIP_MEMBERSHIP_BACKFILL=1 (operators who curate
     // memberships by hand).
     if (String(process.env.OS_SKIP_MEMBERSHIP_BACKFILL ?? '').trim() !== '1') {
-      ctx.hook('kernel:ready', async () => {
-        try {
-          const ql: any = ctx.getService<any>('objectql');
-          const tenancy = this.tenancy;
-          if (!ql || !tenancy) return;
-          const res = await backfillMemberships(ql, {
-            policy: this.options.membershipPolicy ?? 'auto',
-            resolveTargetOrg: () => tenancy.defaultOrgId(),
-            logger: ctx.logger,
-          });
-          if (res.bound > 0) {
-            ctx.logger.info(
-              `[auth] membership backfill bound ${res.bound} pre-existing member-less user(s) to the default organization (ADR-0093 D6)`,
-              res,
-            );
+      // Serialize runs so overlapping triggers (kernel:ready + one or more
+      // `app:seeded` from multiple app bundles) don't race the same scan and
+      // trip the (organization_id, user_id) unique index into warn noise.
+      let backfillChain: Promise<void> = Promise.resolve();
+      const runBackfill = (source: string): Promise<void> => {
+        backfillChain = backfillChain.then(async () => {
+          try {
+            const ql: any = ctx.getService<any>('objectql');
+            const tenancy = this.tenancy;
+            if (!ql || !tenancy) return;
+            const res = await backfillMemberships(ql, {
+              policy: this.options.membershipPolicy ?? 'auto',
+              resolveTargetOrg: () => tenancy.defaultOrgId(),
+              logger: ctx.logger,
+            });
+            if (res.bound > 0) {
+              ctx.logger.info(
+                `[auth] membership backfill (${source}) bound ${res.bound} member-less user(s) to the default organization (ADR-0093 D6)`,
+                res,
+              );
+            }
+          } catch (e) {
+            ctx.logger.warn?.('[auth] membership backfill failed', {
+              source,
+              error: (e as Error).message,
+            });
           }
-        } catch (e) {
-          ctx.logger.warn?.('[auth] membership backfill failed', {
-            error: (e as Error).message,
-          });
-        }
-      });
+        });
+        return backfillChain;
+      };
+      ctx.hook('kernel:ready', () => runBackfill('kernel:ready'));
+      // #2996: app seeds insert `sys_user` via raw engine.insert, bypassing
+      // better-auth's `user.create.after` reconciler. A seed that overruns
+      // OS_INLINE_SEED_BUDGET_MS finishes in the background AFTER kernel:ready,
+      // so its users miss the one-shot backfill above. Re-run the (idempotent)
+      // backfill when the app plugin signals seed settle.
+      ctx.hook('app:seeded', () => runBackfill('app:seeded'));
     }
 
     // Identity-source provenance for accounts created OUTSIDE better-auth's

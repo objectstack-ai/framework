@@ -1107,4 +1107,106 @@ describe('AuthPlugin', () => {
       expect(ql.tables.sys_member).toHaveLength(0);
     });
   });
+
+  // #2996 — the ADR-0093 D6 membership backfill re-runs on `app:seeded` so
+  // users inserted by an over-budget background seed (which finishes AFTER
+  // `kernel:ready` and bypasses the `user.create.after` reconciler) still get
+  // bound to the default org without waiting for the next restart.
+  describe('Membership backfill re-run on app:seeded (#2996)', () => {
+    const OLD_MULTI = process.env.OS_MULTI_ORG_ENABLED;
+    const OLD_SKIP = process.env.OS_SKIP_MEMBERSHIP_BACKFILL;
+    let hookCapture: ReturnType<typeof createHookCapture>;
+    let ql: any;
+
+    const makeQl = () => {
+      const tables: Record<string, any[]> = {
+        sys_permission_set: [{ id: 'ps_admin', name: 'admin_full_access' }],
+        sys_user_permission_set: [
+          { id: 'ups1', user_id: 'admin', permission_set_id: 'ps_admin', organization_id: null },
+        ],
+        // The platform admin already exists; the default-org bootstrap binds it
+        // as `owner` on kernel:ready. A member-less seeded user is added later.
+        sys_user: [{ id: 'admin' }],
+        sys_member: [],
+        sys_organization: [],
+      };
+      const matches = (row: any, where: any) =>
+        Object.entries(where ?? {}).every(([k, v]) => (v === null ? row[k] == null : row[k] === v));
+      return {
+        tables,
+        registerMiddleware: vi.fn(),
+        find: vi.fn(async (object: string, q: any) =>
+          (tables[object] ?? []).filter((r) => matches(r, q?.where)).slice(0, q?.limit ?? 100),
+        ),
+        insert: vi.fn(async (object: string, data: any) => {
+          (tables[object] ??= []).push(data);
+          return data;
+        }),
+      };
+    };
+
+    beforeEach(() => {
+      delete process.env.OS_MULTI_ORG_ENABLED;
+      delete process.env.OS_SKIP_MEMBERSHIP_BACKFILL;
+      hookCapture = createHookCapture();
+      ql = makeQl();
+      mockContext.hook = hookCapture.hookFn;
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'manifest') return { register: vi.fn() };
+        if (name === 'objectql') return ql;
+        return undefined;
+      });
+    });
+
+    afterEach(() => {
+      if (OLD_MULTI === undefined) delete process.env.OS_MULTI_ORG_ENABLED;
+      else process.env.OS_MULTI_ORG_ENABLED = OLD_MULTI;
+      if (OLD_SKIP === undefined) delete process.env.OS_SKIP_MEMBERSHIP_BACKFILL;
+      else process.env.OS_SKIP_MEMBERSHIP_BACKFILL = OLD_SKIP;
+    });
+
+    const boot = async (options: any = {}) => {
+      authPlugin = new AuthPlugin({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        ...options,
+      });
+      await authPlugin.init(mockContext);
+      await authPlugin.start(mockContext);
+    };
+
+    it('registers an app:seeded hook alongside kernel:ready', async () => {
+      await boot();
+      expect(mockContext.hook).toHaveBeenCalledWith('app:seeded', expect.any(Function));
+    });
+
+    it('binds a user seeded after kernel:ready when app:seeded fires', async () => {
+      await boot();
+      // Boot: default org created, admin bound as owner, first backfill pass
+      // sees no member-less users.
+      await hookCapture.trigger('kernel:ready');
+      expect(ql.tables.sys_member.map((m: any) => m.user_id)).toEqual(['admin']);
+
+      // A background seed inserts a member-less user AFTER kernel:ready.
+      ql.tables.sys_user.push({ id: 'seeded_u2' });
+
+      await hookCapture.trigger('app:seeded');
+
+      const seededMember = ql.tables.sys_member.find((m: any) => m.user_id === 'seeded_u2');
+      expect(seededMember).toMatchObject({ user_id: 'seeded_u2', role: 'member' });
+    });
+
+    it('OS_SKIP_MEMBERSHIP_BACKFILL=1 disables the app:seeded re-run', async () => {
+      process.env.OS_SKIP_MEMBERSHIP_BACKFILL = '1';
+      await boot();
+      // No app:seeded hook is registered when the backfill is opted out.
+      expect(mockContext.hook).not.toHaveBeenCalledWith('app:seeded', expect.any(Function));
+
+      await hookCapture.trigger('kernel:ready');
+      ql.tables.sys_user.push({ id: 'seeded_u2' });
+      await hookCapture.trigger('app:seeded');
+
+      expect(ql.tables.sys_member.find((m: any) => m.user_id === 'seeded_u2')).toBeUndefined();
+    });
+  });
 });

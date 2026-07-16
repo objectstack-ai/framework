@@ -364,10 +364,13 @@ export class ObjectKernel {
             await this.context.trigger('kernel:ready');
 
             // Phase 3.5: Trigger kernel:bootstrapped AFTER every kernel:ready
-            // handler has settled — the "all bootstrap + seed data is ready"
+            // handler has settled — the "all synchronous bootstrap has settled"
             // anchor. Reconcile/backfill work that consumes data produced by a
             // later-starting plugin's kernel:ready handler belongs here, not in
-            // kernel:ready (where handler order would race the data). See
+            // kernel:ready (where handler order would race the data). NOTE: this
+            // does NOT guarantee background app seed data has settled (an inline
+            // seed that overruns OS_INLINE_SEED_BUDGET_MS finishes later) —
+            // subscribe `app:seeded` for that. See
             // packages/spec/src/contracts/plugin-lifecycle-events.ts.
             this.logger.debug('Triggering kernel:bootstrapped hook');
             await this.context.trigger('kernel:bootstrapped');

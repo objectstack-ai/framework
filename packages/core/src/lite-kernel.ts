@@ -77,9 +77,11 @@ export class LiteKernel extends ObjectKernelBase {
 
         // Trigger ready hook (route/middleware registration phase)
         await this.triggerHook('kernel:ready');
-        // Trigger bootstrapped hook — "all bootstrap + seed data is ready"
+        // Trigger bootstrapped hook — "all synchronous bootstrap has settled"
         // anchor, strictly after every kernel:ready handler has settled and
-        // before any HTTP socket opens (see plugin-lifecycle-events.ts).
+        // before any HTTP socket opens. NOTE: does not guarantee background app
+        // seed data has settled — subscribe `app:seeded` for that
+        // (see plugin-lifecycle-events.ts).
         await this.triggerHook('kernel:bootstrapped');
         // Trigger listening hook (HTTP servers open their socket here —
         // strictly after every kernel:ready handler has completed).

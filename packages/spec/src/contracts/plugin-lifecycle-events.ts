@@ -23,7 +23,7 @@ export interface IPluginLifecycleEvents {
      * Emitted AFTER every `kernel:ready` handler has completed, but BEFORE
      * `kernel:listening` (so before any HTTP socket opens).
      *
-     * This is the "all bootstrap + seed data has settled" anchor. Because
+     * This is the "all synchronous bootstrap has settled" anchor. Because
      * `kernel:ready` handlers run sequentially in plugin-registration order,
      * a handler cannot rely on data produced by a plugin that starts later
      * (e.g. the security bootstrap seeds `sys_position`, the app plugin's
@@ -32,6 +32,12 @@ export interface IPluginLifecycleEvents {
      * every producer's `kernel:ready` handler has finished by the time this
      * fires. HTTP `listen()` is deliberately deferred one more phase to
      * `kernel:listening` so late route registration still lands.
+     *
+     * CAVEAT: this does NOT guarantee app *seed* data has settled. The app
+     * plugin's inline seed only blocks the kernel for `OS_INLINE_SEED_BUDGET_MS`
+     * (default 8s); a bundle that exceeds that budget continues seeding in the
+     * background and can outlast `kernel:bootstrapped` and even `kernel:listening`
+     * (#2996). Subscribe `app:seeded` for the true per-app seed-settle point.
      *
      * Payload: []
      */
@@ -58,6 +64,27 @@ export interface IPluginLifecycleEvents {
      * Payload: []
      */
     'kernel:listening': [];
+
+    /**
+     * Emitted by the app plugin when an app's inline seed attempt has settled
+     * — success, partial (dropped records), or fallback insert. Single-tenant
+     * mode only, and only when the app actually has seed datasets.
+     *
+     * When the inline seed completes within `OS_INLINE_SEED_BUDGET_MS` this
+     * fires during plugin start (before `kernel:ready`); when it overruns the
+     * budget and finishes in the background it fires AFTER `kernel:ready` /
+     * `kernel:bootstrapped` / `kernel:listening` — `overBudget` distinguishes
+     * the two. May fire once per registered app bundle.
+     *
+     * Consumers MUST be idempotent: this is the settle signal for reconcilers
+     * that read seeded rows. plugin-auth re-runs the ADR-0093 D6 membership
+     * backfill here so users inserted by an over-budget seed (which bypass
+     * better-auth's `user.create.after` reconciler) still get bound to the
+     * default org without waiting for the next restart (#2996).
+     *
+     * Payload: [{ appId, overBudget }]
+     */
+    'app:seeded': [payload: { appId: string; overBudget: boolean }];
 
     /**
      * Emitted when kernel is shutting down
