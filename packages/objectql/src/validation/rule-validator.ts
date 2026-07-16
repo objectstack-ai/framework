@@ -183,18 +183,98 @@ export function stripReadonlyWhenFields(
   let result = data;
   for (const [name, def] of Object.entries(fields)) {
     if (!def?.readonlyWhen || !(name in data)) continue;
-    const res = ExpressionEngine.evaluate<boolean>(toExpression(def.readonlyWhen), {
-      record: merged,
-      previous: previous ?? undefined,
-    });
-    if (!res.ok) {
-      logger?.warn?.(`readonlyWhen for '${name}' failed to evaluate — change allowed through`);
-      continue;
-    }
-    if (res.value === true) {
+    if (isReadonlyWhenLocked(def, merged, previous ?? undefined, name, logger)) {
       if (result === data) result = { ...data };
       delete (result as Record<string, unknown>)[name];
       logger?.warn?.(`Field '${name}' is read-only (readonlyWhen) — ignoring incoming change`);
+    }
+  }
+  return result;
+}
+
+/**
+ * Evaluate one field's `readonlyWhen` predicate against a (merged) record.
+ * TRUE ⇒ the field is locked for that record and the incoming change must be
+ * dropped. A broken predicate is fail-open (returns `false` — the change is
+ * allowed through), matching the strip's historical behaviour. Shared by the
+ * single-id ({@link stripReadonlyWhenFields}) and bulk
+ * ({@link stripReadonlyWhenFieldsMulti}) strips.
+ */
+function isReadonlyWhenLocked(
+  def: ConditionalFieldDef,
+  merged: Record<string, unknown>,
+  previous: Record<string, unknown> | undefined,
+  name: string,
+  logger?: EvaluateRulesOptions['logger'],
+): boolean {
+  const res = ExpressionEngine.evaluate<boolean>(toExpression(def.readonlyWhen!), {
+    record: merged,
+    previous,
+  });
+  if (!res.ok) {
+    logger?.warn?.(`readonlyWhen for '${name}' failed to evaluate — change allowed through`);
+    return false;
+  }
+  return res.value === true;
+}
+
+/**
+ * True when the UPDATE payload writes at least one field that declares a
+ * `readonlyWhen` predicate. A cheap gate the engine uses to decide whether the
+ * bulk update path must fetch its matched rows for
+ * {@link stripReadonlyWhenFieldsMulti} — no `readonlyWhen` field in the payload
+ * ⇒ no fetch, no cost.
+ */
+export function hasReadonlyWhenInPayload(
+  objectSchema: { fields?: Record<string, ConditionalFieldDef> } | undefined | null,
+  data: Record<string, unknown> | undefined | null,
+): boolean {
+  const fields = objectSchema?.fields;
+  if (!fields || !data) return false;
+  for (const [name, def] of Object.entries(fields)) {
+    if (def?.readonlyWhen && name in data) return true;
+  }
+  return false;
+}
+
+/**
+ * Multi-row counterpart of {@link stripReadonlyWhenFields} (#3042). A bulk
+ * `updateMany` applies ONE payload to every matched row, but `readonlyWhen` is a
+ * PER-ROW predicate — a single merged prior is not enough. Given the matched
+ * rows' prior state (the engine reads them with the SAME row-scoped AST the
+ * write binds — one query), a `readonlyWhen` field is dropped from the batch
+ * when its predicate is TRUE for AT LEAST ONE matched row: a bulk write cannot
+ * lock the field for some rows and write it for others, so a field locked in any
+ * target row is fail-safe-dropped for all (narrow the `where` to reach the rows
+ * where it is unlocked). A field NO matched row locks is written normally — a
+ * legitimate bulk edit of an unlocked conditional field is unaffected. A broken
+ * predicate is fail-open for that row. INSERT is exempt (update path only),
+ * symmetric with the single-id strip.
+ *
+ * Returns the same object when nothing is stripped, else a shallow copy with the
+ * locked keys removed.
+ */
+export function stripReadonlyWhenFieldsMulti(
+  objectSchema: { fields?: Record<string, ConditionalFieldDef> } | undefined | null,
+  data: Record<string, unknown> | undefined | null,
+  priorRows: ReadonlyArray<Record<string, unknown>> | undefined | null,
+  logger?: EvaluateRulesOptions['logger'],
+): Record<string, unknown> | undefined | null {
+  const fields = objectSchema?.fields;
+  if (!fields || !data) return data;
+  const rows = priorRows ?? [];
+  let result = data;
+  for (const [name, def] of Object.entries(fields)) {
+    if (!def?.readonlyWhen || !(name in data)) continue;
+    const lockedInSomeRow = rows.some((row) =>
+      isReadonlyWhenLocked(def, { ...(row ?? {}), ...data }, row ?? undefined, name, logger),
+    );
+    if (lockedInSomeRow) {
+      if (result === data) result = { ...data };
+      delete (result as Record<string, unknown>)[name];
+      logger?.warn?.(
+        `Field '${name}' is read-only (readonlyWhen) in ≥1 matched row — ignoring incoming change on bulk update`,
+      );
     }
   }
   return result;
