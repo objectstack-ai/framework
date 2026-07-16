@@ -18,7 +18,7 @@ import { ExternalCustomer, ExternalOrder } from './src/data/objects/external/ind
 import { setupShowcaseExternalDatasource } from './src/system/datasources/external-fixture.js';
 import { registerRecalcEndpoint } from './src/system/server/recalc-endpoint.js';
 import { registerShowcasePositionBindings } from './src/security/bind-position-sets.js';
-import { TaskViews, ProjectViews, InquiryViews, BusinessUnitViews } from './src/ui/views/index.js';
+import { TaskViews, ProjectViews, InquiryViews, BusinessUnitViews, SemanticZooViews, SemanticZooLegacyViews } from './src/ui/views/index.js';
 import { ShowcaseApp } from './src/ui/apps/index.js';
 import { ChartGalleryDashboard, OpsDashboard, RevenuePulseDashboard } from './src/ui/dashboards/index.js';
 import { ShowcaseTaskDataset, ShowcaseProjectDataset, ShowcaseInvoiceDataset, ShowcaseAccountDataset } from './src/ui/datasets/index.js';
@@ -181,7 +181,7 @@ export default defineStack({
   // UI
   apps: [ShowcaseApp],
   portals: allPortals,
-  views: [TaskViews, ProjectViews, InquiryViews, BusinessUnitViews],
+  views: [TaskViews, ProjectViews, InquiryViews, BusinessUnitViews, SemanticZooViews, SemanticZooLegacyViews],
   pages: [CapabilityMapPage, StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage],
   dashboards: [ChartGalleryDashboard, OpsDashboard, RevenuePulseDashboard],
   books: allBooks,
