@@ -20,6 +20,7 @@ import {
   registerPermissionSetProjection,
   reconcilePermissionSetProjection,
 } from './permission-set-projection.js';
+import { registerObjectPostureGate } from './object-posture-gate.js';
 import {
   syncAudienceBindingSuggestions,
   listAudienceBindingSuggestions,
@@ -1571,6 +1572,12 @@ export class SecurityPlugin implements Plugin {
               ql, metadata: this.metadata, logger: ctx.logger,
             });
           }
+          // [#3050] OWD posture authoring gate — pre-persistence veto on
+          // runtime-authored `object` bodies: env-tighten-only over packaged
+          // declarations (ADR-0086 D1) + external ≤ internal (ADR-0090 D11).
+          // Feature-detected; protocols predating registerAuthoringGate keep
+          // the legacy (CLI-lint-only) behavior.
+          registerObjectPostureGate(protocol);
           // [ADR-0094 D4] Converge record ↔ metadata: project env overlays
           // onto records (creating missing ones), backfill legacy data-door
           // creations into the metadata store once, and heal drifted records
