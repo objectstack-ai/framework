@@ -1,6 +1,6 @@
 # ADR-0086: Authorization metadata↔config boundary + cross-package composition — DEFINITION travels, ASSIGNMENT stays, packages ship their own sets
 
-**Status**: Proposed (2026-07-04)
+**Status**: Accepted (2026-07-04) — **substantially implemented**; parts refined/superseded by [ADR-0090](./0090-permission-model-v2-concept-convergence.md) and [ADR-0094](./0094-sys-permission-set-pure-projection.md). See the **Re-evaluation (2026-07-16)** addendum for the current, code-grounded status of every decision.
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0066](./0066-unified-authorization-model.md) (three-way separation: Capability / Assignment / Requirement — this ADR operationalizes its **D5** for the packaging axis), [ADR-0056](./0056-permission-model-landing-verification.md) (whole-model enforce/prove; **D7** app-declared default profile), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (`readScope`/`writeScope` depth), [ADR-0005](./0005-metadata-customization-overlay.md) (per-org overlay = the subtract/adjust layer), [ADR-0028](./0028-metadata-naming-and-namespace-isolation.md) / [ADR-0048](./0048-cross-package-metadata-collision.md) (namespaced api names = collision-proof keys), [ADR-0078](./0078-no-silently-inert-metadata.md) (no declarable-but-never-seeded metadata), [ADR-0016](./0016-studio-package-authoring-and-publish.md) / [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft/publish), [ADR-0084](./0084-application-builder-information-architecture.md) (Access pillar = matrix; defers composition), [ADR-0025](./0025-plugin-package-distribution.md) (manifest `permissions` = install-consent scopes, **not** RBAC grants), [ADR-0003](./0003-package-as-first-class-citizen.md) / [ADR-0070](./0070-package-first-authoring.md) (package-first), [ADR-0006](./0006-project-environment-split.v4.md) (environment split)
 **Consumers**: `@objectstack/spec` (`security/permission.zod.ts`, `stack.zod.ts`, `system/metadata-persistence.zod.ts`), `@objectstack/plugin-security` (`bootstrap-declared-*`, `permission-evaluator`), `@objectstack/core` (`resolve-authz-context`), `@objectstack/metadata` (overlay), `../objectui` (`AccessPillar`, `PermissionMatrixEditor`, `metadata-admin`)
@@ -352,3 +352,87 @@ each door only writes what it owns.
 - **Lifecycle context**: this ADR covers the package-authoring/composition slice of the authz
   surface; the whole-lifecycle gap map (P0–P3, package dev → production) is tracked in
   umbrella issue #2561.
+
+---
+
+## Re-evaluation (2026-07-16) — code-grounded status; what landed, what later ADRs refined
+
+This ADR was written the day issue #2557 opened (2026-07-04). In the two weeks since, its
+whole plan **shipped**, and three later ADRs (0090, 0094, and — transitively — 0095) built on
+top of it and refined two of its parts. This addendum re-grounds every decision against the
+current code (HEAD 2026-07-16) so the ADR stops reading as an unimplemented proposal. **The
+central thesis holds unchanged**: authorization *definitions* travel with the package
+(metadata, on the `managedBy` provenance axis + `packageId`); *subject bindings* stay
+environment config; cross-package grants compose conflict-free by the namespaced-key UNION.
+Two mechanisms named in the original text have been overtaken by a better realization and are
+flagged inline below.
+
+### Status of each decision / phase
+
+| Item | Status | Where it landed / how it changed |
+|---|---|---|
+| **D1** classification on the provenance axis | **Adopted**; table vocabulary now stale — see "revised table" below | Principle intact. Rows renamed/removed by ADR-0090 (Profile gone, role→position). |
+| **D2** DEFINITION↔ASSIGNMENT principle | **Adopted, reinforced** | ADR-0090 D2 leans on it to justify removing Profile; ADR-0091 dates the *assignment* rows only (`valid_from`/`valid_until`), confirming they are env data. |
+| **D3** `packageId` + provenance `managedBy` on the set | **Implemented** | `spec/security/permission.zod.ts:167` (`packageId`, tagged `[ADR-0086 D3]`) + `:178` (`managedBy` enum); record fields `package_id`/`managed_by`/`customized` + index on `sys-permission-set.object.ts:217-266`. |
+| **D4** Shape B (packages ship own sets; union; shared slices env-only) | **Adopted, reinforced; subtract layer upgraded** | ADR-0090 D9 / Alt #6 reject package-written shared/builtin sets for the same reasons. Composition is now anchored at the **position** ("bind several packages' sets to one position"), ADR-0094 D5. **Subtract layer changed** — see ⚠️ below. |
+| **D5** `bootstrapDeclaredPermissions` | **Implemented; `isDefault` semantics refined by ADR-0090 D5** | `plugin-security/src/bootstrap-declared-permissions.ts` (invoked at `kernel:ready`, `security-plugin.ts`); seeds `managed_by:'package'` + `package_id`, idempotent/upgrade-aware; closes the ADR-0078 inert-metadata smell the D5 header calls out. `isDefault` no longer means "profile fallback": app-level default sets **auto-bind to the `everyone` position**; package-level default sets materialize a `sys_audience_binding_suggestion` an admin confirms (new object). |
+| **D6** package Access door under draft/publish | **Implemented** | objectui writes the package door as `mode:'draft', packageId` (`PermissionMatrixEditor.tsx`); env door stays live and, per ADR-0094 D3, that "live" save is itself redirected into a metadata overlay. |
+| **D7** two doors | **Implemented; gate narrowed by ADR-0094 D5** | Package door edits the package slice (scoped, draft); env-admin door keeps the cross-package matrix + assignment (live). ADR-0094 narrows the two-doors *gate* to what stays structurally true: the admin door can never **forge** package provenance, and package-row lifecycle ops with no overlay translation stay refused — but an env edit of a package set is now a first-class overlay, not a flat 403. |
+| **P0** objectui scope + slice-merge | **Done** (objectui #2505/#2508) | `permission-slice.ts` + `mergePermissionSlice`; matrix loads `client.list('object', { packageId })`, fields lazy per-object; save re-reads a fresh layered record and merges only the package slice, byte-for-byte preserving other packages. ⚠️ realized against the ADR-0094 store — see below. |
+| **P1** framework `packageId` + seeder | **Done** | = D3 + D5 above. |
+| **P2** two doors + overlay/subtract | **Largely done** | Two doors shipped (D6/D7). Subtract layer landed as **ADR-0005 first-class overlay** (ADR-0094 D5), not the Salesforce-muting/explicit-deny path this ADR sketched. The ADR-0066 precedence-step-4 explicit-deny layer remains deferred and **evidence-gated** — the whole-document overlay-wins customization covers today's need. |
+
+### ⚠️ Two mechanisms in the original text are superseded by a better realization
+
+1. **P0's "slice-merge the shared *data record*" premise → ADR-0094 projection + overlay.**
+   The original Context/P0 assumed grants live inline on **one writable `sys_permission_set`
+   record** and the fix was to slice-merge that record on save. **ADR-0094 relocated the
+   authoritative store to the metadata layer**: the `sys_permission_set` row is now a **pure
+   projection** written only by an awaited mutation projector, and every data-door write is
+   redirected (write-through) into a metadata save/overlay. The data-loss trap this ADR
+   worried about is now closed **structurally** (there is no second writable authority to
+   clobber), and the shipped P0 correctly slice-merges the **layered effective** body, not a
+   raw shared row. *Note the inline `objects`/`fields` dict shape survived — ADR-0094 moved
+   the store, not the body shape — so this ADR's load-bearing claim that namespaced keys make
+   a package's slice unambiguous still holds and underpins both slice-merge and overlay.*
+
+2. **D4's "Salesforce muting / clone-to-customize" subtract layer → ADR-0005 whole-document
+   overlay.** ADR-0094 D5 (revised 2026-07-14) makes an environment overlay of a
+   package-owned set a **first-class ADR-0005 customization** (overlay-wins, `managed_by:
+   'package'` + `package_id` preserved; a data-door "delete" is an overlay reset to the shipped
+   declaration). This is strictly better than muting/forking: the customization keeps receiving
+   the vendor's baseline security tightenings and retains the code-vs-overlay diff. The trade
+   it accepts (an overlay pins a name against a later vendor tightening until reset) is the same
+   trade every overlayable type makes and is covered by ADR-0091 recertification.
+
+### D1 classification table — restated in current (ADR-0090) vocabulary
+
+Superseding the D1 table only where vocabulary changed; the **class** column is unchanged
+except where noted:
+
+| Primitive (current name) | Class | What changed since 2026-07-04 |
+|---|---|---|
+| **Position** (was "Role") definition | **metadata** | Renamed `role`→`position` (ADR-0090 D3); "role" is now a reserved-forbidden word. |
+| ~~Role hierarchy `parent`~~ | **removed** | Positions are **flat, no `parent`** (ADR-0090 D3); the visibility hierarchy is the **Business Unit tree** (ADR-0057), which carries its own metadata/config split. The old "hybrid parent" row no longer exists. |
+| **PermissionSet** definition | **metadata** | **Profile removed** (ADR-0090 D2 — `isProfile` deleted); `permission_set` is the sole capability container. |
+| ObjectPermission / FieldPermission / `systemPermissions` / `tabPermissions` | **metadata** | Unchanged — ride the set definition, own objects/fields only. |
+| RLS policy / Sharing rule / OWD `sharingModel` | metadata / hybrid / metadata | Unchanged in class. `sharingModel` default flipped to `private` for custom objects (ADR-0090 D1) and gained `externalSharingModel` (D11). `sys_sharing_rule` is **record-authoritative** (seed-not-clobber), per the ADR-0094 addendum. |
+| **`everyone` / `guest`** built-in positions | **config** (admin-confirmed) | NEW default-grant mechanism (ADR-0090 D5/D9) that replaces the `member_default` fallback + ADR-0056 D7 default-profile. Packages *suggest* bindings; admins confirm. High-privilege bits on `everyone`/`guest` are lint-blocked. |
+| **Assignment** `sys_user_position` / `sys_position_permission_set` (was `sys_user_permission_set` / `sys_role_permission_set`) | **config / data** | Tables renamed (ADR-0090 D3); still the universal DEFINITION↔ASSIGNMENT line. ADR-0091 adds `valid_from`/`valid_until` — assignment is now *time-boxed* config. |
+| Delegated-admin **`adminScope`** on a set | **metadata (definition) + config (grant)** | NEW (ADR-0090 D12): admin capability itself is scoped (BU subtree + assignable-set allowlist + no self-escalation); `authorEnvironmentSets` keeps package-managed rows publish-only per this ADR. |
+| Organization / tenancy / actual users & teams | **config / data** | Unchanged. Tenancy is now an explicit kernel service (ADR-0093) and tenant isolation an always-first Layer 0 (ADR-0095). Teams *receive* sharing, never carry capability (ADR-0090 D8). |
+
+### Net assessment
+
+ADR-0086 is **done and correct**, not pending. Its provenance-axis classification and Shape-B
+composition became the load-bearing assumption of the whole permission-model-v2 wave: ADR-0090
+cites "ADR-0086 D3 made machine-checkable" as the reason Profile could be removed and
+uninstall-by-`packageId` works; the companion `docs/design/permission-model.md` documents D3/D5
+as the operative package/platform isolation boundary. The only corrections a reader needs are
+(1) the two superseded *mechanisms* above (store = ADR-0094 projection/overlay, not a raw shared
+record; subtract = ADR-0005 overlay, not muting) and (2) the ADR-0090 vocabulary (Position not
+Role, no Profile, `everyone`/`guest`). No decision here was reversed. Remaining genuinely-open
+items are the ones this ADR already marked deferred and evidence-gated: the ADR-0066 explicit-deny
+precedence layer, permission-set **groups** as a bundling primitive over Shape-B sets, and
+OWD/`sharingModel` env-tightening riding the overlay path (ADR-0005 still marks `security` types
+non-org-overridable by default; ADR-0094's overlay is the explicit, gated exception).
