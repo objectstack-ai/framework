@@ -1919,6 +1919,84 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // Honest capabilities — ADR-0076 D12 (#2462)
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('discovery honest capabilities (D12)', () => {
+        it('never advertises a /realtime route and reports a registered realtime service as degraded', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'realtime') return { publish: vi.fn(), subscribe: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+
+            // No HTTP/WS surface exists — a discovery-advertised route would 404.
+            expect(info.routes.realtime).toBeUndefined();
+            expect(info.features.websockets).toBe(false);
+            expect(info.services.realtime.enabled).toBe(true);
+            expect(info.services.realtime.status).toBe('degraded');
+            expect(info.services.realtime.handlerReady).toBe(false);
+            // …and a /realtime request indeed has no handler
+            const result = await dispatcher.dispatch('POST', '/realtime/subscribe', {}, {}, { request: {} });
+            expect(result.response?.status).toBe(404);
+        });
+
+        it('reports realtime as unavailable when no service is registered', async () => {
+            (kernel as any).getService = vi.fn().mockResolvedValue(null);
+            (kernel as any).services = new Map();
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.routes.realtime).toBeUndefined();
+            expect(info.services.realtime.enabled).toBe(false);
+            expect(info.services.realtime.status).toBe('unavailable');
+        });
+
+        it('reports a _dev-marked stub service as stub, never available', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'ai') return { _dev: true, chat: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.ai.enabled).toBe(true);
+            expect(info.services.ai.status).toBe('stub');
+            expect(info.services.ai.handlerReady).toBe(false);
+            expect(info.services.ai.message).toContain('stub');
+        });
+
+        it('reports a __serviceInfo-marked fallback with its declared status and message', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'analytics') return {
+                    __serviceInfo: { status: 'degraded', handlerReady: true, message: 'Lightweight fallback' },
+                    query: vi.fn(),
+                };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.analytics.enabled).toBe(true);
+            expect(info.services.analytics.status).toBe('degraded');
+            expect(info.services.analytics.handlerReady).toBe(true);
+            expect(info.services.analytics.message).toBe('Lightweight fallback');
+            // Route stays advertised — the fallback genuinely serves it.
+            expect(info.routes.analytics).toBe('/api/v1/analytics');
+        });
+
+        it('keeps reporting unmarked services as available', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'workflow') return { getConfig: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.workflow.enabled).toBe(true);
+            expect(info.services.workflow.status).toBe('available');
+            expect(info.services.workflow.handlerReady).toBe(true);
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // i18n across server/dev/mock environments
     // ═══════════════════════════════════════════════════════════════
 

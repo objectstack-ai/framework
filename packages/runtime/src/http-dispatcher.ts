@@ -6,6 +6,7 @@ import {
 } from '@objectstack/core';
 import { isMcpServerEnabled } from '@objectstack/types';
 import { CoreServiceName } from '@objectstack/spec/system';
+import { readServiceSelfInfo } from '@objectstack/spec/api';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
@@ -1565,7 +1566,6 @@ export class HttpDispatcher {
         const hasAuth         = !!authSvc;
         const hasGraphQL      = !!(graphqlSvc || this.kernel.graphql);
         const hasSearch       = !!searchSvc;
-        const hasWebSockets   = !!realtimeSvc;
         const hasFiles        = !!filesSvc;
         const hasAnalytics    = !!analyticsSvc;
         const hasWorkflow     = !!workflowSvc;
@@ -1590,7 +1590,12 @@ export class HttpDispatcher {
                 analytics:     hasAnalytics ? `${prefix}/analytics` : undefined,
                 automation:    hasAutomation ? `${prefix}/automation` : undefined,
                 workflow:      hasWorkflow ? `${prefix}/workflow` : undefined,
-                realtime:      hasWebSockets ? `${prefix}/realtime` : undefined,
+                // Never advertised (ADR-0076 D12, #2462): service-realtime is an
+                // in-process pub/sub bus — the dispatcher has no /realtime branch
+                // and no plugin mounts one, so an advertised route would 404.
+                // Re-add only when a real HTTP/WS surface exists (and then it must
+                // pass through the shouldDenyAnonymous gate, #2567).
+                realtime:      undefined,
                 notifications: hasNotification ? `${prefix}/notifications` : undefined,
                 ai:            hasAi ? `${prefix}/ai` : undefined,
                 i18n:          hasI18n ? `${prefix}/i18n` : undefined,
@@ -1604,13 +1609,30 @@ export class HttpDispatcher {
         // handlerReady: true means the dispatcher has a real, bound handler for this route.
         // handlerReady: false means the route is present in the discovery table but may not
         // yet have a concrete implementation or may be served by a stub.
-        const svcAvailable = (route?: string, provider?: string) => ({
-            enabled: true, status: 'available' as const, handlerReady: true, route, provider,
-        });
+        //
+        // Honest capabilities (ADR-0076 D12, #2462): a registered service that
+        // self-identifies as a stub / dev fake / degraded fallback (via the
+        // `__serviceInfo` marker or plugin-dev's legacy `_dev: true`) is
+        // reported with its declared status — never as `available` — so
+        // consumers (AI agents, the console) don't mistake a fake capability
+        // for a real one.
+        const svcAvailable = (route?: string, provider?: string, svc?: unknown) => {
+            const self = svc ? readServiceSelfInfo(svc) : undefined;
+            if (self) {
+                return {
+                    enabled: true, status: self.status, handlerReady: self.handlerReady ?? false,
+                    route, provider, message: self.message,
+                };
+            }
+            return { enabled: true, status: 'available' as const, handlerReady: true, route, provider };
+        };
         const svcUnavailable = (name: string) => ({
             enabled: false, status: 'unavailable' as const, handlerReady: false,
             message: `Install a ${name} plugin to enable`,
         });
+
+        // Self-description of the registered realtime service, if any (D12).
+        const realtimeSelf = realtimeSvc ? readServiceSelfInfo(realtimeSvc) : undefined;
 
         // Derive locale info from actual i18n service when available
         let locale = { default: 'en', supported: ['en'], timezone: 'UTC' };
@@ -1635,7 +1657,10 @@ export class HttpDispatcher {
             features: {
                 graphql: hasGraphQL,
                 search: hasSearch,
-                websockets: hasWebSockets,
+                // No WS/HTTP realtime surface is mounted anywhere — a mere
+                // in-process realtime service must not advertise websockets
+                // (ADR-0076 D12, #2462).
+                websockets: false,
                 files: hasFiles,
                 analytics: hasAnalytics,
                 ai: hasAi,
@@ -1648,21 +1673,32 @@ export class HttpDispatcher {
                 metadata:       { enabled: true, status: 'degraded' as const, handlerReady: true, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
                 data:           svcAvailable(routes.data, 'kernel'),
                 // Plugin-provided — only available when a plugin registers the service
-                auth:           hasAuth ? svcAvailable(routes.auth) : svcUnavailable('auth'),
-                automation:     hasAutomation ? svcAvailable(routes.automation) : svcUnavailable('automation'),
-                analytics:      hasAnalytics ? svcAvailable(routes.analytics) : svcUnavailable('analytics'),
-                cache:          hasCache ? svcAvailable() : svcUnavailable('cache'),
-                queue:          hasQueue ? svcAvailable() : svcUnavailable('queue'),
-                job:            hasJob ? svcAvailable() : svcUnavailable('job'),
-                ui:             hasUi ? svcAvailable(routes.ui) : svcUnavailable('ui'),
-                workflow:       hasWorkflow ? svcAvailable(routes.workflow) : svcUnavailable('workflow'),
-                realtime:       hasWebSockets ? svcAvailable(routes.realtime) : svcUnavailable('realtime'),
-                notification:   hasNotification ? svcAvailable(routes.notifications) : svcUnavailable('notification'),
-                ai:             hasAi ? svcAvailable(routes.ai) : svcUnavailable('ai'),
-                i18n:           hasI18n ? svcAvailable(routes.i18n) : svcUnavailable('i18n'),
-                graphql:        hasGraphQL ? svcAvailable(routes.graphql) : svcUnavailable('graphql'),
-                'file-storage': hasFiles ? svcAvailable(routes.storage) : svcUnavailable('file-storage'),
-                search:         hasSearch ? svcAvailable() : svcUnavailable('search'),
+                auth:           hasAuth ? svcAvailable(routes.auth, undefined, authSvc) : svcUnavailable('auth'),
+                automation:     hasAutomation ? svcAvailable(routes.automation, undefined, automationSvc) : svcUnavailable('automation'),
+                analytics:      hasAnalytics ? svcAvailable(routes.analytics, undefined, analyticsSvc) : svcUnavailable('analytics'),
+                cache:          hasCache ? svcAvailable(undefined, undefined, cacheSvc) : svcUnavailable('cache'),
+                queue:          hasQueue ? svcAvailable(undefined, undefined, queueSvc) : svcUnavailable('queue'),
+                job:            hasJob ? svcAvailable(undefined, undefined, jobSvc) : svcUnavailable('job'),
+                ui:             hasUi ? svcAvailable(routes.ui, undefined, uiSvc) : svcUnavailable('ui'),
+                workflow:       hasWorkflow ? svcAvailable(routes.workflow, undefined, workflowSvc) : svcUnavailable('workflow'),
+                // Honest entry (ADR-0076 D12, #2462): the registered realtime
+                // service is an in-process event bus with NO mounted HTTP/WS
+                // surface — report it degraded with handlerReady:false (or as
+                // the stub it declares itself to be), never as an available
+                // HTTP capability with a route that would 404.
+                realtime:       realtimeSvc ? {
+                                    enabled: true,
+                                    status: realtimeSelf?.status ?? ('degraded' as const),
+                                    handlerReady: false,
+                                    message: realtimeSelf?.message
+                                        ?? 'In-process event bus only — no HTTP/WS realtime surface is mounted',
+                                } : svcUnavailable('realtime'),
+                notification:   hasNotification ? svcAvailable(routes.notifications, undefined, notificationSvc) : svcUnavailable('notification'),
+                ai:             hasAi ? svcAvailable(routes.ai, undefined, aiSvc) : svcUnavailable('ai'),
+                i18n:           hasI18n ? svcAvailable(routes.i18n, undefined, i18nSvc) : svcUnavailable('i18n'),
+                graphql:        hasGraphQL ? svcAvailable(routes.graphql, undefined, graphqlSvc) : svcUnavailable('graphql'),
+                'file-storage': hasFiles ? svcAvailable(routes.storage, undefined, filesSvc) : svcUnavailable('file-storage'),
+                search:         hasSearch ? svcAvailable(undefined, undefined, searchSvc) : svcUnavailable('search'),
             },
             locale,
         };

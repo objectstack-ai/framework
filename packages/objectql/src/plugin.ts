@@ -4,6 +4,7 @@ import { ObjectQL } from './engine.js';
 import { ObjectStackProtocolImplementation } from '@objectstack/metadata-protocol';
 import { Plugin, PluginContext } from '@objectstack/core';
 import { StorageNameMapping } from '@objectstack/spec/system';
+import { SERVICE_SELF_INFO_KEY, type ServiceSelfInfo } from '@objectstack/spec/api';
 import { LifecycleService } from './lifecycle/lifecycle-service.js';
 import { lifecycleSettingsManifest } from './lifecycle/lifecycle-settings.js';
 import {
@@ -279,6 +280,16 @@ export class ObjectQLPlugin implements Plugin {
     // structured "not implemented" payload so callers see something
     // useful instead of a 500.
     ctx.registerService('analytics', {
+      // Honest capabilities (ADR-0076 D12, #2462): this adapter is a
+      // deliberate lightweight fallback, not the full analytics engine —
+      // self-identify so discovery reports it as 'degraded' instead of
+      // 'available'. AnalyticsServicePlugin replaces this service (via
+      // ctx.replaceService) with the real engine, which carries no marker.
+      [SERVICE_SELF_INFO_KEY]: {
+        status: 'degraded',
+        handlerReady: true,
+        message: 'Lightweight ObjectQL analytics fallback — install @objectstack/service-analytics for the full engine',
+      } satisfies ServiceSelfInfo,
       // HttpDispatcher passes the raw POST body (AnalyticsQuery shape:
       // `{ cube, measures, dimensions, where?, filters?, ... }`). The
       // protocol shim's `analyticsQuery` expects the wrapped envelope

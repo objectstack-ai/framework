@@ -62,27 +62,76 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     mockServices.set('auth', {});
     mockServices.set('realtime', {});
     mockServices.set('ai', {});
-    
+
     protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
-    
+
     const discovery = await protocol.getDiscovery();
-    
+
     // Check auth
     expect(discovery.services.auth.enabled).toBe(true);
     expect(discovery.services.auth.status).toBe('available');
-    
-    // Check realtime
+
+    // Check realtime — honest capabilities (ADR-0076 D12, #2462): the
+    // realtime service is an in-process bus with NO HTTP surface, so it is
+    // registered/enabled but degraded, with no advertised route (a route
+    // would 404).
     expect(discovery.services.realtime.enabled).toBe(true);
-    expect(discovery.services.realtime.status).toBe('available');
-    
+    expect(discovery.services.realtime.status).toBe('degraded');
+    expect(discovery.services.realtime.handlerReady).toBe(false);
+    expect(discovery.services.realtime.route).toBeUndefined();
+
     // Check AI
     expect(discovery.services.ai.enabled).toBe(true);
     expect(discovery.services.ai.status).toBe('available');
-    
-    // Routes should include available services
+
+    // Routes should include available services — but never realtime (D12)
     expect(discovery.routes.auth).toBe('/api/v1/auth');
-    expect(discovery.routes.realtime).toBe('/api/v1/realtime');
+    expect(discovery.routes.realtime).toBeUndefined();
     expect(discovery.routes.ai).toBe('/api/v1/ai');
+  });
+
+  // ── Honest capabilities (ADR-0076 D12, #2462) ─────────────────────────────
+
+  it('should report a _dev-marked service as a stub, never available', async () => {
+    const mockServices = new Map<string, any>();
+    mockServices.set('ai', { _dev: true });
+
+    protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
+    const discovery = await protocol.getDiscovery();
+
+    expect(discovery.services.ai.enabled).toBe(true);
+    expect(discovery.services.ai.status).toBe('stub');
+    expect(discovery.services.ai.handlerReady).toBe(false);
+    expect(discovery.services.ai.message).toContain('stub');
+  });
+
+  it('should report a __serviceInfo-marked service with its declared status', async () => {
+    const mockServices = new Map<string, any>();
+    mockServices.set('workflow', {
+      __serviceInfo: { status: 'degraded', message: 'partial impl' },
+    });
+
+    protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
+    const discovery = await protocol.getDiscovery();
+
+    expect(discovery.services.workflow.enabled).toBe(true);
+    expect(discovery.services.workflow.status).toBe('degraded');
+    expect(discovery.services.workflow.handlerReady).toBe(true);
+    expect(discovery.services.workflow.message).toBe('partial impl');
+  });
+
+  it('should report the analytics fallback honestly when it self-identifies', async () => {
+    const mockServices = new Map<string, any>();
+    mockServices.set('analytics', {
+      __serviceInfo: { status: 'degraded', handlerReady: true, message: 'fallback' },
+    });
+
+    protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
+    const discovery = await protocol.getDiscovery();
+
+    expect(discovery.services.analytics.enabled).toBe(true);
+    expect(discovery.services.analytics.status).toBe('degraded');
+    expect(discovery.services.analytics.message).toBe('fallback');
   });
 
   it('should always show core services as available', async () => {

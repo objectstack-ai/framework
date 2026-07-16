@@ -462,6 +462,7 @@
     "api/SearchFeedRequest",
     "api/SearchFeedResponse",
     "api/ServiceInfo",
+    "api/ServiceSelfInfo",
     "api/ServiceStatus",
     "api/Session",
     "api/SessionResponse",

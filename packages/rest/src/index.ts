@@ -2,6 +2,8 @@
 
 // REST Server
 export { RestServer } from './rest-server.js';
+// The protocol slice the REST layer consumes (ADR-0076 D9 / #2462 A1.5)
+export type { RestProtocol } from './rest-server.js';
 
 // Route Management
 export { RouteManager, RouteGroupBuilder } from './route-manager.js';

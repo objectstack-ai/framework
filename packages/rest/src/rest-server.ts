@@ -7,7 +7,16 @@ import {
 import { isMcpServerEnabled } from '@objectstack/types';
 import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
-import { ObjectStackProtocol } from '@objectstack/spec/api';
+import { DataProtocol, MetadataProtocol } from '@objectstack/spec/api';
+
+/**
+ * The protocol slice the REST layer actually consumes (ADR-0076 D9 / #2462
+ * A1.5): wire-normalized data CRUD plus the metadata control plane — not the
+ * full `ObjectStackProtocol` union. Server-only extensions (drafts, history,
+ * diagnostics, clone, …) are feature-detected via runtime casts and so don't
+ * widen this contract.
+ */
+export type RestProtocol = DataProtocol & MetadataProtocol;
 import {
     buildFieldMetaMap,
     referenceFieldNames,
@@ -693,7 +702,7 @@ export interface RestEnvRegistry {
 }
 
 export class RestServer {
-    private protocol: ObjectStackProtocol;
+    private protocol: RestProtocol;
     private config: NormalizedRestServerConfig;
     private routeManager: RouteManager;
     private kernelManager?: RestKernelManager;
@@ -749,7 +758,7 @@ export class RestServer {
 
     constructor(
         server: IHttpServer,
-        protocol: ObjectStackProtocol,
+        protocol: RestProtocol,
         config: RestServerConfig = {},
         kernelManager?: RestKernelManager,
         envRegistry?: RestEnvRegistry,
@@ -876,12 +885,12 @@ export class RestServer {
         return undefined;
     }
 
-    private async resolveProtocol(environmentId?: string, req?: any): Promise<ObjectStackProtocol> {
+    private async resolveProtocol(environmentId?: string, req?: any): Promise<RestProtocol> {
         if (environmentId === 'platform') return this.protocol;
         const envId = await this.resolveRequestEnvironmentId(environmentId, req);
         if (!envId || !this.kernelManager) return this.protocol;
         const kernel = await this.kernelManager.getOrCreate(envId);
-        return kernel.getServiceAsync<ObjectStackProtocol>('protocol');
+        return kernel.getServiceAsync<RestProtocol>('protocol');
     }
 
     /**
@@ -998,7 +1007,7 @@ export class RestServer {
     private async enforceApiAccess(
         req: any,
         res: any,
-        p: ObjectStackProtocol,
+        p: RestProtocol,
         environmentId: string | undefined,
         operation: string,
     ): Promise<boolean> {

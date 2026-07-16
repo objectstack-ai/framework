@@ -7,6 +7,9 @@ import {
   WellKnownCapabilitiesSchema,
   RouteHealthEntrySchema,
   RouteHealthReportSchema,
+  ServiceSelfInfoSchema,
+  readServiceSelfInfo,
+  SERVICE_SELF_INFO_KEY,
   type DiscoveryResponse,
   type ApiRoutes,
   type ServiceInfo,
@@ -899,5 +902,59 @@ describe('RouteHealthReportSchema', () => {
       totalMissing: 0,
       routes: [],
     })).toThrow();
+  });
+});
+
+describe('Service self-description marker (ADR-0076 D12, #2462)', () => {
+  it('ServiceSelfInfoSchema accepts stub and degraded declarations', () => {
+    expect(() => ServiceSelfInfoSchema.parse({ status: 'stub' })).not.toThrow();
+    expect(() => ServiceSelfInfoSchema.parse({
+      status: 'degraded', handlerReady: true, message: 'fallback',
+    })).not.toThrow();
+  });
+
+  it('ServiceSelfInfoSchema rejects available — real services carry no marker', () => {
+    expect(() => ServiceSelfInfoSchema.parse({ status: 'available' })).toThrow();
+  });
+
+  it('readServiceSelfInfo returns undefined for unmarked services and non-objects', () => {
+    expect(readServiceSelfInfo({ query: () => [] })).toBeUndefined();
+    expect(readServiceSelfInfo(undefined)).toBeUndefined();
+    expect(readServiceSelfInfo(null)).toBeUndefined();
+    expect(readServiceSelfInfo('svc')).toBeUndefined();
+  });
+
+  it('readServiceSelfInfo reads the standard __serviceInfo descriptor', () => {
+    const svc = {
+      [SERVICE_SELF_INFO_KEY]: { status: 'degraded', message: 'partial' },
+    };
+    expect(readServiceSelfInfo(svc)).toEqual({
+      status: 'degraded',
+      handlerReady: true, // degraded defaults to a genuinely-serving handler
+      message: 'partial',
+    });
+  });
+
+  it('readServiceSelfInfo defaults handlerReady to false for stubs', () => {
+    const svc = { [SERVICE_SELF_INFO_KEY]: { status: 'stub' } };
+    expect(readServiceSelfInfo(svc)).toEqual({ status: 'stub', handlerReady: false });
+  });
+
+  it('readServiceSelfInfo honors an explicit handlerReady override', () => {
+    const svc = { [SERVICE_SELF_INFO_KEY]: { status: 'degraded', handlerReady: false } };
+    expect(readServiceSelfInfo(svc)?.handlerReady).toBe(false);
+  });
+
+  it('readServiceSelfInfo normalizes the legacy _dev marker to a stub', () => {
+    const info = readServiceSelfInfo({ _dev: true, chat: () => 'fake' });
+    expect(info?.status).toBe('stub');
+    expect(info?.handlerReady).toBe(false);
+    expect(info?.message).toContain('plugin-dev');
+  });
+
+  it('readServiceSelfInfo ignores malformed markers', () => {
+    expect(readServiceSelfInfo({ [SERVICE_SELF_INFO_KEY]: { status: 'available' } })).toBeUndefined();
+    expect(readServiceSelfInfo({ [SERVICE_SELF_INFO_KEY]: 'stub' })).toBeUndefined();
+    expect(readServiceSelfInfo({ _dev: 'yes' })).toBeUndefined();
   });
 });

@@ -1,8 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
-import { RestServer, RestKernelManager } from './rest-server.js';
-import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
+import { RestServer, RestKernelManager, RestProtocol } from './rest-server.js';
+import { RestServerConfig } from '@objectstack/spec/api';
 import { registerPackageRoutes } from './package-routes.js';
 import { registerExternalDatasourceRoutes } from './external-datasource-routes.js';
 import type { PackageService } from '@objectstack/service-package';
@@ -25,7 +25,7 @@ export interface RestApiPluginConfig {
  * 
  * Responsibilities:
  * 1. Consumes 'http.server' (or configured service)
- * 2. Consumes 'protocol' (ObjectStackProtocol)
+ * 2. Consumes 'protocol' (the `RestProtocol` slice — DataProtocol + MetadataProtocol, ADR-0076 D9)
  * 3. Instantiates RestServer to auto-generate routes
  */
 export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
@@ -59,7 +59,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             const protocolService = config.protocolServiceName || 'protocol';
             
             let server: IHttpServer | undefined;
-            let protocol: ObjectStackProtocol | undefined;
+            let protocol: RestProtocol | undefined;
 
             try {
                 server = ctx.getService<IHttpServer>(serverService);
@@ -68,7 +68,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             }
 
             try {
-                protocol = ctx.getService<ObjectStackProtocol>(protocolService);
+                protocol = ctx.getService<RestProtocol>(protocolService);
             } catch (e) {
                 // Ignore missing service
             }

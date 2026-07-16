@@ -104,7 +104,7 @@ ObjectStack supports two real-time protocols:
 
 ### Connection Endpoint
 
-The discovery endpoint advertises the realtime route when the realtime service is registered:
+The discovery endpoint reports the realtime service honestly (ADR-0076 D12): because the in-process realtime service mounts **no** HTTP/WS surface today, **no `routes.realtime` entry is advertised** — an advertised route with no handler would 404. The service itself appears in `services.realtime` as `degraded` with `handlerReady: false` when registered:
 
 ```http
 GET /.well-known/objectstack
@@ -114,14 +114,21 @@ GET /.well-known/objectstack
 {
   "routes": {
     "data": "/api/v1/data",
-    "metadata": "/api/v1/meta",
-    "realtime": "/api/v1/realtime"
+    "metadata": "/api/v1/meta"
+  },
+  "services": {
+    "realtime": {
+      "enabled": true,
+      "status": "degraded",
+      "handlerReady": false,
+      "message": "In-process event bus only — no HTTP/WS realtime surface is mounted"
+    }
   }
 }
 ```
 
 <Callout type="info">
-  The discovery `routes.realtime` value is an HTTP path (`/api/v1/realtime`), not a `wss://` URL. A WebSocket upgrade endpoint is part of the planned transport (`IRealtimeService.handleUpgrade()`) and is not yet served.
+  A WebSocket upgrade endpoint is part of the planned transport (`IRealtimeService.handleUpgrade()`) and is not yet served. When it lands, discovery will advertise `routes.realtime` again — until then clients must treat `services.realtime.handlerReady: false` as "no wire transport" (see #2462).
 </Callout>
 
 ### Establishing Connection
