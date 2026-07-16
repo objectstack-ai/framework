@@ -134,6 +134,20 @@ export const EXPRESSION_SURFACE: ExprSurface[] = [
     ],
   },
   {
+    id: 'cel-row-crud-visible',
+    summary: 'built-in row Edit/Delete per-record visibility (userActions.{edit,delete}.visibleWhen, objectui#2614)',
+    dialect: 'cel', mode: 'interpret', state: 'enforced', failPolicy: 'fail-closed',
+    enforcement: 'console (objectui) RowActionMenu BuiltinRowActionItem + data-table DataTableBuiltinRowActionItem → useRowPredicate → @objectstack/formula celEngine (interpret); FALSE/fault hides the row button (UI gating only — write enforcement stays with permissions/hooks)',
+    covers: ['data/object.zod.ts:visibleWhen'],
+  },
+  {
+    id: 'cel-row-crud-disabled',
+    summary: 'built-in row Edit/Delete per-record disabling (userActions.{edit,delete}.disabledWhen, objectui#2614)',
+    dialect: 'cel', mode: 'interpret', state: 'enforced', failPolicy: 'fail-soft-log',
+    enforcement: 'console (objectui) RowActionMenu BuiltinRowActionItem + data-table DataTableBuiltinRowActionItem → useRowPredicate → @objectstack/formula celEngine (interpret); TRUE renders the button disabled, a fault leaves it enabled (server hooks are the real boundary)',
+    covers: ['data/object.zod.ts:disabledWhen'],
+  },
+  {
     id: 'cel-flow',
     summary: 'flow / sync / loader branching + filter predicates',
     dialect: 'cel', mode: 'interpret', state: 'enforced', failPolicy: 'throw',
