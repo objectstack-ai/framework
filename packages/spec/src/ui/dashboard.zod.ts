@@ -185,6 +185,18 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
   options: z.unknown().optional().describe('Widget specific configuration'),
 
   /**
+   * Per-widget bindings from a dashboard-level filter (referenced by its
+   * `name`, or the reserved name `"dateRange"` for the built-in date range)
+   * to one of THIS widget's fields (framework#2501):
+   * - string → apply the filter to that field (e.g. `{ dateRange: 'signed_at' }`)
+   * - false  → opt this widget out of that filter
+   * - absent → default binding: the filter's own `field`
+   *   (dateRange: `dateRange.field ?? 'created_at'`)
+   */
+  filterBindings: z.record(z.string(), z.union([z.string(), z.literal(false)])).optional()
+    .describe("Per-widget dashboard-filter bindings: filter name → this widget's field, or false to opt out"),
+
+  /**
    * Rule ids of build diagnostics intentionally suppressed on this widget
    * (e.g. `'table-count-only'` when a single-row summary table is deliberate).
    * Consumed by `objectstack build` / `objectstack lint`; no runtime effect.
@@ -223,6 +235,15 @@ export const GlobalFilterOptionsFromSchema = lazySchema(() => z.object({
  * Defines a single global filter control for the dashboard filter bar.
  */
 export const GlobalFilterSchema = lazySchema(() => z.object({
+  /**
+   * Stable filter name (framework#2501) — the dashboard-variable key under
+   * which the filter's value is published (readable in widget expressions as
+   * `page.<name>`) and the key widgets reference in `filterBindings`.
+   * Defaults to `field`. The name `"dateRange"` is reserved for the built-in
+   * dashboard date range.
+   */
+  name: z.string().optional().describe('Stable filter name (variable key); defaults to field'),
+
   /** Field name to filter on */
   field: z.string().describe('Field name to filter on'),
 
