@@ -812,27 +812,21 @@ export class HttpDispatcher {
             // identity forwarded. No `@objectstack/service-ai`.
             listActions: async () => {
                 const meta: any = await getMeta();
-                const objs: any[] = (await meta?.listObjects?.()) ?? [];
                 const hasAutomation = Boolean(
                     await this.resolveService('automation', envId).catch(() => null),
                 );
                 const out: any[] = [];
-                for (const obj of objs) {
-                    const objectName: string | undefined = obj?.name;
+                for (const { action, objectName, obj } of await this.collectActionDeclarations(meta)) {
                     if (!objectName || isSystemObjectName(objectName)) continue; // fail-closed on sys_*
-                    const actions: any[] = Array.isArray(obj?.actions) ? obj.actions : [];
-                    for (const action of actions) {
-                        if (!action || typeof action.name !== 'string') continue;
-                        if (!this.isHeadlessInvokableAction(action, hasAutomation)) continue;
-                        // [#2849 / ADR-0011] MCP is an AI surface: only actions the
-                        // author explicitly opted in via `ai.exposed` are listed.
-                        // Fail-closed — bodies run as trusted code (see
-                        // buildActionEngineFacade), so author opt-in is the boundary.
-                        if (this.actionAiExposureError(action)) continue;
-                        // Hide actions the caller is not permitted to run.
-                        if (this.actionPermissionError(action, ec)) continue;
-                        out.push(this.summarizeAction(action, obj, objectName));
-                    }
+                    if (!this.isHeadlessInvokableAction(action, hasAutomation)) continue;
+                    // [#2849 / ADR-0011] MCP is an AI surface: only actions the
+                    // author explicitly opted in via `ai.exposed` are listed.
+                    // Fail-closed — bodies run as trusted code (see
+                    // buildActionEngineFacade), so author opt-in is the boundary.
+                    if (this.actionAiExposureError(action)) continue;
+                    // Hide actions the caller is not permitted to run.
+                    if (this.actionPermissionError(action, ec)) continue;
+                    out.push(this.summarizeAction(action, obj, objectName));
                 }
                 return out;
             },
@@ -1176,24 +1170,86 @@ export class HttpDispatcher {
         name: string,
         objectName?: string,
     ): Promise<{ action: any; objectName: string } | null> {
+        const decls = await this.collectActionDeclarations(meta);
         if (objectName) {
-            const def: any = await meta?.getObject?.(objectName);
-            const action = Array.isArray(def?.actions) ? def.actions.find((a: any) => a?.name === name) : undefined;
-            return action ? { action, objectName } : null;
+            const hit = decls.find((d) => d.objectName === objectName && d.action?.name === name);
+            return hit ? { action: hit.action, objectName } : null;
         }
-        const objs: any[] = (await meta?.listObjects?.()) ?? [];
-        const matches: Array<{ action: any; objectName: string }> = [];
-        for (const obj of objs) {
-            if (!obj?.name) continue;
-            const action = Array.isArray(obj?.actions) ? obj.actions.find((a: any) => a?.name === name) : undefined;
-            if (action) matches.push({ action, objectName: obj.name });
-        }
+        const matches = decls.filter((d) => d.action?.name === name);
         if (matches.length === 0) return null;
         if (matches.length > 1) {
             const where = matches.map((m) => m.objectName).join(', ');
             throw new Error(`Action '${name}' exists on multiple objects (${where}); pass objectName to disambiguate`);
         }
-        return matches[0];
+        return { action: matches[0].action, objectName: matches[0].objectName };
+    }
+
+    /**
+     * The MCP surface's single declaration source: every action declaration the
+     * bridge may list or invoke, as `{ action, objectName, obj }` rows.
+     *
+     * Two shapes feed it (#3010):
+     *  1. `object.actions` — bundle/artifact objects and authored object rows.
+     *  2. Standalone `action` metadata items — Studio-authored rows that the
+     *     engine executes since #2608 (`resyncAuthoredActions`) but that never
+     *     appear inside any object definition. Their owning object follows the
+     *     same convention as the engine registration key (`objectName` field,
+     *     legacy `object` field, else the `'global'` wildcard).
+     *
+     * On a key clash (`objectName:name`) the object-embedded declaration wins,
+     * mirroring the execution layer's artifact-wins rule — `resyncAuthoredActions`
+     * refuses to clobber an artifact-registered handler, so the embedded
+     * declaration is the one that matches what actually runs. All MCP gating
+     * (`ai.exposed`, ADR-0066 D4, headless-invokability) applies downstream of
+     * this collection, unchanged.
+     */
+    private async collectActionDeclarations(
+        meta: any,
+    ): Promise<Array<{ action: any; objectName: string; obj: any }>> {
+        const objs: any[] = (await meta?.listObjects?.()) ?? [];
+        const objByName = new Map<string, any>();
+        for (const obj of objs) {
+            if (typeof obj?.name === 'string') objByName.set(obj.name, obj);
+        }
+        const out: Array<{ action: any; objectName: string; obj: any }> = [];
+        const seen = new Set<string>();
+        for (const obj of objs) {
+            const objectName: string | undefined = obj?.name;
+            if (!objectName) continue;
+            for (const action of Array.isArray(obj?.actions) ? obj.actions : []) {
+                if (!action || typeof action.name !== 'string') continue;
+                seen.add(`${objectName}:${action.name}`);
+                out.push({ action, objectName, obj });
+            }
+        }
+        let standalone: any[] = [];
+        try {
+            standalone = (await meta?.loadMany?.('action')) ?? [];
+        } catch {
+            standalone = []; // no standalone-item source on this metadata service
+        }
+        for (const action of standalone) {
+            if (!action || typeof action.name !== 'string') continue;
+            const objectName = this.standaloneActionObjectName(action);
+            const key = `${objectName}:${action.name}`;
+            if (seen.has(key)) continue; // object-embedded declaration wins
+            seen.add(key);
+            out.push({ action, objectName, obj: objByName.get(objectName) });
+        }
+        return out;
+    }
+
+    /**
+     * Owning object of a standalone `action` item — must stay in lockstep with
+     * the ObjectQL plugin's `actionObjectKey` (the engine registration key), so
+     * the declaration the MCP surface resolves is the one whose handler
+     * `executeAction` will find: spec `objectName`, bundle-collector `object`,
+     * else the `'global'` wildcard.
+     */
+    private standaloneActionObjectName(action: any): string {
+        if (typeof action?.objectName === 'string' && action.objectName.length > 0) return action.objectName;
+        if (typeof action?.object === 'string' && action.object.length > 0) return action.object;
+        return 'global';
     }
 
     /**
