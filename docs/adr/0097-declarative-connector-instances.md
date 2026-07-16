@@ -167,6 +167,31 @@ dispatch was rejected: MCP actions ARE the server's `tools/list`, so a
 connector materialized without connecting would register a zero-action def —
 exactly the plausible-but-dead shape this ADR exists to kill.
 
+### Declarative stdio policy: default-deny (follow-up, landed — #3055)
+
+A declarative `provider: 'mcp'` entry may name a **stdio transport**, and
+materializing one **spawns a local child process** — from *metadata*, which a
+runtime Studio publish can introduce (the reload reconcile materializes new
+instances; soft mode skips failures, not successes). Anyone who can publish
+metadata could otherwise execute commands on the server. Stdio on declarative
+instances is therefore **denied by default** and opt-in per host:
+
+```ts
+new ConnectorMcpPlugin({ declarativeStdio: ['my-mcp-server'] })  // allowlist
+new ConnectorMcpPlugin({ declarativeStdio: true })               // full trust
+```
+
+A policy violation is a **configuration fault** — plain throw (fatal at boot,
+skipped on reload), never `CONNECTOR_UPSTREAM_UNAVAILABLE`: a security
+rejection must not be retried into existence. `http` transports are unaffected
+(same trust class as the `http` node), and so are **hand-wired** connectors
+(plugin instance options / `createMcpConnector`) — their command lives in host
+code, a different trust anchor than metadata. The allowlist is deliberately
+honest about being a *coarse* boundary (allowlisting `npx` ≈ allowing any
+package it can run); sandboxed execution remains the enterprise tier
+(ADR-0024 §4). This gate is the precondition for shipping `connector-mcp` in
+any default preset (#3056).
+
 ### Deliberate scope boundaries
 
 - **`providerConfig.spec` (openapi)** accepts an inline document, an http(s) URL, **or a package-relative file path** (#3016 follow-up). The connector still owns no filesystem access: the automation service injects a `loadPackageFile` capability into `ConnectorProviderContext` that resolves the ref against the declaring stack/package root (`packageRoot`, CLI default: the `objectstack.config.ts` directory) and **confines reads to that root** — absolute and `..`-escaping paths are rejected. Read/parse failures follow the reconcile policy above: fatal at boot, skipped on reload.

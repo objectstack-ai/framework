@@ -41,6 +41,9 @@ describe('ConnectorMcpPlugin — end to end with the automation engine', () => {
         kernel.use(new AutomationServicePlugin());
         kernel.use(
             new ConnectorMcpPlugin({
+                // NOTE deliberately no `declarativeStdio`: the #3055 default-deny
+                // policy gates DECLARATIVE instances only — this hand-wired stdio
+                // transport (host code, not metadata) must keep working un-gated.
                 name: 'github_mcp',
                 label: 'GitHub MCP',
                 transport: { kind: 'stdio', command: 'noop' },
@@ -92,5 +95,33 @@ describe('ConnectorMcpPlugin — end to end with the automation engine', () => {
         // Shutdown tears the MCP connection down.
         await kernel.shutdown();
         expect(isClosed()).toBe(true);
+    });
+
+    it('plumbs declarativeStdio through to the registered provider factory (#3055)', async () => {
+        const { client } = fakeClient();
+        let registered: ((ctx: unknown) => Promise<unknown>) | undefined;
+        const automationStub = {
+            registerConnector: () => {},
+            unregisterConnector: () => {},
+            registerConnectorProvider: (_key: string, factory: never) => { registered = factory; },
+        };
+        const plugin = new ConnectorMcpPlugin({
+            clientFactory: async () => client,
+            declarativeStdio: ['trusted-mcp'],
+        });
+        await plugin.init({
+            getService: () => automationStub,
+            logger: { info: () => {}, warn: () => {} },
+        } as never);
+        expect(registered).toBeDefined();
+
+        const provider = registered!;
+        const declarativeCtx = (command: string) => ({
+            name: 'x', label: 'X', type: 'api',
+            providerConfig: { transport: { kind: 'stdio', command } },
+        });
+        // Allowlisted command materializes; anything else is denied by policy.
+        await expect(provider(declarativeCtx('trusted-mcp'))).resolves.toBeDefined();
+        await expect(provider(declarativeCtx('bash'))).rejects.toThrow(/declarativeStdio allowlist/);
     });
 });

@@ -3,7 +3,11 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { Connector, ConnectorProviderFactory } from '@objectstack/spec/integration';
 import { createMcpConnector, type McpConnectorOptions } from './mcp-connector.js';
-import { createMcpProviderFactory, MCP_PROVIDER_KEY } from './mcp-provider.js';
+import {
+    createMcpProviderFactory,
+    MCP_PROVIDER_KEY,
+    type McpDeclarativeStdioPolicy,
+} from './mcp-provider.js';
 
 /**
  * Minimal surface of the automation engine this plugin depends on — the
@@ -29,7 +33,17 @@ export interface ConnectorRegistrySurface {
  * stack can declare `provider: 'mcp'` instances as pure metadata. Supply a
  * `transport` to ALSO connect one hand-wired MCP server at `start()`.
  */
-export interface ConnectorMcpPluginOptions extends Partial<McpConnectorOptions> {}
+export interface ConnectorMcpPluginOptions extends Partial<McpConnectorOptions> {
+    /**
+     * Policy for stdio transports on **declarative** `provider: 'mcp'`
+     * instances (#3055). Default **deny**: metadata (including a runtime Studio
+     * publish) must not spawn local processes unless the host opts in.
+     * `string[]` allowlists specific commands; `true` allows any. Hand-wired
+     * connectors configured via these plugin options are not subject to it —
+     * their command lives in host code, not metadata.
+     */
+    declarativeStdio?: McpDeclarativeStdioPolicy;
+}
 
 /**
  * ConnectorMcpPlugin — contributes the generic MCP adapter (ADR-0024) in two forms:
@@ -71,7 +85,10 @@ export class ConnectorMcpPlugin implements Plugin {
         if (automation && typeof automation.registerConnectorProvider === 'function') {
             automation.registerConnectorProvider(
                 MCP_PROVIDER_KEY,
-                createMcpProviderFactory({ clientFactory: this.options.clientFactory }),
+                createMcpProviderFactory({
+                    clientFactory: this.options.clientFactory,
+                    declarativeStdio: this.options.declarativeStdio,
+                }),
             );
             ctx.logger.info("ConnectorMcpPlugin: registered 'mcp' connector provider");
         }

@@ -287,8 +287,8 @@ substrate above.
 
 ## Governance: how "declared = enforced" is kept true
 
-Four CI-time mechanisms make the security posture a **checked artifact**
-rather than a belief:
+Five mechanisms — four CI-time, one runtime — make the security posture a
+**checked artifact** rather than a belief:
 
 - **Security publish linter** (ADR-0090 D7, `validateSecurityPosture` in
   `@objectstack/lint`, gating `os compile`): unset OWD on custom objects,
@@ -298,6 +298,19 @@ rather than a belief:
   security identifiers, and the ADR-0091 grant-lifecycle rules (a seed grant
   already expired at authoring time; a delegation row missing its mandatory
   `reason`) — every error rule mirrors a runtime gate.
+- **Runtime OWD posture gate** (#3050, `objectPostureGate` in
+  `@objectstack/plugin-security`, registered on the metadata protocol's
+  pre-persistence `registerAuthoringGate` seam): the two OWD rules the CLI
+  linter can only check at build time are also enforced on every
+  runtime-authored object body — Studio drafts, REST saves, AI builders.
+  An environment overlay of a **packaged** object may only *tighten*
+  `sharingModel` / `externalSharingModel`, never widen them beyond the
+  packaged declaration (`403 owd_widening_forbidden` — widen it in the
+  package source and publish instead; this closes the
+  `OS_METADATA_WRITABLE=object` escape hatch as an unvalidated widening
+  path, ADR-0086 D1), and `externalSharingModel ≤ sharingModel` (ADR-0090
+  D11) is rejected at save time (`403 owd_external_wider`). Write-path
+  only: stored metadata keeps loading unchanged.
 - **Access-matrix snapshot** (ADR-0090 D6, `buildAccessMatrix` /
   `diffAccessMatrix`): with `access-matrix.json` committed next to the config,
   `os compile` fails on any capability drift with semantic lines
