@@ -15,13 +15,10 @@ import { bootStack, type VerifyStack } from '@objectstack/verify';
 
 describe('showcase: $search over the HTTP API (ADR-0061 conformance proof)', () => {
   let stack: VerifyStack;
+  let token: string;
 
   const query = async (body: Record<string, unknown>) => {
-    const res = await stack.api('/data/showcase_account/query', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await stack.apiAs(token, 'POST', '/data/showcase_account/query', body);
     expect(res.status).toBe(200);
     const data = await res.json();
     return (data?.data?.records ?? data?.records ?? []) as Array<Record<string, unknown>>;
@@ -29,19 +26,25 @@ describe('showcase: $search over the HTTP API (ADR-0061 conformance proof)', () 
 
   beforeAll(async () => {
     stack = await bootStack(showcaseStack);
-    await stack.signIn();
+    token = await stack.signIn();
   }, 60_000);
   afterAll(async () => { await stack?.stop(); });
 
   it('multi-field match: "retail" returns Northwind via industry, not name', async () => {
     const records = await query({ search: 'retail' });
-    const names = records.map((r) => r.name);
+    const names = records.map((r) => String(r.name));
     expect(names).toContain('Northwind');
-    // Guard the premise that makes this a MULTI-FIELD proof: no account is
-    // NAMED *retail* — the hit can only have come from the industry field.
-    for (const n of names) {
-      expect(String(n).toLowerCase()).not.toContain('retail');
-    }
+    // Guard the premise: Northwind's NAME does not contain "retail", so its
+    // presence in the result can only come from a non-name field…
+    expect(names.find((n) => n === 'Northwind')!.toLowerCase()).not.toContain('retail');
+    // …and prove it positively: restricting the same search to `industry`
+    // alone still returns Northwind — the hit IS the industry field.
+    const viaIndustry = await query({ search: 'retail', searchFields: ['industry'] });
+    expect(viaIndustry.map((r) => r.name)).toContain('Northwind');
+    // (The seed also has an account literally NAMED "acme retail" — a useful
+    // control: the unrestricted search returns it via `name`, proving the
+    // cross-field OR spans both fields in one query.)
+    expect(names.some((n) => n.toLowerCase().includes('retail'))).toBe(true);
   });
 
   it('select label→value mapping: the capitalized label "Retail" also matches', async () => {
