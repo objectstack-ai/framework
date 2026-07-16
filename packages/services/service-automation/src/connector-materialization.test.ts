@@ -127,6 +127,70 @@ function automationOf(kernel: LiteKernel): AutomationEngine {
     return kernel.getService('automation') as AutomationEngine;
 }
 
+/**
+ * A fake provider whose materialized connectors carry a `close`, so reload tests
+ * can assert teardown. Records the ctx of every invocation (`calls`) and the
+ * names whose `close()` ran (`closed`).
+ */
+function makeClosableProvider() {
+    const calls: ConnectorProviderContext[] = [];
+    const closed: string[] = [];
+    const factory: ConnectorProviderFactory = (ctx) => {
+        calls.push(ctx);
+        return {
+            def: {
+                name: ctx.name,
+                label: ctx.label,
+                type: 'api',
+                authentication: { type: 'none' },
+                actions: [{ key: 'ping', label: 'Ping' }],
+            },
+            handlers: { ping: async () => ({ ok: true }) },
+            close: async () => { closed.push(ctx.name); },
+        };
+    };
+    return { factory, calls, closed };
+}
+
+/**
+ * Boot with a MUTABLE declared set and expose a `reload(next)` that swaps the
+ * registry contents and fires `metadata:reloaded` — the runtime reconcile path
+ * (ADR-0096 F1). The harness's ctx is the shared kernel context, so
+ * `ctx.trigger('metadata:reloaded')` invokes the automation plugin's hook.
+ */
+async function bootReloadable(
+    initial: unknown[],
+    opts: { providerFactory: ConnectorProviderFactory; credentialResolver?: CredentialResolver },
+) {
+    const state = { declared: initial };
+    let captured: any;
+    const kernel = new LiteKernel({ logger: { level: 'silent' } } as never);
+    kernel.use(new AutomationServicePlugin({ credentialResolver: opts.credentialResolver }));
+    const harness = {
+        name: 'test.harness',
+        type: 'standard' as const,
+        version: '1.0.0',
+        dependencies: ['com.objectstack.service-automation'],
+        async init(ctx: any) {
+            captured = ctx;
+            ctx.registerService('objectql', {
+                registry: { listItems: (type: string) => (type === 'connector' ? state.declared : []) },
+            });
+            ctx.getService('automation').registerConnectorProvider('fake', opts.providerFactory);
+        },
+        async start() {},
+    };
+    kernel.use(harness as never);
+    await kernel.bootstrap();
+    await flush();
+    const reload = async (next: unknown[]) => {
+        state.declared = next;
+        await captured.trigger('metadata:reloaded');
+        await flush();
+    };
+    return { kernel, engine: automationOf(kernel), reload };
+}
+
 describe('ADR-0096 — declarative connector materialization', () => {
     it('materializes a provider-bound instance into a live, listed connector', async () => {
         const { factory, calls } = makeFakeProvider();
@@ -139,7 +203,9 @@ describe('ADR-0096 — declarative connector materialization', () => {
         const desc = engine.getConnectorDescriptors().find((d) => d.name === 'billing');
         expect(desc).toBeDefined();
         expect(desc?.actions.map((a) => a.key)).toEqual(['ping']);
-        // Origin is 'declarative', not 'plugin'.
+        // Origin is 'declarative', not 'plugin' — surfaced on the descriptor so a
+        // designer can distinguish a materialized instance from a plugin connector.
+        expect(desc?.origin).toBe('declarative');
         expect(engine.getConnectorOrigin('billing')).toBe('declarative');
         // The factory saw the declared identity.
         expect(calls[0]?.name).toBe('billing');
@@ -280,5 +346,84 @@ describe('ADR-0096 — declarative connector materialization', () => {
         await expect(
             boot([providerConnector('dup'), providerConnector('dup')], { providerFactory: factory }),
         ).rejects.toThrow(/duplicate declarative connector instance name 'dup'/);
+    });
+});
+
+describe('ADR-0096 — runtime re-materialization on metadata:reloaded (F1)', () => {
+    it('materializes an instance published after boot', async () => {
+        const { factory, calls } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([], { providerFactory: factory });
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+
+        await reload([providerConnector('billing')]);
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect(engine.getConnectorOrigin('billing')).toBe('declarative');
+        expect(calls).toHaveLength(1);
+        await kernel.shutdown();
+    });
+
+    it('unregisters and tears down an instance removed after boot', async () => {
+        const { factory, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+
+        await reload([]); // billing deleted from the stack
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+        expect(closed).toEqual(['billing']); // close() ran on teardown
+        await kernel.shutdown();
+    });
+
+    it('tears down an instance newly marked enabled:false', async () => {
+        const { factory, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+        await reload([providerConnector('billing', { enabled: false })]);
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+        expect(closed).toEqual(['billing']);
+        await kernel.shutdown();
+    });
+
+    it('leaves an UNCHANGED instance untouched (no reconnect on unrelated reload)', async () => {
+        const { factory, calls, closed } = makeClosableProvider();
+        const { reload, kernel } = await bootReloadable(
+            [providerConnector('billing', { providerConfig: { baseUrl: 'https://x' } })],
+            { providerFactory: factory },
+        );
+        expect(calls).toHaveLength(1);
+
+        // A reload that does not change billing's inputs must not re-invoke the factory.
+        await reload([providerConnector('billing', { providerConfig: { baseUrl: 'https://x' } })]);
+        expect(calls).toHaveLength(1);
+        expect(closed).toEqual([]);
+        await kernel.shutdown();
+    });
+
+    it('re-materializes a CHANGED instance and tears down the old connection', async () => {
+        const { factory, calls, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable(
+            [providerConnector('billing', { providerConfig: { baseUrl: 'https://old' } })],
+            { providerFactory: factory },
+        );
+        expect(calls).toHaveLength(1);
+
+        await reload([providerConnector('billing', { providerConfig: { baseUrl: 'https://new' } })]);
+        expect(calls).toHaveLength(2); // re-materialized
+        expect(closed).toEqual(['billing']); // old connection torn down
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect((calls[1].providerConfig as { baseUrl?: string }).baseUrl).toBe('https://new');
+        await kernel.shutdown();
+    });
+
+    it('reload is soft: an unknown-provider entry is skipped, not fatal, and other connectors survive', async () => {
+        const { factory } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+
+        // A bad publish must NOT crash the running server (no throw), and the
+        // healthy connector keeps serving.
+        await expect(
+            reload([providerConnector('billing'), providerConnector('ghost', { provider: 'nonexistent' })]),
+        ).resolves.toBeUndefined();
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect(engine.getRegisteredConnectors()).not.toContain('ghost');
+        await kernel.shutdown();
     });
 });
