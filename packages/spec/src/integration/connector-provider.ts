@@ -81,8 +81,12 @@ export interface ConnectorProviderContext {
  * A provider factory contributed by a connector plugin under a provider key.
  * Invoked once per declarative instance at boot; may be async (loading a spec
  * document, opening a connection). Throwing is a **hard boot error** — invalid
- * `providerConfig`, an unreachable upstream, etc. surface loudly rather than
- * yielding a silently-dead connector (ADR-0097 §Decision).
+ * `providerConfig`, an unresolvable credential, etc. surface loudly rather than
+ * yielding a silently-dead connector (ADR-0097 §Decision). One exception
+ * (#3017): a throw carrying the `CONNECTOR_UPSTREAM_UNAVAILABLE` code (see
+ * `connector-provider-errors.ts`) marks an *operational* fault — the upstream
+ * the factory must contact is temporarily unreachable — which the materializer
+ * degrades and retries instead of failing boot.
  */
 export type ConnectorProviderFactory = (
   ctx: ConnectorProviderContext,

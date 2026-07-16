@@ -3,10 +3,12 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IJobService } from '@objectstack/spec/contracts';
 import type {
+    Connector,
     ConnectorInstanceAuth,
     ResolvedConnectorAuth,
     ConnectorProviderContext,
 } from '@objectstack/spec/integration';
+import { isConnectorUpstreamUnavailable } from '@objectstack/spec/integration';
 import { AutomationEngine } from './engine.js';
 import { installBuiltinNodes, rearmSuspendedWaitTimers } from './builtin/index.js';
 import { SysAutomationRun } from './sys-automation-run.object.js';
@@ -138,6 +140,19 @@ export type CredentialResolver = (ref: string) => string | undefined | Promise<s
  */
 export const defaultEnvCredentialResolver: CredentialResolver = (ref) =>
     typeof process !== 'undefined' ? process.env?.[ref] : undefined;
+
+/**
+ * Retry backoff for **degraded** declarative instances (#3017) — provider-bound
+ * entries whose upstream (e.g. an MCP server) was unreachable at
+ * materialization. First retry after {@link DECLARATIVE_RETRY_BASE_MS}, doubling
+ * per consecutive failure up to {@link DECLARATIVE_RETRY_MAX_MS}, so a server
+ * that comes up seconds after the app recovers fast while a long outage doesn't
+ * generate connection spam. A `metadata:reloaded` reconcile also retries
+ * immediately, and a config edit to the entry resets the backoff.
+ */
+export const DECLARATIVE_RETRY_BASE_MS = 5_000;
+/** Ceiling for the degraded-instance retry backoff (#3017). */
+export const DECLARATIVE_RETRY_MAX_MS = 300_000;
 
 /**
  * Deterministic JSON stringify (keys sorted at every level) so a signature is
@@ -293,6 +308,20 @@ export class AutomationServicePlugin implements Plugin {
      * child process leaks.
      */
     private materializedConnectors = new Map<string, { signature: string; close?: () => void | Promise<void> }>();
+    /**
+     * Degraded declarative instances (#3017): provider-bound entries whose
+     * upstream was unreachable at materialization. Keyed by connector name;
+     * `attempts` drives the retry backoff, `signature` detects a config edit
+     * (which resets the backoff), `reason` is what the registered husk surfaces.
+     * Disjoint from {@link materializedConnectors} EXCEPT when a *changed*
+     * entry's re-materialization failed — then the old live connector keeps
+     * serving (still tracked there) while the retry is pending here.
+     */
+    private degradedInstances = new Map<string, { attempts: number; signature: string; reason: string }>();
+    private declarativeRetryTimer?: ReturnType<typeof setTimeout>;
+    /** Serializes reconcile runs — see {@link materializeDeclaredConnectors}. */
+    private reconcileQueue: Promise<void> = Promise.resolve();
+    private destroyed = false;
 
     constructor(options: AutomationServicePluginOptions = {}) {
         this.options = options;
@@ -458,6 +487,10 @@ export class AutomationServicePlugin implements Plugin {
         // boot loudly — a metadata platform shipping a plausible-but-dead connector is
         // the worst failure mode. A start()-phase throw is fatal under both LiteKernel
         // and ObjectKernel (rollbackOnFailure defaults on), so the operator sees it.
+        // One carve-out (#3017): a factory signalling its UPSTREAM is temporarily
+        // unreachable (CONNECTOR_UPSTREAM_UNAVAILABLE) degrades that one instance —
+        // registered action-less + retried with backoff — instead of failing boot;
+        // an operational blip in one integration must not take the whole app down.
         await this.materializeDeclaredConnectors(ctx, { fatal: true });
 
         // ── Runtime re-bind: re-sync flow triggers on 'metadata:reloaded' ──────
@@ -588,10 +621,34 @@ export class AutomationServicePlugin implements Plugin {
      *
      * Reads the same ObjectQL registry the descriptor audit uses; without one
      * there is nothing declared, hence nothing to reconcile.
+     *
+     * **Upstream-availability exception (#3017):** a provider factory that
+     * throws the `CONNECTOR_UPSTREAM_UNAVAILABLE` marker (e.g. `connector-mcp`
+     * when the MCP server is unreachable) is an *operational* fault, not a
+     * configuration fault — in BOTH modes the instance is **degraded** instead
+     * of failing the run: registered as an action-less husk (visible via
+     * `GET /connectors`, dispatch errors clearly) when nothing live holds the
+     * name, or the previous live connector keeps serving on a changed-config
+     * re-materialize. Degraded instances are retried with exponential backoff
+     * ({@link DECLARATIVE_RETRY_BASE_MS}) and on every reconcile.
      */
-    private async materializeDeclaredConnectors(ctx: PluginContext, opts: { fatal: boolean }): Promise<void> {
+    private materializeDeclaredConnectors(ctx: PluginContext, opts: { fatal: boolean }): Promise<void> {
+        // Serialize runs: boot, `metadata:reloaded`, and the degraded-retry
+        // timer can all request a reconcile; concurrent runs would race the
+        // registry and the tracked maps. Each caller still observes its own
+        // run's failure (a fatal boot error propagates), while the chain itself
+        // is never left poisoned for the next caller.
+        const run = this.reconcileQueue.then(() => this.reconcileDeclaredConnectors(ctx, opts));
+        this.reconcileQueue = run.catch(() => undefined);
+        return run;
+    }
+
+    private async reconcileDeclaredConnectors(ctx: PluginContext, opts: { fatal: boolean }): Promise<void> {
         const engine = this.engine;
-        if (!engine) return;
+        if (!engine || this.destroyed) return;
+        // This run supersedes any pending degraded-instance retry; it is
+        // rescheduled at the end if instances remain degraded.
+        this.clearDeclarativeRetryTimer();
 
         let declared: unknown[] = [];
         try {
@@ -632,13 +689,32 @@ export class AutomationServicePlugin implements Plugin {
             if (desired.has(name)) continue;
             await this.dematerializeConnector(engine, name, tracked, ctx);
         }
+        // Degraded instances (#3017) whose entry vanished / was disabled are
+        // dropped too: unregister the husk (idempotent — a kept-serving old
+        // connector was already torn down above) and forget the retry.
+        for (const name of [...this.degradedInstances.keys()]) {
+            if (desired.has(name)) continue;
+            this.degradedInstances.delete(name);
+            try { engine.unregisterConnector(name); } catch { /* ignore */ }
+            ctx.logger.info(`[Automation] dropped degraded connector instance '${name}' (no longer declared)`);
+        }
 
         // 2. Add new instances and re-materialize changed ones (signature diff).
         const resolver = this.options.credentialResolver ?? defaultEnvCredentialResolver;
         let changed = 0;
         for (const [name, { entry, signature }] of desired) {
             const existing = this.materializedConnectors.get(name);
-            if (existing && existing.signature === signature) continue; // unchanged — leave the live connector as-is
+            if (existing && existing.signature === signature) {
+                // Unchanged — leave the live connector as-is. If a retry was
+                // pending for a *changed* config that has since been reverted,
+                // the live connector is already the desired one: cancel it.
+                if (this.degradedInstances.delete(name)) {
+                    ctx.logger.info(
+                        `[Automation] connector instance '${name}' reverted to its live configuration; pending retry cancelled (#3017)`,
+                    );
+                }
+                continue;
+            }
 
             const provider = entry.provider;
 
@@ -690,6 +766,20 @@ export class AutomationServicePlugin implements Plugin {
             try {
                 materialization = await factory(providerCtx);
             } catch (err) {
+                // #3017 — an *operational* fault (upstream unreachable) degrades
+                // the one instance instead of failing the run, in BOTH modes;
+                // only configuration faults keep the fail-loud contract below.
+                if (isConnectorUpstreamUnavailable(err)) {
+                    this.degradeConnectorInstance(engine, ctx, {
+                        name,
+                        entry,
+                        provider,
+                        signature,
+                        hasLive: existing !== undefined,
+                        reason: (err as Error).message,
+                    });
+                    continue;
+                }
                 fail(
                     `[Automation] failed to materialize connector instance '${name}' via provider '${provider}': ` +
                         `${(err as Error).message} (ADR-0097).`,
@@ -710,10 +800,13 @@ export class AutomationServicePlugin implements Plugin {
             const def = { ...materialization.def, name };
             engine.registerConnector(def, materialization.handlers, 'declarative');
             this.materializedConnectors.set(name, { signature, close: materialization.close });
+            // Success clears any pending degraded retry — including replacing a
+            // registered husk (registerConnector above overwrote it).
+            const recovered = this.degradedInstances.delete(name);
             changed++;
             ctx.logger.info(
-                `[Automation] ${existing ? 're-' : ''}materialized connector instance '${name}' via provider '${provider}' ` +
-                    `(${def.actions?.length ?? 0} action(s))`,
+                `[Automation] ${recovered ? 'recovered' : existing ? 're-materialized' : 'materialized'} ` +
+                    `connector instance '${name}' via provider '${provider}' (${def.actions?.length ?? 0} action(s))`,
             );
         }
 
@@ -722,6 +815,117 @@ export class AutomationServicePlugin implements Plugin {
                 `[Automation] materialized ${changed} provider-bound connector instance(s) (ADR-0097)`,
             );
         }
+
+        // #3017 — instances still degraded after this run retry on a backoff.
+        this.scheduleDeclarativeRetry(ctx);
+    }
+
+    /**
+     * Track one instance as degraded (#3017) and make the failure honest:
+     * unless a previously-materialized connector still holds the name (a
+     * changed-config re-materialize failure — the old connector keeps serving,
+     * same guarantee as every other reload failure), register an action-less
+     * husk so `GET /connectors` shows the instance with `state: 'degraded'`
+     * and a `connector_action` dispatch fails with the reason, rather than the
+     * instance silently missing. A config edit (signature change) resets the
+     * backoff — it is a different upstream/config now.
+     */
+    private degradeConnectorInstance(
+        engine: AutomationEngine,
+        ctx: PluginContext,
+        info: {
+            name: string;
+            entry: DeclaredConnectorItem;
+            provider: string;
+            signature: string;
+            hasLive: boolean;
+            reason: string;
+        },
+    ): void {
+        const prior = this.degradedInstances.get(info.name);
+        const attempts = prior && prior.signature === info.signature ? prior.attempts + 1 : 1;
+        this.degradedInstances.set(info.name, { attempts, signature: info.signature, reason: info.reason });
+
+        if (!info.hasLive) {
+            try {
+                engine.registerDegradedConnector(
+                    this.buildDegradedHuskDef(info.name, info.entry),
+                    info.reason,
+                    'declarative',
+                );
+            } catch (err) {
+                // Can't even register the husk (e.g. the entry's def no longer
+                // parses) — the retry bookkeeping above still drives recovery.
+                ctx.logger.warn(
+                    `[Automation] could not register degraded husk for '${info.name}': ${(err as Error).message}`,
+                );
+            }
+        }
+        ctx.logger.error(
+            `[Automation] connector instance '${info.name}' (provider '${info.provider}') upstream unavailable — ` +
+                (info.hasLive
+                    ? 'the previously-materialized connector keeps serving'
+                    : 'instance registered degraded (no actions)') +
+                `; retrying with backoff, attempt ${attempts} (#3017): ${info.reason}`,
+        );
+    }
+
+    /** The action-less `status: 'error'` def a degraded instance registers (#3017). */
+    private buildDegradedHuskDef(name: string, entry: DeclaredConnectorItem): Connector {
+        return {
+            name,
+            label: entry.label ?? name,
+            description: entry.description,
+            icon: entry.icon,
+            type: (typeof entry.type === 'string' ? entry.type : 'api') as Connector['type'],
+            // 'error' is the ConnectorStatusSchema value for "has errors" — the
+            // husk is honest metadata, not a dispatchable connector.
+            status: 'error',
+            enabled: true,
+            authentication: { type: 'none' },
+            connectionTimeoutMs: 30000,
+            requestTimeoutMs: 30000,
+            actions: [],
+        };
+    }
+
+    /** Backoff for degraded-instance retries (#3017): base · 2^(attempts-1), capped. */
+    private static declarativeRetryDelayMs(attempts: number): number {
+        return Math.min(DECLARATIVE_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), DECLARATIVE_RETRY_MAX_MS);
+    }
+
+    private clearDeclarativeRetryTimer(): void {
+        if (this.declarativeRetryTimer !== undefined) {
+            clearTimeout(this.declarativeRetryTimer);
+            this.declarativeRetryTimer = undefined;
+        }
+    }
+
+    /**
+     * Arm one retry timer for the soonest-due degraded instance (#3017). The
+     * retry is a full soft reconcile — it re-reads the registry, so it also
+     * picks up whatever else changed — and reconcile re-arms the timer while
+     * anything stays degraded. `unref()` (where available) keeps the timer from
+     * holding the process open.
+     */
+    private scheduleDeclarativeRetry(ctx: PluginContext): void {
+        this.clearDeclarativeRetryTimer();
+        if (this.destroyed || this.degradedInstances.size === 0) return;
+        const delay = Math.min(
+            ...[...this.degradedInstances.values()].map((d) =>
+                AutomationServicePlugin.declarativeRetryDelayMs(d.attempts),
+            ),
+        );
+        const timer = setTimeout(() => {
+            this.declarativeRetryTimer = undefined;
+            // Always soft: a background retry must never crash a running server.
+            void this.materializeDeclaredConnectors(ctx, { fatal: false });
+        }, delay);
+        (timer as unknown as { unref?: () => void }).unref?.();
+        this.declarativeRetryTimer = timer;
+        ctx.logger.info(
+            `[Automation] ${this.degradedInstances.size} degraded connector instance(s); next retry in ${delay}ms (#3017)`,
+        );
     }
 
     /** Unregister and tear down one materialized declarative connector (ADR-0097). */
@@ -920,6 +1124,11 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async destroy(): Promise<void> {
+        // Stop the degraded-instance retry loop first (#3017): mark destroyed so
+        // an already-queued reconcile no-ops, and cancel any armed timer.
+        this.destroyed = true;
+        this.clearDeclarativeRetryTimer();
+        this.degradedInstances.clear();
         // Tear down materialized provider-bound connectors (ADR-0097) — e.g. an
         // MCP connection's close — in reverse registration order, best-effort, so
         // no socket / child process leaks. The engine (and its registry) is dropped

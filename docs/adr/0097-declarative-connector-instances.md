@@ -132,8 +132,44 @@ and skipped**, never crashing the live server; a changed instance's old connecto
 keeps serving until its replacement materializes successfully. Boot keeps the
 "fail loudly" contract.
 
+### Upstream availability: degrade, don't die (follow-up, landed — #3017)
+
+The fail-loud contract deliberately distinguishes **configuration** faults from
+**operational** faults. Unknown provider, invalid `providerConfig`, unresolvable
+`credentialRef`, name conflict — authoring mistakes — stay fatal at boot. But a
+provider whose factory must contact an upstream to materialize (the `mcp`
+provider connects and calls `tools/list`) can fail because that upstream is
+*temporarily unreachable*; aborting the whole app boot for one integration's
+network blip turns a degraded connector into a total outage.
+
+A factory signals the operational case by throwing an error carrying the
+`CONNECTOR_UPSTREAM_UNAVAILABLE` code (`ConnectorUpstreamUnavailableError` in
+`@objectstack/spec/integration`; the materializer's check is structural, not
+`instanceof`). The reconcile then — in both boot and reload modes — **degrades**
+that one instance instead of failing the run:
+
+- With no live connector under the name, an action-less husk is registered
+  (`state: 'degraded'` + `degradedReason` on the descriptor, `status: 'error'`
+  on the def) so `GET /connectors` shows the instance honestly instead of it
+  silently missing, and a `connector_action` dispatch fails with the reason and
+  "the platform retries automatically" — never the generic wiring hint.
+- On a changed-config re-materialization, the previous live connector keeps
+  serving untouched (the same guarantee every other reload failure gives).
+- Degraded instances are retried on an exponential backoff (5s doubling to a
+  5-minute ceiling; a config edit resets it) and immediately by any reconcile
+  (`metadata:reloaded`). Recovery replaces the husk atomically via
+  `registerConnector`; an instance deleted while degraded is dropped, husk and
+  pending retry included.
+
+The `mcp` provider classifies connect / `tools/list` failures as unavailable;
+transport-shape validation stays a plain (fatal) throw. Lazy connect-on-first-
+dispatch was rejected: MCP actions ARE the server's `tools/list`, so a
+connector materialized without connecting would register a zero-action def —
+exactly the plausible-but-dead shape this ADR exists to kill.
+
 ### Deliberate scope boundaries
 
 - **`providerConfig.spec` (openapi)** accepts an inline document, an http(s) URL, **or a package-relative file path** (#3016 follow-up). The connector still owns no filesystem access: the automation service injects a `loadPackageFile` capability into `ConnectorProviderContext` that resolves the ref against the declaring stack/package root (`packageRoot`, CLI default: the `objectstack.config.ts` directory) and **confines reads to that root** — absolute and `..`-escaping paths are rejected. Read/parse failures follow the reconcile policy above: fatal at boot, skipped on reload.
 - **MCP credentials** ride the transport (ADR-0024); for an http transport a resolved `auth` is folded into the request headers.
-- **MCP at boot** connects during materialization, so an unreachable server fails boot; a fail-soft "optional" marker for boot-time materialization is a possible future refinement (runtime reloads are already soft).
+- **A live `provider: 'mcp'` showcase demo** remains deferred: materialization needs a reachable MCP server, and the natural in-repo target (`@objectstack/mcp`, the platform's own MCP endpoint) is not listening until after the automation plugin's `start()` — the demo would deterministically boot degraded and heal seconds later, making the dogfood CI gate timing-sensitive. It should land together with an in-repo MCP fixture server (or an explicit boot-ordering story for self-connection).
+- **The openapi provider's remote-URL spec fetch** still throws plain on network failure (fatal at boot). It can adopt the same `CONNECTOR_UPSTREAM_UNAVAILABLE` classification once operators ask for it — the mechanism is provider-agnostic.
