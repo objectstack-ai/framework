@@ -1,0 +1,130 @@
+---
+title: Attachments Access
+description: How access to record attachments is decided — the parent-derived read/create/delete model, authenticated downloads, the enable.files opt-in gate, and the storage-byte lifecycle. Covers sys_attachment and sys_file.
+---
+
+# Attachments Access
+
+The generic **Attachments** surface (Salesforce "Notes & Attachments" parity)
+separates *file storage* from *where a file is attached*:
+
+- **`sys_file`** — one row per uploaded blob (the bytes live in the storage
+  backend; the row holds `key`, `scope`, `owner_id`, `status`).
+- **`sys_attachment`** — a polymorphic join row linking a `sys_file` to any
+  record via `parent_object` + `parent_id` (like Salesforce
+  `ContentDocumentLink`). One file can be attached to many records.
+
+The governing principle: **an attachment has no access model of its own — it
+inherits its parent record's.** A caller who can read a record can read its
+attachments; a caller who can edit a record can attach to and detach from it.
+Enforcement is layered, and every gate is fail-closed.
+
+`Field.file` / `Field.image` are a **separate** path — those store a file URL
+in the record's own column and never create a `sys_attachment` row, so nothing
+on this page applies to them.
+
+## The opt-in gate — `enable.files`
+
+Attachments are **opt-in per object** (spec default `false`). A `sys_attachment`
+row may only target an object that declares `enable: { files: true }`; the
+Attachments panel renders only for such objects. Any other target is rejected:
+
+| Code | Status | When |
+| --- | --- | --- |
+| `FILES_DISABLED` | 403 | Creating a `sys_attachment` whose `parent_object` does not declare `enable.files: true` |
+
+This is enforced by a `beforeInsert` hook on `sys_attachment` and is
+independent of the record-level checks below.
+
+## Create — read visibility (+ edit-on-parent) & provenance
+
+Creating a `sys_attachment` requires that the caller can **read** the parent
+record (verified with a caller-scoped `findOne`, so RLS / OWD / sharing of the
+parent object apply), and — for edit-on-parent parity — that they can edit it.
+`uploaded_by` is **server-stamped** from the session; a client-supplied value
+is ignored.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `ATTACHMENT_PARENT_ACCESS` | 403 | The caller cannot access the parent record they are attaching to |
+
+## Read / list — inherited parent visibility
+
+Listing or reading `sys_attachment` only returns rows whose **parent record the
+caller can read**. This is enforced by a `sys_attachment`-scoped engine
+*middleware* (not a hook), so it filters `find`, `findOne`, `count`, and
+`aggregate` identically — the list `total` cannot leak the count of hidden
+rows. Per distinct `parent_object`, the visible parent ids are resolved through
+the caller-scoped engine (the parent object's own RLS applies) and folded into
+the query; a caller with no visible parent gets an empty result. Failure to
+resolve the filter fails closed (deny-all).
+
+## Delete — uploader or parent editor
+
+Deleting a `sys_attachment` is allowed when the caller is **the uploader** OR
+**can edit the parent record** (`sharing.canEdit` — public-model parents are
+editable by design). A multi-delete requires *every* matched row to pass.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `ATTACHMENT_DELETE_DENIED` | 403 | The caller is neither the uploader nor able to edit the parent record |
+
+<Callout type="info">
+The platform baseline permission set (`member_default`, the `everyone`
+anchor) grants **no delete** on `sys_attachment` (ADR-0090 D5 — delete is not a
+baseline right). Attachment management is therefore enabled by an ordinary,
+position-distributed permission set that grants `sys_attachment` CRUD. Until a
+member holds such a set, a delete is refused by RBAC (`PERMISSION_DENIED`)
+before the attachment-level gate above is even consulted.
+</Callout>
+
+## Download — authenticated & parent-scoped
+
+For **`scope: 'attachments'`** files (those created through the Attachments
+surface), the download endpoints require a session and read-access to a parent
+record, and issue a **short-lived signed URL**:
+
+| Code | Status | When |
+| --- | --- | --- |
+| `AUTH_REQUIRED` | 401 | Anonymous download of an attachments-scope file |
+| `ATTACHMENT_DOWNLOAD_DENIED` | 403 | The caller is neither the file's owner nor able to read any record it is attached to |
+
+The gate is scoped to attachments files on purpose: **non-attachments files**
+(avatars, `Field.image` thumbnails, org logos) keep their stable, anonymous
+capability URL, because they are embedded in `<img src>` which cannot carry a
+bearer token. Their discovery is already gated by access to the owning record.
+
+The upload entry points (presigned / chunked) likewise require a session when
+an auth service is wired, and stamp `owner_id` on the new `sys_file`.
+
+## Storage-byte lifecycle
+
+Deleting attachments does not immediately delete the underlying bytes (a file
+can be shared across records). Reclamation is handled by the platform LifecycleService via declarative
+[reap guards](/adr/0057-system-data-lifecycle-and-retention):
+
+- **`sys_file`** — when the last `sys_attachment` referencing an
+  attachments-scope file is deleted, the file is tombstoned; a reap guard
+  re-verifies zero references at sweep time and deletes the storage bytes
+  before the row is reaped (abandoned `pending` uploads are reaped too).
+- **`sys_upload_session`** — abandoned/terminal chunked-upload sessions are
+  reaped, and a reap guard aborts the underlying backend multipart upload
+  (S3 `AbortMultipartUpload` / local parts dir) first, so already-uploaded
+  parts don't leak.
+
+## Enforcement summary
+
+| Operation | Requirement | Deny code |
+| --- | --- | --- |
+| Attach (create) | parent object opts in (`enable.files`) | `FILES_DISABLED` (403) |
+| Attach (create) | can read + edit the parent record | `ATTACHMENT_PARENT_ACCESS` (403) |
+| List / read | inherits parent read visibility | *(filtered out)* |
+| Delete | uploader or parent editor (+ RBAC delete grant) | `ATTACHMENT_DELETE_DENIED` / `PERMISSION_DENIED` (403) |
+| Download | session + owner-or-parent-read (attachments scope) | `AUTH_REQUIRED` (401) / `ATTACHMENT_DOWNLOAD_DENIED` (403) |
+
+## See also
+
+- [`enable.files` object capability](/docs/references/data/object)
+- [`services.storage` contract](/docs/kernel/runtime-services/storage-service)
+- [Authorization Architecture](/docs/permissions/authorization)
+- ADR-0049 (no unenforced security properties), ADR-0057 (data lifecycle), ADR-0066 (object access posture)

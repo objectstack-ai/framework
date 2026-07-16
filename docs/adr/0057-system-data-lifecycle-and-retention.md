@@ -191,6 +191,11 @@ retried next sweep). Rules:
   tombstoned by hooks when their last `sys_attachment` reference is deleted,
   reaped `30d` later by TTL with byte reclaim, with zero-reference
   re-verification at sweep time; abandoned `pending` uploads reap after `7d`.
+- Second consumer: `sys_upload_session` (service-storage) — when an
+  abandoned/terminal chunked-upload session row is reaped, its guard first
+  aborts the backend multipart upload (S3 `AbortMultipartUpload` / local parts
+  dir), skipping `completed` sessions and vetoing on abort failure so the
+  session's already-uploaded parts don't leak.
 
 ### 3.4 Reclaim — driver space hygiene
 
