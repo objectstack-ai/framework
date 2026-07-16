@@ -80,6 +80,10 @@ const HIGH_RISK = [
   // #2567 — every anonymous-deny HTTP surface is high-risk: it guards the
   // same object data as REST `/data` through a sibling entry point.
   'anonymous-deny-meta', 'anonymous-deny-graphql', 'anonymous-deny-hono-data',
+  // #2948/#3003 — write-integrity face: without the strip, `readonly: true`
+  // is false compliance (declared ≠ enforced) and approval/status columns are
+  // one direct PATCH away from self-approval.
+  'readonly-static-write',
 ];
 
 describe('ADR-0056 D10 — authorization conformance matrix', () => {

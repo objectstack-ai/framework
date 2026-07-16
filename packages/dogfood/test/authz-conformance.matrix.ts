@@ -77,6 +77,10 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     note: 'These routes delegate straight to ObjectQL and were only shadowed when the REST plugin registered the same paths FIRST — so the posture depended on plugin registration order (a load-order change silently reopened it, no test failing). Gating each route makes the deny decision a property of this entry point too. Handler-level proof in plugin-hono-server/hono-anonymous-deny.test.ts.' },
   { id: 'default-profile', summary: 'app-declared default profile (isDefault)', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },
+  { id: 'readonly-static-write', summary: 'static `readonly: true` stripped from non-system UPDATE payloads (#2948 / #3003 — a direct PATCH cannot forge approval/status/amount columns the UI never renders)', state: 'enforced',
+    enforcement: 'objectql/engine.ts update — stripReadonlyFields on both the single-id and multi-row paths (caller-supplied keys only, so audit-hook/middleware server stamps survive; isSystem exempt; symmetric with the readonlyWhen strip)',
+    proof: 'showcase-static-readonly.dogfood.test.ts',
+    note: 'The #3003 field report: `readonly: true` used to be UI-only, so a logged-in non-admin self-approved a 4-stage approval (approval_status/approval_stage/confirmed_total) with one same-session REST PATCH on a draft record — RECORD_LOCKED only guards pending flows, and the draft never entered one. The strip is SILENT (HTTP 200, persisted value kept — reject-vs-strip decided in #2948 for readonlyWhen symmetry). INSERT is deliberately exempt (create may seed a readonly column: defaultValue, import, migration), also symmetric with readonlyWhen. Engine-level unit/integration proof in objectql/plugin.integration.test.ts (#2948 suite: forge stripped, server stamp survives, system context allowed).' },
 
   // ── ADR-0057 — ERP authorization core (enforced + e2e proven) ──────────
   { id: 'scope-depth', summary: 'permission-grant access DEPTH (own/own_and_reports/unit/unit_and_below/org)', state: 'enforced',

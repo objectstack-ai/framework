@@ -144,6 +144,19 @@ export const HIGH_RISK_CLASSES: HighRiskClass[] = [
     ledgerBindings: [{ type: 'object', path: 'lifecycle' }],
   },
   {
+    id: 'readonly-static-write',
+    label: 'Static readonly write enforcement',
+    summary:
+      'a statically `readonly: true` field cannot be forged by a non-system UPDATE — the write is stripped server-side, not merely hidden by the form (#2948/#3003: approval/status/amount columns "protected" only by readonly were one direct PATCH away from self-approval).',
+    proofId: 'readonly-static-write',
+    proofRef: 'packages/dogfood/test/showcase-static-readonly.dogfood.test.ts#readonly-static-write',
+    bound: true,
+    // `readonly` was renderer-only until #2948 — declared ≠ enforced is exactly
+    // the false-compliance class ADR-0049 closes. The proof pins the server-side
+    // strip (forge dropped, sibling edit lands, insert exempt) over real HTTP.
+    ledgerBindings: [{ type: 'field', path: 'readonly' }],
+  },
+  {
     id: 'form-widget',
     label: 'Form layout / section / widget',
     summary: 'server-side form resolution.',

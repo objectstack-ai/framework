@@ -280,7 +280,7 @@ These properties are available on all field types:
 | `description` | `string` | — | Developer documentation |
 | `inlineHelpText` | `string` | — | Help text shown in UI |
 | `hidden` | `boolean` | `false` | Hide from default views |
-| `readonly` | `boolean` | `false` | Prevent editing |
+| `readonly` | `boolean` | `false` | Prevent editing — hidden from create/edit forms AND server-enforced: non-system `UPDATE` writes to the field are silently dropped (insert may still seed it) |
 | `sortable` | `boolean` | `true` | Allow sorting by this field |
 | `group` | `string` | — | Group name for organizing in forms (e.g. `'billing'`) |
 

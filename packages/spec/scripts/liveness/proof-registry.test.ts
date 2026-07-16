@@ -104,6 +104,7 @@ describe('registry invariants', () => {
     expect([...BOUND_PROOF_PATHS.keys()].sort()).toEqual(
       [
         'field/type',
+        'field/readonly',
         'flow/nodes.type',
         'flow/runAs',
         'permission/rowLevelSecurity.using',

@@ -74,7 +74,8 @@
     },
     "readonlyWhen": {
       "status": "live",
-      "note": "renderer CEL."
+      "evidence": "packages/objectql/src/validation/rule-validator.ts",
+      "note": "renderer CEL + server write path: stripReadonlyWhenFields drops UPDATE writes when the predicate is TRUE against {...previous, ...data} (B2); INSERT exempt."
     },
     "visibleWhen": {
       "status": "live",
@@ -86,7 +87,9 @@
     },
     "readonly": {
       "status": "live",
-      "note": "renderer."
+      "evidence": "packages/objectql/src/validation/rule-validator.ts",
+      "proof": "packages/dogfood/test/showcase-static-readonly.dogfood.test.ts#readonly-static-write",
+      "note": "renderer + server write path: stripReadonlyFields drops non-system UPDATE writes to the field (#2948/#3003 — was renderer-only, i.e. false compliance for approval/status columns); INSERT exempt, symmetric with readonlyWhen."
     },
     "hidden": {
       "status": "live",

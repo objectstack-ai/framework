@@ -613,7 +613,7 @@ export const FieldSchema = lazySchema(() => z.object({
 
   /** Security & Visibility */
   hidden: z.boolean().default(false).describe('Hidden from default UI'),
-  readonly: z.boolean().default(false).describe('Read-only in UI'),
+  readonly: z.boolean().default(false).describe('Read-only — never editable in forms, AND server-enforced on UPDATE: a non-system write to this field is silently dropped from the payload (#2948/#3003; symmetric with `readonlyWhen`). INSERT may still seed it (defaultValue, import).'),
 
   /**
    * [ADR-0066 D3] Capabilities required to READ/EDIT this field. A field
