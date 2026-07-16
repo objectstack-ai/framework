@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { ConnectorProviderFactory, ResolvedConnectorAuth } from '@objectstack/spec/integration';
+import { ConnectorUpstreamUnavailableError } from '@objectstack/spec/integration';
 import { createMcpConnector, type McpConnectorOptions, type McpTransport } from './mcp-connector.js';
 
 /**
@@ -103,9 +104,13 @@ function normalizeTransport(
  * {@link createMcpConnector} builds for a hand-wired MCP connector — one action
  * per tool, dispatched to the server's `tools/call`.
  *
- * The connection is opened at materialization; an unreachable server or invalid
- * transport therefore fails boot loudly (ADR-0097 fail-loud contract). Prefer a
- * fail-soft plugin instantiation for an *optional* server.
+ * The connection is opened at materialization. Faults are classified (#3017):
+ * an invalid transport shape is a *configuration* fault and throws plain —
+ * fatal at boot per the ADR-0097 fail-loud contract — while a connect /
+ * `tools/list` failure (server down, refused, timed out) is an *operational*
+ * fault and throws {@link ConnectorUpstreamUnavailableError}, which the
+ * materializer turns into a degraded instance that is retried with backoff
+ * instead of aborting the whole app boot.
  */
 export function createMcpProviderFactory(deps: McpProviderDeps = {}): ConnectorProviderFactory {
   return async (ctx) => {
@@ -116,14 +121,26 @@ export function createMcpProviderFactory(deps: McpProviderDeps = {}): ConnectorP
       : undefined;
     const include = includeList ? (toolName: string) => includeList.includes(toolName) : undefined;
 
-    const bundle = await createMcpConnector({
-      name: ctx.name,
-      label: ctx.label,
-      description: ctx.description,
-      transport,
-      include,
-      clientFactory: deps.clientFactory,
-    });
+    let bundle;
+    try {
+      bundle = await createMcpConnector({
+        name: ctx.name,
+        label: ctx.label,
+        description: ctx.description,
+        transport,
+        include,
+        clientFactory: deps.clientFactory,
+      });
+    } catch (err) {
+      // Everything past transport validation is talking to the server (connect,
+      // handshake, tools/list) — operational, hence retryable. A credential the
+      // server rejects also lands here: indistinguishable from the outside, and
+      // retrying it is loud (logged per attempt), never silent.
+      throw new ConnectorUpstreamUnavailableError(
+        `connector-mcp provider: connector '${ctx.name}' could not reach its MCP server: ${(err as Error).message}`,
+        { cause: err },
+      );
+    }
     return { def: bundle.def, handlers: bundle.handlers, close: bundle.close };
   };
 }
