@@ -5,6 +5,7 @@ import {
   validateSemanticRoles,
   FIELD_GROUP_UNDECLARED,
   FIELD_GROUP_EMPTY,
+  FIELD_GROUP_SHADOWED,
   SEMANTIC_ROLE_FIELD_UNKNOWN,
 } from './validate-semantic-roles';
 
@@ -18,7 +19,11 @@ describe('validateSemanticRoles (ADR-0085)', () => {
       highlightFields: ['name', 'status'],
       fieldGroups: [{ key: 'basic', label: 'Basic' }],
       fields: {
+        // `code` keeps the group visible on detail pages: `name` is the
+        // record title (page H1, never in the body) so a name-only group
+        // would trip rule (d).
         name: { type: 'text', group: 'basic' },
+        code: { type: 'text', group: 'basic' },
         status: { type: 'select' },
       },
     }]));
@@ -55,6 +60,72 @@ describe('validateSemanticRoles (ADR-0085)', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ rule: FIELD_GROUP_EMPTY });
     expect(findings[0].message).toContain('unused');
+  });
+
+  it('flags a group fully shadowed by the highlight strip (rule d)', () => {
+    // `money`'s only member is also a highlight → detail bodies hide it, so
+    // the group never renders on detail pages.
+    const findings = validateSemanticRoles(stack([{
+      name: 'zoo',
+      highlightFields: ['name', 'status', 'amount'],
+      fieldGroups: [
+        { key: 'basics', label: 'Basics' },
+        { key: 'money', label: 'Money' },
+      ],
+      fields: {
+        name: { type: 'text' },
+        status: { type: 'select', group: 'basics' },
+        code: { type: 'text', group: 'basics' }, // keeps basics visible
+        amount: { type: 'number', group: 'money' },
+      },
+    }]));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: 'warning',
+      rule: FIELD_GROUP_SHADOWED,
+      path: 'objects[0].fieldGroups',
+    });
+    expect(findings[0].message).toContain('money');
+    expect(findings[0].message).toContain('amount');
+  });
+
+  it('rule d counts the title field as hidden-from-body and respects the 4-entry strip cap', () => {
+    // A group holding only the record title never renders in the body even
+    // though the title is filtered OUT of the strip.
+    const titleOnly = validateSemanticRoles(stack([{
+      name: 'doc',
+      highlightFields: ['title', 'status'],
+      fieldGroups: [{ key: 'head', label: 'Head' }],
+      fields: { title: { type: 'text', group: 'head' }, status: { type: 'select' } },
+    }]));
+    expect(titleOnly.map((f) => f.rule)).toEqual([FIELD_GROUP_SHADOWED]);
+
+    // Entry #5 is beyond the strip (first 4 after the title filter), so a
+    // group containing it still renders → clean.
+    const beyondCap = validateSemanticRoles(stack([{
+      name: 'wide',
+      highlightFields: ['name', 'a', 'b', 'c', 'd', 'e'],
+      fieldGroups: [{ key: 'tail', label: 'Tail' }],
+      fields: {
+        name: {}, a: {}, b: {}, c: {}, d: {},
+        e: { type: 'text', group: 'tail' },
+      },
+    }]));
+    expect(beyondCap).toEqual([]);
+
+    // Hidden members don't keep a group "visible": a group whose only
+    // NON-hidden member is highlighted is still shadowed.
+    const hiddenMember = validateSemanticRoles(stack([{
+      name: 'mix',
+      highlightFields: ['name', 'amount'],
+      fieldGroups: [{ key: 'money', label: 'Money' }],
+      fields: {
+        name: {},
+        amount: { type: 'number', group: 'money' },
+        legacy: { type: 'text', group: 'money', hidden: true },
+      },
+    }]));
+    expect(hiddenMember.map((f) => f.rule)).toEqual([FIELD_GROUP_SHADOWED]);
   });
 
   it('flags stageField pointing at a missing field; false is fine', () => {

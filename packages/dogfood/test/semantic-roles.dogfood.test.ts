@@ -55,10 +55,24 @@ describe('ADR-0085 semantic roles survive the served pipeline', () => {
 
     expect(def.fieldGroups).toEqual([
       { key: 'basics', label: 'Basics', collapse: 'none' },
-      { key: 'money', label: 'Money', collapse: 'collapsed' },
+      {
+        key: 'money',
+        label: 'Money',
+        icon: 'banknote',
+        description: 'Financial fields — collapsed by default.',
+        collapse: 'collapsed',
+      },
     ]);
     expect(def.fields?.status?.group).toBe('basics');
     expect(def.fields?.amount?.group).toBe('money');
+    // Non-highlighted group members (the detail body hides highlighted
+    // fields, so these keep their groups visible on detail pages).
+    expect(def.fields?.code?.group).toBe('basics');
+    expect(def.fields?.budget?.group).toBe('money');
+    // The spec channel for a per-field currency is currencyConfig (a bare
+    // `currency` key is stripped at parse) — renderers resolve
+    // field.currency → currencyConfig.defaultCurrency → tenant default.
+    expect(def.fields?.budget?.currencyConfig?.defaultCurrency).toBe('USD');
   });
 
   it('the legacy fixture serves canonical highlightFields only (alias retired)', async () => {
@@ -89,8 +103,16 @@ describe('ADR-0085 semantic roles survive the served pipeline', () => {
     const sections = deriveFieldGroupLayout(def);
     expect(sections).not.toBeNull();
     expect(sections!.map((s) => s.key)).toEqual(['basics', 'money', undefined]);
-    expect(sections![0].fields).toContain('status');
-    expect(sections![1]).toMatchObject({ key: 'money', collapse: 'collapsed', fields: ['amount'] });
+    expect(sections![0].fields).toEqual(['status', 'code']);
+    expect(sections![1]).toMatchObject({
+      key: 'money',
+      collapse: 'collapsed',
+      // icon/description pass through the shared derivation (ADR-0085 §5) so
+      // every section renderer gets the same header chrome.
+      icon: 'banknote',
+      description: 'Financial fields — collapsed by default.',
+      fields: ['amount', 'budget'],
+    });
     // Ungrouped trailing bucket keeps `notes` visible (never silently dropped).
     expect(sections![2].fields).toContain('notes');
   });

@@ -20,6 +20,7 @@
 
 export const FIELD_GROUP_UNDECLARED = 'field-group-undeclared';
 export const FIELD_GROUP_EMPTY = 'field-group-empty';
+export const FIELD_GROUP_SHADOWED = 'field-group-shadowed';
 export const SEMANTIC_ROLE_FIELD_UNKNOWN = 'semantic-role-field-unknown';
 
 export type SemanticRoleSeverity = 'error' | 'warning';
@@ -153,6 +154,53 @@ export function validateSemanticRoles(stack: AnyRec): SemanticRoleFinding[] {
           `Fix the field name (highlightFields drives default columns, cards, ` +
           `previews and the detail highlight strip, in order).`,
       });
+    }
+
+    // ── (d) declared group fully shadowed by the detail highlight strip ──
+    // Detail pages render the first 4 highlightFields as the top strip and
+    // HIDE those fields from the details body; the record's title field is
+    // the page H1 and never renders in the body either. A group whose every
+    // visible member is covered by strip ∪ title therefore renders on FORMS
+    // but silently never on detail pages — legal, but almost never what the
+    // author pictured when they declared the group.
+    const declaredStrings = highlights.filter(
+      (h): h is string => typeof h === 'string' && h.length > 0,
+    );
+    if (declaredStrings.length > 0 && declaredGroups.size > 0) {
+      // Mirror the renderer's title resolution: declared role first
+      // (nameField / primaryField / deprecated displayNameField), else the
+      // first conventional display-field name present on the object.
+      const declaredTitle = [obj.nameField, obj.primaryField, obj.displayNameField]
+        .find((v): v is string => typeof v === 'string' && v.length > 0 && fieldNames.has(v));
+      const titleField = declaredTitle
+        ?? ['name', 'full_name', 'title', 'subject', 'display_name'].find((c) => fieldNames.has(c));
+      const stripSet = new Set(
+        declaredStrings.filter((h) => h !== titleField).slice(0, 4),
+      );
+      const hiddenFromBody = new Set(stripSet);
+      if (titleField) hiddenFromBody.add(titleField);
+
+      for (const key of declaredGroups) {
+        const members = Object.entries(fields)
+          .filter(([, f]) => f?.group === key && f?.hidden !== true)
+          .map(([fname]) => fname);
+        if (members.length === 0) continue; // rule (b) already covers empty groups
+        if (!members.every((m) => hiddenFromBody.has(m))) continue;
+        findings.push({
+          severity: 'warning',
+          rule: FIELD_GROUP_SHADOWED,
+          where,
+          path: `${path}.fieldGroups`,
+          message:
+            `${objName}: every field in group "${key}" (${members.join(', ')}) is ` +
+            `hoisted into the detail highlight strip (or is the record title) — ` +
+            `the group renders on forms but never on detail pages`,
+          hint:
+            `Keep at least one non-highlighted field in "${key}", or remove the ` +
+            `group if the strip already covers it. (Detail pages show the first ` +
+            `4 highlightFields as the top strip and hide them from the body.)`,
+        });
+      }
     }
   }
 

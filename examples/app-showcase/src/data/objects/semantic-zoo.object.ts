@@ -42,7 +42,23 @@ export const SemanticZoo = ObjectSchema.create({
       ],
       group: 'basics',
     }),
+    // `code`/`budget` are deliberately NOT in highlightFields: detail pages
+    // hide highlighted fields from the body, so a group whose every member is
+    // highlighted never renders there (the `field-group-shadowed` lint). Each
+    // group keeps one non-highlighted member so the grouped detail layout —
+    // including Money's `collapse: 'collapsed'` — is actually exercised
+    // in-browser (#2548 follow-up), not just at parse time.
+    code: Field.text({ label: 'Code', group: 'basics' }),
     amount: Field.number({ label: 'Amount', group: 'money' }),
+    // Explicit ISO currency (spec channel: `currencyConfig.defaultCurrency`;
+    // a bare `currency` key is NOT on the field schema and gets stripped at
+    // parse). Without a resolvable code, renderers deliberately show a bare
+    // grouped number — never a guessed symbol.
+    budget: Field.currency({
+      label: 'Budget',
+      currencyConfig: { precision: 2, currencyMode: 'fixed', defaultCurrency: 'USD' },
+      group: 'money',
+    }),
     notes: Field.textarea({ label: 'Notes' }),
   },
 
@@ -50,7 +66,16 @@ export const SemanticZoo = ObjectSchema.create({
   stageField: 'status',
   fieldGroups: [
     { key: 'basics', label: 'Basics' },
-    { key: 'money', label: 'Money', collapse: 'collapsed' },
+    // icon/description ride the served pipeline into the shared
+    // deriveFieldGroupLayout output (ADR-0085 §5) — declared here so the
+    // detail/form section chrome for them is dogfooded end-to-end.
+    {
+      key: 'money',
+      label: 'Money',
+      icon: 'banknote',
+      description: 'Financial fields — collapsed by default.',
+      collapse: 'collapsed',
+    },
   ],
 });
 
@@ -68,12 +93,14 @@ export const SemanticZooLegacy = ObjectSchema.create({
   fields: {
     name: Field.text({ label: 'Name', required: true }),
     // Named `status` ON PURPOSE: the stepper heuristic would pick it up —
-    // `stageField: false` below is what keeps it suppressed.
+    // `stageField: false` below is what keeps it suppressed. Option `color`
+    // pins the badge tint (spec-typed; without it renderers fall back to a
+    // value-hash palette, which colored "Green" amber).
     status: Field.select({
       label: 'Status',
       options: [
-        { label: 'Red', value: 'red', default: true },
-        { label: 'Green', value: 'green' },
+        { label: 'Red', value: 'red', color: 'red', default: true },
+        { label: 'Green', value: 'green', color: 'green' },
       ],
     }),
     amount: Field.number({ label: 'Amount' }),

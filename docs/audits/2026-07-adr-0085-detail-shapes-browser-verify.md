@@ -44,8 +44,12 @@ curl -s localhost:4600/api/v1/health          # -> {"status":"ok"}
 
 # 2. Console — objectui source (post-#2546) pointed at the backend. CORS is
 #    enabled in dev, so the cross-origin :5180 -> :4600 calls are allowed.
+#    DEV_PROXY_TARGET matters too: relative-path calls (/api/v1/runtime/config,
+#    /api/v1/dev/metadata-events) go through the Vite /api proxy, which
+#    defaults to the dead :3000 without it.
 cd ../objectui
-VITE_SERVER_URL=http://localhost:4600 pnpm --filter @object-ui/console dev  # :5180
+VITE_SERVER_URL=http://localhost:4600 DEV_PROXY_TARGET=http://localhost:4600 \
+  pnpm --filter @object-ui/console dev  # :5180
 
 # 3. Auth + fixtures (better-auth Bearer). Sign in, grab the set-auth-token
 #    header, POST the two semantic-zoo records (not seeded), then drive the
@@ -82,16 +86,24 @@ highlighted `status/industry/revenue` do not repeat in its Details body. The
 untitled bucket) is separately proven over the served pipeline in
 `semantic-roles.dogfood.test.ts`.
 
-## Out-of-scope observations (not defects in the detail path)
+## Out-of-scope observations (triaged in the #2548 follow-up)
 
-- `502 /api/v1/runtime/config` and `502 /api/v1/dev/metadata-events` are
-  **same-origin** requests the Console makes to its own origin (`:5180`); in the
-  split-origin verify harness the Vite server has nothing there. `initRuntimeConfig`
-  absorbs the failure by design and the app boots + renders regardless. Not seen
-  in the normal same-origin (`--ui` / vendored console) deployment.
-- `401 /api/v1/approvals/requests?…` (the header approvals badge) is a peripheral
-  poll unrelated to record rendering; the detail pages loaded their data fine.
-  Left for separate triage.
+- `502 /api/v1/runtime/config` / `502 /api/v1/dev/metadata-events` — **harness
+  misconfiguration, not a product defect**. The console dev server proxies
+  `/api` to `DEV_PROXY_TARGET` (default `http://localhost:3000`); this pass set
+  only `VITE_SERVER_URL`, so relative-path calls hit the proxy's dead default.
+  Correct invocation (now also in the runbook above):
+  `VITE_SERVER_URL=http://localhost:<port> DEV_PROXY_TARGET=http://localhost:<port> pnpm --filter @object-ui/console dev`.
+  In production the SPA and runtime share an origin, so relative paths are by
+  design. `initRuntimeConfig` absorbed the failure and the app rendered anyway.
+- `401 /api/v1/approvals/requests?…` (header approvals badge) — **real latent
+  defect for split-origin deployments**: `approvalsApi` authenticated with
+  cookies only (`credentials: 'include'`) while every other console API call
+  sends the Bearer token, so any deployment where the SameSite cookie doesn't
+  flow (custom-domain console ↔ API split, or this token-injected harness)
+  loses the approvals surface. Fixed in the objectui #2548 follow-up —
+  `approvalsApi` now attaches the stored Bearer token like the rest of the
+  console.
 
 ## Conclusion
 

@@ -447,12 +447,21 @@ export function installAuditWriters(
     }
 
     const label = recordLabel(after ?? before, recordId ?? '');
+    // Summaries are user-facing (the record Discussion feed and Setup
+    // dashboards render them verbatim), so name the object by its display
+    // label ("Semantic Zoo"), not its API name ("showcase_semantic_zoo").
+    // Best-effort: falls back to the API name when the def isn't resolvable.
+    const objectDef = getObjectDef(ctx.object);
+    const objectDisplay =
+      typeof objectDef?.label === 'string' && objectDef.label.length > 0
+        ? objectDef.label
+        : ctx.object;
     let summary: string;
     let activityType: string = activityTypeFor(action);
     if (action === 'create') {
-      summary = `Created ${ctx.object} "${label}"`;
+      summary = `Created ${objectDisplay} "${label}"`;
     } else if (action === 'delete') {
-      summary = `Deleted ${ctx.object} "${label}"`;
+      summary = `Deleted ${objectDisplay} "${label}"`;
     } else {
       // ADR-0052 §5b — declarative activity, precedence: a configured semantic
       // milestone (§5b.2) wins; else a tracked field-change diff ("Stage:
@@ -464,7 +473,7 @@ export function installAuditWriters(
       } else {
         summary =
           renderTrackedChangeSummary(getFieldDefs(ctx.object), oldValue, newValue) ??
-          `Updated ${ctx.object} "${label}"`;
+          `Updated ${objectDisplay} "${label}"`;
       }
     }
 
