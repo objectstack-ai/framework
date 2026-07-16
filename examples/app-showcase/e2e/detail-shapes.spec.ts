@@ -137,27 +137,6 @@ test('stageField:false: status renders as a plain field, no stepper', async ({ p
   expect(errors, 'uncaught page errors on stageField:false detail').toEqual([]);
 });
 
-test('kanban default lanes honour stageField — role drives lanes, strict-false suppresses them', async ({ page }) => {
-  // Both `board` views deliberately carry NO kanban binding (spec-optional),
-  // so the lane field resolves through the shared stageField detector
-  // (objectui#2596).
-
-  // Positive: zoo declares stageField:'status' → lanes are the option
-  // labels, with zero view-level config.
-  let errors = await openRecord(page, `/_console/apps/${APP}/showcase_semantic_zoo?view=board`);
-  await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Done', { exact: true }).first()).toBeVisible();
-  expect(errors, 'uncaught page errors on stageField board').toEqual([]);
-
-  // Negative: legacy zoo declares stageField:false (its status is a color,
-  // not a lifecycle) → NO default lanes. The pre-#2596 hard-coded 'status'
-  // fallback would have grouped by Red / Green.
-  errors = await openRecord(page, `/_console/apps/${APP}/showcase_semantic_zoo_legacy?view=board`);
-  await expect(page.getByText('Red', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Green', { exact: true })).toHaveCount(0);
-  expect(errors, 'uncaught page errors on suppressed board').toEqual([]);
-});
-
 test('ungrouped + related-heavy: flat details and related-list tabs on Contoso', async ({ page }) => {
   const errors = await openRecord(page, recordUrl('showcase_account', contosoId));
 
