@@ -76,7 +76,15 @@ export class InMemoryRealtimeAdapter implements IRealtimeService {
   }
 
   async publish(event: RealtimeEventPayload): Promise<void> {
-    // Deliver to all channel subscriptions that match filters
+    // Deliver to all channel subscriptions that match filters.
+    //
+    // ⚠️ TRUSTED fan-out (#2992 / ADR-0096 D4): there is NO per-recipient
+    // authorization here — `matchesSubscription` filters by object/event type
+    // only, `Subscription` carries no principal, and the engine publishes the
+    // full record body. Safe ONLY while every subscriber is server-internal.
+    // A client transport must not be wired to this path until delivery
+    // re-checks each recipient's authority (or payloads become id-only); the
+    // authz conformance matrix (`realtime-delivery-authz`) pins this.
     for (const sub of this.subscriptions.values()) {
       if (this.matchesSubscription(event, sub)) {
         try {

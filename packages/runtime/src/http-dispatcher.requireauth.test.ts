@@ -100,6 +100,62 @@ describe('HttpDispatcher requireAuth gate — GraphQL (handleGraphQL)', () => {
     });
 });
 
+// #2992 / ADR-0096 D1 — the GraphQL entry point must THREAD the caller's
+// identity to the engine, not just gate anonymity. kernel.graphql is a stub
+// surface today (never assigned in the monorepo), but the moment a real
+// engine lands it resolves objects through ObjectQL, whose security
+// middleware falls OPEN on a missing principal — so the entry point passes
+// the resolved ExecutionContext as `options.context` (the same key the REST
+// callData path threads). Dropping it also goes STALE in the authz
+// conformance matrix (dogfood/test/authz-conformance.test.ts).
+describe('HttpDispatcher identity threading — GraphQL (handleGraphQL, #2992)', () => {
+    const gqlBody = { query: '{ __typename }', variables: { a: 1 } };
+
+    const makeGraphQLKernel = (calls: any[]) =>
+        makeKernel({
+            graphql: (query: string, variables: any, options: any) => {
+                calls.push({ query, variables, options });
+                return { data: {} };
+            },
+        });
+
+    it('threads the resolved ExecutionContext as options.context', async () => {
+        const calls: any[] = [];
+        const d = new HttpDispatcher(makeGraphQLKernel(calls), undefined, { requireAuth: true });
+        await d.handleGraphQL(gqlBody, authed);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].query).toBe(gqlBody.query);
+        expect(calls[0].variables).toEqual(gqlBody.variables);
+        expect(calls[0].options.context).toBe(authed.executionContext);
+    });
+
+    it('threads a system context unchanged', async () => {
+        const calls: any[] = [];
+        const d = new HttpDispatcher(makeGraphQLKernel(calls), undefined, { requireAuth: true });
+        await d.handleGraphQL(gqlBody, system);
+        expect(calls[0].options.context).toBe(system.executionContext);
+    });
+
+    it('threads the caller identity even when requireAuth is OFF (an authenticated caller on an open deployment still runs under their own authority)', async () => {
+        const calls: any[] = [];
+        const d = new HttpDispatcher(makeGraphQLKernel(calls), undefined, { requireAuth: false });
+        await d.handleGraphQL(gqlBody, authed);
+        expect(calls[0].options.context).toBe(authed.executionContext);
+    });
+
+    it('an anonymous caller on an open deployment carries NO authority (explicit guest principal or nothing — never a forged user/system identity)', async () => {
+        const calls: any[] = [];
+        const d = new HttpDispatcher(makeGraphQLKernel(calls), undefined, { requireAuth: false });
+        // Fresh context object: handleGraphQL caches the resolved identity on it.
+        await d.handleGraphQL(gqlBody, { request: {}, executionContext: undefined } as any);
+        const threaded = calls[0].options.context;
+        // The resolver yields an explicit guest principal (mirroring dispatch());
+        // whatever is threaded must carry no user and no system authority.
+        expect(threaded?.userId).toBeUndefined();
+        expect(threaded?.isSystem ?? false).toBe(false);
+    });
+});
+
 describe('HttpDispatcher requireAuth gate — metadata catch-all (handleMetadata)', () => {
     it('401s an anonymous caller when requireAuth is on', async () => {
         const d = new HttpDispatcher(makeKernel(), undefined, { requireAuth: true });

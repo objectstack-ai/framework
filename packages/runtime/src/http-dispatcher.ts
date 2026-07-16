@@ -1631,9 +1631,13 @@ export class HttpDispatcher {
         //
         // The dispatcher-plugin's direct `/graphql` route calls us WITHOUT
         // resolving identity first (unlike `dispatch()`, which populates
-        // `context.executionContext`), so resolve it here when absent.
+        // `context.executionContext`), so resolve it here when absent —
+        // REGARDLESS of `requireAuth`: the resolved identity is also what we
+        // thread to the engine below (#2992), and an authenticated caller on a
+        // `requireAuth: false` deployment must still run under their own
+        // authority, not context-less.
         let ec: any = context.executionContext;
-        if (this.requireAuth && !ec) {
+        if (!ec) {
             ec = await this.resolveRequestExecutionContext(context);
             if (ec) context.executionContext = ec;
         }
@@ -1652,8 +1656,16 @@ export class HttpDispatcher {
             throw { statusCode: 501, message: 'GraphQL service not available' };
         }
 
+        // ADR-0096 D1 / #2992 — thread the caller's identity to the engine.
+        // `kernel.graphql` is still unassigned everywhere (this call 501s
+        // above), but the moment a real engine lands it resolves objects
+        // through ObjectQL, whose security middleware falls OPEN on a missing
+        // principal — so the entry point must already carry the caller as
+        // `options.context` (the same key the REST `callData` path threads).
+        // An implementation MUST forward it to every data-engine call.
         return this.kernel.graphql(body.query, body.variables, {
-            request: context.request
+            request: context.request,
+            context: ec,
         });
     }
 
@@ -1663,8 +1675,10 @@ export class HttpDispatcher {
      * `context.executionContext`). The dispatcher-plugin's direct `/graphql`
      * route is the current caller. Mirrors the identity resolution `dispatch()`
      * performs so an anonymous-deny gate can tell an authenticated caller from
-     * an anonymous one. Best-effort: returns `undefined` on failure (treated as
-     * anonymous, i.e. denied under `requireAuth`).
+     * an anonymous one, and so the caller's identity can be THREADED to the
+     * engine (#2992 / ADR-0096 D1) instead of dropped. Best-effort: returns
+     * `undefined` on failure (treated as anonymous, i.e. denied under
+     * `requireAuth`).
      */
     private async resolveRequestExecutionContext(
         context: HttpProtocolContext,
