@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   PageSchema,
   PAGE_TYPE_ROADMAP,
@@ -1041,5 +1042,27 @@ describe('ADR-0089 D3a — strict page component schema (loud mis-layered keys)'
   it('rejects a stale `visibleOn` key on a page component (that is the view-form alias, not a page one)', () => {
     const res = PageComponentSchema.safeParse({ type: 'element:text', visibleOn: "page.a == 1" });
     expect(res.success).toBe(false);
+  });
+});
+
+/**
+ * ObjectUI Studio derives the Page inspector's authoring JSONSchema straight
+ * from these zod schemas via `z.toJSONSchema` (objectui#2561). The lazySchema
+ * proxy must stay identity-compatible with zod's converter — the D3a
+ * `.strict().transform(…)` pipe on PageComponentSchema is exactly the shape
+ * that crashed it before the `_zod` facade fix.
+ */
+describe('PageSchema → JSON Schema derivation (Studio inspector path)', () => {
+  const TO_JSON = { io: 'input', unrepresentable: 'any' } as const;
+
+  it('derives the input-io JSONSchema for the whole Page document', () => {
+    const json = z.toJSONSchema(PageSchema, TO_JSON);
+    const text = JSON.stringify(json);
+    expect(text).toContain('interfaceConfig');
+    expect(text).toContain('regions');
+  });
+
+  it('derives the input-io JSONSchema for a bare PageComponent', () => {
+    expect(() => z.toJSONSchema(PageComponentSchema, TO_JSON)).not.toThrow();
   });
 });
