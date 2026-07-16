@@ -2,7 +2,7 @@
 
 import { Plugin, PluginContext } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
-import { describeHighPrivilegeBits, describeAnchorForbiddenBits } from '@objectstack/spec/security';
+import { describeHighPrivilegeBits, describeAnchorForbiddenBits, PUBLIC_FORM_SERVER_MANAGED_FIELDS } from '@objectstack/spec/security';
 import { MCP_AGENT_PERMISSION_SET_RESTRICTED } from '@objectstack/spec/ai';
 import { PermissionEvaluator, crudBucketForOperation } from './permission-evaluator.js';
 import { DelegatedAdminGate } from './delegated-admin-gate.js';
@@ -569,7 +569,39 @@ export class SecurityPlugin implements Plugin {
         const allowed =
           opCtx.object === grantObject &&
           ['insert', 'find', 'findOne', 'count'].includes(opCtx.operation);
-        if (allowed) return next();
+        if (allowed) {
+          // [#3022] The grant bypasses every downstream write gate (FLS 2.5,
+          // owner anchor 3.5, tenant CHECK) — so the system-managed anchors
+          // must be forced HERE, before the write is admitted. An anonymous
+          // submission has no principal to backfill from and no conceivable
+          // transfer authorization, so a supplied `owner_id` /
+          // `organization_id` / audit column is stripped from every row (the
+          // route-side field allow-list is the first net; this is the
+          // data-layer boundary that holds even if a FormView declares — or
+          // a zero-section form falls open to — one of these columns).
+          // Ownership stays NULL for object hooks / the first-admin
+          // bootstrap to assign, exactly like other anonymous-seeded rows.
+          if (opCtx.operation === 'insert' && opCtx.data && typeof opCtx.data === 'object') {
+            const rows = Array.isArray(opCtx.data) ? opCtx.data : [opCtx.data];
+            const stripped = new Set<string>();
+            for (const row of rows) {
+              if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+              for (const field of PUBLIC_FORM_SERVER_MANAGED_FIELDS) {
+                if (Object.prototype.hasOwnProperty.call(row, field)) {
+                  delete (row as Record<string, unknown>)[field];
+                  stripped.add(field);
+                }
+              }
+            }
+            if (stripped.size > 0) {
+              ctx.logger.warn(
+                `[security] public-form insert on '${grantObject}' supplied server-managed ` +
+                  `field(s) [${[...stripped].join(', ')}] — stripped (#3022)`,
+              );
+            }
+          }
+          return next();
+        }
         throw new PermissionDeniedError(
           `[Security] Access denied: public-form grant permits only create/read-back on '${grantObject}', ` +
             `not '${opCtx.operation}' on '${opCtx.object}'`,

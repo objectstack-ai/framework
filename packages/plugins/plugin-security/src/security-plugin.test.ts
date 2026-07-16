@@ -239,6 +239,83 @@ describe('SecurityPlugin', () => {
     expect(opCtx.ast.where).toBeUndefined();
   });
 
+  // ── publicFormGrant — server-managed anchor stripping (#3022) ───────────
+  // The ADR-0056 Option A grant short-circuits the middleware BEFORE every
+  // write gate (FLS 2.5, owner anchor 3.5, tenant CHECK), so the grant branch
+  // itself must force the system-managed anchors: an anonymous public-form
+  // insert can never forge `owner_id` / `organization_id` / audit columns,
+  // no matter what the route-side field allow-list let through.
+  describe('publicFormGrant — server-managed anchor stripping (#3022)', () => {
+    const anonFormCtx = { publicFormGrant: { object: 'task' }, permissions: ['guest_portal'], anonymous: true };
+
+    const boot = async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      return harness;
+    };
+
+    it('strips forged owner_id / organization_id / audit anchors from an insert', async () => {
+      const harness = await boot();
+      const opCtx: any = {
+        object: 'task', operation: 'insert',
+        data: {
+          name: 'Ada', id: 'rec_forged', owner_id: 'usr_victim', organization_id: 'org_victim',
+          created_by: 'usr_victim', updated_by: 'usr_victim',
+          created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z',
+        },
+        context: anonFormCtx,
+      };
+      await harness.run(opCtx);
+      // Business fields survive; every server-managed anchor is gone
+      // (ownership stays unset for hooks / first-admin bootstrap to assign).
+      expect(opCtx.data).toEqual({ name: 'Ada' });
+    });
+
+    it('strips anchors from EVERY row of a batch insert', async () => {
+      const harness = await boot();
+      const opCtx: any = {
+        object: 'task', operation: 'insert',
+        data: [
+          { name: 'A', owner_id: 'usr_victim' },
+          { name: 'B', organization_id: 'org_victim' },
+          { name: 'C' },
+        ],
+        context: anonFormCtx,
+      };
+      await harness.run(opCtx);
+      expect(opCtx.data).toEqual([{ name: 'A' }, { name: 'B' }, { name: 'C' }]);
+    });
+
+    it('a clean insert passes through untouched', async () => {
+      const harness = await boot();
+      const opCtx: any = {
+        object: 'task', operation: 'insert',
+        data: { name: 'Ada', email: 'ada@example.com' },
+        context: anonFormCtx,
+      };
+      await harness.run(opCtx);
+      expect(opCtx.data).toEqual({ name: 'Ada', email: 'ada@example.com' });
+    });
+
+    it('the grant still refuses non-granted operations and foreign objects', async () => {
+      const harness = await boot();
+      await expect(
+        harness.run({
+          object: 'task', operation: 'update', data: { owner_id: 'usr_victim' },
+          context: anonFormCtx,
+        }),
+      ).rejects.toThrow(/public-form grant permits only create\/read-back/);
+      await expect(
+        harness.run({
+          object: 'sys_user', operation: 'insert', data: { name: 'x' },
+          context: anonFormCtx,
+        }),
+      ).rejects.toThrow(/public-form grant permits only create\/read-back/);
+    });
+  });
+
   // ── Row-level WRITE authorization (pre-image check, #1985) ──────────────
   // A by-id update/delete never builds an RLS `where`, so the owner/tenant
   // predicate must be enforced by re-reading the target row before mutating.
