@@ -108,72 +108,13 @@ jobs:
       # still run (close to) everything — but the many PRs that don't touch
       # spec skip the bulk of the 75-package matrix.
       # --concurrency=4: turbo's default (10) oversubscribes the 4-vCPU
-      # hosted runner. As the task graph grew past ~100 tasks (connector
-      # packages + qa gates), parallel vitest workers + tsup DTS builds
-      # started exhausting runner memory: plugin-audit#test died with ZERO
-      # output (kernel OOM-kill signature) deterministically on the runner
-      # while passing everywhere else — first seen on main @4f8c2d1,
-      # reproduced twice on #3037. Matching concurrency to the core count
-      # bounds peak memory; the job is CPU-bound anyway.
-      # ── TEMPORARY DIAGNOSTICS for #3071 — remove before merge ────────────
-      # plugin-audit#test dies on the hosted runner with zero captured output
-      # (3× deterministic; passes locally under Node 20/22 with the exact CI
-      # command). Run it ISOLATED first — fresh machine, no turbo grouping,
-      # verbose reporter — so its real output cannot be mangled by the GH log
-      # pipeline under burst. SIGQUIT before the timeout makes Node dump all
-      # thread stacks if it hangs.
-      - name: DIAG 3071 — plugin-audit isolated with built deps (temporary)
-        if: github.event_name == 'pull_request'
-        run: |
-          node --version
-          free -h || true
-          echo "── build plugin-audit dependency closure ──"
-          pnpm turbo run build --filter='@objectstack/plugin-audit^...' --concurrency=4
-          echo "── isolated vitest run (deps built) ──"
-          timeout -s QUIT 240 pnpm --filter @objectstack/plugin-audit exec vitest run --reporter=verbose --no-file-parallelism; echo "exit=$?"
-        continue-on-error: true
-
-      # Reproduce the REAL failing scenario: a full affected graph (old base ⇒
-      # everything affected), with turbo's output captured to a FILE so the
-      # plugin-audit block cannot be lost to the GH log pipeline under burst
-      # (that loss is why 3 prior failures showed zero output).
-      - name: DIAG 3071 — full-graph reproduction, file-captured (temporary)
-        if: github.event_name == 'pull_request'
-        env:
-          TURBO_SCM_BASE: 55bc68d
-        run: |
-          set +e
-          pnpm turbo run test --affected --concurrency=4 > /tmp/diag-turbo-test.log 2>&1
-          code=$?
-          echo "turbo exit=$code"
-          echo "── summary ──"
-          grep -E "Tasks:|Cached:|Failed:" /tmp/diag-turbo-test.log || true
-          echo "── plugin-audit block ──"
-          grep -n "plugin-audit" /tmp/diag-turbo-test.log | head -5
-          awk '/plugin-audit:test/{flag=1} flag{print} flag&&/ELIFECYCLE|Duration/{count++} count>=2{exit}' /tmp/diag-turbo-test.log | head -120
-          echo "── any FAIL lines anywhere ──"
-          grep -nE "FAIL |Failed Tests|Failed Suites|Unhandled" /tmp/diag-turbo-test.log | head -30
-          exit 0
-        continue-on-error: true
-
+      # hosted runner; matching the core count bounds peak memory and the
+      # job is CPU-bound anyway.
       - name: Run affected tests (PR)
         if: github.event_name == 'pull_request'
         env:
           TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
         run: pnpm turbo run test --affected --concurrency=4
-
-      # ── TEMPORARY DIAGNOSTICS for #3071 — remove before merge ────────────
-      # If the turbo step above still kills plugin-audit silently, dmesg shows
-      # whether the kernel OOM-killer fired, and the second isolated re-run
-      # distinguishes "machine state after the full graph" from "fresh".
-      - name: DIAG 3071 — post-turbo dmesg + re-run (temporary)
-        if: github.event_name == 'pull_request' && always()
-        run: |
-          echo "── kernel OOM traces ──"
-          sudo dmesg | grep -iE "oom|killed process|out of memory" | tail -20 || echo "(no OOM traces)"
-          echo "── plugin-audit re-run on post-graph machine ──"
-          timeout -s QUIT 240 pnpm --filter @objectstack/plugin-audit exec vitest run --reporter=verbose --no-file-parallelism; echo "exit=$?"
-        continue-on-error: true
 
       # Push to main: full run, but exclude spec's plain test task — the
       # coverage step below executes the exact same 250-file spec suite once,
