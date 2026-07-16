@@ -113,27 +113,33 @@ export const RestApiConfigSchema = lazySchema(() => z.object({
     .describe('Project ID resolution strategy'),
 
   /**
-   * When `true`, all `/data/*` CRUD + batch endpoints reject anonymous
-   * requests with HTTP 401 before reaching ObjectQL. This is the REST-layer
-   * counterpart to the security plugin's RBAC enforcement and the
-   * **only** defense for deployments where the security plugin is not
-   * mounted (legacy bare-runtime hosts) or where it would otherwise fall
-   * through anonymous traffic.
+   * When `true`, anonymous requests are rejected with HTTP 401 before reaching
+   * ObjectQL. This is the transport-layer counterpart to the security plugin's
+   * RBAC enforcement and the **only** defense for deployments where the
+   * security plugin is not mounted (legacy bare-runtime hosts) or where it
+   * would otherwise fall through anonymous traffic.
    *
-   * **Default `true` — secure by default (ADR-0056 D2).** Anonymous access
-   * to the data API must be an explicit deployment decision
-   * (`requireAuth: false`), not a silent fallthrough. Legitimate anonymous
-   * surfaces survive the deny posture without any opt-out: the control
-   * plane (`/auth`, `/health`, `/discovery`) is exempt, share-links read
-   * under a system context after token validation, and public-form
-   * submission is self-authorizing via the declaration-derived
-   * `publicFormGrant` (create + read-back on the declared target object
-   * only). Demo/playground deployments that intentionally serve data
-   * publicly must now set `requireAuth: false` explicitly — the REST
-   * plugin logs a boot warning when they do.
+   * **Applies to every HTTP surface, not just REST `/data`** (#2567). The same
+   * `requireAuth` value is threaded to every entry point that reaches object
+   * data, so the anonymous-deny posture is UNIFORM by surface: REST `/data`
+   * CRUD + batch, the metadata endpoints (`/meta`), the dispatcher's GraphQL
+   * endpoint (`/graphql`), and the raw-hono standard `/data` routes. All share
+   * one decision (`shouldDenyAnonymous` in `@objectstack/core`). Before #2567 a
+   * caller denied on `/data` could read the same rows through a sibling door.
+   *
+   * **Default `true` — secure by default (ADR-0056 D2).** Anonymous access must
+   * be an explicit deployment decision (`requireAuth: false`), not a silent
+   * fallthrough. Legitimate anonymous surfaces survive the deny posture without
+   * any opt-out: the control plane (`/auth`, `/health`, `/discovery`) is exempt,
+   * share-links read under a system context after token validation, and
+   * public-form submission is self-authorizing via the declaration-derived
+   * `publicFormGrant` (create + read-back on the declared target object only).
+   * Demo/playground deployments that intentionally serve data publicly must set
+   * `requireAuth: false` explicitly — the REST plugin (and the dispatcher / hono
+   * plugins) log a boot warning when they do.
    */
   requireAuth: z.boolean().default(true)
-    .describe('Reject anonymous requests on /data/* with HTTP 401 (secure-by-default; set false to serve data publicly)'),
+    .describe('Reject anonymous requests on ALL HTTP surfaces that reach object data (REST /data, /meta, GraphQL, raw-hono /data) with HTTP 401 (secure-by-default; set false to serve them publicly)'),
 
   /**
    * API documentation configuration
