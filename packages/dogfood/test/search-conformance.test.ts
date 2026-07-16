@@ -8,7 +8,7 @@
 // or deleted proof file fails here, closing the declared-but-unenforced loop).
 
 import { describe, expect, it } from 'vitest';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkLedger } from '@objectstack/verify';
 import { SEARCH_SURFACE } from './search-conformance.ledger.js';
