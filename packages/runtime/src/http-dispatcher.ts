@@ -2337,8 +2337,16 @@ export class HttpDispatcher {
         }
 
         const ec = context.executionContext;
-        if (!ec?.userId && !ec?.isSystem) {
-            return { handled: true, response: this.error('Authentication required', 401) };
+        // Admin surface — anonymous is denied UNCONDITIONALLY (`requireAuth:
+        // true` hardcoded), independent of the deployment posture: even a
+        // `requireAuth: false` demo must not let anonymous callers list or
+        // confirm audience bindings. Shares the decision + body with every
+        // other HTTP seam (#2567).
+        if (shouldDenyAnonymous({ requireAuth: true, userId: ec?.userId, isSystem: ec?.isSystem })) {
+            return {
+                handled: true,
+                response: this.error(ANONYMOUS_DENY_MESSAGE, ANONYMOUS_DENY_STATUS, { code: ANONYMOUS_DENY_CODE }),
+            };
         }
 
         const m = method.toUpperCase();

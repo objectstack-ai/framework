@@ -558,10 +558,15 @@ describe('HttpDispatcher', () => {
 
             it('401s an anonymous request without touching the service', async () => {
                 const service = makeService();
+                // NOTE: no options — requireAuth defaults false, yet the admin
+                // surface still denies anonymous (the gate is UNCONDITIONAL,
+                // hardcoded requireAuth:true into shouldDenyAnonymous — #2567).
                 const d = new HttpDispatcher(secKernel(service));
                 const result = await d.handleSecurity('/suggested-bindings', 'GET', undefined, {}, ctx());
                 expect(result.handled).toBe(true);
                 expect(result.response?.status).toBe(401);
+                // Shared anonymous-deny body shape (locks the seam migration).
+                expect(result.response?.body?.error?.details?.code).toBe('unauthenticated');
                 expect(service.listAudienceBindingSuggestions).not.toHaveBeenCalled();
             });
 
