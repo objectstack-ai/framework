@@ -48,8 +48,8 @@ never installs them directly.
 ## TypeScript Usage
 
 ```typescript
-import { DisablePackageRequest, EnablePackageRequest, GetPackageRequest, ListPackagesRequest, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
-import type { DisablePackageRequest, EnablePackageRequest, GetPackageRequest, ListPackagesRequest, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
+import { DisablePackageRequest, DisablePackageResponse, EnablePackageRequest, EnablePackageResponse, GetPackageRequest, GetPackageResponse, InstallPackageRequest, InstallPackageResponse, InstalledPackage, ListPackagesRequest, ListPackagesResponse, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
+import type { DisablePackageRequest, DisablePackageResponse, EnablePackageRequest, EnablePackageResponse, GetPackageRequest, GetPackageResponse, InstallPackageRequest, InstallPackageResponse, InstalledPackage, ListPackagesRequest, ListPackagesResponse, NamespaceConflictError, NamespaceRegistryEntry, PackageStatusEnum, UninstallPackageRequest, UninstallPackageResponse } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = DisablePackageRequest.parse(data);
@@ -70,6 +70,20 @@ Disable package request
 
 ---
 
+## DisablePackageResponse
+
+Disable package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **package** | `Object` | ✅ | Disabled package details |
+| **message** | `string` | optional | Disable status message |
+
+
+---
+
 ## EnablePackageRequest
 
 Enable package request
@@ -79,6 +93,20 @@ Enable package request
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Package ID to enable |
+
+
+---
+
+## EnablePackageResponse
+
+Enable package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **package** | `Object` | ✅ | Enabled package details |
+| **message** | `string` | optional | Enable status message |
 
 
 ---
@@ -96,6 +124,74 @@ Get package request
 
 ---
 
+## GetPackageResponse
+
+Get package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **package** | `Object` | ✅ | Package details |
+
+
+---
+
+## InstallPackageRequest
+
+Install package request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ | Package manifest to install |
+| **settings** | `Record<string, any>` | optional | User-provided settings at install time |
+| **enableOnInstall** | `boolean` | optional | Whether to enable immediately after install |
+| **platformVersion** | `string` | optional | Current platform version for compatibility verification |
+
+
+---
+
+## InstallPackageResponse
+
+Install package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **package** | `Object` | ✅ | Installed package details |
+| **message** | `string` | optional | Installation status message |
+| **dependencyResolution** | `Object` | optional | Dependency resolution result from install analysis |
+
+
+---
+
+## InstalledPackage
+
+Installed package with runtime lifecycle state
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ | Full package manifest |
+| **status** | `Enum<'installed' \| 'disabled' \| 'installing' \| 'upgrading' \| 'uninstalling' \| 'error'>` | optional | Package state: installed, disabled, installing, upgrading, uninstalling, or error |
+| **enabled** | `boolean` | optional | Whether the package is currently enabled |
+| **installedAt** | `string` | optional | Installation timestamp |
+| **updatedAt** | `string` | optional | Last update timestamp |
+| **installedVersion** | `string` | optional | Currently installed version for quick access |
+| **previousVersion** | `string` | optional | Version before the last upgrade |
+| **statusChangedAt** | `string` | optional | Status change timestamp |
+| **errorMessage** | `string` | optional | Error message when status is error |
+| **settings** | `Record<string, any>` | optional | User-provided configuration settings |
+| **upgradeHistory** | `Object[]` | optional | Version upgrade history |
+| **registeredNamespaces** | `string[]` | optional | Namespace prefixes registered by this package |
+
+
+---
+
 ## ListPackagesRequest
 
 List packages request
@@ -107,6 +203,20 @@ List packages request
 | **status** | `Enum<'installed' \| 'disabled' \| 'installing' \| 'upgrading' \| 'uninstalling' \| 'error'>` | optional | Filter by package status |
 | **type** | `Enum<'plugin' \| 'ui' \| 'driver' \| 'server' \| 'app' \| 'theme' \| 'agent' \| 'objectql' \| 'module' \| 'gateway' \| 'adapter'>` | optional | Filter by package type |
 | **enabled** | `boolean` | optional | Filter by enabled state |
+
+
+---
+
+## ListPackagesResponse
+
+List packages response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packages** | `Object[]` | ✅ | List of installed packages |
+| **total** | `number` | ✅ | Total package count |
 
 
 ---

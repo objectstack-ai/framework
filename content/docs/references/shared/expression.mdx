@@ -48,12 +48,40 @@ posture and portability story differ.
 ## TypeScript Usage
 
 ```typescript
-import { Expression, ExpressionDialect, ExpressionMeta, Predicate } from '@objectstack/spec/shared';
-import type { Expression, ExpressionDialect, ExpressionMeta, Predicate } from '@objectstack/spec/shared';
+import { CronExpressionInput, Expression, ExpressionDialect, ExpressionInput, ExpressionMeta, Predicate, PredicateInput, TemplateExpressionInput } from '@objectstack/spec/shared';
+import type { CronExpressionInput, Expression, ExpressionDialect, ExpressionInput, ExpressionMeta, Predicate, PredicateInput, TemplateExpressionInput } from '@objectstack/spec/shared';
 
 // Validate data
-const result = Expression.parse(data);
+const result = CronExpressionInput.parse(data);
 ```
+
+---
+
+## CronExpressionInput
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **dialect** | `Enum<'cel' \| 'js' \| 'cron' \| 'template'>` | ✅ |  |
+| **source** | `string` | optional |  |
+| **ast** | `any` | optional |  |
+| **meta** | `Object` | optional |  |
+
+---
+
 
 ---
 
@@ -83,6 +111,34 @@ const result = Expression.parse(data);
 
 ---
 
+## ExpressionInput
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **dialect** | `Enum<'cel' \| 'js' \| 'cron' \| 'template'>` | ✅ |  |
+| **source** | `string` | optional |  |
+| **ast** | `any` | optional |  |
+| **meta** | `Object` | optional |  |
+
+---
+
+
+---
+
 ## ExpressionMeta
 
 ### Properties
@@ -105,6 +161,62 @@ const result = Expression.parse(data);
 | **source** | `string` | optional |  |
 | **ast** | `any` | optional |  |
 | **meta** | `Object` | optional |  |
+
+
+---
+
+## PredicateInput
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **dialect** | `Enum<'cel' \| 'js' \| 'cron' \| 'template'>` | ✅ |  |
+| **source** | `string` | optional |  |
+| **ast** | `any` | optional |  |
+| **meta** | `Object` | optional |  |
+
+---
+
+
+---
+
+## TemplateExpressionInput
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **dialect** | `Enum<'cel' \| 'js' \| 'cron' \| 'template'>` | ✅ |  |
+| **source** | `string` | optional |  |
+| **ast** | `any` | optional |  |
+| **meta** | `Object` | optional |  |
+
+---
 
 
 ---

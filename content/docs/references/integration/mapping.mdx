@@ -1,0 +1,40 @@
+---
+title: Mapping
+description: Mapping protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs live in the module folders under content/docs/. */}
+
+<Callout type="info">
+**Source:** `packages/spec/src/integration/mapping.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { FieldMapping } from '@objectstack/spec/integration';
+import type { FieldMapping } from '@objectstack/spec/integration';
+
+// Validate data
+const result = FieldMapping.parse(data);
+```
+
+---
+
+## FieldMapping
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **source** | `string` | ✅ | Source field name |
+| **target** | `string` | ✅ | Target field name |
+| **transform** | `Object \| Object \| Object \| Object \| Object` | optional | Transformation to apply |
+| **defaultValue** | `any` | optional | Default if source is null/undefined |
+| **dataType** | `Enum<'string' \| 'number' \| 'boolean' \| 'date' \| 'datetime' \| 'json' \| 'array'>` | optional | Target data type |
+| **required** | `boolean` | optional | Field is required |
+| **syncMode** | `Enum<'read_only' \| 'write_only' \| 'bidirectional'>` | optional | Sync mode |
+
+
+---
+

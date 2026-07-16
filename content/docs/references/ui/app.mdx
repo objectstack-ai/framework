@@ -34,12 +34,72 @@ Navigation item IDs are used in URLs and configuration and must be lowercase sna
 ## TypeScript Usage
 
 ```typescript
-import { AppBranding, AppContextSelector } from '@objectstack/spec/ui';
-import type { AppBranding, AppContextSelector } from '@objectstack/spec/ui';
+import { ActionNavItem, App, AppBranding, AppContextSelector, ComponentNavItem, DashboardNavItem, GroupNavItem, NavigationArea, NavigationContribution, NavigationItem, ObjectNavItem, PageNavItem, ReportNavItem, UrlNavItem } from '@objectstack/spec/ui';
+import type { ActionNavItem, App, AppBranding, AppContextSelector, ComponentNavItem, DashboardNavItem, GroupNavItem, NavigationArea, NavigationContribution, NavigationItem, ObjectNavItem, PageNavItem, ReportNavItem, UrlNavItem } from '@objectstack/spec/ui';
 
 // Validate data
-const result = AppBranding.parse(data);
+const result = ActionNavItem.parse(data);
 ```
+
+---
+
+## ActionNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **actionDef** | `Object` | ✅ | Action definition to execute when clicked |
+
+
+---
+
+## App
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | App unique machine name (lowercase snake_case) |
+| **label** | `string` | ✅ | App display label |
+| **version** | `string` | optional | App version |
+| **description** | `string` | optional | App description |
+| **icon** | `string` | optional | App icon used in the App Launcher |
+| **branding** | `Object` | optional | App-specific branding |
+| **active** | `boolean` | optional | Whether the app is enabled |
+| **isDefault** | `boolean` | optional | Is default app |
+| **hidden** | `boolean` | optional | Hide from the App Switcher; the shell surfaces hidden apps via the avatar menu instead |
+| **navigation** | `[__schema0](./__schema0)[]` | optional | Full navigation tree for the app sidebar |
+| **areas** | `Object[]` | optional | Navigation areas for partitioning navigation by business domain |
+| **contextSelectors** | `Object[]` | optional | App-level scope dropdowns whose value is injected into nav items as `{<id>}` template vars |
+| **homePageId** | `string` | optional | ID of the navigation item to serve as landing page |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this app |
+| **objects** | `any[]` | optional | Objects belonging to this app |
+| **apis** | `any[]` | optional | Custom APIs belonging to this app |
+| **sharing** | `Object` | optional | Public sharing configuration |
+| **embed** | `Object` | optional | Iframe embedding configuration |
+| **mobileNavigation** | `Object` | optional | Mobile-specific navigation configuration |
+| **defaultAgent** | `string` | optional | Name of the default AI agent for this app (used by the ambient chat endpoint) |
+| **aria** | `Object` | optional | ARIA accessibility attributes for the application |
+| **protection** | `Object` | optional | Package author protection block — lock policy for this app. |
+| **_lock** | `Enum<'none' \| 'no-overlay' \| 'no-delete' \| 'full'>` | optional | Item-level lock — controls overlay & delete (ADR-0010). |
+| **_lockReason** | `string` | optional | Human-readable reason shown when a write is refused by _lock. |
+| **_lockSource** | `Enum<'artifact' \| 'package' \| 'env-forced'>` | optional | Layer that set _lock (artifact \| package \| env-forced). |
+| **_provenance** | `Enum<'package' \| 'org' \| 'env-forced'>` | optional | Origin of the item (package \| org \| env-forced). |
+| **_packageId** | `string` | optional | Owning package machine id. |
+| **_packageVersion** | `string` | optional | Owning package version. |
+| **_lockDocsUrl** | `string` | optional | Optional documentation link surfaced next to _lockReason. |
+
 
 ---
 
@@ -70,6 +130,388 @@ const result = AppBranding.parse(data);
 | **allValue** | `string` | ✅ | Template value when "All" is selected (empty = no filter) |
 | **persist** | `Enum<'query' \| 'session' \| 'none'>` | ✅ | Persist selection via URL query, sessionStorage, or not at all |
 | **placement** | `Enum<'sidebar_header' \| 'topbar'>` | ✅ | Render location in the app chrome |
+
+
+---
+
+## ComponentNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **componentRef** | `string` | ✅ | Component registry key (e.g. "metadata:directory") |
+| **params** | `Record<string, any>` | optional | Props passed to the component |
+
+
+---
+
+## DashboardNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **dashboardName** | `string` | ✅ | Target dashboard name |
+
+
+---
+
+## GroupNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **expanded** | `boolean` | optional | Default expansion state in sidebar |
+
+
+---
+
+## NavigationArea
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique area identifier (lowercase snake_case) |
+| **label** | `string` | ✅ | Area display label |
+| **icon** | `string` | optional | Area icon name |
+| **order** | `number` | optional | Sort order among areas (lower = first) |
+| **description** | `string` | optional | Area description |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL) for this area. |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this area |
+| **navigation** | `[__schema0](./__schema0)[]` | ✅ | Navigation items within this area |
+
+
+---
+
+## NavigationContribution
+
+A navigation contribution: a package injecting nav items into an app it does not own (ADR-0029 D7)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **app** | `string` | ✅ | Target app name to contribute navigation into (e.g. "setup") |
+| **group** | `string` | optional | Target group nav-item id to append into (e.g. "group_integrations"); omit to append at the app top level |
+| **priority** | `integer` | optional | Merge priority within the target group — lower applied first (matches object extender priority) |
+| **items** | `[__schema0](./__schema0)[]` | ✅ | Navigation items contributed into the target app/group |
+
+
+---
+
+## NavigationItem
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+**Type:** `object`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **objectName** | `string` | ✅ | Target object name |
+| **viewName** | `string` | optional | Default list view to open. Defaults to "all". Ignored when `recordId` is set. |
+| **recordId** | `string` | optional | Navigate directly to this record id instead of the list view. Supports template vars: `{current_user_id}`, `{current_org_id}`. |
+| **recordMode** | `Enum<'view' \| 'edit'>` | optional | Open the record in view (default) or edit mode. Only meaningful when `recordId` is set. |
+| **filters** | `Record<string, string>` | optional | URL filter conditions — targets the /:objectName/data bare surface via filter[`<field>`]=`<value>` params instead of a saved view. Values support template vars `{current_user_id}`, `{current_org_id}`. Mutually exclusive with recordId/viewName. |
+| **children** | `[#](./#)[]` | optional | Child navigation items (e.g. specific views) |
+
+---
+
+#### Option 2
+
+**Type:** `dashboard`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **dashboardName** | `string` | ✅ | Target dashboard name |
+
+---
+
+#### Option 3
+
+**Type:** `page`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **pageName** | `string` | ✅ | Target custom page component name |
+| **params** | `Record<string, any>` | optional | Parameters passed to the page context |
+
+---
+
+#### Option 4
+
+**Type:** `url`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **url** | `string` | ✅ | Target external URL |
+| **target** | `Enum<'_self' \| '_blank'>` | optional | Link target window |
+
+---
+
+#### Option 5
+
+**Type:** `report`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **reportName** | `string` | ✅ | Target report name |
+
+---
+
+#### Option 6
+
+**Type:** `action`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **actionDef** | `Object` | ✅ | Action definition to execute when clicked |
+
+---
+
+#### Option 7
+
+**Type:** `component`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **componentRef** | `string` | ✅ | Component registry key (e.g. "metadata:directory") |
+| **params** | `Record<string, any>` | optional | Props passed to the component |
+
+---
+
+#### Option 8
+
+**Type:** `group`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **expanded** | `boolean` | optional | Default expansion state in sidebar |
+| **children** | `[#](./#)[]` | ✅ | Child navigation items |
+
+---
+
+
+---
+
+## ObjectNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **objectName** | `string` | ✅ | Target object name |
+| **viewName** | `string` | optional | Default list view to open. Defaults to "all". Ignored when `recordId` is set. |
+| **recordId** | `string` | optional | Navigate directly to this record id instead of the list view. Supports template vars: `{current_user_id}`, `{current_org_id}`. |
+| **recordMode** | `Enum<'view' \| 'edit'>` | optional | Open the record in view (default) or edit mode. Only meaningful when `recordId` is set. |
+| **filters** | `Record<string, string>` | optional | URL filter conditions — targets the /:objectName/data bare surface via filter[`<field>`]=`<value>` params instead of a saved view. Values support template vars `{current_user_id}`, `{current_org_id}`. Mutually exclusive with recordId/viewName. |
+
+
+---
+
+## PageNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **pageName** | `string` | ✅ | Target custom page component name |
+| **params** | `Record<string, any>` | optional | Parameters passed to the page context |
+
+
+---
+
+## ReportNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **reportName** | `string` | ✅ | Target report name |
+
+
+---
+
+## UrlNavItem
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
+| **label** | `string` | ✅ | Display proper label |
+| **icon** | `string` | optional | Icon name |
+| **order** | `number` | optional | Sort order within the same level (lower = first) |
+| **badge** | `string \| number` | optional | Badge text or count displayed on the item |
+| **visible** | `string \| Object` | optional | Visibility predicate (CEL). e.g. P`'org_admin' in current_user.positions` |
+| **requiredPermissions** | `string[]` | optional | Permissions required to access this item |
+| **requiresObject** | `string` | optional | Hide/disable this entry unless the named object is registered in the runtime |
+| **requiresService** | `string` | optional | Hide/disable this entry unless the named kernel service is registered |
+| **type** | `string` | ✅ |  |
+| **url** | `string` | ✅ | Target external URL |
+| **target** | `Enum<'_self' \| '_blank'>` | optional | Link target window |
 
 
 ---

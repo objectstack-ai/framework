@@ -16,12 +16,31 @@ The baseline security posture for an object.
 ## TypeScript Usage
 
 ```typescript
-import { OWDModel, OwnerSharingRule, ShareRecipientType, SharingLevel, SharingRuleType } from '@objectstack/spec/security';
-import type { OWDModel, OwnerSharingRule, ShareRecipientType, SharingLevel, SharingRuleType } from '@objectstack/spec/security';
+import { CriteriaSharingRule, OWDModel, OwnerSharingRule, ShareRecipientType, SharingLevel, SharingRule, SharingRuleType } from '@objectstack/spec/security';
+import type { CriteriaSharingRule, OWDModel, OwnerSharingRule, ShareRecipientType, SharingLevel, SharingRule, SharingRuleType } from '@objectstack/spec/security';
 
 // Validate data
-const result = OWDModel.parse(data);
+const result = CriteriaSharingRule.parse(data);
 ```
+
+---
+
+## CriteriaSharingRule
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **description** | `string` | optional | Administrative notes |
+| **object** | `string` | ✅ | Target Object Name |
+| **active** | `boolean` | optional |  |
+| **accessLevel** | `Enum<'read' \| 'edit' \| 'full'>` | optional |  |
+| **sharedWith** | `Object` | ✅ | The recipient of the shared access |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL). e.g. P`record.department == "Sales"` |
+
 
 ---
 
@@ -76,6 +95,55 @@ const result = OWDModel.parse(data);
 * `read`
 * `edit`
 * `full`
+
+
+---
+
+## SharingRule
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+**Type:** `criteria`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **description** | `string` | optional | Administrative notes |
+| **object** | `string` | ✅ | Target Object Name |
+| **active** | `boolean` | optional |  |
+| **accessLevel** | `Enum<'read' \| 'edit' \| 'full'>` | optional |  |
+| **sharedWith** | `Object` | ✅ | The recipient of the shared access |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL). e.g. P`record.department == "Sales"` |
+
+---
+
+#### Option 2
+
+**Type:** `owner`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **description** | `string` | optional | Administrative notes |
+| **object** | `string` | ✅ | Target Object Name |
+| **active** | `boolean` | optional |  |
+| **accessLevel** | `Enum<'read' \| 'edit' \| 'full'>` | optional |  |
+| **sharedWith** | `Object` | ✅ | The recipient of the shared access |
+| **type** | `string` | ✅ |  |
+| **ownedBy** | `Object` | ✅ | Source group/position whose records are being shared |
+
+---
 
 
 ---

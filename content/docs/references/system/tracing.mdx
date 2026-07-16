@@ -26,8 +26,8 @@ Comprehensive distributed tracing based on OpenTelemetry standards:
 ## TypeScript Usage
 
 ```typescript
-import { OpenTelemetryCompatibility, OtelExporterType, SamplingDecision, SamplingStrategyType, Span, SpanAttributeValue, SpanAttributes, SpanEvent, SpanKind, SpanLink, SpanStatus, TraceContext, TraceContextPropagation, TraceFlags, TracePropagationFormat, TraceState } from '@objectstack/spec/system';
-import type { OpenTelemetryCompatibility, OtelExporterType, SamplingDecision, SamplingStrategyType, Span, SpanAttributeValue, SpanAttributes, SpanEvent, SpanKind, SpanLink, SpanStatus, TraceContext, TraceContextPropagation, TraceFlags, TracePropagationFormat, TraceState } from '@objectstack/spec/system';
+import { OpenTelemetryCompatibility, OtelExporterType, SamplingDecision, SamplingStrategyType, Span, SpanAttributeValue, SpanAttributes, SpanEvent, SpanKind, SpanLink, SpanStatus, TraceContext, TraceContextPropagation, TraceFlags, TracePropagationFormat, TraceSamplingConfig, TraceState, TracingConfig } from '@objectstack/spec/system';
+import type { OpenTelemetryCompatibility, OtelExporterType, SamplingDecision, SamplingStrategyType, Span, SpanAttributeValue, SpanAttributes, SpanEvent, SpanKind, SpanLink, SpanStatus, TraceContext, TraceContextPropagation, TraceFlags, TracePropagationFormat, TraceSamplingConfig, TraceState, TracingConfig } from '@objectstack/spec/system';
 
 // Validate data
 const result = OpenTelemetryCompatibility.parse(data);
@@ -290,6 +290,25 @@ Trace propagation format
 
 ---
 
+## TraceSamplingConfig
+
+Trace sampling configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `Enum<'always_on' \| 'always_off' \| 'trace_id_ratio' \| 'rate_limiting' \| 'parent_based' \| 'probability' \| 'composite' \| 'custom'>` | ✅ | Sampling strategy |
+| **ratio** | `number` | optional | Sample ratio (0-1) |
+| **rateLimit** | `number` | optional | Traces per second |
+| **parentBased** | `Object` | optional |  |
+| **composite** | `Object[]` | optional |  |
+| **rules** | `Object[]` | optional |  |
+| **customSamplerId** | `string` | optional | Custom sampler identifier |
+
+
+---
+
 ## TraceState
 
 Trace state
@@ -299,6 +318,28 @@ Trace state
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **entries** | `Record<string, string>` | ✅ | Trace state entries |
+
+
+---
+
+## TracingConfig
+
+Tracing configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Configuration name (snake_case, max 64 chars) |
+| **label** | `string` | ✅ | Display label |
+| **enabled** | `boolean` | optional |  |
+| **sampling** | `Object` | optional | Trace sampling configuration |
+| **propagation** | `Object` | optional | Trace context propagation |
+| **openTelemetry** | `Object` | optional | OpenTelemetry compatibility configuration |
+| **spanLimits** | `Object` | optional |  |
+| **traceIdGenerator** | `Enum<'random' \| 'uuid' \| 'custom'>` | optional |  |
+| **customTraceIdGeneratorId** | `string` | optional | Custom generator identifier |
+| **performance** | `Object` | optional |  |
 
 
 ---

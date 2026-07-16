@@ -108,12 +108,57 @@ severity: 'error'
 ## TypeScript Usage
 
 ```typescript
-import { FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
-import type { FormatValidation, JSONValidation, StateMachineValidation } from '@objectstack/spec/data';
+import { ConditionalValidation, CrossFieldValidation, FormatValidation, JSONValidation, ScriptValidation, StateMachineValidation, ValidationRule } from '@objectstack/spec/data';
+import type { ConditionalValidation, CrossFieldValidation, FormatValidation, JSONValidation, ScriptValidation, StateMachineValidation, ValidationRule } from '@objectstack/spec/data';
 
 // Validate data
-const result = FormatValidation.parse(data);
+const result = ConditionalValidation.parse(data);
 ```
+
+---
+
+## ConditionalValidation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **when** | `string \| Object` | ✅ | Predicate (CEL). e.g. P`record.type == 'enterprise'` |
+| **then** | `Object \| Object \| Object \| Object \| Object \| [#](./#)` | ✅ | Validation rule to apply when condition is true |
+| **otherwise** | `Object \| Object \| Object \| Object \| Object \| [#](./#)` | optional | Validation rule to apply when condition is false |
+
+
+---
+
+## CrossFieldValidation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL) comparing fields. e.g. P`record.end_date > record.start_date` |
+| **fields** | `string[]` | ✅ | Fields involved in the validation |
+
 
 ---
 
@@ -162,6 +207,27 @@ const result = FormatValidation.parse(data);
 
 ---
 
+## ScriptValidation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL). If TRUE, validation fails. e.g. P`record.amount < 0` |
+
+
+---
+
 ## StateMachineValidation
 
 ### Properties
@@ -180,6 +246,154 @@ const result = FormatValidation.parse(data);
 | **type** | `string` | ✅ |  |
 | **field** | `string` | ✅ | State field (e.g. status) |
 | **transitions** | `Record<string, string[]>` | ✅ | Map of `{ OldState: [AllowedNewStates] }` |
+
+
+---
+
+## ValidationRule
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+**Type:** `script`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL). If TRUE, validation fails. e.g. P`record.amount < 0` |
+
+---
+
+#### Option 2
+
+**Type:** `state_machine`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **field** | `string` | ✅ | State field (e.g. status) |
+| **transitions** | `Record<string, string[]>` | ✅ | Map of `{ OldState: [AllowedNewStates] }` |
+
+---
+
+#### Option 3
+
+**Type:** `format`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **field** | `string` | ✅ |  |
+| **regex** | `string` | optional |  |
+| **format** | `Enum<'email' \| 'url' \| 'phone' \| 'json'>` | optional |  |
+
+---
+
+#### Option 4
+
+**Type:** `cross_field`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **condition** | `string \| Object` | ✅ | Predicate (CEL) comparing fields. e.g. P`record.end_date > record.start_date` |
+| **fields** | `string[]` | ✅ | Fields involved in the validation |
+
+---
+
+#### Option 5
+
+**Type:** `json_schema`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **field** | `string` | ✅ | JSON field to validate |
+| **schema** | `Record<string, any>` | ✅ | JSON Schema object definition |
+
+---
+
+#### Option 6
+
+**Type:** `conditional`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | optional |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **when** | `string \| Object` | ✅ | Predicate (CEL). e.g. P`record.type == 'enterprise'` |
+| **then** | `[#](./#)` | ✅ | Validation rule to apply when condition is true |
+| **otherwise** | `[#](./#)` | optional | Validation rule to apply when condition is false |
+
+---
 
 
 ---

@@ -12,8 +12,8 @@ description: Connector protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { Connector, ConnectorTrigger } from '@objectstack/spec/automation';
-import type { Connector, ConnectorTrigger } from '@objectstack/spec/automation';
+import { Connector, ConnectorTrigger, DataSyncConfig } from '@objectstack/spec/automation';
+import type { Connector, ConnectorTrigger, DataSyncConfig } from '@objectstack/spec/automation';
 
 // Validate data
 const result = Connector.parse(data);
@@ -62,6 +62,35 @@ const result = Connector.parse(data);
 | **config** | `Record<string, any>` | optional | Trigger configuration |
 | **outputSchema** | `Record<string, any>` | optional | Event payload schema |
 | **pollingIntervalMs** | `integer` | optional | Polling interval in ms |
+
+
+---
+
+## DataSyncConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Sync configuration name (snake_case) |
+| **label** | `string` | optional | Sync display name |
+| **description** | `string` | optional | Sync description |
+| **source** | `Object` | ✅ | Data source |
+| **destination** | `Object` | ✅ | Data destination |
+| **direction** | `Enum<'push' \| 'pull' \| 'bidirectional'>` | optional | Sync direction |
+| **syncMode** | `Enum<'full' \| 'incremental' \| 'realtime'>` | optional | Sync mode |
+| **conflictResolution** | `Enum<'source_wins' \| 'destination_wins' \| 'latest_wins' \| 'manual' \| 'merge'>` | optional | Conflict resolution |
+| **schedule** | `string \| Object` | optional | Cron schedule |
+| **enabled** | `boolean` | optional | Sync enabled |
+| **changeTrackingField** | `string` | optional | Field for change tracking |
+| **batchSize** | `integer` | optional | Batch size for processing |
+| **retry** | `Object` | optional | Retry configuration |
+| **validation** | `Object` | optional | Validation rules |
+| **errorHandling** | `Object` | optional | Error handling |
+| **optimization** | `Object` | optional | Performance optimization |
+| **audit** | `Object` | optional | Audit configuration |
+| **tags** | `string[]` | optional | Sync tags |
+| **metadata** | `Record<string, any>` | optional | Custom metadata |
 
 
 ---

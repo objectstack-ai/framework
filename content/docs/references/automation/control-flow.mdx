@@ -1,0 +1,156 @@
+---
+title: Control Flow
+description: Control Flow protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs live in the module folders under content/docs/. */}
+
+@module automation/control-flow
+
+Structured control-flow constructs (ADR-0031) — the **native + AI-authored**
+
+flow model: a `loop` **container**, a `parallel` **block**, and structured
+
+`try/catch/retry`. Unlike BPMN's gateway/boundary/token graph (kept in the
+
+protocol for *interop* only), these constructs are **well-formed by
+
+construction**, locally composable, and statically analyzable — the right
+
+substrate for LLM authoring (ADR-0010/0011).
+
+## Representation — decision: **(B) nested sub-structure**
+
+ADR-0031 flagged two ways to carry structured containers in the flat
+
+`nodes[]`+`edges[]` model:
+
+- **(A)** marker-delimited scoped regions (a container node + a scope-end
+
+marker; the body is the edges *between* them in the main graph), or
+
+- **(B)** the container node carries a **nested mini-flow** in its `config`.
+
+We adopt **(B)**. Each container holds its body as a self-contained
+
+[FlowRegionSchema](FlowRegionSchema) (`config.body` for `loop`, `config.branches[]` for
+
+`parallel`, `config.try`/`config.catch` for `try_catch`). The reasons:
+
+1. **Well-formed by construction** — a nested region is its *own* graph, so
+
+single-entry is intrinsic; there are no scope markers to balance and no
+
+way to "leak" an edge across a boundary. Validation is local.
+
+2. **The shared engine traversal stays untouched** — the container executor
+
+runs its own body via a scoped helper; the main DAG `traverseNext` never
+
+learns about scope markers (important under the multi-agent discipline
+
+around `engine.ts`). The container's *ordinary* out-edges remain the
+
+"after-loop / after-block" continuation.
+
+3. **Cleaner AST for AI** — ADR-0031 calls (B) "the cleaner long-term AST,"
+
+and AI authoring is the design center.
+
+Existing flat-graph loops (a `loop` node with no `config.body`) keep their
+
+legacy behavior — the constructs are **additive**, activated only when the
+
+nested structure is present.
+
+The canonical construct type ids are [LOOP_NODE_TYPE](LOOP_NODE_TYPE) (`loop`,
+
+pre-existing), [PARALLEL_NODE_TYPE](PARALLEL_NODE_TYPE) (`parallel`), and
+
+[TRY_CATCH_NODE_TYPE](TRY_CATCH_NODE_TYPE) (`try_catch`). These are distinct from the BPMN
+
+interop node types (`parallel_gateway` / `join_gateway` / `boundary_event`),
+
+which remain author-invisible interchange representations.
+
+<Callout type="info">
+**Source:** `packages/spec/src/automation/control-flow.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { FlowRegion, LoopConfig, ParallelBranch, ParallelConfig, TryCatchConfig } from '@objectstack/spec/automation';
+import type { FlowRegion, LoopConfig, ParallelBranch, ParallelConfig, TryCatchConfig } from '@objectstack/spec/automation';
+
+// Validate data
+const result = FlowRegion.parse(data);
+```
+
+---
+
+## FlowRegion
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **nodes** | `Object[]` | ✅ | Region body nodes (single-entry/single-exit sub-graph) |
+| **edges** | `Object[]` | optional | Region body edges |
+
+
+---
+
+## LoopConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **collection** | `string` | ✅ | Template/variable resolving to the array to iterate |
+| **iteratorVariable** | `string` | optional | Loop variable holding the current item |
+| **indexVariable** | `string` | optional | Optional loop variable holding the current index |
+| **maxIterations** | `integer` | optional | Hard cap on iterations (clamped to the engine ceiling) |
+| **body** | `Object` | optional | Loop body region (omit for legacy flat-graph loops) |
+
+
+---
+
+## ParallelBranch
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | optional | Branch label |
+| **nodes** | `Object[]` | ✅ | Branch body nodes |
+| **edges** | `Object[]` | optional | Branch body edges |
+
+
+---
+
+## ParallelConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **branches** | `Object[]` | ✅ | Branch regions executed concurrently; implicit join at block end |
+
+
+---
+
+## TryCatchConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **try** | `Object` | ✅ | Protected region |
+| **catch** | `Object` | optional | Handler region run when the try region fails |
+| **errorVariable** | `string` | optional | Variable holding the caught error in the catch region |
+| **retry** | `Object` | optional | Optional retry policy for the try region |
+
+
+---
+
