@@ -1195,7 +1195,7 @@ export class SecurityPlugin implements Plugin {
                       // closes the owner-enumeration oracle a system read would
                       // open (a caller who can't read the row gets null → deny,
                       // indistinguishable from a non-owner).
-                      const pre: any = await this.ql.findOne(opCtx.object, { where: { id: targetId }, context: opCtx.context });
+                      const pre = await this.getCallerPreImage(opCtx, targetId);
                       unchanged = !!pre && pre.owner_id != null && String(pre.owner_id) === String(row.owner_id);
                     } catch {
                       unchanged = false; // fail closed
@@ -1257,13 +1257,10 @@ export class SecurityPlugin implements Plugin {
               );
               postImage = null;
             } else if (this.ql) {
-              let pre: any = null;
-              try {
-                pre = await this.ql.findOne(opCtx.object, { where: { id: targetId }, context: opCtx.context });
-              } catch {
-                pre = null;
-              }
-              if (pre && typeof pre === 'object') postImage = { ...(pre as Record<string, unknown>), ...(opCtx.data as Record<string, unknown>) };
+              // Shares the memoized caller pre-image with the step-3.5 owner
+              // echo check — the identical (object, id, caller-context) row.
+              const pre = await this.getCallerPreImage(opCtx, targetId);
+              if (pre) postImage = { ...pre, ...(opCtx.data as Record<string, unknown>) };
             }
           }
           if (postImage && !checkParts.every((f) => matchesFilterCondition(postImage as any, f as any))) {
@@ -1366,9 +1363,10 @@ export class SecurityPlugin implements Plugin {
       // sorting / grouping on it (row presence is the oracle; the objectui
       // /data surface makes URL-driven predicates first-class). Reject such
       // queries outright — silent predicate dropping would change query
-      // semantics unpredictably. MUST run against the CALLER's AST, before
-      // the RLS injection below: RLS policies legitimately reference fields
-      // the caller cannot read (e.g. owner_id).
+      // semantics unpredictably. MUST run against the CALLER's OWN predicate,
+      // before the RLS injection below: RLS / sharing filters legitimately
+      // reference fields the caller cannot read (e.g. owner_id) and must not be
+      // rejected.
       if (opCtx.ast) {
         let guardPerms = this.permissionEvaluator.getFieldPermissions(opCtx.object, permissionSets);
         guardPerms = this.foldFieldRequiredPermissions(guardPerms, secMeta.fieldRequiredPermissions, permissionSets);
@@ -1380,7 +1378,22 @@ export class SecurityPlugin implements Plugin {
           guardPerms = intersectFieldMasks(guardPerms, delGuard);
         }
         if (Object.keys(guardPerms).length > 0) {
-          assertReadableQueryFields(opCtx.ast as unknown as Record<string, unknown>, guardPerms, opCtx.object);
+          // [#2982 follow-up] For a bulk WRITE the caller's own predicate is
+          // `opCtx.options.where` (untouched); `opCtx.ast.where` may ALREADY
+          // carry an owner-match that plugin-sharing's write branch composed in
+          // — and plugin-sharing is a SIBLING middleware whose registration
+          // order relative to this one is not guaranteed. Guarding the injected
+          // AST would 403 a legitimate bulk write on an object whose owner_id is
+          // FLS-hidden, purely because a sibling filter mentioned it. Inspect
+          // the caller's own predicate so the guard is independent of middleware
+          // order and never mistakes an injected filter for a probe. Reads keep
+          // guarding the ast: the read seed is the caller's query verbatim and
+          // this middleware runs before its own RLS injection.
+          const guardTarget: Record<string, unknown> =
+            opCtx.operation === 'update' || opCtx.operation === 'delete'
+              ? { where: opCtx.options?.where }
+              : (opCtx.ast as unknown as Record<string, unknown>);
+          assertReadableQueryFields(guardTarget, guardPerms, opCtx.object);
         }
       }
 
@@ -2156,9 +2169,7 @@ export class SecurityPlugin implements Plugin {
       return;
     }
 
-    const existing = await this.ql
-      .findOne('sys_permission_set', { where: { id: targetId }, context: { isSystem: true } })
-      .catch(() => null);
+    const existing = await this.readRowById('sys_permission_set', targetId, { isSystem: true });
     if (existing && (existing as Record<string, unknown>).managed_by === 'package') {
       const row = existing as Record<string, unknown>;
       throw new PermissionDeniedError(
@@ -2264,9 +2275,7 @@ export class SecurityPlugin implements Plugin {
       return;
     }
 
-    const existing = await this.ql
-      .findOne(opCtx.object, { where: { id: targetId }, context: { isSystem: true } })
-      .catch(() => null);
+    const existing = await this.readRowById(opCtx.object, targetId, { isSystem: true });
     const existingManagedBy = existing
       ? String((existing as Record<string, unknown>).managed_by ?? '')
       : '';
@@ -2295,6 +2304,40 @@ export class SecurityPlugin implements Plugin {
       return (where as any).id;
     }
     return null;
+  }
+
+  /**
+   * By-id row read with the standard FAIL-CLOSED contract (missing engine,
+   * null id, or a thrown read → `null`), shared by every provenance / pre-image
+   * gate. Centralising the read SHAPE keeps a future change (soft-delete filter,
+   * field projection) from drifting across the ~5 call sites that used to
+   * inline it (#3018 review — Reuse). A `null` return always DENIES downstream;
+   * it never bypasses a gate.
+   */
+  private async readRowById(object: string, id: unknown, context: any): Promise<Record<string, unknown> | null> {
+    if (id == null || typeof this.ql?.findOne !== 'function') return null;
+    try {
+      const row = await this.ql.findOne(object, { where: { id }, context });
+      return row && typeof row === 'object' ? (row as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The single-id write PRE-IMAGE read under the CALLER's context, memoized per
+   * operation. The owner-anchor echo check (step 3.5) and the RLS `check`
+   * post-image (step 3.6) read the IDENTICAL `(object, id, caller-context)` row;
+   * this collapses the two reads into one. Safe: no write to the row happens
+   * between the gates (the driver write runs after the whole middleware pass),
+   * so the pre-image is stable within the operation.
+   */
+  private async getCallerPreImage(opCtx: any, id: unknown): Promise<Record<string, unknown> | null> {
+    if (id == null) return null;
+    if (opCtx.__preImage && opCtx.__preImage.id === id) return opCtx.__preImage.row;
+    const row = await this.readRowById(opCtx.object, id, opCtx.context);
+    opCtx.__preImage = { id, row };
+    return row;
   }
 
   /**
@@ -2597,14 +2640,9 @@ export class SecurityPlugin implements Plugin {
     } else {
       const targetId = this.extractSingleId(opCtx);
       if (targetId == null) return; // bulk write — scoped by the read filter on the AST
-      let row: any = null;
-      try {
-        row = await this.ql.findOne(object, { where: { id: targetId }, context: { isSystem: true } });
-      } catch {
-        row = null;
-      }
+      const row = await this.readRowById(object, targetId, { isSystem: true });
       if (!row) deny('target record not found', targetId);
-      masterId = row[rel!.fk];
+      masterId = row![rel!.fk];
     }
     if (masterId == null) deny('detail record has no master reference');
 

@@ -1223,6 +1223,48 @@ describe('SecurityPlugin', () => {
     });
   });
 
+  it('[#2982 follow-up] bulk-write predicate guard inspects the CALLER predicate, not injected owner/RLS filters', async () => {
+    // The anti-oracle guard (2.9) must reject a caller filtering on an
+    // FLS-hidden field, but must NOT reject an owner_id predicate a sibling
+    // middleware (plugin-sharing) composed onto opCtx.ast — otherwise a bulk
+    // write on an object whose owner_id is FLS-hidden 403s purely because the
+    // injected filter mentions it, and the result depends on middleware order.
+    const ownerHiddenSet: PermissionSet = {
+      name: 'member_default',
+      label: 'Member',
+      objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+      fields: { 'task.owner_id': { readable: false, editable: false }, 'task.ssn': { readable: false, editable: false } },
+    } as any;
+    const boot = async () => {
+      const plugin = new SecurityPlugin({ fallbackPermissionSet: 'member_default' });
+      const harness = makeMiddlewareCtx({ permissionSets: [ownerHiddenSet], objectFields: ['id', 'owner_id', 'name', 'ssn', 'status'] });
+      await plugin.init(harness.ctx);
+      await plugin.start(harness.ctx);
+      return harness;
+    };
+    const ctx = { userId: 'u1', tenantId: 'org-1', positions: [], permissions: ['member_default'] };
+
+    // Injected owner_id in the AST, but the caller's own predicate is clean → allowed.
+    const injected: any = await boot();
+    const okCtx: any = {
+      object: 'task', operation: 'update', data: { name: 'renamed' },
+      options: { where: { status: 'open' }, multi: true },
+      ast: { where: { $and: [{ status: 'open' }, { owner_id: 'u1' }] } }, // as plugin-sharing would compose
+      context: ctx,
+    };
+    await injected.run(okCtx); // must NOT throw — owner_id is only in the injected filter
+
+    // The caller's OWN predicate references a hidden field → still rejected.
+    const probing: any = await boot();
+    const denyCtx: any = {
+      object: 'task', operation: 'update', data: { name: 'renamed' },
+      options: { where: { ssn: 'guess' }, multi: true },
+      ast: { where: { ssn: 'guess' } },
+      context: ctx,
+    };
+    await expect(probing.run(denyCtx)).rejects.toThrow(/filter oracle|not readable/);
+  });
+
   it('FLS write — the record echoed back by an update is masked (no read-leak of hidden fields)', async () => {
     // Regression: a caller with edit-but-not-field-read must not be able to
     // read a read-protected field back out of the mutation response. The write
