@@ -1919,6 +1919,84 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // Honest capabilities — ADR-0076 D12 (#2462)
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('discovery honest capabilities (D12)', () => {
+        it('never advertises a /realtime route and reports a registered realtime service as degraded', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'realtime') return { publish: vi.fn(), subscribe: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+
+            // No HTTP/WS surface exists — a discovery-advertised route would 404.
+            expect(info.routes.realtime).toBeUndefined();
+            expect(info.features.websockets).toBe(false);
+            expect(info.services.realtime.enabled).toBe(true);
+            expect(info.services.realtime.status).toBe('degraded');
+            expect(info.services.realtime.handlerReady).toBe(false);
+            // …and a /realtime request indeed has no handler
+            const result = await dispatcher.dispatch('POST', '/realtime/subscribe', {}, {}, { request: {} });
+            expect(result.response?.status).toBe(404);
+        });
+
+        it('reports realtime as unavailable when no service is registered', async () => {
+            (kernel as any).getService = vi.fn().mockResolvedValue(null);
+            (kernel as any).services = new Map();
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.routes.realtime).toBeUndefined();
+            expect(info.services.realtime.enabled).toBe(false);
+            expect(info.services.realtime.status).toBe('unavailable');
+        });
+
+        it('reports a _dev-marked stub service as stub, never available', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'ai') return { _dev: true, chat: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.ai.enabled).toBe(true);
+            expect(info.services.ai.status).toBe('stub');
+            expect(info.services.ai.handlerReady).toBe(false);
+            expect(info.services.ai.message).toContain('stub');
+        });
+
+        it('reports a __serviceInfo-marked fallback with its declared status and message', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'analytics') return {
+                    __serviceInfo: { status: 'degraded', handlerReady: true, message: 'Lightweight fallback' },
+                    query: vi.fn(),
+                };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.analytics.enabled).toBe(true);
+            expect(info.services.analytics.status).toBe('degraded');
+            expect(info.services.analytics.handlerReady).toBe(true);
+            expect(info.services.analytics.message).toBe('Lightweight fallback');
+            // Route stays advertised — the fallback genuinely serves it.
+            expect(info.routes.analytics).toBe('/api/v1/analytics');
+        });
+
+        it('keeps reporting unmarked services as available', async () => {
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'workflow') return { getConfig: vi.fn() };
+                return null;
+            });
+
+            const info = await dispatcher.getDiscoveryInfo('/api/v1');
+            expect(info.services.workflow.enabled).toBe(true);
+            expect(info.services.workflow.status).toBe('available');
+            expect(info.services.workflow.handlerReady).toBe(true);
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // i18n across server/dev/mock environments
     // ═══════════════════════════════════════════════════════════════
 
@@ -2717,5 +2795,132 @@ describe('HttpDispatcher — MCP action bridge (list_actions / run_action)', () 
     const execute = vi.fn(async () => ({ success: false, error: 'boom' }));
     const { bridge } = makeFlowBridge({ userId: 'u1', systemPermissions: [] }, { execute });
     await expect(bridge.runAction('escalate_ticket', {})).rejects.toThrow(/boom/i);
+  });
+
+  // ── standalone authored `action` rows (#3010) ──
+  // Studio-authored standalone `action` metadata items execute since #2608
+  // (`resyncAuthoredActions` registers their body under the declarative name),
+  // but the bridge used to read declarations only from `object.actions`, so
+  // they were invisible to list_actions and unresolvable by run_action.
+  const standaloneScoped = {
+    name: 'archive_task',
+    label: 'Archive',
+    objectName: 'todo_task',
+    type: 'script',
+    body: { language: 'js', source: 'ctx.record.archived = true;' },
+    locations: ['record_header'],
+    params: [{ name: 'reason', type: 'text', required: true }],
+    ai: { exposed: true, description: 'Archive a completed todo task.' },
+  };
+  const standaloneGlobal = {
+    name: 'nightly_cleanup',
+    label: 'Nightly Cleanup',
+    type: 'script',
+    body: { language: 'js', source: 'return 1;' },
+    ai: { exposed: true, description: 'Purge stale drafts.' },
+  };
+  const standaloneUnexposed = {
+    name: 'raw_reindex',
+    objectName: 'todo_task',
+    type: 'script',
+    body: { language: 'js', source: 'return 1;' },
+  };
+  const standaloneOnSysObject = {
+    name: 'rotate_all',
+    objectName: 'sys_api_key',
+    type: 'script',
+    body: { language: 'js', source: 'return 1;' },
+    ai: { exposed: true },
+  };
+  // Same key as the embedded `complete_task` declaration — the embedded one wins.
+  const standaloneShadowing = {
+    name: 'complete_task',
+    objectName: 'todo_task',
+    type: 'script',
+    body: { language: 'js', source: 'return 1;' },
+    ai: { exposed: true, description: 'SHADOW — must not surface.' },
+  };
+
+  const makeStandaloneBridge = (execCtx: any, standaloneRows: any[]) => {
+    const executeAction = vi.fn(async (obj: string, key: string) => {
+      if (obj === 'todo_task' && key === 'archive_task') return { archived: true };
+      if (obj === 'global' && key === 'nightly_cleanup') return { purged: 3 };
+      if (key === 'completeTask') return { updated: true };
+      throw new Error(`Action '${key}' on object '${obj}' not found`);
+    });
+    const ql: any = {
+      executeAction,
+      registry: { getObject: (n: string) => (n === 'todo_task' ? todoObject : null) },
+      insert: vi.fn(), update: vi.fn(), delete: vi.fn(),
+      find: vi.fn(async () => []),
+    };
+    const metadata: any = {
+      listObjects: vi.fn(async () => [todoObject, sysObject]),
+      getObject: vi.fn(async (n: string) => (n === 'todo_task' ? todoObject : undefined)),
+      loadMany: vi.fn(async (type: string) => (type === 'action' ? standaloneRows : [])),
+    };
+    const kernel: any = {
+      context: { getService: (n: string) => (n === 'objectql' ? ql : n === 'metadata' ? metadata : null) },
+    };
+    const dispatcher = new HttpDispatcher(kernel);
+    const ctx: any = { request: {}, environmentId: 'platform', executionContext: execCtx };
+    return { bridge: (dispatcher as any).buildMcpBridge(ctx), executeAction, metadata };
+  };
+
+  it('list_actions surfaces standalone authored rows — object-scoped and global — under the engine-key object name', async () => {
+    const { bridge } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [
+      standaloneScoped, standaloneGlobal, standaloneUnexposed, standaloneOnSysObject,
+    ]);
+    const actions = await bridge.listActions();
+    const archive = actions.find((a: any) => a.name === 'archive_task');
+    expect(archive).toMatchObject({ objectName: 'todo_task', type: 'script' });
+    expect(archive.params).toEqual([expect.objectContaining({ name: 'reason', required: true })]);
+    expect(actions.find((a: any) => a.name === 'nightly_cleanup')).toMatchObject({ objectName: 'global' });
+    const names = actions.map((a: any) => a.name);
+    expect(names).not.toContain('raw_reindex'); // ai.exposed absent → hidden (#2849)
+    expect(names).not.toContain('rotate_all'); // sys_* owner → hidden fail-closed
+  });
+
+  it('list_actions dedupes a standalone row that shadows an object-embedded declaration (embedded wins)', async () => {
+    const { bridge } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [standaloneShadowing]);
+    const matches = (await bridge.listActions()).filter((a: any) => a.name === 'complete_task');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].description).not.toMatch(/SHADOW/);
+  });
+
+  it('run_action dispatches a standalone body action under its declarative name key', async () => {
+    const { bridge, executeAction } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [standaloneScoped]);
+    const res = await bridge.runAction('archive_task', { params: { reason: 'done' } });
+    expect(res.ok).toBe(true);
+    expect(executeAction).toHaveBeenCalledWith(
+      'todo_task',
+      'archive_task', // body-based → registered under the declarative name, not a target
+      expect.objectContaining({ params: expect.objectContaining({ reason: 'done' }) }),
+    );
+  });
+
+  it('run_action dispatches a standalone GLOBAL action under the global wildcard key', async () => {
+    const { bridge, executeAction } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [standaloneGlobal]);
+    const res = await bridge.runAction('nightly_cleanup', {});
+    expect(res.ok).toBe(true);
+    expect(executeAction).toHaveBeenCalledWith('global', 'nightly_cleanup', expect.anything());
+  });
+
+  it('run_action refuses an unexposed standalone row and never dispatches', async () => {
+    const { bridge, executeAction } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [standaloneUnexposed]);
+    await expect(bridge.runAction('raw_reindex', {})).rejects.toThrow(/not exposed to AI/i);
+    expect(executeAction).not.toHaveBeenCalled();
+  });
+
+  it('run_action blocks a standalone row owned by a system object', async () => {
+    const { bridge, executeAction } = makeStandaloneBridge({ userId: 'u1', systemPermissions: [] }, [standaloneOnSysObject]);
+    await expect(bridge.runAction('rotate_all', {})).rejects.toThrow(/system object/i);
+    expect(executeAction).not.toHaveBeenCalled();
+  });
+
+  it('the bridge tolerates a metadata service without loadMany (standalone source absent)', async () => {
+    const { bridge } = makeBridge({ userId: 'u1', systemPermissions: [] }); // makeBridge's metadata mock has no loadMany
+    const names = (await bridge.listActions()).map((a: any) => a.name);
+    expect(names).toContain('complete_task');
   });
 });

@@ -1,6 +1,6 @@
 # ADR-0085: Presentation intent on an object is declared as cross-surface semantic roles, never as per-surface hint blocks (delete `detail`, retire `views.*`, type `stageField`)
 
-**Status**: Proposed (2026-07-02)
+**Status**: Accepted (2026-07-16) — proposed 2026-07-02; execution complete through PR4 + real-backend verification, see the as-built addendum
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove trichotomy), [ADR-0078](./0078-no-silently-inert-metadata.md) (completeness gate; "AI is the author, silent no-op manufactures false completion"), [ADR-0032](./0032-unified-expression-layer.md) (validate-by-default, no silent failure), ADR-0079 (`nameField` — the canonical object-level semantic-role precedent)
 **Supersedes**: the `detail.*` passthrough-block approach adopted by [objectui#2065](https://github.com/objectstack-ai/objectui/issues/2065) and proposed in [objectui#2148](https://github.com/objectstack-ai/objectui/issues/2148) §方案-6 (that mechanism was the right escape hatch *given* the spec of the day; this ADR replaces the mechanism, not the goals — both issues' goals ship)
@@ -103,3 +103,15 @@ Warnings (fragile): `Field.group` references an undeclared group key; a declared
 - **Add `highlightFields` alongside `compactLayout`** — rejected. Two curated "important fields" lists drift; Salesforce solved this the same way: the compact layout drives the highlights panel. (Resolved instead as a rename: one list, the clearer name.)
 - **Keep the `compactLayout` name** — rejected. The name claims a structure the value doesn't have, misses its own biggest consumer (default list columns), and mismatches the renderer vocabulary that already says "highlight" everywhere. A protocol whose keys are named for what they actually do is itself an AI guardrail; the rename costs one alias (ADR-0079 machinery already exists) and a mechanical in-repo sweep.
 - **Deprecation window for `views.*`** — rejected as cargo cult: there is no author to deprecate for. Windows are for populations, not for ghosts.
+
+## As-built addendum (2026-07-16)
+
+Execution landed across both repos; differences from the proposal are noted inline.
+
+- **Roles & rename** — `highlightFields` shipped with the ADR-0079 alias machinery; the `compactLayout` alias was then fully retired by framework#2536 (served metadata now carries the canonical key only). `stageField` is spec-typed including the strict-`false` suppression contract (renderer side objectui#2168).
+- **§5 shared derivation** — `deriveFieldGroupLayout` lives in `@objectstack/spec` (`packages/spec/src/data/field-group-layout.ts`) and passes group `icon`/`description`/`collapse` through; objectui form/detail synth consume it (the two pre-existing near-copies were deleted).
+- **§6 guardrails** — `@objectstack/lint` `validate-semantic-roles`: undeclared `Field.group` reference, declared-but-unreferenced group, dangling `stageField`/`highlightFields` pointers; plus `field-group-shadowed` (added by the #2548 follow-up): a group whose every visible member is hoisted into the detail highlight strip (or is the record title) renders on forms but never on detail pages.
+- **PR4 (legacy-path deletion)** — objectui#2546 removed the monolith `DetailView` branch in `RecordDetailView` together with the `detail.renderViaSchema` kill-switch and the `?renderViaSchema=0` debug param; schema-driven is the only path.
+- **Cross-surface consumption** — kanban default card fields ride `highlightFields` (objectui#2541), alongside grids/lists/detail strip.
+- **Verification** — parse: `@objectstack/spec` suite; served pipeline: `packages/dogfood/test/semantic-roles.dogfood.test.ts`; real-backend browser pass over the four detail shapes (grouped / ungrouped / `stageField: false` / related-heavy): framework#3019, runbook + results in `docs/audits/2026-07-adr-0085-detail-shapes-browser-verify.md`, and a permanent Playwright spec in `examples/app-showcase/e2e/detail-shapes.spec.ts`.
+- **Consequence surfaced by the browser pass** — because detail bodies hide strip fields, a fully-highlighted group silently disappears from detail pages. Judged working-as-intended (one curated list, every surface) but author-surprising — hence the `field-group-shadowed` warning and the semantic-zoo fixture keeping one non-highlighted member per group.

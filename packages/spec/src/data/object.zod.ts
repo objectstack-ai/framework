@@ -970,7 +970,9 @@ const ObjectSchemaBase = z.object({
   // control is an assigned Page. The passthrough block bred silently-inert
   // keys (9 read by renderers vs 3 typed; the typed `hideReferenceRail` was
   // itself a no-op for spec authors) — see the ADR for the full inventory.
-  // `renderViaSchema` retires together with the legacy monolith render path.
+  // `renderViaSchema` — the block's last-surviving key, kept only as the
+  // legacy monolith detail renderer's kill-switch — retired with that
+  // renderer in objectui#2546 (ADR-0085 PR4).
 
   /**
    * Object Actions

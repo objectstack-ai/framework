@@ -81,7 +81,7 @@ describe('ConnectorRestPlugin — end to end with the automation engine', () => 
         await kernel.shutdown();
     });
 
-    it('materializes a declarative `provider: rest` instance from stack metadata (ADR-0096)', async () => {
+    it('materializes a declarative `provider: rest` instance from stack metadata (ADR-0097)', async () => {
         const { impl, calls } = stubFetch();
 
         // A provider-bound `connectors:` entry as it sits in the ObjectQL registry.

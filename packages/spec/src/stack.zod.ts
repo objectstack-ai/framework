@@ -331,7 +331,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
   analyticsCubes: z.array(CubeSchema).optional().describe('Analytics Semantic Layer Cubes'),
 
   /**
-   * Integration Protocol — connectors are of two kinds (ADR-0096):
+   * Integration Protocol — connectors are of two kinds (ADR-0097):
    *
    * 1. **Provider-bound instance** (has `provider`): a live, dispatchable
    *    connector authored as pure metadata. At boot the automation service looks
@@ -353,13 +353,13 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * Runtime connectors may also be contributed directly by plugins calling
    * `engine.registerConnector(def, handlers)` (ADR-0018 §Addendum). A
    * provider-bound instance whose `name` collides with such a plugin-registered
-   * connector is a hard boot error (no silent precedence, ADR-0096 §4).
+   * connector is a hard boot error (no silent precedence, ADR-0097 §4).
    */
   connectors: z.array(DeclarativeConnectorEntrySchema).optional().describe(
     'External System Connectors. A provider-bound entry (has `provider`: openapi/mcp/rest) is materialized into a ' +
     'live, dispatchable connector at boot and referenced by flows via `connector_action`; credentials are `auth.credentialRef` ' +
     'references, never inline secrets. An entry with no `provider` is a catalog descriptor only (NOT dispatchable) — set ' +
-    '`enabled: false` on deliberate descriptors. Unknown provider / unresolvable credentialRef / name conflict ⇒ hard boot error (ADR-0096, #2977).',
+    '`enabled: false` on deliberate descriptors. Unknown provider / unresolvable credentialRef / name conflict ⇒ hard boot error (ADR-0097, #2977).',
   ),
 
   /**

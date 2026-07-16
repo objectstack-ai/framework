@@ -75,8 +75,26 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
     covers: ['data:hono-plugin.ts:POST /data/:object', 'data:hono-plugin.ts:GET /data/:object/:id', 'data:hono-plugin.ts:GET /data/:object'],
     note: 'These routes delegate straight to ObjectQL and were only shadowed when the REST plugin registered the same paths FIRST — so the posture depended on plugin registration order (a load-order change silently reopened it, no test failing). Gating each route makes the deny decision a property of this entry point too. Handler-level proof in plugin-hono-server/hono-anonymous-deny.test.ts.' },
+
+  // ── #2992 / ADR-0096 D4 — latent execution surfaces (pre-wiring identity
+  // admission). Neither surface is reachable by a client today; these rows
+  // register their identity posture NOW so the ratchet (see the probes +
+  // transport tripwires in authz-conformance.test.ts) blocks wiring a client
+  // transport without the identity story — in CI, not in an adversarial
+  // review after the fact.
+  { id: 'graphql-identity-thread', summary: 'GraphQL entry point threads the caller identity to the engine (#2992 surface 1, ADR-0096 D1)', state: 'enforced',
+    enforcement: 'runtime/http-dispatcher.ts handleGraphQL — resolves the caller ExecutionContext (also on the direct dispatcher-plugin route, requireAuth on or off) and threads it as options.context on every kernel.graphql call; spec IGraphQLService.execute documents that implementations MUST forward it to ObjectQL as options.context',
+    covers: ['graphql:http-dispatcher.ts:kernel.graphql(context-threaded)'],
+    note: 'Surface posture: user (caller identity), latent — kernel.graphql is never assigned in the monorepo, so every POST /graphql 501s before an engine call; the only IGraphQLService is the plugin-dev stub. The threading exists so the FIRST real engine runs caller-scoped instead of context-less (the security middleware falls OPEN on a missing principal = full authority). Threading unit-proven in runtime/http-dispatcher.requireauth.test.ts (identity threading block); removing it goes STALE here and fails CI.' },
+  { id: 'realtime-delivery-authz', summary: 'realtime delivery fan-out has NO per-recipient authorization — trusted server-internal subscribers only (#2992 surface 2)', state: 'experimental',
+    covers: ['realtime:in-memory-realtime-adapter.ts:publish(trusted-fan-out)'],
+    note: 'Surface posture: system (trusted-implicit), pre-wiring — no end-user transport exists (handleUpgrade unimplemented, no REST subscribe route, client RealtimeAPI is a placeholder); the only subscribers are server-internal plugins (webhook auto-enqueuer, knowledge sync). Structural defect: Subscription carries no principal, matchesSubscription filters only by object+eventTypes (RealtimeSubscriptionOptions.filter is declared but never read), and the engine publishes the FULL after-row — so any future external subscriber would receive record bodies cross-tenant that its own find would hide. ADMISSION REQUIREMENT before any WebSocket/SSE/subscribe transport ships: per-recipient RLS/FLS/tenant re-check on delivery (subscription carries the subscriber ExecutionContext) OR id-only payload + client re-fetch. The transport tripwire probes in authz-conformance.test.ts turn a wired transport into an UNCLASSIFIED surface → red CI until this row is upgraded with the enforcement site.' },
   { id: 'default-profile', summary: 'app-declared default profile (isDefault)', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },
+  { id: 'readonly-static-write', summary: 'static `readonly: true` stripped from non-system UPDATE payloads (#2948 / #3003 — a direct PATCH cannot forge approval/status/amount columns the UI never renders)', state: 'enforced',
+    enforcement: 'objectql/engine.ts update — stripReadonlyFields on both the single-id and multi-row paths (caller-supplied keys only, so audit-hook/middleware server stamps survive; isSystem exempt; symmetric with the readonlyWhen strip)',
+    proof: 'showcase-static-readonly.dogfood.test.ts',
+    note: 'The #3003 field report: `readonly: true` used to be UI-only, so a logged-in non-admin self-approved a 4-stage approval (approval_status/approval_stage/confirmed_total) with one same-session REST PATCH on a draft record — RECORD_LOCKED only guards pending flows, and the draft never entered one. The strip is SILENT (HTTP 200, persisted value kept — reject-vs-strip decided in #2948 for readonlyWhen symmetry). INSERT is deliberately exempt (create may seed a readonly column: defaultValue, import, migration), also symmetric with readonlyWhen. Engine-level unit/integration proof in objectql/plugin.integration.test.ts (#2948 suite: forge stripped, server stamp survives, system context allowed).' },
 
   // ── ADR-0057 — ERP authorization core (enforced + e2e proven) ──────────
   { id: 'scope-depth', summary: 'permission-grant access DEPTH (own/own_and_reports/unit/unit_and_below/org)', state: 'enforced',
@@ -96,6 +114,12 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
     enforcement: 'plugin-security/field-masker.ts + detectForbiddenWrites' },
   { id: 'ownership-stamp', summary: 'owner_id auto-stamp on insert', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts (insert owner_id inject)' },
+  { id: 'ownership-anchor-guard', summary: 'owner_id is system-managed for non-privileged writers — no client forge (insert) / transfer (update) without the transfer grant (#3004)', state: 'enforced',
+    enforcement: 'plugin-security/security-plugin.ts step 3.5: insert forging a foreign owner is denied unless allowTransfer/modifyAllRecords (batch rows too); update carrying owner_id is a transfer/disown, denied without the grant — single-id no-op echo tolerated via pre-image compare, bulk change-set fails closed; isSystem exempt',
+    proof: 'owner-anchor-and-bulk-writes.dogfood.test.ts' },
+  { id: 'bulk-write-owner-scoping', summary: 'bulk (multi) update/delete are owner-scoped on OWD-private objects, not just single-id writes (#2982)', state: 'enforced',
+    enforcement: 'objectql/engine.ts seeds opCtx.ast for no-single-id update/delete BEFORE the middleware chain and hands the composed AST to driver.updateMany/deleteMany, so plugin-sharing buildWriteFilter (owner-match + shares) and plugin-security RLS write filters actually bind bulk writes',
+    proof: 'owner-anchor-and-bulk-writes.dogfood.test.ts' },
   { id: 'record-share', summary: 'manual record shares (sys_record_share)', state: 'enforced',
     enforcement: 'plugin-sharing/sharing-service.ts buildReadFilter/canEdit' },
   { id: 'sharing-rules', summary: 'criteria/owner sharing rules', state: 'enforced',

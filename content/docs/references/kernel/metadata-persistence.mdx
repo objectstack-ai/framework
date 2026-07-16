@@ -12,8 +12,8 @@ description: Metadata Persistence protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { MetadataCollectionInfo, MetadataFormat, MetadataImportOptions, MetadataLoadResult, MetadataLoaderContract, MetadataSaveOptions, MetadataSaveResult, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/kernel';
-import type { MetadataCollectionInfo, MetadataFormat, MetadataImportOptions, MetadataLoadResult, MetadataLoaderContract, MetadataSaveOptions, MetadataSaveResult, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/kernel';
+import { MetadataCollectionInfo, MetadataExportOptions, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataSaveOptions, MetadataSaveResult, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/kernel';
+import type { MetadataCollectionInfo, MetadataExportOptions, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataSaveOptions, MetadataSaveResult, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = MetadataCollectionInfo.parse(data);
@@ -33,6 +33,22 @@ const result = MetadataCollectionInfo.parse(data);
 | **totalSize** | `integer` | optional | Total size in bytes |
 | **lastModified** | `string` | optional | Last modification date |
 | **location** | `string` | optional | Collection location |
+
+
+---
+
+## MetadataExportOptions
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **output** | `string` | ✅ | Output file path |
+| **format** | `Enum<'json' \| 'yaml' \| 'typescript' \| 'javascript'>` | optional | Export format |
+| **filter** | `string \| Object` | optional | Filter items to export (CEL) |
+| **includeStats** | `boolean` | optional | Include metadata statistics |
+| **compress** | `boolean` | optional | Compress output (gzip) |
+| **prettify** | `boolean` | optional | Pretty print output |
 
 
 ---
@@ -60,6 +76,24 @@ const result = MetadataCollectionInfo.parse(data);
 | **dryRun** | `boolean` | ✅ | Simulate import without saving |
 | **continueOnError** | `boolean` | ✅ | Continue if validation fails |
 | **transform** | `string` | optional | Transform items before import |
+
+
+---
+
+## MetadataLoadOptions
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **patterns** | `string[]` | optional | File glob patterns |
+| **ifNoneMatch** | `string` | optional | ETag for conditional request |
+| **ifModifiedSince** | `string` | optional | Only load if modified after this date |
+| **validate** | `boolean` | optional | Validate against schema |
+| **useCache** | `boolean` | optional | Enable caching |
+| **filter** | `string \| Object` | optional | Filter predicate (CEL) |
+| **limit** | `integer` | optional | Maximum items to load |
+| **recursive** | `boolean` | optional | Search subdirectories |
 
 
 ---

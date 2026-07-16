@@ -3,7 +3,7 @@
 import { defineConnector, type Connector } from '@objectstack/spec/integration';
 
 /**
- * Declarative `connectors:` — the collection now holds BOTH kinds (ADR-0096):
+ * Declarative `connectors:` — the collection now holds BOTH kinds (ADR-0097):
  *
  * 1. **Provider-bound instance** ({@link StatusApiConnector}) — a live,
  *    dispatchable connector authored as pure metadata. It names a `provider`
@@ -14,7 +14,7 @@ import { defineConnector, type Connector } from '@objectstack/spec/integration';
  *    indistinguishable from a hand-written connector — `connector_action`
  *    dispatches it and `GET /connectors` lists it. {@link
  *    file://../../automation/flows/index.ts | ShowcaseDeclarativeConnectorPingFlow}
- *    calls it end-to-end. This is the #2977 / ADR-0096 upgrade of what used to
+ *    calls it end-to-end. This is the #2977 / ADR-0097 upgrade of what used to
  *    be a purely descriptor-only collection.
  *
  * 2. **Catalog descriptor** ({@link ErpCatalogConnector}, the #2612 interim
@@ -31,7 +31,7 @@ import { defineConnector, type Connector } from '@objectstack/spec/integration';
  */
 
 /**
- * ADR-0096 provider-bound instance — declared as pure metadata, materialized
+ * ADR-0097 provider-bound instance — declared as pure metadata, materialized
  * into a live `rest` connector at boot by ConnectorRestPlugin's provider factory
  * (which the plugin registers even though, here, it is also configured with a
  * hand-wired `rest` connector). Points at the running server itself, so
@@ -45,7 +45,7 @@ export const StatusApiConnector = defineConnector({
   label: 'Status API (Declarative REST Instance)',
   type: 'api',
   description:
-    'Provider-bound declarative connector instance (ADR-0096): authored as metadata, materialized into a live, ' +
+    'Provider-bound declarative connector instance (ADR-0097): authored as metadata, materialized into a live, ' +
     'dispatchable `rest` connector at boot. Unlike the ERP descriptor below, this one IS callable from a flow ' +
     'connector_action and appears in GET /connectors.',
   provider: 'rest',
@@ -58,6 +58,39 @@ export const StatusApiConnector = defineConnector({
   },
   auth: { type: 'none' },
 });
+/**
+ * ADR-0097 provider-bound instance, **file-path spec** form (#3016): the OpenAPI
+ * document lives next to this file (`status-openapi.json`) and is referenced by
+ * a path resolved relative to THIS package's root at materialization — reads
+ * are confined to the package root (absolute / `..`-escaping paths are
+ * rejected), and a missing or unparseable document fails boot loudly. The
+ * `openapi` provider factory (ConnectorOpenApiPlugin in objectstack.config.ts)
+ * turns the document's one operation (`getHealth` → `GET /api/v1/health`) into
+ * a dispatchable action against the running server itself, so the materialized
+ * connector is observable with no external dependency. Complements
+ * {@link StatusApiConnector}, which demos the same materialization from the
+ * `rest` provider's inline config.
+ */
+export const StatusOpenApiConnector = defineConnector({
+  name: 'showcase_status_openapi',
+  label: 'Status API (Declarative OpenAPI Instance, File-Path Spec)',
+  type: 'api',
+  description:
+    'Provider-bound declarative connector instance (ADR-0097) whose OpenAPI document is referenced as a ' +
+    'package-relative file path (#3016) and read at boot, confined to the package root. Materialized into a live ' +
+    '`openapi` connector — getHealth dispatches GET /api/v1/health against the running server.',
+  provider: 'openapi',
+  providerConfig: {
+    // Package-relative file ref (#3016) — resolved against the directory that
+    // holds objectstack.config.ts (the CLI passes it as the automation
+    // service's packageRoot). Inline documents and http(s) URLs stay valid.
+    spec: './src/system/connectors/status-openapi.json',
+    // Same self-pointing literal rationale as StatusApiConnector above.
+    baseUrl: 'http://127.0.0.1:3000',
+  },
+  auth: { type: 'none' },
+});
+
 export const ErpCatalogConnector = defineConnector({
   name: 'showcase_erp_catalog',
   label: 'ERP Integration (Catalog Descriptor)',
@@ -69,7 +102,7 @@ export const ErpCatalogConnector = defineConnector({
   authentication: { type: 'api-key', key: 'SET_AT_INSTALL_TIME', headerName: 'X-API-Key' },
   // Descriptor-level action catalog: key + label + I/O JSON Schemas. Note the
   // deliberate absence of any execution binding (HTTP method/path) — that is
-  // what keeps descriptors inert today and what ADR-0096's provider binding
+  // what keeps descriptors inert today and what ADR-0097's provider binding
   // supplies declaratively.
   actions: [
     {
@@ -110,4 +143,4 @@ export const ErpCatalogConnector = defineConnector({
   enabled: false,
 });
 
-export const allConnectors: Connector[] = [StatusApiConnector, ErpCatalogConnector];
+export const allConnectors: Connector[] = [StatusApiConnector, StatusOpenApiConnector, ErpCatalogConnector];

@@ -34,17 +34,26 @@ export const ObjectPermissionSchema = lazySchema(() => z.object({
   /**
    * Lifecycle Operations.
    *
-   * RBAC-gated, operations pending (#1883 / roadmap M2). The
+   * RBAC-gated, operations pending (#1883 / roadmap M2). The dedicated
    * `transfer`/`restore`/`purge` ObjectQL operations do not exist yet, but the
    * permission evaluator PRE-MAPS them to these bits
    * (`permission-evaluator.ts` OPERATION_TO_PERMISSION): the moment such an
    * operation is dispatched it is denied unless a resolved permission set
    * grants the bit (or `modifyAllRecords`). Until the operations ship,
-   * authoring these bits grants nothing — there is no ungated window either
-   * way (unmapped destructive ops additionally fail CLOSED via
+   * authoring `restore`/`purge` grants nothing — there is no ungated window
+   * either way (unmapped destructive ops additionally fail CLOSED via
    * DESTRUCTIVE_OPERATIONS, per ADR-0049).
+   *
+   * EXCEPTION (#3004): `allowTransfer` is ALREADY ENFORCED today through the
+   * ordinary `insert`/`update` door, not only the future `transfer` op. The
+   * ownership anchor `owner_id` is system-managed for non-privileged writers —
+   * a write that plants a record under another user (insert) or reassigns /
+   * disowns one (update) is DENIED unless the caller holds `allowTransfer`
+   * (or `modifyAllRecords`, which implies it). So granting `allowTransfer`
+   * grants the ownership-write capability now; the dedicated M2 `transfer`
+   * operation will reuse the same bit.
    */
-  allowTransfer: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Change record ownership'),
+  allowTransfer: z.boolean().default(false).describe('[RBAC-gated; ENFORCED now via insert/update owner_id guard, #3004] Change record ownership (assign/reassign/disown owner_id)'),
   allowRestore: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Restore from trash (Undelete)'),
   allowPurge: z.boolean().default(false).describe('[RBAC-gated; operation pending M2] Permanently delete (Hard Delete/GDPR)'),
 

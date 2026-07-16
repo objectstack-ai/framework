@@ -12,8 +12,8 @@ description: Misc protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabasePoolConfig, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubIssueTracking, GitHubProvider, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, ProducerConfig, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
-import type { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabasePoolConfig, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubIssueTracking, GitHubProvider, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, ProducerConfig, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
+import { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
+import type { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
 
 // Validate data
 const result = AckMode.parse(data);
@@ -81,6 +81,47 @@ Message acknowledgment mode
 
 ---
 
+## DatabaseConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'postgresql' \| 'mysql' \| 'mariadb' \| 'mssql' \| 'oracle' \| 'mongodb' \| 'redis' \| 'cassandra' \| 'snowflake' \| 'bigquery' \| 'redshift' \| 'custom'>` | ✅ | Database provider type |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **connectionConfig** | `Object` | ✅ | Database connection configuration |
+| **poolConfig** | `Object` | optional | Connection pool configuration |
+| **sslConfig** | `Object` | optional | SSL/TLS configuration |
+| **tables** | `Object[]` | ✅ | Tables to sync |
+| **cdcConfig** | `Object` | optional | CDC configuration |
+| **readReplicaConfig** | `Object` | optional | Read replica configuration |
+| **queryTimeoutMs** | `number` | optional | Query timeout in ms |
+| **enableQueryLogging** | `boolean` | optional | Enable SQL query logging |
+
+
+---
+
 ## DatabasePoolConfig
 
 ### Properties
@@ -94,6 +135,24 @@ Message acknowledgment mode
 | **acquireTimeoutMs** | `number` | ✅ | Connection acquisition timeout in ms |
 | **evictionRunIntervalMs** | `number` | ✅ | Connection eviction check interval in ms |
 | **testOnBorrow** | `boolean` | ✅ | Test connection before use |
+
+
+---
+
+## DatabaseTable
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Table name in ObjectStack (snake_case) |
+| **label** | `string` | ✅ | Display label |
+| **schema** | `string` | optional | Database schema name |
+| **tableName** | `string` | ✅ | Actual table name in database |
+| **primaryKey** | `string` | ✅ | Primary key column |
+| **enabled** | `boolean` | optional | Enable sync for this table |
+| **fieldMappings** | `Object[]` | optional | Table-specific field mappings |
+| **whereClause** | `string` | optional | SQL WHERE clause for filtering |
 
 
 ---
@@ -229,6 +288,49 @@ File access pattern
 
 ---
 
+## FileStorageConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'s3' \| 'azure_blob' \| 'gcs' \| 'dropbox' \| 'box' \| 'onedrive' \| 'google_drive' \| 'sharepoint' \| 'ftp' \| 'local' \| 'custom'>` | ✅ | File storage provider type |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **storageConfig** | `Object` | optional | Storage configuration |
+| **buckets** | `Object[]` | ✅ | Buckets/containers to sync |
+| **metadataConfig** | `Object` | optional | Metadata extraction configuration |
+| **multipartConfig** | `Object` | optional | Multipart upload configuration |
+| **versioningConfig** | `Object` | optional | File versioning configuration |
+| **encryption** | `Object` | optional | Encryption configuration |
+| **lifecyclePolicy** | `Object` | optional | Lifecycle policy |
+| **contentProcessing** | `Object` | optional | Content processing configuration |
+| **bufferSize** | `number` | optional | Buffer size in bytes |
+| **transferAcceleration** | `boolean` | optional | Enable transfer acceleration |
+
+
+---
+
 ## FileStorageProvider
 
 File storage provider type
@@ -294,6 +396,48 @@ File storage provider type
 
 ---
 
+## GitHubConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'github' \| 'github_enterprise'>` | ✅ | GitHub provider |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **baseUrl** | `string` | optional | GitHub API base URL |
+| **repositories** | `Object[]` | ✅ | Repositories to manage |
+| **commitConfig** | `Object` | optional | Commit configuration |
+| **pullRequestConfig** | `Object` | optional | Pull request configuration |
+| **workflows** | `Object[]` | optional | GitHub Actions workflows |
+| **releaseConfig** | `Object` | optional | Release configuration |
+| **issueTracking** | `Object` | optional | Issue tracking configuration |
+| **enableWebhooks** | `boolean` | optional | Enable GitHub webhooks |
+| **webhookEvents** | `Enum<'push' \| 'pull_request' \| 'issues' \| 'issue_comment' \| 'release' \| 'workflow_run' \| 'deployment' \| 'deployment_status' \| 'check_run' \| 'check_suite' \| 'status'>[]` | optional | Webhook events to subscribe to |
+
+
+---
+
 ## GitHubIssueTracking
 
 ### Properties
@@ -317,6 +461,23 @@ GitHub provider type
 
 * `github`
 * `github_enterprise`
+
+
+---
+
+## GitHubPullRequestConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **titleTemplate** | `string \| Object` | optional | PR title template — supports `{{var}`} interpolation |
+| **bodyTemplate** | `string \| Object` | optional | PR body template — supports `{{var}`} interpolation |
+| **defaultReviewers** | `string[]` | optional | Default reviewers (usernames) |
+| **defaultAssignees** | `string[]` | optional | Default assignees (usernames) |
+| **defaultLabels** | `string[]` | optional | Default labels |
+| **draftByDefault** | `boolean` | optional | Create draft PRs by default |
+| **deleteHeadBranch** | `boolean` | optional | Delete head branch after merge |
 
 
 ---
@@ -368,6 +529,48 @@ GitHub provider type
 
 ---
 
+## MessageQueueConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'rabbitmq' \| 'kafka' \| 'redis_pubsub' \| 'redis_streams' \| 'aws_sqs' \| 'aws_sns' \| 'google_pubsub' \| 'azure_service_bus' \| 'azure_event_hubs' \| 'nats' \| 'pulsar' \| 'activemq' \| 'custom'>` | ✅ | Message queue provider type |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **brokerConfig** | `Object` | ✅ | Broker connection configuration |
+| **topics** | `Object[]` | ✅ | Topics/queues to sync |
+| **deliveryGuarantee** | `Enum<'at_most_once' \| 'at_least_once' \| 'exactly_once'>` | optional | Message delivery guarantee |
+| **sslConfig** | `Object` | optional | SSL/TLS configuration |
+| **saslConfig** | `Object` | optional | SASL authentication configuration |
+| **schemaRegistry** | `Object` | optional | Schema registry configuration |
+| **preserveOrder** | `boolean` | optional | Preserve message ordering |
+| **enableMetrics** | `boolean` | optional | Enable message queue metrics |
+| **enableTracing** | `boolean` | optional | Enable distributed tracing |
+
+
+---
+
 ## ProducerConfig
 
 ### Properties
@@ -383,6 +586,64 @@ GitHub provider type
 | **idempotence** | `boolean` | ✅ | Enable idempotent producer |
 | **transactional** | `boolean` | ✅ | Enable transactional producer |
 | **transactionTimeoutMs** | `number` | optional | Transaction timeout in ms |
+
+
+---
+
+## SaasConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'salesforce' \| 'hubspot' \| 'stripe' \| 'shopify' \| 'zendesk' \| 'intercom' \| 'mailchimp' \| 'slack' \| 'microsoft_dynamics' \| 'servicenow' \| 'netsuite' \| 'custom'>` | ✅ | SaaS provider type |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **baseUrl** | `string` | ✅ | API base URL |
+| **apiVersion** | `Object` | optional | API version configuration |
+| **objectTypes** | `Object[]` | ✅ | Syncable object types |
+| **oauthSettings** | `Object` | optional | OAuth-specific configuration |
+| **paginationConfig** | `Object` | optional | Pagination configuration |
+| **sandboxConfig** | `Object` | optional | Sandbox environment configuration |
+| **customHeaders** | `Record<string, string>` | optional | Custom HTTP headers for all requests |
+
+
+---
+
+## SaasObjectType
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Object type name (snake_case) |
+| **label** | `string` | ✅ | Display label |
+| **apiName** | `string` | ✅ | API name in external system |
+| **enabled** | `boolean` | optional | Enable sync for this object |
+| **supportsCreate** | `boolean` | optional | Supports record creation |
+| **supportsUpdate** | `boolean` | optional | Supports record updates |
+| **supportsDelete** | `boolean` | optional | Supports record deletion |
+| **fieldMappings** | `Object[]` | optional | Object-specific field mappings |
 
 
 ---
@@ -461,6 +722,45 @@ SaaS provider type
 | **dlqConfig** | `Object` | optional | Dead letter queue configuration |
 | **routingKey** | `string` | optional | Routing key pattern |
 | **messageFilter** | `Object` | optional | Message filter criteria |
+
+
+---
+
+## VercelConnector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `string` | ✅ |  |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `Enum<'vercel'>` | ✅ | Vercel provider |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
+| **baseUrl** | `string` | optional | Vercel API base URL |
+| **team** | `Object` | optional | Vercel team configuration |
+| **projects** | `Object[]` | ✅ | Vercel projects |
+| **monitoring** | `Object` | optional | Monitoring configuration |
+| **enableWebhooks** | `boolean` | optional | Enable Vercel webhooks |
+| **webhookEvents** | `Enum<'deployment.created' \| 'deployment.succeeded' \| 'deployment.failed' \| 'deployment.ready' \| 'deployment.error' \| 'deployment.canceled' \| 'deployment-checks-completed' \| 'deployment-prepared' \| 'project.created' \| 'project.removed'>[]` | optional | Webhook events to subscribe to |
 
 
 ---

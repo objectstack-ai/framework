@@ -8,7 +8,7 @@
 // inert; the audit at kernel:ready surfaces exactly those entries as a loud
 // warning instead of letting `connector_action` fail mysteriously at runtime.
 // Provider-bound declarative instances (which upgrade this warning to an
-// error) are tracked in #2977 / ADR-0096.
+// error) are tracked in #2977 / ADR-0097.
 
 import { describe, it, expect, vi } from 'vitest';
 import { LiteKernel } from '@objectstack/core';

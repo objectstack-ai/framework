@@ -24,8 +24,8 @@ Base path: /api/v1/data/\{object\}/export
 ## TypeScript Usage
 
 ```typescript
-import { CreateExportJobRequest, CreateExportJobResponse, CreateImportJobRequest, CreateImportJobResponse, DeduplicationStrategy, ExportFormat, ExportImportTemplate, ExportJobProgress, ExportJobStatus, ExportJobSummary, FieldMappingEntry, GetExportJobDownloadRequest, GetExportJobDownloadResponse, ImportJobProgress, ImportJobResults, ImportJobStatus, ImportJobSummary, ImportMapping, ImportRequest, ImportResponse, ImportRowResult, ImportValidationConfig, ImportValidationMode, ImportValidationResult, ImportWriteMode, ListExportJobsRequest, ListExportJobsResponse, ListImportJobsRequest, ListImportJobsResponse, ScheduleExportResponse, UndoImportJobResponse } from '@objectstack/spec/api';
-import type { CreateExportJobRequest, CreateExportJobResponse, CreateImportJobRequest, CreateImportJobResponse, DeduplicationStrategy, ExportFormat, ExportImportTemplate, ExportJobProgress, ExportJobStatus, ExportJobSummary, FieldMappingEntry, GetExportJobDownloadRequest, GetExportJobDownloadResponse, ImportJobProgress, ImportJobResults, ImportJobStatus, ImportJobSummary, ImportMapping, ImportRequest, ImportResponse, ImportRowResult, ImportValidationConfig, ImportValidationMode, ImportValidationResult, ImportWriteMode, ListExportJobsRequest, ListExportJobsResponse, ListImportJobsRequest, ListImportJobsResponse, ScheduleExportResponse, UndoImportJobResponse } from '@objectstack/spec/api';
+import { CreateExportJobRequest, CreateExportJobResponse, CreateImportJobRequest, CreateImportJobResponse, DeduplicationStrategy, ExportFormat, ExportImportTemplate, ExportJobProgress, ExportJobStatus, ExportJobSummary, FieldMappingEntry, GetExportJobDownloadRequest, GetExportJobDownloadResponse, ImportJobProgress, ImportJobResults, ImportJobStatus, ImportJobSummary, ImportMapping, ImportRequest, ImportResponse, ImportRowResult, ImportValidationConfig, ImportValidationMode, ImportValidationResult, ImportWriteMode, ListExportJobsRequest, ListExportJobsResponse, ListImportJobsRequest, ListImportJobsResponse, ScheduleExportRequest, ScheduleExportResponse, ScheduledExport, UndoImportJobResponse } from '@objectstack/spec/api';
+import type { CreateExportJobRequest, CreateExportJobResponse, CreateImportJobRequest, CreateImportJobResponse, DeduplicationStrategy, ExportFormat, ExportImportTemplate, ExportJobProgress, ExportJobStatus, ExportJobSummary, FieldMappingEntry, GetExportJobDownloadRequest, GetExportJobDownloadResponse, ImportJobProgress, ImportJobResults, ImportJobStatus, ImportJobSummary, ImportMapping, ImportRequest, ImportResponse, ImportRowResult, ImportValidationConfig, ImportValidationMode, ImportValidationResult, ImportWriteMode, ListExportJobsRequest, ListExportJobsResponse, ListImportJobsRequest, ListImportJobsResponse, ScheduleExportRequest, ScheduleExportResponse, ScheduledExport, UndoImportJobResponse } from '@objectstack/spec/api';
 
 // Validate data
 const result = CreateExportJobRequest.parse(data);
@@ -520,6 +520,25 @@ Type: `Object[]`
 
 ---
 
+## ScheduleExportRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Schedule name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **object** | `string` | ✅ | Object name to export |
+| **format** | `Enum<'csv' \| 'json' \| 'jsonl' \| 'xlsx' \| 'parquet'>` | optional | Export file format |
+| **fields** | `string[]` | optional | Fields to include |
+| **filter** | `Record<string, any>` | optional | Record filter criteria |
+| **templateId** | `string` | optional | Export template ID for field mappings |
+| **schedule** | `Object` | ✅ | Schedule timing configuration |
+| **delivery** | `Object` | ✅ | Export delivery configuration |
+
+
+---
+
 ## ScheduleExportResponse
 
 ### Properties
@@ -530,6 +549,31 @@ Type: `Object[]`
 | **error** | `Object` | optional | Error details if success is false |
 | **meta** | `Object` | optional | Response metadata |
 | **data** | `Object` | ✅ |  |
+
+
+---
+
+## ScheduledExport
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | optional | Scheduled export ID |
+| **name** | `string` | ✅ | Schedule name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **object** | `string` | ✅ | Object name to export |
+| **format** | `Enum<'csv' \| 'json' \| 'jsonl' \| 'xlsx' \| 'parquet'>` | optional | Export file format |
+| **fields** | `string[]` | optional | Fields to include |
+| **filter** | `Record<string, any>` | optional | Record filter criteria |
+| **templateId** | `string` | optional | Export template ID for field mappings |
+| **schedule** | `Object` | ✅ | Schedule timing configuration |
+| **delivery** | `Object` | ✅ | Export delivery configuration |
+| **enabled** | `boolean` | optional | Whether the scheduled export is active |
+| **lastRunAt** | `string` | optional | Last execution timestamp |
+| **nextRunAt** | `string` | optional | Next scheduled execution |
+| **createdAt** | `string` | optional | Creation timestamp |
+| **createdBy** | `string` | optional | User who created the schedule |
 
 
 ---

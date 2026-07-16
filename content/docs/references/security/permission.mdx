@@ -89,8 +89,8 @@ const result = AdminScope.parse(data);
 | **allowPurge** | `boolean` | ✅ | [RBAC-gated; operation pending M2] Permanently delete (Hard Delete/GDPR) |
 | **viewAllRecords** | `boolean` | ✅ | View All Data (Bypass Sharing) |
 | **modifyAllRecords** | `boolean` | ✅ | Modify All Data (Bypass Sharing) |
-| **readScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Read depth: own|unit|unit_and_below|org |
-| **writeScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Write depth: own|unit|unit_and_below|org |
+| **readScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Read depth: own\|unit\|unit_and_below\|org |
+| **writeScope** | `Enum<'own' \| 'own_and_reports' \| 'unit' \| 'unit_and_below' \| 'org'>` | optional | [ADR-0057 D1] Write depth: own\|unit\|unit_and_below\|org |
 
 
 ---
@@ -105,7 +105,7 @@ const result = AdminScope.parse(data);
 | **label** | `string` | optional | Display label |
 | **packageId** | `string` | optional | [ADR-0086 D3] Owning package id for a package-shipped set (absent = env-authored) |
 | **managedBy** | `Enum<'package' \| 'platform' \| 'user'>` | optional | [ADR-0086 D3] Record provenance: package (upgrade-owned metadata) vs platform/user (env config) |
-| **isDefault** | `boolean` | ✅ | [ADR-0090 D5] Install-time suggestion to bind this set to the everyone position (admin confirms; never auto-bound) |
+| **isDefault** | `boolean` | ✅ | [ADR-0090 D5] App baseline for the everyone position: app-level sets are auto-bound at boot (guarded, idempotent); package-level sets become install-time suggestions an admin confirms |
 | **objects** | `Record<string, Object>` | ✅ | Entity permissions |
 | **fields** | `Record<string, Object>` | optional | Field level security |
 | **systemPermissions** | `string[]` | optional | System level capabilities |

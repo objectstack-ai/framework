@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — provider-bound declarative connector instances. A `connectors:`
+// ADR-0097 — provider-bound declarative connector instances. A `connectors:`
 // entry that names a `provider` is materialized at boot by the automation
 // service: it looks up the provider factory a connector plugin registered,
 // resolves `auth.credentialRef`, and registers the resulting `{ def, handlers }`
@@ -9,14 +9,17 @@
 // Boot fails loudly for unknown provider / unresolvable credentialRef / name
 // conflict / factory failure.
 
-import { describe, it, expect } from 'vitest';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { describe, it, expect, afterAll } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
 import type {
     ConnectorProviderContext,
     ConnectorProviderFactory,
     ConnectorInstanceAuth,
 } from '@objectstack/spec/integration';
-import { AutomationServicePlugin, type CredentialResolver } from './plugin.js';
+import { AutomationServicePlugin, createPackageFileLoader, type CredentialResolver } from './plugin.js';
 import type { AutomationEngine } from './engine.js';
 
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -81,6 +84,8 @@ interface BootOptions {
     /** Names registered as plugin connectors during init() (for the conflict rule). */
     registerLivePlugin?: string[];
     credentialResolver?: CredentialResolver;
+    /** Stack/package root that relative file refs resolve against (#3016). */
+    packageRoot?: string;
 }
 
 /**
@@ -92,7 +97,7 @@ interface BootOptions {
  */
 async function boot(declared: unknown[], opts: BootOptions = {}): Promise<LiteKernel> {
     const kernel = new LiteKernel({ logger: { level: 'silent' } } as never);
-    kernel.use(new AutomationServicePlugin({ credentialResolver: opts.credentialResolver }));
+    kernel.use(new AutomationServicePlugin({ credentialResolver: opts.credentialResolver, packageRoot: opts.packageRoot }));
     const harness = {
         name: 'test.harness',
         type: 'standard' as const,
@@ -127,7 +132,71 @@ function automationOf(kernel: LiteKernel): AutomationEngine {
     return kernel.getService('automation') as AutomationEngine;
 }
 
-describe('ADR-0096 — declarative connector materialization', () => {
+/**
+ * A fake provider whose materialized connectors carry a `close`, so reload tests
+ * can assert teardown. Records the ctx of every invocation (`calls`) and the
+ * names whose `close()` ran (`closed`).
+ */
+function makeClosableProvider() {
+    const calls: ConnectorProviderContext[] = [];
+    const closed: string[] = [];
+    const factory: ConnectorProviderFactory = (ctx) => {
+        calls.push(ctx);
+        return {
+            def: {
+                name: ctx.name,
+                label: ctx.label,
+                type: 'api',
+                authentication: { type: 'none' },
+                actions: [{ key: 'ping', label: 'Ping' }],
+            },
+            handlers: { ping: async () => ({ ok: true }) },
+            close: async () => { closed.push(ctx.name); },
+        };
+    };
+    return { factory, calls, closed };
+}
+
+/**
+ * Boot with a MUTABLE declared set and expose a `reload(next)` that swaps the
+ * registry contents and fires `metadata:reloaded` — the runtime reconcile path
+ * (ADR-0097 F1). The harness's ctx is the shared kernel context, so
+ * `ctx.trigger('metadata:reloaded')` invokes the automation plugin's hook.
+ */
+async function bootReloadable(
+    initial: unknown[],
+    opts: { providerFactory: ConnectorProviderFactory; credentialResolver?: CredentialResolver; packageRoot?: string },
+) {
+    const state = { declared: initial };
+    let captured: any;
+    const kernel = new LiteKernel({ logger: { level: 'silent' } } as never);
+    kernel.use(new AutomationServicePlugin({ credentialResolver: opts.credentialResolver, packageRoot: opts.packageRoot }));
+    const harness = {
+        name: 'test.harness',
+        type: 'standard' as const,
+        version: '1.0.0',
+        dependencies: ['com.objectstack.service-automation'],
+        async init(ctx: any) {
+            captured = ctx;
+            ctx.registerService('objectql', {
+                registry: { listItems: (type: string) => (type === 'connector' ? state.declared : []) },
+            });
+            ctx.getService('automation').registerConnectorProvider('fake', opts.providerFactory);
+        },
+        async start() {},
+    };
+    kernel.use(harness as never);
+    await kernel.bootstrap();
+    await flush();
+    const reload = async (next: unknown[]) => {
+        state.declared = next;
+        await captured.trigger('metadata:reloaded');
+        await flush();
+    };
+    return { kernel, engine: automationOf(kernel), reload };
+}
+
+describe('ADR-0097 — declarative connector materialization', () => {
     it('materializes a provider-bound instance into a live, listed connector', async () => {
         const { factory, calls } = makeFakeProvider();
         const kernel = await boot([providerConnector('billing')], { providerFactory: factory });
@@ -139,7 +208,9 @@ describe('ADR-0096 — declarative connector materialization', () => {
         const desc = engine.getConnectorDescriptors().find((d) => d.name === 'billing');
         expect(desc).toBeDefined();
         expect(desc?.actions.map((a) => a.key)).toEqual(['ping']);
-        // Origin is 'declarative', not 'plugin'.
+        // Origin is 'declarative', not 'plugin' — surfaced on the descriptor so a
+        // designer can distinguish a materialized instance from a plugin connector.
+        expect(desc?.origin).toBe('declarative');
         expect(engine.getConnectorOrigin('billing')).toBe('declarative');
         // The factory saw the declared identity.
         expect(calls[0]?.name).toBe('billing');
@@ -241,7 +312,7 @@ describe('ADR-0096 — declarative connector materialization', () => {
         await kernel.shutdown();
     });
 
-    // ── Hard boot failures (ADR-0096 §Decision / §Acceptance) ──────────────
+    // ── Hard boot failures (ADR-0097 §Decision / §Acceptance) ──────────────
 
     it('fails boot loudly when the provider has no registered factory', async () => {
         await expect(
@@ -280,5 +351,186 @@ describe('ADR-0096 — declarative connector materialization', () => {
         await expect(
             boot([providerConnector('dup'), providerConnector('dup')], { providerFactory: factory }),
         ).rejects.toThrow(/duplicate declarative connector instance name 'dup'/);
+    });
+});
+
+describe('ADR-0097 — runtime re-materialization on metadata:reloaded (F1)', () => {
+    it('materializes an instance published after boot', async () => {
+        const { factory, calls } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([], { providerFactory: factory });
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+
+        await reload([providerConnector('billing')]);
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect(engine.getConnectorOrigin('billing')).toBe('declarative');
+        expect(calls).toHaveLength(1);
+        await kernel.shutdown();
+    });
+
+    it('unregisters and tears down an instance removed after boot', async () => {
+        const { factory, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+
+        await reload([]); // billing deleted from the stack
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+        expect(closed).toEqual(['billing']); // close() ran on teardown
+        await kernel.shutdown();
+    });
+
+    it('tears down an instance newly marked enabled:false', async () => {
+        const { factory, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+        await reload([providerConnector('billing', { enabled: false })]);
+        expect(engine.getRegisteredConnectors()).not.toContain('billing');
+        expect(closed).toEqual(['billing']);
+        await kernel.shutdown();
+    });
+
+    it('leaves an UNCHANGED instance untouched (no reconnect on unrelated reload)', async () => {
+        const { factory, calls, closed } = makeClosableProvider();
+        const { reload, kernel } = await bootReloadable(
+            [providerConnector('billing', { providerConfig: { baseUrl: 'https://x' } })],
+            { providerFactory: factory },
+        );
+        expect(calls).toHaveLength(1);
+
+        // A reload that does not change billing's inputs must not re-invoke the factory.
+        await reload([providerConnector('billing', { providerConfig: { baseUrl: 'https://x' } })]);
+        expect(calls).toHaveLength(1);
+        expect(closed).toEqual([]);
+        await kernel.shutdown();
+    });
+
+    it('re-materializes a CHANGED instance and tears down the old connection', async () => {
+        const { factory, calls, closed } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable(
+            [providerConnector('billing', { providerConfig: { baseUrl: 'https://old' } })],
+            { providerFactory: factory },
+        );
+        expect(calls).toHaveLength(1);
+
+        await reload([providerConnector('billing', { providerConfig: { baseUrl: 'https://new' } })]);
+        expect(calls).toHaveLength(2); // re-materialized
+        expect(closed).toEqual(['billing']); // old connection torn down
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect((calls[1].providerConfig as { baseUrl?: string }).baseUrl).toBe('https://new');
+        await kernel.shutdown();
+    });
+
+    it('reload is soft: an unknown-provider entry is skipped, not fatal, and other connectors survive', async () => {
+        const { factory } = makeClosableProvider();
+        const { engine, reload, kernel } = await bootReloadable([providerConnector('billing')], { providerFactory: factory });
+
+        // A bad publish must NOT crash the running server (no throw), and the
+        // healthy connector keeps serving.
+        await expect(
+            reload([providerConnector('billing'), providerConnector('ghost', { provider: 'nonexistent' })]),
+        ).resolves.toBeUndefined();
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        expect(engine.getRegisteredConnectors()).not.toContain('ghost');
+        await kernel.shutdown();
+    });
+});
+
+// ── #3016 — package file refs (loadPackageFile) ─────────────────────────────
+//
+// The `loadPackageFile` capability lets a provider factory dereference a
+// relative file ref (the openapi provider's `providerConfig.spec:
+// './billing-openapi.json'`) against the declaring stack/package root, with
+// reads CONFINED to that root. Failures follow the reconcile policy above:
+// fatal at boot, skipped on reload.
+
+const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'adr96-pkgfile-'));
+mkdirSync(path.join(fixtureRoot, 'specs'), { recursive: true });
+writeFileSync(path.join(fixtureRoot, 'specs', 'billing.json'), JSON.stringify({ openapi: '3.0.0' }));
+afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+/** A provider whose factory reads `providerConfig.spec` via ctx.loadPackageFile. */
+function makeFileReadingProvider() {
+    const reads: string[] = [];
+    const factory: ConnectorProviderFactory = async (ctx) => {
+        const text = await ctx.loadPackageFile!(String(ctx.providerConfig.spec));
+        reads.push(text);
+        return {
+            def: { name: ctx.name, label: ctx.label, type: 'api', authentication: { type: 'none' }, actions: [{ key: 'ping', label: 'Ping' }] },
+            handlers: { ping: async () => ({ ok: true }) },
+        };
+    };
+    return { factory, reads };
+}
+
+describe('#3016 — package file loader (createPackageFileLoader)', () => {
+    const load = createPackageFileLoader(fixtureRoot);
+
+    it('reads a root-relative file (happy path)', async () => {
+        await expect(load('./specs/billing.json')).resolves.toBe(JSON.stringify({ openapi: '3.0.0' }));
+        // Plain relative form (no leading ./) resolves identically.
+        await expect(load('specs/billing.json')).resolves.toContain('openapi');
+    });
+
+    it('rejects absolute paths (posix and windows-drive)', async () => {
+        await expect(load(path.join(fixtureRoot, 'specs', 'billing.json'))).rejects.toThrow(/absolute/);
+        await expect(load('C:\\evil\\creds.json')).rejects.toThrow(/absolute/);
+    });
+
+    it('rejects paths that escape the package root after resolution', async () => {
+        await expect(load('../outside.json')).rejects.toThrow(/escapes the stack\/package root/);
+        await expect(load('specs/../../outside.json')).rejects.toThrow(/escapes the stack\/package root/);
+    });
+
+    it('rejects empty refs and reports unreadable files with the resolved path', async () => {
+        await expect(load('')).rejects.toThrow(/non-empty relative path/);
+        await expect(load('./specs/missing.json')).rejects.toThrow(/could not be read/);
+    });
+});
+
+describe('#3016 — file-ref materialization policy (fatal at boot, soft on reload)', () => {
+    it('hands every provider factory a working loadPackageFile anchored to packageRoot', async () => {
+        const { factory, reads } = makeFileReadingProvider();
+        const kernel = await boot(
+            [providerConnector('billing', { providerConfig: { spec: './specs/billing.json' } })],
+            { providerFactory: factory, packageRoot: fixtureRoot },
+        );
+        expect(automationOf(kernel).getRegisteredConnectors()).toContain('billing');
+        expect(reads).toEqual([JSON.stringify({ openapi: '3.0.0' })]);
+        await kernel.shutdown();
+    });
+
+    it('fails boot loudly when the file ref is missing', async () => {
+        const { factory } = makeFileReadingProvider();
+        await expect(
+            boot([providerConnector('billing', { providerConfig: { spec: './specs/missing.json' } })], {
+                providerFactory: factory,
+                packageRoot: fixtureRoot,
+            }),
+        ).rejects.toThrow(/failed to materialize connector instance 'billing'.*could not be read/s);
+    });
+
+    it('fails boot loudly when the file ref escapes the package root', async () => {
+        const { factory } = makeFileReadingProvider();
+        await expect(
+            boot([providerConnector('billing', { providerConfig: { spec: '../outside.json' } })], {
+                providerFactory: factory,
+                packageRoot: fixtureRoot,
+            }),
+        ).rejects.toThrow(/escapes the stack\/package root/);
+    });
+
+    it('reload is soft: a bad file ref skips the entry, keeps the old connector serving', async () => {
+        const { factory } = makeFileReadingProvider();
+        const { engine, reload, kernel } = await bootReloadable(
+            [providerConnector('billing', { providerConfig: { spec: './specs/billing.json' } })],
+            { providerFactory: factory, packageRoot: fixtureRoot },
+        );
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+
+        // A publish that points billing at a missing file must not crash the
+        // server; the previously materialized connector keeps serving.
+        await expect(
+            reload([providerConnector('billing', { providerConfig: { spec: './specs/missing.json' } })]),
+        ).resolves.toBeUndefined();
+        expect(engine.getRegisteredConnectors()).toContain('billing');
+        await kernel.shutdown();
     });
 });

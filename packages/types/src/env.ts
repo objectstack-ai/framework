@@ -167,6 +167,38 @@ export function resolveOrgLimit(): number | undefined {
 }
 
 /**
+ * SINGLE decision point for "is pinyin search recall on?" (#2486).
+ *
+ * Pinyin search is a deployment/locale-level capability, not field metadata:
+ * Chinese deployments want it, pure-Japanese/English deployments don't. The
+ * flag gates the whole feature end-to-end — the SchemaRegistry's compile-time
+ * `__search` companion-column seam AND the `plugin-pinyin-search` populate
+ * hooks — so there is no half-state where a column exists but nobody fills it
+ * (ADR-0049: no declared-but-unenforced capability).
+ *
+ * Resolution:
+ *   1. An explicit `OS_SEARCH_PINYIN_ENABLED` always wins — truthy
+ *      (`1`/`true`/`on`/`yes`) enables, anything else disables.
+ *   2. When unset, the default derives from the deployment's configured
+ *      locales (`opts.locales`, e.g. the stack's `i18n.defaultLocale` +
+ *      `supportedLocales`): any `zh-*` locale turns it on.
+ *   3. No env var and no `zh-*` locale → off. OSS / non-Chinese deployments
+ *      never load `pinyin-pro` and pay zero compute cost.
+ *
+ * Hosts that know the stack's i18n config (the CLI `serve` boot path) resolve
+ * once with locales and stamp the decision back into the env, so downstream
+ * consumers constructed without config access (per-engine SchemaRegistry)
+ * read the same answer via the no-arg form.
+ */
+export function resolveSearchPinyinEnabled(opts?: { locales?: readonly string[] }): boolean {
+  const raw = readEnvWithDeprecation('OS_SEARCH_PINYIN_ENABLED', [], { silent: true });
+  if (raw != null && String(raw).trim() !== '') {
+    return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
+  }
+  return (opts?.locales ?? []).some((l) => /^zh([-_]|$)/i.test(String(l ?? '').trim()));
+}
+
+/**
  * Internal: clear the dedupe set. Test-only; exposed so suite-wide
  * deprecation warnings don't bleed between tests.
  *

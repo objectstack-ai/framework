@@ -70,6 +70,84 @@ export const ServiceInfoSchema = lazySchema(() => z.object({
   }).optional().describe('Rate limit and quota info for this service'),
 }));
 
+// ============================================================================
+// Honest capabilities — service self-description marker (ADR-0076 D12, #2462)
+// ============================================================================
+
+/**
+ * Well-known property name a registered kernel service can carry to
+ * self-identify as a stub / dev-fake / degraded fallback.
+ *
+ * Discovery builders MUST read this marker (via {@link readServiceSelfInfo})
+ * and report the declared status instead of hardcoding `available` — a stub
+ * or fallback that reports `status: 'available'` misleads consumers (AI
+ * agents, the console) into treating a fake capability as real.
+ */
+export const SERVICE_SELF_INFO_KEY = '__serviceInfo' as const;
+
+/**
+ * Legacy dev-stub marker used by plugin-dev's in-memory fakes.
+ * Recognized by {@link readServiceSelfInfo} as shorthand for
+ * `{ status: 'stub', handlerReady: false }`.
+ */
+export const SERVICE_DEV_MARKER_KEY = '_dev' as const;
+
+/**
+ * Shape of the {@link SERVICE_SELF_INFO_KEY} marker a service carries to
+ * describe its own honesty level. Only non-`available` self-reports exist:
+ * a service that is fully real simply carries no marker.
+ */
+export const ServiceSelfInfoSchema = lazySchema(() => z.object({
+  /** Declared honesty level: `stub` = placeholder/fake, `degraded` = working but partial fallback */
+  status: z.enum(['stub', 'degraded']).describe(
+    'stub = placeholder or dev fake (do not use for real work); '
+    + 'degraded = functional fallback with reduced capability'
+  ),
+  /**
+   * Whether the service's HTTP handler genuinely serves requests.
+   * Defaults (when omitted): `false` for `stub`, `true` for `degraded`.
+   */
+  handlerReady: z.boolean().optional().describe(
+    'Whether the HTTP handler genuinely serves requests. Defaults: false for stub, true for degraded.'
+  ),
+  /** Human-readable explanation shown in discovery (e.g. what to install for the real thing) */
+  message: z.string().optional().describe('Human-readable explanation, e.g. what to install for the full implementation'),
+}));
+
+export type ServiceSelfInfo = z.infer<typeof ServiceSelfInfoSchema>;
+
+/**
+ * Reads the standardized self-description marker off a registered service
+ * instance (ADR-0076 D12). Returns `undefined` for services that carry no
+ * marker — i.e. services claiming to be fully real.
+ *
+ * Recognizes:
+ * - `svc[SERVICE_SELF_INFO_KEY]` — the standard `{ status, handlerReady?, message? }` descriptor.
+ * - `svc[SERVICE_DEV_MARKER_KEY] === true` — plugin-dev's legacy `_dev: true`
+ *   flag, normalized to `{ status: 'stub', handlerReady: false }`.
+ */
+export function readServiceSelfInfo(svc: unknown): ServiceSelfInfo | undefined {
+  if (!svc || typeof svc !== 'object') return undefined;
+  const self = (svc as Record<string, unknown>)[SERVICE_SELF_INFO_KEY] as Record<string, unknown> | undefined;
+  if (self && typeof self === 'object' && (self.status === 'stub' || self.status === 'degraded')) {
+    return {
+      status: self.status,
+      handlerReady: typeof self.handlerReady === 'boolean'
+        ? self.handlerReady
+        : self.status === 'degraded',
+      ...(typeof self.message === 'string' ? { message: self.message } : {}),
+    };
+  }
+  if ((svc as Record<string, unknown>)[SERVICE_DEV_MARKER_KEY] === true) {
+    return {
+      status: 'stub',
+      handlerReady: false,
+      message: 'Development stub (plugin-dev) — not a production implementation',
+    };
+  }
+  return undefined;
+}
+
 /**
  * API Routes Schema
  * The "Map" for the frontend to know where to send requests.

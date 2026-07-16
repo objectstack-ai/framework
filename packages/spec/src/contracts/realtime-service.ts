@@ -40,7 +40,14 @@ export interface RealtimeSubscriptionOptions {
     object?: string;
     /** Event types to listen for */
     eventTypes?: string[];
-    /** Additional filter conditions */
+    /**
+     * Additional filter conditions.
+     *
+     * ⚠️ EXPERIMENTAL — declared but NOT evaluated by the in-memory adapter
+     * (`matchesSubscription` reads only `object` + `eventTypes`). Do not rely
+     * on it to narrow delivery, and NEVER as an authorization mechanism
+     * (see the identity-admission note on {@link IRealtimeService}).
+     */
     filter?: Record<string, unknown>;
 }
 
@@ -60,6 +67,31 @@ export interface RealtimeSubscriptionFilter {
     fields?: string[];
 }
 
+/**
+ * ⚠️ Identity admission — READ BEFORE WIRING A CLIENT TRANSPORT (#2992,
+ * ADR-0096 D4).
+ *
+ * This contract currently serves TRUSTED, SERVER-INTERNAL subscribers only
+ * (webhook auto-enqueuer, knowledge sync). Delivery is a pure fan-out with
+ * **no per-recipient authorization seam**: subscriptions carry no principal,
+ * `matchesSubscription` filters only by object name + event type, and the
+ * engine publishes the FULL record body (`after` row) — rows and fields a
+ * subscriber's own `find` would hide under RLS/FLS/tenant scoping.
+ *
+ * Before ANY end-user transport ships (`handleUpgrade` WebSocket, SSE, a REST
+ * subscribe route, or a real client in `@objectstack/client`), the delivery
+ * path MUST gain one of:
+ *   1. a per-recipient re-check on delivery — the subscription carries the
+ *      subscriber's `ExecutionContext` and every event is re-authorized
+ *      (RLS/FLS/tenant) against it before the handler fires; or
+ *   2. id-only payloads — the client re-fetches the record under its own
+ *      authority.
+ *
+ * Wiring a transport without this is a fall-open (full-authority broadcast,
+ * cross-tenant). The authz conformance matrix pins this posture
+ * (`realtime-delivery-authz` row + transport tripwire probes in
+ * `dogfood/test/authz-conformance.test.ts`) so CI blocks it, not review.
+ */
 export interface IRealtimeService {
     /**
      * Publish an event to all subscribers
@@ -84,6 +116,11 @@ export interface IRealtimeService {
 
     /**
      * Handle an incoming HTTP upgrade request (WebSocket handshake)
+     *
+     * ⚠️ Deliberately UNIMPLEMENTED platform-wide: implementing this hands
+     * external clients the unauthorized fan-out described on the interface —
+     * satisfy the identity-admission requirement above first (#2992).
+     *
      * @param request - Standard Request object
      * @returns Standard Response object
      */

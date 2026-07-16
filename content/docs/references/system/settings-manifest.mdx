@@ -40,8 +40,8 @@ Resolution order (handled by `SettingsService.get`):
 ## TypeScript Usage
 
 ```typescript
-import { ResolvedSettingValue, SettingsActionResult, SpecifierHandler, SpecifierOption, SpecifierScope, SpecifierType } from '@objectstack/spec/system';
-import type { ResolvedSettingValue, SettingsActionResult, SpecifierHandler, SpecifierOption, SpecifierScope, SpecifierType } from '@objectstack/spec/system';
+import { ResolvedSettingValue, SettingsActionResult, SettingsManifest, SettingsNamespacePayload, Specifier, SpecifierHandler, SpecifierOption, SpecifierScope, SpecifierType } from '@objectstack/spec/system';
+import type { ResolvedSettingValue, SettingsActionResult, SettingsManifest, SettingsNamespacePayload, Specifier, SpecifierHandler, SpecifierOption, SpecifierScope, SpecifierType } from '@objectstack/spec/system';
 
 // Validate data
 const result = ResolvedSettingValue.parse(data);
@@ -74,6 +74,82 @@ const result = ResolvedSettingValue.parse(data);
 | **message** | `string` | optional | Toast message |
 | **severity** | `Enum<'info' \| 'success' \| 'warning' \| 'error'>` | optional |  |
 | **details** | `any` | optional | Optional structured detail (renderer-defined) |
+
+
+---
+
+## SettingsManifest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **namespace** | `string` | ✅ | Namespace (snake_case, globally unique) |
+| **version** | `integer` | optional | Manifest schema version |
+| **label** | `string` | ✅ | Display label |
+| **icon** | `string` | optional | Icon (Lucide) |
+| **description** | `string` | optional | Short description |
+| **helpText** | `string` | optional | Markdown help text shown above specifiers |
+| **scope** | `Enum<'global' \| 'tenant' \| 'user'>` | optional | Default scope for specifiers |
+| **readPermission** | `string` | optional | Permission required to read |
+| **writePermission** | `string` | optional | Permission required to write |
+| **category** | `string` | optional | Settings hub category |
+| **order** | `number` | optional | Display order |
+| **specifiers** | `Object[]` | ✅ | Page contents (ordered) |
+| **visible** | `string \| Object` | optional | Whole-manifest visibility |
+| **featureFlag** | `string` | optional | Gate manifest visibility on a feature flag |
+| **beta** | `boolean` | optional | Show a Beta chip on the page |
+
+
+---
+
+## SettingsNamespacePayload
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ |  |
+| **values** | `Record<string, Object>` | ✅ | Effective values keyed by specifier.key |
+
+
+---
+
+## Specifier
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `Enum<'group' \| 'child_pane' \| 'info_banner' \| 'title_value' \| 'text' \| 'textarea' \| 'password' \| 'email' \| 'url' \| 'phone' \| 'number' \| 'toggle' \| 'select' \| 'radio' \| 'multiselect' \| 'slider' \| 'color' \| 'json' \| 'action_button'>` | ✅ | Specifier variant |
+| **id** | `string` | optional | Stable identifier (snake_case) |
+| **key** | `string` | optional | Storage key (snake_case) |
+| **label** | `string` | ✅ | Display label |
+| **description** | `string` | optional | Help text |
+| **icon** | `string` | optional | Icon name (Lucide) |
+| **default** | `any` | optional | Default value |
+| **visible** | `string \| Object` | optional | Visibility expression |
+| **required** | `boolean` | optional | Required field |
+| **encrypted** | `boolean` | optional | Encrypt value at rest (forced true for password) |
+| **scope** | `Enum<'global' \| 'tenant' \| 'user'>` | optional | Override manifest scope for this key |
+| **availableScopes** | `Enum<'global' \| 'tenant' \| 'user'>[]` | optional | Scopes allowed to override this specifier |
+| **lockable** | `boolean` | optional | Allow upper-scope locking of this specifier |
+| **readPermission** | `string` | optional | Permission required to read this specifier |
+| **writePermission** | `string` | optional | Permission required to write this specifier |
+| **deprecated** | `boolean` | optional | Mark deprecated |
+| **replacedBy** | `string` | optional | Replacement key (used when deprecated=true) |
+| **options** | `Object[]` | optional | Options for select/radio/multiselect |
+| **min** | `number` | optional |  |
+| **max** | `number` | optional |  |
+| **step** | `number` | optional |  |
+| **minLength** | `integer` | optional |  |
+| **maxLength** | `integer` | optional |  |
+| **pattern** | `string` | optional | Regex pattern (text only) |
+| **rows** | `integer` | optional |  |
+| **handler** | `Object \| Object \| Object` | optional | Action handler (action_button) |
+| **childNamespace** | `string` | optional | Sub-namespace (child_pane) |
+| **bannerText** | `string` | optional | Markdown body (info_banner) |
+| **bannerSeverity** | `Enum<'info' \| 'success' \| 'warning' \| 'error'>` | optional |  |
 
 
 ---

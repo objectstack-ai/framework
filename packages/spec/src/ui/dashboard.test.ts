@@ -143,4 +143,24 @@ describe('Dashboard presentation sub-schemas', () => {
     expect(f.scope).toBe('dashboard');
     expect(GlobalFilterOptionsFromSchema.parse({ object: 'user', valueField: 'id', labelField: 'name' }).object).toBe('user');
   });
+
+  it('GlobalFilterSchema.name — optional stable variable key (framework#2501)', () => {
+    const named = GlobalFilterSchema.parse({ name: 'region', field: 'sales_region', type: 'select' });
+    expect(named.name).toBe('region');
+    // name stays optional — runtime defaults it to `field`.
+    expect(GlobalFilterSchema.parse({ field: 'region' }).name).toBeUndefined();
+  });
+
+  it('DashboardWidgetSchema.filterBindings — field override / opt-out (framework#2501)', () => {
+    const w = DashboardWidgetSchema.parse({
+      id: 'accounts_signed', type: 'line', dataset: 'accounts', values: ['count'],
+      filterBindings: { dateRange: 'signed_at', region: 'sales_region', status: false },
+    });
+    expect(w.filterBindings).toEqual({ dateRange: 'signed_at', region: 'sales_region', status: false });
+    // Only string (field name) or literal false are valid binding values.
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'w_bad', type: 'metric', dataset: 'sales', values: ['revenue'],
+      filterBindings: { region: true },
+    })).toThrow();
+  });
 });

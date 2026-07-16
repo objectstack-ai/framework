@@ -1038,29 +1038,131 @@ export class SecurityPlugin implements Plugin {
         }
       }
 
-      // 3.5. Auto-inject `owner_id` on insert from the
-      // ExecutionContext. Without this, the row has `owner_id = NULL`
-      // and the default `owner_only_writes` RLS policy hides it from
-      // the very user who just created it.
+      // 3.5. [#3004] `owner_id` — the row-ownership ANCHOR — is SYSTEM-MANAGED
+      // for non-privileged writers. It is deliberately not `readonly` in the
+      // schema (ownership is transferable, see registry.ts applySystemFields),
+      // so the #2948 static-readonly strip never covers it; FLS doesn't gate it
+      // by default; and OWD/RLS owner gates key OFF it — whoever controls the
+      // value controls who may update/delete the row. So the middleware owns
+      // the anchor:
+      //
+      //   • INSERT: an empty `owner_id` is auto-stamped to the acting user
+      //     (without this the row has `owner_id = NULL` and the default
+      //     `owner_only_writes` RLS policy hides it from its own creator).
+      //     Batch rows included. A SUPPLIED owner that is NOT the acting user
+      //     is an ownership FORGE — denied unless the caller holds the
+      //     transfer grant (`allowTransfer`, or `modifyAllRecords` which
+      //     implies it).
+      //   • UPDATE: a supplied `owner_id` is an ownership TRANSFER (or a
+      //     disown, when null) — denied without the transfer grant. The
+      //     single-id no-op echo (a form save sending the unchanged owner
+      //     back) is tolerated by comparing against the pre-image; a bulk
+      //     change-set carrying `owner_id` has no pre-image to compare and
+      //     fails CLOSED.
+      //
+      // System/boot writes carry `isSystem` and short-circuited the whole
+      // middleware above — imports, OAuth provisioning, cron snapshots and
+      // seed claims that legitimately write foreign/NULL owners are unaffected.
+      // Under delegation (ADR-0090 D10) BOTH principals must hold the grant.
       //
       // `organization_id` auto-injection has moved to
-      // `@objectstack/organizations`. Install that plugin for
-      // multi-tenant deployments.
+      // `@objectstack/organizations`; its forge guard is step 3.7 below.
       if (
-        opCtx.operation === 'insert' &&
+        (opCtx.operation === 'insert' || opCtx.operation === 'update') &&
         opCtx.data &&
-        typeof opCtx.data === 'object' &&
-        !Array.isArray(opCtx.data) &&
-        !!opCtx.context?.userId
+        typeof opCtx.data === 'object'
       ) {
-        const fields = await this.getObjectFieldNames(metadata, opCtx.object, ql);
-        if (fields) {
-          const data = opCtx.data as Record<string, unknown>;
-          if (
-            fields.has('owner_id') &&
-            (data.owner_id == null || data.owner_id === '')
-          ) {
-            data.owner_id = opCtx.context!.userId;
+        const isInsert = opCtx.operation === 'insert';
+        const rows = (Array.isArray(opCtx.data) ? opCtx.data : [opCtx.data]) as Record<string, unknown>[];
+        // Own-property test only — never read `owner_id` through the prototype
+        // chain (a polluted `Object.prototype.owner_id` must not make ordinary
+        // field-only updates look like ownership writes).
+        const writesOwner = (r: unknown): r is Record<string, unknown> =>
+          !!r && typeof r === 'object' && !Array.isArray(r) &&
+          Object.prototype.hasOwnProperty.call(r, 'owner_id');
+        // A valid owner id is a NON-EMPTY SCALAR. Anything else (array / object /
+        // boolean / '' ) is neither a stampable self-owner nor a tolerable echo —
+        // String()-coercing it would let `owner_id: [selfId]` pass as "self" and
+        // corrupt the anchor into an array (self-lockout).
+        const isScalarId = (v: unknown): v is string | number =>
+          (typeof v === 'string' && v !== '') || (typeof v === 'number' && Number.isFinite(v));
+
+        // Cheap pre-check: does any row actually WRITE owner_id? On update this
+        // skips the whole guard (and the field-set resolution) for the common
+        // path whose change-set never mentions the anchor. Insert always runs —
+        // it must stamp an absent owner.
+        if (isInsert || rows.some(writesOwner)) {
+          const fields = await this.getObjectFieldNames(metadata, opCtx.object, ql);
+          if (fields?.has('owner_id')) {
+            const userId = opCtx.context?.userId;
+            const denyOwnerWrite = (action: string): never => {
+              throw new PermissionDeniedError(
+                `[Security] Access denied: 'owner_id' on '${opCtx.object}' is system-managed — ` +
+                  `${action} requires the transfer grant (allowTransfer or modifyAllRecords)`,
+                { operation: opCtx.operation, object: opCtx.object, positions, permissionSets: explicitPermissionSets },
+              );
+            };
+            // Lazily evaluated + memoized (incl. a `false` result): the common
+            // path pays nothing, and ADR-0090 D10 — under delegation BOTH
+            // principals must independently hold the transfer grant.
+            let transferGrant: boolean | null = null;
+            const hasTransferGrant = (): boolean => {
+              if (transferGrant === null) {
+                transferGrant =
+                  this.permissionEvaluator.checkObjectPermission('transfer', opCtx.object, permissionSets, { isPrivate: secMeta.isPrivate }) &&
+                  (!delegatorSets || this.permissionEvaluator.checkObjectPermission('transfer', opCtx.object, delegatorSets, { isPrivate: secMeta.isPrivate }));
+              }
+              return transferGrant;
+            };
+
+            if (isInsert) {
+              for (const row of rows) {
+                if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+                if (!writesOwner(row) || row.owner_id == null || row.owner_id === '') {
+                  // Auto-stamp the acting user (batch rows included — the
+                  // single-record-only stamp left bulk-inserted rows NULL-owned
+                  // and invisible to their creator).
+                  if (userId) row.owner_id = userId;
+                } else if (
+                  !(isScalarId(row.owner_id) && userId != null && String(row.owner_id) === String(userId)) &&
+                  !hasTransferGrant()
+                ) {
+                  // A supplied owner that is not the acting user (or not a valid
+                  // scalar id) is a forge — denied without the transfer grant.
+                  denyOwnerWrite('creating a record owned by another user');
+                }
+              }
+            } else {
+              // UPDATE — a supplied owner_id is a transfer/disown. Only the
+              // single-id no-op echo (a form save resending the UNCHANGED owner)
+              // is tolerated; an array / bulk change-set has no single pre-image
+              // to compare and fails CLOSED.
+              const single = !Array.isArray(opCtx.data);
+              for (const row of rows) {
+                if (!writesOwner(row)) continue;
+                if (hasTransferGrant()) break; // authorized transfer — allow every row
+                let unchanged = false;
+                if (single && isScalarId(row.owner_id)) {
+                  const targetId = this.extractSingleId(opCtx);
+                  if (targetId != null && this.ql) {
+                    try {
+                      // Read the pre-image under the CALLER's context (NOT
+                      // isSystem): a form echo only makes sense for a row the
+                      // caller can already see. This threads the caller's open
+                      // transaction (an in-tx echo isn't spuriously denied) AND
+                      // closes the owner-enumeration oracle a system read would
+                      // open (a caller who can't read the row gets null → deny,
+                      // indistinguishable from a non-owner).
+                      const pre: any = await this.ql.findOne(opCtx.object, { where: { id: targetId }, context: opCtx.context });
+                      unchanged = !!pre && pre.owner_id != null && String(pre.owner_id) === String(row.owner_id);
+                    } catch {
+                      unchanged = false; // fail closed
+                    }
+                  }
+                }
+                if (!unchanged) denyOwnerWrite(`changing record ownership on ${opCtx.operation}`);
+              }
+            }
           }
         }
       }

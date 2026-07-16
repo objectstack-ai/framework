@@ -7,7 +7,7 @@ import { createRestProviderFactory, REST_PROVIDER_KEY } from './rest-provider.js
 
 /**
  * Minimal surface of the automation engine this plugin depends on — the
- * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0096).
+ * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0097).
  * Kept structural so the plugin needs no runtime dependency on
  * `@objectstack/service-automation`.
  */
@@ -24,10 +24,10 @@ export interface ConnectorRegistrySurface {
 }
 
 /**
- * Options for {@link ConnectorRestPlugin}. All optional (ADR-0096): with no
+ * Options for {@link ConnectorRestPlugin}. All optional (ADR-0097): with no
  * `baseUrl` the plugin contributes only the `rest` provider factory — so a stack
  * can declare `provider: 'rest'` instances as pure metadata. Supply `baseUrl`
- * (etc.) to ALSO register a single hand-wired `rest` connector, the pre-ADR-0096
+ * (etc.) to ALSO register a single hand-wired `rest` connector, the pre-ADR-0097
  * usage.
  */
 export interface ConnectorRestPluginOptions extends Partial<RestConnectorOptions> {}
@@ -36,7 +36,7 @@ export interface ConnectorRestPluginOptions extends Partial<RestConnectorOptions
  * ConnectorRestPlugin — contributes the generic REST connector (ADR-0018
  * §Addendum) in two forms:
  *
- *  1. **Provider factory** (`rest`, ADR-0096): registered at `init()` so the
+ *  1. **Provider factory** (`rest`, ADR-0097): registered at `init()` so the
  *     automation service can materialize declarative `provider: 'rest'`
  *     `connectors:` entries into live connectors at boot.
  *  2. **Hand-wired instance** (optional, back-compat): when constructed with a
@@ -61,7 +61,7 @@ export class ConnectorRestPlugin implements Plugin {
     }
 
     async init(ctx: PluginContext): Promise<void> {
-        // Contribute the `rest` provider factory (ADR-0096). Done in init() — not
+        // Contribute the `rest` provider factory (ADR-0097). Done in init() — not
         // start() — so it is registered before the automation service materializes
         // declarative instances during its own start().
         const automation = this.tryGetAutomation(ctx);

@@ -30,12 +30,62 @@ no longer constrains authored flows — plugins extend the vocabulary.
 ## TypeScript Usage
 
 ```typescript
-import { FlowNode, FlowNodeAction, FlowVariable } from '@objectstack/spec/automation';
-import type { FlowNode, FlowNodeAction, FlowVariable } from '@objectstack/spec/automation';
+import { Flow, FlowEdge, FlowNode, FlowNodeAction, FlowVariable, FlowVersionHistory } from '@objectstack/spec/automation';
+import type { Flow, FlowEdge, FlowNode, FlowNodeAction, FlowVariable, FlowVersionHistory } from '@objectstack/spec/automation';
 
 // Validate data
-const result = FlowNode.parse(data);
+const result = Flow.parse(data);
 ```
+
+---
+
+## Flow
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Machine name |
+| **label** | `string` | ✅ | Flow label |
+| **description** | `string` | optional |  |
+| **successMessage** | `string` | optional | Toast shown when a screen flow completes (defaults to a generic "Done"). |
+| **errorMessage** | `string` | optional | Toast shown when a screen flow fails (defaults to the raw error). |
+| **version** | `integer` | optional | Version number |
+| **status** | `Enum<'draft' \| 'active' \| 'obsolete' \| 'invalid'>` | optional | Deployment status |
+| **template** | `boolean` | optional | Is logic template (Subflow) |
+| **type** | `Enum<'autolaunched' \| 'record_change' \| 'schedule' \| 'screen' \| 'api'>` | ✅ | Flow type |
+| **variables** | `Object[]` | optional | Flow variables |
+| **nodes** | `Object[]` | ✅ | Flow nodes |
+| **edges** | `Object[]` | ✅ | Flow connections |
+| **active** | `boolean` | optional | Is active (Deprecated: use status) |
+| **runAs** | `Enum<'system' \| 'user'>` | optional | Execution identity for the run: system = elevated (bypasses RLS), user = the triggering user (RLS-respecting). A schedule-triggered run has no trigger user, so under user it runs UNSCOPED (elevated) — declare system to make that explicit. |
+| **errorHandling** | `Object` | optional | Flow-level error handling configuration |
+| **protection** | `Object` | optional | Package author protection block — lock policy for this flow. |
+| **_lock** | `Enum<'none' \| 'no-overlay' \| 'no-delete' \| 'full'>` | optional | Item-level lock — controls overlay & delete (ADR-0010). |
+| **_lockReason** | `string` | optional | Human-readable reason shown when a write is refused by _lock. |
+| **_lockSource** | `Enum<'artifact' \| 'package' \| 'env-forced'>` | optional | Layer that set _lock (artifact \| package \| env-forced). |
+| **_provenance** | `Enum<'package' \| 'org' \| 'env-forced'>` | optional | Origin of the item (package \| org \| env-forced). |
+| **_packageId** | `string` | optional | Owning package machine id. |
+| **_packageVersion** | `string` | optional | Owning package version. |
+| **_lockDocsUrl** | `string` | optional | Optional documentation link surfaced next to _lockReason. |
+
+
+---
+
+## FlowEdge
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Edge unique ID |
+| **source** | `string` | ✅ | Source Node ID |
+| **target** | `string` | ✅ | Target Node ID |
+| **condition** | `string \| Object` | optional | Predicate (CEL) returning boolean used for branching. |
+| **type** | `Enum<'default' \| 'fault' \| 'conditional' \| 'back'>` | optional | Connection type: default (normal flow), fault (error path), conditional (expression-guarded), or back (ADR-0044 declared back-edge — traversed normally at run time, but excluded from DAG cycle validation so a revise/rework loop can re-enter an earlier node) |
+| **label** | `string` | optional | Label on the connector |
+| **isDefault** | `boolean` | optional | Marks this edge as the default path when no other conditions match |
+
 
 ---
 
@@ -98,6 +148,22 @@ const result = FlowNode.parse(data);
 | **type** | `string` | ✅ | Data type (text, number, boolean, object, list) |
 | **isInput** | `boolean` | ✅ | Is input parameter |
 | **isOutput** | `boolean` | ✅ | Is output parameter |
+
+
+---
+
+## FlowVersionHistory
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **flowName** | `string` | ✅ | Flow machine name |
+| **version** | `integer` | ✅ | Version number |
+| **definition** | `Object` | ✅ | Complete flow definition snapshot |
+| **createdAt** | `string` | ✅ | When this version was created |
+| **createdBy** | `string` | optional | User who created this version |
+| **changeNote** | `string` | optional | Description of what changed in this version |
 
 
 ---

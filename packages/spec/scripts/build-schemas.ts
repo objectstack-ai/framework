@@ -33,6 +33,10 @@ const Protocol: Record<string, Record<string, unknown>> = {
 };
 
 const OUT_DIR = path.resolve(__dirname, '../json-schema');
+// Ratchet manifest: the committed record of every schema key this script has
+// ever emitted. json-schema/ itself is a gitignored build artifact, so this
+// file is the durable "last time" — see the disappearance check below (#2978).
+const MANIFEST_PATH = path.resolve(__dirname, '../json-schema.manifest.json');
 const SPEC_VERSION = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8')).version;
 const SCHEMA_BASE_URL = `https://schema.objectstack.io/v${SPEC_VERSION}`;
 
@@ -146,6 +150,7 @@ ensureDir(OUT_DIR);
 console.log(`Generating JSON Schemas to ${OUT_DIR}...`);
 
 let count = 0;
+let inputModeCount = 0;
 let skippedCount = 0;
 let errorCount = 0;
 
@@ -187,28 +192,57 @@ for (const [namespaceName, namespaceExports] of Object.entries(Protocol)) {
       // Check if it looks like a Zod Schema
       if (value instanceof z.ZodType) {
         const schemaName = key.endsWith('Schema') ? key.replace('Schema', '') : key;
-        
+
         try {
-          // Convert to JSON Schema using Zod v4's built-in toJSONSchema()
-          const jsonSchema = z.toJSONSchema(value, {
-            target: 'draft-2020-12',
-          });
+          // Convert to JSON Schema using Zod v4's built-in toJSONSchema().
+          // Default is the output (post-parse) shape. When that fails because
+          // the schema contains a `.transform` (e.g. ExpressionInputSchema's
+          // string→envelope shorthand), fall back to the *input* shape: these
+          // JSON Schemas describe what authors write, and the input side of a
+          // transform pipe is plain data, so it IS representable. Without this
+          // fallback, adding a transform anywhere silently unpublishes the
+          // schema (that's how PageTabsProps vanished in #2967 — see #2978).
+          let jsonSchema: Record<string, unknown>;
+          let io: 'output' | 'input' = 'output';
+          try {
+            jsonSchema = z.toJSONSchema(value, {
+              target: 'draft-2020-12',
+            }) as Record<string, unknown>;
+          } catch (outputError) {
+            if (!isKnownUnsupported(outputError)) throw outputError;
+            io = 'input';
+            // Throws again for types unrepresentable in either direction
+            // (functions, Date, BigInt, custom) — caught by the outer skip.
+            jsonSchema = z.toJSONSchema(value, {
+              target: 'draft-2020-12',
+              io: 'input',
+            }) as Record<string, unknown>;
+          }
 
           // Add $id URL and version metadata for IDE autocomplete and schema resolution
           const categorySlug = namespaceName.toLowerCase();
-          (jsonSchema as Record<string, unknown>)['$id'] = `${SCHEMA_BASE_URL}/${categorySlug}/${schemaName}.json`;
-          (jsonSchema as Record<string, unknown>)['x-spec-version'] = SPEC_VERSION;
+          jsonSchema['$id'] = `${SCHEMA_BASE_URL}/${categorySlug}/${schemaName}.json`;
+          jsonSchema['x-spec-version'] = SPEC_VERSION;
+          if (io === 'input') {
+            // Flag that this schema describes the author-time (pre-parse)
+            // shape — parse-time transforms/defaults are not applied in it.
+            jsonSchema['x-io'] = 'input';
+          }
 
           const fileName = `${schemaName}.json`;
           const filePath = path.join(categoryDir, fileName);
 
           writeFileWithRetry(filePath, JSON.stringify(jsonSchema, null, 2));
-          generatedSchemas.set(`${categorySlug}/${schemaName}`, jsonSchema as Record<string, unknown>);
-          console.log(`  ✓ ${namespaceName.toLowerCase()}/${fileName}`);
+          generatedSchemas.set(`${categorySlug}/${schemaName}`, jsonSchema);
+          console.log(`  ✓ ${namespaceName.toLowerCase()}/${fileName}${io === 'input' ? ' (input shape)' : ''}`);
           count++;
+          if (io === 'input') inputModeCount++;
         } catch (error) {
           if (isKnownUnsupported(error)) {
-            // Functions, transforms, Date types etc. have no JSON Schema representation — skip gracefully
+            // Functions, Date types etc. have no JSON Schema representation in
+            // either io direction — skip gracefully. The ratchet below still
+            // fails the build if a skip makes a previously-published schema
+            // disappear.
             const msg = error instanceof Error ? error.message : String(error);
             console.warn(`  ⊘ ${namespaceName}.${key}: ${msg} (skipped)`);
             skippedCount++;
@@ -223,15 +257,72 @@ for (const [namespaceName, namespaceExports] of Object.entries(Protocol)) {
 }
 
 console.log(`\n─── Summary ───`);
-console.log(`  Generated: ${count}`);
+console.log(`  Generated: ${count}${inputModeCount > 0 ? ` (${inputModeCount} as input shape)` : ''}`);
 if (skippedCount > 0) {
-  console.log(`  Skipped:   ${skippedCount} (unsupported types: function, transform, date)`);
+  console.log(`  Skipped:   ${skippedCount} (unsupported types: function, date, bigint, custom)`);
 }
 
 if (errorCount > 0) {
   console.error(`  Errors:    ${errorCount}`);
   console.error(`\n❌ Build failed with ${errorCount} unexpected error(s).`);
   process.exit(1);
+}
+
+// ─── Ratchet: a published schema must never silently disappear ────────
+// json-schema/ is a public contract surface (IDE validation, gen:docs input,
+// $id URLs under schema.objectstack.io). The manifest is the committed record
+// of every schema key ever emitted; a key present there but absent from this
+// run means a code change unpublished a schema — fail loudly instead of
+// letting gen:docs quietly delete its reference docs (#2978). Deliberate
+// removals must delete the key from the manifest in the same PR.
+interface SchemaManifest {
+  description?: string;
+  schemas: string[];
+}
+
+let manifest: SchemaManifest | null = null;
+try {
+  manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8')) as SchemaManifest;
+} catch (error) {
+  // A missing manifest just means first run (bootstrap below); anything else
+  // (unreadable, invalid JSON) must fail rather than silently drop the ratchet.
+  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    console.error(`\n❌ Failed to read ${MANIFEST_PATH}: ${error}`);
+    process.exit(1);
+  }
+}
+
+const generatedKeys = new Set(generatedSchemas.keys());
+const missing = (manifest?.schemas ?? []).filter((key) => !generatedKeys.has(key));
+if (missing.length > 0) {
+  console.error(`\n❌ ${missing.length} previously published schema(s) disappeared from this build:`);
+  for (const key of missing) {
+    console.error(`     - json-schema/${key}.json`);
+  }
+  console.error(
+    `\n   A schema listed in json-schema.manifest.json was not emitted. This usually means a\n` +
+    `   Zod change made it unrepresentable (e.g. an added .transform in "output" AND "input"\n` +
+    `   io modes) or an export was renamed/removed. Fix the schema, or — if the removal is\n` +
+    `   deliberate — delete the key(s) from packages/spec/json-schema.manifest.json in the\n` +
+    `   same PR. Silently unpublishing a schema deletes its reference docs on the next\n` +
+    `   gen:docs run (see #2978).`,
+  );
+  process.exit(1);
+}
+
+const added = [...generatedKeys].filter((key) => !(manifest?.schemas ?? []).includes(key));
+if (!manifest || added.length > 0) {
+  const updated: SchemaManifest = {
+    description:
+      'Ratchet manifest of every JSON Schema emitted by scripts/build-schemas.ts. ' +
+      'Auto-appended when new schemas are added (commit the change). A listed schema that a ' +
+      'build no longer emits fails gen:schema — remove a key ONLY for a deliberate retirement. See #2978.',
+    schemas: [...generatedKeys].sort(),
+  };
+  fs.writeFileSync(MANIFEST_PATH, JSON.stringify(updated, null, 2) + '\n');
+  console.log(
+    `\n📒 json-schema.manifest.json ${manifest ? `updated (+${added.length} schema(s))` : `created (${generatedKeys.size} schemas)`} — commit it.`,
+  );
 }
 
 // ─── Generate Bundled Schema ─────────────────────────────────────────

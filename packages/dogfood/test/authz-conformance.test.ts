@@ -60,6 +60,60 @@ const PROBES: ReadonlyArray<{ file: string; re: RegExp; key: (m: RegExpExecArray
     re: /rawApp\.(get|post|put|patch|delete)\(\s*`\$\{prefix\}(\/data[^`]*)`/g,
     key: (m) => `data:hono-plugin.ts:${m[1].toUpperCase()} ${m[2]}`,
   },
+
+  // ── #2992 / ADR-0096 D4 — latent-surface identity pins ─────────────────
+  // GraphQL identity threading: the ONLY kernel.graphql(...) call site must
+  // carry `context:` in its options. If a refactor drops the threading the key
+  // vanishes → the `graphql-identity-thread` row's covers goes STALE → red CI.
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /kernel\.graphql\([^)]*\bcontext:/g,
+    key: () => 'graphql:http-dispatcher.ts:kernel.graphql(context-threaded)',
+  },
+  // Realtime delivery fan-out: pins the trusted-internal-only posture of the
+  // in-memory adapter's publish loop (`realtime-delivery-authz` row).
+  {
+    file: 'packages/services/service-realtime/src/in-memory-realtime-adapter.ts',
+    re: /async\s+publish\s*\(/g,
+    key: () => 'realtime:in-memory-realtime-adapter.ts:publish(trusted-fan-out)',
+  },
+
+  // ── #2992 transport TRIPWIRES — deliberately covered by NO row ──────────
+  // Delivery today is a pure fan-out with no per-recipient authorization
+  // (subscriptions carry no principal, payload is the full record), which is
+  // safe ONLY while every subscriber is server-internal. These patterns match
+  // nothing today; the moment someone wires an end-user realtime transport
+  // (WebSocket handshake, SSE, a client transport) a NEW key appears →
+  // UNCLASSIFIED surface → red CI with this checklist: add per-recipient
+  // RLS/FLS/tenant re-check on delivery (or switch to id-only payloads),
+  // THEN register the enforcement site in a matrix row covering the new key.
+  {
+    file: 'packages/services/service-realtime/src/in-memory-realtime-adapter.ts',
+    re: /handleUpgrade\s*\(/g,
+    key: () => 'realtime:in-memory-realtime-adapter.ts:handleUpgrade(TRANSPORT-WIRED)',
+  },
+  {
+    file: 'packages/services/service-realtime/src/realtime-service-plugin.ts',
+    re: /handleUpgrade\s*\(|new\s+WebSocketServer|text\/event-stream/g,
+    key: () => 'realtime:realtime-service-plugin.ts:transport(TRANSPORT-WIRED)',
+  },
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /async\s+handle(Realtime|Upgrade|Subscribe)\w*\s*\(/g,
+    key: (m) => `realtime:http-dispatcher.ts:handle${m[1]}(TRANSPORT-WIRED)`,
+  },
+  {
+    file: 'packages/client/src/realtime-api.ts',
+    re: /new\s+WebSocket\b|new\s+EventSource\b/g,
+    key: () => 'realtime:client/realtime-api.ts:transport(TRANSPORT-WIRED)',
+  },
+  // packages/rest/src has ZERO realtime refs today (#2992) — a `/realtime`
+  // route literal appearing there is a subscribe endpoint. Same tripwire.
+  {
+    file: 'packages/rest/src/rest-server.ts',
+    re: /['"`][^'"`]*\/realtime[^'"`]*['"`]/g,
+    key: () => 'realtime:rest-server.ts:route(TRANSPORT-WIRED)',
+  },
 ];
 
 /** Statically enumerate the anonymous-deny HTTP entry points from source. */
@@ -80,6 +134,10 @@ const HIGH_RISK = [
   // #2567 — every anonymous-deny HTTP surface is high-risk: it guards the
   // same object data as REST `/data` through a sibling entry point.
   'anonymous-deny-meta', 'anonymous-deny-graphql', 'anonymous-deny-hono-data',
+  // #2948/#3003 — write-integrity face: without the strip, `readonly: true`
+  // is false compliance (declared ≠ enforced) and approval/status columns are
+  // one direct PATCH away from self-approval.
+  'readonly-static-write',
 ];
 
 describe('ADR-0056 D10 — authorization conformance matrix', () => {
@@ -131,5 +189,26 @@ describe('#2567 — anonymous-deny surface ratchet bites', () => {
     row.covers = [...(row.covers ?? []), 'graphql:http-dispatcher.ts:handleRemovedThing'];
     const problems = checkLedger(m, opts(() => discoverAnonymousDenySurfaces()));
     expect(problems.some((p) => /STALE covers/.test(p) && /handleRemovedThing/.test(p))).toBe(true);
+  });
+
+  // ── #2992 — the latent-surface pins bite too ──────────────────────────
+  it('(d) wiring a realtime transport (tripwire key appears) → UNCLASSIFIED surface failure (#2992)', () => {
+    const fake = 'realtime:in-memory-realtime-adapter.ts:handleUpgrade(TRANSPORT-WIRED)';
+    const problems = checkLedger(
+      AUTHZ_CONFORMANCE,
+      opts(() => new Set([...discoverAnonymousDenySurfaces(), fake])),
+    );
+    expect(problems.some((p) => p.includes('UNCLASSIFIED surface') && p.includes(fake))).toBe(true);
+  });
+
+  it('(e) dropping the GraphQL context-thread → STALE covers failure (#2992)', () => {
+    const threaded = 'graphql:http-dispatcher.ts:kernel.graphql(context-threaded)';
+    // Baseline sanity: the threading is discovered from source today.
+    expect(discoverAnonymousDenySurfaces().has(threaded)).toBe(true);
+    const problems = checkLedger(
+      AUTHZ_CONFORMANCE,
+      opts(() => new Set([...discoverAnonymousDenySurfaces()].filter((k) => k !== threaded))),
+    );
+    expect(problems.some((p) => /STALE covers/.test(p) && p.includes(threaded))).toBe(true);
   });
 });

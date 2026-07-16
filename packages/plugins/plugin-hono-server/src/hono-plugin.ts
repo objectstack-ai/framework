@@ -515,7 +515,9 @@ export class HonoServerPlugin implements Plugin {
                 auth:          `${prefix}/auth`,
                 packages:      `${prefix}/packages`,
                 analytics:     `${prefix}/analytics`,
-                realtime:      `${prefix}/realtime`,
+                // realtime deliberately absent (ADR-0076 D12, #2462): no
+                // /realtime HTTP surface is mounted anywhere — advertising
+                // it here made clients call a route that 404s.
                 workflow:      `${prefix}/workflow`,
                 automation:    `${prefix}/automation`,
                 ai:            `${prefix}/ai`,

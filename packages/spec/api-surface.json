@@ -2930,6 +2930,8 @@
     "RouteHealthReportSchema (const)",
     "RouterConfig (type)",
     "RouterConfigSchema (const)",
+    "SERVICE_DEV_MARKER_KEY (const)",
+    "SERVICE_SELF_INFO_KEY (const)",
     "SaveMetaItemRequest (type)",
     "SaveMetaItemRequestSchema (const)",
     "SaveMetaItemResponse (type)",
@@ -2947,6 +2949,8 @@
     "SearchFeedResponseSchema (const)",
     "ServiceInfo (type)",
     "ServiceInfoSchema (const)",
+    "ServiceSelfInfo (type)",
+    "ServiceSelfInfoSchema (const)",
     "ServiceStatus (type)",
     "Session (type)",
     "SessionResponse (type)",
@@ -3097,7 +3101,8 @@
     "WorkflowTransitionResponseSchema (const)",
     "getAuthEndpointUrl (function)",
     "getDefaultRouteRegistrations (function)",
-    "mapFieldTypeToGraphQL (const)"
+    "mapFieldTypeToGraphQL (const)",
+    "readServiceSelfInfo (function)"
   ],
   "./ui": [
     "ACTION_LOCATIONS (const)",

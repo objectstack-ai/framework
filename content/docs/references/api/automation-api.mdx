@@ -40,8 +40,8 @@ GET    /api/automation/:name/runs/:runId       — Get single execution run
 ## TypeScript Usage
 
 ```typescript
-import { AutomationApiErrorCode, AutomationFlowPathParams, AutomationRunPathParams, DeleteFlowRequest, DeleteFlowResponse, FlowSummary, GetFlowRequest, GetRunRequest, GetRunResponse, ListFlowsRequest, ListFlowsResponse, ListRunsRequest, ListRunsResponse, ToggleFlowRequest, ToggleFlowResponse, TriggerFlowRequest, TriggerFlowResponse } from '@objectstack/spec/api';
-import type { AutomationApiErrorCode, AutomationFlowPathParams, AutomationRunPathParams, DeleteFlowRequest, DeleteFlowResponse, FlowSummary, GetFlowRequest, GetRunRequest, GetRunResponse, ListFlowsRequest, ListFlowsResponse, ListRunsRequest, ListRunsResponse, ToggleFlowRequest, ToggleFlowResponse, TriggerFlowRequest, TriggerFlowResponse } from '@objectstack/spec/api';
+import { AutomationApiErrorCode, AutomationFlowPathParams, AutomationRunPathParams, CreateFlowRequest, CreateFlowResponse, DeleteFlowRequest, DeleteFlowResponse, FlowSummary, GetFlowRequest, GetFlowResponse, GetRunRequest, GetRunResponse, ListFlowsRequest, ListFlowsResponse, ListRunsRequest, ListRunsResponse, ToggleFlowRequest, ToggleFlowResponse, TriggerFlowRequest, TriggerFlowResponse, UpdateFlowRequest, UpdateFlowResponse } from '@objectstack/spec/api';
+import type { AutomationApiErrorCode, AutomationFlowPathParams, AutomationRunPathParams, CreateFlowRequest, CreateFlowResponse, DeleteFlowRequest, DeleteFlowResponse, FlowSummary, GetFlowRequest, GetFlowResponse, GetRunRequest, GetRunResponse, ListFlowsRequest, ListFlowsResponse, ListRunsRequest, ListRunsResponse, ToggleFlowRequest, ToggleFlowResponse, TriggerFlowRequest, TriggerFlowResponse, UpdateFlowRequest, UpdateFlowResponse } from '@objectstack/spec/api';
 
 // Validate data
 const result = AutomationApiErrorCode.parse(data);
@@ -85,6 +85,53 @@ const result = AutomationApiErrorCode.parse(data);
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Flow machine name (snake_case) |
 | **runId** | `string` | ✅ | Execution run ID |
+
+
+---
+
+## CreateFlowRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Machine name |
+| **label** | `string` | ✅ | Flow label |
+| **description** | `string` | optional |  |
+| **successMessage** | `string` | optional | Toast shown when a screen flow completes (defaults to a generic "Done"). |
+| **errorMessage** | `string` | optional | Toast shown when a screen flow fails (defaults to the raw error). |
+| **version** | `integer` | optional | Version number |
+| **status** | `Enum<'draft' \| 'active' \| 'obsolete' \| 'invalid'>` | optional | Deployment status |
+| **template** | `boolean` | optional | Is logic template (Subflow) |
+| **type** | `Enum<'autolaunched' \| 'record_change' \| 'schedule' \| 'screen' \| 'api'>` | ✅ | Flow type |
+| **variables** | `Object[]` | optional | Flow variables |
+| **nodes** | `Object[]` | ✅ | Flow nodes |
+| **edges** | `Object[]` | ✅ | Flow connections |
+| **active** | `boolean` | optional | Is active (Deprecated: use status) |
+| **runAs** | `Enum<'system' \| 'user'>` | optional | Execution identity for the run: system = elevated (bypasses RLS), user = the triggering user (RLS-respecting). A schedule-triggered run has no trigger user, so under user it runs UNSCOPED (elevated) — declare system to make that explicit. |
+| **errorHandling** | `Object` | optional | Flow-level error handling configuration |
+| **protection** | `Object` | optional | Package author protection block — lock policy for this flow. |
+| **_lock** | `Enum<'none' \| 'no-overlay' \| 'no-delete' \| 'full'>` | optional | Item-level lock — controls overlay & delete (ADR-0010). |
+| **_lockReason** | `string` | optional | Human-readable reason shown when a write is refused by _lock. |
+| **_lockSource** | `Enum<'artifact' \| 'package' \| 'env-forced'>` | optional | Layer that set _lock (artifact \| package \| env-forced). |
+| **_provenance** | `Enum<'package' \| 'org' \| 'env-forced'>` | optional | Origin of the item (package \| org \| env-forced). |
+| **_packageId** | `string` | optional | Owning package machine id. |
+| **_packageVersion** | `string` | optional | Owning package version. |
+| **_lockDocsUrl** | `string` | optional | Optional documentation link surfaced next to _lockReason. |
+
+
+---
+
+## CreateFlowResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ | The created flow definition |
 
 
 ---
@@ -139,6 +186,20 @@ const result = AutomationApiErrorCode.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Flow machine name (snake_case) |
+
+
+---
+
+## GetFlowResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ | Full flow definition |
 
 
 ---
@@ -277,6 +338,32 @@ const result = AutomationApiErrorCode.parse(data);
 | **error** | `Object` | optional | Error details if success is false |
 | **meta** | `Object` | optional | Response metadata |
 | **data** | `Object` | ✅ |  |
+
+
+---
+
+## UpdateFlowRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Flow machine name (snake_case) |
+| **definition** | `Object` | ✅ | Partial flow definition to update |
+
+
+---
+
+## UpdateFlowResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ | The updated flow definition |
 
 
 ---

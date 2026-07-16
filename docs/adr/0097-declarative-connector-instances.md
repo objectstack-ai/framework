@@ -1,4 +1,4 @@
-# ADR-0096: Declarative Connector Instances — Provider-Bound `connectors:` Entries Materialized by Generic Executors
+# ADR-0097: Declarative Connector Instances — Provider-Bound `connectors:` Entries Materialized by Generic Executors
 
 **Status**: Accepted (2026-07-15) — implemented in framework#2977
 **Deciders**: ObjectStack Protocol Architects
@@ -118,8 +118,22 @@ If a provider-bound instance and a plugin-registered connector share a `name`, b
 - **Open source:** the `rest` / `openapi` / `mcp` provider factories; **static** auth (`none` / `api-key` / `basic` / `bearer`); `credentialRef` resolved from **environment variables** (`defaultEnvCredentialResolver`) — the degraded-but-honest story for environments with no managed secrets service.
 - **Enterprise:** managed credential **vaulting** and OAuth2 authorization-code/refresh lifecycle (inject a vault-backed `CredentialResolver` via `AutomationServicePluginOptions.credentialResolver` — no change to the materialization path), plus per-tenant connection lifecycle. The open tier deliberately omits OAuth2 from `ConnectorInstanceAuthSchema`.
 
+### Runtime reconcile (follow-up, landed)
+
+Materialization is no longer boot-only. `materializeDeclaredConnectors` is a
+**reconcile** against the declared set, run both at boot (`fatal: true`) and on
+`metadata:reloaded` (`fatal: false` — a Studio publish / dev reload). The reconcile
+adds newly-declared instances, tears down removed / newly-`enabled:false` ones
+(calling their `close`), and re-materializes only those whose signature (a stable
+hash of `provider` + `providerConfig` + `auth` + identity) changed — an unchanged
+MCP instance is never needlessly reconnected. On reload a bad entry (unknown
+provider, unresolvable credentialRef, factory failure, name conflict) is **logged
+and skipped**, never crashing the live server; a changed instance's old connector
+keeps serving until its replacement materializes successfully. Boot keeps the
+"fail loudly" contract.
+
 ### Deliberate scope boundaries
 
-- **Boot-time only.** Materialization runs once at boot. Re-materializing a provider-bound instance published at runtime (Studio) is a follow-up; the descriptor audit still re-runs on `metadata:reloaded`.
-- **`providerConfig.spec` (openapi)** accepts an inline document or an http(s) URL; resolving a `./file.json` ref relative to the stack is the stack loader's job, not the connector's.
+- **`providerConfig.spec` (openapi)** accepts an inline document, an http(s) URL, **or a package-relative file path** (#3016 follow-up). The connector still owns no filesystem access: the automation service injects a `loadPackageFile` capability into `ConnectorProviderContext` that resolves the ref against the declaring stack/package root (`packageRoot`, CLI default: the `objectstack.config.ts` directory) and **confines reads to that root** — absolute and `..`-escaping paths are rejected. Read/parse failures follow the reconcile policy above: fatal at boot, skipped on reload.
 - **MCP credentials** ride the transport (ADR-0024); for an http transport a resolved `auth` is folded into the request headers.
+- **MCP at boot** connects during materialization, so an unreachable server fails boot; a fail-soft "optional" marker for boot-time materialization is a possible future refinement (runtime reloads are already soft).

@@ -15,6 +15,7 @@ import type {
     InstallPackageResponse
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
+import { readServiceSelfInfo } from '@objectstack/spec/api';
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
@@ -447,9 +448,13 @@ const CLONE_STRIP_FIELDS: readonly string[] = [
 
 /**
  * Service Configuration for Discovery
- * Maps service names to their routes and plugin providers
+ * Maps service names to their routes and plugin providers.
+ *
+ * `route: undefined` means the service has NO HTTP surface — discovery must
+ * not advertise a route for it (ADR-0076 D12, #2462: an advertised route
+ * with no mounted handler 404s and misleads consumers).
  */
-const SERVICE_CONFIG: Record<string, { route: string; plugin: string }> = {
+const SERVICE_CONFIG: Record<string, { route?: string; plugin: string }> = {
     auth:         { route: '/api/v1/auth', plugin: 'plugin-auth' },
     automation:   { route: '/api/v1/automation', plugin: 'plugin-automation' },
     cache:        { route: '/api/v1/cache', plugin: 'plugin-redis' },
@@ -457,7 +462,9 @@ const SERVICE_CONFIG: Record<string, { route: string; plugin: string }> = {
     job:          { route: '/api/v1/jobs', plugin: 'job-scheduler' },
     ui:           { route: '/api/v1/ui', plugin: 'ui-plugin' },
     workflow:     { route: '/api/v1/workflow', plugin: 'plugin-workflow' },
-    realtime:     { route: '/api/v1/realtime', plugin: 'plugin-realtime' },
+    // service-realtime is an in-process pub/sub bus; nothing mounts
+    // /api/v1/realtime, so no route is advertised (D12, #2462).
+    realtime:     { plugin: 'service-realtime' },
     notification: { route: '/api/v1/notifications', plugin: 'plugin-notifications' },
     ai:           { route: '/api/v1/ai', plugin: 'plugin-ai' },
     i18n:         { route: '/api/v1/i18n', plugin: 'service-i18n' },
@@ -1096,23 +1103,49 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // Get registered services from kernel if available
         const registeredServices = this.getServicesRegistry ? this.getServicesRegistry() : new Map();
         
+        // Honest capabilities (ADR-0076 D12, #2462): the registered analytics
+        // service may be the lightweight ObjectQL fallback rather than the
+        // full service-analytics engine — report whatever it declares about
+        // itself instead of hardcoding 'available'.
+        const analyticsSelf = readServiceSelfInfo(registeredServices.get('analytics'));
+
         // Build dynamic service info with proper typing
         const services: Record<string, ServiceInfo> = {
             // --- Kernel-provided (objectql is an example kernel implementation) ---
             metadata:  { enabled: true, status: 'available' as const, route: '/api/v1/meta', provider: 'objectql' },
             data:      { enabled: true, status: 'available' as const, route: '/api/v1/data', provider: 'objectql' },
-            analytics: { enabled: true, status: 'available' as const, route: '/api/v1/analytics', provider: 'objectql' },
+            analytics: {
+                enabled: true,
+                status: analyticsSelf?.status ?? ('available' as const),
+                route: '/api/v1/analytics',
+                provider: 'objectql',
+                ...(analyticsSelf?.handlerReady !== undefined ? { handlerReady: analyticsSelf.handlerReady } : {}),
+                ...(analyticsSelf?.message ? { message: analyticsSelf.message } : {}),
+            },
         };
 
         // Check which services are actually registered
         for (const [serviceName, config] of Object.entries(SERVICE_CONFIG)) {
             if (registeredServices.has(serviceName)) {
-                // Service is registered and available
+                // Registered — but honor a stub/dev/fallback self-description
+                // instead of blindly reporting 'available' (ADR-0076 D12).
+                const self = readServiceSelfInfo(registeredServices.get(serviceName));
+                // No HTTP surface at all (e.g. realtime): the handler can never
+                // be ready and 'available' would overstate it — report degraded.
+                const noHttpSurface = !config.route;
                 services[serviceName] = {
                     enabled: true,
-                    status: 'available' as const,
+                    status: self?.status ?? (noHttpSurface ? ('degraded' as const) : ('available' as const)),
                     route: config.route,
                     provider: config.plugin,
+                    ...(noHttpSurface || self?.handlerReady !== undefined
+                        ? { handlerReady: noHttpSurface ? false : self?.handlerReady }
+                        : {}),
+                    ...(self?.message
+                        ? { message: self.message }
+                        : noHttpSurface
+                            ? { message: 'In-process service only — no HTTP surface is mounted' }
+                            : {}),
                 };
             } else {
                 // Service is not registered
@@ -1142,9 +1175,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             analytics: '/api/v1/analytics',
         };
 
-        // Add routes for available plugin services
+        // Add routes for available plugin services. Services without an HTTP
+        // surface (config.route undefined) advertise no route (D12, #2462).
         for (const [serviceName, config] of Object.entries(SERVICE_CONFIG)) {
-            if (registeredServices.has(serviceName)) {
+            if (registeredServices.has(serviceName) && config.route) {
                 const routeKey = serviceToRouteKey[serviceName];
                 if (routeKey) {
                     optionalRoutes[routeKey] = config.route;

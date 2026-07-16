@@ -6,6 +6,7 @@
     "expression",
     "http",
     "identifiers",
+    "mapping",
     "metadata-persistence",
     "metadata-types",
     "protection"

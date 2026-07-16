@@ -18,7 +18,17 @@
  * (every term must hit some field); fields are OR-ed. `select`/`status` columns
  * store a value but users type the label, so the term is mapped to option
  * values whose label matches (with a raw-value `$contains` fallback).
+ *
+ * Pinyin recall (#2486): when the object carries the hidden `__search`
+ * companion column (provisioned by the SchemaRegistry when
+ * `OS_SEARCH_PINYIN_ENABLED` is on, populated by plugin-pinyin-search), each
+ * latin term additionally ORs `{ __search: { $contains: term } }` so full
+ * pinyin (`zhangwei`) and initials (`zw`) hit CJK names. Purely additive:
+ * `resolveSearchFields` still returns only source fields (the companion is
+ * invisible to `$searchFields` overrides and to clients).
  */
+
+import { SEARCH_COMPANION_FIELD, isCompanionMatchableTerm } from './search-companion.js';
 
 export interface SearchFieldMeta {
   type?: string;
@@ -148,9 +158,19 @@ export function expandSearchToFilter(raw: unknown, opts: ExpandSearchOptions): a
   if (searchFields.length === 0) return null;
 
   const terms = query.trim().split(/\s+/).filter(Boolean);
-  const andClauses = terms.map((term) => ({
-    $or: searchFields.flatMap((f) => fieldClausesForTerm(f, term, opts.fields[f] || {})),
-  }));
+  // [#2486] Companion recall: present only when the registry provisioned the
+  // hidden `__search` column for this object (deployment-gated). The companion
+  // stores lowercase normalized forms, so the term is lowercased; CJK terms
+  // skip the clause (they hit the source columns directly and can never match
+  // the ASCII companion).
+  const hasCompanion = !!opts.fields[SEARCH_COMPANION_FIELD];
+  const andClauses = terms.map((term) => {
+    const clauses = searchFields.flatMap((f) => fieldClausesForTerm(f, term, opts.fields[f] || {}));
+    if (hasCompanion && isCompanionMatchableTerm(term)) {
+      clauses.push({ [SEARCH_COMPANION_FIELD]: { $contains: term.toLowerCase() } });
+    }
+    return { $or: clauses };
+  });
 
   if (andClauses.length === 0) return null;
   return andClauses.length === 1 ? andClauses[0] : { $and: andClauses };

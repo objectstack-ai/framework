@@ -1,6 +1,6 @@
 # ADR-0095: Authorization Kernel Chain — Tenant Isolation as Layer 0, a Monotonic Posture Ladder, Capability-Derived Posture
 
-**Status**: Proposed (2026-07-14)
+**Status**: Accepted (2026-07-14) — implemented: D1 tenant Layer 0 (`plugin-security/src/tenant-layer.ts`), D2/D3 posture ladder (`core/src/security/posture-ladder.ts`), locked by `authz-matrix-gate.test.ts` + `posture-ladder.test.ts` (#2920 B1–B4)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0002](./0002-environment-database-isolation.md) (environment-per-database), [ADR-0057](./0057-erp-authorization-core-business-units-and-scope-depth.md) (scope depth), [ADR-0066](./0066-unified-authorization-model.md) (unified authz model, superuser bypass), [ADR-0090](./0090-permission-model-v2-concept-convergence.md) (permission model v2), [ADR-0093](./0093-tenancy-mode-and-membership-lifecycle.md) (tenancy service)
 **Scopes**: the "cross-tenant RLS does not exist here" claim in [ADR-0073](./0073-automation-execution-identity.md) (see Context)

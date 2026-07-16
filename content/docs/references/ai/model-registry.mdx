@@ -18,8 +18,8 @@ Enables AI-powered ObjectStack applications to discover and use LLMs consistentl
 ## TypeScript Usage
 
 ```typescript
-import { ModelCapability, ModelConfig, ModelLimits, ModelPricing, ModelProvider, ModelRegistryEntry, ModelSelectionCriteria, PromptVariable } from '@objectstack/spec/ai';
-import type { ModelCapability, ModelConfig, ModelLimits, ModelPricing, ModelProvider, ModelRegistryEntry, ModelSelectionCriteria, PromptVariable } from '@objectstack/spec/ai';
+import { ModelCapability, ModelConfig, ModelLimits, ModelPricing, ModelProvider, ModelRegistry, ModelRegistryEntry, ModelSelectionCriteria, PromptTemplate, PromptVariable } from '@objectstack/spec/ai';
+import type { ModelCapability, ModelConfig, ModelLimits, ModelPricing, ModelProvider, ModelRegistry, ModelRegistryEntry, ModelSelectionCriteria, PromptTemplate, PromptVariable } from '@objectstack/spec/ai';
 
 // Validate data
 const result = ModelCapability.parse(data);
@@ -113,6 +113,21 @@ const result = ModelCapability.parse(data);
 
 ---
 
+## ModelRegistry
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Registry name |
+| **models** | `Record<string, Object>` | ✅ | Model entries by ID |
+| **promptTemplates** | `Record<string, Object>` | optional | Prompt templates by name |
+| **defaultModel** | `string` | optional | Default model ID |
+| **enableAutoFallback** | `boolean` | optional | Auto-fallback on errors |
+
+
+---
+
 ## ModelRegistryEntry
 
 ### Properties
@@ -140,6 +155,35 @@ const result = ModelCapability.parse(data);
 | **provider** | `Enum<'openai' \| 'azure_openai' \| 'anthropic' \| 'google' \| 'cohere' \| 'huggingface' \| 'local' \| 'custom'>` | optional |  |
 | **tags** | `string[]` | optional |  |
 | **excludeDeprecated** | `boolean` | ✅ |  |
+
+
+---
+
+## PromptTemplate
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique template identifier |
+| **name** | `string` | ✅ | Template name (snake_case) |
+| **label** | `string` | ✅ | Display name |
+| **system** | `string \| Object` | optional | System prompt — supports `{{var}`} interpolation |
+| **user** | `string \| Object` | ✅ | User prompt template — supports `{{var}`} interpolation |
+| **assistant** | `string` | optional | Assistant message prefix |
+| **variables** | `Object[]` | optional | Template variables |
+| **modelId** | `string` | optional | Recommended model ID |
+| **temperature** | `number` | optional |  |
+| **maxTokens** | `number` | optional |  |
+| **topP** | `number` | optional |  |
+| **frequencyPenalty** | `number` | optional |  |
+| **presencePenalty** | `number` | optional |  |
+| **stopSequences** | `string[]` | optional |  |
+| **version** | `string` | optional |  |
+| **description** | `string` | optional |  |
+| **category** | `string` | optional | Template category (e.g., "code_generation", "support") |
+| **tags** | `string[]` | optional |  |
+| **examples** | `Object[]` | optional |  |
 
 
 ---

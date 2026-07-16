@@ -2,7 +2,9 @@
   "title": "Integration Protocol",
   "pages": [
     "connector",
+    "connector-auth",
     "http",
+    "mapping",
     "message-queue",
     "misc",
     "object-storage",

@@ -1,0 +1,48 @@
+---
+"@objectstack/console": patch
+---
+
+Console (objectui) refreshed to `092bd859934f`. Frontend changes in this range:
+
+- fix(app-shell): bind current_user.positions into the client predicate scope; align role-gating examples (#1583 / ADR-0058) (#2573)
+- feat(app-shell): CEL lint + field autocomplete for condition predicates (#1582) (#2567)
+- fix(detail): gate related lists on the current user's child-object read permission (#2359) (#2565)
+- feat(flow-designer): connector picker lists dispatchable connectors + marks declarative instances (#2563)
+- feat(app-shell): Studio CEL editor for list-view conditional formatting (#1584 / #1582) (#2558)
+- fix(fields): resolve lookup chip display name via referenced object schema, not the autonumber-prone key heuristic (#2357) (#2551)
+- feat(kanban): accept CEL { condition, style } conditional-formatting rules (#1584 follow-up) (#2550)
+- fix(plugin-grid): sniff CSV encoding in import wizard (GB18030 fallback) (#2557)
+- feat(detail): editable record highlights on the shared inline-edit draft (#2549)
+- fix(spec-bridge/form): #2545 stop dropping spec FormViewSchema keys; normalize legacy groups → sections (#2552)
+- feat(flow-designer): localize palette headings + cloud-sync recents + guide (#2553)
+- fix(studio): refresh builder top-bar name after a package rename (#2554)
+- feat(core): B3 cascading-option guardrail, role-gated demo, ADR + browser e2e (#1583) (#2547)
+- feat(list): unify conditional formatting + row-action visibility onto the CEL engine (#1584) (#2544)
+- feat(detail): record-level inline edit — shared InlineEditContext + one atomic Save (#2542)
+- feat(flow-designer): search box + keyboard nav + recents in the add-node palette (#2543)
+- feat(kanban): default card fields to object highlightFields (ADR-0085, #2162) (#2541)
+- fix(types/plugin-grid): #1763 declare spec-canonical bulkActions on ObjectGridSchema (#2539)
+- fix(attachments): download attachments via authenticated signed URL (framework #2970)
+- feat(studio): spec-driven package create/edit/view form in a modal (#2535)
+- fix(permissions/fields): #2926 ④⑧ — FLS fail-open + lookup display_field (#2537)
+- feat(app-shell): CEL authoring safety for RLS policies — lint, field autocomplete, test-run (#2533)
+- fix(auth): gate DeviceAuthPage on features.deviceAuthorization (framework#2874 / #2513) (#2536)
+- fix(app-shell): close view config panel on discard in edit mode (#2320)
+- feat(metadata-admin): create form-family views through the View create UI (#2531)
+- fix(app-shell): render action's objectName as an object selector (#2325)
+- fix(components): exit inline edit mode for injected cell editors (#2534)
+- fix(attachments): authenticated uploads + friendly denial copy in RecordAttachmentsPanel (#2755) (#2532)
+- feat(components): page:tabs honors item-level visibleWhen — conditional tabs (framework#2606) (#2516)
+- feat(metadata-admin): page variable source is a component picker (#2328) (#2523)
+- fix(studio-design): make object canvas overridable via studio-canvas-preview registry (#2337) (#2527)
+- fix(metadata-admin): seed flow createDefaults with required `type` (#2525)
+- fix(metadata-admin): give hook create form a createSchema so object renders as a ref:object picker (#2521)
+- feat(studio): enforce package namespace prefix at authoring time (framework#2694) (#2524)
+- fix(app-shell): render View create-form Object field as ref:object picker (#2526)
+- feat(components): add `variant === 'primary'` tie-break to action:bar ordering (#2339) (#2519)
+- fix(build): stop TS6059 rootDir errors in dts build across 21 packages (#2520)
+- fix(app-nav): exclude record-detail pages from the 'page' nav picker (#2333) (#2517)
+- fix(plugin-report): stop TS6059 rootDir errors in dts build (#2334) (#2518)
+- feat(flow-designer): add 'position' xRef picker kind for approval approvers / escalateTo (#2778) (#2515)
+
+objectui range: `cc2156841787...092bd859934f`

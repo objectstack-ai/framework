@@ -20,7 +20,7 @@ export type {
     StepLogEntry,
 } from './engine.js';
 
-// Connector provider contract (ADR-0096) — re-exported from @objectstack/spec so
+// Connector provider contract (ADR-0097) — re-exported from @objectstack/spec so
 // hosts/tests can reach it via this package too. Connector plugins should import
 // it directly from `@objectstack/spec/integration` (no coupling to this engine).
 export type {
@@ -45,7 +45,7 @@ export { SysAutomationRun } from './sys-automation-run.object.js';
 
 // Kernel plugin — seeds all built-in nodes; this is the only plugin needed for
 // a fully-functional automation capability.
-export { AutomationServicePlugin } from './plugin.js';
+export { AutomationServicePlugin, createPackageFileLoader } from './plugin.js';
 export type { AutomationServicePluginOptions } from './plugin.js';
 
 // Run identity (ADR-0049 / #1888). Maps a flow run's effective `runAs` to the

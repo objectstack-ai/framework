@@ -30,8 +30,8 @@ Features:
 ## TypeScript Usage
 
 ```typescript
-import { KernelSecurityPolicy, KernelSecurityScanResult, KernelSecurityVulnerability, PermissionAction, PermissionScope, PluginTrustLevel, ResourceType, RuntimeConfig, SandboxConfig } from '@objectstack/spec/kernel';
-import type { KernelSecurityPolicy, KernelSecurityScanResult, KernelSecurityVulnerability, PermissionAction, PermissionScope, PluginTrustLevel, ResourceType, RuntimeConfig, SandboxConfig } from '@objectstack/spec/kernel';
+import { KernelSecurityPolicy, KernelSecurityScanResult, KernelSecurityVulnerability, PermissionAction, PermissionScope, PluginPermission, PluginPermissionSet, PluginSecurityManifest, PluginTrustLevel, ResourceType, RuntimeConfig, SandboxConfig } from '@objectstack/spec/kernel';
+import type { KernelSecurityPolicy, KernelSecurityScanResult, KernelSecurityVulnerability, PermissionAction, PermissionScope, PluginPermission, PluginPermissionSet, PluginSecurityManifest, PluginTrustLevel, ResourceType, RuntimeConfig, SandboxConfig } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = KernelSecurityPolicy.parse(data);
@@ -132,6 +132,58 @@ Scope of permission application
 * `user`
 * `resource`
 * `plugin`
+
+
+---
+
+## PluginPermission
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique permission identifier |
+| **resource** | `Enum<'data.object' \| 'data.record' \| 'data.field' \| 'ui.view' \| 'ui.dashboard' \| 'ui.report' \| 'system.config' \| 'system.plugin' \| 'system.api' \| 'system.service' \| 'storage.file' \| 'storage.database' \| 'network.http' \| 'network.websocket' \| 'process.spawn' \| 'process.env'>` | ✅ | Type of resource being accessed |
+| **actions** | `Enum<'create' \| 'read' \| 'update' \| 'delete' \| 'execute' \| 'manage' \| 'configure' \| 'share' \| 'export' \| 'import' \| 'admin'>[]` | ✅ |  |
+| **scope** | `Enum<'global' \| 'tenant' \| 'user' \| 'resource' \| 'plugin'>` | optional | Scope of permission application |
+| **filter** | `Object` | optional |  |
+| **description** | `string` | ✅ |  |
+| **required** | `boolean` | optional |  |
+| **justification** | `string` | optional | Why this permission is needed |
+
+
+---
+
+## PluginPermissionSet
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **permissions** | `Object[]` | ✅ |  |
+| **groups** | `Object[]` | optional |  |
+| **defaultGrant** | `Enum<'prompt' \| 'allow' \| 'deny' \| 'inherit'>` | optional |  |
+
+
+---
+
+## PluginSecurityManifest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **pluginId** | `string` | ✅ |  |
+| **trustLevel** | `Enum<'verified' \| 'trusted' \| 'community' \| 'untrusted' \| 'blocked'>` | ✅ | Trust level of the plugin |
+| **permissions** | `Object` | ✅ |  |
+| **sandbox** | `Object` | ✅ |  |
+| **policy** | `Object` | optional |  |
+| **scanResults** | `Object[]` | optional |  |
+| **vulnerabilities** | `Object[]` | optional |  |
+| **codeSigning** | `Object` | optional |  |
+| **certifications** | `Object[]` | optional |  |
+| **securityContact** | `Object` | optional |  |
+| **vulnerabilityDisclosure** | `Object` | optional |  |
 
 
 ---

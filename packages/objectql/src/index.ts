@@ -12,6 +12,20 @@ export {
 } from './registry.js';
 export type { ObjectContributor, SchemaRegistryOptions } from './registry.js';
 
+// Search-normalization companion column (#2486 — pinyin recall). Shared by
+// the registry's compile-time provisioning seam, the engine's `$search`
+// expansion, and plugin-pinyin-search's populate hooks.
+export {
+  SEARCH_COMPANION_FIELD,
+  SEARCH_COMPANION_NORMALIZERS,
+  provisionSearchCompanion,
+  resolveSearchCompanionSources,
+  isCompanionSourceEligible,
+  isCompanionMatchableTerm,
+  containsCJK,
+} from './search-companion.js';
+export type { CompanionFieldMeta, CompanionObjectMeta } from './search-companion.js';
+
 // Export Protocol Implementation
 export { ObjectStackProtocolImplementation } from '@objectstack/metadata-protocol';
 

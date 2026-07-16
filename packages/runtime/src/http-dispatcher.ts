@@ -6,6 +6,7 @@ import {
 } from '@objectstack/core';
 import { isMcpServerEnabled } from '@objectstack/types';
 import { CoreServiceName } from '@objectstack/spec/system';
+import { readServiceSelfInfo } from '@objectstack/spec/api';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
@@ -812,27 +813,21 @@ export class HttpDispatcher {
             // identity forwarded. No `@objectstack/service-ai`.
             listActions: async () => {
                 const meta: any = await getMeta();
-                const objs: any[] = (await meta?.listObjects?.()) ?? [];
                 const hasAutomation = Boolean(
                     await this.resolveService('automation', envId).catch(() => null),
                 );
                 const out: any[] = [];
-                for (const obj of objs) {
-                    const objectName: string | undefined = obj?.name;
+                for (const { action, objectName, obj } of await this.collectActionDeclarations(meta)) {
                     if (!objectName || isSystemObjectName(objectName)) continue; // fail-closed on sys_*
-                    const actions: any[] = Array.isArray(obj?.actions) ? obj.actions : [];
-                    for (const action of actions) {
-                        if (!action || typeof action.name !== 'string') continue;
-                        if (!this.isHeadlessInvokableAction(action, hasAutomation)) continue;
-                        // [#2849 / ADR-0011] MCP is an AI surface: only actions the
-                        // author explicitly opted in via `ai.exposed` are listed.
-                        // Fail-closed — bodies run as trusted code (see
-                        // buildActionEngineFacade), so author opt-in is the boundary.
-                        if (this.actionAiExposureError(action)) continue;
-                        // Hide actions the caller is not permitted to run.
-                        if (this.actionPermissionError(action, ec)) continue;
-                        out.push(this.summarizeAction(action, obj, objectName));
-                    }
+                    if (!this.isHeadlessInvokableAction(action, hasAutomation)) continue;
+                    // [#2849 / ADR-0011] MCP is an AI surface: only actions the
+                    // author explicitly opted in via `ai.exposed` are listed.
+                    // Fail-closed — bodies run as trusted code (see
+                    // buildActionEngineFacade), so author opt-in is the boundary.
+                    if (this.actionAiExposureError(action)) continue;
+                    // Hide actions the caller is not permitted to run.
+                    if (this.actionPermissionError(action, ec)) continue;
+                    out.push(this.summarizeAction(action, obj, objectName));
                 }
                 return out;
             },
@@ -1176,24 +1171,86 @@ export class HttpDispatcher {
         name: string,
         objectName?: string,
     ): Promise<{ action: any; objectName: string } | null> {
+        const decls = await this.collectActionDeclarations(meta);
         if (objectName) {
-            const def: any = await meta?.getObject?.(objectName);
-            const action = Array.isArray(def?.actions) ? def.actions.find((a: any) => a?.name === name) : undefined;
-            return action ? { action, objectName } : null;
+            const hit = decls.find((d) => d.objectName === objectName && d.action?.name === name);
+            return hit ? { action: hit.action, objectName } : null;
         }
-        const objs: any[] = (await meta?.listObjects?.()) ?? [];
-        const matches: Array<{ action: any; objectName: string }> = [];
-        for (const obj of objs) {
-            if (!obj?.name) continue;
-            const action = Array.isArray(obj?.actions) ? obj.actions.find((a: any) => a?.name === name) : undefined;
-            if (action) matches.push({ action, objectName: obj.name });
-        }
+        const matches = decls.filter((d) => d.action?.name === name);
         if (matches.length === 0) return null;
         if (matches.length > 1) {
             const where = matches.map((m) => m.objectName).join(', ');
             throw new Error(`Action '${name}' exists on multiple objects (${where}); pass objectName to disambiguate`);
         }
-        return matches[0];
+        return { action: matches[0].action, objectName: matches[0].objectName };
+    }
+
+    /**
+     * The MCP surface's single declaration source: every action declaration the
+     * bridge may list or invoke, as `{ action, objectName, obj }` rows.
+     *
+     * Two shapes feed it (#3010):
+     *  1. `object.actions` — bundle/artifact objects and authored object rows.
+     *  2. Standalone `action` metadata items — Studio-authored rows that the
+     *     engine executes since #2608 (`resyncAuthoredActions`) but that never
+     *     appear inside any object definition. Their owning object follows the
+     *     same convention as the engine registration key (`objectName` field,
+     *     legacy `object` field, else the `'global'` wildcard).
+     *
+     * On a key clash (`objectName:name`) the object-embedded declaration wins,
+     * mirroring the execution layer's artifact-wins rule — `resyncAuthoredActions`
+     * refuses to clobber an artifact-registered handler, so the embedded
+     * declaration is the one that matches what actually runs. All MCP gating
+     * (`ai.exposed`, ADR-0066 D4, headless-invokability) applies downstream of
+     * this collection, unchanged.
+     */
+    private async collectActionDeclarations(
+        meta: any,
+    ): Promise<Array<{ action: any; objectName: string; obj: any }>> {
+        const objs: any[] = (await meta?.listObjects?.()) ?? [];
+        const objByName = new Map<string, any>();
+        for (const obj of objs) {
+            if (typeof obj?.name === 'string') objByName.set(obj.name, obj);
+        }
+        const out: Array<{ action: any; objectName: string; obj: any }> = [];
+        const seen = new Set<string>();
+        for (const obj of objs) {
+            const objectName: string | undefined = obj?.name;
+            if (!objectName) continue;
+            for (const action of Array.isArray(obj?.actions) ? obj.actions : []) {
+                if (!action || typeof action.name !== 'string') continue;
+                seen.add(`${objectName}:${action.name}`);
+                out.push({ action, objectName, obj });
+            }
+        }
+        let standalone: any[] = [];
+        try {
+            standalone = (await meta?.loadMany?.('action')) ?? [];
+        } catch {
+            standalone = []; // no standalone-item source on this metadata service
+        }
+        for (const action of standalone) {
+            if (!action || typeof action.name !== 'string') continue;
+            const objectName = this.standaloneActionObjectName(action);
+            const key = `${objectName}:${action.name}`;
+            if (seen.has(key)) continue; // object-embedded declaration wins
+            seen.add(key);
+            out.push({ action, objectName, obj: objByName.get(objectName) });
+        }
+        return out;
+    }
+
+    /**
+     * Owning object of a standalone `action` item — must stay in lockstep with
+     * the ObjectQL plugin's `actionObjectKey` (the engine registration key), so
+     * the declaration the MCP surface resolves is the one whose handler
+     * `executeAction` will find: spec `objectName`, bundle-collector `object`,
+     * else the `'global'` wildcard.
+     */
+    private standaloneActionObjectName(action: any): string {
+        if (typeof action?.objectName === 'string' && action.objectName.length > 0) return action.objectName;
+        if (typeof action?.object === 'string' && action.object.length > 0) return action.object;
+        return 'global';
     }
 
     /**
@@ -1509,7 +1566,6 @@ export class HttpDispatcher {
         const hasAuth         = !!authSvc;
         const hasGraphQL      = !!(graphqlSvc || this.kernel.graphql);
         const hasSearch       = !!searchSvc;
-        const hasWebSockets   = !!realtimeSvc;
         const hasFiles        = !!filesSvc;
         const hasAnalytics    = !!analyticsSvc;
         const hasWorkflow     = !!workflowSvc;
@@ -1534,7 +1590,12 @@ export class HttpDispatcher {
                 analytics:     hasAnalytics ? `${prefix}/analytics` : undefined,
                 automation:    hasAutomation ? `${prefix}/automation` : undefined,
                 workflow:      hasWorkflow ? `${prefix}/workflow` : undefined,
-                realtime:      hasWebSockets ? `${prefix}/realtime` : undefined,
+                // Never advertised (ADR-0076 D12, #2462): service-realtime is an
+                // in-process pub/sub bus — the dispatcher has no /realtime branch
+                // and no plugin mounts one, so an advertised route would 404.
+                // Re-add only when a real HTTP/WS surface exists (and then it must
+                // pass through the shouldDenyAnonymous gate, #2567).
+                realtime:      undefined,
                 notifications: hasNotification ? `${prefix}/notifications` : undefined,
                 ai:            hasAi ? `${prefix}/ai` : undefined,
                 i18n:          hasI18n ? `${prefix}/i18n` : undefined,
@@ -1548,13 +1609,30 @@ export class HttpDispatcher {
         // handlerReady: true means the dispatcher has a real, bound handler for this route.
         // handlerReady: false means the route is present in the discovery table but may not
         // yet have a concrete implementation or may be served by a stub.
-        const svcAvailable = (route?: string, provider?: string) => ({
-            enabled: true, status: 'available' as const, handlerReady: true, route, provider,
-        });
+        //
+        // Honest capabilities (ADR-0076 D12, #2462): a registered service that
+        // self-identifies as a stub / dev fake / degraded fallback (via the
+        // `__serviceInfo` marker or plugin-dev's legacy `_dev: true`) is
+        // reported with its declared status — never as `available` — so
+        // consumers (AI agents, the console) don't mistake a fake capability
+        // for a real one.
+        const svcAvailable = (route?: string, provider?: string, svc?: unknown) => {
+            const self = svc ? readServiceSelfInfo(svc) : undefined;
+            if (self) {
+                return {
+                    enabled: true, status: self.status, handlerReady: self.handlerReady ?? false,
+                    route, provider, message: self.message,
+                };
+            }
+            return { enabled: true, status: 'available' as const, handlerReady: true, route, provider };
+        };
         const svcUnavailable = (name: string) => ({
             enabled: false, status: 'unavailable' as const, handlerReady: false,
             message: `Install a ${name} plugin to enable`,
         });
+
+        // Self-description of the registered realtime service, if any (D12).
+        const realtimeSelf = realtimeSvc ? readServiceSelfInfo(realtimeSvc) : undefined;
 
         // Derive locale info from actual i18n service when available
         let locale = { default: 'en', supported: ['en'], timezone: 'UTC' };
@@ -1579,7 +1657,10 @@ export class HttpDispatcher {
             features: {
                 graphql: hasGraphQL,
                 search: hasSearch,
-                websockets: hasWebSockets,
+                // No WS/HTTP realtime surface is mounted anywhere — a mere
+                // in-process realtime service must not advertise websockets
+                // (ADR-0076 D12, #2462).
+                websockets: false,
                 files: hasFiles,
                 analytics: hasAnalytics,
                 ai: hasAi,
@@ -1592,21 +1673,32 @@ export class HttpDispatcher {
                 metadata:       { enabled: true, status: 'degraded' as const, handlerReady: true, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
                 data:           svcAvailable(routes.data, 'kernel'),
                 // Plugin-provided — only available when a plugin registers the service
-                auth:           hasAuth ? svcAvailable(routes.auth) : svcUnavailable('auth'),
-                automation:     hasAutomation ? svcAvailable(routes.automation) : svcUnavailable('automation'),
-                analytics:      hasAnalytics ? svcAvailable(routes.analytics) : svcUnavailable('analytics'),
-                cache:          hasCache ? svcAvailable() : svcUnavailable('cache'),
-                queue:          hasQueue ? svcAvailable() : svcUnavailable('queue'),
-                job:            hasJob ? svcAvailable() : svcUnavailable('job'),
-                ui:             hasUi ? svcAvailable(routes.ui) : svcUnavailable('ui'),
-                workflow:       hasWorkflow ? svcAvailable(routes.workflow) : svcUnavailable('workflow'),
-                realtime:       hasWebSockets ? svcAvailable(routes.realtime) : svcUnavailable('realtime'),
-                notification:   hasNotification ? svcAvailable(routes.notifications) : svcUnavailable('notification'),
-                ai:             hasAi ? svcAvailable(routes.ai) : svcUnavailable('ai'),
-                i18n:           hasI18n ? svcAvailable(routes.i18n) : svcUnavailable('i18n'),
-                graphql:        hasGraphQL ? svcAvailable(routes.graphql) : svcUnavailable('graphql'),
-                'file-storage': hasFiles ? svcAvailable(routes.storage) : svcUnavailable('file-storage'),
-                search:         hasSearch ? svcAvailable() : svcUnavailable('search'),
+                auth:           hasAuth ? svcAvailable(routes.auth, undefined, authSvc) : svcUnavailable('auth'),
+                automation:     hasAutomation ? svcAvailable(routes.automation, undefined, automationSvc) : svcUnavailable('automation'),
+                analytics:      hasAnalytics ? svcAvailable(routes.analytics, undefined, analyticsSvc) : svcUnavailable('analytics'),
+                cache:          hasCache ? svcAvailable(undefined, undefined, cacheSvc) : svcUnavailable('cache'),
+                queue:          hasQueue ? svcAvailable(undefined, undefined, queueSvc) : svcUnavailable('queue'),
+                job:            hasJob ? svcAvailable(undefined, undefined, jobSvc) : svcUnavailable('job'),
+                ui:             hasUi ? svcAvailable(routes.ui, undefined, uiSvc) : svcUnavailable('ui'),
+                workflow:       hasWorkflow ? svcAvailable(routes.workflow, undefined, workflowSvc) : svcUnavailable('workflow'),
+                // Honest entry (ADR-0076 D12, #2462): the registered realtime
+                // service is an in-process event bus with NO mounted HTTP/WS
+                // surface — report it degraded with handlerReady:false (or as
+                // the stub it declares itself to be), never as an available
+                // HTTP capability with a route that would 404.
+                realtime:       realtimeSvc ? {
+                                    enabled: true,
+                                    status: realtimeSelf?.status ?? ('degraded' as const),
+                                    handlerReady: false,
+                                    message: realtimeSelf?.message
+                                        ?? 'In-process event bus only — no HTTP/WS realtime surface is mounted',
+                                } : svcUnavailable('realtime'),
+                notification:   hasNotification ? svcAvailable(routes.notifications, undefined, notificationSvc) : svcUnavailable('notification'),
+                ai:             hasAi ? svcAvailable(routes.ai, undefined, aiSvc) : svcUnavailable('ai'),
+                i18n:           hasI18n ? svcAvailable(routes.i18n, undefined, i18nSvc) : svcUnavailable('i18n'),
+                graphql:        hasGraphQL ? svcAvailable(routes.graphql, undefined, graphqlSvc) : svcUnavailable('graphql'),
+                'file-storage': hasFiles ? svcAvailable(routes.storage, undefined, filesSvc) : svcUnavailable('file-storage'),
+                search:         hasSearch ? svcAvailable(undefined, undefined, searchSvc) : svcUnavailable('search'),
             },
             locale,
         };
@@ -1631,9 +1723,13 @@ export class HttpDispatcher {
         //
         // The dispatcher-plugin's direct `/graphql` route calls us WITHOUT
         // resolving identity first (unlike `dispatch()`, which populates
-        // `context.executionContext`), so resolve it here when absent.
+        // `context.executionContext`), so resolve it here when absent —
+        // REGARDLESS of `requireAuth`: the resolved identity is also what we
+        // thread to the engine below (#2992), and an authenticated caller on a
+        // `requireAuth: false` deployment must still run under their own
+        // authority, not context-less.
         let ec: any = context.executionContext;
-        if (this.requireAuth && !ec) {
+        if (!ec) {
             ec = await this.resolveRequestExecutionContext(context);
             if (ec) context.executionContext = ec;
         }
@@ -1652,8 +1748,16 @@ export class HttpDispatcher {
             throw { statusCode: 501, message: 'GraphQL service not available' };
         }
 
+        // ADR-0096 D1 / #2992 — thread the caller's identity to the engine.
+        // `kernel.graphql` is still unassigned everywhere (this call 501s
+        // above), but the moment a real engine lands it resolves objects
+        // through ObjectQL, whose security middleware falls OPEN on a missing
+        // principal — so the entry point must already carry the caller as
+        // `options.context` (the same key the REST `callData` path threads).
+        // An implementation MUST forward it to every data-engine call.
         return this.kernel.graphql(body.query, body.variables, {
-            request: context.request
+            request: context.request,
+            context: ec,
         });
     }
 
@@ -1663,8 +1767,10 @@ export class HttpDispatcher {
      * `context.executionContext`). The dispatcher-plugin's direct `/graphql`
      * route is the current caller. Mirrors the identity resolution `dispatch()`
      * performs so an anonymous-deny gate can tell an authenticated caller from
-     * an anonymous one. Best-effort: returns `undefined` on failure (treated as
-     * anonymous, i.e. denied under `requireAuth`).
+     * an anonymous one, and so the caller's identity can be THREADED to the
+     * engine (#2992 / ADR-0096 D1) instead of dropped. Best-effort: returns
+     * `undefined` on failure (treated as anonymous, i.e. denied under
+     * `requireAuth`).
      */
     private async resolveRequestExecutionContext(
         context: HttpProtocolContext,

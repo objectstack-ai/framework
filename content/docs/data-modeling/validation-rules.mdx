@@ -27,7 +27,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `unique` | `boolean` | `false` | Enforces database-level uniqueness constraint |
 | `multiple` | `boolean` | `false` | Stores value as array (applicable for select, lookup, file, image) |
 | `hidden` | `boolean` | `false` | Excluded from default UI rendering |
-| `readonly` | `boolean` | `false` | Blocks user edits in UI forms |
+| `readonly` | `boolean` | `false` | Blocks user edits in UI forms; server-enforced on update — a non-system write to the field is silently dropped from the payload (insert exempt) |
 | `sortable` | `boolean` | `true` | Whether field appears in list view sort options |
 | `index` | `boolean` | `false` | Creates standard database index |
 | `externalId` | `boolean` | `false` | Marks field as external ID for upsert operations |

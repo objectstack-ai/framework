@@ -4,7 +4,7 @@ import type { ConnectorProviderFactory, ResolvedConnectorAuth } from '@objectsta
 import { createRestConnector, type RestAuth } from './rest-connector.js';
 
 /**
- * The provider key this package contributes (ADR-0096). A declarative
+ * The provider key this package contributes (ADR-0097). A declarative
  * `connectors:` entry with `provider: 'rest'` is materialized by this factory.
  */
 export const REST_PROVIDER_KEY = 'rest';
@@ -27,7 +27,7 @@ function isStringRecord(v: unknown): v is Record<string, string> {
 }
 
 /**
- * Build the `rest` {@link ConnectorProviderFactory} (ADR-0096). At boot the
+ * Build the `rest` {@link ConnectorProviderFactory} (ADR-0097). At boot the
  * automation service invokes it for each `provider: 'rest'` declarative instance,
  * turning `providerConfig.baseUrl` (+ the resolved `auth`) into the same
  * `{ def, handlers }` bundle {@link createRestConnector} produces for a
