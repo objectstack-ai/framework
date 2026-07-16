@@ -142,12 +142,28 @@ schedule: '0 * * * *' // Hourly
 ## TypeScript Usage
 
 ```typescript
-import { DataSourceConfig, SyncDirection, SyncExecutionResult, SyncExecutionStatus, SyncMode } from '@objectstack/spec/automation';
-import type { DataSourceConfig, SyncDirection, SyncExecutionResult, SyncExecutionStatus, SyncMode } from '@objectstack/spec/automation';
+import { DataDestinationConfig, DataSourceConfig, SyncDirection, SyncExecutionResult, SyncExecutionStatus, SyncMode } from '@objectstack/spec/automation';
+import type { DataDestinationConfig, DataSourceConfig, SyncDirection, SyncExecutionResult, SyncExecutionStatus, SyncMode } from '@objectstack/spec/automation';
 
 // Validate data
-const result = DataSourceConfig.parse(data);
+const result = DataDestinationConfig.parse(data);
 ```
+
+---
+
+## DataDestinationConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | optional | ObjectStack object name |
+| **connectorInstanceId** | `string` | optional | Connector instance ID |
+| **operation** | `Enum<'insert' \| 'update' \| 'upsert' \| 'delete' \| 'sync'>` | ✅ | Sync operation |
+| **mapping** | `Record<string, string> \| Object[]` | optional | Field mappings |
+| **externalResource** | `string` | optional | External resource ID |
+| **matchKey** | `string[]` | optional | Match key fields |
+
 
 ---
 

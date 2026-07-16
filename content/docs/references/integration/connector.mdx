@@ -31,6 +31,42 @@ This protocol supports multiple authentication strategies, bidirectional sync,
 
 field mapping, webhooks, and comprehensive rate limiting.
 
+## Runtime contract — descriptor vs. registered connector (#2612)
+
+This schema serves TWO distinct consumers; do not conflate them:
+
+1. **Runtime registration (plugin-only).** The automation engine's connector
+
+registry — what `GET /connectors` lists and the `connector_action` flow
+
+node dispatches — is populated exclusively by plugins calling
+
+`engine.registerConnector(def, handlers)` with a handler per declared
+
+action (ADR-0018 §Addendum). The definition is validated against this
+
+schema at registration.
+
+2. **Declarative `connectors:` stack entries (catalog descriptors).** Stack
+
+metadata validated against this schema is registered as kind 'connector'
+
+for discovery/documentation/marketplace purposes only — it never reaches
+
+the runtime registry, because an action here carries no execution binding
+
+(deliberately: ADR-0023 rejected re-inventing OpenAPI inside this schema).
+
+The automation service warns at boot about declared entries with `actions`
+
+that lack a same-name runtime registration; mark deliberate catalog-only
+
+entries with `enabled: false`. Provider-bound declarative instances that
+
+a generic executor (connector-openapi / connector-mcp) materializes at
+
+boot are tracked in #2977 (ADR-0096).
+
 Authentication is now imported from the canonical auth/config.zod.ts.
 
 ## When to Use This Layer
@@ -102,8 +138,8 @@ Authentication is now imported from the canonical auth/config.zod.ts.
 ## TypeScript Usage
 
 ```typescript
-import { CircuitBreakerConfig, ConnectorAction, ConnectorHealth, ConnectorStatus, ConnectorTrigger, ConnectorType, ErrorCategory, ErrorMappingConfig, ErrorMappingRule, HealthCheckConfig, RateLimitStrategy, RetryConfig, RetryStrategy, SyncStrategy, WebhookConfig, WebhookEvent, WebhookSignatureAlgorithm } from '@objectstack/spec/integration';
-import type { CircuitBreakerConfig, ConnectorAction, ConnectorHealth, ConnectorStatus, ConnectorTrigger, ConnectorType, ErrorCategory, ErrorMappingConfig, ErrorMappingRule, HealthCheckConfig, RateLimitStrategy, RetryConfig, RetryStrategy, SyncStrategy, WebhookConfig, WebhookEvent, WebhookSignatureAlgorithm } from '@objectstack/spec/integration';
+import { CircuitBreakerConfig, Connector, ConnectorAction, ConnectorHealth, ConnectorStatus, ConnectorTrigger, ConnectorType, DataSyncConfig, DeclarativeConnectorEntry, ErrorCategory, ErrorMappingConfig, ErrorMappingRule, HealthCheckConfig, RateLimitStrategy, RetryConfig, RetryStrategy, SyncStrategy, WebhookConfig, WebhookEvent, WebhookSignatureAlgorithm } from '@objectstack/spec/integration';
+import type { CircuitBreakerConfig, Connector, ConnectorAction, ConnectorHealth, ConnectorStatus, ConnectorTrigger, ConnectorType, DataSyncConfig, DeclarativeConnectorEntry, ErrorCategory, ErrorMappingConfig, ErrorMappingRule, HealthCheckConfig, RateLimitStrategy, RetryConfig, RetryStrategy, SyncStrategy, WebhookConfig, WebhookEvent, WebhookSignatureAlgorithm } from '@objectstack/spec/integration';
 
 // Validate data
 const result = CircuitBreakerConfig.parse(data);
@@ -125,6 +161,39 @@ Circuit breaker configuration
 | **halfOpenMaxRequests** | `number` | ✅ | Requests allowed in half-open state |
 | **monitoringWindow** | `number` | ✅ | Rolling window for failure count in ms |
 | **fallbackStrategy** | `Enum<'cache' \| 'default_value' \| 'error' \| 'queue'>` | optional | Fallback strategy when circuit is open |
+
+
+---
+
+## Connector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `Enum<'saas' \| 'database' \| 'file_storage' \| 'message_queue' \| 'api' \| 'custom'>` | ✅ | Connector type |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `string` | optional | Generic-executor key that materializes this declarative entry at boot (e.g. openapi/mcp/rest). Omit for a catalog-only descriptor. Unknown provider ⇒ hard boot error (ADR-0096). |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
 
 
 ---
@@ -199,6 +268,58 @@ Connector type
 * `message_queue`
 * `api`
 * `custom`
+
+
+---
+
+## DataSyncConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **strategy** | `Enum<'full' \| 'incremental' \| 'upsert' \| 'append_only'>` | optional | Synchronization strategy |
+| **direction** | `Enum<'import' \| 'export' \| 'bidirectional'>` | optional | Sync direction |
+| **schedule** | `string \| Object` | optional | Cron expression for scheduled sync — cron`0 */15 * * *` |
+| **realtimeSync** | `boolean` | optional | Enable real-time sync |
+| **timestampField** | `string` | optional | Field to track last modification time |
+| **conflictResolution** | `Enum<'source_wins' \| 'target_wins' \| 'latest_wins' \| 'manual'>` | optional | Conflict resolution strategy |
+| **batchSize** | `number` | optional | Records per batch |
+| **deleteMode** | `Enum<'hard_delete' \| 'soft_delete' \| 'ignore'>` | optional | Delete handling mode |
+| **filters** | `Record<string, any>` | optional | Filter criteria for selective sync |
+
+
+---
+
+## DeclarativeConnectorEntry
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique connector identifier |
+| **label** | `string` | ✅ | Display label |
+| **type** | `Enum<'saas' \| 'database' \| 'file_storage' \| 'message_queue' \| 'api' \| 'custom'>` | ✅ | Connector type |
+| **description** | `string` | optional | Connector description |
+| **icon** | `string` | optional | Icon identifier |
+| **authentication** | `Object \| Object \| Object \| Object \| Object` | optional | Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead. |
+| **provider** | `string` | optional | Generic-executor key that materializes this declarative entry at boot (e.g. openapi/mcp/rest). Omit for a catalog-only descriptor. Unknown provider ⇒ hard boot error (ADR-0096). |
+| **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi). Requires `provider`. |
+| **auth** | `Object \| Object \| Object \| Object` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096). |
+| **actions** | `Object[]` | optional |  |
+| **triggers** | `Object[]` | optional |  |
+| **syncConfig** | `Object` | optional | Data sync configuration |
+| **fieldMappings** | `Object[]` | optional | Field mapping rules |
+| **webhooks** | `Object[]` | optional | Webhook configurations |
+| **rateLimitConfig** | `Object` | optional | Rate limiting configuration |
+| **retryConfig** | `Object` | optional | Retry configuration |
+| **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
+| **requestTimeoutMs** | `number` | optional | Request timeout in ms |
+| **status** | `Enum<'active' \| 'inactive' \| 'error' \| 'configuring'>` | optional | Connector status |
+| **enabled** | `boolean` | optional | Enable connector. On declarative stack entries, false marks a deliberate catalog-only descriptor (#2612). |
+| **errorMapping** | `Object` | optional | Error mapping configuration |
+| **health** | `Object` | optional | Health and resilience configuration |
+| **metadata** | `Record<string, any>` | optional | Custom connector metadata |
 
 
 ---

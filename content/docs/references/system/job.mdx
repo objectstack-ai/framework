@@ -16,12 +16,25 @@ Schedule jobs using cron expressions
 ## TypeScript Usage
 
 ```typescript
-import { IntervalSchedule, JobExecution, JobExecutionStatus, OnceSchedule, RetryPolicy } from '@objectstack/spec/system';
-import type { IntervalSchedule, JobExecution, JobExecutionStatus, OnceSchedule, RetryPolicy } from '@objectstack/spec/system';
+import { CronSchedule, IntervalSchedule, Job, JobExecution, JobExecutionStatus, OnceSchedule, RetryPolicy, Schedule } from '@objectstack/spec/system';
+import type { CronSchedule, IntervalSchedule, Job, JobExecution, JobExecutionStatus, OnceSchedule, RetryPolicy, Schedule } from '@objectstack/spec/system';
 
 // Validate data
-const result = IntervalSchedule.parse(data);
+const result = CronSchedule.parse(data);
 ```
+
+---
+
+## CronSchedule
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `string` | ✅ |  |
+| **expression** | `string \| Object` | ✅ | Cron expression — cron`0 0 * * *` for daily at midnight. Build emits `{dialect:"cron",source}` envelope. |
+| **timezone** | `string` | optional | Timezone for cron execution (e.g., "America/New_York") |
+
 
 ---
 
@@ -33,6 +46,25 @@ const result = IntervalSchedule.parse(data);
 | :--- | :--- | :--- | :--- |
 | **type** | `string` | ✅ |  |
 | **intervalMs** | `integer` | ✅ | Interval in milliseconds |
+
+
+---
+
+## Job
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | optional | Unique job identifier (defaults to `name` when omitted) |
+| **name** | `string` | ✅ | Job name (snake_case) |
+| **label** | `string` | optional | Human-readable label |
+| **description** | `string` | optional | Job description / purpose |
+| **schedule** | `Object \| Object \| Object` | ✅ | Job schedule configuration |
+| **handler** | `string` | ✅ | Handler function name (must match a key in `defineStack({ functions })`) |
+| **retryPolicy** | `Object` | optional | Retry policy configuration |
+| **timeout** | `integer` | optional | Timeout in milliseconds |
+| **enabled** | `boolean` | optional | Whether the job is enabled |
 
 
 ---
@@ -86,6 +118,55 @@ const result = IntervalSchedule.parse(data);
 | **maxRetries** | `integer` | ✅ | Maximum number of retry attempts |
 | **backoffMs** | `integer` | ✅ | Initial backoff delay in milliseconds |
 | **backoffMultiplier** | `number` | ✅ | Multiplier for exponential backoff |
+
+
+---
+
+## Schedule
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+**Type:** `cron`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `string` | ✅ |  |
+| **expression** | `string \| Object` | ✅ | Cron expression — cron`0 0 * * *` for daily at midnight. Build emits `{dialect:"cron",source}` envelope. |
+| **timezone** | `string` | optional | Timezone for cron execution (e.g., "America/New_York") |
+
+---
+
+#### Option 2
+
+**Type:** `interval`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `string` | ✅ |  |
+| **intervalMs** | `integer` | ✅ | Interval in milliseconds |
+
+---
+
+#### Option 3
+
+**Type:** `once`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `string` | ✅ |  |
+| **at** | `string` | ✅ | ISO 8601 datetime when to execute |
+
+---
 
 
 ---

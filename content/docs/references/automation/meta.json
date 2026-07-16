@@ -4,6 +4,7 @@
     "approval",
     "bpmn-interop",
     "connector",
+    "control-flow",
     "etl",
     "execution",
     "flow",

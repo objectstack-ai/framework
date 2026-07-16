@@ -52,8 +52,8 @@ Similar to Salesforce External Objects for real-time data integration.
 ## TypeScript Usage
 
 ```typescript
-import { ExternalDataSource } from '@objectstack/spec/data';
-import type { ExternalDataSource } from '@objectstack/spec/data';
+import { ExternalDataSource, ExternalFieldMapping, ExternalLookup } from '@objectstack/spec/data';
+import type { ExternalDataSource, ExternalFieldMapping, ExternalLookup } from '@objectstack/spec/data';
 
 // Validate data
 const result = ExternalDataSource.parse(data);
@@ -72,6 +72,42 @@ const result = ExternalDataSource.parse(data);
 | **type** | `Enum<'odata' \| 'rest-api' \| 'graphql' \| 'custom'>` | ✅ | Protocol type |
 | **endpoint** | `string` | ✅ | API endpoint URL |
 | **authentication** | `Object` | ✅ | Authentication |
+
+
+---
+
+## ExternalFieldMapping
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **source** | `string` | ✅ | Source field name |
+| **target** | `string` | ✅ | Target field name |
+| **transform** | `Object \| Object \| Object \| Object \| Object` | optional | Transformation to apply |
+| **defaultValue** | `any` | optional | Default if source is null/undefined |
+| **type** | `string` | optional | Field type |
+| **readonly** | `boolean` | optional | Read-only field |
+
+
+---
+
+## ExternalLookup
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **fieldName** | `string` | ✅ | Field name |
+| **dataSource** | `Object` | ✅ | External data source |
+| **query** | `Object` | ✅ | Query configuration |
+| **fieldMappings** | `Object[]` | ✅ | Field mappings |
+| **caching** | `Object` | optional | Caching configuration |
+| **fallback** | `Object` | optional | Fallback configuration |
+| **rateLimit** | `Object` | optional | Rate limiting |
+| **retry** | `Object` | optional | Retry configuration with exponential backoff |
+| **transform** | `Object` | optional | Request/response transformation pipeline |
+| **pagination** | `Object` | optional | Pagination configuration for external data |
 
 
 ---

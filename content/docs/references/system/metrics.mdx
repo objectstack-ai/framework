@@ -26,8 +26,8 @@ Comprehensive metrics collection and monitoring:
 ## TypeScript Usage
 
 ```typescript
-import { HistogramBucketConfig, MetricAggregationConfig, MetricAggregationType, MetricDataPoint, MetricDefinition, MetricExportConfig, MetricLabels, MetricType, MetricUnit, ServiceLevelObjective, TimeSeries, TimeSeriesDataPoint } from '@objectstack/spec/system';
-import type { HistogramBucketConfig, MetricAggregationConfig, MetricAggregationType, MetricDataPoint, MetricDefinition, MetricExportConfig, MetricLabels, MetricType, MetricUnit, ServiceLevelObjective, TimeSeries, TimeSeriesDataPoint } from '@objectstack/spec/system';
+import { HistogramBucketConfig, MetricAggregationConfig, MetricAggregationType, MetricDataPoint, MetricDefinition, MetricExportConfig, MetricLabels, MetricType, MetricUnit, MetricsConfig, ServiceLevelIndicator, ServiceLevelObjective, TimeSeries, TimeSeriesDataPoint } from '@objectstack/spec/system';
+import type { HistogramBucketConfig, MetricAggregationConfig, MetricAggregationType, MetricDataPoint, MetricDefinition, MetricExportConfig, MetricLabels, MetricType, MetricUnit, MetricsConfig, ServiceLevelIndicator, ServiceLevelObjective, TimeSeries, TimeSeriesDataPoint } from '@objectstack/spec/system';
 
 // Validate data
 const result = HistogramBucketConfig.parse(data);
@@ -191,6 +191,50 @@ Metric unit
 * `count`
 * `operations`
 * `custom`
+
+
+---
+
+## MetricsConfig
+
+Metrics configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Configuration name (snake_case, max 64 chars) |
+| **label** | `string` | ✅ | Display label |
+| **enabled** | `boolean` | optional |  |
+| **metrics** | `Object[]` | optional |  |
+| **defaultLabels** | `Record<string, string>` | optional | Metric labels |
+| **aggregations** | `Object[]` | optional |  |
+| **slis** | `Object[]` | optional |  |
+| **slos** | `Object[]` | optional |  |
+| **exports** | `Object[]` | optional |  |
+| **collectionInterval** | `integer` | optional |  |
+| **retention** | `Object` | optional |  |
+| **cardinalityLimits** | `Object` | optional |  |
+
+
+---
+
+## ServiceLevelIndicator
+
+Service Level Indicator
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | SLI name (snake_case) |
+| **label** | `string` | ✅ | Display label |
+| **description** | `string` | optional | SLI description |
+| **metric** | `string` | ✅ | Base metric name |
+| **type** | `Enum<'availability' \| 'latency' \| 'throughput' \| 'error_rate' \| 'saturation' \| 'custom'>` | ✅ | SLI type |
+| **successCriteria** | `Object \| string \| Object` | ✅ | Success criteria — structured or CEL predicate |
+| **window** | `Object` | ✅ | Measurement window |
+| **enabled** | `boolean` | optional |  |
 
 
 ---

@@ -22,8 +22,8 @@ AWS Step Functions execution logs.
 ## TypeScript Usage
 
 ```typescript
-import { Checkpoint, ConcurrencyPolicy, ExecutionError, ExecutionErrorSeverity, ExecutionLog, ExecutionStatus, ExecutionStepLog } from '@objectstack/spec/automation';
-import type { Checkpoint, ConcurrencyPolicy, ExecutionError, ExecutionErrorSeverity, ExecutionLog, ExecutionStatus, ExecutionStepLog } from '@objectstack/spec/automation';
+import { Checkpoint, ConcurrencyPolicy, ExecutionError, ExecutionErrorSeverity, ExecutionLog, ExecutionStatus, ExecutionStepLog, ScheduleState } from '@objectstack/spec/automation';
+import type { Checkpoint, ConcurrencyPolicy, ExecutionError, ExecutionErrorSeverity, ExecutionLog, ExecutionStatus, ExecutionStepLog, ScheduleState } from '@objectstack/spec/automation';
 
 // Validate data
 const result = Checkpoint.parse(data);
@@ -153,7 +153,34 @@ const result = Checkpoint.parse(data);
 | **retryAttempt** | `integer` | optional | Retry attempt number (0 = first try) |
 | **parentNodeId** | `string` | optional | Enclosing structured-region container node ID (loop/parallel/try_catch) |
 | **iteration** | `integer` | optional | Zero-based loop iteration or parallel branch index of the enclosing region |
-| **regionKind** | `string` | optional | Region kind the step ran in: loop-body | parallel-branch | try | catch |
+| **regionKind** | `string` | optional | Region kind the step ran in: loop-body \| parallel-branch \| try \| catch |
+
+
+---
+
+## ScheduleState
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Schedule instance ID |
+| **flowName** | `string` | ✅ | Flow machine name |
+| **cronExpression** | `string \| Object` | ✅ | Cron expression — cron`0 9 * * MON-FRI` |
+| **timezone** | `string` | optional | IANA timezone for cron evaluation |
+| **status** | `Enum<'active' \| 'paused' \| 'disabled' \| 'expired'>` | optional | Current schedule status |
+| **nextRunAt** | `string` | optional | Next scheduled execution timestamp |
+| **lastRunAt** | `string` | optional | Last execution timestamp |
+| **lastExecutionId** | `string` | optional | Execution ID of the last run |
+| **lastRunStatus** | `Enum<'pending' \| 'running' \| 'paused' \| 'completed' \| 'failed' \| 'cancelled' \| 'timed_out' \| 'retrying'>` | optional | Status of the last run |
+| **totalRuns** | `integer` | optional | Total number of executions |
+| **consecutiveFailures** | `integer` | optional | Consecutive failed executions |
+| **startDate** | `string` | optional | Schedule effective start date |
+| **endDate** | `string` | optional | Schedule expiration date |
+| **maxRuns** | `integer` | optional | Maximum total executions before auto-disable |
+| **createdAt** | `string` | ✅ | Schedule creation timestamp |
+| **updatedAt** | `string` | optional | Last update timestamp |
+| **createdBy** | `string` | optional | User who created the schedule |
 
 
 ---

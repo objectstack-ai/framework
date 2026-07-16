@@ -126,8 +126,8 @@ status
 ## TypeScript Usage
 
 ```typescript
-import { FederationEntity, FederationEntityKey, FederationExternalField, FederationGateway, FederationProvides, FederationRequires, GraphQLDataLoaderConfig, GraphQLDirectiveConfig, GraphQLDirectiveLocation, GraphQLMutationConfig, GraphQLPersistedQuery, GraphQLQueryComplexity, GraphQLQueryDepthLimit, GraphQLRateLimit, GraphQLScalarType, GraphQLSubscriptionConfig, GraphQLTypeConfig, SubgraphConfig } from '@objectstack/spec/api';
-import type { FederationEntity, FederationEntityKey, FederationExternalField, FederationGateway, FederationProvides, FederationRequires, GraphQLDataLoaderConfig, GraphQLDirectiveConfig, GraphQLDirectiveLocation, GraphQLMutationConfig, GraphQLPersistedQuery, GraphQLQueryComplexity, GraphQLQueryDepthLimit, GraphQLRateLimit, GraphQLScalarType, GraphQLSubscriptionConfig, GraphQLTypeConfig, SubgraphConfig } from '@objectstack/spec/api';
+import { FederationEntity, FederationEntityKey, FederationExternalField, FederationGateway, FederationProvides, FederationRequires, GraphQLConfig, GraphQLDataLoaderConfig, GraphQLDirectiveConfig, GraphQLDirectiveLocation, GraphQLMutationConfig, GraphQLPersistedQuery, GraphQLQueryComplexity, GraphQLQueryConfig, GraphQLQueryDepthLimit, GraphQLRateLimit, GraphQLResolverConfig, GraphQLScalarType, GraphQLSubscriptionConfig, GraphQLTypeConfig, SubgraphConfig } from '@objectstack/spec/api';
+import type { FederationEntity, FederationEntityKey, FederationExternalField, FederationGateway, FederationProvides, FederationRequires, GraphQLConfig, GraphQLDataLoaderConfig, GraphQLDirectiveConfig, GraphQLDirectiveLocation, GraphQLMutationConfig, GraphQLPersistedQuery, GraphQLQueryComplexity, GraphQLQueryConfig, GraphQLQueryDepthLimit, GraphQLRateLimit, GraphQLResolverConfig, GraphQLScalarType, GraphQLSubscriptionConfig, GraphQLTypeConfig, SubgraphConfig } from '@objectstack/spec/api';
 
 // Validate data
 const result = FederationEntity.parse(data);
@@ -212,6 +212,23 @@ const result = FederationEntity.parse(data);
 | :--- | :--- | :--- | :--- |
 | **field** | `string` | ✅ | Field with the requirement |
 | **fields** | `string` | ✅ | Selection set of required fields (e.g., "price weight") |
+
+
+---
+
+## GraphQLConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **enabled** | `boolean` | optional | Enable GraphQL API |
+| **path** | `string` | optional | GraphQL endpoint path |
+| **playground** | `Object` | optional | GraphQL Playground configuration |
+| **schema** | `Object` | optional | Schema generation configuration |
+| **dataLoaders** | `Object[]` | optional | DataLoader configurations |
+| **security** | `Object` | optional | Security configuration |
+| **federation** | `Object` | optional | GraphQL Federation gateway configuration |
 
 
 ---
@@ -327,6 +344,28 @@ const result = FederationEntity.parse(data);
 
 ---
 
+## GraphQLQueryConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Query field name (camelCase recommended) |
+| **object** | `string` | ✅ | Source ObjectQL object name |
+| **type** | `Enum<'get' \| 'list' \| 'search'>` | ✅ | Query type |
+| **description** | `string` | optional | Query description |
+| **args** | `Record<string, Object>` | optional | Query arguments |
+| **filtering** | `Object` | optional | Filtering capabilities |
+| **sorting** | `Object` | optional | Sorting capabilities |
+| **pagination** | `Object` | optional | Pagination configuration |
+| **fields** | `Object` | optional | Field selection configuration |
+| **authRequired** | `boolean` | optional | Require authentication |
+| **permissions** | `string[]` | optional | Required permissions |
+| **cache** | `Object` | optional | Query caching |
+
+
+---
+
 ## GraphQLQueryDepthLimit
 
 ### Properties
@@ -357,6 +396,20 @@ const result = FederationEntity.parse(data);
 | **onLimitExceeded** | `Enum<'reject' \| 'queue' \| 'log'>` | ✅ | Action when rate limit exceeded |
 | **errorMessage** | `string` | optional | Custom error message for rate limit violations |
 | **includeHeaders** | `boolean` | ✅ | Include rate limit headers in response |
+
+
+---
+
+## GraphQLResolverConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **path** | `string` | ✅ | Resolver path (Type.field) |
+| **type** | `Enum<'datasource' \| 'computed' \| 'script' \| 'proxy'>` | ✅ | Resolver implementation type |
+| **implementation** | `Object` | optional | Implementation configuration |
+| **cache** | `Object` | optional | Resolver caching |
 
 
 ---

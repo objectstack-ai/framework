@@ -14,12 +14,30 @@ Feature Rollout Strategy
 ## TypeScript Usage
 
 ```typescript
-import { FeatureStrategy } from '@objectstack/spec/kernel';
-import type { FeatureStrategy } from '@objectstack/spec/kernel';
+import { FeatureFlag, FeatureStrategy } from '@objectstack/spec/kernel';
+import type { FeatureFlag, FeatureStrategy } from '@objectstack/spec/kernel';
 
 // Validate data
-const result = FeatureStrategy.parse(data);
+const result = FeatureFlag.parse(data);
 ```
+
+---
+
+## FeatureFlag
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Feature key (snake_case) |
+| **label** | `string` | optional | Display label |
+| **description** | `string` | optional |  |
+| **enabled** | `boolean` | optional | Is globally enabled |
+| **strategy** | `Enum<'boolean' \| 'percentage' \| 'user_list' \| 'group' \| 'custom'>` | optional |  |
+| **conditions** | `Object` | optional |  |
+| **environment** | `Enum<'dev' \| 'staging' \| 'prod' \| 'all'>` | optional | Environment validity |
+| **expiresAt** | `string` | optional | Feature flag expiration date |
+
 
 ---
 

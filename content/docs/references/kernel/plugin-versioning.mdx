@@ -28,8 +28,8 @@ Based on semantic versioning (SemVer) with extensions for:
 ## TypeScript Usage
 
 ```typescript
-import { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
-import type { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
+import { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
+import type { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = BreakingChange.parse(data);
@@ -116,6 +116,21 @@ Compatibility level between versions
 | **reason** | `string` | ✅ |  |
 | **alternative** | `string` | optional | What to use instead |
 | **migrationPath** | `string` | optional | How to migrate to alternative |
+
+
+---
+
+## MultiVersionSupport
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **enabled** | `boolean` | optional |  |
+| **maxConcurrentVersions** | `integer` | optional | How many versions can run at the same time |
+| **selectionStrategy** | `Enum<'latest' \| 'stable' \| 'compatible' \| 'pinned' \| 'canary' \| 'custom'>` | optional |  |
+| **routing** | `Object[]` | optional |  |
+| **rollout** | `Object` | optional |  |
 
 
 ---
