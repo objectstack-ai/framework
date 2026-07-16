@@ -161,7 +161,7 @@ export type ConnectorActionHandler = (
 ) => Promise<Record<string, unknown>>;
 
 /**
- * How a registered connector reached the engine (ADR-0096 §4). `plugin` — a
+ * How a registered connector reached the engine (ADR-0097 §4). `plugin` — a
  * connector plugin called `registerConnector` directly (ADR-0018 §Addendum).
  * `declarative` — the automation service materialized a provider-bound
  * `connectors:` stack entry at boot. A name registered under one origin cannot
@@ -177,11 +177,11 @@ export type ConnectorOrigin = 'plugin' | 'declarative';
 export interface RegisteredConnector {
     readonly def: Connector;
     readonly handlers: Record<string, ConnectorActionHandler>;
-    /** How this connector was registered (ADR-0096 §4). Defaults to `plugin`. */
+    /** How this connector was registered (ADR-0097 §4). Defaults to `plugin`. */
     readonly origin: ConnectorOrigin;
 }
 
-// The connector **provider** contract (ADR-0096) — ConnectorProviderFactory,
+// The connector **provider** contract (ADR-0097) — ConnectorProviderFactory,
 // ConnectorProviderContext, ConnectorMaterialization — lives in
 // `@objectstack/spec/integration` so a connector plugin can implement a factory
 // depending only on the spec, with no runtime coupling to this engine. Imported
@@ -247,7 +247,7 @@ export interface ConnectorDescriptor {
     readonly icon?: string;
     readonly actions: ConnectorActionDescriptor[];
     /**
-     * How the connector reached the registry (ADR-0096 §4): `plugin` — registered
+     * How the connector reached the registry (ADR-0097 §4): `plugin` — registered
      * by a connector plugin via `registerConnector`; `declarative` — materialized
      * from a provider-bound `connectors:` stack entry at boot. Lets a designer
      * distinguish a live declarative instance from a plugin connector (and both
@@ -489,7 +489,7 @@ export class AutomationEngine implements IAutomationService {
     private boundFlowTriggers = new Map<string, string>();
     /** Connectors registered by integration plugins, keyed by connector name (ADR-0018 §Addendum). */
     private connectors = new Map<string, RegisteredConnector>();
-    /** Connector provider factories keyed by provider name (ADR-0096 §2 — `openapi`/`mcp`/`rest`/…). */
+    /** Connector provider factories keyed by provider name (ADR-0097 §2 — `openapi`/`mcp`/`rest`/…). */
     private connectorProviders = new Map<string, ConnectorProviderFactory>();
     /** Bridge to the host function registry for `script`-node calls (#1870), if wired. */
     private functionResolver: FlowFunctionResolver | null = null;
@@ -800,7 +800,7 @@ export class AutomationEngine implements IAutomationService {
     /**
      * Register a connector (called by integration plugins, ADR-0018 §Addendum;
      * and by the automation service for materialized declarative instances,
-     * ADR-0096 §2). Validates the definition against {@link ConnectorSchema} and
+     * ADR-0097 §2). Validates the definition against {@link ConnectorSchema} and
      * asserts every declared action has a handler, so a half-wired connector
      * fails loudly at registration rather than silently at dispatch.
      *
@@ -808,7 +808,7 @@ export class AutomationEngine implements IAutomationService {
      * {@link registerNodeExecutor} — supports hot-reload). Re-registering across
      * origins — a plugin name colliding with a declarative provider-bound
      * instance, or vice versa — is a **hard error** (the two-sources-of-truth
-     * hazard, ADR-0096 §4): there is no silent precedence, because silent
+     * hazard, ADR-0097 §4): there is no silent precedence, because silent
      * precedence is how the declared def and the plugin def drift apart.
      *
      * @param origin how the connector reached the engine (defaults to `plugin`;
@@ -837,7 +837,7 @@ export class AutomationEngine implements IAutomationService {
                 throw new Error(
                     `Connector name conflict: '${parsed.name}' is already registered by ${describe(existing.origin)} ` +
                         `and cannot also be registered by ${describe(origin)}. A declarative provider-bound instance and a ` +
-                        `plugin-registered connector must not share a name — there is no silent precedence (ADR-0096 §4). ` +
+                        `plugin-registered connector must not share a name — there is no silent precedence (ADR-0097 §4). ` +
                         `Rename one of them.`,
                 );
             }
@@ -895,7 +895,7 @@ export class AutomationEngine implements IAutomationService {
     }
 
     /**
-     * Register a connector **provider factory** (ADR-0096 §2). A connector
+     * Register a connector **provider factory** (ADR-0097 §2). A connector
      * plugin (e.g. `@objectstack/connector-openapi`) calls this at `init()` under
      * its provider key (`openapi`); the automation service then invokes the
      * factory at boot for every declarative `connectors:` entry naming that

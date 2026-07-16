@@ -7,7 +7,7 @@ import { createMcpProviderFactory, MCP_PROVIDER_KEY } from './mcp-provider.js';
 
 /**
  * Minimal surface of the automation engine this plugin depends on — the
- * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0096).
+ * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0097).
  * Kept structural so the plugin needs no runtime dependency on
  * `@objectstack/service-automation`.
  */
@@ -24,7 +24,7 @@ export interface ConnectorRegistrySurface {
 }
 
 /**
- * Options for {@link ConnectorMcpPlugin}. All optional (ADR-0096): with no
+ * Options for {@link ConnectorMcpPlugin}. All optional (ADR-0097): with no
  * `transport` the plugin contributes only the `mcp` provider factory — so a
  * stack can declare `provider: 'mcp'` instances as pure metadata. Supply a
  * `transport` to ALSO connect one hand-wired MCP server at `start()`.
@@ -34,7 +34,7 @@ export interface ConnectorMcpPluginOptions extends Partial<McpConnectorOptions> 
 /**
  * ConnectorMcpPlugin — contributes the generic MCP adapter (ADR-0024) in two forms:
  *
- *  1. **Provider factory** (`mcp`, ADR-0096): registered at `init()` so the
+ *  1. **Provider factory** (`mcp`, ADR-0097): registered at `init()` so the
  *     automation service can materialize declarative `provider: 'mcp'`
  *     `connectors:` entries — connecting to the server and mapping its tools to
  *     connector actions — at boot.
@@ -65,7 +65,7 @@ export class ConnectorMcpPlugin implements Plugin {
     }
 
     async init(ctx: PluginContext): Promise<void> {
-        // Contribute the `mcp` provider factory (ADR-0096) before the automation
+        // Contribute the `mcp` provider factory (ADR-0097) before the automation
         // service materializes declarative instances during its start().
         const automation = this.tryGetAutomation(ctx);
         if (automation && typeof automation.registerConnectorProvider === 'function') {

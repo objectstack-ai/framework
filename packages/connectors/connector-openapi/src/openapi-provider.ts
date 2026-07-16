@@ -12,7 +12,7 @@ import {
 } from './openapi-connector.js';
 
 /**
- * The provider key this package contributes (ADR-0096). A declarative
+ * The provider key this package contributes (ADR-0097). A declarative
  * `connectors:` entry with `provider: 'openapi'` is materialized by this factory.
  */
 export const OPENAPI_PROVIDER_KEY = 'openapi';
@@ -36,7 +36,7 @@ interface OpenApiProviderConfig {
 }
 
 /**
- * Resolve `providerConfig.spec` into a parsed OpenAPI document (ADR-0096;
+ * Resolve `providerConfig.spec` into a parsed OpenAPI document (ADR-0097;
  * union per #3016): an inline document object (the reliable, no-I/O-at-boot
  * form used by the showcase), an http(s) URL fetched at materialization, or a
  * **file path** read through the host's `ctx.loadPackageFile` — which resolves
@@ -102,7 +102,7 @@ async function loadOpenApiDocument(
 }
 
 /**
- * Build the `openapi` {@link ConnectorProviderFactory} (ADR-0096 / ADR-0023). At
+ * Build the `openapi` {@link ConnectorProviderFactory} (ADR-0097 / ADR-0023). At
  * boot the automation service invokes it for each `provider: 'openapi'`
  * declarative instance: it loads the OpenAPI document from `providerConfig.spec`,
  * then produces the same `{ def, handlers }` bundle {@link createOpenApiConnector}

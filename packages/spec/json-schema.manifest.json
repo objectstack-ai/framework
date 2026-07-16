@@ -1697,6 +1697,7 @@
     "ui/EvictionPolicy",
     "ui/FocusManagement",
     "ui/FocusTrapConfig",
+    "ui/FormButtonConfig",
     "ui/FormField",
     "ui/FormSection",
     "ui/FormView",

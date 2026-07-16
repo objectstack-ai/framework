@@ -4,7 +4,7 @@ import type { ConnectorProviderFactory, ResolvedConnectorAuth } from '@objectsta
 import { createMcpConnector, type McpConnectorOptions, type McpTransport } from './mcp-connector.js';
 
 /**
- * The provider key this package contributes (ADR-0096). A declarative
+ * The provider key this package contributes (ADR-0097). A declarative
  * `connectors:` entry with `provider: 'mcp'` is materialized by this factory.
  */
 export const MCP_PROVIDER_KEY = 'mcp';
@@ -96,7 +96,7 @@ function normalizeTransport(
 }
 
 /**
- * Build the `mcp` {@link ConnectorProviderFactory} (ADR-0096 / ADR-0024). At boot
+ * Build the `mcp` {@link ConnectorProviderFactory} (ADR-0097 / ADR-0024). At boot
  * the automation service invokes it for each `provider: 'mcp'` declarative
  * instance: it connects to the MCP server named by `providerConfig.transport`,
  * lists its tools, and produces the same `{ def, handlers, close }` bundle
@@ -104,7 +104,7 @@ function normalizeTransport(
  * per tool, dispatched to the server's `tools/call`.
  *
  * The connection is opened at materialization; an unreachable server or invalid
- * transport therefore fails boot loudly (ADR-0096 fail-loud contract). Prefer a
+ * transport therefore fails boot loudly (ADR-0097 fail-loud contract). Prefer a
  * fail-soft plugin instantiation for an *optional* server.
  */
 export function createMcpProviderFactory(deps: McpProviderDeps = {}): ConnectorProviderFactory {

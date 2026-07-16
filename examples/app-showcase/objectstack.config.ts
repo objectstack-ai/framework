@@ -20,8 +20,8 @@ import { registerRecalcEndpoint } from './src/system/server/recalc-endpoint.js';
 import { registerShowcasePositionBindings } from './src/security/bind-position-sets.js';
 import { TaskViews, ProjectViews, InquiryViews, BusinessUnitViews } from './src/ui/views/index.js';
 import { ShowcaseApp } from './src/ui/apps/index.js';
-import { ChartGalleryDashboard, OpsDashboard } from './src/ui/dashboards/index.js';
-import { ShowcaseTaskDataset, ShowcaseProjectDataset } from './src/ui/datasets/index.js';
+import { ChartGalleryDashboard, OpsDashboard, RevenuePulseDashboard } from './src/ui/dashboards/index.js';
+import { ShowcaseTaskDataset, ShowcaseProjectDataset, ShowcaseInvoiceDataset, ShowcaseAccountDataset } from './src/ui/datasets/index.js';
 import { allReports } from './src/ui/reports/index.js';
 import { allActions } from './src/ui/actions/index.js';
 import { CapabilityMapPage, StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage } from './src/ui/pages/index.js';
@@ -109,7 +109,7 @@ export default defineStack({
   //   • slack   → registered so TaskCompletedSlackFlow resolves its connector;
   //               live posting needs a real bot token (set SLACK_BOT_TOKEN).
   //   • openapi → option-less: contributes only the `openapi` provider factory
-  //               (ADR-0096), which materializes the StatusOpenApiConnector
+  //               (ADR-0097), which materializes the StatusOpenApiConnector
   //               declarative instance below — its OpenAPI document is a
   //               package-relative FILE PATH read at boot (#3016).
   plugins: [
@@ -183,9 +183,9 @@ export default defineStack({
   portals: allPortals,
   views: [TaskViews, ProjectViews, InquiryViews, BusinessUnitViews],
   pages: [CapabilityMapPage, StartHerePage, ComponentGalleryPage, ProjectWorkspacePage, ProjectDetailPage, TaskWorkbenchPage, TaskTriagePage, TaskBoardPage, TaskCalendarPage, TaskGalleryPage, TaskSchedulePage, TaskTimelinePage, TaskMapPage, TaskAllViewsPage, ActiveProjectsPage, TaskDetailPage, ReviewQueuePage, NewProjectWizardPage, MyWorkPage, SettingsPage, StylingGalleryPage, CommandCenterPage, CommandCenterJsxPage, CrmWorkbenchPage, TaskDeskPage, PageVariablesPage, ContactFormPage, RenewalsPipelinePage],
-  dashboards: [ChartGalleryDashboard, OpsDashboard],
+  dashboards: [ChartGalleryDashboard, OpsDashboard, RevenuePulseDashboard],
   books: allBooks,
-  datasets: [ShowcaseTaskDataset, ShowcaseProjectDataset],
+  datasets: [ShowcaseTaskDataset, ShowcaseProjectDataset, ShowcaseInvoiceDataset, ShowcaseAccountDataset],
   reports: allReports,
   actions: allActions,
   themes: allThemes,
@@ -197,7 +197,7 @@ export default defineStack({
   // Declarative REST endpoints (object_operation + flow) — the metadata
   // counterpart of the code-mounted recalc endpoint (see src/system/apis/).
   apis: allApis,
-  // Declarative `connectors:` — both kinds (ADR-0096): provider-bound
+  // Declarative `connectors:` — both kinds (ADR-0097): provider-bound
   // INSTANCES (StatusApiConnector via `rest`; StatusOpenApiConnector via
   // `openapi` with a package-relative file-path spec, #3016) materialized into
   // live, dispatchable connectors at boot, plus a CATALOG DESCRIPTOR

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — the `openapi` provider factory: materialize a declarative
+// ADR-0097 — the `openapi` provider factory: materialize a declarative
 // `provider: 'openapi'` connector instance from a spec document + resolved auth.
 
 import { describe, it, expect } from 'vitest';
@@ -22,7 +22,7 @@ function ctx(partial: Partial<ConnectorProviderContext> & Pick<ConnectorProvider
     return { name: 'pets', label: 'Pets', type: 'api', ...partial };
 }
 
-describe('openapi provider factory (ADR-0096)', () => {
+describe('openapi provider factory (ADR-0097)', () => {
     it('advertises the openapi provider key', () => {
         expect(OPENAPI_PROVIDER_KEY).toBe('openapi');
     });
@@ -52,7 +52,7 @@ describe('openapi provider factory (ADR-0096)', () => {
         await expect(factory(ctx({ providerConfig: {} }))).rejects.toThrow(/providerConfig\.spec/);
     });
 
-    // ── File-path specs (#3016 — ADR-0096 follow-up) ────────────────────────
+    // ── File-path specs (#3016 — ADR-0097 follow-up) ────────────────────────
 
     it('reads a file-path spec through the host loadPackageFile capability', async () => {
         const requested: string[] = [];

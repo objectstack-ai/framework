@@ -84,7 +84,12 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
   // ── ui ──
   view: { status: 'demonstrated', files: ['src/ui/views/task.view.ts', 'src/ui/views/project.view.ts'] },
   page: { status: 'demonstrated', files: ['src/ui/pages/index.ts'] },
-  dashboard: { status: 'demonstrated', files: ['src/ui/dashboards/chart-gallery.dashboard.ts'] },
+  dashboard: {
+    status: 'demonstrated',
+    files: ['src/ui/dashboards/chart-gallery.dashboard.ts', 'src/ui/dashboards/revenue-pulse.dashboard.ts'],
+    notes:
+      'revenue-pulse also demonstrates dashboard-level filters (framework#2501): dateRange + globalFilters driving two objects via per-widget filterBindings.',
+  },
   app: { status: 'demonstrated', files: ['src/ui/apps/index.ts'] },
   action: { status: 'demonstrated', files: ['src/ui/actions/index.ts'] },
   report: { status: 'demonstrated', files: ['src/ui/reports/index.ts'] },
@@ -179,7 +184,7 @@ export const STACK_COLLECTION_COVERAGE: Record<string, KindCoverage> = {
     status: 'demonstrated',
     files: ['src/system/connectors/index.ts', 'src/automation/flows/index.ts'],
     notes:
-      'Both connector kinds are demonstrated. (1) Provider-bound INSTANCES (ADR-0096 / #2977): StatusApiConnector declares `provider: rest` (inline config) and StatusOpenApiConnector declares `provider: openapi` with its OpenAPI document referenced as a package-relative FILE PATH (#3016, read at boot and confined to the package root) — both are materialized into live, dispatchable connectors at boot; ShowcaseDeclarativeConnectorPingFlow calls the rest instance via connector_action and both appear in GET /connectors. (2) Catalog DESCRIPTOR (#2612): ErpCatalogConnector has no provider, so it stays inert metadata; enabled:false marks the deliberate catalog entry and silences the boot audit. Plugin-registered connectors (ConnectorRestPlugin/ConnectorSlackPlugin in objectstack.config.ts) are also exercised by the connector flows.',
+      'Both connector kinds are demonstrated. (1) Provider-bound INSTANCES (ADR-0097 / #2977): StatusApiConnector declares `provider: rest` (inline config) and StatusOpenApiConnector declares `provider: openapi` with its OpenAPI document referenced as a package-relative FILE PATH (#3016, read at boot and confined to the package root) — both are materialized into live, dispatchable connectors at boot; ShowcaseDeclarativeConnectorPingFlow calls the rest instance via connector_action and both appear in GET /connectors. (2) Catalog DESCRIPTOR (#2612): ErpCatalogConnector has no provider, so it stays inert metadata; enabled:false marks the deliberate catalog entry and silences the boot audit. Plugin-registered connectors (ConnectorRestPlugin/ConnectorSlackPlugin in objectstack.config.ts) are also exercised by the connector flows.',
   },
 };
 

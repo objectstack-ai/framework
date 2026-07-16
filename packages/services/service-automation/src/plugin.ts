@@ -56,7 +56,7 @@ export interface AutomationServicePluginOptions {
     runHistoryMaxPerFlow?: number;
     /**
      * Resolves a declarative connector instance's `auth.credentialRef` to its
-     * secret at boot (ADR-0096 §3). Defaults to {@link defaultEnvCredentialResolver}
+     * secret at boot (ADR-0097 §3). Defaults to {@link defaultEnvCredentialResolver}
      * — the **open tier**: a `credentialRef` names an environment variable. An
      * enterprise host injects a vault/KMS-backed resolver here without touching
      * the materialization path. A ref that resolves to `undefined`/empty is a
@@ -82,7 +82,7 @@ export interface AutomationServicePluginOptions {
  * any path that escapes the root after resolution (`../…`, `a/../../…`), so a
  * declarative entry can never read outside the stack/package that declared it.
  * A missing/unreadable file throws — the materializer's reconcile policy makes
- * that fatal at boot and a skipped entry on reload, like every other ADR-0096
+ * that fatal at boot and a skipped entry on reload, like every other ADR-0097
  * materialization failure.
  *
  * Node builtins are imported lazily inside the returned closure so merely
@@ -130,7 +130,7 @@ export function createPackageFileLoader(packageRoot?: string): (relativePath: st
 export type CredentialResolver = (ref: string) => string | undefined | Promise<string | undefined>;
 
 /**
- * Open-tier credential resolver (ADR-0096 §3, ADR-0015 open/enterprise line):
+ * Open-tier credential resolver (ADR-0097 §3, ADR-0015 open/enterprise line):
  * a `credentialRef` is the name of an environment variable. This is the
  * degraded-but-honest story for environments without a managed secrets service —
  * static credentials from env/config are open source; managed vaulting, OAuth2
@@ -154,7 +154,7 @@ function stableStringify(input: unknown): string {
 
 /**
  * Stable signature of a provider-bound instance's materialization inputs
- * (ADR-0096). Drives the `metadata:reloaded` reconcile: an unchanged signature
+ * (ADR-0097). Drives the `metadata:reloaded` reconcile: an unchanged signature
  * means the live connector is left untouched (no MCP reconnect); a changed one
  * triggers re-materialization. `auth` carries only the `credentialRef`, never a
  * resolved secret, so hashing the declarative entry is safe.
@@ -185,7 +185,7 @@ function connectorInstanceSignature(entry: {
  * 'connector'). Raw authored values — Zod defaults (e.g. `enabled: true`)
  * may not have been applied, so `enabled` is only trusted when explicitly
  * `false`. `provider` (+ `providerConfig`/`auth`) marks a provider-bound
- * **instance** the automation service materializes at boot (ADR-0096);
+ * **instance** the automation service materializes at boot (ADR-0097);
  * its absence marks a catalog **descriptor** (#2612).
  */
 interface DeclaredConnectorItem {
@@ -215,7 +215,7 @@ interface DeclaredConnectorItem {
  * catalog-only entry), and (d) are NOT provider-bound instances — a
  * provider-bound entry (`provider` set) is materialized (or fails boot) by
  * {@link AutomationServicePlugin.materializeDeclaredConnectors}, so it follows
- * the ADR-0096 instance contract, not the descriptor-only warning (#2977).
+ * the ADR-0097 instance contract, not the descriptor-only warning (#2977).
  */
 export function findInertDeclaredConnectors(
     declared: unknown[],
@@ -285,7 +285,7 @@ export class AutomationServicePlugin implements Plugin {
     private syncedFlowNames = new Set<string>();
     /**
      * Provider-bound declarative connectors this plugin has materialized
-     * (ADR-0096), keyed by connector name. `signature` is a stable hash of the
+     * (ADR-0097), keyed by connector name. `signature` is a stable hash of the
      * entry's materialization inputs so a `metadata:reloaded` reconcile can tell
      * an unchanged instance (skip — don't re-open its MCP connection) from a
      * changed one (re-materialize). `close` is the optional teardown (e.g. an MCP
@@ -448,7 +448,7 @@ export class AutomationServicePlugin implements Plugin {
             ctx.logger.warn(`[Automation] flow pull from ObjectQL registry failed: ${msg}`);
         }
 
-        // ── ADR-0096: materialize provider-bound declarative connector instances ──
+        // ── ADR-0097: materialize provider-bound declarative connector instances ──
         // Every plugin's init() has completed by start(), so connector plugins have
         // registered their provider factories (they do so in init()) and the ObjectQL
         // registry is fully populated with declared `connectors:` entries. Turn each
@@ -478,7 +478,7 @@ export class AutomationServicePlugin implements Plugin {
             // A Studio publish / dev reload can add, change, or remove declarative
             // provider-bound connector instances — reconcile the live registry so
             // a newly-published instance becomes dispatchable (and a removed one
-            // is torn down) without a restart (ADR-0096). Soft mode: a bad publish
+            // is torn down) without a restart (ADR-0097). Soft mode: a bad publish
             // logs + skips rather than crashing the running server.
             await this.materializeDeclaredConnectors(ctx, { fatal: false });
             // Re-audit so the inert-descriptor warning stays current for plain
@@ -561,12 +561,12 @@ export class AutomationServicePlugin implements Plugin {
                 `@objectstack/connector-rest, @objectstack/connector-slack, @objectstack/connector-openapi, ` +
                 `@objectstack/connector-mcp. Install/instantiate the matching connector plugin, or mark a ` +
                 `deliberate catalog-only entry with \`enabled: false\` to silence this warning. ` +
-                `Declarative provider-bound connector instances are tracked in #2977 (ADR-0096).`,
+                `Declarative provider-bound connector instances are tracked in #2977 (ADR-0097).`,
         );
     }
 
     /**
-     * ADR-0096 — reconcile the live connector registry against the declared
+     * ADR-0097 — reconcile the live connector registry against the declared
      * provider-bound `connectors:` entries. For each enabled entry naming a
      * `provider`: look up the provider factory, resolve `auth.credentialRef`,
      * invoke the factory, and register the result under the **declared** name
@@ -620,7 +620,7 @@ export class AutomationServicePlugin implements Plugin {
             const bound = entry as DeclaredConnectorItem & { name: string; provider: string };
             if (bound.enabled === false) continue;
             if (desired.has(bound.name)) {
-                fail(`[Automation] duplicate declarative connector instance name '${bound.name}' — connector names must be unique (ADR-0096).`);
+                fail(`[Automation] duplicate declarative connector instance name '${bound.name}' — connector names must be unique (ADR-0097).`);
                 continue;
             }
             desired.set(bound.name, { entry: bound, signature: connectorInstanceSignature(bound) });
@@ -647,7 +647,7 @@ export class AutomationServicePlugin implements Plugin {
             if (!existing && engine.getConnectorOrigin(name) === 'plugin') {
                 fail(
                     `[Automation] connector name conflict: declarative provider-bound instance '${name}' collides with a ` +
-                        `plugin-registered connector of the same name — there is no silent precedence (ADR-0096 §4). Rename one.`,
+                        `plugin-registered connector of the same name — there is no silent precedence (ADR-0097 §4). Rename one.`,
                 );
                 continue;
             }
@@ -659,7 +659,7 @@ export class AutomationServicePlugin implements Plugin {
                     `[Automation] connector instance '${name}' declares provider '${provider}', but no provider factory is registered. ` +
                         `Install the connector plugin that supplies it (openapi → @objectstack/connector-openapi, mcp → @objectstack/connector-mcp, ` +
                         `rest → @objectstack/connector-rest) in the stack's plugins: array. Installed providers: ` +
-                        `[${installed.join(', ') || 'none'}] (ADR-0096).`,
+                        `[${installed.join(', ') || 'none'}] (ADR-0097).`,
                 );
                 continue;
             }
@@ -692,7 +692,7 @@ export class AutomationServicePlugin implements Plugin {
             } catch (err) {
                 fail(
                     `[Automation] failed to materialize connector instance '${name}' via provider '${provider}': ` +
-                        `${(err as Error).message} (ADR-0096).`,
+                        `${(err as Error).message} (ADR-0097).`,
                 );
                 continue;
             }
@@ -719,12 +719,12 @@ export class AutomationServicePlugin implements Plugin {
 
         if (changed > 0) {
             ctx.logger.info(
-                `[Automation] materialized ${changed} provider-bound connector instance(s) (ADR-0096)`,
+                `[Automation] materialized ${changed} provider-bound connector instance(s) (ADR-0097)`,
             );
         }
     }
 
-    /** Unregister and tear down one materialized declarative connector (ADR-0096). */
+    /** Unregister and tear down one materialized declarative connector (ADR-0097). */
     private async dematerializeConnector(
         engine: AutomationEngine,
         name: string,
@@ -743,7 +743,7 @@ export class AutomationServicePlugin implements Plugin {
      * Resolve a declarative instance's `auth` into the static
      * {@link ResolvedConnectorAuth} a provider factory applies — dereferencing
      * `credentialRef` through the resolver. An `undefined`/empty resolution is a
-     * hard boot error (ADR-0096 §3): an app must not run with a connector whose
+     * hard boot error (ADR-0097 §3): an app must not run with a connector whose
      * credentials never loaded.
      */
     private async resolveInstanceAuth(
@@ -761,7 +761,7 @@ export class AutomationServicePlugin implements Plugin {
                 `[Automation] connector instance '${connectorName}' (provider '${provider}'): credentialRef ` +
                     `'${auth.credentialRef}' did not resolve to a value. The open tier resolves credentialRef from ` +
                     `environment variables — set the '${auth.credentialRef}' env var, or wire ` +
-                    `AutomationServicePluginOptions.credentialResolver to a secrets service (ADR-0096 §3).`,
+                    `AutomationServicePluginOptions.credentialResolver to a secrets service (ADR-0097 §3).`,
             );
         }
 
@@ -920,7 +920,7 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async destroy(): Promise<void> {
-        // Tear down materialized provider-bound connectors (ADR-0096) — e.g. an
+        // Tear down materialized provider-bound connectors (ADR-0097) — e.g. an
         // MCP connection's close — in reverse registration order, best-effort, so
         // no socket / child process leaks. The engine (and its registry) is dropped
         // right after, so unregistering the connectors themselves is unnecessary.

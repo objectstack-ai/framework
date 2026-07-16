@@ -520,11 +520,14 @@ function composeAnd(existing: unknown, addition: unknown): unknown {
     typeof addition === 'object' && addition !== null && !Array.isArray(addition)
   ) {
     const ex: any = existing;
-    if (Array.isArray(ex.$and)) {
+    // Flatten only when `existing` is a PURE `{$and:[…]}` — an object mixing
+    // `$and` with sibling top-level keys (`{$and:[…], status:'x'}`) must NOT be
+    // spread, or those siblings are silently DROPPED (a caller's AND-ed
+    // predicate quietly widening the write — data loss on bulk delete/update).
+    if (Array.isArray(ex.$and) && Object.keys(ex).length === 1) {
       return { $and: [...ex.$and, addition] };
     }
-    // Heuristic: if existing has no operator keys, attempt shallow merge;
-    // otherwise nest into $and to preserve semantics.
+    // Otherwise nest the whole existing object into $and to preserve semantics.
     return { $and: [existing, addition] };
   }
   return { $and: [existing, addition] };

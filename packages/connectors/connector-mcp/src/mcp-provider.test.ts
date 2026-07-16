@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — the `mcp` provider factory: materialize a declarative
+// ADR-0097 — the `mcp` provider factory: materialize a declarative
 // `provider: 'mcp'` connector instance by connecting to the server (an injected
 // fake client here), listing its tools, and mapping them to actions.
 
@@ -33,7 +33,7 @@ function ctx(partial: Partial<ConnectorProviderContext> & Pick<ConnectorProvider
     return { name: 'github', label: 'GitHub', type: 'api', ...partial };
 }
 
-describe('mcp provider factory (ADR-0096)', () => {
+describe('mcp provider factory (ADR-0097)', () => {
     it('advertises the mcp provider key', () => {
         expect(MCP_PROVIDER_KEY).toBe('mcp');
     });

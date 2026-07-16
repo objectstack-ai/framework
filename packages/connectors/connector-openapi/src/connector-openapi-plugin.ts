@@ -7,7 +7,7 @@ import { createOpenApiProviderFactory, OPENAPI_PROVIDER_KEY } from './openapi-pr
 
 /**
  * Minimal surface of the automation engine this package depends on — the
- * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0096).
+ * connector registry (ADR-0018 §Addendum) plus the provider registry (ADR-0097).
  * Kept structural so callers need no runtime dependency on
  * `@objectstack/service-automation` (mirrors connector-rest / connector-mcp).
  */
@@ -35,7 +35,7 @@ export function registerOpenApiConnector(registry: ConnectorRegistrySurface, con
 }
 
 /**
- * Options for {@link ConnectorOpenApiPlugin}. All optional (ADR-0096): with no
+ * Options for {@link ConnectorOpenApiPlugin}. All optional (ADR-0097): with no
  * `document` the plugin contributes only the `openapi` provider factory — so a
  * stack can declare `provider: 'openapi'` instances as pure metadata. Supply a
  * `document` (+ config) to ALSO register one hand-wired OpenAPI connector.
@@ -49,7 +49,7 @@ export interface ConnectorOpenApiPluginOptions extends Partial<OpenApiConnectorC
  * ConnectorOpenApiPlugin — contributes the OpenAPI generic executor (ADR-0023) in
  * two forms:
  *
- *  1. **Provider factory** (`openapi`, ADR-0096): registered at `init()` so the
+ *  1. **Provider factory** (`openapi`, ADR-0097): registered at `init()` so the
  *     automation service can materialize declarative `provider: 'openapi'`
  *     `connectors:` entries — loading the OpenAPI document and mapping each
  *     operation to a connector action — at boot.
@@ -74,7 +74,7 @@ export class ConnectorOpenApiPlugin implements Plugin {
     }
 
     async init(ctx: PluginContext): Promise<void> {
-        // Contribute the `openapi` provider factory (ADR-0096) before the
+        // Contribute the `openapi` provider factory (ADR-0097) before the
         // automation service materializes declarative instances during its start().
         const automation = this.tryGetAutomation(ctx);
         if (automation && typeof automation.registerConnectorProvider === 'function') {
