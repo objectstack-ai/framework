@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { defineStack } from '@objectstack/spec';
+import { ConnectorMcpPlugin } from '@objectstack/connector-mcp';
 import { ConnectorOpenApiPlugin } from '@objectstack/connector-openapi';
 import { ConnectorRestPlugin } from '@objectstack/connector-rest';
 import { ConnectorSlackPlugin } from '@objectstack/connector-slack';
@@ -112,8 +113,19 @@ export default defineStack({
   //               (ADR-0097), which materializes the StatusOpenApiConnector
   //               declarative instance below — its OpenAPI document is a
   //               package-relative FILE PATH read at boot (#3016).
+  //   • mcp     → contributes the `mcp` provider factory, which materializes
+  //               the DevToolsMcpConnector declarative instance from the
+  //               in-repo stdio fixture (scripts/mcp-fixture.mjs). The
+  //               `declarativeStdio` allowlist is the #3055 security opt-in:
+  //               declarative stdio transports spawn a local process from
+  //               METADATA, so they are denied by default; this host
+  //               deliberately trusts `node` to run the in-repo fixture.
+  //               (A coarse boundary by design — trusting `node` trusts what
+  //               it is asked to run; real deployments should list specific
+  //               server binaries.)
   plugins: [
     new ConnectorOpenApiPlugin(),
+    new ConnectorMcpPlugin({ declarativeStdio: ['node'] }),
     new ConnectorRestPlugin({
       name: 'rest',
       baseUrl: process.env.SHOWCASE_SELF_URL ?? 'http://127.0.0.1:3000',

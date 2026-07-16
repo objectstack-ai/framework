@@ -91,6 +91,45 @@ export const StatusOpenApiConnector = defineConnector({
   auth: { type: 'none' },
 });
 
+/**
+ * ADR-0097 provider-bound instance, **mcp** form (#3056, completing the live
+ * demo deferred from #3017): the entry points at the tiny in-repo MCP fixture
+ * server (`scripts/mcp-fixture.mjs`) over a **stdio** transport. At boot the
+ * `mcp` provider factory (ConnectorMcpPlugin in objectstack.config.ts) spawns
+ * the fixture, calls `tools/list`, and maps its one deterministic tool
+ * (`echo_upper`) to a connector action — no network, no ports, no boot-ordering
+ * coupling, so the demo is CI-deterministic.
+ *
+ * Two platform behaviors are dogfooded here:
+ * - **#3055 stdio policy**: a declarative stdio transport spawns a local
+ *   process from metadata, so it is denied by default; the host opts in via
+ *   `new ConnectorMcpPlugin({ declarativeStdio: ['node'] })` in
+ *   objectstack.config.ts. Remove that option and boot fails loudly with the
+ *   opt-in instructions — try it.
+ * - **#3049 degrade + retry**: if the fixture were unreachable (e.g. the
+ *   script path wrong), boot would NOT crash — the instance registers
+ *   `state: 'degraded'` on GET /connectors and the platform retries with
+ *   backoff until it heals.
+ */
+export const DevToolsMcpConnector = defineConnector({
+  name: 'showcase_mcp_tools',
+  label: 'Dev Tools (Declarative MCP Instance)',
+  type: 'api',
+  description:
+    'Provider-bound declarative connector instance (ADR-0097) backed by a Model Context Protocol server: the ' +
+    'in-repo stdio fixture (scripts/mcp-fixture.mjs). Its tools/list becomes the action list — echo_upper is ' +
+    'dispatched end-to-end by ShowcaseMcpConnectorEchoFlow.',
+  provider: 'mcp',
+  providerConfig: {
+    // Spawned at materialization; the path is relative to the app's working
+    // directory (`os dev`/`serve` run from the app root). The command must be
+    // allowlisted by the host's declarativeStdio policy (#3055) — see
+    // objectstack.config.ts.
+    transport: { kind: 'stdio', command: 'node', args: ['./scripts/mcp-fixture.mjs'] },
+  },
+  auth: { type: 'none' },
+});
+
 export const ErpCatalogConnector = defineConnector({
   name: 'showcase_erp_catalog',
   label: 'ERP Integration (Catalog Descriptor)',
@@ -143,4 +182,9 @@ export const ErpCatalogConnector = defineConnector({
   enabled: false,
 });
 
-export const allConnectors: Connector[] = [StatusApiConnector, StatusOpenApiConnector, ErpCatalogConnector];
+export const allConnectors: Connector[] = [
+  StatusApiConnector,
+  StatusOpenApiConnector,
+  DevToolsMcpConnector,
+  ErpCatalogConnector,
+];

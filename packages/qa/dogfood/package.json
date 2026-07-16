@@ -9,6 +9,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@objectstack/connector-mcp": "workspace:*",
+    "@objectstack/connector-openapi": "workspace:*",
+    "@objectstack/connector-rest": "workspace:*",
     "@objectstack/example-crm": "workspace:*",
     "@objectstack/example-showcase": "workspace:*",
     "@objectstack/objectql": "workspace:*",
