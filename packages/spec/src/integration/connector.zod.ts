@@ -44,7 +44,7 @@ import { FieldMappingSchema as BaseFieldMappingSchema } from '../shared/mapping.
  *    that lack a same-name runtime registration; mark deliberate catalog-only
  *    entries with `enabled: false`. Provider-bound declarative instances that
  *    a generic executor (connector-openapi / connector-mcp) materializes at
- *    boot are tracked in #2977 (ADR-0096).
+ *    boot are tracked in #2977 (ADR-0097).
  *
  * Authentication is now imported from the canonical auth/config.zod.ts.
  * 
@@ -582,14 +582,14 @@ export const ConnectorSchema = lazySchema(() => z.object({
    * inline, supplied by a plugin at `registerConnector`). Optional and defaults
    * to `{ type: 'none' }` so a declarative provider-bound instance can reference
    * credentials through {@link auth}/`credentialRef` instead of inlining them
-   * here (ADR-0096). Hand-written / plugin connectors keep setting it as before.
+   * here (ADR-0097). Hand-written / plugin connectors keep setting it as before.
    */
   authentication: ConnectorAuthConfigSchema.optional().default({ type: 'none' }).describe(
     'Authentication configuration (runtime shape with inline secrets). Provider-bound declarative instances use `auth.credentialRef` instead.',
   ),
 
   /**
-   * ADR-0096 — provider key naming the installed **generic executor** that
+   * ADR-0097 — provider key naming the installed **generic executor** that
    * materializes this declarative entry into a live, dispatchable connector at
    * boot (`openapi`, `mcp`, `rest`, or any provider a connector plugin
    * contributes). Presence flips the entry from an inert catalog **descriptor**
@@ -599,11 +599,11 @@ export const ConnectorSchema = lazySchema(() => z.object({
    * error. Omit `provider` to keep the entry a pure descriptor.
    */
   provider: z.string().regex(/^[a-z][a-z0-9_]*$/).optional().describe(
-    'Generic-executor key that materializes this declarative entry at boot (e.g. openapi/mcp/rest). Omit for a catalog-only descriptor. Unknown provider ⇒ hard boot error (ADR-0096).',
+    'Generic-executor key that materializes this declarative entry at boot (e.g. openapi/mcp/rest). Omit for a catalog-only descriptor. Unknown provider ⇒ hard boot error (ADR-0097).',
   ),
 
   /**
-   * ADR-0096 — provider-specific configuration, **validated by the provider
+   * ADR-0097 — provider-specific configuration, **validated by the provider
    * factory** (not by this schema): the OpenAPI provider expects `{ spec,
    * baseUrl? }` — where `spec` is an inline OpenAPI document object, a file
    * path resolved relative to the declaring stack/package root (reads are
@@ -620,14 +620,14 @@ export const ConnectorSchema = lazySchema(() => z.object({
   ),
 
   /**
-   * ADR-0096 — declarative auth for a provider-bound instance: secret-bearing
+   * ADR-0097 — declarative auth for a provider-bound instance: secret-bearing
    * variants carry a `credentialRef` the automation service resolves through the
    * secrets/env layer at materialization, never an inline secret (§3). Distinct
    * from {@link authentication}, which is the runtime shape with the resolved
    * secret inline. Requires `provider`.
    */
   auth: ConnectorInstanceAuthSchema.optional().describe(
-    'Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0096).',
+    'Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0097).',
   ),
 
   /** Zapier-style Capabilities */
@@ -714,7 +714,7 @@ export function defineConnector(config: z.input<typeof ConnectorSchema>): Connec
 }
 
 /**
- * A declarative `connectors:` **stack entry** (ADR-0096) — {@link ConnectorSchema}
+ * A declarative `connectors:` **stack entry** (ADR-0097) — {@link ConnectorSchema}
  * plus the cross-field rules that apply only when a connector is *authored inside
  * a stack*, as opposed to a def a plugin builds at runtime and hands to
  * `registerConnector`. `stack.zod.ts` validates the `connectors:` array against
@@ -738,14 +738,14 @@ export const DeclarativeConnectorEntrySchema = lazySchema(() =>
         ctx.addIssue({
           code: 'custom',
           path: ['providerConfig'],
-          message: '`providerConfig` requires a `provider` — a connector entry with no provider is a catalog descriptor (ADR-0096).',
+          message: '`providerConfig` requires a `provider` — a connector entry with no provider is a catalog descriptor (ADR-0097).',
         });
       }
       if (entry.auth !== undefined) {
         ctx.addIssue({
           code: 'custom',
           path: ['auth'],
-          message: '`auth` requires a `provider` — declarative instance auth applies only to a provider-bound entry (ADR-0096).',
+          message: '`auth` requires a `provider` — declarative instance auth applies only to a provider-bound entry (ADR-0097).',
         });
       }
       return;
@@ -755,21 +755,21 @@ export const DeclarativeConnectorEntrySchema = lazySchema(() =>
       ctx.addIssue({
         code: 'custom',
         path: ['authentication'],
-        message: `Provider-bound connector instance '${entry.name}' must not inline secrets via \`authentication\`; reference credentials with \`auth: { type, credentialRef }\` instead (ADR-0096 §3).`,
+        message: `Provider-bound connector instance '${entry.name}' must not inline secrets via \`authentication\`; reference credentials with \`auth: { type, credentialRef }\` instead (ADR-0097 §3).`,
       });
     }
     if (entry.actions && entry.actions.length > 0) {
       ctx.addIssue({
         code: 'custom',
         path: ['actions'],
-        message: `Provider-bound connector instance '${entry.name}' must not author \`actions\` — the '${entry.provider}' provider derives them from the upstream at boot (ADR-0096 §5).`,
+        message: `Provider-bound connector instance '${entry.name}' must not author \`actions\` — the '${entry.provider}' provider derives them from the upstream at boot (ADR-0097 §5).`,
       });
     }
     if (entry.triggers && entry.triggers.length > 0) {
       ctx.addIssue({
         code: 'custom',
         path: ['triggers'],
-        message: `Provider-bound connector instance '${entry.name}' must not author \`triggers\` — the '${entry.provider}' provider derives them from the upstream at boot (ADR-0096 §5).`,
+        message: `Provider-bound connector instance '${entry.name}' must not author \`triggers\` — the '${entry.provider}' provider derives them from the upstream at boot (ADR-0097 §5).`,
       });
     }
   }),
@@ -777,7 +777,7 @@ export const DeclarativeConnectorEntrySchema = lazySchema(() =>
 
 export type DeclarativeConnectorEntry = z.infer<typeof DeclarativeConnectorEntrySchema>;
 
-// Re-export the declarative-instance auth surface (ADR-0096) so consumers reach
+// Re-export the declarative-instance auth surface (ADR-0097) so consumers reach
 // it through `@objectstack/spec/integration` alongside the connector schema.
 export {
   ConnectorInstanceAuthSchema,

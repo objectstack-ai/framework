@@ -1,4 +1,4 @@
-# ADR-0096: Declarative Connector Instances — Provider-Bound `connectors:` Entries Materialized by Generic Executors
+# ADR-0097: Declarative Connector Instances — Provider-Bound `connectors:` Entries Materialized by Generic Executors
 
 **Status**: Accepted (2026-07-15) — implemented in framework#2977
 **Deciders**: ObjectStack Protocol Architects

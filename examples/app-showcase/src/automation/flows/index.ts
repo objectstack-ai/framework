@@ -395,14 +395,14 @@ export const TaskCompletedRestPingFlow = defineFlow({
 });
 
 /**
- * Declarative Connector Ping — the worked ADR-0096 example: a `connector_action`
+ * Declarative Connector Ping — the worked ADR-0097 example: a `connector_action`
  * dispatching a **provider-bound declarative connector instance**.
  *
  * Where {@link TaskCompletedRestPingFlow} targets the `rest` connector a *plugin*
  * registered (ConnectorRestPlugin, ADR-0018 §Addendum), this flow targets
  * `showcase_status_api` — a connector declared as pure metadata in
  * src/system/connectors/ and *materialized* into the registry at boot by the
- * `rest` generic executor (ADR-0096). Nothing registered it in code: the
+ * `rest` generic executor (ADR-0097). Nothing registered it in code: the
  * `connectors:` entry named `provider: 'rest'`, and the automation service turned
  * it into a live connector. On task creation the flow issues `GET /api/v1/health`
  * through it; the call and its `{ status: 'ok' }` response are captured on the
@@ -410,7 +410,7 @@ export const TaskCompletedRestPingFlow = defineFlow({
  */
 export const ShowcaseDeclarativeConnectorPingFlow = defineFlow({
   name: 'showcase_declarative_connector_ping',
-  label: 'Declarative Connector Ping (ADR-0096)',
+  label: 'Declarative Connector Ping (ADR-0097)',
   description:
     'Dispatches GET /api/v1/health through showcase_status_api — a provider-bound connector instance materialized from pure metadata at boot.',
   type: 'autolaunched',

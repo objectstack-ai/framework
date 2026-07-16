@@ -20,7 +20,7 @@ export type {
     StepLogEntry,
 } from './engine.js';
 
-// Connector provider contract (ADR-0096) — re-exported from @objectstack/spec so
+// Connector provider contract (ADR-0097) — re-exported from @objectstack/spec so
 // hosts/tests can reach it via this package too. Connector plugins should import
 // it directly from `@objectstack/spec/integration` (no coupling to this engine).
 export type {

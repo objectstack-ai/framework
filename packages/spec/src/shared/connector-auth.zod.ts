@@ -76,7 +76,7 @@ export type ConnectorAuthConfig = z.infer<typeof ConnectorAuthConfigSchema>;
  * tier a generic executor can apply with no token-acquisition flow (`none` /
  * `api-key` / `basic` / `bearer`). This is the shape a provider factory receives
  * *after* a declarative instance's {@link ConnectorInstanceAuth} `credentialRef`
- * has been resolved to its secret at materialization (ADR-0096). OAuth2 —
+ * has been resolved to its secret at materialization (ADR-0097). OAuth2 —
  * authorization-code/refresh lifecycle — is the enterprise tier (ADR-0015).
  */
 export type ResolvedConnectorAuth = Extract<
@@ -85,7 +85,7 @@ export type ResolvedConnectorAuth = Extract<
 >;
 
 // ============================================================================
-// Declarative connector-instance auth (ADR-0096)
+// Declarative connector-instance auth (ADR-0097)
 //
 // Auth for a provider-bound declarative `connectors:` entry. Unlike
 // ConnectorAuthConfigSchema — the runtime shape, which carries the *resolved*
@@ -93,7 +93,7 @@ export type ResolvedConnectorAuth = Extract<
 // carries a `credentialRef` **reference** that the automation service resolves
 // through the secrets/env layer at boot. There is deliberately no field to
 // inline a secret here: stack metadata is authored, versioned, and shipped, so
-// a raw token must never live in it (ADR-0096 §3). OAuth2 is intentionally
+// a raw token must never live in it (ADR-0097 §3). OAuth2 is intentionally
 // absent (enterprise tier, ADR-0015).
 // ============================================================================
 
@@ -131,7 +131,7 @@ export const ConnectorInstanceBasicAuthSchema = lazySchema(() => z.object({
 
 /**
  * Declarative connector-instance auth: a discriminated union whose secret-bearing
- * variants carry a `credentialRef` instead of an inline secret (ADR-0096 §3).
+ * variants carry a `credentialRef` instead of an inline secret (ADR-0097 §3).
  * Consumed by the `auth` field on a provider-bound `connectors:` entry.
  */
 export const ConnectorInstanceAuthSchema = lazySchema(() => z.discriminatedUnion('type', [

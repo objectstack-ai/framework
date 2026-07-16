@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — provider-bound declarative connector instances. A `connectors:`
+// ADR-0097 — provider-bound declarative connector instances. A `connectors:`
 // entry that names a `provider` is materialized at boot by the automation
 // service: it looks up the provider factory a connector plugin registered,
 // resolves `auth.credentialRef`, and registers the resulting `{ def, handlers }`
@@ -160,7 +160,7 @@ function makeClosableProvider() {
 /**
  * Boot with a MUTABLE declared set and expose a `reload(next)` that swaps the
  * registry contents and fires `metadata:reloaded` — the runtime reconcile path
- * (ADR-0096 F1). The harness's ctx is the shared kernel context, so
+ * (ADR-0097 F1). The harness's ctx is the shared kernel context, so
  * `ctx.trigger('metadata:reloaded')` invokes the automation plugin's hook.
  */
 async function bootReloadable(
@@ -196,7 +196,7 @@ async function bootReloadable(
     return { kernel, engine: automationOf(kernel), reload };
 }
 
-describe('ADR-0096 — declarative connector materialization', () => {
+describe('ADR-0097 — declarative connector materialization', () => {
     it('materializes a provider-bound instance into a live, listed connector', async () => {
         const { factory, calls } = makeFakeProvider();
         const kernel = await boot([providerConnector('billing')], { providerFactory: factory });
@@ -312,7 +312,7 @@ describe('ADR-0096 — declarative connector materialization', () => {
         await kernel.shutdown();
     });
 
-    // ── Hard boot failures (ADR-0096 §Decision / §Acceptance) ──────────────
+    // ── Hard boot failures (ADR-0097 §Decision / §Acceptance) ──────────────
 
     it('fails boot loudly when the provider has no registered factory', async () => {
         await expect(
@@ -354,7 +354,7 @@ describe('ADR-0096 — declarative connector materialization', () => {
     });
 });
 
-describe('ADR-0096 — runtime re-materialization on metadata:reloaded (F1)', () => {
+describe('ADR-0097 — runtime re-materialization on metadata:reloaded (F1)', () => {
     it('materializes an instance published after boot', async () => {
         const { factory, calls } = makeClosableProvider();
         const { engine, reload, kernel } = await bootReloadable([], { providerFactory: factory });
