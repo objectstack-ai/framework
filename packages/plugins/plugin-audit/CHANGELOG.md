@@ -1,5 +1,69 @@
 # @objectstack/plugin-audit
 
+## 15.1.0
+
+### Patch Changes
+
+- f531a26: ADR-0085 #2548 follow-ups surfaced by the real-backend browser pass:
+
+  - **lint**: new `field-group-shadowed` warning in `validate-semantic-roles` — a
+    declared fieldGroup whose every visible member is hoisted into the detail
+    highlight strip (or is the record title) renders on forms but silently never
+    on detail pages (detail bodies hide the first 4 highlightFields). Warning
+    tier, same as the other semantic-role rules.
+  - **plugin-audit**: feed/audit summaries ("Created … / Deleted … / Updated …")
+    now name the object by its display label ("Semantic Zoo") instead of its API
+    name ("showcase_semantic_zoo") — these strings render verbatim in the record
+    Discussion feed and Setup dashboards. Falls back to the API name when the
+    object definition isn't resolvable. Existing stored rows are unchanged.
+
+- f531a26: Localize activity summaries to the workspace default locale (#3039). Activity
+  writers previously hardcoded English verbs and the object API name
+  (`Created person_qualification "OC-00001"`). The writer now resolves the
+  ADR-0053 `localization.locale` setting per write (memoized per tenant/user
+  scope), renders the verb through new `messages.activityCreated/Updated/Deleted`
+  i18n templates (en, zh-CN, ja-JP, es-ES shipped), and names the object by its
+  localized label (`objects.{name}.label`) with fallback to the authored def
+  label, then the API name. Missing i18n/settings services or bundle keys
+  degrade to the previous English summaries.
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

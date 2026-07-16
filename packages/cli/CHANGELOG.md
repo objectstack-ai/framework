@@ -1,5 +1,262 @@
 # @objectstack/cli
 
+## 15.1.0
+
+### Minor Changes
+
+- f531a26: feat(protocol): complete ADR-0087 — load-seam handshake, chain backfill 12–15, release artifacts (#2643)
+
+  Closes the remaining ADR-0087 gaps (see the ADR's as-built Addendum):
+
+  - **P0 load seams (D1).** The protocol handshake now runs on the boot-time
+    durable-package rehydration path (`@objectstack/service-package` refuses an
+    incompatible `sys_packages` row with the structured `OS_PROTOCOL_INCOMPATIBLE`
+    diagnostic and keeps booting) and on `AppPlugin` for code-defined stacks
+    (fail-fast before the manifest is decomposed). `objectstack lint` gains
+    `protocol/missing-engines-range` (warning + fix-it) and the
+    `create-objectstack` blank template stamps `engines: { protocol: '^<major>' }`
+    (re-stamped at version time by `scripts/sync-template-versions.mjs`) — the
+    two ends of the grandfathering ratchet.
+  - **Chain backfill (D2/D3).** `MetadataConversion.retiredFromLoadPath`
+    implements the load-window's second half (retired entries replay only via
+    `migrate meta` / fixture CI). Steps 12–15 land: the `api.requireAuth` flip
+    (semantic), the ADR-0090 wave (3 retired conversions + 5 semantic TODOs), the
+    `BookAudience` rename (retired conversion), and the ADR-0089 visibility
+    unification (`visibleOn`/`visibility` → `visibleWhen` as LIVE load-window
+    conversions) + the `.strict()` flip (semantic). The protocol-11
+    `compactLayout` → `highlightFields` rename is backfilled as a retired step-11
+    conversion. `migrate meta --from 10` now reaches protocol 15.
+  - **Release artifacts (D4).** `spec-changes.json` is generated from the
+    registries (`gen:spec-changes`, CI drift-checked), ships in the npm artifact
+    together with `api-surface.json`, and is attached to each `@objectstack/spec`
+    GitHub Release with `added[]`/`removed[]` filled from the api-surface diff
+    against the previously published release. The upgrade guide
+    (`docs/protocol-upgrade-guide.md`) is generated from the same registries and
+    CI drift-checked — a projection that cannot drift.
+
+- f531a26: feat(connector-openapi): resolve `providerConfig.spec` from a package-relative file path (#3016, ADR-0096 follow-up)
+
+  ADR-0096's canonical example authors an OpenAPI-backed instance as
+  `providerConfig: { spec: './billing-openapi.json' }`, but the landed `openapi`
+  provider factory only accepted an inline document object or an http(s) URL.
+  The spec union is now complete: **inline object | file path | remote URL**.
+
+  - **`@objectstack/spec`.** `ConnectorProviderContext` gains an optional
+    host-injected `loadPackageFile(relativePath)` capability (pure type): reads a
+    UTF-8 file resolved against the declaring stack/package root, confined to
+    that root. `undefined` on hosts without a filesystem.
+
+  - **`@objectstack/service-automation`.** New `packageRoot` plugin option (the
+    base for relative file refs; defaults to `process.cwd()`) and an exported
+    `createPackageFileLoader(packageRoot)` that implements the confinement
+    guard — absolute paths and `..`-escaping paths are rejected — with lazy
+    `node:fs`/`node:path` imports so non-Node hosts only fail if a file ref is
+    actually dereferenced. The materializer injects the capability into every
+    provider factory's context. Failures follow the existing reconcile policy:
+    **fatal at boot, entry skipped on reload**.
+
+  - **`@objectstack/connector-openapi`.** A string `providerConfig.spec` that is
+    not an http(s) URL is now read via `ctx.loadPackageFile` and parsed as an
+    OpenAPI JSON document (clear errors for missing/unreadable files, unparseable
+    JSON, and hosts without package file access).
+
+  - **`@objectstack/cli`.** `serve`/`dev` pass the project folder (the
+    `objectstack.config.ts` directory) as the automation service's `packageRoot`,
+    mirroring how the standalone sqlite default is anchored.
+
+- f531a26: feat(cli): `os i18n extract` now emits action param keys (`o.<object>._actions.<action>.params.<param>.*`) so action-dialog forms are translatable (#3030)
+
+  The console client already resolves param labels, help text, placeholders and
+  option labels from `o.<object>._actions.<action>.params.*`, but the extractor
+  never walked `actions[].params`, so those keys were absent from generated
+  bundles and dialogs like Setup → Create User rendered raw English under any
+  locale. The extractor now emits:
+
+  - inline params → `label` / `helpText` / `placeholder` / `options.<value>`;
+  - field-backed params (`{ field: '…' }`) → only when they carry a literal
+    override (field translations already cover them at runtime);
+  - both object actions and top-level (global) actions.
+
+  `@objectstack/platform-objects` regenerates its en/zh-CN/ja-JP/es-ES bundles
+  with the new keys filled (user admin actions, sys_jwks fields, page variable
+  forms). Re-running extract with `--merge` stays idempotent.
+
+- f531a26: feat(docker): official runtime image `ghcr.io/objectstack-ai/objectstack`
+
+  ObjectStack now ships an official, versioned Docker runtime image instead of
+  only a copy-me example. The image packages Node 22 + a pinned
+  `@objectstack/cli` + `os start` (non-root `node` user, `/api/v1/health`
+  HEALTHCHECK, `OS_ARTIFACT_PATH` / `OS_PORT=8080` preset), published
+  multi-arch (amd64/arm64) on every release with tags mirroring the CLI
+  version (`X.Y.Z` / `X.Y` / `X` / `latest`).
+
+  Deploying an app is now:
+
+  ```dockerfile
+  FROM ghcr.io/objectstack-ai/objectstack:<version>
+  COPY --chown=node:node dist/objectstack.json /srv/app/objectstack.json
+  ```
+
+  or, with no image build at all, `docker run` the official image with the
+  artifact mounted (or `OS_ARTIFACT_PATH` pointing at an `https://` URL).
+  `examples/docker` and the Self-Hosted Deployment docs now build on the
+  official image; the self-built runtime Dockerfile remains documented for
+  air-gapped registries.
+
+- f531a26: Generic pinyin search recall (#2486, ADR-0098): a locale-gated
+  `OS_SEARCH_PINYIN_ENABLED` switch (auto-on when the stack configures any
+  `zh-*` locale) provisions a hidden `__search` companion column for each
+  object's display/name field at compile time, the new
+  `@objectstack/plugin-pinyin-search` fills it with full pinyin + initials
+  ("张伟" → "zhangwei zw") on before-save (plus boot backfill and a
+  `rebuildSearchCompanion` reconcile entry), and `$search` ORs the column in at
+  query time — so lookup pickers, list quick-search and ⌘K transparently match
+  `zhangwei` / `zw` against CJK names. Purely additive: `resolveSearchFields`,
+  `searchableFields`, drivers and non-Chinese deployments are untouched; FLS
+  restricted / secret / PII fields never feed the companion.
+- f531a26: feat(spec,cli): enroll `view` in the liveness ledger (#2998 Track B)
+
+  `view` joins the `GOVERNED` set of the spec property-liveness gate — the
+  rollout gap that let the objectui#1763/#2545 class of renderer/spec key drift
+  survive undetected. New `packages/spec/liveness/view.json` classifies all 83
+  walkable properties (75 ledger entries + framework overlay fields): the `list`
+  and `form` containers are drilled one level via `children`.
+
+  Seeded from the 2026-06 viewschema audit and **re-verified against objectui
+  HEAD** — four audit-era DEAD findings had since gone live and are classified
+  from current reads (`form.submitBehavior`, `list.sharing.lockedBy`, list-path
+  `ViewData` providers, and the post-ADR-0021 `list.chart` dataset shape — the
+  audit's "chart renderers never migrated" headline is resolved). Final tally:
+  68 live, 2 experimental (`form.buttons`/`form.defaults`, #2998 Track A
+  awaiting objectui#2545), 5 dead (`list.responsive`, `list.performance`,
+  `form.data`, `form.defaultSort`, `form.aria`). All misleading dead props
+  carry `authorWarn` + `authorHint`.
+
+  The CLI's compile-time liveness lint gains `view` coverage
+  (`TYPE_COLLECTIONS` + view containers labelled by `object`), so authoring a
+  dead prop — e.g. a spec-valid `chart` list view that renders empty — now warns
+  at `os build` with a corrective hint.
+
+### Patch Changes
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [5ffff3b]
+- Updated dependencies [f531a26]
+- Updated dependencies [d14a387]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [d75c7ac]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/rest@15.1.0
+  - @objectstack/plugin-hono-server@15.1.0
+  - @objectstack/lint@15.1.0
+  - @objectstack/plugin-audit@15.1.0
+  - @objectstack/service-package@15.1.0
+  - @objectstack/service-automation@15.1.0
+  - @objectstack/service-storage@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/verify@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/plugin-security@15.1.0
+  - @objectstack/console@15.1.0
+  - @objectstack/service-realtime@15.1.0
+  - @objectstack/plugin-sharing@15.1.0
+  - @objectstack/mcp@15.1.0
+  - @objectstack/plugin-auth@15.1.0
+  - @objectstack/plugin-pinyin-search@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/plugin-reports@15.1.0
+  - @objectstack/account@15.1.0
+  - @objectstack/setup@15.1.0
+  - @objectstack/client@15.1.0
+  - @objectstack/cloud-connection@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/metadata@15.1.0
+  - @objectstack/observability@15.1.0
+  - @objectstack/driver-memory@15.1.0
+  - @objectstack/driver-mongodb@15.1.0
+  - @objectstack/driver-sql@15.1.0
+  - @objectstack/driver-sqlite-wasm@15.1.0
+  - @objectstack/plugin-approvals@15.1.0
+  - @objectstack/plugin-email@15.1.0
+  - @objectstack/plugin-webhooks@15.1.0
+  - @objectstack/service-analytics@15.1.0
+  - @objectstack/service-cache@15.1.0
+  - @objectstack/service-datasource@15.1.0
+  - @objectstack/service-job@15.1.0
+  - @objectstack/service-messaging@15.1.0
+  - @objectstack/service-queue@15.1.0
+  - @objectstack/service-settings@15.1.0
+  - @objectstack/service-sms@15.1.0
+  - @objectstack/trigger-api@15.1.0
+  - @objectstack/trigger-record-change@15.1.0
+  - @objectstack/trigger-schedule@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

@@ -1,5 +1,118 @@
 # Changelog
 
+## 15.1.0
+
+### Patch Changes
+
+- f531a26: fix(plugin-auth): re-run membership backfill when app seeding settles (#2996)
+
+  The ADR-0093 D6 membership backfill — the only safety net for users created
+  by app seeds (raw `engine.insert` into `sys_user` bypasses better-auth's
+  `user.create.after` reconciler) — ran only once on `kernel:ready`. When a seed
+  bundle overruns its inline budget (`OS_INLINE_SEED_BUDGET_MS`, default 8s) it
+  finishes in the background _after_ `kernel:ready`, so its users stayed
+  member-less in single-org `auto` mode until the next restart re-ran the backfill.
+
+  `AppPlugin` now emits a new **`app:seeded`** lifecycle event when an app's inline
+  seed settles (success, partial, or fallback) — carrying `{ appId, overBudget }`,
+  where `overBudget: true` marks the post-`kernel:ready` background case. plugin-auth
+  subscribes and re-runs the (idempotent, self-guarding, opt-out-able)
+  `backfillMemberships` on that signal, closing the window without waiting for a
+  restart. No behavior change when a seed completes within budget, in multi-tenant
+  mode, or under `invite-only` policy; `OS_SKIP_MEMBERSHIP_BACKFILL=1` still opts out.
+
+- 4109153: Close the `@better-auth/oauth-provider` 1.7 schema drift that broke platform
+  SSO (token exchange 500: `table sys_oauth_access_token has no column named
+authorizationCodeId`).
+
+  - `sys_oauth_access_token` / `sys_oauth_refresh_token`: add
+    `authorization_code_id`, `resources`, `requested_user_info_claims`,
+    `confirmation` (+ access-token `revoked`; + refresh-token `rotated_at`,
+    `rotation_replay_response`, `rotation_replay_expires_at`).
+  - `sys_oauth_consent`: add `resources`, `requested_user_info_claims`.
+  - `sys_oauth_application`: add `jwks`, `jwks_uri`, `backchannel_logout_uri`,
+    `backchannel_logout_session_required`, `dpop_bound_access_tokens`.
+  - New platform objects for the three models 1.7 introduced:
+    `sys_oauth_resource`, `sys_oauth_client_resource`,
+    `sys_oauth_client_assertion` (RFC 8707 resource indicators + RFC 7523
+    client-assertion replay prevention), registered in the auth manifest and
+    mapped in `buildOauthProviderPluginSchema()`.
+  - All camelCase→snake_case `fieldName` mappings extended accordingly, and a
+    new parity test (`oauth-provider-schema-parity.test.ts`) fails the build
+    whenever a future better-auth bump introduces model fields our objects or
+    mappings don't cover.
+
+- f531a26: fix(auth): align the better-auth family on 1.7.0-rc.1, implement the new adapter methods, and add the new sys_jwks columns (#2974)
+
+  Remediating GHSA-p2fr-6hmx-4528 (`@better-auth/oauth-provider`) requires the
+  1.7 plugin line, which imports `CLIENT_ASSERTION_TYPE` and other symbols that
+  only exist in `@better-auth/core` 1.7.x — so the whole better-auth family is
+  pinned to `1.7.0-rc.1` together (mixing a 1.7 plugin with 1.6.23 core 500s on
+  sign-in). better-auth 1.7 also extends its `CustomAdapter` contract with two
+  new methods, which the ObjectQL adapter now implements:
+
+  - `consumeOne` — atomic single-row consume (find the guarded row, delete it,
+    return it), used by better-auth for single-use credential consumption
+    (e.g. verification tokens on the sign-in path).
+  - `incrementOne` — guarded counter mutation (`field = field + delta` per
+    `increment` entry plus any absolute `set` values), returning the updated row
+    or `null` when the guard matches nothing.
+
+  Both are find-then-write mirrors of the existing `delete` / `update` methods
+  (ObjectQL exposes no native atomic primitive) and honour the same core/plugin
+  field-name bridging.
+
+  better-auth 1.7 also extends its `jwks` model with two new optional columns,
+  `alg` (signing algorithm, e.g. `EdDSA`) and `crv` (curve, e.g. `Ed25519`), and
+  writes them when minting signing keys. The `sys_jwks` platform object gains the
+  matching fields — without them every JWKS write failed (`table sys_jwks has no
+column named alg`), 500ing token signing and breaking session validation
+  (sign-in succeeded but every authenticated request 401'd).
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/rest@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

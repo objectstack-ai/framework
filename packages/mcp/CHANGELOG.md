@@ -1,5 +1,94 @@
 # @objectstack/plugin-mcp-server
 
+## 15.1.0
+
+### Minor Changes
+
+- f531a26: feat(mcp): `aggregate_records` tool — GROUP BY aggregation over the engine read path
+
+  New MCP tool `aggregate_records` (count/sum/avg/min/max/count_distinct, optional
+  groupBy incl. date bucketing, where filter, IANA timezone) in the `data:read`
+  family. Execution routes through the ObjectQL ENGINE (`callData('aggregate')`
+  deliberately never uses the raw per-env driver), so RLS/tenant scoping and the
+  D10 delegator intersection apply exactly as on find.
+
+  Security hardening shipped with it:
+
+  - plugin-security: new FLS aggregate-INPUT gate — result masking never runs for
+    `aggregate` (output rows carry only aliases), so any groupBy / aggregation
+    reference to an FLS-unreadable field is now rejected fail-closed with the
+    offending field names (mirrors the FLS write gate).
+  - runtime: `aggregate` maps to the `list` ApiMethod in the object exposure gate
+    (an object whose `apiMethods` whitelist excludes `list` cannot leak row
+    statistics through GROUP BY), and the aggregate action requires at least one
+    aggregation (the engine's in-memory path would otherwise degrade to raw rows
+    that the FLS masker does not cover).
+
+  The bridge seam is optional: a runtime that does not implement
+  `McpDataBridge.aggregate` simply does not register the tool (graceful
+  degradation, same contract as the action tools).
+
+### Patch Changes
+
+- f531a26: fix(security): enforce the `ai.exposed` opt-in on the MCP action surface (#2849)
+
+  Business-action bodies execute as trusted code: their engine facade carries no
+  `ExecutionContext`, so a body's internal reads/writes bypass RLS/FLS/CRUD and
+  tenant scoping — the caller's permissions and an agent's ADR-0090 D10 data
+  ceiling do NOT bound what an invoked action does. The MCP `run_action` bridge
+  nevertheless allowed invoking ANY headless action, ignoring the spec's
+  `ai.exposed` governance gate (ADR-0011) entirely.
+
+  The MCP bridge now fail-closes on `ai.exposed`: `list_actions` only enumerates
+  — and `run_action` only dispatches — actions the app author explicitly opted
+  into the AI surface with `ai: { exposed: true, description }`. Flow-type
+  actions additionally receive the caller's identity (`userId` / `positions` /
+  `permissions` / `tenantId`) as a proper `AutomationContext` (replacing the
+  former `triggerData` envelope the engine never read), so a `runAs: 'user'`
+  flow enforces RLS as the invoker instead of running unscoped (ADR-0049).
+  Trusted body dispatches are now audit-logged on both the MCP and REST action
+  paths, and the MCP tool/README/docs wording no longer claims action bodies run
+  under the caller's RLS.
+
+  Migration: actions that should stay invokable by AI agents through MCP must
+  declare `ai: { exposed: true, description: '…' }` (≥40-char description). All
+  other invocation surfaces (UI, REST `/actions/...`) are unchanged.
+
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [3fe9df1]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [4109153]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [627f225]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+- Updated dependencies [f531a26]
+  - @objectstack/spec@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes
