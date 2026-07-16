@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary } from '@objectstack/spec/data';
-import { resolveMultiOrgEnabled } from '@objectstack/types';
+import { resolveMultiOrgEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
+import { provisionSearchCompanion } from './search-companion.js';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
 import { AppSchema } from '@objectstack/spec/ui';
 import { applyProtection } from '@objectstack/spec/shared';
@@ -141,6 +142,17 @@ export interface SchemaRegistryOptions {
    * (useful in tests).
    */
   multiTenant?: boolean;
+
+  /**
+   * Whether to provision the hidden `__search` search-normalization companion
+   * column on registered objects that have an eligible display/name field
+   * (#2486 — pinyin search recall). Sourced from `OS_SEARCH_PINYIN_ENABLED`
+   * via `resolveSearchPinyinEnabled()` when not explicitly set (the CLI boot
+   * path stamps the locale-derived decision into that env var before the
+   * kernel constructs engines). Default off — non-Chinese deployments carry
+   * no extra column. Pass an explicit boolean to override (useful in tests).
+   */
+  searchCompanion?: boolean;
 
   /**
    * Policy for the install-time namespace gate (ADR-0048 Phase 1) — installing
@@ -412,6 +424,9 @@ export class SchemaRegistry {
   /** Whether to auto-inject multi-tenant system fields. */
   private readonly multiTenant: boolean;
 
+  /** Whether to provision the `__search` companion column (#2486). */
+  private readonly searchCompanion: boolean;
+
   /** Cross-package base-layer collision policy (ADR-0048). */
   private readonly collisionPolicy: 'error' | 'warn';
 
@@ -422,6 +437,12 @@ export class SchemaRegistry {
       // Mirror the SecurityPlugin / CLI banner default (env-driven, off by default).
       this.multiTenant = resolveMultiOrgEnabled();
     }
+
+    // Pinyin-search companion column (#2486). Env-driven like multiTenant;
+    // the CLI boot path resolves the locale-derived default once and stamps
+    // it into OS_SEARCH_PINYIN_ENABLED so this read agrees with the plugin
+    // gate.
+    this.searchCompanion = options.searchCompanion ?? resolveSearchPinyinEnabled();
 
     // ADR-0048 — default to a loud error on cross-package collision; allow an
     // env opt-out for deliberate migrations.
@@ -581,6 +602,18 @@ export class SchemaRegistry {
     // resolving their title on read via `resolveDisplayField` / `titleFormat`.
     if (ownership === 'own') {
       schema = provisionPrimary(schema, { synthesize: false });
+
+      // [#2486] Search-normalization companion column (`__search`). Runs
+      // AFTER `provisionPrimary` so the just-designated `nameField` is
+      // visible, and ONLY when the deployment enables pinyin search — the
+      // column is a real additive migration (ADR-0045) that the driver's
+      // `syncSchema` materializes, populated by plugin-pinyin-search's
+      // before-save hooks and OR-ed into `$search` by the engine's
+      // `expandSearchToFilter`. Owned objects only: extensions merge into
+      // the owner's already-provisioned shape.
+      if (this.searchCompanion) {
+        schema = provisionSearchCompanion(schema);
+      }
     }
 
     const shortName = schema.name;

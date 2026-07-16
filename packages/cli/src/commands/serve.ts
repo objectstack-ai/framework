@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -485,6 +485,25 @@ export default class Serve extends Command {
       // `requires: ['mcp']` in config works regardless of the env var.
       if (isMcpServerEnabled() && !requires.includes('mcp')) {
         requires.push('mcp');
+      }
+      // Pinyin search recall (#2486): locale-gated platform capability. When
+      // `OS_SEARCH_PINYIN_ENABLED` is unset, the default derives from the
+      // stack's configured locales (any `zh-*` → on). This is the ONE place
+      // that sees the stack config, so the resolved decision is stamped back
+      // into the env var — every later consumer (each engine's SchemaRegistry
+      // provisioning the `__search` companion column, the plugin's own gate)
+      // reads the same answer via the no-arg `resolveSearchPinyinEnabled()`.
+      {
+        const i18nCfg = (config as any).i18n ?? {};
+        const configuredLocales = [
+          i18nCfg.defaultLocale,
+          i18nCfg.fallbackLocale,
+          ...(Array.isArray(i18nCfg.supportedLocales) ? i18nCfg.supportedLocales : []),
+        ].filter((l: unknown): l is string => typeof l === 'string');
+        if (resolveSearchPinyinEnabled({ locales: configuredLocales })) {
+          process.env.OS_SEARCH_PINYIN_ENABLED = 'true';
+          if (!requires.includes('pinyin-search')) requires.push('pinyin-search');
+        }
       }
       // Default capability slate — every preset except `minimal` gets the
       // foundational services (queue + job + cache + settings + email +
@@ -1811,6 +1830,13 @@ export default class Serve extends Command {
           pkg: '@objectstack/plugin-sharing',
           export: 'SharingServicePlugin',
           nameMatch: ['plugin-sharing', 'SharingServicePlugin', 'SharingPlugin'],
+        },
+        // #2486 — auto-required above when resolveSearchPinyinEnabled()
+        // (explicit env, else any configured zh-* locale) says on.
+        'pinyin-search': {
+          pkg: '@objectstack/plugin-pinyin-search',
+          export: 'PinyinSearchPlugin',
+          nameMatch: ['plugin-pinyin-search', 'PinyinSearchPlugin'],
         },
         reports: {
           pkg: '@objectstack/plugin-reports',

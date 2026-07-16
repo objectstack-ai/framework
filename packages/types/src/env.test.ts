@@ -5,6 +5,7 @@ import {
   _resetEnvDeprecationWarnings,
   readEnvWithDeprecation,
   resolveAllowDegradedTenancy,
+  resolveSearchPinyinEnabled,
 } from './env.js';
 
 describe('readEnvWithDeprecation', () => {
@@ -126,6 +127,48 @@ describe('resolveAllowDegradedTenancy (ADR-0093 D5)', () => {
     for (const v of ['0', 'false', 'off', 'no', '', 'maybe']) {
       process.env.OS_ALLOW_DEGRADED_TENANCY = v;
       expect(resolveAllowDegradedTenancy()).toBe(false);
+    }
+  });
+});
+
+describe('resolveSearchPinyinEnabled (#2486)', () => {
+  const original = process.env.OS_SEARCH_PINYIN_ENABLED;
+  afterEach(() => {
+    if (original === undefined) delete process.env.OS_SEARCH_PINYIN_ENABLED;
+    else process.env.OS_SEARCH_PINYIN_ENABLED = original;
+  });
+
+  it('defaults OFF with no env and no locales', () => {
+    delete process.env.OS_SEARCH_PINYIN_ENABLED;
+    expect(resolveSearchPinyinEnabled()).toBe(false);
+    expect(resolveSearchPinyinEnabled({ locales: [] })).toBe(false);
+    expect(resolveSearchPinyinEnabled({ locales: ['en', 'ja-JP'] })).toBe(false);
+  });
+
+  it('derives ON from any configured zh-* locale when env is unset', () => {
+    delete process.env.OS_SEARCH_PINYIN_ENABLED;
+    for (const locales of [['zh-CN'], ['en', 'zh-TW'], ['zh'], ['ZH-hans'], ['en', 'zh_CN']]) {
+      expect(resolveSearchPinyinEnabled({ locales })).toBe(true);
+    }
+    expect(resolveSearchPinyinEnabled({ locales: ['zhx-nonsense'] })).toBe(false);
+  });
+
+  it('explicit env overrides the locale-derived default in both directions', () => {
+    process.env.OS_SEARCH_PINYIN_ENABLED = 'false';
+    expect(resolveSearchPinyinEnabled({ locales: ['zh-CN'] })).toBe(false);
+    process.env.OS_SEARCH_PINYIN_ENABLED = 'true';
+    expect(resolveSearchPinyinEnabled({ locales: ['en'] })).toBe(true);
+    expect(resolveSearchPinyinEnabled()).toBe(true);
+  });
+
+  it('accepts truthy values case-insensitively; anything else is off', () => {
+    for (const v of ['1', 'true', 'TRUE', 'on', 'Yes']) {
+      process.env.OS_SEARCH_PINYIN_ENABLED = v;
+      expect(resolveSearchPinyinEnabled()).toBe(true);
+    }
+    for (const v of ['0', 'false', 'off', 'no', 'maybe']) {
+      process.env.OS_SEARCH_PINYIN_ENABLED = v;
+      expect(resolveSearchPinyinEnabled()).toBe(false);
     }
   });
 });
