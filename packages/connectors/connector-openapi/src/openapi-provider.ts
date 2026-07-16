@@ -36,7 +36,7 @@ interface OpenApiProviderConfig {
 }
 
 /**
- * Resolve `providerConfig.spec` into a parsed OpenAPI document (ADR-0096;
+ * Resolve `providerConfig.spec` into a parsed OpenAPI document (ADR-0097;
  * union per #3016): an inline document object (the reliable, no-I/O-at-boot
  * form used by the showcase), an http(s) URL fetched at materialization, or a
  * **file path** read through the host's `ctx.loadPackageFile` — which resolves

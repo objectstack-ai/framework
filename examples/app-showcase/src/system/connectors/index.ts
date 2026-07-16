@@ -59,7 +59,7 @@ export const StatusApiConnector = defineConnector({
   auth: { type: 'none' },
 });
 /**
- * ADR-0096 provider-bound instance, **file-path spec** form (#3016): the OpenAPI
+ * ADR-0097 provider-bound instance, **file-path spec** form (#3016): the OpenAPI
  * document lives next to this file (`status-openapi.json`) and is referenced by
  * a path resolved relative to THIS package's root at materialization — reads
  * are confined to the package root (absolute / `..`-escaping paths are
@@ -76,7 +76,7 @@ export const StatusOpenApiConnector = defineConnector({
   label: 'Status API (Declarative OpenAPI Instance, File-Path Spec)',
   type: 'api',
   description:
-    'Provider-bound declarative connector instance (ADR-0096) whose OpenAPI document is referenced as a ' +
+    'Provider-bound declarative connector instance (ADR-0097) whose OpenAPI document is referenced as a ' +
     'package-relative file path (#3016) and read at boot, confined to the package root. Materialized into a live ' +
     '`openapi` connector — getHealth dispatches GET /api/v1/health against the running server.',
   provider: 'openapi',

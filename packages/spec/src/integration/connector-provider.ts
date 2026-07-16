@@ -63,7 +63,7 @@ export interface ConnectorProviderContext {
   readonly providerConfig: Record<string, unknown>;
   readonly auth?: ResolvedConnectorAuth;
   /**
-   * Host-injected package file reader (#3016, ADR-0096 follow-up). Resolves a
+   * Host-injected package file reader (#3016, ADR-0097 follow-up). Resolves a
    * **relative** path against the root of the stack/package that declared the
    * entry and returns the file's UTF-8 text, so a factory can support file-path
    * refs like `providerConfig.spec: './billing-openapi.json'` without owning

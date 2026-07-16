@@ -82,7 +82,7 @@ export interface AutomationServicePluginOptions {
  * any path that escapes the root after resolution (`../…`, `a/../../…`), so a
  * declarative entry can never read outside the stack/package that declared it.
  * A missing/unreadable file throws — the materializer's reconcile policy makes
- * that fatal at boot and a skipped entry on reload, like every other ADR-0096
+ * that fatal at boot and a skipped entry on reload, like every other ADR-0097
  * materialization failure.
  *
  * Node builtins are imported lazily inside the returned closure so merely

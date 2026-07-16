@@ -52,7 +52,7 @@ describe('openapi provider factory (ADR-0097)', () => {
         await expect(factory(ctx({ providerConfig: {} }))).rejects.toThrow(/providerConfig\.spec/);
     });
 
-    // ── File-path specs (#3016 — ADR-0096 follow-up) ────────────────────────
+    // ── File-path specs (#3016 — ADR-0097 follow-up) ────────────────────────
 
     it('reads a file-path spec through the host loadPackageFile capability', async () => {
         const requested: string[] = [];
