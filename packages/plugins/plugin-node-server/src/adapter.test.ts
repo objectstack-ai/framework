@@ -140,6 +140,15 @@ describe('NodeHttpServer (live socket)', () => {
         expect(await res.text()).toBe('');
     });
 
+    it('drops prototype-polluting query keys (CodeQL: remote property injection)', async () => {
+        const res = await fetch(`${base}/echo/1?__proto__=polluted&constructor=x&a=ok`);
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.q).toEqual({ a: 'ok' });
+        // The global Object prototype must be untouched.
+        expect(({} as any).polluted).toBeUndefined();
+    });
+
     it('exposes the Host header natively (no backfill needed)', async () => {
         server.get('/host', (req, res) => { res.json({ host: req.headers.host }); });
         const res = await fetch(`${base}/host`);

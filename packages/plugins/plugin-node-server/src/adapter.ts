@@ -160,7 +160,9 @@ export class NodeHttpServer implements IHttpServer {
             if (route.method !== effective) continue;
             const m = route.regex.exec(normalized);
             if (!m) continue;
-            const params: Record<string, string> = {};
+            // Null-prototype for symmetry with `query` — keys come from the
+            // registered pattern (developer-controlled), values from the URL.
+            const params: Record<string, string> = Object.create(null);
             route.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
             return { route, params };
         }
@@ -198,8 +200,13 @@ export class NodeHttpServer implements IHttpServer {
         }
 
         // ── Query params (multi-value aware) ────────────────────────────────
-        const query: Record<string, string | string[]> = {};
+        // Null-prototype object + dangerous-key filter: the property names
+        // come straight from the request, so a plain `{}` would be open to
+        // prototype pollution via `?__proto__=…` (CodeQL: remote property
+        // injection).
+        const query: Record<string, string | string[]> = Object.create(null);
         for (const key of url.searchParams.keys()) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
             if (key in query) continue;
             const all = url.searchParams.getAll(key);
             query[key] = all.length > 1 ? all : all[0];
