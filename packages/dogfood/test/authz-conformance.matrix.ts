@@ -21,6 +21,13 @@ export interface AuthzPrimitive {
   enforcement?: string;
   /** Dogfood proof filename in this directory (required for high-risk enforced). */
   proof?: string;
+  /**
+   * Ratchet keys this row accounts for (ADR-0060), matched against the test's
+   * `discover()`. A discovered HTTP entry point with no covering row fails CI as
+   * UNCLASSIFIED; a `covers` key no longer in source fails as STALE. See
+   * authz-conformance.test.ts (#2567 anonymous-deny surface enumeration).
+   */
+  covers?: string[];
   /** Why it is experimental/removed, or a roadmap pointer. */
   note?: string;
 }
@@ -55,15 +62,18 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
   // the same `requireAuth` gate; these rows pin every entry point so a new
   // ungated surface (or a silent regression) fails CI, not review.
   { id: 'anonymous-deny-meta', summary: 'anonymous-deny on the metadata endpoints (#2567 surface 1)', state: 'enforced',
-    enforcement: 'rest/rest-server.ts registerMetadataEndpoints guarded registrar (enforceAuth) — every /meta route inherits the gate; runtime/http-dispatcher.ts handleMetadata mirrors it for the dispatcher metadata catch-all',
-    proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts' },
-  { id: 'anonymous-deny-graphql', summary: 'anonymous-deny on the dispatcher GraphQL endpoint (#2567 surface 2)', state: 'enforced',
-    enforcement: 'runtime/http-dispatcher.ts handleGraphQL (requireAuth gate, resolves identity for the direct /graphql route) + runtime/dispatcher-plugin.ts requireAuth default(true), mirroring rest-server.ts',
+    enforcement: 'rest/rest-server.ts registerMetadataEndpoints guarded registrar (enforceAuth → shouldDenyAnonymous) — every /meta route inherits the gate; runtime/http-dispatcher.ts handleMetadata mirrors it for the dispatcher metadata catch-all',
     proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
+    covers: ['meta:rest-server.ts:registerMetadataEndpoints', 'meta:http-dispatcher.ts:handleMetadata'] },
+  { id: 'anonymous-deny-graphql', summary: 'anonymous-deny on the dispatcher GraphQL endpoint (#2567 surface 2)', state: 'enforced',
+    enforcement: 'runtime/http-dispatcher.ts handleGraphQL (shouldDenyAnonymous, resolves identity for the direct /graphql route) + runtime/dispatcher-plugin.ts requireAuth default(true), mirroring rest-server.ts',
+    proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
+    covers: ['graphql:http-dispatcher.ts:handleGraphQL', 'graphql:dispatcher-plugin.ts:POST /api/v1/graphql'],
     note: 'GraphQL reaches the same object data as /data through kernel.graphql, whose security middleware falls OPEN for an anonymous context. Unit-proven in runtime/http-dispatcher.requireauth.test.ts (GraphQL block); e2e on the platform default in the surfaces proof.' },
   { id: 'anonymous-deny-hono-data', summary: 'anonymous-deny on the raw-hono standard /data routes (#2567 surface 3)', state: 'enforced',
-    enforcement: 'plugin-hono-server/hono-plugin.ts denyAnonymous gate on the standard /data routes (requireAuth ?? true, mirroring rest-server.ts)',
+    enforcement: 'plugin-hono-server/hono-plugin.ts denyAnonymous gate (shouldDenyAnonymous) on the standard /data routes (requireAuth ?? true, mirroring rest-server.ts)',
     proof: 'showcase-anonymous-deny-surfaces.dogfood.test.ts',
+    covers: ['data:hono-plugin.ts:POST /data/:object', 'data:hono-plugin.ts:GET /data/:object/:id', 'data:hono-plugin.ts:GET /data/:object'],
     note: 'These routes delegate straight to ObjectQL and were only shadowed when the REST plugin registered the same paths FIRST — so the posture depended on plugin registration order (a load-order change silently reopened it, no test failing). Gating each route makes the deny decision a property of this entry point too. Handler-level proof in plugin-hono-server/hono-anonymous-deny.test.ts.' },
   { id: 'default-profile', summary: 'app-declared default profile (isDefault)', state: 'enforced',
     enforcement: 'plugin-security/security-plugin.ts fallback resolution', proof: 'showcase-default-profile.dogfood.test.ts' },

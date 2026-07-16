@@ -1,6 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { IHttpServer, resolveAuthzContext, resolveLocalizationContext, isAuthGateAllowlisted } from '@objectstack/core';
+import {
+    IHttpServer, resolveAuthzContext, resolveLocalizationContext, isAuthGateAllowlisted,
+    shouldDenyAnonymous, ANONYMOUS_DENY_BODY, ANONYMOUS_DENY_STATUS,
+} from '@objectstack/core';
 import { isMcpServerEnabled } from '@objectstack/types';
 import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
@@ -957,14 +960,21 @@ export class RestServer {
             res.status(403).json({ error: { code: gate.code, message: gate.message } });
             return true;
         }
-        if (!this.config.api.requireAuth) return false;
-        if (context?.userId) return false;
-        if (req?.method === 'OPTIONS') return false;
-        res.status(401).json({
-            error: 'unauthenticated',
-            message: 'Authentication is required to access this endpoint.',
-        });
-        return true;
+        // Shared anonymous-deny decision (#2567). Pass no `path`: the REST
+        // control-plane routes are registered WITHOUT `enforceAuth`, so this
+        // seam only ever guards data/meta — deny unconditionally when anonymous,
+        // exactly as before (the allowlist is reserved for a future umbrella
+        // seam). `isSystem` is never set on inbound HTTP, so it cannot bypass.
+        if (shouldDenyAnonymous({
+            requireAuth: this.config.api.requireAuth,
+            userId: context?.userId,
+            isSystem: context?.isSystem,
+            method: req?.method,
+        })) {
+            res.status(ANONYMOUS_DENY_STATUS).json(ANONYMOUS_DENY_BODY);
+            return true;
+        }
+        return false;
     }
 
     /**

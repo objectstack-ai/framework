@@ -5,26 +5,131 @@
 // every shared invariant (valid state, enforced-has-site, experimental/removed-
 // has-note, proof-file-exists, high-risk-has-proof). A new fail-open or a deleted
 // proof breaks the build.
+//
+// #2567 Phase 2 — the anonymous-deny SURFACES are additionally pinned by the
+// `discover()` ratchet: this test STATICALLY enumerates the data/meta/graphql
+// HTTP entry points from source and asserts each is classified by a matrix row.
+// A new ungated `/data` route (or a removed/stale `covers` key) then fails CI as
+// UNCLASSIFIED / STALE — the surface can't silently regress.
 
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { checkLedger } from '@objectstack/verify';
-import { AUTHZ_CONFORMANCE } from './authz-conformance.matrix.js';
+import { AUTHZ_CONFORMANCE, type AuthzPrimitive } from './authz-conformance.matrix.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// packages/dogfood/test → repo root.
+const REPO_ROOT = join(HERE, '../../..');
+
+// ── #2567 ratchet — static enumeration of anonymous-deny HTTP entry points ──
+//
+// A CURATED per-file probe table (not a blind repo grep): scoped to the four
+// source files and to data/meta/graphql segments only, so control-plane routes
+// (/health, /auth, /ready, /discovery) are never enumerated as data surfaces.
+// But each probe is pattern-based WITHIN its file, so a genuinely new `/data`
+// route (or a new graphql/meta handler) is auto-discovered → new key → a
+// missing `covers` fails CI. Keys are derived from source CONTENT (route
+// literals / handler names), never line numbers, so they don't churn on edits.
+const PROBES: ReadonlyArray<{ file: string; re: RegExp; key: (m: RegExpExecArray) => string }> = [
+  // REST /meta umbrella registrar — one guarded registrar covers all ~17 routes.
+  {
+    file: 'packages/rest/src/rest-server.ts',
+    re: /private\s+registerMetadataEndpoints\s*\(/g,
+    key: () => 'meta:rest-server.ts:registerMetadataEndpoints',
+  },
+  // Dispatcher meta + graphql handlers — curated NAMES only (NOT handleAI /
+  // handleData / handleSecurity, which are separate surfaces/rows).
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /async\s+(handleMetadata|handleGraphQL)\s*\(/g,
+    key: (m) => `${m[1] === 'handleGraphQL' ? 'graphql' : 'meta'}:http-dispatcher.ts:${m[1]}`,
+  },
+  // Dispatcher-plugin direct GraphQL route (other server.post routes are
+  // control-plane / feature endpoints, deliberately not enumerated here).
+  {
+    file: 'packages/runtime/src/dispatcher-plugin.ts',
+    re: /server\.post\(\s*`\$\{prefix\}\/graphql`/g,
+    key: () => 'graphql:dispatcher-plugin.ts:POST /api/v1/graphql',
+  },
+  // Raw-hono standard /data routes — genuinely pattern-based: ANY new
+  // `rawApp.<verb>(`${prefix}/data...`)` → a new key → CI fails until a row covers it.
+  {
+    file: 'packages/plugins/plugin-hono-server/src/hono-plugin.ts',
+    re: /rawApp\.(get|post|put|patch|delete)\(\s*`\$\{prefix\}(\/data[^`]*)`/g,
+    key: (m) => `data:hono-plugin.ts:${m[1].toUpperCase()} ${m[2]}`,
+  },
+];
+
+/** Statically enumerate the anonymous-deny HTTP entry points from source. */
+function discoverAnonymousDenySurfaces(): Set<string> {
+  const found = new Set<string>();
+  for (const probe of PROBES) {
+    const src = readFileSync(join(REPO_ROOT, probe.file), 'utf8');
+    // Fresh lastIndex per file (the RegExp is shared, `g`-flagged).
+    probe.re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = probe.re.exec(src)) !== null) found.add(probe.key(m));
+  }
+  return found;
+}
+
+const HIGH_RISK = [
+  'owd-private', 'owd-public-read', 'controlled-by-parent', 'anonymous-deny', 'default-profile',
+  // #2567 — every anonymous-deny HTTP surface is high-risk: it guards the
+  // same object data as REST `/data` through a sibling entry point.
+  'anonymous-deny-meta', 'anonymous-deny-graphql', 'anonymous-deny-hono-data',
+];
 
 describe('ADR-0056 D10 — authorization conformance matrix', () => {
-  it('is a sound conformance ledger (ADR-0060 checkLedger)', () => {
+  it('is a sound conformance ledger (ADR-0060 checkLedger) + the #2567 surface ratchet holds', () => {
     const problems = checkLedger(AUTHZ_CONFORMANCE, {
       proofRoot: HERE, // proofs are dogfood test files alongside this one
-      highRisk: [
-        'owd-private', 'owd-public-read', 'controlled-by-parent', 'anonymous-deny', 'default-profile',
-        // #2567 — every anonymous-deny HTTP surface is high-risk: it guards the
-        // same object data as REST `/data` through a sibling entry point.
-        'anonymous-deny-meta', 'anonymous-deny-graphql', 'anonymous-deny-hono-data',
-      ],
+      highRisk: HIGH_RISK,
+      // The ratchet: every discovered data/meta/graphql entry point must be
+      // classified by exactly one row's `covers`, and no `covers` key may be
+      // stale (no longer in source).
+      discover: () => discoverAnonymousDenySurfaces(),
     });
     expect(problems, problems.join('\n')).toEqual([]);
+  });
+});
+
+// #2567 — prove the ratchet actually BITES. Drives `checkLedger` with controlled
+// inputs (deep-cloned matrix / synthetic discover) so it's deterministic and
+// needs no source edits. If these ever pass vacuously, the ratchet is asleep.
+describe('#2567 — anonymous-deny surface ratchet bites', () => {
+  const clone = (): AuthzPrimitive[] => JSON.parse(JSON.stringify(AUTHZ_CONFORMANCE));
+  const opts = (discover: () => Iterable<string>) => ({ proofRoot: HERE, highRisk: HIGH_RISK, discover });
+
+  it('the real matrix + real discover is sound (baseline lock)', () => {
+    const problems = checkLedger(AUTHZ_CONFORMANCE, opts(() => discoverAnonymousDenySurfaces()));
+    expect(problems).toEqual([]);
+  });
+
+  it('(a) a row that DROPS its covers → UNCLASSIFIED surface failure', () => {
+    const m = clone();
+    const row = m.find((r) => r.id === 'anonymous-deny-hono-data')!;
+    row.covers = [];
+    const problems = checkLedger(m, opts(() => discoverAnonymousDenySurfaces()));
+    expect(problems.some((p) => /UNCLASSIFIED surface/.test(p) && /data:hono-plugin\.ts/.test(p))).toBe(true);
+  });
+
+  it('(b) a NEW ungated route appearing in source → UNCLASSIFIED surface failure', () => {
+    const fake = 'data:hono-plugin.ts:DELETE /data/fake';
+    const problems = checkLedger(
+      AUTHZ_CONFORMANCE,
+      opts(() => new Set([...discoverAnonymousDenySurfaces(), fake])),
+    );
+    expect(problems.some((p) => p.includes('UNCLASSIFIED surface') && p.includes(fake))).toBe(true);
+  });
+
+  it('(c) a covers key no longer in source → STALE covers failure', () => {
+    const m = clone();
+    const row = m.find((r) => r.id === 'anonymous-deny-graphql')!;
+    row.covers = [...(row.covers ?? []), 'graphql:http-dispatcher.ts:handleRemovedThing'];
+    const problems = checkLedger(m, opts(() => discoverAnonymousDenySurfaces()));
+    expect(problems.some((p) => /STALE covers/.test(p) && /handleRemovedThing/.test(p))).toBe(true);
   });
 });
