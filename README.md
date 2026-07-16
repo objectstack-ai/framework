@@ -7,11 +7,6 @@
 
 > **A metadata protocol and TypeScript toolkit for AI-native business apps.** Describe your objects, permissions, workflows, APIs, UI, and AI tools once as typed, version-controlled Zod metadata — and ObjectStack derives the TypeScript types, REST API, client SDK, UI, and MCP tools from that single definition.
 
-```
-ObjectStack (this repo)  →  for builders — the open-source protocol, toolkit, and production runtime
-ObjectOS                 →  for end users — the commercial runtime environment (Cloud & Enterprise)
-```
-
 This repo is the **framework**: the protocol, kernel, SDK, CLI, and production runtime you build — and ship — with. `os start` or the official Docker image [`ghcr.io/objectstack-ai/objectstack`](./docker) runs your compiled app in production, Console and governance included, entirely on open source.  · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
 
 <p align="center">
@@ -333,5 +328,4 @@ Run locally: `pnpm docs:dev`
 
 ## License
 
-Apache-2.0. Enterprise editions, official cloud services, and marketplace
-commercial terms live outside this repository.
+Apache-2.0. 
