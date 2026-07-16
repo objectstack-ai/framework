@@ -57,6 +57,9 @@ export const ShowcaseApp = App.create({
         { id: 'nav_categories', type: 'object', objectName: 'showcase_category', label: 'Categories', icon: 'list-tree' },
         { id: 'nav_business_units', type: 'object', objectName: 'showcase_business_unit', label: 'Business Units', icon: 'network' },
         { id: 'nav_field_zoo', type: 'object', objectName: 'showcase_field_zoo', label: 'Field Zoo', icon: 'shapes' },
+        // B3 (#1583) dynamic-options fixture: country → province cascade + a
+        // role-gated tier, enforced server-side by the objectql rule path.
+        { id: 'nav_cascade', type: 'object', objectName: 'showcase_cascade', label: 'Cascading Select', icon: 'git-fork' },
       ],
     },
     {
