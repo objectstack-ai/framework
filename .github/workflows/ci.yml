@@ -122,13 +122,38 @@ jobs:
       # verbose reporter — so its real output cannot be mangled by the GH log
       # pipeline under burst. SIGQUIT before the timeout makes Node dump all
       # thread stacks if it hangs.
-      - name: DIAG 3071 — plugin-audit isolated, verbose (temporary)
+      - name: DIAG 3071 — plugin-audit isolated with built deps (temporary)
         if: github.event_name == 'pull_request'
         run: |
           node --version
           free -h || true
-          echo "── isolated vitest run ──"
+          echo "── build plugin-audit dependency closure ──"
+          pnpm turbo run build --filter='@objectstack/plugin-audit^...' --concurrency=4
+          echo "── isolated vitest run (deps built) ──"
           timeout -s QUIT 240 pnpm --filter @objectstack/plugin-audit exec vitest run --reporter=verbose --no-file-parallelism; echo "exit=$?"
+        continue-on-error: true
+
+      # Reproduce the REAL failing scenario: a full affected graph (old base ⇒
+      # everything affected), with turbo's output captured to a FILE so the
+      # plugin-audit block cannot be lost to the GH log pipeline under burst
+      # (that loss is why 3 prior failures showed zero output).
+      - name: DIAG 3071 — full-graph reproduction, file-captured (temporary)
+        if: github.event_name == 'pull_request'
+        env:
+          TURBO_SCM_BASE: 55bc68d
+        run: |
+          set +e
+          pnpm turbo run test --affected --concurrency=4 > /tmp/diag-turbo-test.log 2>&1
+          code=$?
+          echo "turbo exit=$code"
+          echo "── summary ──"
+          grep -E "Tasks:|Cached:|Failed:" /tmp/diag-turbo-test.log || true
+          echo "── plugin-audit block ──"
+          grep -n "plugin-audit" /tmp/diag-turbo-test.log | head -5
+          awk '/plugin-audit:test/{flag=1} flag{print} flag&&/ELIFECYCLE|Duration/{count++} count>=2{exit}' /tmp/diag-turbo-test.log | head -120
+          echo "── any FAIL lines anywhere ──"
+          grep -nE "FAIL |Failed Tests|Failed Suites|Unhandled" /tmp/diag-turbo-test.log | head -30
+          exit 0
         continue-on-error: true
 
       - name: Run affected tests (PR)
