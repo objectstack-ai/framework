@@ -160,10 +160,12 @@ export class NodeHttpServer implements IHttpServer {
             if (route.method !== effective) continue;
             const m = route.regex.exec(normalized);
             if (!m) continue;
-            // Null-prototype for symmetry with `query` — keys come from the
-            // registered pattern (developer-controlled), values from the URL.
-            const params: Record<string, string> = Object.create(null);
-            route.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
+            // Own-data-property construction for symmetry with `query` — keys
+            // come from the registered pattern (developer-controlled), values
+            // from the URL.
+            const params = Object.fromEntries(
+                route.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]),
+            ) as Record<string, string>;
             return { route, params };
         }
         return undefined;
@@ -200,17 +202,22 @@ export class NodeHttpServer implements IHttpServer {
         }
 
         // ── Query params (multi-value aware) ────────────────────────────────
-        // Null-prototype object + dangerous-key filter: the property names
-        // come straight from the request, so a plain `{}` would be open to
-        // prototype pollution via `?__proto__=…` (CodeQL: remote property
-        // injection).
-        const query: Record<string, string | string[]> = Object.create(null);
+        // The property names come straight from the request URL, so this map
+        // must never be built via dynamic property writes (`obj[key] = …`) —
+        // `?__proto__=…` would walk the prototype chain (CodeQL: remote
+        // property injection). `Object.fromEntries` creates own data
+        // properties only; the dangerous keys are dropped outright as
+        // defense in depth.
+        const seen = new Set<string>();
+        const queryEntries: Array<[string, string | string[]]> = [];
         for (const key of url.searchParams.keys()) {
             if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-            if (key in query) continue;
+            if (seen.has(key)) continue;
+            seen.add(key);
             const all = url.searchParams.getAll(key);
-            query[key] = all.length > 1 ? all : all[0];
+            queryEntries.push([key, all.length > 1 ? all : all[0]]);
         }
+        const query = Object.fromEntries(queryEntries) as Record<string, string | string[]>;
 
         // ── Body ────────────────────────────────────────────────────────────
         // JSON / urlencoded / text bodies are consumed eagerly (like the
