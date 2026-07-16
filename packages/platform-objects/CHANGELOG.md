@@ -1,5 +1,142 @@
 # @objectstack/platform-objects
 
+## 15.1.0
+
+### Minor Changes
+
+- 86c0aea: feat(attachments): sys_file orphan lifecycle + parent-derived attachment access (#2755)
+
+  **Orphan lifecycle (ADR-0057).** Deleting a `sys_attachment` join row used to
+  orphan the backing `sys_file` row and its storage bytes forever. `sys_file`
+  now declares a lifecycle (`ttl 30d` on a new `deleted_at` tombstone for
+  orphans; `retention 7d onlyWhen status=pending` for abandoned uploads), the
+  storage plugin's new hooks tombstone a file when its LAST join row is deleted
+  (attachments scope only — `Field.file`/`Field.image`/avatar scopes are never
+  touched) and un-tombstone on re-attach, and a new LifecycleService **reap
+  guard** seam (`registerReapGuard`) re-verifies zero references at sweep time
+  and deletes the storage bytes before confirming each row reap. A guarded
+  object is never blind-deleted; an erroring guard fails safe (rows retained).
+
+  **Attachment access (ADR-0049, Salesforce parent-derived semantics).**
+  `sys_attachment` create now requires caller READ visibility of the parent
+  record (403 `ATTACHMENT_PARENT_ACCESS`) and server-stamps `uploaded_by` from
+  the session (client value ignored); delete requires uploader-or-parent-editor
+  (403 `ATTACHMENT_DELETE_DENIED`). The storage upload routes require an
+  authenticated session when an auth service is wired (401 `AUTH_REQUIRED`;
+  bare kernels stay open) and stamp `owner_id` on new files.
+
+  **REMOVED — `sys_attachment.share_type` / `sys_attachment.visibility`.**
+  Both fields were modeled in v1 with zero runtime consumers (ADR-0049
+  parsed-but-unenforced). There is no replacement key: attachment access is
+  derived from the parent record by the hooks above. Writers of these fields
+  should simply stop sending them (unknown-field validation will reject them);
+  existing DB columns are left as unmanaged leftovers, no migration needed.
+
+  `@objectstack/verify` gains `BootOptions.extraPlugins` for booting optional
+  service pairs (e.g. storage + audit) in dogfood fixtures.
+
+### Patch Changes
+
+- 94b8e44: feat(attachments): edit-on-parent attach, upload-session lifecycle, trash=false (#2970 items 3-5)
+
+  Closes the remaining enforce-or-remove / lifecycle items of #2970:
+
+  - **Edit-on-parent for attach (item 3, Salesforce parity).** Creating a
+    `sys_attachment` now requires EDIT access to the parent record (via the
+    sharing service's `canEdit`), not merely read — public-model parents are
+    unchanged (canEdit is true for any member), private/owner-scoped parents
+    require the caller to own/edit them. Degrades to read visibility when no
+    sharing service is present.
+  - **`sys_upload_session` lifecycle (item 4).** Abandoned / terminal chunked
+    upload sessions are reaped by the platform LifecycleService (`transient`;
+    TTL 1d past `expires_at`; retention 7d for terminal statuses). Row reap
+    only — a reap guard that aborts backend multipart uploads for partial S3
+    sessions is a filed follow-up.
+  - **`sys_attachment.enable.trash` → `false` (item 5, ADR-0049).** The flag is
+    `dead` in the liveness ledger (no engine soft-delete reader) and attachment
+    deletes are hard (the reap guard reclaims a file's bytes once its last join
+    row is gone, so a restore would dangle) — declare the honest state rather
+    than claim a restore capability the runtime does not provide.
+
+- e7d5291: **Every feature-gated capability is now UI-gated, guardrailed by a flag registry and a declarative `requiresFeature` annotation (#2874, generalizing the create-user phone fix #2871).**
+
+  `@objectstack/spec/kernel` gains `PUBLIC_AUTH_FEATURES` — a classification registry for all 13 boolean flags served at `/api/v1/auth/config`: consumption surface (crud/login/status), default semantics (opt-in `== true` vs default-on `!= false`), and the gated spec inputs or an exemption reason. A plugin-auth drift test pins the served key set to the registry, and a platform-objects completeness guard pins the registry to the actual gates in both directions.
+
+  `ActionSchema`/`ActionParamSchema` gain `requiresFeature: '<flag>'` (enum-checked), lowered at parse time into the canonical `visible` CEL predicate per the flag's registered semantics, AND-composed with any explicit `visible`, and stripped from the output — renderers and lint see only `visible`, so objectui needs no changes. All 22 hand-written `features.*` gates migrated (behavior-locked by an exact-string matrix test), and the audit gated 17 previously naked capability-dependent actions: the six `sys_user` platform-admin actions, six 2FA actions, and five `sys_oauth_application` actions now hide when their plugin is off instead of rendering buttons that 404.
+
+- eb89a8c: feat(cli): `os i18n extract` now emits action param keys (`o.<object>._actions.<action>.params.<param>.*`) so action-dialog forms are translatable (#3030)
+
+  The console client already resolves param labels, help text, placeholders and
+  option labels from `o.<object>._actions.<action>.params.*`, but the extractor
+  never walked `actions[].params`, so those keys were absent from generated
+  bundles and dialogs like Setup → Create User rendered raw English under any
+  locale. The extractor now emits:
+
+  - inline params → `label` / `helpText` / `placeholder` / `options.<value>`;
+  - field-backed params (`{ field: '…' }`) → only when they carry a literal
+    override (field translations already cover them at runtime);
+  - both object actions and top-level (global) actions.
+
+  `@objectstack/platform-objects` regenerates its en/zh-CN/ja-JP/es-ES bundles
+  with the new keys filled (user admin actions, sys_jwks fields, page variable
+  forms). Re-running extract with `--merge` stays idempotent.
+
+- aead168: fix(auth): align the better-auth family on 1.7.0-rc.1, implement the new adapter methods, and add the new sys_jwks columns (#2974)
+
+  Remediating GHSA-p2fr-6hmx-4528 (`@better-auth/oauth-provider`) requires the
+  1.7 plugin line, which imports `CLIENT_ASSERTION_TYPE` and other symbols that
+  only exist in `@better-auth/core` 1.7.x — so the whole better-auth family is
+  pinned to `1.7.0-rc.1` together (mixing a 1.7 plugin with 1.6.23 core 500s on
+  sign-in). better-auth 1.7 also extends its `CustomAdapter` contract with two
+  new methods, which the ObjectQL adapter now implements:
+
+  - `consumeOne` — atomic single-row consume (find the guarded row, delete it,
+    return it), used by better-auth for single-use credential consumption
+    (e.g. verification tokens on the sign-in path).
+  - `incrementOne` — guarded counter mutation (`field = field + delta` per
+    `increment` entry plus any absolute `set` values), returning the updated row
+    or `null` when the guard matches nothing.
+
+  Both are find-then-write mirrors of the existing `delete` / `update` methods
+  (ObjectQL exposes no native atomic primitive) and honour the same core/plugin
+  field-name bridging.
+
+  better-auth 1.7 also extends its `jwks` model with two new optional columns,
+  `alg` (signing algorithm, e.g. `EdDSA`) and `crv` (curve, e.g. `Ed25519`), and
+  writes them when minting signing keys. The `sys_jwks` platform object gains the
+  matching fields — without them every JWKS write failed (`table sys_jwks has no
+column named alg`), 500ing token signing and breaking session validation
+  (sign-in succeeded but every authenticated request 401'd).
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/metadata-core@15.1.0
+
 ## 15.0.0
 
 ### Minor Changes

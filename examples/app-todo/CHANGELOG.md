@@ -1,5 +1,59 @@
 # @objectstack/example-todo
 
+## 4.0.88
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [86c0aea]
+- Updated dependencies [541b96a]
+- Updated dependencies [4c46ee0]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [e0b049a]
+- Updated dependencies [e9a2885]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [3dc9fce]
+- Updated dependencies [fae5dd0]
+- Updated dependencies [23925e9]
+- Updated dependencies [6613ad0]
+- Updated dependencies [a16972b]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [fdfe1d9]
+- Updated dependencies [8b27dd7]
+- Updated dependencies [e07645c]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/mcp@15.1.0
+  - @objectstack/service-knowledge@15.1.0
+  - @objectstack/client@15.1.0
+  - @objectstack/metadata@15.1.0
+  - @objectstack/driver-sqlite-wasm@15.1.0
+  - @objectstack/knowledge-memory@15.1.0
+
 ## 4.0.87
 
 ### Patch Changes

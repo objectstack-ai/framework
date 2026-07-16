@@ -1,5 +1,152 @@
 # @objectstack/service-storage
 
+## 15.1.0
+
+### Minor Changes
+
+- 0289d5a: feat(attachments): authenticated, parent-scoped downloads for attachments files (#2970)
+
+  Closes item 2 of #2970. The storage download endpoints (`GET /storage/files/:fileId`
+  and `/files/:fileId/url`) were anonymous capability URLs — anyone holding a
+  `fileId` could mint a download without a session or any access check.
+
+  For `scope === 'attachments'`, non-`public_read` files, both endpoints now gate
+  on a new `authorizeFileRead` seam: `401 AUTH_REQUIRED` without a session, `403
+ATTACHMENT_DOWNLOAD_DENIED` when the caller is neither the file's owner nor able
+  to READ a record the file is attached to (parent-derived, resolved through the
+  full caller context via `resolveAuthzContext`), and otherwise a **short-lived**
+  signed URL (`downloadTtl`, default 300s). Non-attachments files (field files,
+  avatars, org logos — embedded in `<img src>` which cannot carry a bearer token)
+  keep the stable anonymous capability URL, and bare kernels/tests without the
+  seam wired stay open (back-compat).
+
+- 94b8e44: feat(attachments): edit-on-parent attach, upload-session lifecycle, trash=false (#2970 items 3-5)
+
+  Closes the remaining enforce-or-remove / lifecycle items of #2970:
+
+  - **Edit-on-parent for attach (item 3, Salesforce parity).** Creating a
+    `sys_attachment` now requires EDIT access to the parent record (via the
+    sharing service's `canEdit`), not merely read — public-model parents are
+    unchanged (canEdit is true for any member), private/owner-scoped parents
+    require the caller to own/edit them. Degrades to read visibility when no
+    sharing service is present.
+  - **`sys_upload_session` lifecycle (item 4).** Abandoned / terminal chunked
+    upload sessions are reaped by the platform LifecycleService (`transient`;
+    TTL 1d past `expires_at`; retention 7d for terminal statuses). Row reap
+    only — a reap guard that aborts backend multipart uploads for partial S3
+    sessions is a filed follow-up.
+  - **`sys_attachment.enable.trash` → `false` (item 5, ADR-0049).** The flag is
+    `dead` in the liveness ledger (no engine soft-delete reader) and attachment
+    deletes are hard (the reap guard reclaims a file's bytes once its last join
+    row is gone, so a restore would dangle) — declare the honest state rather
+    than claim a restore capability the runtime does not provide.
+
+- d49deb5: feat(attachments): sys_attachment read inherits parent-record visibility (#2970)
+
+  Follow-up to #2755. The create/delete gates landed, but a member could still
+  LIST `sys_attachment` rows (file_name, size, parent_id) pointing at records
+  they cannot read — an information leak, since attachment access derives from
+  the PARENT record (Salesforce ContentDocumentLink semantics). `sys_attachment`
+  is a public system object with no owner field, so the sharing/RLS static
+  predicates never narrowed it.
+
+  `installAttachmentReadVisibility` registers a `sys_attachment`-scoped engine
+  **middleware** (not a find-hook) so it filters `find`, `findOne`, `count`, and
+  `aggregate` identically — critically, the list `total` (which comes from
+  `engine.count()`, never the find path) is filtered too, so it cannot leak the
+  count of hidden rows. Generalizing ADR-0055 `controlled_by_parent` to the
+  polymorphic parent, each read resolves the visible parent ids per
+  `parent_object` through the caller-scoped engine (the parent's own RLS/OWD/
+  sharing apply) and ANDs a `$or` of `{ parent_object, parent_id: { $in } }`
+  into the query; no visible parent ⇒ a deny-all sentinel. Fails closed on any
+  compute error. System / context-less internal reads are not narrowed.
+
+- 86c0aea: feat(attachments): sys_file orphan lifecycle + parent-derived attachment access (#2755)
+
+  **Orphan lifecycle (ADR-0057).** Deleting a `sys_attachment` join row used to
+  orphan the backing `sys_file` row and its storage bytes forever. `sys_file`
+  now declares a lifecycle (`ttl 30d` on a new `deleted_at` tombstone for
+  orphans; `retention 7d onlyWhen status=pending` for abandoned uploads), the
+  storage plugin's new hooks tombstone a file when its LAST join row is deleted
+  (attachments scope only — `Field.file`/`Field.image`/avatar scopes are never
+  touched) and un-tombstone on re-attach, and a new LifecycleService **reap
+  guard** seam (`registerReapGuard`) re-verifies zero references at sweep time
+  and deletes the storage bytes before confirming each row reap. A guarded
+  object is never blind-deleted; an erroring guard fails safe (rows retained).
+
+  **Attachment access (ADR-0049, Salesforce parent-derived semantics).**
+  `sys_attachment` create now requires caller READ visibility of the parent
+  record (403 `ATTACHMENT_PARENT_ACCESS`) and server-stamps `uploaded_by` from
+  the session (client value ignored); delete requires uploader-or-parent-editor
+  (403 `ATTACHMENT_DELETE_DENIED`). The storage upload routes require an
+  authenticated session when an auth service is wired (401 `AUTH_REQUIRED`;
+  bare kernels stay open) and stamp `owner_id` on new files.
+
+  **REMOVED — `sys_attachment.share_type` / `sys_attachment.visibility`.**
+  Both fields were modeled in v1 with zero runtime consumers (ADR-0049
+  parsed-but-unenforced). There is no replacement key: attachment access is
+  derived from the parent record by the hooks above. Writers of these fields
+  should simply stop sending them (unknown-field validation will reject them);
+  existing DB columns are left as unmanaged leftovers, no migration needed.
+
+  `@objectstack/verify` gains `BootOptions.extraPlugins` for booting optional
+  service pairs (e.g. storage + audit) in dogfood fixtures.
+
+### Patch Changes
+
+- 7c800c6: fix(storage): abort the backend multipart upload when reaping an abandoned sys_upload_session (#2970)
+
+  The `sys_upload_session` lifecycle (added in #2984) reaps abandoned/terminal
+  chunked-upload session ROWS, but not the underlying backend multipart upload —
+  on S3 an initiated-but-not-completed multipart keeps its already-uploaded parts
+  billable and invisible to normal listing until an explicit
+  `AbortMultipartUpload`, so reaping only the row stranded them (with
+  `backend_upload_id`, the sole pointer, gone).
+
+  `createUploadSessionReapGuard` registers a `LifecycleReapGuard` on
+  `sys_upload_session` that aborts the backend multipart before the row is
+  deleted: it skips `completed` sessions (their multipart already became a real
+  object — an abort would `NoSuchUpload`-error), re-seeds the S3 adapter's
+  `uploadId → key` map from the row (a cold sweep lacks the live in-process map),
+  and vetoes (keeps the row for retry) on abort failure so the pointer survives.
+  The local adapter's parts directory is removed the same way.
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [94b8e44]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [eb89a8c]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aead168]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/observability@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

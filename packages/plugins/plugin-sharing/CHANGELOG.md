@@ -1,5 +1,150 @@
 # @objectstack/plugin-sharing
 
+## 15.1.0
+
+### Minor Changes
+
+- 28ba0c7: feat(plugin-sharing): sys_sharing_rule provenance + seed-not-clobber (#2909 P0/T1). The object gains readonly `managed_by` (unified A4 tri-state platform/package/admin) and `customized` columns; declared rules seed with `managed_by: 'package'`. defineRule in seed mode adopts pristine/legacy rows (package upgrades stay deliverable) but never overwrites admin-authored or customized rows — an admin's `active: false` on an over-sharing rule now survives redeploys instead of being resurrected at boot. A beforeUpdate hook stamps `customized` on any non-system edit of a seeded rule. Deliberately NO write gate: sharing rules remain a first-class admin authoring surface (ADR-0094 addendum tradeoff).
+
+### Patch Changes
+
+- 464418e: feat(kernel): add `kernel:bootstrapped` lifecycle anchor — the phase that fires after every `kernel:ready` handler has settled but before `kernel:listening` (HTTP socket open). `kernel:ready` handlers run sequentially in plugin-registration order, so a handler that consumes data produced by a later-starting plugin (e.g. the security bootstrap seeds `sys_position`; the app plugin's seed loader inserts records) would race the very rows it needs. `kernel:bootstrapped` is the correct anchor for reconcile/backfill work: every producer's ready handler has finished by the time it fires. Both `ObjectKernel` and `LiteKernel` trigger it. The sharing-rule boot backfill moves from `kernel:listening` to `kernel:bootstrapped` (semantics-only; behaviour unchanged).
+- a16972b: fix(security): guard the `owner_id` ownership anchor and scope bulk writes to owner-visible rows (#3004, #2982)
+
+  Two write-path holes on the row-ownership anchor (`owner_id`), the column OWD
+  row-level scoping keys off to decide who may update/delete a record.
+
+  - **#3004 — client-writable, unguarded `owner_id`.** The anchor is deliberately
+    not `readonly` (ownership is transferable), so the static-readonly strip never
+    covered it and FLS doesn't gate it by default. A non-privileged writer could
+    therefore `insert` a record under someone else's name (forge) or `update` one
+    to a new owner (transfer / disown), evading the owner gate that governs
+    update/delete. The security middleware (plugin-security step 3.5) now treats
+    `owner_id` as system-managed for non-privileged writers: on insert an empty
+    value is auto-stamped to the acting user (batch rows too — previously only the
+    single-record path stamped, leaving bulk-inserted rows NULL-owned and
+    invisible to their creator), and a supplied foreign owner is denied; on update
+    a supplied `owner_id` is a transfer/disown and is denied — the unchanged no-op
+    echo of a form save is tolerated via a pre-image compare, and a bulk
+    change-set carrying `owner_id` fails closed. A non-scalar `owner_id`
+    (array/object) is rejected outright rather than string-coerced, and the
+    change-set membership test uses own-property semantics so a polluted
+    prototype cannot spoof an ownership write. Both require the transfer grant
+    (`allowTransfer`, or `modifyAllRecords` which implies it) to proceed. System
+    context (`ctx.isSystem`) stays fully exempt (OAuth provisioning / cron
+    snapshots / seed claims / migrations), and under delegation both principals
+    must hold the grant (ADR-0090 D10 intersection). Note a REST **import** runs
+    under the importer's own context (not `isSystem`), so a non-privileged user
+    importing a CSV whose `owner_id` column names other users is correctly denied
+    unless they hold the transfer grant — administrators (who carry
+    `modifyAllRecords`) are unaffected.
+
+  - **#2982 — bulk writes skipped owner scoping on OWD-`private` objects.** A
+    `update({ multi: true })` / bulk delete rebuilt the driver AST from
+    `options.where` AFTER the middleware chain, discarding the owner/RLS write
+    filter that plugin-sharing (`buildWriteFilter`) and plugin-security compose
+    onto `opCtx.ast` — so a member's bulk write hit every matching row, including
+    peers'. The engine now seeds `opCtx.ast` from the caller's predicate BEFORE the
+    chain (the same seam reads use) and hands the middleware-composed AST to
+    `driver.updateMany` / `driver.deleteMany`, so bulk writes are constrained to the
+    rows the caller may edit — matching single-id write behavior. `delete` now
+    applies the same scalar-`id` guard `update` already had, so an id-list bulk
+    delete (`where: { id: { $in: […] } }, multi: true`) is owner-scoped too, and
+    both multi branches fail CLOSED (throw) rather than silently rebuilding an
+    unscoped predicate if the row-scoping AST is ever absent.
+
+    Consequences of routing bulk writes through the AST: the anti-oracle
+    predicate guard now also applies to bulk `update`/`delete` (a bulk write
+    filtering on an FLS-unreadable field is rejected, as reads already are), and a
+    principal-less (no-`userId`, non-system) bulk write on an owner-scoped object
+    now correctly affects zero rows instead of all of them.
+
+  Proven end-to-end on the real showcase app
+  (`packages/qa/dogfood/test/owner-anchor-and-bulk-writes.dogfood.test.ts`) and pinned
+  in the ADR-0096 authz-conformance ledger (`ownership-anchor-guard`,
+  `bulk-write-owner-scoping`).
+
+- e07645c: fix(security): close three execution-surface authz holes surfaced by the #2849 class sweep (#2980, #2981, #2982)
+
+  Three independent, confirmed-exploitable defects where an execution surface
+  ignored the caller's identity or fell open on a missing one. Each is fixed at
+  its own enforcement point; none change behaviour for correctly-scoped callers.
+
+  - **#2980 — reports IDOR + scheduled-report RLS bypass.** `ReportService`
+    discarded the caller's context and read/wrote `sys_saved_report` with a system
+    context, so any authenticated user could read, delete, or overwrite any saved
+    report by id (cross-owner / cross-tenant), and `listReports` enumerated all
+    owners. `getReport`/`deleteReport`/`saveReport`/`listReports` are now
+    owner-scoped (system read of the protection-locked metadata object, but
+    authorization enforced by owner match); create/overwrite can no longer spoof
+    ownership. Scheduled dispatch no longer runs `isSystem` (which emailed the
+    target object's entire table past the owner's RLS): it resolves the owner to a
+    real RLS-bearing context via a new `resolveOwnerContext` seam and **fails
+    closed** (skips + marks the schedule failed) when the owner can't be resolved,
+    rather than running elevated. Wiring that resolver is the reports-surface
+    consumer of ADR-0073's user-less identity resolution.
+
+  - **#2981 — knowledge/RAG retrieval fall-open.** `applyPermissionFilter` returned
+    every hit when the context was missing _or_ system. A missing identity is no
+    longer treated as a grant: object-backed hits fail closed (dropped, keeping
+    ACL-less file/http hits), and only an **explicit** system context passes
+    through. Closes the agent path where an omitted `ToolExecutionContext.actor`
+    yielded unfiltered semantic search over the whole corpus.
+
+  - **#2982 — bulk-write OWD gap.** `update({multi:true})` / `deleteMany` had no
+    single id to `canEdit`-gate, so owner scoping was skipped on private (and
+    public_read) objects. A new `SharingService.buildWriteFilter` (the edit-set
+    analogue of `buildReadFilter`) is AND-ed into the write AST for multi writes,
+    constraining them to rows the caller may edit — including the on-behalf-of
+    delegator intersection.
+
+  Tracked as the motivating evidence of ADR-0096 (execution-surface identity
+  admission); the mechanism that would prevent the class structurally is separate.
+
+- 28ba0c7: fix(plugin-sharing): reconcile every active sharing rule once at boot (#2926 ③). Rule grants are materialized by write hooks, which deliberately skip `isSystem` writes — so seed-loader records never produced `sys_record_share` rows and demo data shipping with matching sharing rules was broken out of the box until each record was touched at runtime. The boot backfill runs on `kernel:listening` — the phase the kernel fires only after every `kernel:ready` handler has settled, including the AppPlugin seed loader — so the reconcile sees the seeded rows rather than racing them. It is idempotent (diff-based reconcile) and best-effort per rule so one broken rule cannot block startup.
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [94b8e44]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [e0b049a]
+- Updated dependencies [e9a2885]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [eb89a8c]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [6613ad0]
+- Updated dependencies [a16972b]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aead168]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [8b27dd7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/formula@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

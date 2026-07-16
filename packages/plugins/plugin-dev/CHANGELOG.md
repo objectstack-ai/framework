@@ -1,5 +1,73 @@
 # @objectstack/plugin-dev
 
+## 15.1.0
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [86c0aea]
+- Updated dependencies [541b96a]
+- Updated dependencies [4c46ee0]
+- Updated dependencies [99755b5]
+- Updated dependencies [93bb7b4]
+- Updated dependencies [c11e24b]
+- Updated dependencies [e0b049a]
+- Updated dependencies [e9a2885]
+- Updated dependencies [ef50372]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [7bc9e79]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [aeb2110]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [3dc9fce]
+- Updated dependencies [fae5dd0]
+- Updated dependencies [23925e9]
+- Updated dependencies [7f9a795]
+- Updated dependencies [6613ad0]
+- Updated dependencies [a16972b]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aead168]
+- Updated dependencies [dee7feb]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [fdfe1d9]
+- Updated dependencies [8b27dd7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [464418e]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/runtime@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/rest@15.1.0
+  - @objectstack/plugin-hono-server@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/plugin-security@15.1.0
+  - @objectstack/plugin-auth@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/account@15.1.0
+  - @objectstack/setup@15.1.0
+  - @objectstack/driver-memory@15.1.0
+  - @objectstack/service-i18n@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

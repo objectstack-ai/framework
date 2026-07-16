@@ -1,5 +1,483 @@
 # @objectstack/spec
 
+## 15.1.0
+
+### Minor Changes
+
+- 7f68068: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- 8fc1208: feat(protocol): complete ADR-0087 — load-seam handshake, chain backfill 12–15, release artifacts (#2643)
+
+  Closes the remaining ADR-0087 gaps (see the ADR's as-built Addendum):
+
+  - **P0 load seams (D1).** The protocol handshake now runs on the boot-time
+    durable-package rehydration path (`@objectstack/service-package` refuses an
+    incompatible `sys_packages` row with the structured `OS_PROTOCOL_INCOMPATIBLE`
+    diagnostic and keeps booting) and on `AppPlugin` for code-defined stacks
+    (fail-fast before the manifest is decomposed). `objectstack lint` gains
+    `protocol/missing-engines-range` (warning + fix-it) and the
+    `create-objectstack` blank template stamps `engines: { protocol: '^<major>' }`
+    (re-stamped at version time by `scripts/sync-template-versions.mjs`) — the
+    two ends of the grandfathering ratchet.
+  - **Chain backfill (D2/D3).** `MetadataConversion.retiredFromLoadPath`
+    implements the load-window's second half (retired entries replay only via
+    `migrate meta` / fixture CI). Steps 12–15 land: the `api.requireAuth` flip
+    (semantic), the ADR-0090 wave (3 retired conversions + 5 semantic TODOs), the
+    `BookAudience` rename (retired conversion), and the ADR-0089 visibility
+    unification (`visibleOn`/`visibility` → `visibleWhen` as LIVE load-window
+    conversions) + the `.strict()` flip (semantic). The protocol-11
+    `compactLayout` → `highlightFields` rename is backfilled as a retired step-11
+    conversion. `migrate meta --from 10` now reaches protocol 15.
+  - **Release artifacts (D4).** `spec-changes.json` is generated from the
+    registries (`gen:spec-changes`, CI drift-checked), ships in the npm artifact
+    together with `api-surface.json`, and is attached to each `@objectstack/spec`
+    GitHub Release with `added[]`/`removed[]` filled from the api-surface diff
+    against the previously published release. The upgrade guide
+    (`docs/protocol-upgrade-guide.md`) is generated from the same registries and
+    CI drift-checked — a projection that cannot drift.
+
+- 96a14d0: feat(connectors): ADR-0096 — provider-bound declarative connector instances materialized at boot (#2977)
+
+  Declarative `connectors:` stack entries used to be **descriptor-only** (#2612):
+  registered as metadata but never dispatchable, the platform's one dead metadata
+  surface. An entry may now name a **`provider`** — an installed generic executor
+  (`openapi` / `mcp` / `rest`) — and the automation service **materializes** it
+  into a live, dispatchable connector at boot. AI can now wire an integration as
+  pure metadata and a flow `connector_action` calls it end-to-end.
+
+  - **Schema (`@objectstack/spec`).** `ConnectorSchema` gains `provider`,
+    `providerConfig`, and `auth` (a `credentialRef`-based instance-auth shape —
+    `ConnectorInstanceAuthSchema` — that references credentials, never inlines
+    them); `authentication` now defaults to `{ type: 'none' }` so a provider-bound
+    instance need not author it (loosening — existing connectors are unaffected).
+    `DeclarativeConnectorEntrySchema` (used by `stack.zod.ts`) rejects inline
+    secrets, orphan `providerConfig`/`auth`, and authored `actions`/`triggers` on a
+    provider-bound entry. A new `integration/connector-provider.ts` defines the
+    provider-factory contract as pure types.
+
+  - **Engine + boot (`@objectstack/service-automation`).** The engine adds a
+    connector-provider registry (`registerConnectorProvider`/`getConnectorProvider`)
+    and origin-tags registered connectors. At boot the service resolves each
+    provider-bound entry — looking up the factory, resolving `auth.credentialRef`
+    via a pluggable `CredentialResolver` (open-tier default: environment
+    variables), and registering the materialized connector. Boot **fails loudly**
+    for an unknown provider, invalid `providerConfig`, an unresolvable
+    `credentialRef`, or a name conflict with a plugin-registered connector (no
+    silent precedence).
+
+  - **Providers (`connector-rest` / `connector-openapi` / `connector-mcp`).** Each
+    plugin registers a provider factory in `init()` reusing its existing
+    generator/adapter API. Plugin options are now **optional**: with none the
+    plugin contributes only its provider factory; with instance options it also
+    registers a hand-wired connector (back-compat). `connector-openapi` adds a
+    `ConnectorOpenApiPlugin`.
+
+  Open tier: static auth (`none`/`api-key`/`basic`/`bearer`) with `credentialRef`
+  resolved from env vars. Managed vaulting, OAuth2 refresh, and per-tenant
+  connection lifecycle remain the enterprise tier (ADR-0015) — an enterprise host
+  injects a vault-backed `CredentialResolver` with no change to the materialization
+  path.
+
+- 10a570a: feat(connector-openapi): resolve `providerConfig.spec` from a package-relative file path (#3016, ADR-0096 follow-up)
+
+  ADR-0096's canonical example authors an OpenAPI-backed instance as
+  `providerConfig: { spec: './billing-openapi.json' }`, but the landed `openapi`
+  provider factory only accepted an inline document object or an http(s) URL.
+  The spec union is now complete: **inline object | file path | remote URL**.
+
+  - **`@objectstack/spec`.** `ConnectorProviderContext` gains an optional
+    host-injected `loadPackageFile(relativePath)` capability (pure type): reads a
+    UTF-8 file resolved against the declaring stack/package root, confined to
+    that root. `undefined` on hosts without a filesystem.
+
+  - **`@objectstack/service-automation`.** New `packageRoot` plugin option (the
+    base for relative file refs; defaults to `process.cwd()`) and an exported
+    `createPackageFileLoader(packageRoot)` that implements the confinement
+    guard — absolute paths and `..`-escaping paths are rejected — with lazy
+    `node:fs`/`node:path` imports so non-Node hosts only fail if a file ref is
+    actually dereferenced. The materializer injects the capability into every
+    provider factory's context. Failures follow the existing reconcile policy:
+    **fatal at boot, entry skipped on reload**.
+
+  - **`@objectstack/connector-openapi`.** A string `providerConfig.spec` that is
+    not an http(s) URL is now read via `ctx.loadPackageFile` and parsed as an
+    OpenAPI JSON document (clear errors for missing/unreadable files, unparseable
+    JSON, and hosts without package file access).
+
+  - **`@objectstack/cli`.** `serve`/`dev` pass the project folder (the
+    `objectstack.config.ts` directory) as the automation service's `packageRoot`,
+    mirroring how the standalone sqlite default is anchored.
+
+- 4f8c2d1: feat(connectors): degrade + retry declarative instances whose upstream is unreachable (#3017)
+
+  ADR-0097 kept every declarative-connector materialization failure fatal at
+  boot. That is right for configuration faults (unknown provider, invalid
+  `providerConfig`, unresolvable `credentialRef`, name conflict) but wrong for
+  _operational_ ones: a `provider: 'mcp'` instance must contact its MCP server
+  (`tools/list`) to materialize, and a transient network blip aborted the whole
+  app boot.
+
+  - **spec**: a provider factory can now throw
+    `ConnectorUpstreamUnavailableError` (code `CONNECTOR_UPSTREAM_UNAVAILABLE`,
+    structural guard `isConnectorUpstreamUnavailable`) to mark a failure as
+    "upstream temporarily unreachable — degrade and retry" instead of fatal.
+  - **service-automation**: the reconcile degrades such an instance in both boot
+    and reload modes: it registers an action-less husk (`state: 'degraded'` +
+    `degradedReason` on the `GET /connectors` descriptor) so the instance is
+    visible instead of silently missing — or, on a changed-config
+    re-materialization, keeps the old connector serving. A `connector_action`
+    against a degraded instance fails with the reason and a "retries
+    automatically" pointer. Degraded instances retry on an exponential backoff
+    (5s → 5min, reset by config edits) and on every `metadata:reloaded`
+    reconcile; recovery swaps the husk for the live connector atomically.
+    Reconcile runs (boot / reload / retry timer) are now serialized.
+  - **connector-mcp**: the `mcp` provider classifies connect / `tools/list`
+    failures as upstream-unavailable; transport-shape validation stays a plain
+    (fatal) throw.
+
+  Configuration faults remain loud boot failures — the carve-out is only for the
+  unavailable marker.
+
+- c11e24b: fix(authz): carry the derived posture rung on ExecutionContext (#2947)
+
+  The ADR-0095 D2 posture ladder (`PLATFORM_ADMIN > TENANT_ADMIN > MEMBER >
+EXTERNAL`) is derived once by the shared authz resolver from capability grants,
+  but both HTTP/MCP entry points that build the `ExecutionContext` dropped it —
+  so any enforcement-side reader of `context.posture` always saw `undefined`
+  (the same drop that forced the explain layer to re-derive it, #2949).
+
+  `ExecutionContextSchema` now carries an optional `posture` field, and both
+  `rest-server` and the runtime `resolveExecutionContext` plumb the resolver's
+  value through. Additive and **behavior-preserving**: no enforcement decision
+  consumes `posture` yet — whether the hot path evaluates _by_ posture remains a
+  larger ADR-level decision — this only stops the already-computed value from
+  being discarded, so enforcement and explain read the same derived rung.
+
+- bf1720b: Dashboard-level filters spec pairing (framework#2501, objectui#2578) — land the
+  two properties the objectui runtime already ships (objectui#2576) so the
+  protocol and the renderer agree:
+
+  - **`GlobalFilterSchema.name`** (optional string) — stable filter name used as
+    the dashboard-variable key (readable in widget expressions as `page.<name>`)
+    and as the key widgets reference in `filterBindings`. Defaults to `field`;
+    `"dateRange"` is reserved for the built-in dashboard date range.
+  - **`DashboardWidgetSchema.filterBindings`** (optional
+    `Record<string, string | false>`) — per-widget binding from a dashboard
+    filter name to one of THIS widget's fields: a string re-targets the filter to
+    that field, `false` opts the widget out, absent falls back to the filter's
+    own `field`.
+
+  Purely additive — existing dashboards parse unchanged. The metadata-admin
+  dashboard inspector (objectui `dashboard-schema.ts`) derives its form from this
+  schema via `z.toJSONSchema`, so both properties surface there automatically
+  once objectui picks up this spec version.
+
+- 663e7d6: feat(spec): structured `buttons` + `defaults` config on `FormViewSchema` (#2998)
+
+  `FormViewSchema` gains two optional top-level keys — the spec home for the flat
+  renderer-invented form config ObjectUI's `ObjectForm` reads today
+  (`showSubmit`/`submitText`/`showCancel`/`cancelText`/`showReset`/`initialValues`,
+  objectui#2545), which the strip-mode container silently discards:
+
+  - **`buttons`** — structured action-button config: per-button `{ show, label }`
+    for `submit` / `cancel` / `reset` (new exported leaf `FormButtonConfigSchema`,
+    `.strict()` per ADR-0089 D3a so typo'd keys error loudly).
+  - **`defaults`** — initial field values for create-mode forms, keyed by field
+    machine name (absorbs ObjectUI's `initialValues`).
+
+  Both are marked `[EXPERIMENTAL — NOT ENFORCED]` per ADR-0078's escape hatch
+  until the ObjectUI renderer reads them (tracked in objectui#2545); authoring
+  them today is declared, not yet honored. Purely additive — no existing key
+  changes shape, no tombstone needed.
+
+- 464418e: feat(kernel): add `kernel:bootstrapped` lifecycle anchor — the phase that fires after every `kernel:ready` handler has settled but before `kernel:listening` (HTTP socket open). `kernel:ready` handlers run sequentially in plugin-registration order, so a handler that consumes data produced by a later-starting plugin (e.g. the security bootstrap seeds `sys_position`; the app plugin's seed loader inserts records) would race the very rows it needs. `kernel:bootstrapped` is the correct anchor for reconcile/backfill work: every producer's ready handler has finished by the time it fires. Both `ObjectKernel` and `LiteKernel` trigger it. The sharing-rule boot backfill moves from `kernel:listening` to `kernel:bootstrapped` (semantics-only; behaviour unchanged).
+- 23925e9: fix(plugin-auth): re-run membership backfill when app seeding settles (#2996)
+
+  The ADR-0093 D6 membership backfill — the only safety net for users created
+  by app seeds (raw `engine.insert` into `sys_user` bypasses better-auth's
+  `user.create.after` reconciler) — ran only once on `kernel:ready`. When a seed
+  bundle overruns its inline budget (`OS_INLINE_SEED_BUDGET_MS`, default 8s) it
+  finishes in the background _after_ `kernel:ready`, so its users stayed
+  member-less in single-org `auto` mode until the next restart re-ran the backfill.
+
+  `AppPlugin` now emits a new **`app:seeded`** lifecycle event when an app's inline
+  seed settles (success, partial, or fallback) — carrying `{ appId, overBudget }`,
+  where `overBudget: true` marks the post-`kernel:ready` background case. plugin-auth
+  subscribes and re-runs the (idempotent, self-guarding, opt-out-able)
+  `backfillMemberships` on that signal, closing the window without waiting for a
+  restart. No behavior change when a seed completes within budget, in multi-tenant
+  mode, or under `invite-only` policy; `OS_SKIP_MEMBERSHIP_BACKFILL=1` still opts out.
+
+- c64ee8c: Conditional tabs (#2606): `page:tabs` items accept an optional `visibleWhen` CEL predicate. When it evaluates FALSE the whole tab — header **and** panel — is omitted from the tab strip, unlike a child component's own `visibleWhen`, which hides only the panel content and leaves an empty tab header behind. The predicate binds the same environment as page-component `visibleWhen` (`record` + `current_user`, plus page state as `page.<var>`) and is re-evaluated live when page variables change.
+
+  Per ADR-0089 the key uses the canonical `*When` name from day one — the deprecated `visibility` / `visibleOn` aliases are **not** accepted on tab items (this surface is new; there is no legacy metadata to alias for).
+
+  Additive and back-compatible: items without `visibleWhen` behave exactly as before.
+
+- ddc2bad: feat(spec): page variable `source` renders as a component picker (objectui#2328)
+
+  The page metadata form's `variables` repeater now declares explicit sub-fields
+  and pins `{ field: 'source', widget: 'ref:component' }`. A page variable's
+  `source` names the component (by `id`) that writes it, so Studio can offer it as
+  a dropdown of the components actually placed on the page — mirroring how the
+  sibling `object` field uses `ref:object` — instead of a free-text input the
+  author has to type an id into by hand. The `ref:component` widget itself lives
+  in objectui (app-shell metadata-admin); this change is the form-spec trigger.
+
+- f71d19a: feat(spec)!: remove `tenancy.strategy` + `tenancy.crossTenantAccess`; tenancy block is now strict (#2763)
+
+  > ⚠️ RELEASE NOTE — breaking by strict semver, shipped as `minor` per the
+  > launch-window policy (owner decision on PR #2962): the fields had zero
+  > consumers, behavior is unchanged, and the parse error carries the
+  > migration. Fold into the v15 release page's "What's new in 15.x" section
+  > when versioning.
+
+  BREAKING CHANGE: `TenancyConfigSchema` drops its two zero-consumer fields, and
+  the `tenancy` block is now `.strict()` — an unknown key is a loud parse error
+  with tombstone guidance instead of a silent zod strip (#1535; precedent
+  ADR-0056 D8 "compliance-grade config must never merely look live", ADR-0049
+  enforce-or-remove).
+
+  The platform has exactly two tenancy modes, and neither needs object-level
+  strategy config: database-per-tenant isolation is an environment/deployment
+  choice (each environment carries its own database URL), and shared-database
+  row isolation is `tenancy.enabled` + `tenancy.tenantField` (both stay, both
+  live: sql-driver row scoping, security-plugin org scoping). Cross-tenant
+  visibility is governed by sharing rules / OWD (ADR-0056),
+  `externalSharingModel` (ADR-0090 D11), and the object access posture — never
+  by a blanket boolean.
+
+  Migration (delete the keys; nothing read them, so behavior is unchanged):
+
+  - FROM `tenancy: { enabled: false, strategy: 'shared' }` → TO `tenancy: { enabled: false }`
+  - FROM `tenancy: { enabled: true, strategy: '...', tenantField: 'x', crossTenantAccess: false }` → TO `tenancy: { enabled: true, tenantField: 'x' }`
+  - Wanted per-tenant databases? Deploy per environment (EnvironmentKernelFactory) — not object metadata.
+  - Wanted cross-tenant visibility? Use sharing rules / OWD or `externalSharingModel`.
+
+  The compile-time authorWarn for these fields (#2750) and their liveness-ledger
+  entries are retired with the removal; the schema itself now carries the
+  prescription.
+
+- 6c114c0: Retire the "ObjectOS" layer name from the spec's public surface — the control layer is the **Kernel**; ObjectOS now exclusively names the commercial runtime environment.
+
+  Renames (deprecated aliases kept for one release, so existing imports keep compiling):
+
+  - `ObjectOSCapabilitiesSchema` → `KernelCapabilitiesSchema`
+  - `ObjectOSCapabilities` (type) → `KernelCapabilities`
+  - `ObjectOSKernel` (interface) → `IKernel` (`PluginContext.os` is now typed as `IKernel`)
+
+  Migration: replace the old names with the new ones — a find/replace of the three identifiers above is sufficient; runtime behavior, schema shapes, and JSON output are unchanged. TSDoc and generated reference docs now say "the ObjectStack runtime" / "Kernel" instead of "ObjectOS" (product mentions like ObjectOS Cloud in the Cloud protocol domain are unchanged).
+
+- 2973f7f: feat(spec,cli): enroll `view` in the liveness ledger (#2998 Track B)
+
+  `view` joins the `GOVERNED` set of the spec property-liveness gate — the
+  rollout gap that let the objectui#1763/#2545 class of renderer/spec key drift
+  survive undetected. New `packages/spec/liveness/view.json` classifies all 83
+  walkable properties (75 ledger entries + framework overlay fields): the `list`
+  and `form` containers are drilled one level via `children`.
+
+  Seeded from the 2026-06 viewschema audit and **re-verified against objectui
+  HEAD** — four audit-era DEAD findings had since gone live and are classified
+  from current reads (`form.submitBehavior`, `list.sharing.lockedBy`, list-path
+  `ViewData` providers, and the post-ADR-0021 `list.chart` dataset shape — the
+  audit's "chart renderers never migrated" headline is resolved). Final tally:
+  68 live, 2 experimental (`form.buttons`/`form.defaults`, #2998 Track A
+  awaiting objectui#2545), 5 dead (`list.responsive`, `list.performance`,
+  `form.data`, `form.defaultSort`, `form.aria`). All misleading dead props
+  carry `authorWarn` + `authorHint`.
+
+  The CLI's compile-time liveness lint gains `view` coverage
+  (`TYPE_COLLECTIONS` + view containers labelled by `object`), so authoring a
+  dead prop — e.g. a spec-valid `chart` list view that renders empty — now warns
+  at `os build` with a corrective hint.
+
+### Patch Changes
+
+- fad8e49: docs(spec): retire the stale `renderViaSchema` forward-reference now that objectui#2546 landed (ADR-0085 PR4 follow-up, #2548)
+
+  The `ObjectSchema` source comment forward-referenced `renderViaSchema`
+  retiring "together with the legacy monolith render path" — a promise about
+  work that had not yet shipped. That path, and the `detail.renderViaSchema`
+  kill-switch that was its only steering wheel, were removed in objectui#2546
+  (ADR-0085 PR4). The comment now records the completed state with a breadcrumb
+  to that PR instead of a forward reference, closing the cleanup #2546 flagged.
+
+  Comment-only change; no type, schema, or runtime behavior is affected.
+
+- d8f7f6a: feat(automation): descriptor-only contract + boot audit for declarative `connectors:` (#2612)
+
+  Declarative `connectors:` stack entries never reach the automation engine's
+  connector registry — only plugins populate it via
+  `engine.registerConnector(def, handlers)` (ADR-0018 §Addendum) — so a declared
+  connector with actions and no plugin behind it _looked_ dispatchable but was
+  silently inert.
+
+  The contract is now explicit and audited:
+
+  - **Boot audit (service-automation).** At `kernel:ready` (and again on
+    `metadata:reloaded`), declared connectors with `actions` but no same-name
+    runtime registration log a loud warning naming each inert entry and
+    pointing at the fix (install the matching connector plugin, or mark a
+    deliberate catalog entry). Nothing is registered on your behalf — the
+    warning surfaces the gap `connector_action` would otherwise hit at
+    dispatch time.
+  - **`enabled: false` = deliberate catalog descriptor (spec).** Setting it on
+    a declarative entry documents "descriptor-only on purpose" and silences the
+    audit. Schema docs on `stack.zod.ts` (`connectors:`) and
+    `integration/connector.zod.ts` now state the descriptor-vs-registered
+    contract explicitly (including for AI stack authoring via `.describe()`).
+
+  Declarative provider-bound connector _instances_ — entries a generic executor
+  (connector-openapi / connector-mcp) materializes into live connectors at boot,
+  upgrading this warning to a hard error — are specified in ADR-0096 and tracked
+  in #2977.
+
+- 929efdf: docs(security): document that `requireAuth` denies anonymous across ALL HTTP surfaces (#2567)
+
+  The `api.requireAuth` schema description and JSDoc said the anonymous-deny
+  posture applied to REST `/data/*` only. Post-#2567 the same value is threaded to
+  every entry point that reaches object data — REST `/data`, the metadata
+  endpoints (`/meta`), the dispatcher GraphQL endpoint (`/graphql`), and the
+  raw-hono standard `/data` routes — sharing one decision (`shouldDenyAnonymous`).
+  The description now reflects the uniform, by-surface posture and the single
+  opt-out (`requireAuth: false`). Doc-only; no behavior change.
+
+  (Accompanying hand-written docs — `permissions/authorization.mdx` and the
+  regenerated `references/api/rest-server.mdx` — are updated to match.)
+
+- 0f8db52: docs(spec): `readonly` is server-enforced on UPDATE, not a UI-only affordance (#3003)
+
+  The `readonly` field property was described as "Read-only in UI", which #3003
+  proved to be exactly how integrators read it — approval/status/amount columns
+  protected only by `readonly: true` were forged with a direct REST `PATCH`,
+  self-approving a multi-stage approval on the released 15.0.0. Since #2948 the
+  engine strips caller-supplied writes to statically-readonly fields from every
+  non-system UPDATE (single-id and multi-row, symmetric with `readonlyWhen`;
+  INSERT may still seed the column). The schema description and the field
+  liveness ledger now state the server-side contract, and a dogfood conformance
+  proof (`showcase-static-readonly.dogfood.test.ts` + an authz-matrix row) pins
+  it end-to-end so it cannot silently regress to renderer-only.
+
+- e7d5291: **Every feature-gated capability is now UI-gated, guardrailed by a flag registry and a declarative `requiresFeature` annotation (#2874, generalizing the create-user phone fix #2871).**
+
+  `@objectstack/spec/kernel` gains `PUBLIC_AUTH_FEATURES` — a classification registry for all 13 boolean flags served at `/api/v1/auth/config`: consumption surface (crud/login/status), default semantics (opt-in `== true` vs default-on `!= false`), and the gated spec inputs or an exemption reason. A plugin-auth drift test pins the served key set to the registry, and a platform-objects completeness guard pins the registry to the actual gates in both directions.
+
+  `ActionSchema`/`ActionParamSchema` gain `requiresFeature: '<flag>'` (enum-checked), lowered at parse time into the canonical `visible` CEL predicate per the flag's registered semantics, AND-composed with any explicit `visible`, and stripped from the output — renderers and lint see only `visible`, so objectui needs no changes. All 22 hand-written `features.*` gates migrated (behavior-locked by an exact-string matrix test), and the audit gated 17 previously naked capability-dependent actions: the six `sys_user` platform-admin actions, six 2FA actions, and five `sys_oauth_application` actions now hide when their plugin is off instead of rendering buttons that 404.
+
+- 59cd765: fix(security): pre-wiring identity admission for the GraphQL and realtime surfaces (#2992, ADR-0096 D4)
+
+  Two latent execution surfaces — neither reachable by a client today — would
+  have fallen open the instant a real transport was wired, because both drop or
+  lack the caller's identity. Per ADR-0096, the identity story is fixed and
+  pinned in CI _before_ wiring, not after an adversarial review:
+
+  - **GraphQL (surface 1 — latent context-drop, now threaded).**
+    `handleGraphQL` passed only `{ request }` to `kernel.graphql`, dropping the
+    resolved `ExecutionContext` — the moment a real engine resolved objects
+    through ObjectQL it would have run context-less (security middleware falls
+    OPEN on a missing principal = full authority). The entry point now resolves
+    the caller identity even on the direct dispatcher-plugin route and even when
+    `requireAuth` is off, and threads it as `options.context`;
+    `IGraphQLService.execute` documents that implementations MUST forward it to
+    every data-engine call. Unit-proven; the authz conformance matrix pins the
+    threading (`graphql-identity-thread` row) so removing it goes STALE and
+    fails CI.
+
+  - **realtime (surface 2 — no per-recipient authz seam, posture registered).**
+    Delivery is a pure fan-out (subscriptions carry no principal,
+    `matchesSubscription` filters only by object+eventTypes, the engine
+    publishes the full `after` row), safe only while every subscriber is
+    server-internal. The posture is now registered as an `experimental` matrix
+    row (`realtime-delivery-authz`) stating the admission requirement
+    (per-recipient RLS/FLS/tenant re-check on delivery, or id-only payload +
+    client re-fetch), and transport TRIPWIRE probes turn any newly wired
+    WebSocket/SSE/subscribe/client transport into an UNCLASSIFIED surface → red
+    CI until the identity story ships with it. The `service-realtime` README —
+    which advertised `authorizeChannel`/`broadcastToUser`/presence auth that do
+    not exist — is rewritten to describe the real, trusted-internal-only
+    surface, and the contract docs carry the admission requirement at the seam.
+
+- d918c9f: fix(spec): keep `lazySchema` proxies identity-compatible with `z.toJSONSchema` (objectui#2561)
+
+  zod's `toJSONSchema` keys its `seen` map on the node object it traverses — the `lazySchema` Proxy wherever a schema is referenced lazily (`z.lazy(() => X)` recursion getters, direct conversion roots) — while its wrapper-type processors (pipe/lazy/optional/default/…) look themselves up via the REAL instance captured at construction (`inst._zod.processJSONSchema = (ctx, …) => pipeProcessor(inst, …)`). The identity mismatch crashed conversion with `Cannot set properties of undefined (setting 'ref')`.
+
+  This stayed latent while lazy-referenced schemas were plain objects (the object processor never looks itself up); ADR-0089 D3a turned `PageComponentSchema` / `FormFieldSchema` into `.strict().transform(…)` **pipes**, which broke ObjectUI Studio's spec-derived Page/View inspector JSONSchema derivation under spec 15.
+
+  Fix: the proxy now serves a memoised `_zod` facade that prototype-delegates to the real internals and wraps only `processJSONSchema` to alias the proxy's `seen` entry onto the real instance before delegating. Parse behavior is unchanged; `OS_EAGER_SCHEMAS=1` remains the bypass. Regression tests cover the D3a pipe shape, recursion through `z.lazy(() => proxy)`, mixed proxy+real traversal, and the full `PageSchema` / `ViewSchema` Studio derivation paths.
+
+- aaec5db: fix(security): public-form submissions can no longer forge server-managed anchors (#3022)
+
+  The anonymous public-form surface (ADR-0056 Option A, `POST /forms/:slug/submit`)
+  is authorized by the declaration-derived `publicFormGrant`, which short-circuits
+  the security middleware BEFORE every write gate (CRUD, FLS, the owner anchor
+  guard, the tenant CHECK). The only field-side defense was the route's
+  declared-field allow-list — and a FormView with zero declared section fields
+  fell back to merging the raw body wholesale, so an unauthenticated visitor
+  could `POST owner_id=<victim>` (or `organization_id`, audit columns, `id`) and
+  attach the record to another user or tenant — the #3004 insert-forge, with no
+  credentials at all.
+
+  Server-managed anchors are now enforced on this surface at BOTH layers, from a
+  single shared definition (`PUBLIC_FORM_SERVER_MANAGED_FIELDS`, new in
+  `@objectstack/spec/security`):
+
+  - **Data layer (authoritative)** — the `publicFormGrant` branch in
+    `@objectstack/plugin-security` strips `id` / `owner_id` / `organization_id` /
+    `tenant_id` / audit columns / soft-delete state / `__search` from every row
+    of a granted insert (batch included) before admitting the write, so the
+    boundary holds no matter what any route lets through. Ownership stays NULL
+    for object hooks / the first-admin bootstrap to assign, as for other
+    anonymous-seeded rows.
+  - **Route layer** — the submit allow-list excludes the same set
+    unconditionally: an explicitly declared `owner_id` section field no longer
+    passes, and the zero-declared-sections fallback keeps its documented
+    all-fields behavior for business columns while refusing the managed set.
+    The resolve route (`GET /forms/:slug`) drops the managed fields from the
+    rendered sections and the embedded object schema so a form never collects a
+    value the submit refuses, and `GET /forms/:slug/lookup/:field` refuses a
+    `publicPicker` declared on a managed anchor (which would have opened
+    anonymous `sys_user` search through `owner_id`).
+
+  Authenticated writes are unaffected — this is the anonymous-surface rule only;
+  `owner_id` transfer semantics for signed-in callers stay governed by the
+  transfer grant (#3004 / PR #3018).
+
+- c5e68b2: Retire "ObjectOS" as the control-layer name in the published agent prompts (`prompts/`): the open control layer is now called the **Kernel**; **ObjectOS** exclusively names the commercial runtime environment. Layer vocabulary is now ObjectQL (data) / Kernel (control) / ObjectUI (view). Prompt text only — no schema changes.
+- 28ba0c7: feat(plugin-sharing): sys_sharing_rule provenance + seed-not-clobber (#2909 P0/T1). The object gains readonly `managed_by` (unified A4 tri-state platform/package/admin) and `customized` columns; declared rules seed with `managed_by: 'package'`. defineRule in seed mode adopts pristine/legacy rows (package upgrades stay deliverable) but never overwrites admin-authored or customized rows — an admin's `active: false` on an over-sharing rule now survives redeploys instead of being resurrected at boot. A beforeUpdate hook stamps `customized` on any non-system edit of a seeded rule. Deliberately NO write gate: sharing rules remain a first-class admin authoring surface (ADR-0094 addendum tradeoff).
+- 28ba0c7: docs(spec): rewrite the `isDefault` permission-set docs to describe the actual dual-track behavior (#2926 ②): app-level `isDefault` sets are resolved as the SecurityPlugin's fallback and idempotently auto-bound to the `everyone` anchor at boot (guarded by the high-privilege-bits check), while package-level sets are never auto-bound and instead materialize a `sys_audience_binding_suggestion` an admin confirms. The previous "never auto-bound" wording contradicted the shipped app-level track.
+
 ## 15.0.0
 
 ### Major Changes

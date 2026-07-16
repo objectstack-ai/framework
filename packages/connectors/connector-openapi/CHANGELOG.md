@@ -1,5 +1,113 @@
 # @objectstack/connector-openapi
 
+## 15.1.0
+
+### Minor Changes
+
+- 96a14d0: feat(connectors): ADR-0096 — provider-bound declarative connector instances materialized at boot (#2977)
+
+  Declarative `connectors:` stack entries used to be **descriptor-only** (#2612):
+  registered as metadata but never dispatchable, the platform's one dead metadata
+  surface. An entry may now name a **`provider`** — an installed generic executor
+  (`openapi` / `mcp` / `rest`) — and the automation service **materializes** it
+  into a live, dispatchable connector at boot. AI can now wire an integration as
+  pure metadata and a flow `connector_action` calls it end-to-end.
+
+  - **Schema (`@objectstack/spec`).** `ConnectorSchema` gains `provider`,
+    `providerConfig`, and `auth` (a `credentialRef`-based instance-auth shape —
+    `ConnectorInstanceAuthSchema` — that references credentials, never inlines
+    them); `authentication` now defaults to `{ type: 'none' }` so a provider-bound
+    instance need not author it (loosening — existing connectors are unaffected).
+    `DeclarativeConnectorEntrySchema` (used by `stack.zod.ts`) rejects inline
+    secrets, orphan `providerConfig`/`auth`, and authored `actions`/`triggers` on a
+    provider-bound entry. A new `integration/connector-provider.ts` defines the
+    provider-factory contract as pure types.
+
+  - **Engine + boot (`@objectstack/service-automation`).** The engine adds a
+    connector-provider registry (`registerConnectorProvider`/`getConnectorProvider`)
+    and origin-tags registered connectors. At boot the service resolves each
+    provider-bound entry — looking up the factory, resolving `auth.credentialRef`
+    via a pluggable `CredentialResolver` (open-tier default: environment
+    variables), and registering the materialized connector. Boot **fails loudly**
+    for an unknown provider, invalid `providerConfig`, an unresolvable
+    `credentialRef`, or a name conflict with a plugin-registered connector (no
+    silent precedence).
+
+  - **Providers (`connector-rest` / `connector-openapi` / `connector-mcp`).** Each
+    plugin registers a provider factory in `init()` reusing its existing
+    generator/adapter API. Plugin options are now **optional**: with none the
+    plugin contributes only its provider factory; with instance options it also
+    registers a hand-wired connector (back-compat). `connector-openapi` adds a
+    `ConnectorOpenApiPlugin`.
+
+  Open tier: static auth (`none`/`api-key`/`basic`/`bearer`) with `credentialRef`
+  resolved from env vars. Managed vaulting, OAuth2 refresh, and per-tenant
+  connection lifecycle remain the enterprise tier (ADR-0015) — an enterprise host
+  injects a vault-backed `CredentialResolver` with no change to the materialization
+  path.
+
+- 10a570a: feat(connector-openapi): resolve `providerConfig.spec` from a package-relative file path (#3016, ADR-0096 follow-up)
+
+  ADR-0096's canonical example authors an OpenAPI-backed instance as
+  `providerConfig: { spec: './billing-openapi.json' }`, but the landed `openapi`
+  provider factory only accepted an inline document object or an http(s) URL.
+  The spec union is now complete: **inline object | file path | remote URL**.
+
+  - **`@objectstack/spec`.** `ConnectorProviderContext` gains an optional
+    host-injected `loadPackageFile(relativePath)` capability (pure type): reads a
+    UTF-8 file resolved against the declaring stack/package root, confined to
+    that root. `undefined` on hosts without a filesystem.
+
+  - **`@objectstack/service-automation`.** New `packageRoot` plugin option (the
+    base for relative file refs; defaults to `process.cwd()`) and an exported
+    `createPackageFileLoader(packageRoot)` that implements the confinement
+    guard — absolute paths and `..`-escaping paths are rejected — with lazy
+    `node:fs`/`node:path` imports so non-Node hosts only fail if a file ref is
+    actually dereferenced. The materializer injects the capability into every
+    provider factory's context. Failures follow the existing reconcile policy:
+    **fatal at boot, entry skipped on reload**.
+
+  - **`@objectstack/connector-openapi`.** A string `providerConfig.spec` that is
+    not an http(s) URL is now read via `ctx.loadPackageFile` and parsed as an
+    OpenAPI JSON document (clear errors for missing/unreadable files, unparseable
+    JSON, and hosts without package file access).
+
+  - **`@objectstack/cli`.** `serve`/`dev` pass the project folder (the
+    `objectstack.config.ts` directory) as the automation service's `packageRoot`,
+    mirroring how the standalone sqlite default is anchored.
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/core@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

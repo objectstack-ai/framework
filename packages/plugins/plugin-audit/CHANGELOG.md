@@ -1,5 +1,66 @@
 # @objectstack/plugin-audit
 
+## 15.1.0
+
+### Patch Changes
+
+- 55bc68d: ADR-0085 #2548 follow-ups surfaced by the real-backend browser pass:
+
+  - **lint**: new `field-group-shadowed` warning in `validate-semantic-roles` — a
+    declared fieldGroup whose every visible member is hoisted into the detail
+    highlight strip (or is the record title) renders on forms but silently never
+    on detail pages (detail bodies hide the first 4 highlightFields). Warning
+    tier, same as the other semantic-role rules.
+  - **plugin-audit**: feed/audit summaries ("Created … / Deleted … / Updated …")
+    now name the object by its display label ("Semantic Zoo") instead of its API
+    name ("showcase_semantic_zoo") — these strings render verbatim in the record
+    Discussion feed and Setup dashboards. Falls back to the API name when the
+    object definition isn't resolvable. Existing stored rows are unchanged.
+
+- 21f75ce: Localize activity summaries to the workspace default locale (#3039). Activity
+  writers previously hardcoded English verbs and the object API name
+  (`Created person_qualification "OC-00001"`). The writer now resolves the
+  ADR-0053 `localization.locale` setting per write (memoized per tenant/user
+  scope), renders the verb through new `messages.activityCreated/Updated/Deleted`
+  i18n templates (en, zh-CN, ja-JP, es-ES shipped), and names the object by its
+  localized label (`objects.{name}.label`) with fallback to the authored def
+  label, then the API name. Missing i18n/settings services or bundle keys
+  degrade to the previous English summaries.
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [94b8e44]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [eb89a8c]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aead168]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

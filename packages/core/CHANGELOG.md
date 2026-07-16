@@ -1,5 +1,69 @@
 # @objectstack/core
 
+## 15.1.0
+
+### Minor Changes
+
+- 99755b5: refactor(security): converge the anonymous-deny decision into one shared function + a source-enumerating ratchet (#2567 Phase 2)
+
+  Phase 1 gated every HTTP surface (REST `/data`, dispatcher `/graphql` + `/meta`,
+  raw-hono `/data`) against the secure-by-default `requireAuth` posture, but each
+  seam hand-rolled the same `!userId && !isSystem → 401` check. Phase 2 removes
+  that duplication and pins the surfaces so a new ungated entry point fails CI.
+
+  - **New `shouldDenyAnonymous` in `@objectstack/core`** (`security/anonymous-deny.ts`)
+    — the single anonymous-deny decision + shared 401 body/constants, mirroring the
+    `auth-gate.ts` pattern (pure function so the seams can never drift). All five
+    seams — REST `enforceAuth`, dispatcher `handleGraphQL` / `handleMetadata` /
+    `handleAI`, hono `denyAnonymous` — now delegate to it. **Pure refactor: no
+    runtime behavior change** (verified by the unchanged Phase-1 handler + e2e
+    proofs). Identity resolution and the dynamic exemptions (public-form grants,
+    share-link tokens) are untouched — they run upstream and only ever hand the
+    seam an already-resolved context.
+  - **A `discover()` ratchet on the authz-conformance matrix** — it statically
+    enumerates the data/meta/graphql HTTP entry points from source (curated
+    per-file probes, control-plane routes excluded) and asserts each is classified
+    by a matrix `covers` key. A new `/data`/`/meta`/`/graphql` route (or a
+    removed/stale `covers`) now fails CI as UNCLASSIFIED / STALE, not in review. A
+    companion negative test proves the ratchet bites.
+
+  A design trap is guarded: `isAuthGateAllowlisted(undefined)` returns `true`, so a
+  body-routed seam (GraphQL, which has no request path) must pass no path — the
+  shared function's non-empty-path guard denies anonymous unconditionally there,
+  never falling through to the control-plane allowlist.
+
+- 464418e: feat(kernel): add `kernel:bootstrapped` lifecycle anchor — the phase that fires after every `kernel:ready` handler has settled but before `kernel:listening` (HTTP socket open). `kernel:ready` handlers run sequentially in plugin-registration order, so a handler that consumes data produced by a later-starting plugin (e.g. the security bootstrap seeds `sys_position`; the app plugin's seed loader inserts records) would race the very rows it needs. `kernel:bootstrapped` is the correct anchor for reconcile/backfill work: every producer's ready handler has finished by the time it fires. Both `ObjectKernel` and `LiteKernel` trigger it. The sharing-rule boot backfill moves from `kernel:listening` to `kernel:bootstrapped` (semantics-only; behaviour unchanged).
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+
 ## 15.0.0
 
 ### Minor Changes

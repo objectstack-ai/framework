@@ -1,5 +1,147 @@
 # @objectstack/plugin-hono-server
 
+## 15.1.0
+
+### Minor Changes
+
+- 541b96a: fix(security): enforce the anonymous-deny posture uniformly across HTTP surfaces (#2567)
+
+  The ADR-0056 D2 `requireAuth` flip made REST `/data/*` deny-anonymous by
+  default, but three sibling surfaces reached ObjectQL without passing through the
+  gate — so the platform's anonymous posture was **inconsistent by surface**: an
+  anonymous caller denied on `/data` could read the same object data through a
+  different door. This closes the remaining two gaps (the `/meta` gate had already
+  landed) and pins every surface with a conformance row.
+
+  - **Dispatcher GraphQL** (`runtime/http-dispatcher.ts`, `dispatcher-plugin.ts`):
+    `POST /graphql` reached `kernel.graphql`, whose security middleware falls
+    **open** for an anonymous context. `handleGraphQL` now applies the same
+    `requireAuth` gate as `/data` and `/meta`, resolving identity for the direct
+    route that does not flow through `dispatch()`. The dispatcher's `requireAuth`
+    default is aligned with the REST plugin's (`?? true`) so a bare host no longer
+    denies anonymous `/data` while serving the same rows over `/graphql`; an
+    explicit `requireAuth: false` opt-out is honoured and logs a boot warning.
+
+  - **Raw-hono standard `/data` routes** (`plugin-hono-server/hono-plugin.ts`):
+    these delegate straight to ObjectQL and were only _shadowed_ when the REST
+    plugin registered the same paths first — so secure-by-default depended on
+    plugin registration order. Each route now consults `requireAuth` (secure by
+    default, mirroring `rest-server.ts`), making the deny decision a property of
+    this entry point too. Order no longer affects the anonymous posture.
+
+  **Behaviour change:** on a `requireAuth` deployment (the secure default),
+  anonymous `POST /graphql` and anonymous raw-hono `/data` now return 401.
+  Deployments that intentionally serve these surfaces publicly set
+  `requireAuth: false` (a boot warning is logged). Proven end-to-end on the
+  platform default in `showcase-anonymous-deny-surfaces.dogfood.test.ts`, with
+  handler-level regression coverage in `http-dispatcher.requireauth.test.ts` and
+  `hono-anonymous-deny.test.ts`, and pinned by three new authz-conformance rows.
+
+### Patch Changes
+
+- 7f68068: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- 99755b5: refactor(security): converge the anonymous-deny decision into one shared function + a source-enumerating ratchet (#2567 Phase 2)
+
+  Phase 1 gated every HTTP surface (REST `/data`, dispatcher `/graphql` + `/meta`,
+  raw-hono `/data`) against the secure-by-default `requireAuth` posture, but each
+  seam hand-rolled the same `!userId && !isSystem → 401` check. Phase 2 removes
+  that duplication and pins the surfaces so a new ungated entry point fails CI.
+
+  - **New `shouldDenyAnonymous` in `@objectstack/core`** (`security/anonymous-deny.ts`)
+    — the single anonymous-deny decision + shared 401 body/constants, mirroring the
+    `auth-gate.ts` pattern (pure function so the seams can never drift). All five
+    seams — REST `enforceAuth`, dispatcher `handleGraphQL` / `handleMetadata` /
+    `handleAI`, hono `denyAnonymous` — now delegate to it. **Pure refactor: no
+    runtime behavior change** (verified by the unchanged Phase-1 handler + e2e
+    proofs). Identity resolution and the dynamic exemptions (public-form grants,
+    share-link tokens) are untouched — they run upstream and only ever hand the
+    seam an already-resolved context.
+  - **A `discover()` ratchet on the authz-conformance matrix** — it statically
+    enumerates the data/meta/graphql HTTP entry points from source (curated
+    per-file probes, control-plane routes excluded) and asserts each is classified
+    by a matrix `covers` key. A new `/data`/`/meta`/`/graphql` route (or a
+    removed/stale `covers`) now fails CI as UNCLASSIFIED / STALE, not in review. A
+    companion negative test proves the ratchet bites.
+
+  A design trap is guarded: `isAuthGateAllowlisted(undefined)` returns `true`, so a
+  body-routed seam (GraphQL, which has no request path) must pass no path — the
+  shared function's non-empty-path guard denies anonymous unconditionally there,
+  never falling through to the control-plane allowlist.
+
+- ef50372: CORS default `allowHeaders` now includes `If-Match`. The REST record update
+  accepts the OCC token as an `If-Match` header (objectui's record-level inline
+  edit sends it on every save), but the preflight allow-list omitted it — so on
+  any split-origin deployment (console dev server against a backend on another
+  origin) the browser failed the preflight and every inline-edit save died with
+  "Failed to fetch". Found live while dogfooding objectui#2572; same
+  split-origin failure class as the #2548 Bearer fixes. Explicit user-supplied
+  `allowHeaders` still win unchanged.
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/observability@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

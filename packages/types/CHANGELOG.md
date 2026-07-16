@@ -1,5 +1,51 @@
 # @objectstack/types
 
+## 15.1.0
+
+### Minor Changes
+
+- 1c58abd: Generic pinyin search recall (#2486, ADR-0098): a locale-gated
+  `OS_SEARCH_PINYIN_ENABLED` switch (auto-on when the stack configures any
+  `zh-*` locale) provisions a hidden `__search` companion column for each
+  object's display/name field at compile time, the new
+  `@objectstack/plugin-pinyin-search` fills it with full pinyin + initials
+  ("张伟" → "zhangwei zw") on before-save (plus boot backfill and a
+  `rebuildSearchCompanion` reconcile entry), and `$search` ORs the column in at
+  query time — so lookup pickers, list quick-search and ⌘K transparently match
+  `zhangwei` / `zw` against CJK names. Purely additive: `resolveSearchFields`,
+  `searchableFields`, drivers and non-Chinese deployments are untouched; FLS
+  restricted / secret / PII fields never feed the companion.
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

@@ -1,5 +1,195 @@
 # @objectstack/service-automation
 
+## 15.1.0
+
+### Minor Changes
+
+- 96a14d0: feat(connectors): ADR-0096 — provider-bound declarative connector instances materialized at boot (#2977)
+
+  Declarative `connectors:` stack entries used to be **descriptor-only** (#2612):
+  registered as metadata but never dispatchable, the platform's one dead metadata
+  surface. An entry may now name a **`provider`** — an installed generic executor
+  (`openapi` / `mcp` / `rest`) — and the automation service **materializes** it
+  into a live, dispatchable connector at boot. AI can now wire an integration as
+  pure metadata and a flow `connector_action` calls it end-to-end.
+
+  - **Schema (`@objectstack/spec`).** `ConnectorSchema` gains `provider`,
+    `providerConfig`, and `auth` (a `credentialRef`-based instance-auth shape —
+    `ConnectorInstanceAuthSchema` — that references credentials, never inlines
+    them); `authentication` now defaults to `{ type: 'none' }` so a provider-bound
+    instance need not author it (loosening — existing connectors are unaffected).
+    `DeclarativeConnectorEntrySchema` (used by `stack.zod.ts`) rejects inline
+    secrets, orphan `providerConfig`/`auth`, and authored `actions`/`triggers` on a
+    provider-bound entry. A new `integration/connector-provider.ts` defines the
+    provider-factory contract as pure types.
+
+  - **Engine + boot (`@objectstack/service-automation`).** The engine adds a
+    connector-provider registry (`registerConnectorProvider`/`getConnectorProvider`)
+    and origin-tags registered connectors. At boot the service resolves each
+    provider-bound entry — looking up the factory, resolving `auth.credentialRef`
+    via a pluggable `CredentialResolver` (open-tier default: environment
+    variables), and registering the materialized connector. Boot **fails loudly**
+    for an unknown provider, invalid `providerConfig`, an unresolvable
+    `credentialRef`, or a name conflict with a plugin-registered connector (no
+    silent precedence).
+
+  - **Providers (`connector-rest` / `connector-openapi` / `connector-mcp`).** Each
+    plugin registers a provider factory in `init()` reusing its existing
+    generator/adapter API. Plugin options are now **optional**: with none the
+    plugin contributes only its provider factory; with instance options it also
+    registers a hand-wired connector (back-compat). `connector-openapi` adds a
+    `ConnectorOpenApiPlugin`.
+
+  Open tier: static auth (`none`/`api-key`/`basic`/`bearer`) with `credentialRef`
+  resolved from env vars. Managed vaulting, OAuth2 refresh, and per-tenant
+  connection lifecycle remain the enterprise tier (ADR-0015) — an enterprise host
+  injects a vault-backed `CredentialResolver` with no change to the materialization
+  path.
+
+- 10a570a: feat(connector-openapi): resolve `providerConfig.spec` from a package-relative file path (#3016, ADR-0096 follow-up)
+
+  ADR-0096's canonical example authors an OpenAPI-backed instance as
+  `providerConfig: { spec: './billing-openapi.json' }`, but the landed `openapi`
+  provider factory only accepted an inline document object or an http(s) URL.
+  The spec union is now complete: **inline object | file path | remote URL**.
+
+  - **`@objectstack/spec`.** `ConnectorProviderContext` gains an optional
+    host-injected `loadPackageFile(relativePath)` capability (pure type): reads a
+    UTF-8 file resolved against the declaring stack/package root, confined to
+    that root. `undefined` on hosts without a filesystem.
+
+  - **`@objectstack/service-automation`.** New `packageRoot` plugin option (the
+    base for relative file refs; defaults to `process.cwd()`) and an exported
+    `createPackageFileLoader(packageRoot)` that implements the confinement
+    guard — absolute paths and `..`-escaping paths are rejected — with lazy
+    `node:fs`/`node:path` imports so non-Node hosts only fail if a file ref is
+    actually dereferenced. The materializer injects the capability into every
+    provider factory's context. Failures follow the existing reconcile policy:
+    **fatal at boot, entry skipped on reload**.
+
+  - **`@objectstack/connector-openapi`.** A string `providerConfig.spec` that is
+    not an http(s) URL is now read via `ctx.loadPackageFile` and parsed as an
+    OpenAPI JSON document (clear errors for missing/unreadable files, unparseable
+    JSON, and hosts without package file access).
+
+  - **`@objectstack/cli`.** `serve`/`dev` pass the project folder (the
+    `objectstack.config.ts` directory) as the automation service's `packageRoot`,
+    mirroring how the standalone sqlite default is anchored.
+
+- 93fd58e: feat(connectors): ADR-0096 runtime re-materialization of declarative connectors (#2977 follow-up)
+
+  Provider-bound declarative `connectors:` instances (ADR-0096) previously
+  materialized only at boot — a connector published from Studio while the server
+  ran did not become dispatchable until a restart. `materializeDeclaredConnectors`
+  is now a **reconcile** run both at boot and on `metadata:reloaded`:
+
+  - **Add** newly-declared instances, **tear down** removed / newly-`enabled:false`
+    ones (calling their `close`, e.g. an MCP connection), and **re-materialize**
+    only instances whose signature — a stable hash of `provider` + `providerConfig`
+    - `auth` + identity — changed. An unchanged MCP instance is never needlessly
+      reconnected on an unrelated metadata reload.
+  - **Boot stays fatal** ("fail loudly"): unknown provider / invalid providerConfig
+    / unresolvable credentialRef / name conflict aborts startup. **Reload is soft**:
+    the same problems are logged and the offending entry skipped, so a bad publish
+    never crashes a running server; a changed instance's old connector keeps
+    serving until its replacement materializes successfully.
+
+  Also: `ConnectorDescriptor` (served by `GET /api/v1/automation/connectors`) now
+  carries an `origin` field (`'plugin' | 'declarative'`), so a designer can
+  distinguish a materialized declarative instance from a plugin-registered
+  connector.
+
+- 4f8c2d1: feat(connectors): degrade + retry declarative instances whose upstream is unreachable (#3017)
+
+  ADR-0097 kept every declarative-connector materialization failure fatal at
+  boot. That is right for configuration faults (unknown provider, invalid
+  `providerConfig`, unresolvable `credentialRef`, name conflict) but wrong for
+  _operational_ ones: a `provider: 'mcp'` instance must contact its MCP server
+  (`tools/list`) to materialize, and a transient network blip aborted the whole
+  app boot.
+
+  - **spec**: a provider factory can now throw
+    `ConnectorUpstreamUnavailableError` (code `CONNECTOR_UPSTREAM_UNAVAILABLE`,
+    structural guard `isConnectorUpstreamUnavailable`) to mark a failure as
+    "upstream temporarily unreachable — degrade and retry" instead of fatal.
+  - **service-automation**: the reconcile degrades such an instance in both boot
+    and reload modes: it registers an action-less husk (`state: 'degraded'` +
+    `degradedReason` on the `GET /connectors` descriptor) so the instance is
+    visible instead of silently missing — or, on a changed-config
+    re-materialization, keeps the old connector serving. A `connector_action`
+    against a degraded instance fails with the reason and a "retries
+    automatically" pointer. Degraded instances retry on an exponential backoff
+    (5s → 5min, reset by config edits) and on every `metadata:reloaded`
+    reconcile; recovery swaps the husk for the live connector atomically.
+    Reconcile runs (boot / reload / retry timer) are now serialized.
+  - **connector-mcp**: the `mcp` provider classifies connect / `tools/list`
+    failures as upstream-unavailable; transport-shape validation stays a plain
+    (fatal) throw.
+
+  Configuration faults remain loud boot failures — the carve-out is only for the
+  unavailable marker.
+
+- d8f7f6a: feat(automation): descriptor-only contract + boot audit for declarative `connectors:` (#2612)
+
+  Declarative `connectors:` stack entries never reach the automation engine's
+  connector registry — only plugins populate it via
+  `engine.registerConnector(def, handlers)` (ADR-0018 §Addendum) — so a declared
+  connector with actions and no plugin behind it _looked_ dispatchable but was
+  silently inert.
+
+  The contract is now explicit and audited:
+
+  - **Boot audit (service-automation).** At `kernel:ready` (and again on
+    `metadata:reloaded`), declared connectors with `actions` but no same-name
+    runtime registration log a loud warning naming each inert entry and
+    pointing at the fix (install the matching connector plugin, or mark a
+    deliberate catalog entry). Nothing is registered on your behalf — the
+    warning surfaces the gap `connector_action` would otherwise hit at
+    dispatch time.
+  - **`enabled: false` = deliberate catalog descriptor (spec).** Setting it on
+    a declarative entry documents "descriptor-only on purpose" and silences the
+    audit. Schema docs on `stack.zod.ts` (`connectors:`) and
+    `integration/connector.zod.ts` now state the descriptor-vs-registered
+    contract explicitly (including for AI stack authoring via `.describe()`).
+
+  Declarative provider-bound connector _instances_ — entries a generic executor
+  (connector-openapi / connector-mcp) materializes into live connectors at boot,
+  upgrading this warning to a hard error — are specified in ADR-0096 and tracked
+  in #2977.
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/formula@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

@@ -1,5 +1,82 @@
 # @objectstack/metadata-protocol
 
+## 15.1.0
+
+### Minor Changes
+
+- 7f68068: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- 7f9a795: OWD posture is now enforced on the runtime write path (#3050). `metadata-protocol` gains the ADR-0094-addendum `registerAuthoringGate(type, gate)` seam — an awaited, throwing pre-persistence hook inside `saveMetaItem` (draft and publish-mode saves; environment writes only). `plugin-security` registers the `object` posture gate on it: an environment overlay of a packaged object may only TIGHTEN `sharingModel`/`externalSharingModel` (ADR-0086 D1 — closes the `OS_METADATA_WRITABLE=object` unvalidated-widening hole), and `externalSharingModel ≤ sharingModel` (ADR-0090 D11) is now rejected at save time instead of only by CLI lint. Write-path only — stored metadata keeps loading unchanged.
+
+### Patch Changes
+
+- 28ba0c7: fix(metadata-protocol): findData now rejects unknown `$`-prefixed query parameters with 400 `UNSUPPORTED_QUERY_PARAM` instead of silently treating them as implicit field-equality filters that match zero rows (#2926 ⑩). A `$`-prefixed key can never be a field name, so this is loud-failure only for the unsupported-alias class; bare-key implicit equality filtering is unchanged. The error message lists the supported aliases ($top, $skip, $orderby, $select, $count, $search, $searchFields, $filter, $expand).
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/metadata-core@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

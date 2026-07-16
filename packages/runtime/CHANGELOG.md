@@ -1,5 +1,327 @@
 # @objectstack/runtime
 
+## 15.1.0
+
+### Minor Changes
+
+- 7f68068: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- 8fc1208: feat(protocol): complete ADR-0087 — load-seam handshake, chain backfill 12–15, release artifacts (#2643)
+
+  Closes the remaining ADR-0087 gaps (see the ADR's as-built Addendum):
+
+  - **P0 load seams (D1).** The protocol handshake now runs on the boot-time
+    durable-package rehydration path (`@objectstack/service-package` refuses an
+    incompatible `sys_packages` row with the structured `OS_PROTOCOL_INCOMPATIBLE`
+    diagnostic and keeps booting) and on `AppPlugin` for code-defined stacks
+    (fail-fast before the manifest is decomposed). `objectstack lint` gains
+    `protocol/missing-engines-range` (warning + fix-it) and the
+    `create-objectstack` blank template stamps `engines: { protocol: '^<major>' }`
+    (re-stamped at version time by `scripts/sync-template-versions.mjs`) — the
+    two ends of the grandfathering ratchet.
+  - **Chain backfill (D2/D3).** `MetadataConversion.retiredFromLoadPath`
+    implements the load-window's second half (retired entries replay only via
+    `migrate meta` / fixture CI). Steps 12–15 land: the `api.requireAuth` flip
+    (semantic), the ADR-0090 wave (3 retired conversions + 5 semantic TODOs), the
+    `BookAudience` rename (retired conversion), and the ADR-0089 visibility
+    unification (`visibleOn`/`visibility` → `visibleWhen` as LIVE load-window
+    conversions) + the `.strict()` flip (semantic). The protocol-11
+    `compactLayout` → `highlightFields` rename is backfilled as a retired step-11
+    conversion. `migrate meta --from 10` now reaches protocol 15.
+  - **Release artifacts (D4).** `spec-changes.json` is generated from the
+    registries (`gen:spec-changes`, CI drift-checked), ships in the npm artifact
+    together with `api-surface.json`, and is attached to each `@objectstack/spec`
+    GitHub Release with `added[]`/`removed[]` filled from the api-surface diff
+    against the previously published release. The upgrade guide
+    (`docs/protocol-upgrade-guide.md`) is generated from the same registries and
+    CI drift-checked — a projection that cannot drift.
+
+- 541b96a: fix(security): enforce the anonymous-deny posture uniformly across HTTP surfaces (#2567)
+
+  The ADR-0056 D2 `requireAuth` flip made REST `/data/*` deny-anonymous by
+  default, but three sibling surfaces reached ObjectQL without passing through the
+  gate — so the platform's anonymous posture was **inconsistent by surface**: an
+  anonymous caller denied on `/data` could read the same object data through a
+  different door. This closes the remaining two gaps (the `/meta` gate had already
+  landed) and pins every surface with a conformance row.
+
+  - **Dispatcher GraphQL** (`runtime/http-dispatcher.ts`, `dispatcher-plugin.ts`):
+    `POST /graphql` reached `kernel.graphql`, whose security middleware falls
+    **open** for an anonymous context. `handleGraphQL` now applies the same
+    `requireAuth` gate as `/data` and `/meta`, resolving identity for the direct
+    route that does not flow through `dispatch()`. The dispatcher's `requireAuth`
+    default is aligned with the REST plugin's (`?? true`) so a bare host no longer
+    denies anonymous `/data` while serving the same rows over `/graphql`; an
+    explicit `requireAuth: false` opt-out is honoured and logs a boot warning.
+
+  - **Raw-hono standard `/data` routes** (`plugin-hono-server/hono-plugin.ts`):
+    these delegate straight to ObjectQL and were only _shadowed_ when the REST
+    plugin registered the same paths first — so secure-by-default depended on
+    plugin registration order. Each route now consults `requireAuth` (secure by
+    default, mirroring `rest-server.ts`), making the deny decision a property of
+    this entry point too. Order no longer affects the anonymous posture.
+
+  **Behaviour change:** on a `requireAuth` deployment (the secure default),
+  anonymous `POST /graphql` and anonymous raw-hono `/data` now return 401.
+  Deployments that intentionally serve these surfaces publicly set
+  `requireAuth: false` (a boot warning is logged). Proven end-to-end on the
+  platform default in `showcase-anonymous-deny-surfaces.dogfood.test.ts`, with
+  handler-level regression coverage in `http-dispatcher.requireauth.test.ts` and
+  `hono-anonymous-deny.test.ts`, and pinned by three new authz-conformance rows.
+
+- 3dc9fce: feat(mcp): `aggregate_records` tool — GROUP BY aggregation over the engine read path
+
+  New MCP tool `aggregate_records` (count/sum/avg/min/max/count_distinct, optional
+  groupBy incl. date bucketing, where filter, IANA timezone) in the `data:read`
+  family. Execution routes through the ObjectQL ENGINE (`callData('aggregate')`
+  deliberately never uses the raw per-env driver), so RLS/tenant scoping and the
+  D10 delegator intersection apply exactly as on find.
+
+  Security hardening shipped with it:
+
+  - plugin-security: new FLS aggregate-INPUT gate — result masking never runs for
+    `aggregate` (output rows carry only aliases), so any groupBy / aggregation
+    reference to an FLS-unreadable field is now rejected fail-closed with the
+    offending field names (mirrors the FLS write gate).
+  - runtime: `aggregate` maps to the `list` ApiMethod in the object exposure gate
+    (an object whose `apiMethods` whitelist excludes `list` cannot leak row
+    statistics through GROUP BY), and the aggregate action requires at least one
+    aggregation (the engine's in-memory path would otherwise degrade to raw rows
+    that the FLS masker does not cover).
+
+  The bridge seam is optional: a runtime that does not implement
+  `McpDataBridge.aggregate` simply does not register the tool (graceful
+  degradation, same contract as the action tools).
+
+### Patch Changes
+
+- 4c46ee0: refactor(security): migrate the handleSecurity admin gate to shouldDenyAnonymous (#2567 follow-up)
+
+  The dispatcher's `/security/suggested-bindings` admin surface was the last HTTP
+  seam still hand-rolling the `!userId && !isSystem → 401` check. It now delegates
+  to the shared `shouldDenyAnonymous` decision like every other seam — with
+  `requireAuth: true` hardcoded, preserving its UNCONDITIONAL semantics (an admin
+  surface denies anonymous callers even on a `requireAuth: false` demo deployment).
+  The 401 body adopts the shared shape (`code: 'unauthenticated'`).
+
+  Deliberately NOT migrated: `handleNotification`'s `!userId` check — that is a
+  "needs a user identity" predicate (the inbox is keyed by userId; a system
+  context has no inbox), not an anonymous-posture decision; migrating it would
+  change semantics.
+
+- 99755b5: refactor(security): converge the anonymous-deny decision into one shared function + a source-enumerating ratchet (#2567 Phase 2)
+
+  Phase 1 gated every HTTP surface (REST `/data`, dispatcher `/graphql` + `/meta`,
+  raw-hono `/data`) against the secure-by-default `requireAuth` posture, but each
+  seam hand-rolled the same `!userId && !isSystem → 401` check. Phase 2 removes
+  that duplication and pins the surfaces so a new ungated entry point fails CI.
+
+  - **New `shouldDenyAnonymous` in `@objectstack/core`** (`security/anonymous-deny.ts`)
+    — the single anonymous-deny decision + shared 401 body/constants, mirroring the
+    `auth-gate.ts` pattern (pure function so the seams can never drift). All five
+    seams — REST `enforceAuth`, dispatcher `handleGraphQL` / `handleMetadata` /
+    `handleAI`, hono `denyAnonymous` — now delegate to it. **Pure refactor: no
+    runtime behavior change** (verified by the unchanged Phase-1 handler + e2e
+    proofs). Identity resolution and the dynamic exemptions (public-form grants,
+    share-link tokens) are untouched — they run upstream and only ever hand the
+    seam an already-resolved context.
+  - **A `discover()` ratchet on the authz-conformance matrix** — it statically
+    enumerates the data/meta/graphql HTTP entry points from source (curated
+    per-file probes, control-plane routes excluded) and asserts each is classified
+    by a matrix `covers` key. A new `/data`/`/meta`/`/graphql` route (or a
+    removed/stale `covers`) now fails CI as UNCLASSIFIED / STALE, not in review. A
+    companion negative test proves the ratchet bites.
+
+  A design trap is guarded: `isAuthGateAllowlisted(undefined)` returns `true`, so a
+  body-routed seam (GraphQL, which has no request path) must pass no path — the
+  shared function's non-empty-path guard denies anonymous unconditionally there,
+  never falling through to the control-plane allowlist.
+
+- c11e24b: fix(authz): carry the derived posture rung on ExecutionContext (#2947)
+
+  The ADR-0095 D2 posture ladder (`PLATFORM_ADMIN > TENANT_ADMIN > MEMBER >
+EXTERNAL`) is derived once by the shared authz resolver from capability grants,
+  but both HTTP/MCP entry points that build the `ExecutionContext` dropped it —
+  so any enforcement-side reader of `context.posture` always saw `undefined`
+  (the same drop that forced the explain layer to re-derive it, #2949).
+
+  `ExecutionContextSchema` now carries an optional `posture` field, and both
+  `rest-server` and the runtime `resolveExecutionContext` plumb the resolver's
+  value through. Additive and **behavior-preserving**: no enforcement decision
+  consumes `posture` yet — whether the hot path evaluates _by_ posture remains a
+  larger ADR-level decision — this only stops the already-computed value from
+  being discarded, so enforcement and explain read the same derived rung.
+
+- 59cd765: fix(security): pre-wiring identity admission for the GraphQL and realtime surfaces (#2992, ADR-0096 D4)
+
+  Two latent execution surfaces — neither reachable by a client today — would
+  have fallen open the instant a real transport was wired, because both drop or
+  lack the caller's identity. Per ADR-0096, the identity story is fixed and
+  pinned in CI _before_ wiring, not after an adversarial review:
+
+  - **GraphQL (surface 1 — latent context-drop, now threaded).**
+    `handleGraphQL` passed only `{ request }` to `kernel.graphql`, dropping the
+    resolved `ExecutionContext` — the moment a real engine resolved objects
+    through ObjectQL it would have run context-less (security middleware falls
+    OPEN on a missing principal = full authority). The entry point now resolves
+    the caller identity even on the direct dispatcher-plugin route and even when
+    `requireAuth` is off, and threads it as `options.context`;
+    `IGraphQLService.execute` documents that implementations MUST forward it to
+    every data-engine call. Unit-proven; the authz conformance matrix pins the
+    threading (`graphql-identity-thread` row) so removing it goes STALE and
+    fails CI.
+
+  - **realtime (surface 2 — no per-recipient authz seam, posture registered).**
+    Delivery is a pure fan-out (subscriptions carry no principal,
+    `matchesSubscription` filters only by object+eventTypes, the engine
+    publishes the full `after` row), safe only while every subscriber is
+    server-internal. The posture is now registered as an `experimental` matrix
+    row (`realtime-delivery-authz`) stating the admission requirement
+    (per-recipient RLS/FLS/tenant re-check on delivery, or id-only payload +
+    client re-fetch), and transport TRIPWIRE probes turn any newly wired
+    WebSocket/SSE/subscribe/client transport into an UNCLASSIFIED surface → red
+    CI until the identity story ships with it. The `service-realtime` README —
+    which advertised `authorizeChannel`/`broadcastToUser`/presence auth that do
+    not exist — is rewritten to describe the real, trusted-internal-only
+    surface, and the contract docs carry the admission requirement at the seam.
+
+- fae5dd0: Surface standalone authored `action` metadata rows on the MCP action bridge (#3010). `list_actions` and `run_action` now resolve declarations from `object.actions` unioned with standalone `action` items, keyed the same way the engine registers their handlers (`objectName` → legacy `object` → `'global'`), with object-embedded declarations winning on a key clash. Previously a Studio-authored standalone action executed via REST but was invisible and uninvokable on the MCP/AI surface, even with `ai.exposed: true`. All invoke-time gates (`ai.exposed` fail-closed, ADR-0066 D4 capability gate, sys\_\* fail-closed) are unchanged.
+- 23925e9: fix(plugin-auth): re-run membership backfill when app seeding settles (#2996)
+
+  The ADR-0093 D6 membership backfill — the only safety net for users created
+  by app seeds (raw `engine.insert` into `sys_user` bypasses better-auth's
+  `user.create.after` reconciler) — ran only once on `kernel:ready`. When a seed
+  bundle overruns its inline budget (`OS_INLINE_SEED_BUDGET_MS`, default 8s) it
+  finishes in the background _after_ `kernel:ready`, so its users stayed
+  member-less in single-org `auto` mode until the next restart re-ran the backfill.
+
+  `AppPlugin` now emits a new **`app:seeded`** lifecycle event when an app's inline
+  seed settles (success, partial, or fallback) — carrying `{ appId, overBudget }`,
+  where `overBudget: true` marks the post-`kernel:ready` background case. plugin-auth
+  subscribes and re-runs the (idempotent, self-guarding, opt-out-able)
+  `backfillMemberships` on that signal, closing the window without waiting for a
+  restart. No behavior change when a seed completes within budget, in multi-tenant
+  mode, or under `invite-only` policy; `OS_SKIP_MEMBERSHIP_BACKFILL=1` still opts out.
+
+- fdfe1d9: fix(security): enforce the `ai.exposed` opt-in on the MCP action surface (#2849)
+
+  Business-action bodies execute as trusted code: their engine facade carries no
+  `ExecutionContext`, so a body's internal reads/writes bypass RLS/FLS/CRUD and
+  tenant scoping — the caller's permissions and an agent's ADR-0090 D10 data
+  ceiling do NOT bound what an invoked action does. The MCP `run_action` bridge
+  nevertheless allowed invoking ANY headless action, ignoring the spec's
+  `ai.exposed` governance gate (ADR-0011) entirely.
+
+  The MCP bridge now fail-closes on `ai.exposed`: `list_actions` only enumerates
+  — and `run_action` only dispatches — actions the app author explicitly opted
+  into the AI surface with `ai: { exposed: true, description }`. Flow-type
+  actions additionally receive the caller's identity (`userId` / `positions` /
+  `permissions` / `tenantId`) as a proper `AutomationContext` (replacing the
+  former `triggerData` envelope the engine never read), so a `runAs: 'user'`
+  flow enforces RLS as the invoker instead of running unscoped (ADR-0049).
+  Trusted body dispatches are now audit-logged on both the MCP and REST action
+  paths, and the MCP tool/README/docs wording no longer claims action bodies run
+  under the caller's RLS.
+
+  Migration: actions that should stay invokable by AI agents through MCP must
+  declare `ai: { exposed: true, description: '…' }` (≥40-char description). All
+  other invocation surfaces (UI, REST `/actions/...`) are unchanged.
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [93bb7b4]
+- Updated dependencies [c11e24b]
+- Updated dependencies [e0b049a]
+- Updated dependencies [e9a2885]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [7bc9e79]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [aeb2110]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [3dc9fce]
+- Updated dependencies [23925e9]
+- Updated dependencies [7f9a795]
+- Updated dependencies [6613ad0]
+- Updated dependencies [a16972b]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aead168]
+- Updated dependencies [dee7feb]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [8b27dd7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [464418e]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/rest@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/plugin-security@15.1.0
+  - @objectstack/plugin-auth@15.1.0
+  - @objectstack/types@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/metadata@15.1.0
+  - @objectstack/metadata-core@15.1.0
+  - @objectstack/observability@15.1.0
+  - @objectstack/driver-memory@15.1.0
+  - @objectstack/driver-sql@15.1.0
+  - @objectstack/driver-sqlite-wasm@15.1.0
+  - @objectstack/service-cluster@15.1.0
+  - @objectstack/service-datasource@15.1.0
+  - @objectstack/service-i18n@15.1.0
+
 ## 15.0.0
 
 ### Minor Changes

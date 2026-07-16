@@ -1,5 +1,243 @@
 # @objectstack/rest
 
+## 15.1.0
+
+### Patch Changes
+
+- 7f68068: feat(discovery): honest capabilities — standardized stub/fallback marker + realtime route honesty (ADR-0076 D12/A1.5 framework slice, #2462)
+
+  **Spec** — new service self-description marker for honest discovery
+  (ADR-0076 D12): `SERVICE_SELF_INFO_KEY` (`__serviceInfo`),
+  `ServiceSelfInfoSchema` / `ServiceSelfInfo`, and `readServiceSelfInfo()`,
+  which also normalizes plugin-dev's legacy `_dev: true` flag to
+  `{ status: 'stub', handlerReady: false }`. A registered service that is a
+  stub / dev fake / degraded fallback self-identifies via this marker; a fully
+  real service carries no marker.
+
+  **Runtime + metadata-protocol** — both discovery builders
+  (`HttpDispatcher.getDiscoveryInfo` and the protocol shim's `getDiscovery`)
+  now honor the marker instead of hardcoding `status: 'available',
+handlerReady: true` for every registered service. Dev stubs report `stub`,
+  the ObjectQL analytics fallback reports `degraded` (it keeps serving — no
+  `/analytics` 404), and consumers can finally trust
+  `status === 'available'` / `handlerReady === true`.
+
+  **Realtime honesty fix** — discovery no longer advertises a
+  `/realtime` route or `websockets: true`: `service-realtime` is an
+  in-process pub/sub bus, no dispatcher branch or plugin mounts any
+  `/realtime` HTTP surface, so the advertised route always 404'd. The
+  registered service now reports `status: 'degraded', handlerReady: false`
+  with no route (clients using the SDK are unaffected — it falls back to the
+  conventional path, which behaves exactly as before). Also corrects the
+  advertised realtime provider from the nonexistent `plugin-realtime` to
+  `service-realtime`.
+
+  **REST (A1.5)** — the REST layer's protocol dependency is narrowed from the
+  `ObjectStackProtocol` god-union to the new `RestProtocol =
+DataProtocol & MetadataProtocol` slice (exported from
+  `@objectstack/rest`), per the ADR-0076 D9 incremental narrowing guidance.
+  Type-level only; no runtime change.
+
+- 86c0aea: feat(attachments): sys_file orphan lifecycle + parent-derived attachment access (#2755)
+
+  **Orphan lifecycle (ADR-0057).** Deleting a `sys_attachment` join row used to
+  orphan the backing `sys_file` row and its storage bytes forever. `sys_file`
+  now declares a lifecycle (`ttl 30d` on a new `deleted_at` tombstone for
+  orphans; `retention 7d onlyWhen status=pending` for abandoned uploads), the
+  storage plugin's new hooks tombstone a file when its LAST join row is deleted
+  (attachments scope only — `Field.file`/`Field.image`/avatar scopes are never
+  touched) and un-tombstone on re-attach, and a new LifecycleService **reap
+  guard** seam (`registerReapGuard`) re-verifies zero references at sweep time
+  and deletes the storage bytes before confirming each row reap. A guarded
+  object is never blind-deleted; an erroring guard fails safe (rows retained).
+
+  **Attachment access (ADR-0049, Salesforce parent-derived semantics).**
+  `sys_attachment` create now requires caller READ visibility of the parent
+  record (403 `ATTACHMENT_PARENT_ACCESS`) and server-stamps `uploaded_by` from
+  the session (client value ignored); delete requires uploader-or-parent-editor
+  (403 `ATTACHMENT_DELETE_DENIED`). The storage upload routes require an
+  authenticated session when an auth service is wired (401 `AUTH_REQUIRED`;
+  bare kernels stay open) and stamp `owner_id` on new files.
+
+  **REMOVED — `sys_attachment.share_type` / `sys_attachment.visibility`.**
+  Both fields were modeled in v1 with zero runtime consumers (ADR-0049
+  parsed-but-unenforced). There is no replacement key: attachment access is
+  derived from the parent record by the hooks above. Writers of these fields
+  should simply stop sending them (unknown-field validation will reject them);
+  existing DB columns are left as unmanaged leftovers, no migration needed.
+
+  `@objectstack/verify` gains `BootOptions.extraPlugins` for booting optional
+  service pairs (e.g. storage + audit) in dogfood fixtures.
+
+- 99755b5: refactor(security): converge the anonymous-deny decision into one shared function + a source-enumerating ratchet (#2567 Phase 2)
+
+  Phase 1 gated every HTTP surface (REST `/data`, dispatcher `/graphql` + `/meta`,
+  raw-hono `/data`) against the secure-by-default `requireAuth` posture, but each
+  seam hand-rolled the same `!userId && !isSystem → 401` check. Phase 2 removes
+  that duplication and pins the surfaces so a new ungated entry point fails CI.
+
+  - **New `shouldDenyAnonymous` in `@objectstack/core`** (`security/anonymous-deny.ts`)
+    — the single anonymous-deny decision + shared 401 body/constants, mirroring the
+    `auth-gate.ts` pattern (pure function so the seams can never drift). All five
+    seams — REST `enforceAuth`, dispatcher `handleGraphQL` / `handleMetadata` /
+    `handleAI`, hono `denyAnonymous` — now delegate to it. **Pure refactor: no
+    runtime behavior change** (verified by the unchanged Phase-1 handler + e2e
+    proofs). Identity resolution and the dynamic exemptions (public-form grants,
+    share-link tokens) are untouched — they run upstream and only ever hand the
+    seam an already-resolved context.
+  - **A `discover()` ratchet on the authz-conformance matrix** — it statically
+    enumerates the data/meta/graphql HTTP entry points from source (curated
+    per-file probes, control-plane routes excluded) and asserts each is classified
+    by a matrix `covers` key. A new `/data`/`/meta`/`/graphql` route (or a
+    removed/stale `covers`) now fails CI as UNCLASSIFIED / STALE, not in review. A
+    companion negative test proves the ratchet bites.
+
+  A design trap is guarded: `isAuthGateAllowlisted(undefined)` returns `true`, so a
+  body-routed seam (GraphQL, which has no request path) must pass no path — the
+  shared function's non-empty-path guard denies anonymous unconditionally there,
+  never falling through to the control-plane allowlist.
+
+- c11e24b: fix(authz): carry the derived posture rung on ExecutionContext (#2947)
+
+  The ADR-0095 D2 posture ladder (`PLATFORM_ADMIN > TENANT_ADMIN > MEMBER >
+EXTERNAL`) is derived once by the shared authz resolver from capability grants,
+  but both HTTP/MCP entry points that build the `ExecutionContext` dropped it —
+  so any enforcement-side reader of `context.posture` always saw `undefined`
+  (the same drop that forced the explain layer to re-derive it, #2949).
+
+  `ExecutionContextSchema` now carries an optional `posture` field, and both
+  `rest-server` and the runtime `resolveExecutionContext` plumb the resolver's
+  value through. Additive and **behavior-preserving**: no enforcement decision
+  consumes `posture` yet — whether the hot path evaluates _by_ posture remains a
+  larger ADR-level decision — this only stops the already-computed value from
+  being discarded, so enforcement and explain read the same derived rung.
+
+- 7bc9e79: fix(import): make async import-job cancellation actually stop the worker (#2824)
+
+  Cancelling a running async import used to have no effect on a synchronous
+  storage driver (better-sqlite3 / wasm fallback): every `await` in the row
+  loop resolved as a microtask, so a 50k-row import monopolized the Node event
+  loop for minutes — the cancel route's HTTP handler (and every progress poll)
+  could never run, so the in-memory flag `shouldCancel` polls was never set.
+  The job then finished `succeeded` with all rows written despite the user's
+  cancel.
+
+  Three-part fix:
+
+  - **`runImport` yields one macrotask at every progress boundary** (every
+    `progressEvery` rows), so pending I/O — the cancel request, progress
+    polls, any other traffic — gets serviced during a large import. This is
+    the root-cause fix; it also unblocks progress polling for the wizard.
+  - **The worker's `shouldCancel` now also reads the durable job row** as a
+    fallback: a cancel accepted by another process (or after a restart
+    dropped the in-memory flag) still stops the worker.
+  - **A late cancel wins the terminal state**: the worker's final patch no
+    longer overwrites the cancel route's durable `cancelled` with
+    `succeeded`, and a job cancelled while still `pending` doesn't start at
+    all. Counts stay truthful — they reflect what was actually written.
+
+- aeb2110: fix(rest): split multi-value fields on import so `multiple: true` columns resolve per-token (#3063)
+
+  The bulk-import coercion (`import-coerce.ts`) resolved a reference cell as a
+  single value regardless of the field's `multiple` flag: a `multiple: true`
+  lookup/user cell like `张焊工;李质检` was passed whole to name resolution and
+  always failed with `no <object> matches "张焊工;李质检"`, so every multi-value
+  association had to be back-filled by hand in the record UI after import.
+
+  Coercion now mirrors objectql's `isMultiValueField` predicate. A field whose
+  stored value is an array — an inherently-multi type (multiselect/checkboxes/tags)
+  or a multi-capable type flagged `multiple: true` (per the spec: select, lookup,
+  file, image; `radio` shares select's branch and `user` shares lookup's) — has
+  its cell split on the export separator (`, ` / `;` / `、` / newline) and each
+  token coerced individually:
+
+  - **lookup / user (`multiple: true`)** — resolve each name token to an id, store
+    the id array; an unmatched/ambiguous token reports the **specific token**
+    (`no sys_user matches "查无此人"`) instead of the whole string.
+  - **select / radio (`multiple: true`)** — match each token against the options,
+    store the option-value array.
+  - **file / image (`multiple: true`)** — split into an id/url array.
+
+  Single-value fields and the non-multi-capable reference types (master_detail /
+  reference / tree) are unchanged — a stray `multiple: true` on them stays a
+  single resolved value, matching the engine.
+
+- aaec5db: fix(security): public-form submissions can no longer forge server-managed anchors (#3022)
+
+  The anonymous public-form surface (ADR-0056 Option A, `POST /forms/:slug/submit`)
+  is authorized by the declaration-derived `publicFormGrant`, which short-circuits
+  the security middleware BEFORE every write gate (CRUD, FLS, the owner anchor
+  guard, the tenant CHECK). The only field-side defense was the route's
+  declared-field allow-list — and a FormView with zero declared section fields
+  fell back to merging the raw body wholesale, so an unauthenticated visitor
+  could `POST owner_id=<victim>` (or `organization_id`, audit columns, `id`) and
+  attach the record to another user or tenant — the #3004 insert-forge, with no
+  credentials at all.
+
+  Server-managed anchors are now enforced on this surface at BOTH layers, from a
+  single shared definition (`PUBLIC_FORM_SERVER_MANAGED_FIELDS`, new in
+  `@objectstack/spec/security`):
+
+  - **Data layer (authoritative)** — the `publicFormGrant` branch in
+    `@objectstack/plugin-security` strips `id` / `owner_id` / `organization_id` /
+    `tenant_id` / audit columns / soft-delete state / `__search` from every row
+    of a granted insert (batch included) before admitting the write, so the
+    boundary holds no matter what any route lets through. Ownership stays NULL
+    for object hooks / the first-admin bootstrap to assign, as for other
+    anonymous-seeded rows.
+  - **Route layer** — the submit allow-list excludes the same set
+    unconditionally: an explicitly declared `owner_id` section field no longer
+    passes, and the zero-declared-sections fallback keeps its documented
+    all-fields behavior for business columns while refusing the managed set.
+    The resolve route (`GET /forms/:slug`) drops the managed fields from the
+    rendered sections and the embedded object schema so a form never collects a
+    value the submit refuses, and `GET /forms/:slug/lookup/:field` refuses a
+    `publicPicker` declared on a managed anchor (which would have opened
+    anonymous `sys_user` search through `owner_id`).
+
+  Authenticated writes are unaffected — this is the anonymous-surface rule only;
+  `owner_id` transfer semantics for signed-in callers stay governed by the
+  transfer grant (#3004 / PR #3018).
+
+- 28ba0c7: fix(rest): mapDataError now honors an explicit 4xx `error.status`/`error.code` carried by domain errors (#2926 ⑦). Record-scope authorization denials from plugin-sharing (status 403, code FORBIDDEN) previously degraded to a bare 400 with no machine-readable code because the generic data routes bypass sendError's status passthrough. Structured 409 envelopes (CONCURRENT_UPDATE, DELETE_RESTRICTED) keep their dedicated branches; 5xx statuses still go through the message-sanitizing heuristics.
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [94b8e44]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [eb89a8c]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [aead168]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/service-package@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/types@15.1.0
+
 ## 15.0.0
 
 ### Patch Changes

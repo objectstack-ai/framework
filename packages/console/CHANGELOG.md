@@ -1,5 +1,104 @@
 # @objectstack/console
 
+## 15.1.0
+
+### Minor Changes
+
+- 330ceba: Console (objectui) refreshed to `b8967495be73`. Frontend changes in this range:
+
+  - fix(app-shell): guard unsaved OWD overview rows in the Access rail and Studio header nav (#2600 follow-up) (#2610)
+  - fix(actions): defuse the three action-visibility traps (#2358) (#2611)
+  - fix(studio): confirm before header SPA nav discards unsaved pillar edits (#2600) (#2606)
+  - feat(studio): CEL formula editor with inferred result type; structured summary roll-up editor (#1582) (#2609)
+
+  objectui range: `23d65c396b8c...b8967495be73`
+
+- 5286745: Console (objectui) refreshed to `fb35e4828fdb`. Frontend changes in this range:
+
+  - fix(data-objectstack): emit MutationEvents from batchTransaction and bulk so master-detail saves refresh bound views (#2584)
+  - feat(dashboard-filters): #2578 item-5 enhancements — nested variable merging, metadata-aware default bindings, server-side optionsFrom distinct (#2590)
+  - feat(fields+form+detail): file/image upload cells in inline line-item grids (#2360) (#2585)
+  - feat(app-shell): visual filterBindings editor in the dashboard widget inspector (#2578) (#2586)
+  - fix(detail): highlight strip lookup editor honors ObjectStack `reference` key (#2407) (#2587)
+  - fix(app-shell): guard Studio Access pillar against silently discarding unsaved matrix edits (#2588)
+  - feat(dashboard-filters): #2578 follow-ups — catalog examples, guide tutorial, i18n entries, spec-alignment cleanup (#2581)
+  - fix(detail+fields+app-shell): ADR-0085 #2548 follow-ups — strip title dedupe, group icon/description, currency channel, approvals Bearer (#2577)
+  - feat(dashboard): dashboard-level filters driving multiple charts (framework#2501) (#2576)
+  - feat(page-header): metadata-driven multi-button record header (#2361) (#2574)
+
+  objectui range: `092bd859934f...fb35e4828fdb`
+
+### Patch Changes
+
+- 55bc68d: Console (objectui) refreshed to `092bd859934f`. Frontend changes in this range:
+
+  - fix(app-shell): bind current_user.positions into the client predicate scope; align role-gating examples (#1583 / ADR-0058) (#2573)
+  - feat(app-shell): CEL lint + field autocomplete for condition predicates (#1582) (#2567)
+  - fix(detail): gate related lists on the current user's child-object read permission (#2359) (#2565)
+  - feat(flow-designer): connector picker lists dispatchable connectors + marks declarative instances (#2563)
+  - feat(app-shell): Studio CEL editor for list-view conditional formatting (#1584 / #1582) (#2558)
+  - fix(fields): resolve lookup chip display name via referenced object schema, not the autonumber-prone key heuristic (#2357) (#2551)
+  - feat(kanban): accept CEL { condition, style } conditional-formatting rules (#1584 follow-up) (#2550)
+  - fix(plugin-grid): sniff CSV encoding in import wizard (GB18030 fallback) (#2557)
+  - feat(detail): editable record highlights on the shared inline-edit draft (#2549)
+  - fix(spec-bridge/form): #2545 stop dropping spec FormViewSchema keys; normalize legacy groups → sections (#2552)
+  - feat(flow-designer): localize palette headings + cloud-sync recents + guide (#2553)
+  - fix(studio): refresh builder top-bar name after a package rename (#2554)
+  - feat(core): B3 cascading-option guardrail, role-gated demo, ADR + browser e2e (#1583) (#2547)
+  - feat(list): unify conditional formatting + row-action visibility onto the CEL engine (#1584) (#2544)
+  - feat(detail): record-level inline edit — shared InlineEditContext + one atomic Save (#2542)
+  - feat(flow-designer): search box + keyboard nav + recents in the add-node palette (#2543)
+  - feat(kanban): default card fields to object highlightFields (ADR-0085, #2162) (#2541)
+  - fix(types/plugin-grid): #1763 declare spec-canonical bulkActions on ObjectGridSchema (#2539)
+  - fix(attachments): download attachments via authenticated signed URL (framework #2970)
+  - feat(studio): spec-driven package create/edit/view form in a modal (#2535)
+  - fix(permissions/fields): #2926 ④⑧ — FLS fail-open + lookup display_field (#2537)
+  - feat(app-shell): CEL authoring safety for RLS policies — lint, field autocomplete, test-run (#2533)
+  - fix(auth): gate DeviceAuthPage on features.deviceAuthorization (framework#2874 / #2513) (#2536)
+  - fix(app-shell): close view config panel on discard in edit mode (#2320)
+  - feat(metadata-admin): create form-family views through the View create UI (#2531)
+  - fix(app-shell): render action's objectName as an object selector (#2325)
+  - fix(components): exit inline edit mode for injected cell editors (#2534)
+  - fix(attachments): authenticated uploads + friendly denial copy in RecordAttachmentsPanel (#2755) (#2532)
+  - feat(components): page:tabs honors item-level visibleWhen — conditional tabs (framework#2606) (#2516)
+  - feat(metadata-admin): page variable source is a component picker (#2328) (#2523)
+  - fix(studio-design): make object canvas overridable via studio-canvas-preview registry (#2337) (#2527)
+  - fix(metadata-admin): seed flow createDefaults with required `type` (#2525)
+  - fix(metadata-admin): give hook create form a createSchema so object renders as a ref:object picker (#2521)
+  - feat(studio): enforce package namespace prefix at authoring time (framework#2694) (#2524)
+  - fix(app-shell): render View create-form Object field as ref:object picker (#2526)
+  - feat(components): add `variant === 'primary'` tie-break to action:bar ordering (#2339) (#2519)
+  - fix(build): stop TS6059 rootDir errors in dts build across 21 packages (#2520)
+  - fix(app-nav): exclude record-detail pages from the 'page' nav picker (#2333) (#2517)
+  - fix(plugin-report): stop TS6059 rootDir errors in dts build (#2334) (#2518)
+  - feat(flow-designer): add 'position' xRef picker kind for approval approvers / escalateTo (#2778) (#2515)
+
+  objectui range: `cc2156841787...092bd859934f`
+
+- 330ceba: Console (objectui) refreshed to `23d65c396b8c`. Frontend changes in this range:
+
+  - fix(i18n): drop try/catch-around-hook in createSafeTranslation / useSafeTranslate (#2605)
+  - fix(app-shell): Studio Access matrix — history opens in-place sheet, breadcrumb stops escaping the pillar (#2599)
+  - fix(data-objectstack): emit mutation events from batchTransaction/bulk so related lists refresh after master-detail saves (#2607)
+  - fix(metadata-admin): follow the live app locale, not just navigator.language (#2602)
+  - feat(detail+fields+components+app-shell): record inline-edit polish (#2572) (#2604)
+  - fix(app-shell+kanban+list): row-predicate CEL authoring advertises runtime-bound roots; kanban binds host scope (#2571 follow-up) (#2603)
+  - fix(plugin-list): spec bare-string sort form crashed ListView (#2578 shape-mismatch audit) (#2601)
+  - fix(app-shell): lock the Access pillar permission matrix in read-only packages (#2570)
+  - fix(fields): localize relative-date humanize via Intl.RelativeTimeFormat (framework#3040) (#2593)
+  - fix(components): pin sticky leading cells at measured header widths (#2592)
+  - fix(app-shell,core): keep error-envelope objects out of toast.error — React #31 page crash (#2579) (#2580)
+  - feat(flow-designer): pick the target node per branch in the Decision Branches editor (#1942) (#2568)
+  - fix(core+data-objectstack+app-shell): canonicalize reference/reference_to at the schema chokepoints (#2407) (#2598)
+  - fix(dashboard-filters): spec-form filter options crashed the dashboard; add guide screenshots (#2578) (#2597)
+  - fix(fields): PeoplePicker cursor resets only on real result changes (de-flakes keyboard test) (#2594)
+  - fix(studio): stop force-opening the new-object dialog on empty packages (#2569)
+  - feat(studio): CEL editor with validate + autocomplete for field conditional rules (#1582) (#2571)
+  - feat(kanban): default lane field honours the ADR-0085 stageField role (#2596)
+  - fix(fields+detail): resolve pre-existing rules-of-hooks violations in cell renderers (#2595)
+
+  objectui range: `fb35e4828fdb...23d65c396b8c`
+
 ## 15.0.0
 
 ### Patch Changes

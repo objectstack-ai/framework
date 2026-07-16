@@ -1,5 +1,52 @@
 # @objectstack/lint
 
+## 15.1.0
+
+### Patch Changes
+
+- 55bc68d: ADR-0085 #2548 follow-ups surfaced by the real-backend browser pass:
+
+  - **lint**: new `field-group-shadowed` warning in `validate-semantic-roles` — a
+    declared fieldGroup whose every visible member is hoisted into the detail
+    highlight strip (or is the record title) renders on forms but silently never
+    on detail pages (detail bodies hide the first 4 highlightFields). Warning
+    tier, same as the other semantic-role rules.
+  - **plugin-audit**: feed/audit summaries ("Created … / Deleted … / Updated …")
+    now name the object by its display label ("Semantic Zoo") instead of its API
+    name ("showcase_semantic_zoo") — these strings render verbatim in the record
+    Discussion feed and Setup dashboards. Falls back to the API name when the
+    object definition isn't resolvable. Existing stored rows are unchanged.
+
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/formula@15.1.0
+  - @objectstack/sdui-parser@15.1.0
+
 ## 15.0.0
 
 ### Minor Changes

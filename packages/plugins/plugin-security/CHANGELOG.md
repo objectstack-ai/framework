@@ -1,5 +1,243 @@
 # @objectstack/plugin-security
 
+## 15.1.0
+
+### Minor Changes
+
+- 7f9a795: OWD posture is now enforced on the runtime write path (#3050). `metadata-protocol` gains the ADR-0094-addendum `registerAuthoringGate(type, gate)` seam — an awaited, throwing pre-persistence hook inside `saveMetaItem` (draft and publish-mode saves; environment writes only). `plugin-security` registers the `object` posture gate on it: an environment overlay of a packaged object may only TIGHTEN `sharingModel`/`externalSharingModel` (ADR-0086 D1 — closes the `OS_METADATA_WRITABLE=object` unvalidated-widening hole), and `externalSharingModel ≤ sharingModel` (ADR-0090 D11) is now rejected at save time instead of only by CLI lint. Write-path only — stored metadata keeps loading unchanged.
+
+### Patch Changes
+
+- 93bb7b4: fix(security): fail-closed sentinel for on-behalf-of reads on getReadFilter (#2852)
+
+  `getReadFilter` (the read-scope provider the analytics/raw-SQL path binds to)
+  resolves only the caller's own ceiling — the ADR-0090 D10 delegator RLS
+  intersection that the engine middleware applies to find/count/aggregate is not
+  implemented on this path. Computing a filter here for a delegated (on-behalf-of)
+  context would therefore silently widen the read past the delegator's scope.
+
+  Until the intersection is threaded through `computeRlsFilter` (tracked with
+  #2920 B1 / ADR-0095 D1), `getReadFilter` now denies fail-closed (deny sentinel +
+  error log) when `context.onBehalfOf.userId` is set. System on-behalf-of bypasses
+  ahead of the guard, and no agent surface reaches analytics today, so this is a
+  latent-invariant guard rather than a live-traffic behavior change.
+
+- 3dc9fce: feat(mcp): `aggregate_records` tool — GROUP BY aggregation over the engine read path
+
+  New MCP tool `aggregate_records` (count/sum/avg/min/max/count_distinct, optional
+  groupBy incl. date bucketing, where filter, IANA timezone) in the `data:read`
+  family. Execution routes through the ObjectQL ENGINE (`callData('aggregate')`
+  deliberately never uses the raw per-env driver), so RLS/tenant scoping and the
+  D10 delegator intersection apply exactly as on find.
+
+  Security hardening shipped with it:
+
+  - plugin-security: new FLS aggregate-INPUT gate — result masking never runs for
+    `aggregate` (output rows carry only aliases), so any groupBy / aggregation
+    reference to an FLS-unreadable field is now rejected fail-closed with the
+    offending field names (mirrors the FLS write gate).
+  - runtime: `aggregate` maps to the `list` ApiMethod in the object exposure gate
+    (an object whose `apiMethods` whitelist excludes `list` cannot leak row
+    statistics through GROUP BY), and the aggregate action requires at least one
+    aggregation (the engine's in-memory path would otherwise degrade to raw rows
+    that the FLS masker does not cover).
+
+  The bridge seam is optional: a runtime that does not implement
+  `McpDataBridge.aggregate` simply does not register the tool (graceful
+  degradation, same contract as the action tools).
+
+- 6613ad0: fix(security): exempt engine referential FK clears from the owner_id transfer guard (#3023)
+
+  Follow-up to the #3004 ownership-anchor guard. `owner_id` is a lookup to `sys_user`
+  with the default `deleteBehavior: 'set_null'`, so deleting a `sys_user` makes
+  `cascadeDeleteRelations` null `owner_id` on every dependent row. That cascade write
+  re-entered the write middleware under the deleter's context, where the #3004 guard
+  read the `owner_id = null` as a user-initiated disown and denied it — aborting the
+  cascade mid-way (no transaction, so partial state) for any deleter without the
+  transfer grant on the child object (e.g. a member clearing a `public_read_write`
+  child that RLS would otherwise have allowed).
+
+  The cascade FK clear is engine-mandated referential integrity consequent to an
+  already-authorized parent delete, not a user ownership change. `cascadeDeleteRelations`
+  now tags the `set_null` write with a server-derived `__referentialFieldClear` context
+  marker (set by the engine, never built from a request — same trust model as
+  `__expandRead`), and the ownership-anchor guard skips when that marker is present.
+  Ordinary user writes are unaffected; the marker cannot be forged from client input,
+  so it can never slip a real ownership transfer past the guard.
+
+- a16972b: fix(security): guard the `owner_id` ownership anchor and scope bulk writes to owner-visible rows (#3004, #2982)
+
+  Two write-path holes on the row-ownership anchor (`owner_id`), the column OWD
+  row-level scoping keys off to decide who may update/delete a record.
+
+  - **#3004 — client-writable, unguarded `owner_id`.** The anchor is deliberately
+    not `readonly` (ownership is transferable), so the static-readonly strip never
+    covered it and FLS doesn't gate it by default. A non-privileged writer could
+    therefore `insert` a record under someone else's name (forge) or `update` one
+    to a new owner (transfer / disown), evading the owner gate that governs
+    update/delete. The security middleware (plugin-security step 3.5) now treats
+    `owner_id` as system-managed for non-privileged writers: on insert an empty
+    value is auto-stamped to the acting user (batch rows too — previously only the
+    single-record path stamped, leaving bulk-inserted rows NULL-owned and
+    invisible to their creator), and a supplied foreign owner is denied; on update
+    a supplied `owner_id` is a transfer/disown and is denied — the unchanged no-op
+    echo of a form save is tolerated via a pre-image compare, and a bulk
+    change-set carrying `owner_id` fails closed. A non-scalar `owner_id`
+    (array/object) is rejected outright rather than string-coerced, and the
+    change-set membership test uses own-property semantics so a polluted
+    prototype cannot spoof an ownership write. Both require the transfer grant
+    (`allowTransfer`, or `modifyAllRecords` which implies it) to proceed. System
+    context (`ctx.isSystem`) stays fully exempt (OAuth provisioning / cron
+    snapshots / seed claims / migrations), and under delegation both principals
+    must hold the grant (ADR-0090 D10 intersection). Note a REST **import** runs
+    under the importer's own context (not `isSystem`), so a non-privileged user
+    importing a CSV whose `owner_id` column names other users is correctly denied
+    unless they hold the transfer grant — administrators (who carry
+    `modifyAllRecords`) are unaffected.
+
+  - **#2982 — bulk writes skipped owner scoping on OWD-`private` objects.** A
+    `update({ multi: true })` / bulk delete rebuilt the driver AST from
+    `options.where` AFTER the middleware chain, discarding the owner/RLS write
+    filter that plugin-sharing (`buildWriteFilter`) and plugin-security compose
+    onto `opCtx.ast` — so a member's bulk write hit every matching row, including
+    peers'. The engine now seeds `opCtx.ast` from the caller's predicate BEFORE the
+    chain (the same seam reads use) and hands the middleware-composed AST to
+    `driver.updateMany` / `driver.deleteMany`, so bulk writes are constrained to the
+    rows the caller may edit — matching single-id write behavior. `delete` now
+    applies the same scalar-`id` guard `update` already had, so an id-list bulk
+    delete (`where: { id: { $in: […] } }, multi: true`) is owner-scoped too, and
+    both multi branches fail CLOSED (throw) rather than silently rebuilding an
+    unscoped predicate if the row-scoping AST is ever absent.
+
+    Consequences of routing bulk writes through the AST: the anti-oracle
+    predicate guard now also applies to bulk `update`/`delete` (a bulk write
+    filtering on an FLS-unreadable field is rejected, as reads already are), and a
+    principal-less (no-`userId`, non-system) bulk write on an owner-scoped object
+    now correctly affects zero rows instead of all of them.
+
+  Proven end-to-end on the real showcase app
+  (`packages/qa/dogfood/test/owner-anchor-and-bulk-writes.dogfood.test.ts`) and pinned
+  in the ADR-0096 authz-conformance ledger (`ownership-anchor-guard`,
+  `bulk-write-owner-scoping`).
+
+- dee7feb: fix(security): scope the bulk-write predicate guard to the caller's own filter, and dedupe pre-image reads (#3018 review follow-ups)
+
+  Two hardening follow-ups from the #3018 adversarial review.
+
+  **Predicate guard is now middleware-order-independent for writes.** #2982 made bulk
+  `update`/`delete` carry an `opCtx.ast`, which brought them under the step-2.9
+  anti-oracle predicate guard for the first time. That guard is documented to run
+  against the _caller's own_ predicate — RLS / sharing filters legitimately reference
+  fields the caller cannot read (e.g. `owner_id`). But for a bulk write it inspected
+  `opCtx.ast.where`, which a sibling middleware (`plugin-sharing`) may have already had
+  an `owner_id` owner-match composed into — and the two middlewares' registration order
+  is not contractually guaranteed. On an object whose `owner_id` is FLS-hidden, that
+  could 403 a legitimate bulk write purely because the injected filter named the field.
+  The guard now inspects `opCtx.options.where` (the caller's untouched predicate) for
+  `update`/`delete`, so it can never mistake an injected owner/RLS filter for a caller
+  probe, independent of middleware order. Reads are unchanged (the read seed is the
+  caller's query verbatim and the guard runs before this middleware's own injection).
+
+  **Pre-image reads deduplicated.** The by-id "read the target row" pattern was inlined
+  at ~5 gates with slightly divergent shapes; a single `readRowById` helper (fail-closed:
+  missing engine / null id / thrown read → `null`, which always denies) now backs the
+  provenance gates, and a memoized `getCallerPreImage` collapses the owner-anchor echo
+  check (3.5) and the RLS `check` post-image (3.6) — which read the identical
+  `(object, id, caller-context)` row — into one read per operation. No behavior change;
+  the read shape can no longer drift across sites.
+
+- aaec5db: fix(security): public-form submissions can no longer forge server-managed anchors (#3022)
+
+  The anonymous public-form surface (ADR-0056 Option A, `POST /forms/:slug/submit`)
+  is authorized by the declaration-derived `publicFormGrant`, which short-circuits
+  the security middleware BEFORE every write gate (CRUD, FLS, the owner anchor
+  guard, the tenant CHECK). The only field-side defense was the route's
+  declared-field allow-list — and a FormView with zero declared section fields
+  fell back to merging the raw body wholesale, so an unauthenticated visitor
+  could `POST owner_id=<victim>` (or `organization_id`, audit columns, `id`) and
+  attach the record to another user or tenant — the #3004 insert-forge, with no
+  credentials at all.
+
+  Server-managed anchors are now enforced on this surface at BOTH layers, from a
+  single shared definition (`PUBLIC_FORM_SERVER_MANAGED_FIELDS`, new in
+  `@objectstack/spec/security`):
+
+  - **Data layer (authoritative)** — the `publicFormGrant` branch in
+    `@objectstack/plugin-security` strips `id` / `owner_id` / `organization_id` /
+    `tenant_id` / audit columns / soft-delete state / `__search` from every row
+    of a granted insert (batch included) before admitting the write, so the
+    boundary holds no matter what any route lets through. Ownership stays NULL
+    for object hooks / the first-admin bootstrap to assign, as for other
+    anonymous-seeded rows.
+  - **Route layer** — the submit allow-list excludes the same set
+    unconditionally: an explicitly declared `owner_id` section field no longer
+    passes, and the zero-declared-sections fallback keeps its documented
+    all-fields behavior for business columns while refusing the managed set.
+    The resolve route (`GET /forms/:slug`) drops the managed fields from the
+    rendered sections and the embedded object schema so a form never collects a
+    value the submit refuses, and `GET /forms/:slug/lookup/:field` refuses a
+    `publicPicker` declared on a managed anchor (which would have opened
+    anonymous `sys_user` search through `owner_id`).
+
+  Authenticated writes are unaffected — this is the anonymous-surface rule only;
+  `owner_id` transfer semantics for signed-in callers stay governed by the
+  transfer grant (#3004 / PR #3018).
+
+- 8b27dd7: fix(security): enforce referenced-object RLS/FLS on $expand (#2850)
+
+  `expandRelatedRecords` resolved lookup/master_detail/user references via the
+  driver directly, so the referenced object's row- and field-level security never
+  ran — any API/session caller who could read a base row could `?expand=` a
+  foreign key and receive RLS-hidden rows and FLS-masked fields (tenant isolation
+  was the only surviving boundary).
+
+  The expand batch now routes through the engine's own `find`, so the security
+  middleware applies the referenced object's RLS + FLS to the `id $in [...]` batch
+  (one query per level, no N+1). The sub-read carries a server-set `__expandRead`
+  marker: the middleware waives only the object-level CRUD / requiredPermissions
+  gate for PUBLIC referenced objects (already broadly readable — avoids
+  over-blocking common status/owner lookups), while PRIVATE referenced objects
+  keep the full gate. Covers the list and single-record REST/protocol surfaces.
+
+- 28ba0c7: fix(plugin-security): stop clobbering admin-edited capability `scope` on boot (#2909 T3). `scope` is an admin-editable classification select on sys_capability, but the curated seeder refreshed it on every boot alongside label/description — silently reverting admin reclassifications. It is now seed-once: written on insert, never refreshed (a curated scope change in a new platform version requires a data migration; recorded in the ADR-0094 addendum).
+- 28ba0c7: fix(plugin-security): re-arm the sys_position system-row write gate after the A4 managed_by rename (#2926 ①). The gate's provenance map still keyed on the legacy `system`/`config` values while rows are now stamped (and boot-normalized to) `platform`/`package`, so platform/package-managed positions — including the `everyone`/`guest` audience anchors — could be physically deleted through the data API once their bindings were removed. The map now guards both the canonical and legacy vocabularies, and the misleading "no runtime path branches on legacy values" safety notes were corrected.
+- 464418e: fix(plugin-security): bind the fallback permission set to the `everyone` anchor AFTER the anchor is seeded. The baseline auto-bind (ADR-0090 D5) ran earlier in `runBootstrap` than `bootstrapBuiltinRoles`, which creates the `everyone` position — so the `everyone` lookup returned nothing and the app's `isDefault` set was never bound, leaving a fresh deploy's `everyone` empty (personas silently degraded) and a redundant `sys_audience_binding_suggestion` filed for the same set. The auto-bind now runs after `bootstrapBuiltinRoles` and before `syncAudienceBindingSuggestions`, so the documented app-level auto-bind actually happens and the suggestion sync correctly skips the already-bound set.
+- Updated dependencies [7f68068]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [94b8e44]
+- Updated dependencies [86c0aea]
+- Updated dependencies [99755b5]
+- Updated dependencies [c11e24b]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [eb89a8c]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [23925e9]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [aead168]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/platform-objects@15.1.0
+  - @objectstack/core@15.1.0
+  - @objectstack/formula@15.1.0
+
 ## 15.0.0
 
 ### Major Changes

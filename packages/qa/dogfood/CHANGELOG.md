@@ -1,5 +1,70 @@
 # @objectstack/dogfood
 
+## 0.0.36
+
+### Patch Changes
+
+- Updated dependencies [7f68068]
+- Updated dependencies [55bc68d]
+- Updated dependencies [fad8e49]
+- Updated dependencies [8fc1208]
+- Updated dependencies [96a14d0]
+- Updated dependencies [10a570a]
+- Updated dependencies [4f8c2d1]
+- Updated dependencies [e97885b]
+- Updated dependencies [0289d5a]
+- Updated dependencies [94b8e44]
+- Updated dependencies [d49deb5]
+- Updated dependencies [86c0aea]
+- Updated dependencies [93bb7b4]
+- Updated dependencies [c11e24b]
+- Updated dependencies [e0b049a]
+- Updated dependencies [e9a2885]
+- Updated dependencies [bf1720b]
+- Updated dependencies [d8f7f6a]
+- Updated dependencies [929efdf]
+- Updated dependencies [0f8db52]
+- Updated dependencies [e7d5291]
+- Updated dependencies [663e7d6]
+- Updated dependencies [59cd765]
+- Updated dependencies [464418e]
+- Updated dependencies [d918c9f]
+- Updated dependencies [3dc9fce]
+- Updated dependencies [23925e9]
+- Updated dependencies [7f9a795]
+- Updated dependencies [6613ad0]
+- Updated dependencies [a16972b]
+- Updated dependencies [c64ee8c]
+- Updated dependencies [ddc2bad]
+- Updated dependencies [1c58abd]
+- Updated dependencies [21f75ce]
+- Updated dependencies [aead168]
+- Updated dependencies [dee7feb]
+- Updated dependencies [aaec5db]
+- Updated dependencies [f71d19a]
+- Updated dependencies [c5e68b2]
+- Updated dependencies [6c114c0]
+- Updated dependencies [8b27dd7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [464418e]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [28ba0c7]
+- Updated dependencies [7c800c6]
+- Updated dependencies [2973f7f]
+  - @objectstack/spec@15.1.0
+  - @objectstack/objectql@15.1.0
+  - @objectstack/plugin-audit@15.1.0
+  - @objectstack/connector-rest@15.1.0
+  - @objectstack/connector-openapi@15.1.0
+  - @objectstack/connector-mcp@15.1.0
+  - @objectstack/service-storage@15.1.0
+  - @objectstack/verify@15.1.0
+  - @objectstack/plugin-security@15.1.0
+  - @objectstack/plugin-auth@15.1.0
+  - @objectstack/example-crm@4.0.88
+  - @objectstack/example-showcase@0.3.10
+
 ## 0.0.35
 
 ### Patch Changes
