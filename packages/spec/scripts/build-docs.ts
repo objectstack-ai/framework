@@ -213,7 +213,9 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
       for (const [key, prop] of Object.entries(props) as [string, any][]) {
           const typeStr = formatType(prop).replace(/\|/g, '\\|');
           const isReq = required.has(key) ? '✅' : 'optional';
-          let desc = escapeMdxDescription((prop.description || '').replace(/\n/g, ' '));
+          // Escape literal pipes last — this cell lives in a GFM table row, where
+          // an unescaped `|` (even inside a code span) splits the cell.
+          const desc = escapeMdxDescription((prop.description || '').replace(/\n/g, ' ')).replace(/\|/g, '\\|');
           t += `| **${key}** | \`${typeStr}\` | ${isReq} | ${desc} |\n`;
       }
       return t + '\n';
