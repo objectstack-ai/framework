@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — the `rest` provider factory: materialize a declarative
+// ADR-0097 — the `rest` provider factory: materialize a declarative
 // `provider: 'rest'` connector instance from providerConfig + resolved auth.
 
 import { describe, it, expect } from 'vitest';
@@ -26,7 +26,7 @@ function ctx(partial: Partial<ConnectorProviderContext> & Pick<ConnectorProvider
     return { name: 'svc', label: 'Svc', type: 'api', ...partial };
 }
 
-describe('rest provider factory (ADR-0096)', () => {
+describe('rest provider factory (ADR-0097)', () => {
     it('advertises the rest provider key', () => {
         expect(REST_PROVIDER_KEY).toBe('rest');
     });

@@ -1,11 +1,12 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — the `mcp` provider factory: materialize a declarative
+// ADR-0097 — the `mcp` provider factory: materialize a declarative
 // `provider: 'mcp'` connector instance by connecting to the server (an injected
 // fake client here), listing its tools, and mapping them to actions.
 
 import { describe, it, expect } from 'vitest';
 import type { ConnectorProviderContext } from '@objectstack/spec/integration';
+import { isConnectorUpstreamUnavailable } from '@objectstack/spec/integration';
 import type { McpClientLike, McpToolDescriptor, McpTransport } from './mcp-connector.js';
 import { createMcpProviderFactory, MCP_PROVIDER_KEY } from './mcp-provider.js';
 
@@ -33,7 +34,7 @@ function ctx(partial: Partial<ConnectorProviderContext> & Pick<ConnectorProvider
     return { name: 'github', label: 'GitHub', type: 'api', ...partial };
 }
 
-describe('mcp provider factory (ADR-0096)', () => {
+describe('mcp provider factory (ADR-0097)', () => {
     it('advertises the mcp provider key', () => {
         expect(MCP_PROVIDER_KEY).toBe('mcp');
     });
@@ -80,5 +81,52 @@ describe('mcp provider factory (ADR-0096)', () => {
         await expect(
             factory(ctx({ providerConfig: { transport: { kind: 'carrier-pigeon' } } })),
         ).rejects.toThrow(/kind must be 'stdio' or 'http'/);
+    });
+});
+
+// ── #3017 — fault classification: config stays fatal, upstream degrades ─────
+
+describe('mcp provider fault classification (#3017)', () => {
+    const stdio = { transport: { kind: 'stdio', command: 'my-mcp' } };
+
+    it('classifies a connect failure as upstream-unavailable (retryable), keeping the cause', async () => {
+        const boom = new Error('connect ECONNREFUSED 127.0.0.1:9999');
+        const clientFactory = async (): Promise<McpClientLike> => { throw boom; };
+        const factory = createMcpProviderFactory({ clientFactory });
+
+        const err = await factory(ctx({ providerConfig: stdio })).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect(isConnectorUpstreamUnavailable(err)).toBe(true);
+        expect((err as Error).message).toMatch(/'github' could not reach its MCP server/);
+        expect((err as Error).message).toContain('ECONNREFUSED');
+        expect((err as { cause?: unknown }).cause).toBe(boom);
+    });
+
+    it('classifies a tools/list failure as upstream-unavailable and closes the client', async () => {
+        let closed = false;
+        const clientFactory = async (): Promise<McpClientLike> => ({
+            listTools: async () => { throw new Error('request timed out'); },
+            callTool: async () => ({}),
+            close: async () => { closed = true; },
+        });
+        const factory = createMcpProviderFactory({ clientFactory });
+
+        const err = await factory(ctx({ providerConfig: stdio })).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect(isConnectorUpstreamUnavailable(err)).toBe(true);
+        expect(closed).toBe(true); // discovery failure must not leak the connection
+    });
+
+    it('keeps transport-shape faults plain — configuration errors stay fatal at boot', async () => {
+        const factory = createMcpProviderFactory();
+        const err = await factory(ctx({ providerConfig: {} })).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect(isConnectorUpstreamUnavailable(err)).toBe(false);
     });
 });

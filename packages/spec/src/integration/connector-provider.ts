@@ -4,7 +4,7 @@ import type { Connector } from './connector.zod';
 import type { ResolvedConnectorAuth } from '../shared/connector-auth.zod';
 
 /**
- * Connector **provider** contract (ADR-0096).
+ * Connector **provider** contract (ADR-0097).
  *
  * A provider is a *generic executor* — `openapi` (ADR-0023), `mcp` (ADR-0024),
  * `rest`, … — contributed by a connector plugin as a **factory**. At boot the
@@ -13,7 +13,7 @@ import type { ResolvedConnectorAuth } from '../shared/connector-auth.zod';
  * inputs into the same `{ def, handlers }` bundle a hand-written connector hands
  * to `registerConnector`. The registry, the `connector_action` node, and the
  * `GET /connectors` discovery route then see a finished connector — they never
- * know it was materialized from stack metadata (ADR-0096 §2).
+ * know it was materialized from stack metadata (ADR-0097 §2).
  *
  * These are pure types (no logic — Prime Directive #2) so a connector plugin can
  * implement a provider factory depending only on `@objectstack/spec`, with no
@@ -63,7 +63,7 @@ export interface ConnectorProviderContext {
   readonly providerConfig: Record<string, unknown>;
   readonly auth?: ResolvedConnectorAuth;
   /**
-   * Host-injected package file reader (#3016, ADR-0096 follow-up). Resolves a
+   * Host-injected package file reader (#3016, ADR-0097 follow-up). Resolves a
    * **relative** path against the root of the stack/package that declared the
    * entry and returns the file's UTF-8 text, so a factory can support file-path
    * refs like `providerConfig.spec: './billing-openapi.json'` without owning
@@ -81,8 +81,12 @@ export interface ConnectorProviderContext {
  * A provider factory contributed by a connector plugin under a provider key.
  * Invoked once per declarative instance at boot; may be async (loading a spec
  * document, opening a connection). Throwing is a **hard boot error** — invalid
- * `providerConfig`, an unreachable upstream, etc. surface loudly rather than
- * yielding a silently-dead connector (ADR-0096 §Decision).
+ * `providerConfig`, an unresolvable credential, etc. surface loudly rather than
+ * yielding a silently-dead connector (ADR-0097 §Decision). One exception
+ * (#3017): a throw carrying the `CONNECTOR_UPSTREAM_UNAVAILABLE` code (see
+ * `connector-provider-errors.ts`) marks an *operational* fault — the upstream
+ * the factory must contact is temporarily unreachable — which the materializer
+ * degrades and retries instead of failing boot.
  */
 export type ConnectorProviderFactory = (
   ctx: ConnectorProviderContext,

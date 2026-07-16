@@ -6,6 +6,8 @@ import {
   needsPriorRecord,
   legalNextStates,
   stripReadonlyWhenFields,
+  stripReadonlyWhenFieldsMulti,
+  hasReadonlyWhenInPayload,
   stripReadonlyFields,
 } from './rule-validator.js';
 import { ValidationError } from './record-validator.js';
@@ -54,6 +56,60 @@ describe('stripReadonlyWhenFields (B2)', () => {
   it('returns the same object when no readonlyWhen fields are touched', () => {
     const d = { x: 1 };
     expect(stripReadonlyWhenFields({ fields: { x: { type: 'number' } } }, d, null)).toBe(d);
+  });
+});
+
+// #3042 — `readonlyWhen` on the BULK (updateMany) path. One payload is applied
+// to every matched row, so the strip evaluates the predicate against EACH
+// matched row's prior state and drops a field locked in ≥1 of them.
+describe('hasReadonlyWhenInPayload (#3042 gate)', () => {
+  it('is TRUE when the payload writes a readonlyWhen field', () => {
+    expect(hasReadonlyWhenInPayload(invoiceFields, { amount: 999 })).toBe(true);
+  });
+  it('is FALSE when the payload touches no readonlyWhen field', () => {
+    expect(hasReadonlyWhenInPayload(invoiceFields, { status: 'draft' })).toBe(false);
+  });
+  it('is FALSE for an object with no readonlyWhen fields at all', () => {
+    expect(hasReadonlyWhenInPayload({ fields: { x: { type: 'number' } } }, { x: 1 })).toBe(false);
+  });
+});
+
+describe('stripReadonlyWhenFieldsMulti (#3042)', () => {
+  it('drops the field when it is locked in EVERY matched row', () => {
+    const out = stripReadonlyWhenFieldsMulti(invoiceFields, { amount: 999 }, [
+      { status: 'paid', amount: 100 },
+      { status: 'paid', amount: 200 },
+    ]);
+    expect(out).toEqual({});
+  });
+
+  it('drops the field when it is locked in AT LEAST ONE matched row (fail-safe for the batch)', () => {
+    // One draft (unlocked) + one paid (locked). A single bulk payload cannot
+    // write to the draft and skip the paid row, so the locked field is dropped
+    // for the whole batch.
+    const out = stripReadonlyWhenFieldsMulti(invoiceFields, { amount: 999 }, [
+      { status: 'draft', amount: 100 },
+      { status: 'paid', amount: 200 },
+    ]);
+    expect(out).toEqual({});
+  });
+
+  it('KEEPS the field when NO matched row locks it (legitimate bulk edit unaffected)', () => {
+    const out = stripReadonlyWhenFieldsMulti(invoiceFields, { amount: 999 }, [
+      { status: 'draft', amount: 100 },
+      { status: 'sent', amount: 200 },
+    ]);
+    expect(out).toEqual({ amount: 999 });
+  });
+
+  it('keeps the field when the match set is empty (0 rows updated anyway)', () => {
+    const d = { amount: 999 };
+    expect(stripReadonlyWhenFieldsMulti(invoiceFields, d, [])).toBe(d);
+  });
+
+  it('returns the same object when no readonlyWhen field is in the payload', () => {
+    const d = { status: 'draft' };
+    expect(stripReadonlyWhenFieldsMulti(invoiceFields, d, [{ status: 'paid' }])).toBe(d);
   });
 });
 

@@ -1322,4 +1322,76 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(updates[0].locked).toBe('legitimate-migration-value');
     });
   });
+
+  // #3042 — conditional `readonlyWhen` must be enforced on the BULK
+  // (updateMany) path too, not only the single-id path. The bulk strip reads
+  // the matched rows' prior state and drops a field locked in ≥1 of them.
+  describe('readonlyWhen write enforcement on multi-row UPDATE (#3042)', () => {
+    async function bootWithBulkCapture(priorRows: Record<string, any>[]) {
+      const bulkUpdates: Record<string, any>[] = [];
+      let findAst: any = null;
+      const mockDriver = {
+        name: 'rw-capture', version: '1.0.0',
+        connect: async () => {}, disconnect: async () => {},
+        find: async (_o: string, ast: any) => { findAst = ast; return priorRows; },
+        findOne: async () => null,
+        create: async (_o: string, d: any) => ({ id: 'rec-1', ...d }),
+        update: async (_o: string, _i: any, d: any) => ({ id: _i, ...d }),
+        updateMany: async (_o: string, _ast: any, d: any) => { bulkUpdates.push({ ...d }); return [{ ...d }]; },
+        delete: async () => true, syncSchema: async () => {},
+      };
+      await kernel.use({
+        name: 'rw-capture-plugin', type: 'driver', version: '1.0.0',
+        init: async (ctx) => { ctx.registerService('driver.rw-capture', mockDriver); },
+      });
+      await kernel.use(new ObjectQLPlugin());
+      await kernel.bootstrap();
+      const objectql = kernel.getService('objectql') as any;
+      const obj: ObjectSchema = {
+        name: 'rw_obj', label: 'RW Obj', datasource: 'rw-capture',
+        fields: {
+          status: { name: 'status', label: 'Status', type: 'text' },
+          note: { name: 'note', label: 'Note', type: 'text' },
+          // locked once the row is paid (conditional, per-row)
+          tax_rate: { name: 'tax_rate', label: 'Tax Rate', type: 'number', readonlyWhen: "record.status == 'paid'" } as any,
+        },
+      };
+      objectql.registry.registerObject(obj, 'test', 'test');
+      return { objectql, bulkUpdates, getFindAst: () => findAst };
+    }
+
+    it('drops a readonlyWhen field locked in ≥1 matched row, but keeps a sibling editable field', async () => {
+      // Match set: one draft (unlocked) + one paid (locked). The bulk payload
+      // cannot diverge per row, so tax_rate is fail-safe-dropped for the batch.
+      const { objectql, bulkUpdates, getFindAst } = await bootWithBulkCapture([
+        { id: 'a', status: 'draft', tax_rate: 5 },
+        { id: 'b', status: 'paid', tax_rate: 7 },
+      ]);
+      await objectql.update(
+        'rw_obj',
+        { tax_rate: 999, note: 'bulk edit' },
+        { multi: true, where: { status: { $in: ['draft', 'paid'] } }, context: { userId: 'user-9' } },
+      );
+      expect(bulkUpdates.length).toBe(1);
+      const data = bulkUpdates[0];
+      expect(data).not.toHaveProperty('tax_rate'); // conditionally-locked forge stripped
+      expect(data.note).toBe('bulk edit');          // editable sibling still written
+      // the pre-read was row-scoped with the same predicate the write binds
+      expect(getFindAst()?.where).toEqual({ status: { $in: ['draft', 'paid'] } });
+    });
+
+    it('KEEPS the readonlyWhen field when NO matched row locks it', async () => {
+      const { objectql, bulkUpdates } = await bootWithBulkCapture([
+        { id: 'a', status: 'draft', tax_rate: 5 },
+        { id: 'c', status: 'sent', tax_rate: 6 },
+      ]);
+      await objectql.update(
+        'rw_obj',
+        { tax_rate: 999 },
+        { multi: true, where: { status: { $in: ['draft', 'sent'] } }, context: { userId: 'user-9' } },
+      );
+      expect(bulkUpdates.length).toBe(1);
+      expect(bulkUpdates[0].tax_rate).toBe(999); // legitimate bulk edit unaffected
+    });
+  });
 });

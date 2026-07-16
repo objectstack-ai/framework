@@ -87,6 +87,17 @@ export const Invoice = ObjectSchema.create({
     // invoices; because `showcase_invoice_line` is `controlled_by_parent`, the
     // lines follow automatically (ADR-0055). Mirror of `project.owner`.
     owner: Field.text({ label: 'Owner', maxLength: 200 }),
+    // Region the sale was booked in — the invoice-side target of the Revenue
+    // Pulse dashboard's shared "region" filter (framework#2501): accounts map
+    // the same filter to their own `sales_region` via `filterBindings`.
+    region: Field.select({
+      label: 'Region',
+      options: [
+        { label: 'AMER', value: 'amer', default: true },
+        { label: 'EMEA', value: 'emea' },
+        { label: 'APAC', value: 'apac' },
+      ],
+    }),
     status: Field.select({
       label: 'Status',
       required: true,
@@ -199,6 +210,11 @@ export const InvoiceLine = ObjectSchema.create({
       min: 0,
       readonlyWhen: P`parent.status == 'paid'`,
     }),
+    // Per-line attachment (objectui#2360): the inline line-item grid renders a
+    // real upload cell for `file` fields — the "attach the receipt to each
+    // expense line" pattern. Exercises upload-in-grid end-to-end (auto-derived
+    // column, compact picker, persistence through the storage service).
+    receipt: Field.file({ label: 'Receipt' }),
     // Amount = Qty × Unit Price. Kept as a *stored* currency column (so the
     // parent Invoice.total summary can roll it up — summary aggregation reads
     // stored columns, not on-read formula fields), but the `expression` makes

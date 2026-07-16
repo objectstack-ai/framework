@@ -161,7 +161,7 @@ export type ConnectorActionHandler = (
 ) => Promise<Record<string, unknown>>;
 
 /**
- * How a registered connector reached the engine (ADR-0096 §4). `plugin` — a
+ * How a registered connector reached the engine (ADR-0097 §4). `plugin` — a
  * connector plugin called `registerConnector` directly (ADR-0018 §Addendum).
  * `declarative` — the automation service materialized a provider-bound
  * `connectors:` stack entry at boot. A name registered under one origin cannot
@@ -171,17 +171,31 @@ export type ConnectorActionHandler = (
 export type ConnectorOrigin = 'plugin' | 'declarative';
 
 /**
+ * Whether a registered connector is dispatchable (#3017). `ready` — the normal
+ * state: actions and handlers are live. `degraded` — a declarative instance
+ * whose provider factory could not reach its upstream (e.g. an MCP server was
+ * unreachable at boot): it is registered so `GET /connectors` shows it honestly
+ * instead of it silently missing, but it exposes no actions and every dispatch
+ * fails with a clear error until the materializer's retry succeeds.
+ */
+export type ConnectorState = 'ready' | 'degraded';
+
+/**
  * A connector registered on the engine: its validated {@link Connector}
  * definition plus the handler for each action it declares.
  */
 export interface RegisteredConnector {
     readonly def: Connector;
     readonly handlers: Record<string, ConnectorActionHandler>;
-    /** How this connector was registered (ADR-0096 §4). Defaults to `plugin`. */
+    /** How this connector was registered (ADR-0097 §4). Defaults to `plugin`. */
     readonly origin: ConnectorOrigin;
+    /** Dispatchability (#3017). `registerConnector` always yields `ready`. */
+    readonly state: ConnectorState;
+    /** Why the connector is degraded — set only when `state` is `degraded`. */
+    readonly degradedReason?: string;
 }
 
-// The connector **provider** contract (ADR-0096) — ConnectorProviderFactory,
+// The connector **provider** contract (ADR-0097) — ConnectorProviderFactory,
 // ConnectorProviderContext, ConnectorMaterialization — lives in
 // `@objectstack/spec/integration` so a connector plugin can implement a factory
 // depending only on the spec, with no runtime coupling to this engine. Imported
@@ -247,13 +261,22 @@ export interface ConnectorDescriptor {
     readonly icon?: string;
     readonly actions: ConnectorActionDescriptor[];
     /**
-     * How the connector reached the registry (ADR-0096 §4): `plugin` — registered
+     * How the connector reached the registry (ADR-0097 §4): `plugin` — registered
      * by a connector plugin via `registerConnector`; `declarative` — materialized
      * from a provider-bound `connectors:` stack entry at boot. Lets a designer
      * distinguish a live declarative instance from a plugin connector (and both
      * from an inert catalog descriptor, which never reaches this list).
      */
     readonly origin: ConnectorOrigin;
+    /**
+     * Dispatchability (#3017): `ready` — actions are live; `degraded` — the
+     * instance's upstream was unreachable when the provider factory ran, so it
+     * currently exposes no actions and cannot dispatch. The platform retries
+     * degraded instances automatically; `degradedReason` says what failed.
+     */
+    readonly state: ConnectorState;
+    /** Why the connector is degraded — present only when `state` is `degraded`. */
+    readonly degradedReason?: string;
 }
 
 // ─── Core Automation Engine ─────────────────────────────────────────
@@ -489,7 +512,7 @@ export class AutomationEngine implements IAutomationService {
     private boundFlowTriggers = new Map<string, string>();
     /** Connectors registered by integration plugins, keyed by connector name (ADR-0018 §Addendum). */
     private connectors = new Map<string, RegisteredConnector>();
-    /** Connector provider factories keyed by provider name (ADR-0096 §2 — `openapi`/`mcp`/`rest`/…). */
+    /** Connector provider factories keyed by provider name (ADR-0097 §2 — `openapi`/`mcp`/`rest`/…). */
     private connectorProviders = new Map<string, ConnectorProviderFactory>();
     /** Bridge to the host function registry for `script`-node calls (#1870), if wired. */
     private functionResolver: FlowFunctionResolver | null = null;
@@ -800,7 +823,7 @@ export class AutomationEngine implements IAutomationService {
     /**
      * Register a connector (called by integration plugins, ADR-0018 §Addendum;
      * and by the automation service for materialized declarative instances,
-     * ADR-0096 §2). Validates the definition against {@link ConnectorSchema} and
+     * ADR-0097 §2). Validates the definition against {@link ConnectorSchema} and
      * asserts every declared action has a handler, so a half-wired connector
      * fails loudly at registration rather than silently at dispatch.
      *
@@ -808,7 +831,7 @@ export class AutomationEngine implements IAutomationService {
      * {@link registerNodeExecutor} — supports hot-reload). Re-registering across
      * origins — a plugin name colliding with a declarative provider-bound
      * instance, or vice versa — is a **hard error** (the two-sources-of-truth
-     * hazard, ADR-0096 §4): there is no silent precedence, because silent
+     * hazard, ADR-0097 §4): there is no silent precedence, because silent
      * precedence is how the declared def and the plugin def drift apart.
      *
      * @param origin how the connector reached the engine (defaults to `plugin`;
@@ -827,26 +850,48 @@ export class AutomationEngine implements IAutomationService {
                 );
             }
         }
-        const existing = this.connectors.get(parsed.name);
-        if (existing) {
-            if (existing.origin !== origin) {
-                const describe = (o: ConnectorOrigin) =>
-                    o === 'plugin'
-                        ? 'a plugin (engine.registerConnector)'
-                        : 'a declarative provider-bound `connectors:` instance';
-                throw new Error(
-                    `Connector name conflict: '${parsed.name}' is already registered by ${describe(existing.origin)} ` +
-                        `and cannot also be registered by ${describe(origin)}. A declarative provider-bound instance and a ` +
-                        `plugin-registered connector must not share a name — there is no silent precedence (ADR-0096 §4). ` +
-                        `Rename one of them.`,
-                );
-            }
-            this.logger.warn(`Connector '${parsed.name}' replaced`);
-        }
-        this.connectors.set(parsed.name, { def: parsed, handlers, origin });
+        this.assertSameOriginOrFree(parsed.name, origin);
+        this.connectors.set(parsed.name, { def: parsed, handlers, origin, state: 'ready' });
         this.logger.info(
             `Connector registered: ${parsed.name} (${Object.keys(handlers).length} action handlers, origin: ${origin})`,
         );
+    }
+
+    /**
+     * Register a connector in the **degraded** state (#3017): its provider
+     * factory could not reach the upstream it materializes from (an MCP server,
+     * a remote spec), so there are no actions and no handlers yet. Registering
+     * the husk — instead of leaving the name absent — keeps the instance honest:
+     * `GET /connectors` shows it with `state: 'degraded'` + the reason, and a
+     * `connector_action` dispatching to it fails with a pointed error rather
+     * than "unknown connector". The materializer retries and replaces this
+     * registration via {@link registerConnector} once the upstream is back.
+     * Same cross-origin collision rule as {@link registerConnector} (ADR-0097 §4).
+     */
+    registerDegradedConnector(def: Connector, reason: string, origin: ConnectorOrigin = 'declarative'): void {
+        const parsed = ConnectorSchema.parse(def);
+        this.assertSameOriginOrFree(parsed.name, origin);
+        this.connectors.set(parsed.name, { def: parsed, handlers: {}, origin, state: 'degraded', degradedReason: reason });
+        this.logger.warn(`Connector registered DEGRADED: ${parsed.name} (origin: ${origin}) — ${reason}`);
+    }
+
+    /** Enforce the ADR-0097 §4 two-sources-of-truth rule; warn on same-origin replace. */
+    private assertSameOriginOrFree(name: string, origin: ConnectorOrigin): void {
+        const existing = this.connectors.get(name);
+        if (!existing) return;
+        if (existing.origin !== origin) {
+            const describe = (o: ConnectorOrigin) =>
+                o === 'plugin'
+                    ? 'a plugin (engine.registerConnector)'
+                    : 'a declarative provider-bound `connectors:` instance';
+            throw new Error(
+                `Connector name conflict: '${name}' is already registered by ${describe(existing.origin)} ` +
+                    `and cannot also be registered by ${describe(origin)}. A declarative provider-bound instance and a ` +
+                    `plugin-registered connector must not share a name — there is no silent precedence (ADR-0097 §4). ` +
+                    `Rename one of them.`,
+            );
+        }
+        this.logger.warn(`Connector '${name}' replaced`);
     }
 
     /** Unregister a connector (hot-unplug). */
@@ -895,7 +940,18 @@ export class AutomationEngine implements IAutomationService {
     }
 
     /**
-     * Register a connector **provider factory** (ADR-0096 §2). A connector
+     * The degraded-state reason for a connector, or `undefined` when the
+     * connector is `ready` (or not registered at all). Lets the
+     * `connector_action` node distinguish "degraded, retrying" from "no such
+     * connector/action" in its failure message (#3017).
+     */
+    getConnectorDegradedReason(name: string): string | undefined {
+        const reg = this.connectors.get(name);
+        return reg?.state === 'degraded' ? (reg.degradedReason ?? 'upstream unavailable') : undefined;
+    }
+
+    /**
+     * Register a connector **provider factory** (ADR-0097 §2). A connector
      * plugin (e.g. `@objectstack/connector-openapi`) calls this at `init()` under
      * its provider key (`openapi`); the automation service then invokes the
      * factory at boot for every declarative `connectors:` entry naming that
@@ -934,13 +990,15 @@ export class AutomationEngine implements IAutomationService {
      * Handlers are omitted — they are runtime code, not metadata.
      */
     getConnectorDescriptors(): ConnectorDescriptor[] {
-        return [...this.connectors.values()].map(({ def, origin }) => ({
+        return [...this.connectors.values()].map(({ def, origin, state, degradedReason }) => ({
             name: def.name,
             label: def.label,
             type: def.type,
             description: def.description,
             icon: def.icon,
             origin,
+            state,
+            degradedReason,
             actions: (def.actions ?? []).map((a) => ({
                 key: a.key,
                 label: a.label,

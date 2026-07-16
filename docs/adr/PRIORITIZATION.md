@@ -1,5 +1,17 @@
 # ADR Prioritization Review
 
+> ⚠️ **STALE (noted 2026-07-16):** this review predates ADR-0050 onward — the directory now
+> reaches ADR-0097, so everything from 0050 up is outside its scope, and several statuses it
+> records for 0001–0049 have since moved. Treat it as a historical snapshot, not current
+> state. The `Status:` header of each ADR file (kept current per the hygiene rule below) is
+> the authority; this document is retained for its method and its ranked-plan rationale.
+>
+> **Status-hygiene rule (adopted 2026-07-16):** when a PR lands the implementation of an ADR,
+> the same PR (or an immediate follow-up) must flip that ADR's `Status:` line to
+> `Accepted — implemented` with one line of evidence (key file + test). An ADR left
+> `Proposed` after its code ships misleads every later reader — this is the same
+> no-silently-stale discipline as ADR-0078, applied to the ADRs themselves.
+
 > **Date:** 2026-06-12
 > **Scope:** All 49 ADRs in `docs/adr/`, cross-checked against actual code on `main`.
 > **Method:** Every unfinished ADR was read in full and its `Status:` header was

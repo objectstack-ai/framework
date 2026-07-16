@@ -31,7 +31,7 @@ import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
 import { validateRecord, normalizeMultiValueFields, coerceBooleanFields } from './validation/record-validator.js';
-import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields, stripReadonlyFields } from './validation/rule-validator.js';
+import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields, stripReadonlyWhenFieldsMulti, hasReadonlyWhenInPayload, stripReadonlyFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
 interface FormulaPlanEntry { name: string; expression: Expression; }
@@ -2368,6 +2368,21 @@ export class ObjectQL implements IDataEngine {
        context: options?.context,
      };
 
+     // [#2982] A no-single-id update routes to `driver.updateMany` below with
+     // an AST that used to be REBUILT from `options.where` AFTER the
+     // middleware chain — so row-scoping filters a middleware AND-composed
+     // onto `opCtx.ast` (RLS write policies, the sharing plugin's
+     // editable-rows filter) never reached the driver, and a bulk write hit
+     // every matching row regardless of ownership. Seed the AST with the
+     // caller's predicate BEFORE the chain runs — the same seam the read path
+     // uses — and let the multi branch consume the composed result. Keyed on
+     // the SAME falsy-`id` test the multi branch dispatches on (below), so the
+     // seed and the branch never disagree. `where` is included only when
+     // supplied, mirroring the read path's AST shape.
+     if (!id) {
+       opCtx.ast = { object, ...(options?.where !== undefined ? { where: options.where } : {}) } as QueryAST;
+     }
+
      // [#2948] Snapshot the keys the CALLER supplied, BEFORE any middleware /
      // beforeUpdate hook stamps server-managed columns (owner/tenant stamp,
      // `updated_by`/`updated_at`). The static-`readonly` strip below drops only
@@ -2428,11 +2443,39 @@ export class ObjectQL implements IDataEngine {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
                normalizeMultiValueFields(updateSchema, hookContext.input.data as Record<string, unknown>);
                validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
-               // Multi-row update: per-row prior state is not fetched (one query
-               // per matched row would be unbounded). state_machine /
-               // cross_field rules are skipped here; warn so the gap is visible.
+               // Multi-row update: per-row prior state is not fetched for the
+               // object-level state_machine / cross_field / script rules (they
+               // need one prior per row, and a single bulk payload cannot diverge
+               // per row). Warn so the gap stays visible.
                if (needsPriorRecord(updateSchema as any)) {
                    this.logger.warn('Object-level validation rules (state_machine/cross_field/script) are not enforced on multi-row updates', { object });
+               }
+               // [#2982] Consume the middleware-composed AST seeded above, so
+               // the injected row-scoping (RLS write filter, sharing's
+               // editable-rows filter) actually binds the driver operation. Fail
+               // CLOSED if it is somehow absent — rebuilding `{ object, where }`
+               // here would silently drop every composed filter and reopen the
+               // unscoped-bulk-write hole this fix closes (AGENTS.md PD #12: no
+               // lenient fallback that tolerates the broken invariant).
+               const ast = opCtx.ast;
+               if (!ast) {
+                   throw new Error(
+                     `[Security] Refusing bulk update on '${object}': row-scoping AST was not seeded ` +
+                       `(a hook cleared the target id after the security filter was composed).`,
+                   );
+               }
+               // [#3042] Enforce conditional `readonlyWhen` on the bulk path too.
+               // Unlike static `readonly` (below), a `readonlyWhen` lock is PER
+               // ROW, so read the row-scoped match set with the SAME AST the write
+               // binds (one query, and only when the payload actually writes a
+               // `readonlyWhen` field) and drop any field locked in ≥1 matched row
+               // — a bulk write can't keep it for some rows and drop it for others,
+               // so a field locked in any target row is fail-safe-dropped for all
+               // (narrow `where` to reach the unlocked rows). Symmetric with the
+               // single-id `stripReadonlyWhenFields`; INSERT stays exempt.
+               if (hasReadonlyWhenInPayload(updateSchema as any, hookContext.input.data as Record<string, unknown>)) {
+                   const priorRows = await driver.find(object, ast, hookContext.input.options as any);
+                   hookContext.input.data = stripReadonlyWhenFieldsMulti(updateSchema as any, hookContext.input.data as Record<string, unknown>, priorRows, this.logger) as any;
                }
                // [#2948] Same static-`readonly` write guard on the bulk path —
                // a forged read-only column in a multi-row update is dropped for
@@ -2441,7 +2484,6 @@ export class ObjectQL implements IDataEngine {
                if (!opCtx.context?.isSystem) {
                    hookContext.input.data = stripReadonlyFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, suppliedKeys, this.logger) as any;
                }
-               const ast: QueryAST = { object, where: options.where };
                result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else {
                throw new Error('Update requires an ID or options.multi=true');
@@ -2589,7 +2631,16 @@ export class ObjectQL implements IDataEngine {
             // hooks and events fire.
             await this.delete(childName, { where: { id: depId }, context } as any);
           } else {
-            await this.update(childName, { id: depId, [fieldName]: null }, { context } as any);
+            // [#3023] Clear the FK as an engine-internal referential-integrity
+            // write, tagged so plugin-security's ownership-anchor guard (#3004)
+            // treats an `owner_id = null` cascade as integrity maintenance, not
+            // a user-initiated disown — otherwise deleting the referenced record
+            // trips the transfer guard and aborts the cascade mid-way. Marker
+            // rides a server-DERIVED context (set here, never from client input
+            // — same trust model as `__expandRead`), so it cannot be forged from
+            // a request to bypass the guard on an ordinary write.
+            const referentialCtx = { ...(context ?? {}), __referentialFieldClear: true } as ExecutionContext;
+            await this.update(childName, { id: depId, [fieldName]: null }, { context: referentialCtx } as any);
           }
         }
       }
@@ -2602,10 +2653,19 @@ export class ObjectQL implements IDataEngine {
     this.assertWriteAllowed(object, 'delete');
     const driver = this.getDriver(object);
 
-    // Extract ID logic similar to update
+    // Extract ID logic mirroring update(): only a SCALAR `where.id` means
+    // "delete one row by primary key". An operator object ({ $in: [...] }, …)
+    // is a multi-row predicate — treating it as an id would bind the object
+    // literally (driver.delete(object, {$in:[…]})) and both skip the #2982 AST
+    // seeding below AND bypass the by-id RLS pre-image check. Leave `id`
+    // undefined so the call routes to deleteMany with the scoped AST.
     let id: any = undefined;
     if (options?.where && typeof options.where === 'object' && 'id' in options.where) {
-        id = (options.where as Record<string, unknown>).id;
+        const whereId = (options.where as Record<string, unknown>).id;
+        const t = typeof whereId;
+        if (whereId !== null && (t === 'string' || t === 'number' || t === 'bigint')) {
+            id = whereId;
+        }
     }
 
     const opCtx: OperationContext = {
@@ -2614,6 +2674,16 @@ export class ObjectQL implements IDataEngine {
       options,
       context: options?.context,
     };
+
+    // [#2982] Same seam as update: a no-single-id delete routes to
+    // `driver.deleteMany` with an AST that used to be rebuilt from
+    // `options.where` after the middleware chain, discarding any row-scoping a
+    // middleware composed onto `opCtx.ast`. Seed the caller's predicate before
+    // the chain, keyed on the SAME falsy-`id` test the multi branch dispatches
+    // on; the multi branch consumes the composed result.
+    if (!id) {
+      opCtx.ast = { object, ...(options?.where !== undefined ? { where: options.where } : {}) } as QueryAST;
+    }
 
     await this.executeWithMiddleware(opCtx, async () => {
       const hookContext: HookContext = {
@@ -2645,7 +2715,17 @@ export class ObjectQL implements IDataEngine {
               await this.cascadeDeleteRelations(object, hookContext.input.id as string | number, opCtx.context);
               result = await driver.delete(object, hookContext.input.id as string, hookContext.input.options as any);
           } else if (options?.multi && driver.deleteMany) {
-               const ast: QueryAST = { object, where: options.where };
+               // [#2982] Consume the middleware-composed AST seeded above so the
+               // injected row-scoping binds the bulk delete. Fail CLOSED if it
+               // is absent rather than rebuilding an unscoped `{ object, where }`
+               // (AGENTS.md PD #12).
+               const ast = opCtx.ast;
+               if (!ast) {
+                   throw new Error(
+                     `[Security] Refusing bulk delete on '${object}': row-scoping AST was not seeded ` +
+                       `(a hook cleared the target id after the security filter was composed).`,
+                   );
+               }
                result = await driver.deleteMany(object, ast, hookContext.input.options as any);
           } else {
                throw new Error('Delete requires an ID or options.multi=true');

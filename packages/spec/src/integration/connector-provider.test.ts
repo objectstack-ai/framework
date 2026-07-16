@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — schema evolution for provider-bound declarative connector instances.
+// ADR-0097 — schema evolution for provider-bound declarative connector instances.
 // Verifies the new `provider` / `providerConfig` / `auth` fields, the
 // credentialRef-based instance auth (no inline secrets), and the authoring rules
 // enforced by DeclarativeConnectorEntrySchema.
@@ -12,7 +12,7 @@ import {
     ConnectorInstanceAuthSchema,
 } from './connector.zod';
 
-describe('ADR-0096 connector schema evolution', () => {
+describe('ADR-0097 connector schema evolution', () => {
     describe('ConnectorSchema — new fields', () => {
         it('defaults authentication to { type: none } so provider-bound instances need not inline it', () => {
             const c = ConnectorSchema.parse({ name: 'billing', label: 'Billing', type: 'api' });

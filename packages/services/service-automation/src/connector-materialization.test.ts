@@ -1,6 +1,6 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 //
-// ADR-0096 — provider-bound declarative connector instances. A `connectors:`
+// ADR-0097 — provider-bound declarative connector instances. A `connectors:`
 // entry that names a `provider` is materialized at boot by the automation
 // service: it looks up the provider factory a connector plugin registered,
 // resolves `auth.credentialRef`, and registers the resulting `{ def, handlers }`
@@ -12,14 +12,20 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
 import type {
     ConnectorProviderContext,
     ConnectorProviderFactory,
     ConnectorInstanceAuth,
 } from '@objectstack/spec/integration';
-import { AutomationServicePlugin, createPackageFileLoader, type CredentialResolver } from './plugin.js';
+import { ConnectorUpstreamUnavailableError } from '@objectstack/spec/integration';
+import {
+    AutomationServicePlugin,
+    createPackageFileLoader,
+    DECLARATIVE_RETRY_BASE_MS,
+    type CredentialResolver,
+} from './plugin.js';
 import type { AutomationEngine } from './engine.js';
 
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -160,7 +166,7 @@ function makeClosableProvider() {
 /**
  * Boot with a MUTABLE declared set and expose a `reload(next)` that swaps the
  * registry contents and fires `metadata:reloaded` — the runtime reconcile path
- * (ADR-0096 F1). The harness's ctx is the shared kernel context, so
+ * (ADR-0097 F1). The harness's ctx is the shared kernel context, so
  * `ctx.trigger('metadata:reloaded')` invokes the automation plugin's hook.
  */
 async function bootReloadable(
@@ -196,7 +202,7 @@ async function bootReloadable(
     return { kernel, engine: automationOf(kernel), reload };
 }
 
-describe('ADR-0096 — declarative connector materialization', () => {
+describe('ADR-0097 — declarative connector materialization', () => {
     it('materializes a provider-bound instance into a live, listed connector', async () => {
         const { factory, calls } = makeFakeProvider();
         const kernel = await boot([providerConnector('billing')], { providerFactory: factory });
@@ -312,7 +318,7 @@ describe('ADR-0096 — declarative connector materialization', () => {
         await kernel.shutdown();
     });
 
-    // ── Hard boot failures (ADR-0096 §Decision / §Acceptance) ──────────────
+    // ── Hard boot failures (ADR-0097 §Decision / §Acceptance) ──────────────
 
     it('fails boot loudly when the provider has no registered factory', async () => {
         await expect(
@@ -354,7 +360,7 @@ describe('ADR-0096 — declarative connector materialization', () => {
     });
 });
 
-describe('ADR-0096 — runtime re-materialization on metadata:reloaded (F1)', () => {
+describe('ADR-0097 — runtime re-materialization on metadata:reloaded (F1)', () => {
     it('materializes an instance published after boot', async () => {
         const { factory, calls } = makeClosableProvider();
         const { engine, reload, kernel } = await bootReloadable([], { providerFactory: factory });
@@ -532,5 +538,277 @@ describe('#3016 — file-ref materialization policy (fatal at boot, soft on relo
         ).resolves.toBeUndefined();
         expect(engine.getRegisteredConnectors()).toContain('billing');
         await kernel.shutdown();
+    });
+});
+
+// ── #3017 — upstream unavailable: degrade + retry, never a dead boot ─────────
+//
+// A provider factory that throws the CONNECTOR_UPSTREAM_UNAVAILABLE marker
+// (connector-mcp does, when its MCP server is unreachable) is an *operational*
+// fault: the instance is registered as a degraded, action-less husk — visible
+// via GET /connectors, dispatch fails with a pointed error — and retried with
+// exponential backoff plus on every reconcile. Configuration faults (plain
+// throws) keep the ADR-0097 fail-loud contract, asserted above.
+
+/**
+ * A provider factory whose availability is a switch: while `down`, it throws
+ * the unavailable marker (as connector-mcp does for an unreachable server);
+ * once up, it materializes a one-action connector. Counts invocations and
+ * records closes.
+ */
+function makeFlakyUpstreamProvider(opts: { down: boolean }) {
+    const state = { down: opts.down, calls: 0 };
+    const closed: string[] = [];
+    const factory: ConnectorProviderFactory = (ctx) => {
+        state.calls++;
+        if (state.down) {
+            throw new ConnectorUpstreamUnavailableError(
+                `connector '${ctx.name}' could not reach its MCP server: connect ECONNREFUSED`,
+            );
+        }
+        return {
+            def: {
+                name: ctx.name,
+                label: ctx.label,
+                type: 'api',
+                authentication: { type: 'none' },
+                actions: [{ key: 'ping', label: 'Ping' }],
+            },
+            handlers: { ping: async () => ({ ok: true }) },
+            close: async () => { closed.push(ctx.name); },
+        };
+    };
+    return { factory, state, closed };
+}
+
+/**
+ * Like {@link bootReloadable} but with NO real-timer flushes, so it can run
+ * entirely under `vi.useFakeTimers()` — the boot reconcile is awaited inside
+ * the plugin's start() and the reload reconcile inside the hook trigger, so
+ * nothing here depends on a timer tick.
+ */
+async function bootDegradable(initial: unknown[], factory: ConnectorProviderFactory) {
+    const state = { declared: initial };
+    let captured: any;
+    const kernel = new LiteKernel({ logger: { level: 'silent' } } as never);
+    kernel.use(new AutomationServicePlugin());
+    kernel.use({
+        name: 'test.harness',
+        type: 'standard' as const,
+        version: '1.0.0',
+        dependencies: ['com.objectstack.service-automation'],
+        async init(ctx: any) {
+            captured = ctx;
+            ctx.registerService('objectql', {
+                registry: { listItems: (type: string) => (type === 'connector' ? state.declared : []) },
+            });
+            ctx.getService('automation').registerConnectorProvider('fake', factory);
+        },
+        async start() {},
+    } as never);
+    await kernel.bootstrap();
+    const reload = async (next: unknown[]) => {
+        state.declared = next;
+        await captured.trigger('metadata:reloaded');
+    };
+    return { kernel, engine: automationOf(kernel), reload };
+}
+
+describe('#3017 — upstream-unavailable degrade + retry', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('boot survives an unreachable upstream: the instance registers DEGRADED, not dead, not fatal', async () => {
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel, engine } = await bootDegradable([providerConnector('gh_mcp')], factory);
+
+        // Boot did not throw; the husk is visible and honest.
+        const desc = engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp');
+        expect(desc?.state).toBe('degraded');
+        expect(desc?.origin).toBe('declarative');
+        expect(desc?.actions).toEqual([]);
+        expect(desc?.degradedReason).toContain('ECONNREFUSED');
+        expect(engine.getConnectorDegradedReason('gh_mcp')).toContain('ECONNREFUSED');
+        // No handlers exist yet — dispatch cannot resolve an action on the husk.
+        expect(engine.resolveConnectorAction('gh_mcp', 'ping')).toBeUndefined();
+        expect(state.calls).toBe(1);
+
+        await kernel.shutdown();
+    });
+
+    it('a connector_action against a degraded instance fails with the reason, not the generic wiring hint', async () => {
+        const { factory } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel, engine } = await bootDegradable([providerConnector('gh_mcp')], factory);
+
+        engine.registerFlow('call_mcp', {
+            name: 'call_mcp',
+            label: 'Call MCP',
+            type: 'autolaunched',
+            nodes: [
+                { id: 'start', type: 'start', label: 'Start' },
+                {
+                    id: 'call',
+                    type: 'connector_action',
+                    label: 'Ping',
+                    connectorConfig: { connectorId: 'gh_mcp', actionId: 'ping', input: {} },
+                },
+                { id: 'end', type: 'end', label: 'End' },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'call' },
+                { id: 'e2', source: 'call', target: 'end' },
+            ],
+        } as never);
+
+        const result = await engine.execute('call_mcp');
+        expect(result.success).toBe(false);
+        expect(JSON.stringify(result)).toMatch(/is degraded/);
+        expect(JSON.stringify(result)).toMatch(/ECONNREFUSED/);
+
+        await kernel.shutdown();
+    });
+
+    it('recovers on the backoff timer once the upstream is back', async () => {
+        vi.useFakeTimers();
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel, engine } = await bootDegradable([providerConnector('gh_mcp')], factory);
+        expect(state.calls).toBe(1);
+        expect(engine.getConnectorDegradedReason('gh_mcp')).toBeDefined();
+
+        state.down = false;
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS);
+
+        expect(state.calls).toBe(2); // the retry ran
+        const desc = engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp');
+        expect(desc?.state).toBe('ready');
+        expect(desc?.degradedReason).toBeUndefined();
+        expect(desc?.actions.map((a) => a.key)).toEqual(['ping']);
+        expect(engine.getConnectorDegradedReason('gh_mcp')).toBeUndefined();
+        expect(engine.resolveConnectorAction('gh_mcp', 'ping')).toBeDefined();
+
+        await kernel.shutdown();
+    });
+
+    it('backs off exponentially while the upstream stays down', async () => {
+        vi.useFakeTimers();
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel } = await bootDegradable([providerConnector('gh_mcp')], factory);
+        expect(state.calls).toBe(1); // boot attempt
+
+        // Retry 1 fires after BASE.
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS);
+        expect(state.calls).toBe(2);
+
+        // Retry 2 is now scheduled at 2·BASE: not yet at +BASE …
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS);
+        expect(state.calls).toBe(2);
+        // … but fires by +2·BASE.
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS);
+        expect(state.calls).toBe(3);
+
+        await kernel.shutdown();
+    });
+
+    it('a metadata reload retries a degraded instance immediately and can recover it', async () => {
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel, engine, reload } = await bootDegradable([providerConnector('gh_mcp')], factory);
+        expect(engine.getConnectorDegradedReason('gh_mcp')).toBeDefined();
+
+        state.down = false;
+        await reload([providerConnector('gh_mcp')]); // unchanged entry — but degraded, so retried
+        expect(state.calls).toBe(2);
+        expect(engine.getConnectorDegradedReason('gh_mcp')).toBeUndefined();
+        expect(engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp')?.state).toBe('ready');
+
+        await kernel.shutdown();
+    });
+
+    it('a degraded instance removed from the stack is dropped entirely (husk + pending retry)', async () => {
+        vi.useFakeTimers();
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel, engine, reload } = await bootDegradable([providerConnector('gh_mcp')], factory);
+        expect(engine.getRegisteredConnectors()).toContain('gh_mcp');
+
+        await reload([]);
+        expect(engine.getRegisteredConnectors()).not.toContain('gh_mcp');
+        // No zombie retries: the upstream coming back must not re-register it.
+        state.down = false;
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS * 10);
+        expect(engine.getRegisteredConnectors()).not.toContain('gh_mcp');
+
+        await kernel.shutdown();
+    });
+
+    it('a changed entry whose new upstream is unreachable keeps the OLD connector serving, then swaps on recovery', async () => {
+        vi.useFakeTimers();
+        const { factory, state, closed } = makeFlakyUpstreamProvider({ down: false });
+        const { kernel, engine, reload } = await bootDegradable(
+            [providerConnector('gh_mcp', { providerConfig: { url: 'https://old' } })],
+            factory,
+        );
+        expect(engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp')?.state).toBe('ready');
+
+        // Publish a config change while the new upstream is down.
+        state.down = true;
+        await reload([providerConnector('gh_mcp', { providerConfig: { url: 'https://new' } })]);
+
+        // The old connector keeps serving — never degraded out from under a flow.
+        const desc = engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp');
+        expect(desc?.state).toBe('ready');
+        expect(engine.resolveConnectorAction('gh_mcp', 'ping')).toBeDefined();
+        expect(closed).toEqual([]); // old connection untouched
+
+        // Upstream recovers → the pending retry swaps in the new materialization.
+        state.down = false;
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS);
+        expect(closed).toEqual(['gh_mcp']); // old torn down only after the new one succeeded
+        expect(engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp')?.state).toBe('ready');
+
+        await kernel.shutdown();
+    });
+
+    it('reverting a pending change back to the live configuration cancels the retry', async () => {
+        vi.useFakeTimers();
+        const { factory, state } = makeFlakyUpstreamProvider({ down: false });
+        const { kernel, engine, reload } = await bootDegradable(
+            [providerConnector('gh_mcp', { providerConfig: { url: 'https://old' } })],
+            factory,
+        );
+        const callsAfterBoot = state.calls;
+
+        state.down = true;
+        await reload([providerConnector('gh_mcp', { providerConfig: { url: 'https://new' } })]);
+        const callsAfterFailedChange = state.calls;
+        expect(callsAfterFailedChange).toBe(callsAfterBoot + 1);
+
+        // Revert to the exact live config: the live connector already IS the
+        // desired state — the pending retry must be cancelled, not fired.
+        await reload([providerConnector('gh_mcp', { providerConfig: { url: 'https://old' } })]);
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS * 10);
+        expect(state.calls).toBe(callsAfterFailedChange); // no further attempts
+        expect(engine.getConnectorDescriptors().find((d) => d.name === 'gh_mcp')?.state).toBe('ready');
+
+        await kernel.shutdown();
+    });
+
+    it('shutdown cancels any pending retry', async () => {
+        vi.useFakeTimers();
+        const { factory, state } = makeFlakyUpstreamProvider({ down: true });
+        const { kernel } = await bootDegradable([providerConnector('gh_mcp')], factory);
+        expect(state.calls).toBe(1);
+
+        await kernel.shutdown();
+        await vi.advanceTimersByTimeAsync(DECLARATIVE_RETRY_BASE_MS * 10);
+        expect(state.calls).toBe(1); // destroyed plugin never retried
+    });
+
+    it('a PLAIN factory throw at boot is still fatal — the carve-out is only for the unavailable marker', async () => {
+        const factory: ConnectorProviderFactory = () => {
+            throw new Error('providerConfig.transport is malformed');
+        };
+        await expect(bootDegradable([providerConnector('gh_mcp')], factory)).rejects.toThrow(
+            /failed to materialize connector instance 'gh_mcp'/,
+        );
     });
 });
