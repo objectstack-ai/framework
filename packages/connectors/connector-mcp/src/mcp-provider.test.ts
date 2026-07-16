@@ -41,7 +41,8 @@ describe('mcp provider factory (ADR-0097)', () => {
 
     it('connects, lists tools, and maps them to actions', async () => {
         const { factory: clientFactory } = fakeClientFactory();
-        const factory = createMcpProviderFactory({ clientFactory });
+        // stdio on a declarative instance requires the host opt-in (#3055).
+        const factory = createMcpProviderFactory({ clientFactory, declarativeStdio: ['my-mcp'] });
         const mat = await factory(ctx({ providerConfig: { transport: { kind: 'stdio', command: 'my-mcp' } } }));
         expect(mat.def.name).toBe('github');
         expect(Object.keys(mat.handlers).sort()).toEqual(['create_issue', 'list_issues']);
@@ -50,7 +51,7 @@ describe('mcp provider factory (ADR-0097)', () => {
 
     it('applies the tool allowlist from providerConfig.include', async () => {
         const { factory: clientFactory } = fakeClientFactory();
-        const factory = createMcpProviderFactory({ clientFactory });
+        const factory = createMcpProviderFactory({ clientFactory, declarativeStdio: ['my-mcp'] });
         const mat = await factory(
             ctx({ providerConfig: { transport: { kind: 'stdio', command: 'my-mcp' }, include: ['create_issue'] } }),
         );
@@ -88,11 +89,12 @@ describe('mcp provider factory (ADR-0097)', () => {
 
 describe('mcp provider fault classification (#3017)', () => {
     const stdio = { transport: { kind: 'stdio', command: 'my-mcp' } };
+    const allowMyMcp = { declarativeStdio: ['my-mcp'] };
 
     it('classifies a connect failure as upstream-unavailable (retryable), keeping the cause', async () => {
         const boom = new Error('connect ECONNREFUSED 127.0.0.1:9999');
         const clientFactory = async (): Promise<McpClientLike> => { throw boom; };
-        const factory = createMcpProviderFactory({ clientFactory });
+        const factory = createMcpProviderFactory({ clientFactory, ...allowMyMcp });
 
         const err = await factory(ctx({ providerConfig: stdio })).then(
             () => { throw new Error('expected rejection'); },
@@ -111,7 +113,7 @@ describe('mcp provider fault classification (#3017)', () => {
             callTool: async () => ({}),
             close: async () => { closed = true; },
         });
-        const factory = createMcpProviderFactory({ clientFactory });
+        const factory = createMcpProviderFactory({ clientFactory, ...allowMyMcp });
 
         const err = await factory(ctx({ providerConfig: stdio })).then(
             () => { throw new Error('expected rejection'); },
@@ -128,5 +130,64 @@ describe('mcp provider fault classification (#3017)', () => {
             (e: unknown) => e,
         );
         expect(isConnectorUpstreamUnavailable(err)).toBe(false);
+    });
+});
+
+// ── #3055 — declarative stdio policy: default-deny + host allowlist ─────────
+//
+// A declarative stdio transport spawns a local process from metadata (a Studio
+// publish reaches materialization at runtime), so it is gated OFF unless the
+// host opts in. Violations are CONFIGURATION faults: plain throw (fatal at
+// boot, skipped on reload) — never upstream-unavailable, which would retry a
+// security rejection into existence.
+
+describe('mcp provider declarative stdio policy (#3055)', () => {
+    const stdioCfg = { transport: { kind: 'stdio', command: 'my-mcp' } };
+
+    it('DENIES a declarative stdio transport by default, as a plain (non-retryable) fault', async () => {
+        const { factory: clientFactory, seen } = fakeClientFactory();
+        const factory = createMcpProviderFactory({ clientFactory }); // no policy
+        const err = await factory(ctx({ providerConfig: stdioCfg })).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect((err as Error).message).toMatch(/stdio transports are disabled by default/);
+        expect((err as Error).message).toContain("declarativeStdio: ['my-mcp']"); // actionable opt-in hint
+        expect(isConnectorUpstreamUnavailable(err)).toBe(false);
+        expect(seen.transport).toBeUndefined(); // rejected before any connection attempt
+    });
+
+    it('allowlist admits exactly the listed command and rejects others', async () => {
+        const { factory: clientFactory } = fakeClientFactory();
+        const factory = createMcpProviderFactory({ clientFactory, declarativeStdio: ['npx', 'my-mcp'] });
+        const mat = await factory(ctx({ providerConfig: stdioCfg }));
+        expect(mat.def.name).toBe('github');
+
+        const err = await factory(
+            ctx({ providerConfig: { transport: { kind: 'stdio', command: 'bash' } } }),
+        ).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect((err as Error).message).toMatch(/not in the host's declarativeStdio allowlist \[npx, my-mcp\]/);
+        expect(isConnectorUpstreamUnavailable(err)).toBe(false);
+    });
+
+    it('declarativeStdio: true allows any command (explicit full trust)', async () => {
+        const { factory: clientFactory } = fakeClientFactory();
+        const factory = createMcpProviderFactory({ clientFactory, declarativeStdio: true });
+        const mat = await factory(
+            ctx({ providerConfig: { transport: { kind: 'stdio', command: 'anything' } } }),
+        );
+        expect(Object.keys(mat.handlers).length).toBeGreaterThan(0);
+    });
+
+    it('http transports are NOT subject to the policy', async () => {
+        const { factory: clientFactory } = fakeClientFactory();
+        const factory = createMcpProviderFactory({ clientFactory }); // default-deny policy in force
+        const mat = await factory(
+            ctx({ providerConfig: { transport: { kind: 'http', url: 'https://mcp.example.com' } } }),
+        );
+        expect(mat.def.name).toBe('github');
     });
 });

@@ -35,4 +35,5 @@ export {
     createMcpProviderFactory,
     MCP_PROVIDER_KEY,
     type McpProviderDeps,
+    type McpDeclarativeStdioPolicy,
 } from './mcp-provider.js';
