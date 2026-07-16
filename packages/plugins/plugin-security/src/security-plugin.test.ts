@@ -322,6 +322,53 @@ describe('SecurityPlugin', () => {
       };
       await harness.run(opCtx); // must not throw, no pre-image read needed
     });
+
+    it('update disowning via owner_id:undefined is denied (mongo $set null hazard)', async () => {
+      const harness = await boot([memberSet], () => ({ id: 't1', owner_id: 'u1' }));
+      const opCtx: any = {
+        object: 'task', operation: 'update', data: { id: 't1', owner_id: undefined },
+        context: memberCtx(),
+      };
+      await expect(harness.run(opCtx)).rejects.toThrow(/owner_id.*system-managed/);
+    });
+
+    it('insert with a NON-SCALAR owner_id (array) is denied, not coerced to self', async () => {
+      const harness = await boot([memberSet]);
+      const opCtx: any = {
+        object: 'task', operation: 'insert', data: { name: 'A', owner_id: ['u1'] },
+        context: memberCtx(),
+      };
+      // String(['u1']) === 'u1' would have passed as self; scalar-only rejects it.
+      await expect(harness.run(opCtx)).rejects.toThrow(/owner_id.*system-managed/);
+    });
+
+    it('update echo with a NON-SCALAR owner_id equal-by-coercion is denied', async () => {
+      const harness = await boot([memberSet], () => ({ id: 't1', owner_id: 'u1' }));
+      const opCtx: any = {
+        object: 'task', operation: 'update', data: { id: 't1', owner_id: ['u1'] },
+        context: memberCtx(),
+      };
+      await expect(harness.run(opCtx)).rejects.toThrow(/owner_id.*system-managed/);
+    });
+
+    it('array-shaped update change-set carrying owner_id fails closed (no silent bypass)', async () => {
+      const harness = await boot([memberSet]);
+      const opCtx: any = {
+        object: 'task', operation: 'update', data: [{ id: 't1', owner_id: 'attacker' }],
+        context: memberCtx(),
+      };
+      await expect(harness.run(opCtx)).rejects.toThrow(/owner_id.*system-managed/);
+    });
+
+    it('a prototype-chain owner_id (not own property) does not trip the guard', async () => {
+      const harness = await boot([memberSet]);
+      const proto = { owner_id: 'attacker' };
+      const data: any = Object.create(proto);
+      data.id = 't1';
+      data.name = 'renamed'; // only own props; owner_id is inherited
+      const opCtx: any = { object: 'task', operation: 'update', data, context: memberCtx() };
+      await harness.run(opCtx); // must not throw — owner_id is not an own property
+    });
   });
 
   it('without org-scoping plugin — strips tenant_isolation RLS so find applies no tenant where', async () => {
