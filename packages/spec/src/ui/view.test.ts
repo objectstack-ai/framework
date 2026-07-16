@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   ViewSchema,
   ListViewSchema,
@@ -2575,5 +2576,24 @@ describe('ADR-0089 D3a — strict view form schemas (loud mis-layered keys)', ()
   it('a strict form section still accepts canonical + alias keys', () => {
     expect(() => FormSectionSchema.parse({ label: 'S', visibleWhen: 'record.a == 1', fields: [] })).not.toThrow();
     expect(() => FormSectionSchema.parse({ label: 'S', visibleOn: 'record.a == 1', fields: [] })).not.toThrow();
+  });
+});
+
+/**
+ * ObjectUI Studio derives the View inspector's authoring JSONSchema from
+ * ViewSchema via `z.toJSONSchema` (objectui#2561). FormFieldSchema is a
+ * self-recursive `.strict().transform(…)` pipe reached through
+ * `z.lazy(() => FormFieldSchema)` — the exact lazySchema-proxy identity shape
+ * that crashed zod's converter before the `_zod` facade fix.
+ */
+describe('ViewSchema → JSON Schema derivation (Studio inspector path)', () => {
+  const TO_JSON = { io: 'input', unrepresentable: 'any' } as const;
+
+  it('derives the input-io JSONSchema for the whole View document', () => {
+    expect(() => z.toJSONSchema(ViewSchema, TO_JSON)).not.toThrow();
+  });
+
+  it('derives the input-io JSONSchema for the recursive FormFieldSchema', () => {
+    expect(() => z.toJSONSchema(FormFieldSchema, TO_JSON)).not.toThrow();
   });
 });
