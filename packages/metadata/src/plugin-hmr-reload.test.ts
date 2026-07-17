@@ -33,6 +33,12 @@ function writeArtifact(flowName: string): string {
         scope: 'app',
         namespace: 'test',
         defaultDatasource: 'memory',
+        // Seeds have no `name`, so they never enter the MetadataManager —
+        // they reach reload consumers only via the `metadata:reloaded`
+        // payload (AppPlugin's hot-reload seeder). Pin that pass-through.
+        data: [
+            { object: 'test_note', records: [{ name: 'seeded-row' }] },
+        ],
         flows: [
             {
                 name: flowName,
@@ -69,9 +75,19 @@ describe('MetadataPlugin._reloadAndAnnounce — fires metadata:reloaded after re
         const registered = await mgr.get('flow', 'sweep');
         expect(registered).toBeDefined();
 
-        // …and the generic reload signal fired with the changed path.
+        // …and the generic reload signal fired with the changed path AND the
+        // freshly parsed artifact collections (seeds have no `name`, so the
+        // payload is the only way they reach reload consumers).
         expect(ctx.trigger).toHaveBeenCalledTimes(1);
-        expect(ctx.trigger).toHaveBeenCalledWith('metadata:reloaded', { changed: [file] });
+        expect(ctx.trigger).toHaveBeenCalledWith(
+            'metadata:reloaded',
+            expect.objectContaining({ changed: [file] }),
+        );
+        const payload = (ctx.trigger as any).mock.calls[0][1];
+        expect(Array.isArray(payload.metadata?.flows)).toBe(true);
+        expect(payload.metadata?.data).toEqual([
+            expect.objectContaining({ object: 'test_note' }),
+        ]);
     });
 
     it('still announces even if a subscriber throws (reload must not break)', async () => {

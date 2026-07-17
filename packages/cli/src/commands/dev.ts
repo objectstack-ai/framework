@@ -392,6 +392,26 @@ export default class Dev extends Command {
       let inFlight = false;
       let queued = false;
 
+      // Object-name inventory of the artifact, diffed across recompiles so a
+      // newly added *.object.ts is called out explicitly (15.1 third-party
+      // eval: "recompiled" alone read as all-green while the new object's
+      // table/seed sync was invisible to the user).
+      const readArtifactObjects = (): Set<string> | null => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(opts.artifactPath, 'utf8'));
+          const meta = raw?.metadata ?? raw?.data?.metadata ?? raw;
+          const objects = Array.isArray(meta?.objects) ? meta.objects : [];
+          return new Set(
+            objects
+              .map((o: any) => o?.name)
+              .filter((n: any): n is string => typeof n === 'string'),
+          );
+        } catch {
+          return null;
+        }
+      };
+      let knownObjects = readArtifactObjects();
+
       const compileAndPing = async () => {
         if (inFlight) { queued = true; return; }
         inFlight = true;
@@ -419,6 +439,19 @@ export default class Dev extends Command {
           // available for external trigger sources (cloud webhooks,
           // git hooks, ad-hoc curl).
           console.log(chalk.green(`  ✓ recompiled in ${dt}ms — server will auto-reload`));
+          const objectsNow = readArtifactObjects();
+          if (objectsNow) {
+            const prior = knownObjects;
+            const fresh = prior ? [...objectsNow].filter((n) => !prior.has(n)) : [];
+            knownObjects = objectsNow;
+            if (fresh.length > 0) {
+              console.log(
+                chalk.cyan(
+                  `  ✚ new object(s): ${fresh.join(', ')} — table & seeds sync on reload`,
+                ),
+              );
+            }
+          }
         }
         inFlight = false;
         if (queued) { queued = false; setTimeout(compileAndPing, 50); }

@@ -71,7 +71,79 @@ function detectCircularDependencies(objects: any[]): string[] {
   return issues;
 }
 
-function findOrphanViews(config: any): string[] {
+// ── Object-reference walking ────────────────────────────────────────
+// A `config.views` entry is a ViewSchema CONTAINER (`{ list, form, listViews,
+// formViews }` — the defineView() shape): the object binding lives on each
+// sub-view at `data.object` (provider 'object'), never on a top-level
+// `view.object`. Legacy flat ViewItems (top-level `object`) are still read.
+
+function* subViewsOf(view: any): Generator<[slot: string, subView: any]> {
+  if (!view || typeof view !== 'object') return;
+  if (view.list) yield ['list', view.list];
+  if (view.form) yield ['form', view.form];
+  for (const [key, sub] of Object.entries<any>(
+    view.listViews && typeof view.listViews === 'object' ? view.listViews : {},
+  )) {
+    yield [`listViews.${key}`, sub];
+  }
+  for (const [key, sub] of Object.entries<any>(
+    view.formViews && typeof view.formViews === 'object' ? view.formViews : {},
+  )) {
+    yield [`formViews.${key}`, sub];
+  }
+}
+
+function subViewObject(sub: any): string | undefined {
+  if (typeof sub?.data?.object === 'string') return sub.data.object;
+  if (typeof sub?.objectName === 'string') return sub.objectName;
+  return undefined;
+}
+
+/** Every object name a view (container or legacy flat item) references. */
+function collectViewObjectRefs(view: any): string[] {
+  const refs: string[] = [];
+  if (typeof view?.object === 'string') refs.push(view.object);
+  for (const [, sub] of subViewsOf(view)) {
+    const bound = subViewObject(sub);
+    if (bound) refs.push(bound);
+    // Inline master-detail children and lookup form fields are references too.
+    for (const subform of Array.isArray(sub?.subforms) ? sub.subforms : []) {
+      if (typeof subform?.childObject === 'string') refs.push(subform.childObject);
+    }
+    for (const section of Array.isArray(sub?.sections) ? sub.sections : []) {
+      for (const field of Array.isArray(section?.fields) ? section.fields : []) {
+        if (typeof field?.reference === 'string') refs.push(field.reference);
+      }
+    }
+  }
+  return refs;
+}
+
+/**
+ * Every object name an app's navigation references. Object nav items carry
+ * `objectName` (AppSchema `ObjectNavItemSchema`), nest under `children`, and
+ * may live in `areas[*].navigation` instead of the top-level `navigation`.
+ */
+function collectAppObjectRefs(app: any): string[] {
+  const refs: string[] = [];
+  const walk = (items: any): void => {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      if (typeof item.objectName === 'string') refs.push(item.objectName);
+      if (typeof item.object === 'string') refs.push(item.object);
+      if (typeof item.requiresObject === 'string') refs.push(item.requiresObject);
+      walk(item.children);
+    }
+  };
+  walk(app?.navigation);
+  for (const area of Array.isArray(app?.areas) ? app.areas : []) {
+    walk(area?.navigation);
+  }
+  return refs;
+}
+
+export function findOrphanViews(config: any): string[] {
   const objectNames = new Set<string>();
   if (Array.isArray(config.objects)) {
     for (const obj of config.objects) {
@@ -82,15 +154,23 @@ function findOrphanViews(config: any): string[] {
   const orphans: string[] = [];
   if (Array.isArray(config.views)) {
     for (const view of config.views) {
-      if (view.object && !objectNames.has(view.object)) {
+      if (typeof view?.object === 'string' && !objectNames.has(view.object)) {
         orphans.push(`View "${view.name || '?'}" references non-existent object "${view.object}"`);
+      }
+      for (const [slot, sub] of subViewsOf(view)) {
+        const bound = subViewObject(sub);
+        if (bound && !objectNames.has(bound)) {
+          orphans.push(
+            `View "${view?.name || sub?.label || slot}" (${slot}) references non-existent object "${bound}"`,
+          );
+        }
       }
     }
   }
   return orphans;
 }
 
-function findUnusedObjects(config: any): string[] {
+export function findUnusedObjects(config: any): string[] {
   const objectNames = new Set<string>();
   if (Array.isArray(config.objects)) {
     for (const obj of config.objects) {
@@ -100,38 +180,32 @@ function findUnusedObjects(config: any): string[] {
 
   const referencedObjects = new Set<string>();
 
-  // Views reference objects
+  // Views — container sub-views (data.object), subforms, lookup form fields.
   if (Array.isArray(config.views)) {
     for (const view of config.views) {
-      if (view.object) referencedObjects.add(view.object);
+      for (const ref of collectViewObjectRefs(view)) referencedObjects.add(ref);
     }
   }
 
-  // Flows may reference objects via trigger
+  // Flows — the bound object lives inside node config (FlowNodeSchema.config
+  // is unstructured; `object`/`objectName` is the canonical alias pair used
+  // by record_change triggers and CRUD nodes).
   if (Array.isArray(config.flows)) {
     for (const flow of config.flows) {
       if (flow.trigger?.object) referencedObjects.add(flow.trigger.object);
       if (flow.object) referencedObjects.add(flow.object);
+      for (const node of Array.isArray(flow?.nodes) ? flow.nodes : []) {
+        const cfg = node?.config;
+        if (typeof cfg?.object === 'string') referencedObjects.add(cfg.object);
+        if (typeof cfg?.objectName === 'string') referencedObjects.add(cfg.objectName);
+      }
     }
   }
 
-  // Apps may reference objects via navigation
+  // Apps — navigation (top-level, nested children, and areas).
   if (Array.isArray(config.apps)) {
     for (const app of config.apps) {
-      if (Array.isArray(app.navigation)) {
-        for (const nav of app.navigation) {
-          if (nav.object) referencedObjects.add(nav.object);
-        }
-      }
-    }
-  }
-
-  // Agents may reference objects
-  if (Array.isArray(config.agents)) {
-    for (const agent of config.agents) {
-      if (Array.isArray(agent.objects)) {
-        for (const o of agent.objects) referencedObjects.add(o);
-      }
+      for (const ref of collectAppObjectRefs(app)) referencedObjects.add(ref);
     }
   }
 
@@ -151,7 +225,7 @@ function findUnusedObjects(config: any): string[] {
   const unused: string[] = [];
   for (const name of objectNames) {
     if (!referencedObjects.has(name)) {
-      unused.push(`Object "${name}" is defined but not referenced by any view, flow, app, or agent`);
+      unused.push(`Object "${name}" is defined but not referenced by any view, flow, app, or lookup field`);
     }
   }
   return unused;

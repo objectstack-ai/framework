@@ -1044,6 +1044,13 @@ export class AuthPlugin implements Plugin {
         .filter((u: any) => u && u.id !== SystemUserId.SYSTEM && u.role !== 'system');
       if (humans.length > 0) {
         ctx.logger.debug('[auth] dev admin seed skipped — a user already exists');
+        // `os dev` defaults to a persistent DB, so the seed fires exactly
+        // once — but the startup banner and the Console login hint read
+        // `devSeedResult`, which used to be set only on the seeding boot.
+        // Re-arm it on every later dev boot for as long as the credentials
+        // actually still work (account exists AND still carries the default
+        // password), so returning users keep seeing how to sign in.
+        await this.maybeReportExistingSeedAdmin(ctx, ql, humans, email, password);
         return;
       }
 
@@ -1070,6 +1077,54 @@ export class AuthPlugin implements Plugin {
       // Best-effort. The common benign case is a race where a real sign-up
       // landed first (unique-email violation) — treat as "already seeded".
       ctx.logger.warn(`[auth] dev admin seed skipped: ${err?.message ?? err}`);
+    }
+  }
+
+  /**
+   * Boots after the seeding one: surface the dev credentials again if (and
+   * only if) the seed account still exists with the DEFAULT password —
+   * verified against the stored credential hash with better-auth's native
+   * `password.verify`, so the hint disappears the boot after an admin
+   * changes the password. Only reachable from `maybeSeedDevAdmin`'s
+   * NODE_ENV==='development' gate; `devSeedResult` therefore never exists in
+   * production, which is what keeps `getPublicConfig().devSeedAdmin` (the
+   * login-page hint) dev-only by construction. Best-effort: any lookup or
+   * verify failure just leaves the hint off.
+   */
+  private async maybeReportExistingSeedAdmin(
+    ctx: PluginContext,
+    ql: any,
+    humans: any[],
+    email: string,
+    password: string,
+  ): Promise<void> {
+    try {
+      if (!this.authManager) return;
+      const seedUser = humans.find(
+        (u: any) => typeof u?.email === 'string' && u.email.toLowerCase() === email.toLowerCase(),
+      );
+      if (!seedUser?.id) return;
+
+      const accounts = await ql
+        .find(
+          'sys_account',
+          { where: { user_id: seedUser.id, provider_id: 'credential' }, limit: 1 },
+          { context: { isSystem: true } },
+        )
+        .catch(() => []);
+      const hash = Array.isArray(accounts) ? accounts[0]?.password : undefined;
+      if (typeof hash !== 'string' || hash.length === 0) return;
+
+      const authCtx: any = await this.authManager.getAuthContext();
+      const verify = authCtx?.password?.verify;
+      if (typeof verify !== 'function') return;
+      const stillDefault = await verify.call(authCtx.password, { password, hash });
+      if (stillDefault === true) {
+        this.authManager.devSeedResult = { email, password };
+        ctx.logger.debug('[auth] dev admin still on default credentials — surfacing the hint');
+      }
+    } catch (err: any) {
+      ctx.logger.debug(`[auth] dev seed-admin probe skipped: ${err?.message ?? err}`);
     }
   }
 

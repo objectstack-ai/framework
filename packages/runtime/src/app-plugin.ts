@@ -889,6 +889,81 @@ export class AppPlugin implements Plugin {
              }
              }
         }
+
+        this.registerHotReloadSeeder(ctx, ql);
+    }
+
+    /**
+     * 15.1 third-party eval — dev hot-reload of a NEW object registered its
+     * metadata (and, via ObjectQL's `metadata:reloaded` hook, created its
+     * table) but its seeds never ran: the seed pipeline in `start()` only
+     * reads the boot-time bundle, so `os dev` users had to restart the
+     * server to get seed rows. Subscribe to `metadata:reloaded` (fired by
+     * MetadataPlugin for both the artifact-file watcher and the HMR POST
+     * endpoint; its payload carries the freshly parsed artifact, because
+     * seeds have no `name` and never enter the MetadataManager) and load the
+     * seeds of objects that did not exist before the reload.
+     *
+     * Scoped STRICTLY to first-seen objects: an already-loaded (and possibly
+     * user-edited) dataset is never re-upserted mid-run — edits to existing
+     * seeds still apply on restart, as before. Dev-only (production publish
+     * flows own their seeding), single-tenant only (multi-tenant replays
+     * per-org on sys_organization insert). Runs AFTER ObjectQL's reload
+     * schema sync because kernel hooks fire in registration order and
+     * ObjectQLPlugin starts first.
+     */
+    private registerHotReloadSeeder(ctx: PluginContext, ql: any): void {
+        const hook = (ctx as any).hook;
+        if (typeof hook !== 'function') return;
+        if (process.env.NODE_ENV !== 'development') return;
+        if (resolveMultiOrgEnabled()) return;
+
+        const knownObjects = new Set<string>(
+            (Array.isArray(this.bundle.objects) ? this.bundle.objects : [])
+                .map((o: any) => o?.name)
+                .filter((n: any): n is string => typeof n === 'string'),
+        );
+
+        hook.call(ctx, 'metadata:reloaded', async (payload: any) => {
+            try {
+                const meta = payload?.metadata;
+                const objectsNow: any[] = Array.isArray(meta?.objects) ? meta.objects : [];
+                const fresh = objectsNow
+                    .map((o: any) => o?.name)
+                    .filter((n: any): n is string => typeof n === 'string' && !knownObjects.has(n));
+                for (const n of fresh) knownObjects.add(n);
+                if (fresh.length === 0) return;
+
+                const seeds = (Array.isArray(meta?.data) ? meta.data : []).filter(
+                    (d: any) => d?.object && fresh.includes(d.object) && Array.isArray(d.records),
+                );
+                if (seeds.length === 0) return;
+
+                const metadata = ctx.getService('metadata') as IMetadataService | undefined;
+                if (!metadata) {
+                    ctx.logger.warn('[Seeder] hot-reload seed skipped — metadata service unavailable');
+                    return;
+                }
+                const seedLoader = new SeedLoaderService(ql, metadata, ctx.logger);
+                const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
+                const request = SeedLoaderRequestSchema.parse({
+                    seeds,
+                    config: { defaultMode: 'upsert', multiPass: true },
+                });
+                const result = await seedLoader.load(request);
+                const { totalInserted, totalUpdated, totalErrored } = result.summary;
+                ctx.logger.info(
+                    `[Seeder] Hot-reload seeded new object(s) ${fresh.join(', ')}: ` +
+                        `${totalInserted} inserted, ${totalUpdated} updated` +
+                        (totalErrored ? `, ${totalErrored} errored` : ''),
+                );
+                for (const e of (result.errors ?? []).slice(0, 10)) {
+                    ctx.logger.warn(`[Seeder]   ✗ ${e.message}`);
+                }
+            } catch (err: any) {
+                ctx.logger.warn('[Seeder] hot-reload seed failed', { error: err?.message ?? String(err) });
+            }
+        });
     }
 
     stop = async (ctx: PluginContext) => {

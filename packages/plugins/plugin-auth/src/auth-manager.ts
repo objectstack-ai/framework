@@ -2789,10 +2789,23 @@ export class AuthManager {
       ...(privacyUrl ? { privacyUrl } : {}),
     };
 
+    // Dev-only login hint (15.1 third-party eval): the empty-DB auto-seeded
+    // admin was invisible — nothing on the login page said the account
+    // exists, so new users signed up into an empty non-admin workspace.
+    // `devSeedResult` is set at boot by the auth plugin ONLY under
+    // NODE_ENV==='development' (seeding boot, or later boots while the
+    // account still verifies against the default password), so this field
+    // can never appear in production. The env re-check is defense in depth.
+    const devSeedAdmin =
+      (globalThis as any)?.process?.env?.NODE_ENV === 'development' && this.devSeedResult
+        ? { email: this.devSeedResult.email, password: this.devSeedResult.password }
+        : undefined;
+
     return {
       emailPassword,
       socialProviders,
       features,
+      ...(devSeedAdmin ? { devSeedAdmin } : {}),
     };
   }
 

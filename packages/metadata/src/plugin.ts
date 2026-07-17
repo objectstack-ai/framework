@@ -185,6 +185,14 @@ export class MetadataPlugin implements Plugin {
     private repository?: import('@objectstack/metadata-core').MetadataRepository;
     /** Chokidar watcher on the artifact file (local-file mode) — ADR-0008 PR-8. */
     private artifactWatcher?: { close: () => Promise<void> };
+    /**
+     * The most recently parsed artifact metadata (the plural-field record:
+     * `objects`, `views`, `data`, …). Carried on the `metadata:reloaded`
+     * payload so runtime consumers can react to collections that never enter
+     * the MetadataManager — notably seeds (`data`), whose items have no
+     * `name` and are skipped by `_parseAndRegisterArtifact`'s register loop.
+     */
+    private lastParsedMetadata?: Record<string, unknown[]>;
 
     constructor(options: MetadataPluginOptions = {}) {
         this.options = {
@@ -532,6 +540,8 @@ export class MetadataPlugin implements Plugin {
             metadata = def as Record<string, unknown[]>;
         }
 
+        this.lastParsedMetadata = metadata;
+
         const memLoader = new MemoryLoader();
         const manifestPackageId =
             (metadata as any)?.manifest?.id ?? (metadata as any)?.id ?? undefined;
@@ -634,7 +644,11 @@ export class MetadataPlugin implements Plugin {
     ): Promise<void> {
         await this._loadFromLocalFile(ctx, src.path, src.fetchTimeoutMs);
         try {
-            await ctx.trigger('metadata:reloaded', { changed });
+            // `metadata` carries the freshly parsed artifact collections so
+            // subscribers can consume the ones that never reach the
+            // MetadataManager (seeds under `data` have no `name`). AppPlugin
+            // uses it to load seeds for objects that appear mid-run.
+            await ctx.trigger('metadata:reloaded', { changed, metadata: this.lastParsedMetadata });
         } catch (e: any) {
             ctx.logger.warn('[MetadataPlugin] metadata:reloaded subscriber failed', { error: e?.message });
         }
