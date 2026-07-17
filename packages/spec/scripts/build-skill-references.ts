@@ -18,11 +18,17 @@
  * 3. Writes `skills/{name}/references/_index.md` with pointers + one-line
  *    descriptions extracted from each file's leading JSDoc comment
  *
- * Usage: tsx scripts/build-skill-references.ts
+ * `skills/` is published to third parties (`npx skills add … --all`), so stale
+ * output here ships to users — `--check` gates it in CI.
+ *
+ * Usage:
+ *   tsx scripts/build-skill-references.ts            # write
+ *   tsx scripts/build-skill-references.ts --check    # verify in sync (CI); exit 1 on drift
  */
 
 import fs from 'fs';
 import path from 'path';
+import { createGeneratedOutput } from './lib/generated-output';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +36,8 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SPEC_SRC = path.resolve(__dirname, '../src');
 const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
 const SPEC_PKG = '@objectstack/spec';
+
+const CHECK = process.argv.includes('--check');
 
 // ── Skill → Zod file mapping ────────────────────────────────────────────────
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
@@ -41,7 +49,7 @@ const SKILL_MAP: Record<string, string[]> = {
     'data/validation.zod.ts',
     'data/hook.zod.ts',
     'data/datasource.zod.ts',
-    'data/dataset.zod.ts',
+    'data/seed.zod.ts',
     'security/permission.zod.ts',
   ],
   'objectstack-query': [
@@ -94,7 +102,7 @@ const SKILL_MAP: Record<string, string[]> = {
     // project setup (was objectstack-quickstart)
     'kernel/manifest.zod.ts',
     'data/datasource.zod.ts',
-    'data/dataset.zod.ts',
+    'data/seed.zod.ts',
     // plugin development (was objectstack-plugin)
     'kernel/plugin.zod.ts',
     'kernel/context.zod.ts',
@@ -130,18 +138,27 @@ function extractLocalImports(filePath: string): string[] {
   return imports;
 }
 
-function resolveAll(entryFiles: string[]): string[] {
+function resolveAll(skillName: string, entryFiles: string[]): string[] {
   const visited = new Set<string>();
   const queue = [...entryFiles];
   while (queue.length > 0) {
-    const rel = queue.shift()!;
-    if (visited.has(rel)) continue;
-    const abs = path.resolve(SPEC_SRC, rel);
+    const relPath = queue.shift()!;
+    if (visited.has(relPath)) continue;
+    const abs = path.resolve(SPEC_SRC, relPath);
+    // Only SKILL_MAP entries can miss here — transitive deps are already
+    // existence-filtered in extractLocalImports — so this is always a stale
+    // hand-authored mapping. Fatal, not a warning: warn-and-skip silently
+    // dropped the seed schema from two published skills across the
+    // dataset.zod.ts → seed.zod.ts rename, and stayed green doing it.
     if (!fs.existsSync(abs)) {
-      console.warn(`  ⚠ File not found: ${rel} (skipped)`);
-      continue;
+      console.error(
+        `\n✗ SKILL_MAP[${skillName}] points at a file that does not exist: ${relPath}\n` +
+          `  Expected ${rel(path.resolve(SPEC_SRC, relPath))} — it was probably renamed or removed.\n` +
+          `  Update SKILL_MAP in ${rel(__filename)}.\n`,
+      );
+      process.exit(1);
     }
-    visited.add(rel);
+    visited.add(relPath);
     for (const dep of extractLocalImports(abs)) {
       if (!visited.has(dep)) queue.push(dep);
     }
@@ -226,57 +243,66 @@ function generateIndex(skillName: string, coreFiles: string[], allFiles: string[
   return lines.join('\n');
 }
 
-// ── Cleanup helper ───────────────────────────────────────────────────────────
+// ── Output sink ──────────────────────────────────────────────────────────────
 
-function cleanReferencesDir(refsDir: string) {
-  if (!fs.existsSync(refsDir)) {
-    fs.mkdirSync(refsDir, { recursive: true });
-    return;
-  }
-  for (const entry of fs.readdirSync(refsDir)) {
-    // Keep hand-written markdown other than _index.md untouched.
-    if (entry === '_index.md') {
-      fs.rmSync(path.resolve(refsDir, entry));
-      continue;
-    }
-    const entryPath = path.resolve(refsDir, entry);
-    const stat = fs.statSync(entryPath);
-    if (stat.isDirectory()) {
-      fs.rmSync(entryPath, { recursive: true });
-    } else if (entry.endsWith('.zod.ts')) {
-      fs.rmSync(entryPath);
-    }
-  }
+const out = createGeneratedOutput({ repoRoot: REPO_ROOT, check: CHECK });
+const rel = (p: string) => path.relative(REPO_ROOT, p);
+
+/**
+ * What a real run removes from a skill's `references/` folder. Hand-written
+ * markdown alongside `_index.md` is deliberately preserved — `data-hooks.md`,
+ * `plugin-hooks.md`, and `react-blocks.md` (which build-react-blocks-contract.ts
+ * owns) all live here — so this is a selective wipe, not a wholesale one.
+ */
+function refsDirDeletes(relPath: string): boolean {
+  // Nested → lives in a sub-folder a real run removes wholesale.
+  if (relPath.includes(path.sep)) return true;
+  return relPath === '_index.md' || relPath.endsWith('.zod.ts');
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  console.log('🔗 Building skill schema reference indexes...\n');
-  let totalSkills = 0;
+  console.log(`🔗 ${CHECK ? 'Checking' : 'Building'} skill schema reference indexes...\n`);
 
   for (const [skillName, coreFiles] of Object.entries(SKILL_MAP)) {
     const skillDir = path.resolve(SKILLS_DIR, skillName);
+    // A mapped skill that isn't on disk means SKILL_MAP lies. Skipping it would
+    // silently ship a skill with no schema index (and leave --check green), so
+    // fail instead — same reasoning as the missing-file check in resolveAll.
     if (!fs.existsSync(skillDir)) {
-      console.warn(`⚠ Skill directory not found: ${skillName}, skipping`);
-      continue;
+      console.error(
+        `\n✗ SKILL_MAP names a skill with no directory: ${skillName}\n` +
+          `  Expected ${rel(skillDir)}. Update SKILL_MAP in ${rel(__filename)}.\n`,
+      );
+      process.exit(1);
     }
 
-    console.log(`📦 ${skillName}`);
-    const allFiles = resolveAll(coreFiles);
-    console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps`);
+    if (!CHECK) console.log(`📦 ${skillName}`);
+    const allFiles = resolveAll(skillName, coreFiles);
+    if (!CHECK) console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps`);
 
     const refsDir = path.resolve(skillDir, 'references');
-    cleanReferencesDir(refsDir);
-
-    fs.writeFileSync(
-      path.resolve(refsDir, '_index.md'),
-      generateIndex(skillName, coreFiles, allFiles),
-    );
-    totalSkills += 1;
+    out.manageDir(refsDir, refsDirDeletes);
+    out.emit(path.resolve(refsDir, '_index.md'), generateIndex(skillName, coreFiles, allFiles));
   }
 
-  console.log(`\n✅ Done — ${totalSkills} skill index files written`);
+  // A run that mapped no skills emits nothing, and "nothing differs" would read
+  // as success — the gate would pass while checking no skills at all. Fail
+  // loudly instead of greenly.
+  if (out.size === 0) {
+    console.error(
+      `\n✗ No skill reference indexes generated — nothing to ${CHECK ? 'check' : 'write'}.\n` +
+        `  SKILL_MAP is empty, or ${rel(SKILLS_DIR)} is missing.\n`,
+    );
+    process.exit(1);
+  }
+
+  out.flush({
+    what: 'skills/*/references/_index.md',
+    noun: 'skill reference indexes',
+    fix: [`pnpm --filter ${SPEC_PKG} gen:skill-refs`, 'git add skills'],
+  });
 }
 
 main();

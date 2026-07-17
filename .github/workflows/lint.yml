@@ -144,6 +144,26 @@ jobs:
       - name: Check generated reference docs are in sync with the spec
         run: pnpm --filter @objectstack/spec check:docs
 
+      # Generated-skills gate: skills/ is generated from the spec by
+      # `gen:skill-refs` + `gen:react-blocks` and committed, and nothing checked
+      # it — both had a `gen:` script but no `check:` sibling, so `check:docs`
+      # above (which only covers content/docs/references/) and `check:skill-docs`
+      # (only SKILL.md frontmatter → README + skills-reference.mdx) both miss it.
+      # It drifted: 8 files were stale on main, and skills/objectstack-{data,
+      # platform}/references/_index.md still pointed agents at
+      # data/dataset.zod.ts — renamed to data/seed.zod.ts back in #1620.
+      #
+      # This bites harder than the docs case: skills/ is PUBLISHED to third
+      # parties via `npx skills add objectstack-ai/framework --all`, so stale
+      # output ships to users. Same job as check:docs and for the same reason —
+      # it is a required status check with no paths filter, so the gate cannot go
+      # dormant. Both read src/ via tsx and need no build, so they fail in ~2s.
+      - name: Check generated skill references are in sync with the spec
+        run: pnpm --filter @objectstack/spec check:skill-refs
+
+      - name: Check generated react-blocks contract is in sync with the spec
+        run: pnpm --filter @objectstack/spec check:react-blocks
+
       # Example apps are AI-authoring reference templates; a red typecheck is a
       # bad signal to copy from. tsup transpiles them without a full typecheck,
       # so build alone will not catch type drift — typecheck them explicitly.

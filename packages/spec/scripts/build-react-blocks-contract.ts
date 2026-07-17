@@ -8,18 +8,27 @@
 //   - skills/objectstack-ui/contracts/react-blocks.contract.json  (machine)
 //   - skills/objectstack-ui/references/react-blocks.md            (AI-facing)
 //
-// Run: pnpm --filter @objectstack/spec gen:react-blocks
+// `skills/` is published to third parties (`npx skills add … --all`), so stale
+// output here ships to users — `--check` gates it in CI.
+//
+// Run:
+//   pnpm --filter @objectstack/spec gen:react-blocks      # write
+//   pnpm --filter @objectstack/spec check:react-blocks    # verify in sync (CI); exit 1 on drift
 
 process.env.OS_EAGER_SCHEMAS = '1';
 
-import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
 import { REACT_BLOCKS, type ReactInteractionProp } from '../src/ui/react-blocks';
+import { createGeneratedOutput } from './lib/generated-output';
 
 const REPO = path.resolve(__dirname, '../../..');
-const OUT_JSON = path.join(REPO, 'skills/objectstack-ui/contracts/react-blocks.contract.json');
+const CONTRACTS_DIR = path.join(REPO, 'skills/objectstack-ui/contracts');
+const OUT_JSON = path.join(CONTRACTS_DIR, 'react-blocks.contract.json');
 const OUT_MD = path.join(REPO, 'skills/objectstack-ui/references/react-blocks.md');
+
+const CHECK = process.argv.includes('--check');
+const out = createGeneratedOutput({ repoRoot: REPO, check: CHECK });
 
 // ---- JSON-schema prop extraction -----------------------------------------
 function resolveRoot(js: any): any {
@@ -93,6 +102,17 @@ const blocks = REACT_BLOCKS.map((b) => {
   return { tag: b.tag, schemaType: b.schemaType, summary: b.summary, specSchema: b.schema ? true : false, props };
 });
 
+// No blocks means the overlay failed to load, not that the contract is empty.
+// Writing that would wipe the published contract; checking it would compare
+// nothing and pass. Fail loudly in both modes instead.
+if (blocks.length === 0) {
+  console.error(
+    `\n✗ No React blocks found in packages/spec/src/ui/react-blocks.ts — nothing to ${CHECK ? 'check' : 'write'}.\n` +
+      `  REACT_BLOCKS is empty; the contract would be generated with zero blocks.\n`,
+  );
+  process.exit(1);
+}
+
 const contract = {
   version: 2,
   adr: 'ADR-0081',
@@ -100,7 +120,10 @@ const contract = {
   note: "Props each component accepts in kind:'react' page source. Reference blocks by their PascalCase tag. kind: data=declarative config (from the spec schema) · binding=connects to data · controlled=React state · callback=React function. These blocks are for DATA. Live data: const adapter = useAdapter(); adapter.find/findOne/create/update. STYLING (ADR-0065) — a page's source is runtime metadata, so the console's build-time Tailwind NEVER scans it: utility classNAMES silently produce no CSS. Do NOT use Tailwind className in page source. (a) Layout/chrome: inline style={} with hsl(var(--token)) theme colors — e.g. color:'hsl(var(--foreground))', background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', and px/flex for layout. (b) Overlays: render <ObjectForm formType='drawer'|'modal' open onOpenChange> (a pre-styled Sheet/Dialog) — never hand-roll a fixed inset-0 backdrop.",
   blocks,
 };
-fs.writeFileSync(OUT_JSON, JSON.stringify(contract, null, 2) + '\n');
+// contracts/ is wholly owned by this generator, so a file in there we didn't
+// emit is one a real run deletes — e.g. a contract left behind by a rename.
+out.manageDir(CONTRACTS_DIR);
+out.emit(OUT_JSON, JSON.stringify(contract, null, 2) + '\n');
 
 // markdown
 const esc = (s: string) => String(s).replace(/\|/g, '\\|');
@@ -134,7 +157,16 @@ L.push('## Injected scope (closure variables, reference directly — not props)'
 L.push('');
 L.push('`React` · `useAdapter` · `data` · `variables` · `page`. Kanban/calendar/gantt/timeline/map of an object = `<ListView navigation={…} />` with the matching visualization, or `<Block type="object-kanban" …/>`.');
 L.push('');
-fs.writeFileSync(OUT_MD, L.join('\n'));
+out.emit(OUT_MD, L.join('\n'));
 
-console.log(`✅ react-blocks contract: ${blocks.length} blocks → ${path.relative(REPO, OUT_JSON)} + ${path.relative(REPO, OUT_MD)}`);
-for (const b of blocks) console.log(`   <${b.tag}> ${b.props.length} props`);
+// Disposition: write the emitted tree, or report drift against it.
+out.flush({
+  what: 'skills/objectstack-ui react-blocks contract',
+  noun: 'react-blocks contract files',
+  fix: ['pnpm --filter @objectstack/spec gen:react-blocks', 'git add skills'],
+});
+
+if (!CHECK) {
+  console.log(`\n✅ react-blocks contract: ${blocks.length} blocks`);
+  for (const b of blocks) console.log(`   <${b.tag}> ${b.props.length} props`);
+}

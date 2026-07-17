@@ -31,10 +31,10 @@ Server-connected create/edit/view form for one object. Config props come from th
 | `columns` | `integer` | data |  | Number of columns for the form body |
 | `tabPosition` | `'top' \| 'bottom' \| 'left' \| 'right'` | data |  | Tab strip position (tabbed forms) |
 | `drawerSide` | `'top' \| 'bottom' \| 'left' \| 'right'` | data |  | Drawer side (drawer forms) |
-| `drawerWidth` | `string` | data |  | Drawer width, e.g. "480px" (drawer forms) |
+| `drawerWidth` | `string` | data |  | [DEPRECATED → size buckets] Drawer width, e.g. "480px". A pixel width cannot be chosen without knowing the client viewport — the renderer derives it. |
 | `modalSize` | `'sm' \| 'default' \| 'lg' \| 'xl' \| 'full'` | data |  | Modal size (modal forms) |
 | `splitDirection` | `'horizontal' \| 'vertical'` | data |  | Split orientation (split forms) |
-| `sections` | `object[]` | data |  |  |
+| `sections` | `any[]` | data |  |  |
 | `subforms` | `object[]` | data |  | Inline master-detail child collections |
 | `submitBehavior` | `object` | data |  | Post-submit behavior |
 
@@ -113,9 +113,10 @@ Related child records via a lookup. Config props from the spec RecordRelatedList
 | `objectName` | `string` | binding |  | The parent object. |
 | `recordId` | `string \| number` | controlled |  | The parent record. |
 | `relationshipField` | `string` | data | ✓ | Field on related object that points to this record (e.g., "account_id") |
-| `columns` | `string[]` | data | ✓ | Fields to display in the related list |
+| `relationshipValueField` | `string` | data | ✓ | Parent-record field whose value relationshipField stores (default 'id'; e.g. 'name' for name-keyed junctions). |
 | `limit` | `integer` | data | ✓ | Number of records to display initially |
 | `showViewAll` | `boolean` | data | ✓ | Show "View All" link to see all related records |
+| `columns` | `string[]` | data |  | Fields to display in the related list. Optional: when omitted, columns derive from the related object's highlightFields / default list columns (a related list … |
 | `sort` | `string \| object[]` | data |  | Sort order for related records |
 | `filter` | `object[]` | data |  | Additional filter criteria for related records |
 | `title` | `string` | data |  | Custom title for the related list |

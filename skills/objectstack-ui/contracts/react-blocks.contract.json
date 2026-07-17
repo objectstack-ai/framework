@@ -113,7 +113,7 @@
           "type": "string",
           "kind": "data",
           "required": false,
-          "description": "Drawer width, e.g. \"480px\" (drawer forms)"
+          "description": "[DEPRECATED → size buckets] Drawer width, e.g. \"480px\". A pixel width cannot be chosen without knowing the client viewport — the renderer derives it."
         },
         {
           "name": "modalSize",
@@ -131,7 +131,7 @@
         },
         {
           "name": "sections",
-          "type": "object[]",
+          "type": "any[]",
           "kind": "data",
           "required": false,
           "description": ""
@@ -478,11 +478,11 @@
           "description": "Field on related object that points to this record (e.g., \"account_id\")"
         },
         {
-          "name": "columns",
-          "type": "string[]",
+          "name": "relationshipValueField",
+          "type": "string",
           "kind": "data",
           "required": true,
-          "description": "Fields to display in the related list"
+          "description": "Parent-record field whose value relationshipField stores (default 'id'; e.g. 'name' for name-keyed junctions)."
         },
         {
           "name": "limit",
@@ -497,6 +497,13 @@
           "kind": "data",
           "required": true,
           "description": "Show \"View All\" link to see all related records"
+        },
+        {
+          "name": "columns",
+          "type": "string[]",
+          "kind": "data",
+          "required": false,
+          "description": "Fields to display in the related list. Optional: when omitted, columns derive from the related object's highlightFields / default list columns (a related list …"
         },
         {
           "name": "sort",
