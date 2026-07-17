@@ -227,10 +227,10 @@ describe('#3112 — register()/unregister() notify subscribe() watchers', () => 
 
   describe('unregisterPackage()', () => {
     it('announces every removed item, so cached consumers drop the uninstalled schemas', async () => {
-      // The concrete bug the silent write path caused: uninstalling a package
-      // tore the objects out of the registry, but ObjectQL's SchemaRegistry
-      // bridge never heard a 'deleted' event and kept resolving the removed
-      // objects until the process restarted.
+      // Latent today — nothing calls unregisterPackage() in production — but it
+      // is the shape the silent write path would have broken: the objects leave
+      // the registry while ObjectQL's SchemaRegistry bridge, never hearing a
+      // 'deleted' event, keeps resolving them until the process restarts.
       await manager.register('object', 'crm_account', { name: 'crm_account', packageId: 'com.acme.crm' }, { notify: false });
       await manager.register('object', 'crm_contact', { name: 'crm_contact', packageId: 'com.acme.crm' }, { notify: false });
       await manager.register('object', 'other', { name: 'other', packageId: 'com.other' }, { notify: false });
