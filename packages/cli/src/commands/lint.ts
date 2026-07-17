@@ -6,7 +6,7 @@ import { bundleRequire } from 'bundle-require';
 import { normalizeStackInput } from '@objectstack/spec';
 import { PROTOCOL_MAJOR } from '@objectstack/spec/kernel';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
-import { computeI18nCoverage } from '../utils/i18n-coverage.js';
+import { computeI18nCoverage, type CoverageIssue } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '@objectstack/lint';
 import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture, validateApprovalApprovers } from '@objectstack/lint';
@@ -34,6 +34,34 @@ interface LintIssue {
   message: string;
   path: string;
   fix?: string;
+}
+
+// Fold i18n coverage issues into lint issues, separating the platform
+// baseline from the user's own metadata. `metadataForm` issues come from
+// walking the static platform registries (DEFAULT_METADATA_TYPE_REGISTRY +
+// METADATA_FORM_REGISTRY) — ~850 Studio-form keys that the platform packages
+// already translate at runtime. On a fresh project they would drown every
+// user-authored signal (15.1 third-party eval: 848/848 errors were platform
+// noise), so they are hidden unless explicitly requested.
+export function foldCoverageIssues(
+  coverageIssues: CoverageIssue[],
+  includePlatform: boolean,
+): { folded: LintIssue[]; hiddenPlatform: number } {
+  const folded: LintIssue[] = [];
+  let hiddenPlatform = 0;
+  for (const c of coverageIssues) {
+    if (!includePlatform && c.source === 'metadataForm') {
+      hiddenPlatform++;
+      continue;
+    }
+    folded.push({
+      severity: c.severity === 'error' ? 'error' : 'warning',
+      rule: `i18n/missing-${c.source}`,
+      message: c.message,
+      path: `translations.${c.locale}.${c.key}`,
+    });
+  }
+  return { folded, hiddenPlatform };
 }
 
 // ─── Rules ──────────────────────────────────────────────────────────
@@ -441,6 +469,10 @@ export default class Lint extends Command {
       default: 75,
     }),
     'skip-i18n': Flags.boolean({ description: 'Skip translation coverage checks' }),
+    'include-platform': Flags.boolean({
+      description:
+        'Also report i18n coverage for platform built-in metadata forms (hidden by default — the platform packages ship those translations)',
+    }),
     'i18n-strict': Flags.boolean({
       description: 'Treat missing translations in non-default locales as errors',
     }),
@@ -486,19 +518,18 @@ export default class Lint extends Command {
       }
 
       // ── Translation coverage ──
+      let hiddenPlatform = 0;
       if (!flags['skip-i18n']) {
         const coverage = computeI18nCoverage(normalized, {
           defaultLocale: flags['default-locale'],
           strict: flags['i18n-strict'],
         });
-        for (const c of coverage.issues) {
-          issues.push({
-            severity: c.severity === 'error' ? 'error' : 'warning',
-            rule: `i18n/missing-${c.source}`,
-            message: c.message,
-            path: `translations.${c.locale}.${c.key}`,
-          });
-        }
+        const { folded, hiddenPlatform: hidden } = foldCoverageIssues(
+          coverage.issues,
+          flags['include-platform'] ?? false,
+        );
+        hiddenPlatform = hidden;
+        issues.push(...folded);
       }
 
       // Metadata-quality score (the lint rubric expressed as 0–100).
@@ -515,6 +546,7 @@ export default class Lint extends Command {
           errors: errors.length,
           warnings: warnings.length,
           suggestions: suggestions.length,
+          ...(hiddenPlatform > 0 ? { hiddenPlatform } : {}),
           ...(score ? { score: score.score, grade: score.grade } : {}),
           issues,
           duration: timer.elapsed(),
@@ -525,8 +557,19 @@ export default class Lint extends Command {
 
       console.log('');
 
+      const printHiddenPlatform = () => {
+        if (hiddenPlatform > 0) {
+          console.log(
+            chalk.dim(
+              `  platform built-ins: ${hiddenPlatform} i18n issue(s) hidden — rerun with --include-platform to audit them`,
+            ),
+          );
+        }
+      };
+
       if (issues.length === 0) {
         printSuccess(`All checks passed ${chalk.dim(`(${timer.display()})`)}`);
+        printHiddenPlatform();
         if (score) this.printScore(score);
         console.log('');
         return;
@@ -578,6 +621,7 @@ export default class Lint extends Command {
       if (warnings.length > 0) parts.push(chalk.yellow(`${warnings.length} warning(s)`));
       if (suggestions.length > 0) parts.push(chalk.blue(`${suggestions.length} suggestion(s)`));
       console.log(`  ${parts.join(', ')} ${chalk.dim(`(${timer.display()})`)}`);
+      printHiddenPlatform();
 
       if (score) this.printScore(score);
 
